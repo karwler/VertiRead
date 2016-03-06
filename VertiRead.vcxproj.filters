@@ -1,0 +1,109 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Source\Engine">
+      <UniqueIdentifier>{33dc20db-3427-4559-84e8-6d7305a62499}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Prog">
+      <UniqueIdentifier>{99e62387-58be-466c-81a6-455ff562003d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Utils">
+      <UniqueIdentifier>{603b5ee9-f739-4ce9-9950-98bc2088e881}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\engine\main.cpp">
+      <Filter>Source\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\windowSys.cpp">
+      <Filter>Source\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\audioSys.cpp">
+      <Filter>Source\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\engine.cpp">
+      <Filter>Source\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\prog\program.cpp">
+      <Filter>Source\Prog</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\scene.cpp">
+      <Filter>Source\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\utils\utils.cpp">
+      <Filter>Source\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\utils\objects.cpp">
+      <Filter>Source\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\world.cpp">
+      <Filter>Source\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\prog\library.cpp">
+      <Filter>Source\Prog</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\filer.cpp">
+      <Filter>Source\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\utils\types.cpp">
+      <Filter>Source\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\inputSys.cpp">
+      <Filter>Source\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="src\utils\items.cpp">
+      <Filter>Source\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\prog\subprograms.cpp">
+      <Filter>Source\Prog</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\engine\windowSys.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\audioSys.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\engine.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\prog\program.h">
+      <Filter>Source\Prog</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\scene.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\utils\utils.h">
+      <Filter>Source\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\utils\objects.h">
+      <Filter>Source\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\utils\types.h">
+      <Filter>Source\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\world.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\prog\library.h">
+      <Filter>Source\Prog</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\filer.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\engine\inputSys.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="src\utils\items.h">
+      <Filter>Source\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\prog\subprograms.h">
+      <Filter>Source\Prog</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
