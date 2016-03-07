@@ -1,6 +1,11 @@
 #include "windowSys.h"
 #include "world.h"
 
+WindowSys::WindowSys() :
+	window(nullptr),
+	renderer(nullptr)
+{}
+
 int WindowSys::SetWindow(VideoSettings settings) {
 	DestroyWindow();
 	sets = settings;

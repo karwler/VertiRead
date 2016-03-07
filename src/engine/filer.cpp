@@ -213,7 +213,7 @@ fs::path Filer::fontDir() {
 #ifdef _WIN32
 	return string(getenv("SystemDrive")) + "\\Windows\\Fonts\\";
 #else
-	return "/usr/share/fonts/";
+	return "/usr/share/fonts/truetype/msttcorefonts/";
 #endif
 }
 

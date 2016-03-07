@@ -2,7 +2,7 @@ A so far simple cross-platform manga reader and music player.
 Still in progress.
 
 TO DO
-- fix program crash under Linux (don't know why yet)
+- add fontpath save/load
 - make dragable scrollbars
 - fix rect cropping in lists
 - make the actual reader

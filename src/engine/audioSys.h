@@ -4,6 +4,8 @@
 
 class AudioSys {
 public:
+	AudioSys();
+
 	bool Initialize(AudioSettings sets);
 	void Cleanup();
 	void FreeMusic();

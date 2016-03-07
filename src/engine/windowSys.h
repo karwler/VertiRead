@@ -4,6 +4,8 @@
 
 class WindowSys {
 public:
+	WindowSys();
+
 	int SetWindow(VideoSettings settings);
 	void DestroyWindow();
 	void DrawScene();
