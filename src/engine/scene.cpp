@@ -3,7 +3,8 @@
 
 Scene::Scene() :
 	program(new Program),
-	library(new Library)
+	library(new Library),
+	sliderHold(nullptr)
 {}
 
 Scene::~Scene() {
@@ -13,6 +14,7 @@ Scene::~Scene() {
 void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 	Clear(objects);
 	focObject = 0;
+	sliderHold = nullptr;
 	vec2i res = World::winSys()->Resolution();
 	switch (newMenu) {
 	case EMenu::books: {
@@ -20,7 +22,7 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 		objects.push_back(new ButtonText(Object(vec2i(res.x / 3, 0), vec2i(res.x / 3 - 10, 50)), &Program::Event_OpenGeneralSettings, "Settings"));
 		objects.push_back(new ButtonText(Object(vec2i(res.x / 3 * 2, 0), vec2i(res.x / 3, 50)), &Program::Event_Back, "Exit"));
 		vector<TileItem> tiles;
-		vector<fs::path> names = Filer::ListDir(dirLib, FILTER_DIR);
+		vector<fs::path> names = Filer::ListDir(Filer::dirLib(), FILTER_DIR);
 		for (fs::path& it : names)
 			tiles.push_back(TileItem(it.filename().string(), it.string(), &Program::Event_OpenBrowser));
 		objects.push_back(new TileBox(Object(vec2i(0, 60), vec2i(res.x, res.y-60)), tiles, vec2i(400, 30)));
@@ -44,7 +46,7 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 		objects.push_back(new ButtonText(Object(vec2i(res.x / 3, 0), vec2i(res.x / 3 - 10, 50)), &Program::Event_OpenGeneralSettings, "Settings"));
 		objects.push_back(new ButtonText(Object(vec2i(res.x / 3 * 2, 0), vec2i(res.x / 3, 50)), &Program::Event_Back, "Exit"));
 		vector<TileItem> tiles;
-		vector<fs::path> names = Filer::ListDir(dirPlist, FILTER_FILE);
+		vector<fs::path> names = Filer::ListDir(Filer::dirPlist(), FILTER_FILE);
 		for (fs::path& it : names)
 			tiles.push_back(TileItem(removeExtension(it.filename()).string(), it.string(), &Program::Event_OpenPlaylistEditor));
 		objects.push_back(new TileBox(Object(vec2i(0, 60), vec2i(res.x, res.y - 60)), tiles, vec2i(400, 30)));
@@ -79,19 +81,23 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 	World::winSys()->DrawScene();
 }
 
-void Scene::OnMouseButton() {
+void Scene::OnMouseDown() {
 	for (Object* obj : objects) {
 		if (dynamic_cast<Button*>(obj)) {
 			if (CheckButtonClick(static_cast<Button*>(obj)))
-				return;
+				break;
 		}
-		else if (dynamic_cast<ListBox*>(obj)) {
-			if (CheckListBoxClick(static_cast<ListBox*>(obj)))
-				return;
-		}
-		else if (dynamic_cast<TileBox*>(obj)) {
-			if (CheckTileBoxClick(static_cast<TileBox*>(obj)))
-				return;
+		else if (dynamic_cast<ScrollArea*>(obj)) {
+			if (CheckSliderClick(static_cast<ScrollArea*>(obj)))
+				break;
+			else if (dynamic_cast<ListBox*>(obj)) {
+				if (CheckListBoxClick(static_cast<ListBox*>(obj)))
+					break;
+			}
+			else if (dynamic_cast<TileBox*>(obj)) {
+				if (CheckTileBoxClick(static_cast<TileBox*>(obj)))
+					break;
+			}
 		}
 	}
 }
@@ -99,6 +105,18 @@ void Scene::OnMouseButton() {
 bool Scene::CheckButtonClick(Button* obj) {
 	if (inRect({ obj->pos.x, obj->pos.y, obj->Size().x, obj->Size().y }, InputSys::mousePos())) {
 		obj->OnClick();
+		return true;
+	}
+	return false;
+}
+
+bool Scene::CheckSliderClick(ScrollArea* obj) {
+	vec2i mPos = InputSys::mousePos();
+	if (inRect(obj->Bar(), mPos)) {
+		sliderHold = obj;
+		if (mPos.y < obj->SliderY() || mPos.y > obj->SliderY() + obj->SliderH())
+			obj->DragSlider(mPos.y - obj->SliderH() / 2);
+		obj->diffSliderMouseY = mPos.y - obj->SliderY();
 		return true;
 	}
 	return false;
@@ -131,6 +149,18 @@ bool Scene::CheckTileBoxClick(TileBox* obj) {
 		}
 	}
 	return false;
+}
+
+void Scene::OnMouseUp() {
+	if (sliderHold) {
+		sliderHold->diffSliderMouseY = 0;
+		sliderHold = nullptr;
+	}
+}
+
+void Scene::OnMouseDrag() {
+	if (sliderHold)
+		sliderHold->DragSlider(InputSys::mousePos().y);
 }
 
 Program* Scene::getProgram() const {

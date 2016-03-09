@@ -2,11 +2,15 @@ A so far simple cross-platform manga reader and music player.
 Still in progress.
 
 TO DO
-- add fontpath save/load
-- make dragable scrollbars
 - fix rect cropping in lists
+- text crop in buttons
+- test getting exec dir under linux
+- scene resize instead of recreating all objects
 - make the actual reader
+- make a playlist editor
+- improve vector classes
 - add settings menu lists
+- add exception handling
 - give it a proper look
 - maybe replace boost with something faster
 - maybe add some animations

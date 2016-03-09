@@ -6,17 +6,25 @@ WindowSys::WindowSys() :
 	renderer(nullptr)
 {}
 
-int WindowSys::SetWindow(VideoSettings settings) {
+bool WindowSys::SetWindow(VideoSettings settings) {
+	// destroy old window if one exists
 	DestroyWindow();
+
+	// set settings and set window flags
 	sets = settings;
-	
 	uint flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
 	if (sets.fullscreen) flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 	else if (sets.maximized) flags |= SDL_WINDOW_MAXIMIZED;
 	
+	// create window and renderer
 	window = SDL_CreateWindow("VertRead", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets.resolution.x, sets.resolution.y, flags);
-	CreateRenderer();
-	return 0;
+	if (!window) {
+		cerr << "couldn't create window" << endl;
+		return false;
+	}
+	if (!CreateRenderer())
+		return false;
+	return true;
 }
 
 void WindowSys::DestroyWindow() {
@@ -47,6 +55,7 @@ vec2i WindowSys::Resolution() const {
 void WindowSys::WindowEvent(const SDL_WindowEvent& winEvent) {
 	switch (winEvent.event) {
 	case SDL_WINDOWEVENT_RESIZED: {
+		// update settings if needed
 		uint flags = SDL_GetWindowFlags(window);
 		if (!(flags & SDL_WINDOW_FULLSCREEN_DESKTOP)) {
 			sets.maximized = (flags & SDL_WINDOW_MAXIMIZED) ? true : false;
@@ -55,11 +64,13 @@ void WindowSys::WindowEvent(const SDL_WindowEvent& winEvent) {
 		}
 		break; }
 	case SDL_WINDOWEVENT_SIZE_CHANGED:
+		// recreate and redraw scene if resolution changes
 		World::scene()->SwitchMenu(World::program()->CurrentMenu());
 	}
 }
 
 void WindowSys::setFullscreen(bool on) {
+	// determine what to do
 	sets.fullscreen = on;
 	if (sets.fullscreen)
 		SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
@@ -67,29 +78,16 @@ void WindowSys::setFullscreen(bool on) {
 		SetWindow(sets);
 	else
 		SDL_SetWindowFullscreen(window, 0);
+	if (!window || !renderer) {
+		cerr << "something went wrong while changing video mode" << endl;
+		World::engine->Close();
+	}
 }
 
 void WindowSys::setVSync(bool on) {
 	sets.vsync = on;
-	CreateRenderer();
-}
-
-bool WindowSys::SetFont(string name) {
-	TTF_Font* tmp = TTF_OpenFont(Filer::getFontPath(name).string().c_str(), 12);
-	if (!tmp) {
-		if (name[0] >= 'A' && name[0] <= 'Z')
-			name[0] = tolower(name[0]);
-		else if (name[0] >= 'a' && name[0] <= 'z')
-			name[0] = toupper(name[0]);
-		else
-			return false;
-		tmp = TTF_OpenFont(Filer::getFontPath(name).string().c_str(), 12);
-		if (!tmp)
-			return false;
-	}
-	TTF_CloseFont(tmp);
-	sets.font = name;
-	return true;
+	if (!CreateRenderer())
+		World::engine->Close();
 }
 
 SDL_Renderer* WindowSys::Renderer() const {
@@ -100,14 +98,21 @@ bool WindowSys::CreateRenderer() {
 	if (renderer)
 		SDL_DestroyRenderer(renderer);
 
+	// set neeeded flags
 	uint flags = SDL_RENDERER_ACCELERATED;
 	if (sets.vsync) flags |= SDL_RENDERER_PRESENTVSYNC;
 
+	// create renderer based on the currently selected one
 	renderer = SDL_CreateRenderer(window, GetRenderDriverIndex(), flags);
-	return 0;
+	if (!renderer) {
+		cerr << "couldn't create renderer" << endl;
+		return false;
+	}
+	return true;
 }
 
 int WindowSys::GetRenderDriverIndex() {
+	// get index of currently selected renderer (if name doesn't match, choose the first renderer)
 	for (int i = 0; i != SDL_GetNumRenderDrivers(); i++)
 		if (getRendererName(i) == sets.renderer)
 			return i;
@@ -116,6 +121,7 @@ int WindowSys::GetRenderDriverIndex() {
 }
 
 void WindowSys::PassDrawObject(Object* obj) {
+	// specific drawing for each object
 	if (dynamic_cast<Image*>(obj)) {
 		Image* object = static_cast<Image*>(obj);
 		DrawImage(object->getRect(), object->texname);
@@ -222,7 +228,7 @@ void WindowSys::DrawImage(SDL_Rect rect, string texname, bool keepSize, SDL_Rect
 }
 
 void WindowSys::DrawText(const Text& txt, SDL_Rect crop) {
-	TTF_Font* font = TTF_OpenFont(Filer::getFontPath(sets.font).string().c_str(), txt.size);
+	TTF_Font* font = TTF_OpenFont(sets.font.c_str(), txt.size);
 
 	SDL_Rect rect = { txt.pos.x, txt.pos.y };
 	TTF_SizeText(font, txt.text.c_str(), &rect.w, &rect.h);

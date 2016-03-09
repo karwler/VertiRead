@@ -3,8 +3,7 @@
 
 // OBJECT
 
-Object::Object(vec2i POS, vec2i SCL, EColor CLR, EObjectState STAT) :
-	state(STAT),
+Object::Object(vec2i POS, vec2i SCL, EColor CLR) :
 	pos(POS), size(SCL),
 	color(CLR)
 {}
@@ -77,7 +76,7 @@ void TextBox::setSize(int val, bool byWidth) {
 }
 
 vec2i TextBox::CalculateSize(Text TXT) const {
-	TTF_Font* font = TTF_OpenFont(Filer::getFontPath(World::winSys()->Settings().font).string().c_str(), text.size);
+	TTF_Font* font = TTF_OpenFont(World::winSys()->Settings().font.c_str(), text.size);
 	vec2i scale;
 	int maxWidth = 0;
 	uint lineCount = 0;
@@ -140,9 +139,20 @@ ButtonText::~ButtonText() {}
 ScrollArea::ScrollArea(Object BASE, int SPC, int BARW) :
 	Object(BASE),
 	barW(BARW),
+	diffSliderMouseY(0),
 	spacing(SPC)
 {}
 ScrollArea::~ScrollArea() {}
+
+void ScrollArea::DragSlider(int ypos) {
+	cout << diffSliderMouseY << endl;
+	sliderY = ypos - diffSliderMouseY;
+	if (sliderY < 0.f)
+		sliderY = 0.f;
+	else if (sliderY > sliderL)
+		sliderY = sliderL;
+	World::winSys()->DrawScene();
+}
 
 void ScrollArea::ScrollSlider(float mov) {
 	sliderY += mov;
@@ -150,6 +160,7 @@ void ScrollArea::ScrollSlider(float mov) {
 		sliderY = 0.f;
 	else if (sliderY > sliderL)
 		sliderY = sliderL;
+	World::winSys()->DrawScene();
 }
 
 void ScrollArea::ScrollList(int mov)  {
@@ -170,6 +181,14 @@ int ScrollArea::listY() const {
 
 int ScrollArea::Spacing() const {
 	return spacing;
+}
+
+int ScrollArea::SliderY() const {
+	return pos.y + sliderY;
+}
+
+int ScrollArea::SliderH() const {
+	return sliderH;
 }
 
 void ScrollArea::SetScollValues() {

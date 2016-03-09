@@ -1,7 +1,6 @@
 #include "world.h"
 
 kptr<Engine> World::engine;
-vector<string> World::args;
 
 void World::PrintInfo() {
 	cout << "Platform: " << SDL_GetPlatform() << endl;

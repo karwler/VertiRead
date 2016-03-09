@@ -28,4 +28,5 @@ private:
 	float dSec;
 
 	void HandleEvent(SDL_Event* event);
+	void Cleanup();
 };

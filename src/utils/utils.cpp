@@ -14,7 +14,7 @@ int findChar(string str, char c) {
 	return -1;
 }
 
-vector<string> getWords(string line) {
+vector<string> getWords(string line, bool skipCommas) {
 	vector<string> words;
 	string word;
 	for (uint i = 0; i <= line.length(); i++) {
@@ -27,6 +27,24 @@ vector<string> getWords(string line) {
 			word += line[i];
 	}
 	return words;
+}
+
+int SplitIniLine(string line, string* arg, string* val, string* key) {
+	int i0 = findChar(line, '=');
+	if (i0 == -1)
+		return -1;
+	if (val)
+		*val = line.substr(i0 + 1);
+	string left = line.substr(0, i0);
+	int i1 = findChar(left, '[');
+	int i2 = findChar(left, ']');
+	if (i1 < i2 && i1 != -1) {
+		if (key) *key = line.substr(i1 + 1, i2 - i1 - 1);
+		if (arg) *arg = line.substr(0, i1);
+	}
+	else if (arg)
+		*arg = left;
+	return i0;
 }
 
 fs::path removeExtension(fs::path path) {
@@ -52,6 +70,13 @@ vector<string> getAvailableMusicExts() {
 	exts[1] = ".mp3";
 	exts[2] = ".ogg";
 	return exts;
+}
+
+string wtos(wstring wstr) {
+	string sstr;
+	for (wchar_t& c : wstr)
+		sstr += c;
+	return sstr;
 }
 
 bool stob(string str) {

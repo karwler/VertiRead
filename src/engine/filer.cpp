@@ -7,16 +7,18 @@ EDirFilter operator|(EDirFilter a, EDirFilter b) {
 
 int Filer::CheckDirectories() {
 	int retval = 0;
-	if (!fs::exists(dirLib))
-		fs::create_directory(dirLib);
-	if (!fs::exists(dirPlist))
-		fs::create_directory(dirPlist);
-	if (!fs::exists(dirSets))
-		fs::create_directory(dirSets);
-	if (!fs::exists(dirSnds))
+	if (!fs::exists(dirPlist()))
+		fs::create_directory(dirPlist());
+	if (!fs::exists(dirSets()))
+		fs::create_directory(dirSets());
+	if (!fs::exists(dirSnds())) {
+		cerr << "couldn't find sound directory" << endl;
 		retval = 1;
-	if (!fs::exists(dirTexs))
+	}
+	if (!fs::exists(dirTexs())) {
+		cerr << "couldn't find texture directory" << endl;
 		retval = 2;
+	}
 	return retval;
 }
 
@@ -62,7 +64,7 @@ vector<fs::path> Filer::ListDir(fs::path dir, EDirFilter filter, vector<string> 
 
 Playlist Filer::LoadPlaylist(string name) {
 	vector<string> lines;
-	if (!ReadTextFile(fs::path(dirPlist + dsep + name + ".txt"), lines))
+	if (!ReadTextFile(fs::path(dirPlist() + name + ".txt"), lines))
 		return Playlist();
 
 	Playlist plist(name);
@@ -83,12 +85,12 @@ void Filer::SavePlaylist(Playlist plist) {
 		lines.push_back("file=" + file);
 	for (string& name : plist.books)
 		lines.push_back("book=" + name);
-	WriteTextFile(dirPlist + dsep + plist.name + ".txt", lines);
+	WriteTextFile(dirPlist() + plist.name + ".txt", lines);
 }
 
 GeneralSettings Filer::LoadGeneralSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(fs::path(dirSets + dsep + "general.ini"), lines))
+	if (!ReadTextFile(fs::path(dirSets() + "general.ini"), lines))
 		return GeneralSettings();
 
 	GeneralSettings sets;
@@ -103,19 +105,21 @@ GeneralSettings Filer::LoadGeneralSettings() {
 void Filer::SaveSettings(GeneralSettings sets) {
 	vector<string> lines;
 	// save settings
-	WriteTextFile(dirSets + dsep + "general.ini", lines);
+	WriteTextFile(dirSets() + "general.ini", lines);
 }
 
 VideoSettings Filer::LoadVideoSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(fs::path(dirSets + dsep + "video.ini"), lines))
+	if (!ReadTextFile(fs::path(dirSets() + "video.ini"), lines))
 		return VideoSettings();
 
 	VideoSettings sets;
 	for (string& line : lines) {
 		string arg, val, key;
 		SplitIniLine(line, &arg, &val, &key);
-		if (arg == "vsync")
+		if (arg == "font")
+			sets.font = val;
+		else if (arg == "vsync")
 			sets.vsync = stob(val);
 		else if (arg == "renderer")
 			sets.renderer = val;
@@ -141,6 +145,7 @@ VideoSettings Filer::LoadVideoSettings() {
 
 void Filer::SaveSettings(VideoSettings sets) {
 	vector<string> lines;
+	lines.push_back("font=" + sets.font);
 	lines.push_back("vsync=" + btos(sets.vsync));
 	lines.push_back("renderer=" + sets.renderer);
 	lines.push_back("maximized=" + btos(sets.maximized));
@@ -148,12 +153,12 @@ void Filer::SaveSettings(VideoSettings sets) {
 	lines.push_back("resolution=" + to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y));
 	for (const pair<EColor, vec4b>& it : sets.colors)
 		lines.push_back("color["+to_string(int(it.first))+"]=" + to_string(it.second.x) + ' ' + to_string(it.second.y) + ' ' + to_string(it.second.z) + ' ' + to_string(it.second.a));
-	WriteTextFile(dirSets + dsep + "video.ini", lines);
+	WriteTextFile(dirSets() + "video.ini", lines);
 }
 
 AudioSettings Filer::LoadAudioSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(fs::path(dirSets + dsep + "audio.ini"), lines))
+	if (!ReadTextFile(fs::path(dirSets() + "audio.ini"), lines))
 		return AudioSettings();
 
 	AudioSettings sets;
@@ -175,12 +180,12 @@ void Filer::SaveSettings(AudioSettings sets) {
 	lines.push_back("music_vol=" + to_string(sets.musicVolume));
 	lines.push_back("interface_vol=" + to_string(sets.soundVolume));
 	lines.push_back("song_delay=" + to_string(sets.songDelay));
-	WriteTextFile(dirSets + dsep + "audio.ini", lines);
+	WriteTextFile(dirSets() + "audio.ini", lines);
 }
 
 ControlsSettings Filer::LoadControlsSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(fs::path(dirSets + dsep + "controls.ini"), lines))
+	if (!ReadTextFile(fs::path(dirSets() + "controls.ini"), lines))
 		return ControlsSettings();
 
 	ControlsSettings sets(false);
@@ -206,39 +211,44 @@ void Filer::SaveSettings(ControlsSettings sets) {
 	for (Shortcut& it : sets.shortcuts)
 		for (SDL_Keysym& key : it.keys)
 			lines.push_back("shortcut[" + it.Name() + "]=" + ktos(key));
-	WriteTextFile(dirSets + dsep + "controls.ini", lines);
+	WriteTextFile(dirSets() + "controls.ini", lines);
 }
 
-fs::path Filer::fontDir() {
+string Filer::execDir() {
+	fs::path path;
 #ifdef _WIN32
-	return string(getenv("SystemDrive")) + "\\Windows\\Fonts\\";
+	TCHAR buffer[2048];
+	GetModuleFileName (NULL, buffer, 2048);
+	for (uint i = 0; buffer[i] != 0; i++)
+		path += buffer[i];
+	path = path.parent_path();
 #else
-	return "/usr/share/fonts/truetype/msttcorefonts/";
-#endif
-}
-
-fs::path Filer::getFontPath(string name) {
-	return fontDir().string() + name + ".ttf";
-}
-
-fs::path Filer::execDir() {
-	return fs::system_complete(World::args[0]).remove_filename();
-}
-
-int Filer::SplitIniLine(string line, string* arg, string* val, string* key) {
-	int i0 = findChar(line, '=');
-	if (i0 == -1)
-		return -1;
-	if (val)
-		*val = line.substr(i0 + 1);
-	string left = line.substr(0, i0);
-	int i1 = findChar(left, '[');
-	int i2 = findChar(left, ']');
-	if (i1 < i2 && i1 != -1) {
-		if (key) *key = line.substr(i1 + 1, i2 - i1 - 1);
-		if (arg) *arg = line.substr(0, i1);
+	char buffer[PATH_MAX];
+	ssize_t len = ::readlink("/proc/self/exe", buffer, sizeof(buffer) - 1);
+	if (len != -1) {
+		buffer[len] = '\0';
+		path = buffer;
 	}
-	else if (arg)
-		*arg = left;
-	return i0;
+#endif
+	return path.string() + dsep;
+}
+
+string Filer::dirLib() {
+	return execDir() + "library" + dsep;
+}
+
+string Filer::dirPlist() {
+	return execDir() + "playlists" + dsep;
+}
+
+string Filer::dirSets() {
+	return execDir() + "settings" + dsep;
+}
+
+string Filer::dirSnds() {
+	return dirLib() + "sounds" + dsep;
+}
+
+string Filer::dirTexs() {
+	return dirLib() + "textures" + dsep;
 }

@@ -1,5 +1,6 @@
 #include "types.h"
 #include "prog/program.h"
+#include "engine/filer.h"
 
 Text::Text(string TXT, vec2i POS, int SIZE, EColor CLR) :
 	size(SIZE),
@@ -103,6 +104,13 @@ VideoSettings::VideoSettings(bool VS, bool MAX, bool FSC, vec2i RES, string FONT
 	renderer(RNDR),
 	colors(CLRS)
 {
+	if (font.empty() || !fs::exists(font)) {
+#ifdef _WIN32
+		font = string(getenv("SystemDrive")) + "\\Windows\\Fonts\\Arial.ttf";
+#else
+		font = "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf";
+#endif
+	}
 	FillMissingColors();
 }
 

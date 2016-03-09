@@ -1,5 +1,12 @@
 #pragma once
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dirent.h>
+#include <unistd.h>
+#endif
+
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
@@ -263,11 +270,13 @@ using vec4i = kvec4<int>;
 
 bool isNumber(string str);
 int findChar(string str, char c);
-vector<string> getWords(string line);
+vector<string> getWords(string line, bool skipCommas=true);
+int SplitIniLine(string line, string* arg, string* val, string* key = nullptr);
 fs::path removeExtension(fs::path path);
 bool inRect(SDL_Rect rect, vec2i point);
 vector<string> getAvailableImageExts();
 vector<string> getAvailableMusicExts();
+string wtos(wstring wstr);
 bool stob(string str);
 string btos(bool b);
 SDL_Keysym stok(string str);

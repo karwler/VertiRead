@@ -4,14 +4,13 @@
 
 class Object {
 public:
-	Object(vec2i POS = vec2i(), vec2i SCL = vec2i(100, 100), EColor CLR = EColor::rectangle, EObjectState STAT = EObjectState::active);
+	Object(vec2i POS = vec2i(), vec2i SCL = vec2i(100, 100), EColor CLR = EColor::rectangle);
 	virtual ~Object();
 
 	SDL_Rect getRect() const;
 	vec2i Size() const;
 	virtual void setSize(vec2i newSize);
 
-	EObjectState state;
 	vec2i pos;
 	EColor color;
 
@@ -78,6 +77,7 @@ public:
 	ScrollArea(Object BASE = Object(), int SPC = 5, int BARW = 10);
 	virtual ~ScrollArea();
 
+	void DragSlider(int ypos);
 	void ScrollSlider(float mov);
 	void ScrollList(int mov);
 
@@ -86,8 +86,11 @@ public:
 
 	int listY() const;
 	int Spacing() const;
+	int SliderY() const;
+	int SliderH() const;
 
 	int barW;
+	int diffSliderMouseY;
 protected:
 	int spacing;
 	float sliderY;

@@ -2,45 +2,33 @@
 #include "engine/world.h"
 
 void Program::Event_Up() {
-	if (dynamic_cast<ScrollArea*>(World::scene()->FocusedObject())) {
+	if (dynamic_cast<ScrollArea*>(World::scene()->FocusedObject()))
 		static_cast<ScrollArea*>(World::scene()->FocusedObject())->ScrollList(-30);
-		World::winSys()->DrawScene();
-	}
 }
 
 void Program::Event_Down() {
-	if (dynamic_cast<ScrollArea*>(World::scene()->FocusedObject())) {
+	if (dynamic_cast<ScrollArea*>(World::scene()->FocusedObject()))
 		static_cast<ScrollArea*>(World::scene()->FocusedObject())->ScrollList(30);
-		World::winSys()->DrawScene();
-	}
 }
 
 void Program::Event_Left() {
-	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject())) {
+	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
 		static_cast<ReaderBox*>(World::scene()->FocusedObject());
-		World::winSys()->DrawScene();
-	}
 }
 
 void Program::Event_Right() {
-	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject())) {
+	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
 		static_cast<ReaderBox*>(World::scene()->FocusedObject());
-		World::winSys()->DrawScene();
-	}
 }
 
 void Program::Event_ZoomIn() {
-	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject())) {
+	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
 		static_cast<ReaderBox*>(World::scene()->FocusedObject());
-		World::winSys()->DrawScene();
-	}
 }
 
 void Program::Event_ZoomOut() {
-	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject())) {
+	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
 		static_cast<ReaderBox*>(World::scene()->FocusedObject());
-		World::winSys()->DrawScene();
-	}
 }
 
 void Program::Event_PlayPauseSong() {

@@ -6,12 +6,11 @@ class WindowSys {
 public:
 	WindowSys();
 
-	int SetWindow(VideoSettings settings);
+	bool SetWindow(VideoSettings settings);
 	void DestroyWindow();
 	void DrawScene();
 
 	SDL_Renderer* Renderer() const;
-	bool SetFont(string name);
 
 	VideoSettings Settings() const;
 	vec2i Resolution() const;

@@ -5,44 +5,56 @@ Engine::Engine() :
 {}
 
 int Engine::Run() {
-	SDL_Init(SDL_INIT_EVERYTHING);
-	TTF_Init();
-
+	// initialize all components
+	if (SDL_Init(SDL_INIT_EVERYTHING))
+		return 1;
+	if (TTF_Init()) {
+		SDL_Quit();
+		return 2;
+	}
+	
 	World::PrintInfo();
 	Filer::CheckDirectories();
 	scene = new Scene;
 
 	winSys = new WindowSys;
-	winSys->SetWindow(Filer::LoadVideoSettings());
+	if (!winSys->SetWindow(Filer::LoadVideoSettings())) {
+		Cleanup();
+		return 3;
+	}
 
 	audioSys = new AudioSys;
-	audioSys->Initialize(Filer::LoadAudioSettings());
+	if (!audioSys->Initialize(Filer::LoadAudioSettings())) {
+		Cleanup();
+		return 4;
+	}
 	audioSys->setPlaylist(Filer::LoadPlaylist("test"));
 	
 	inputSys = new InputSys;
 	inputSys->Settings(Filer::LoadControlsSettings());
 	kptr<SDL_Event> event = new SDL_Event;
 	
+	// initialize scene and timer
 	scene->SwitchMenu(EMenu::books);
 	uint oldTime = SDL_GetTicks();
 
 	while (run) {
+		// get delta seconds
 		uint newTime = SDL_GetTicks();
 		dSec = (newTime - oldTime) / 1000.f;
 		oldTime = newTime;
 
+		// handle events
 		audioSys->Tick(dSec);
 		if (SDL_PollEvent(event))
 			HandleEvent(event);
 	}
-	winSys->DestroyWindow();
-	audioSys->Cleanup();
-	TTF_Quit();
-	SDL_Quit();
+	Cleanup();
 	return 0;
 }
 
 void Engine::Close() {
+	// save all settings before closing
 	Filer::SaveSettings(GeneralSettings());
 	Filer::SaveSettings(winSys->Settings());
 	Filer::SaveSettings(audioSys->Settings());
@@ -51,14 +63,15 @@ void Engine::Close() {
 }
 
 void Engine::HandleEvent(SDL_Event* event) {
+	// pass event to a specific handler
 	switch (event->type) {
-	case SDL_KEYDOWN:
+	case SDL_KEYDOWN: case SDL_KEYUP:
 		inputSys->KeypressEvent(event->key);
 		break;
 	case SDL_MOUSEMOTION:
 		inputSys->MouseMotionEvent(event->motion);
 		break;
-	case SDL_MOUSEBUTTONDOWN:
+	case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEBUTTONUP:
 		inputSys->MouseButtonEvent(event->button);
 		break;
 	case SDL_MOUSEWHEEL:
@@ -70,6 +83,15 @@ void Engine::HandleEvent(SDL_Event* event) {
 	case SDL_QUIT:
 		Close();
 	}
+}
+
+void Engine::Cleanup() {
+	if (audioSys)
+		audioSys->Cleanup();
+	if (winSys)
+		winSys->DestroyWindow();
+	TTF_Quit();
+	SDL_Quit();
 }
 
 float Engine::deltaSeconds() const {

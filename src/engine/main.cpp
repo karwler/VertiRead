@@ -1,8 +1,10 @@
 #include "world.h"
 
-int main(int argc, char** argv) {
-	for (int i = 0; i != argc; i++)
-		World::args.push_back(argv[i]);
+#ifdef _WIN32
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
+#else
+int main(int argc, char**) {
+#endif
 	World::engine = new Engine;
 	return World::engine->Run();
 }

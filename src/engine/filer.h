@@ -2,12 +2,6 @@
 
 #include "utils/types.h"
 
-const string dirLib = "library";
-const string dirPlist = "playlists";
-const string dirSets = "settings";
-const string dirSnds = "sounds";
-const string dirTexs = "textures";
-
 #ifdef _WIN32
 const string dsep = "\\";
 #else
@@ -40,8 +34,10 @@ public:
 	static ControlsSettings LoadControlsSettings();
 	static void SaveSettings(ControlsSettings sets);
 
-	static fs::path fontDir();
-	static fs::path getFontPath(string name);
-	static fs::path execDir();
-	static int SplitIniLine(string line, string* arg, string* val, string* key=nullptr);
+	static string execDir();
+	static string dirLib();
+	static string dirPlist();
+	static string dirSets();
+	static string dirSnds();
+	static string dirTexs();
 };

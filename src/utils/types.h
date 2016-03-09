@@ -20,13 +20,6 @@ enum class EMenu : byte {
 	controlsSets
 };
 
-enum class EObjectState : byte {
-	active,
-	highlighted,
-	disabled,
-	hidden
-};
-
 enum class EColor : byte {
 	background,
 	rectangle,
@@ -80,7 +73,7 @@ struct GeneralSettings {
 };
 
 struct VideoSettings {
-	VideoSettings(bool VS=true, bool MAX=false, bool FSC=false, vec2i RES = vec2i(800, 600), string FONT="Arial", string RNDR="", map<EColor, vec4b> CLRS=map<EColor, vec4b>());
+	VideoSettings(bool VS=true, bool MAX=false, bool FSC=false, vec2i RES = vec2i(800, 600), string FONT="", string RNDR="", map<EColor, vec4b> CLRS=map<EColor, vec4b>());
 
 	bool vsync;
 	bool maximized, fullscreen;
