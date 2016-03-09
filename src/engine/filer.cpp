@@ -22,20 +22,27 @@ int Filer::CheckDirectories() {
 	return retval;
 }
 
-bool Filer::ReadTextFile(fs::path file, vector<string>& lines) {
+bool Filer::ReadTextFile(string file, vector<string>& lines) {
 	ifstream ifs(file.c_str());
-	if (!ifs.good())
+	if (!ifs.good()) {
+		cerr << "couldn't read file " << file << endl;
 		return false;
+	}
 	lines.clear();
 	for (string line; getline(ifs, line);)
 		lines.push_back(line);
 	return true;
 }
 
-void Filer::WriteTextFile(fs::path file, const vector<string>& lines) {
+bool Filer::WriteTextFile(string file, const vector<string>& lines) {
 	ofstream ofs(file.c_str());
+	if (!ofs.good()) {
+		cerr << "couldn't write file " << file << endl;
+		return false;
+	}
 	for (const string& line : lines)
 		ofs << line << endl;
+	return true;
 }
 
 vector<fs::path> Filer::ListDir(fs::path dir, EDirFilter filter, vector<string> extFilter) {
@@ -64,7 +71,7 @@ vector<fs::path> Filer::ListDir(fs::path dir, EDirFilter filter, vector<string> 
 
 Playlist Filer::LoadPlaylist(string name) {
 	vector<string> lines;
-	if (!ReadTextFile(fs::path(dirPlist() + name + ".txt"), lines))
+	if (!ReadTextFile(dirPlist() + name, lines))
 		return Playlist();
 
 	Playlist plist(name);
@@ -90,7 +97,7 @@ void Filer::SavePlaylist(Playlist plist) {
 
 GeneralSettings Filer::LoadGeneralSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(fs::path(dirSets() + "general.ini"), lines))
+	if (!ReadTextFile(dirSets() + "general.ini", lines))
 		return GeneralSettings();
 
 	GeneralSettings sets;
@@ -110,7 +117,7 @@ void Filer::SaveSettings(GeneralSettings sets) {
 
 VideoSettings Filer::LoadVideoSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(fs::path(dirSets() + "video.ini"), lines))
+	if (!ReadTextFile(dirSets() + "video.ini", lines))
 		return VideoSettings();
 
 	VideoSettings sets;
@@ -158,7 +165,7 @@ void Filer::SaveSettings(VideoSettings sets) {
 
 AudioSettings Filer::LoadAudioSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(fs::path(dirSets() + "audio.ini"), lines))
+	if (!ReadTextFile(dirSets() + "audio.ini", lines))
 		return AudioSettings();
 
 	AudioSettings sets;
@@ -185,7 +192,7 @@ void Filer::SaveSettings(AudioSettings sets) {
 
 ControlsSettings Filer::LoadControlsSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(fs::path(dirSets() + "controls.ini"), lines))
+	if (!ReadTextFile(dirSets() + "controls.ini", lines))
 		return ControlsSettings();
 
 	ControlsSettings sets(false);
@@ -221,16 +228,13 @@ string Filer::execDir() {
 	GetModuleFileName (NULL, buffer, 2048);
 	for (uint i = 0; buffer[i] != 0; i++)
 		path += buffer[i];
-	path = path.parent_path();
 #else
 	char buffer[PATH_MAX];
-	ssize_t len = ::readlink("/proc/self/exe", buffer, sizeof(buffer) - 1);
-	if (len != -1) {
-		buffer[len] = '\0';
-		path = buffer;
-	}
+	int len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
+	buffer[len] = '\0';
+	path = buffer;
 #endif
-	return path.string() + dsep;
+	return path.parent_path().string() + dsep;
 }
 
 string Filer::dirLib() {

@@ -13,6 +13,7 @@
 #include <SDL2/SDL_mixer.h>
 #include <boost/filesystem.hpp>
 #include <fstream>
+#include <iostream>
 #include <cstdlib>
 #include <climits>
 #include <cmath>
@@ -20,7 +21,6 @@
 #include <list>
 #include <map>
 #include <string>
-#include <iostream>
 using namespace std;
 namespace fs = boost::filesystem;
 

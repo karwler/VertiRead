@@ -18,8 +18,8 @@ EDirFilter operator|(EDirFilter a, EDirFilter b);
 class Filer {
 public:
 	static int CheckDirectories();
-	static bool ReadTextFile(fs::path file, vector<string>& lines);
-	static void WriteTextFile(fs::path file, const vector<string>& lines);
+	static bool ReadTextFile(string file, vector<string>& lines);
+	static bool WriteTextFile(string file, const vector<string>& lines);
 	static vector<fs::path> ListDir(fs::path dir, EDirFilter filter, vector<string> extFilter=vector<string>());
 
 	static Playlist LoadPlaylist(string name);
