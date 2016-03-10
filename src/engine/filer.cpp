@@ -17,7 +17,7 @@ int Filer::CheckDirectories() {
 	}
 	if (!fs::exists(dirTexs())) {
 		cerr << "couldn't find texture directory" << endl;
-		retval = 2;
+		retval = 1;
 	}
 	return retval;
 }

@@ -3,7 +3,6 @@
 #ifdef _WIN32
 #include <windows.h>
 #else
-#include <dirent.h>
 #include <unistd.h>
 #endif
 
@@ -274,8 +273,9 @@ vector<string> getWords(string line, bool skipCommas=true);
 int SplitIniLine(string line, string* arg, string* val, string* key = nullptr);
 fs::path removeExtension(fs::path path);
 bool inRect(SDL_Rect rect, vec2i point);
-vector<string> getAvailableImageExts();
-vector<string> getAvailableMusicExts();
+bool needsCrop(SDL_Rect crop);
+SDL_Surface* CropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop);
+
 string wtos(wstring wstr);
 bool stob(string str);
 string btos(bool b);

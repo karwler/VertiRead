@@ -9,7 +9,8 @@ public:
 	bool SetWindow(VideoSettings settings);
 	void DestroyWindow();
 	void DrawScene();
-
+	
+	int CalcTextLength(string text, int size);
 	SDL_Renderer* Renderer() const;
 
 	VideoSettings Settings() const;

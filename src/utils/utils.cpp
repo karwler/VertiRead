@@ -55,21 +55,18 @@ bool inRect(SDL_Rect rect, vec2i point) {
 	return point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
 }
 
-vector<string> getAvailableImageExts() {
-	vector<string> exts(4);
-	exts[0] = ".jpg";
-	exts[1] = ".png";
-	exts[2] = ".bmp";
-	exts[3] = ".tif";
-	return exts;
+bool needsCrop(SDL_Rect crop) {
+	return crop.x != 0 || crop.y != 0 || crop.w != 0 || crop.h != 0;
 }
 
-vector<string> getAvailableMusicExts() {
-	vector<string> exts(3);
-	exts[0] = ".wav";
-	exts[1] = ".mp3";
-	exts[2] = ".ogg";
-	return exts;
+SDL_Surface* CropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {
+	vec2i temp(rect.w, rect.h);
+	rect = { rect.x + crop.x, rect.y + crop.y, rect.w - crop.x - crop.w, rect.h - crop.y - crop.h };
+	crop = { crop.x, crop.y, temp.x - crop.x - crop.w, temp.y - crop.y - crop.h };
+
+	SDL_Surface* sheet = SDL_CreateRGBSurface(surface->flags, crop.w, crop.h, surface->format->BitsPerPixel, surface->format->Rmask, surface->format->Gmask, surface->format->Bmask, surface->format->Amask);
+	SDL_BlitSurface(surface, &crop, sheet, 0);
+	return sheet;
 }
 
 string wtos(wstring wstr) {

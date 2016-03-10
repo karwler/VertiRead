@@ -103,28 +103,28 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ExecutablePath>$(SolutionDir)build\;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>$(SolutionDir)src\;$(SolutionDir)include\;C:\Program Files\boost_1_60_0;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Program Files\boost_1_60_0\stage\lib;$(SolutionDir)lib\win32\;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)src\;$(SolutionDir)include\;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)lib\win32\;$(LibraryPath)</LibraryPath>
     <OutDir>$(SolutionDir)build\</OutDir>
     <IntDir>$(SolutionDir)bin\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ExecutablePath>$(SolutionDir)build\;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>$(SolutionDir)src\;$(SolutionDir)include\;C:\Program Files\boost_1_60_0;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Program Files\boost_1_60_0\stage\lib;$(SolutionDir)lib\win32\;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)src\;$(SolutionDir)include\;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)lib\win32\;$(LibraryPath)</LibraryPath>
     <OutDir>$(SolutionDir)build\</OutDir>
     <IntDir>$(SolutionDir)bin\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ExecutablePath>$(SolutionDir)bin\;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>$(SolutionDir)src\;$(SolutionDir)include\;C:\Program Files\boost_1_60_0;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)src\;$(SolutionDir)include\;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)lib\win64\;$(LibraryPath)</LibraryPath>
     <OutDir>$(SolutionDir)build\</OutDir>
     <IntDir>$(SolutionDir)bin\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ExecutablePath>$(SolutionDir)bin\;$(ExecutablePath)</ExecutablePath>
-    <IncludePath>$(SolutionDir)src\;$(SolutionDir)include\;C:\Program Files\boost_1_60_0;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)src\;$(SolutionDir)include\;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)lib\win64\;$(LibraryPath)</LibraryPath>
     <OutDir>$(SolutionDir)build\</OutDir>
     <IntDir>$(SolutionDir)bin\</IntDir>

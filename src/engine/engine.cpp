@@ -28,7 +28,7 @@ int Engine::Run() {
 		Cleanup();
 		return 4;
 	}
-	audioSys->setPlaylist(Filer::LoadPlaylist("test"));
+	audioSys->setPlaylist(Filer::LoadPlaylist("test.txt"));	// this line is just for testing purposees
 	
 	inputSys = new InputSys;
 	inputSys->Settings(Filer::LoadControlsSettings());

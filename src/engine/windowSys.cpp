@@ -90,6 +90,16 @@ void WindowSys::setVSync(bool on) {
 		World::engine->Close();
 }
 
+int WindowSys::CalcTextLength(string text, int size) {
+	int width = 0;
+	TTF_Font* font = TTF_OpenFont(sets.font.c_str(), size);
+	if (font) {
+		TTF_SizeText(font, text.c_str(), &width, nullptr);
+		TTF_CloseFont(font);
+	}
+	return width;
+}
+
 SDL_Renderer* WindowSys::Renderer() const {
 	return renderer;
 }
@@ -188,14 +198,19 @@ void WindowSys::DrawObject(TileBox* obj) {
 		if (itemMax < frameMin || posY > frameMax)
 			continue;
 		
+		int textSize = obj->TileSize().y - obj->TileSize().y / 8;
 		SDL_Rect crop = { 0, 0, 0, 0 };
 		if (posY < frameMin && itemMax > frameMin)
 			crop.y = itemMax - obj->pos.x;
 		if (posY < frameMax && itemMax > frameMax)
 			crop.h = itemMax - frameMax;
 
+		int textWidth = CalcTextLength(tiles[i].label, textSize);
+		if (textWidth > obj->TileSize().x)
+			crop.w = textWidth - obj->TileSize().x + 10;
+
 		DrawRect({ posX, posY, obj->TileSize().x, obj->TileSize().y}, EColor::rectangle);
-		DrawText(Text(tiles[i].label, vec2i(posX+5, posY), obj->TileSize().y - obj->TileSize().y/8), crop);
+		DrawText(Text(tiles[i].label, vec2i(posX+5, posY), textSize), crop);
 	}
 	DrawRect(obj->Bar(), EColor::darkened);
 	DrawRect(obj->Slider(), EColor::highlighted);
@@ -207,43 +222,50 @@ void WindowSys::DrawRect(SDL_Rect rect, EColor color) {
 }
 
 void WindowSys::DrawImage(SDL_Rect rect, string texname, bool keepSize, SDL_Rect crop) {
-	if (!keepSize) {
-		SDL_Texture* tex = IMG_LoadTexture(renderer, texname.c_str());
-		SDL_QueryTexture(tex, nullptr, nullptr, &rect.w, &rect.h);
-		SDL_DestroyTexture(tex);
+	SDL_Texture* tex = IMG_LoadTexture(renderer, texname.c_str());
+	if (!tex) {
+		cerr << "couldn't load texture " << sets.font << endl;
+		return;
 	}
-	rect = { rect.x + crop.x, rect.y + crop.y, rect.w - crop.x - crop.w, rect.h - crop.y - crop.h };
-	crop = { crop.x, crop.y, rect.w - crop.x - crop.w, rect.h - crop.y - crop.h };
+	
+	if (!keepSize)
+		SDL_QueryTexture(tex, nullptr, nullptr, &rect.w, &rect.h);
+	if (needsCrop(crop)) {
+		SDL_DestroyTexture(tex);
+		SDL_Surface* surface = IMG_Load(texname.c_str());
+		SDL_Surface* sheet = CropSurface(surface, rect, crop);
+		tex = SDL_CreateTextureFromSurface(renderer, sheet);
 
-	SDL_Surface* surface = IMG_Load(texname.c_str());
-	SDL_Surface* sheet = SDL_CreateRGBSurface(surface->flags, crop.w, crop.h, surface->format->BitsPerPixel, surface->format->Rmask, surface->format->Gmask, surface->format->Bmask, surface->format->Amask);
-	SDL_BlitSurface(surface, &crop, sheet, 0);
-
-	SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, sheet);
+		SDL_FreeSurface(sheet);
+		SDL_FreeSurface(surface);
+	}
 	SDL_RenderCopy(renderer, tex, nullptr, &rect);
-
 	SDL_DestroyTexture(tex);
-	SDL_FreeSurface(sheet);
-	SDL_FreeSurface(surface);
 }
 
 void WindowSys::DrawText(const Text& txt, SDL_Rect crop) {
 	TTF_Font* font = TTF_OpenFont(sets.font.c_str(), txt.size);
+	if (!font) {
+		cerr << "couldn't load font " << sets.font << endl;
+		return;
+	}
 
 	SDL_Rect rect = { txt.pos.x, txt.pos.y };
 	TTF_SizeText(font, txt.text.c_str(), &rect.w, &rect.h);
-	rect = { rect.x + crop.x, rect.y + crop.y, rect.w - crop.x - crop.w, rect.h - crop.y - crop.h };
-	crop = { crop.x, crop.y, rect.w - crop.x - crop.w, rect.h - crop.y - crop.h };
 
 	SDL_Surface* surface = TTF_RenderText_Blended(font, txt.text.c_str(), { sets.colors[txt.color].x, sets.colors[txt.color].y, sets.colors[txt.color].z, sets.colors[txt.color].a });
-	SDL_Surface* sheet = SDL_CreateRGBSurface(surface->flags, crop.w, crop.h, surface->format->BitsPerPixel, surface->format->Rmask, surface->format->Gmask, surface->format->Bmask, surface->format->Amask);
-	SDL_BlitSurface(surface, &crop, sheet, 0);
+	SDL_Texture* tex = nullptr;
+	if (needsCrop(crop)) {
+		SDL_Surface* sheet = CropSurface(surface, rect, crop);
+		tex = SDL_CreateTextureFromSurface(renderer, sheet);
+		SDL_FreeSurface(sheet);
+	}
+	else
+		tex = SDL_CreateTextureFromSurface(renderer, surface);
 
-	SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, sheet);
 	SDL_RenderCopy(renderer, tex, nullptr, &rect);
 
 	SDL_DestroyTexture(tex);
-	SDL_FreeSurface(sheet);
 	SDL_FreeSurface(surface);
 	TTF_CloseFont(font);
 }

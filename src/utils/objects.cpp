@@ -145,7 +145,6 @@ ScrollArea::ScrollArea(Object BASE, int SPC, int BARW) :
 ScrollArea::~ScrollArea() {}
 
 void ScrollArea::DragSlider(int ypos) {
-	cout << diffSliderMouseY << endl;
 	sliderY = ypos - diffSliderMouseY;
 	if (sliderY < 0.f)
 		sliderY = 0.f;
