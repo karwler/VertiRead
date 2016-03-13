@@ -3,31 +3,29 @@
 
 // OBJECT
 
-Object::Object(vec2i POS, vec2i SCL, EColor CLR) :
-	pos(POS), size(SCL),
+Object::Object(vec2f POS, vec2f SIZ, EColor CLR) :
+	pos(POS), size(SIZ),
 	color(CLR)
 {}
+
+Object::Object(vec2i POS, vec2i SIZ, EColor CLR) :
+	pos(prc(POS)), size(prc(SIZ)),
+	color(CLR)
+{}
+
 Object::~Object() {}
 
 SDL_Rect Object::getRect() const {
-	return {pos.x, pos.y, size.x, size.y};
+	return {Pos().x, Pos().y, Size().x, Size().y};
+}
+
+vec2i Object::Pos() const {
+	return pix(pos);
 }
 
 vec2i Object::Size() const {
-	return size;
+	return pix(size);
 }
-
-void Object::setSize(vec2i newSize) {
-	size = newSize;
-}
-
-// IMAGE
-
-Image::Image(Object BASE, string TEXN) :
-	Object(BASE),
-	texname(TEXN)
-{}
-Image::~Image() {}
 
 // TEXTBOX
 
@@ -65,17 +63,17 @@ vector<Text> TextBox::getLines() const {
 
 void TextBox::setText(Text TXT) {
 	text = TXT;
-	size = CalculateSize(text);
+	size = prc(CalculateSize());
 }
 
 void TextBox::setSize(int val, bool byWidth) {
-	vec2i scale = CalculateSize(text);
+	vec2i scale = CalculateSize();
 	float factor = (byWidth) ? val / scale.x : val / scale.y;
 	text.size *= factor;
-	size = CalculateSize(text);
+	size = prc(CalculateSize());
 }
 
-vec2i TextBox::CalculateSize(Text TXT) const {
+vec2i TextBox::CalculateSize() const {
 	TTF_Font* font = TTF_OpenFont(World::winSys()->Settings().font.c_str(), text.size);
 	vec2i scale;
 	int maxWidth = 0;
@@ -140,60 +138,59 @@ ScrollArea::ScrollArea(Object BASE, int SPC, int BARW) :
 	Object(BASE),
 	barW(BARW),
 	diffSliderMouseY(0),
-	spacing(SPC)
+	spacing(SPC),
+	listY(0)
 {}
 ScrollArea::~ScrollArea() {}
 
 void ScrollArea::DragSlider(int ypos) {
-	sliderY = ypos - diffSliderMouseY;
-	if (sliderY < 0.f)
-		sliderY = 0.f;
-	else if (sliderY > sliderL)
-		sliderY = sliderL;
+	DragList(prcY(ypos - diffSliderMouseY) * float(listH) / size.y);
+}
+
+void ScrollArea::DragList(int ypos) {
+	listY = ypos;
+	if (listY < 0)
+		listY = 0;
+	else if (listY > listL)
+		listY = listL;
 	World::winSys()->DrawScene();
 }
 
-void ScrollArea::ScrollSlider(float mov) {
-	sliderY += mov;
-	if (sliderY < 0.f)
-		sliderY = 0.f;
-	else if (sliderY > sliderL)
-		sliderY = sliderL;
-	World::winSys()->DrawScene();
-}
-
-void ScrollArea::ScrollList(int mov)  {
-	ScrollSlider(mov * size.y / listH);
+void ScrollArea::ScrollList(int ymov)  {
+	DragList(listY + ymov);
 }
 
 SDL_Rect ScrollArea::Bar() const {
-	return{ pos.x + size.x - barW, pos.y, barW, size.y };
+	return{ pixX(pos.x + size.x) - barW, pixY(pos.y), barW, pixY(size.y) };
 }
 
 SDL_Rect ScrollArea::Slider() const {
-	return{ pos.x + size.x - barW, pos.y + int(sliderY), barW, sliderH };
-}
-
-int ScrollArea::listY() const {
-	return (sliderL == 0) ? 0 : -sliderY * listL / sliderL;
+	return{ pixX(pos.x + size.x) - barW, SliderY(), barW, pixY(sliderH) };
 }
 
 int ScrollArea::Spacing() const {
 	return spacing;
 }
 
+int ScrollArea::ListY() const {
+	return listY;
+}
+
+float ScrollArea::sliderY() const {
+	return float(listY) * size.y / float(listH);
+}
+
 int ScrollArea::SliderY() const {
-	return pos.y + sliderY;
+	return pixY(pos.y + sliderY());
 }
 
 int ScrollArea::SliderH() const {
-	return sliderH;
+	return pixY(sliderH);
 }
 
 void ScrollArea::SetScollValues() {
-	listL = listH - size.y;
-	sliderH = (listH >= size.y) ? size.y * size.y / listH : size.y;
-	sliderL = size.y - sliderH;
+	listL = (pixY(size.y) < listH) ? listH - pixY(size.y) : 0;
+	sliderH = (listH > pixY(size.y)) ? size.y * size.y / prcY(listH) : size.y;
 }
 
 // LIST BOX
@@ -242,7 +239,7 @@ vector<TileItem>& TileBox::Items() {
 void TileBox::setItems(const vector<TileItem>& objects) {
 	items = objects;
 
-	tilesPerRow = (size.x - barW) / (tileSize.x + spacing);
+	tilesPerRow = (pixX(size.x) - barW) / (tileSize.x + spacing);
 	if (tilesPerRow == 0)
 		tilesPerRow = 1;
 	float height = float((items.size() * (tileSize.y + spacing)) - spacing) / tilesPerRow;
@@ -260,21 +257,57 @@ int TileBox::TilesPerRow() const {
 
 // READER BOX
 
-ReaderBox::ReaderBox(const vector<Image*>& PICS) :
-	Object(vec2i(0, 0), World::winSys()->Resolution(), EColor::background)
+ReaderBox::ReaderBox(const vector<string>& PICS) :
+	ScrollArea(Object(vec2i(0, 0), World::winSys()->Resolution(), EColor::background), 10),
+	showSlider(false), showButtons(false), showPlayer(false),
+	zoom(1.f),
+	listX(0)
 {
 	if (!PICS.empty())
 		SetPictures(PICS);
 }
+ReaderBox::~ReaderBox() {}
 
-ReaderBox::~ReaderBox() {
-	Clear(pics);
+void ReaderBox::DragListX(int xpos) {
+	listX = xpos;
+	if (listX < -listXL)
+		listX = -listXL;
+	else if (listX > listXL)
+		listX = listXL;
+	World::winSys()->DrawScene();
 }
 
-vector<Image*> ReaderBox::Pictures() const {
+void ReaderBox::ScrollListX(int xmov) {
+	DragListX(listX + xmov);
+}
+
+void ReaderBox::Zoom(float factor) {
+	zoom *= factor;
+	// gotta resize the pics somehow
+}
+
+const vector<Image>& ReaderBox::Pictures() const {
 	return pics;
 }
 
-void ReaderBox::SetPictures(const vector<Image*>& pictures) {
+void ReaderBox::SetPictures(const vector<string>& pictures) {
+	int maxWidth = 0;
+	int ypos = 0;
+	for (const string& it : pictures) {
+		vec2i res = World::winSys()->GetTextureSize(it);
+		if (res.isNull())
+			continue;
+		pics.push_back(Image(vec2i(0, ypos), res, it));
 
+		if (res.x > maxWidth)
+			maxWidth = res.x;
+		ypos += res.y + spacing;
+	}
+	listH = ypos;
+	listXL = (pixX(size.x) < maxWidth) ? (maxWidth - pixX(size.x)) /2: 0;
+	SetScollValues();
+}
+
+int ReaderBox::ListX() const {
+	return listX;
 }

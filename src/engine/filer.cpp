@@ -7,6 +7,8 @@ EDirFilter operator|(EDirFilter a, EDirFilter b) {
 
 int Filer::CheckDirectories() {
 	int retval = 0;
+	if (!fs::exists(dirLib()))
+		fs::create_directory(dirLib());
 	if (!fs::exists(dirPlist()))
 		fs::create_directory(dirPlist());
 	if (!fs::exists(dirSets()))
@@ -45,9 +47,9 @@ bool Filer::WriteTextFile(string file, const vector<string>& lines) {
 	return true;
 }
 
-vector<fs::path> Filer::ListDir(fs::path dir, EDirFilter filter, vector<string> extFilter) {
+vector<fs::path> Filer::ListDir(fs::path dir, EDirFilter filter, const vector<string>& extFilter) {
 	vector<fs::path> names;
-	if (!fs::exists(dir))
+	if (!fs::is_directory(dir))
 		return names;
 	for (fs::directory_iterator it(dir); it != fs::directory_iterator(); it++) {
 		if (filter == 0)
@@ -55,7 +57,7 @@ vector<fs::path> Filer::ListDir(fs::path dir, EDirFilter filter, vector<string> 
 		else if (filter & FILTER_FILE && fs::is_regular_file(it->path())) {
 			if (extFilter.empty())
 				names.push_back(it->path());
-			else for (string& ext : extFilter)
+			else for (const string& ext : extFilter)
 				if (it->path().extension() == ext) {
 					names.push_back(it->path());
 					break;
@@ -66,7 +68,19 @@ vector<fs::path> Filer::ListDir(fs::path dir, EDirFilter filter, vector<string> 
 		else if (filter & FILTER_LINK && fs::is_symlink(it->path()))
 			names.push_back(it->path());
 	}
+	sort(names.begin(), names.end());
 	return names;
+}
+
+vector<string> Filer::GetPicsFromDir(fs::path dir) {
+	vector<string> pics;
+	if (!fs::is_directory(dir))
+		return pics;
+	for (fs::directory_iterator it(dir); it != fs::directory_iterator(); it++)
+		if (fs::is_regular_file(it->path()))
+			pics.push_back(it->path().string());
+	sort(pics.begin(), pics.end());
+	return pics;
 }
 
 Playlist Filer::LoadPlaylist(string name) {
@@ -88,8 +102,8 @@ Playlist Filer::LoadPlaylist(string name) {
 
 void Filer::SavePlaylist(Playlist plist) {
 	vector<string> lines;
-	for (string& file : plist.songs)
-		lines.push_back("file=" + file);
+	for (fs::path& file : plist.songs)
+		lines.push_back("file=" + file.string());
 	for (string& name : plist.books)
 		lines.push_back("book=" + name);
 	WriteTextFile(dirPlist() + plist.name + ".txt", lines);
@@ -193,9 +207,9 @@ void Filer::SaveSettings(AudioSettings sets) {
 ControlsSettings Filer::LoadControlsSettings() {
 	vector<string> lines;
 	if (!ReadTextFile(dirSets() + "controls.ini", lines))
-		return ControlsSettings();
+		return ControlsSettings(true);
 
-	ControlsSettings sets(false);
+	ControlsSettings sets;
 	for (string& line : lines) {
 		string arg, val, key;
 		SplitIniLine(line, &arg, &val, &key);
@@ -229,10 +243,14 @@ string Filer::execDir() {
 	for (uint i = 0; buffer[i] != 0; i++)
 		path += buffer[i];
 #else
-	char buffer[PATH_MAX];
+	char buffer[2048];
 	int len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
-	buffer[len] = '\0';
-	path = buffer;
+	if (len < 2048) {
+		buffer[len] = '\0';
+		path = buffer;
+	}
+	else
+		path = fs::initial_path().string() + "/" + World::args[0];
 #endif
 	return path.parent_path().string() + dsep;
 }
@@ -250,9 +268,9 @@ string Filer::dirSets() {
 }
 
 string Filer::dirSnds() {
-	return dirLib() + "sounds" + dsep;
+	return execDir() + "data"+dsep+"sounds" + dsep;
 }
 
 string Filer::dirTexs() {
-	return dirLib() + "textures" + dsep;
+	return execDir() + "data"+dsep+"textures" + dsep;
 }

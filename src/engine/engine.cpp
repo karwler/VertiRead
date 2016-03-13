@@ -28,14 +28,13 @@ int Engine::Run() {
 		Cleanup();
 		return 4;
 	}
-	audioSys->setPlaylist(Filer::LoadPlaylist("test.txt"));	// this line is just for testing purposees
 	
 	inputSys = new InputSys;
 	inputSys->Settings(Filer::LoadControlsSettings());
 	kptr<SDL_Event> event = new SDL_Event;
 	
 	// initialize scene and timer
-	scene->SwitchMenu(EMenu::books);
+	scene->getProgram()->Event_OpenBookList();
 	uint oldTime = SDL_GetTicks();
 
 	while (run) {

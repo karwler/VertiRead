@@ -1,4 +1,5 @@
 #include "utils.h"
+#include "engine/world.h"
 
 bool isNumber(string str) {
 	string::const_iterator it = str.begin();
@@ -93,6 +94,30 @@ SDL_Keysym stok(string str) {
 
 string ktos(SDL_Keysym key) {
 	return SDL_GetScancodeName(key.scancode);
+}
+
+vec2i pix(vec2f p) {
+	return vec2i(p.x * World::winSys()->Resolution().x, p.y * World::winSys()->Resolution().y);
+}
+
+int pixX(float p) {
+	return p * World::winSys()->Resolution().x;
+}
+
+int pixY(float p) {
+	return p * World::winSys()->Resolution().y;
+}
+
+vec2f prc(vec2i p) {
+	return vec2f(float(p.x) / float(World::winSys()->Resolution().x), float(p.y) / float(World::winSys()->Resolution().y));
+}
+
+float prcX(int p) {
+	return float(p) / float(World::winSys()->Resolution().x);
+}
+
+float prcY(int p) {
+	return float(p) / float(World::winSys()->Resolution().y);
 }
 
 string getRendererName(int id) {

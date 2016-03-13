@@ -1,6 +1,7 @@
 #pragma once
 
-#include "subprograms.h"
+#include "browser.h"
+#include "playlistEditor.h"
 
 class Program {
 public:
@@ -32,4 +33,5 @@ public:
 private:
 	EMenu curMenu;
 	kptr<Browser> browser;
+	kptr<PlaylistEditor> editor;
 };

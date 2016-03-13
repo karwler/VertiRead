@@ -35,11 +35,13 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 		for (fs::path& it : browser->ListDirs())
 			items.push_back(new BrowserButton(30, it.filename().string(), "", &Program::Event_OpenBrowser));
 		for (fs::path& it : browser->ListFiles())
-			items.push_back(new BrowserButton(30, it.filename().string(), "", &Program::Event_OpenReader));
+			items.push_back(new BrowserButton(30, it.filename().string(), it.parent_path().string(), &Program::Event_OpenReader));
 		objects.push_back(new ListBox(Object(vec2i(120, 0), vec2i(res.x-120, res.y), EColor::background), items));
 		focObject = objects.size() - 1;
 		break; }
 	case EMenu::reader:
+		objects.push_back(new ReaderBox(Filer::GetPicsFromDir(cstr(dat))));
+		focObject = objects.size() - 1;
 		break;
 	case EMenu::playlists: {
 		objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(res.x / 3 - 10, 50)), &Program::Event_OpenBookList, "Library"));
@@ -52,8 +54,26 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 		objects.push_back(new TileBox(Object(vec2i(0, 60), vec2i(res.x, res.y - 60)), tiles, vec2i(400, 30)));
 		focObject = objects.size() - 1;
 		break; }
-	case EMenu::plistEditor:
-		break;
+	case EMenu::plistEditor: {
+		PlaylistEditor* editor = (PlaylistEditor*) dat;
+		vector<ListItem*> items;
+		if (editor->showSongs) {
+			objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(100, 20)), &Program::Event_Back, "Books"));
+			for (fs::path& it : editor->getPlaylist().songs)
+				items.push_back(new ListItem(30, it.filename().string()));
+		}
+		else {
+			objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(100, 20)), &Program::Event_Back, "Songs"));
+			for (string& it : editor->getPlaylist().books)
+				items.push_back(new ListItem(30, it));
+		}
+		objects.push_back(new ButtonText(Object(vec2i(0, 30), vec2i(100, 20)), &Program::Event_Back, "Add"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 60), vec2i(100, 20)), &Program::Event_Back, "Del"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 90), vec2i(100, 20)), &Program::Event_Back, "Edit"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 120), vec2i(100, 20)), &Program::Event_Back, "Save"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 150), vec2i(100, 20)), &Program::Event_Back, "Cancel"));
+		objects.push_back(new ListBox(Object(vec2i(110, 0), vec2i(res.x-110, res.y), EColor::background), items));
+		break; }
 	case EMenu::generalSets:
 		objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(200, 50)), &Program::Event_OpenVideoSettings, "Video"));
 		objects.push_back(new ButtonText(Object(vec2i(0, 60), vec2i(200, 50)), &Program::Event_OpenAudioSettings, "Audio"));
@@ -103,7 +123,7 @@ void Scene::OnMouseDown() {
 }
 
 bool Scene::CheckButtonClick(Button* obj) {
-	if (inRect({ obj->pos.x, obj->pos.y, obj->Size().x, obj->Size().y }, InputSys::mousePos())) {
+	if (inRect({ obj->Pos().x, obj->Pos().y, obj->Size().x, obj->Size().y }, InputSys::mousePos())) {
 		obj->OnClick();
 		return true;
 	}
@@ -124,10 +144,10 @@ bool Scene::CheckSliderClick(ScrollArea* obj) {
 
 bool Scene::CheckListBoxClick(ListBox* obj) {
 	vector<ListItem*> items = obj->Items();
-	int posY = obj->pos.y + obj->listY();
+	int posY = obj->Pos().y + obj->ListY();
 	for (uint i = 0; i != items.size(); i++) {
 		int itemMax = posY + items[i]->height;
-		if (inRect({ obj->pos.x, posY, obj->Size().x - obj->barW, itemMax }, InputSys::mousePos())) {
+		if (inRect({ obj->Pos().x, posY, obj->Size().x - obj->barW, itemMax }, InputSys::mousePos())) {
 			items[i]->OnClick();
 			return true;
 		}
@@ -140,8 +160,8 @@ bool Scene::CheckTileBoxClick(TileBox* obj) {
 	vector<TileItem>& items = obj->Items();
 	for (uint i = 0; i != items.size(); i++) {
 		int row = i / obj->TilesPerRow();
-		int posX = (i - row * obj->TilesPerRow()) * (obj->TileSize().x + obj->Spacing()) + obj->pos.x;
-		int posY = row * (obj->TileSize().y + obj->Spacing()) + obj->pos.y;
+		int posX = (i - row * obj->TilesPerRow()) * (obj->TileSize().x + obj->Spacing()) + obj->Pos().x;
+		int posY = row * (obj->TileSize().y + obj->Spacing()) + obj->Pos().y;
 
 		if (inRect({ posX, posY, obj->TileSize().x, obj->TileSize().y }, InputSys::mousePos())) {
 			items[i].OnClick();
@@ -161,6 +181,11 @@ void Scene::OnMouseUp() {
 void Scene::OnMouseDrag() {
 	if (sliderHold)
 		sliderHold->DragSlider(InputSys::mousePos().y);
+}
+
+void Scene::OnMouseWheel(int ymov) {
+	if (dynamic_cast<ScrollArea*>(FocusedObject()))
+		static_cast<ScrollArea*>(FocusedObject())->ScrollList(ymov*-20);
 }
 
 Program* Scene::getProgram() const {

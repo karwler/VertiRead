@@ -29,7 +29,7 @@ void InputSys::MouseMotionEvent(const SDL_MouseMotionEvent& motion) {
 }
 
 void InputSys::MouseWheelEvent(const SDL_MouseWheelEvent& wheel) {
-
+	World::scene()->OnMouseWheel(wheel.y);
 }
 
 bool InputSys::isPressed(SDL_Scancode key) {

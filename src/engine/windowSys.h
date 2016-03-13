@@ -11,6 +11,7 @@ public:
 	void DrawScene();
 	
 	int CalcTextLength(string text, int size);
+	vec2i GetTextureSize(string tex);
 	SDL_Renderer* Renderer() const;
 
 	VideoSettings Settings() const;
@@ -30,8 +31,9 @@ private:
 	void PassDrawObject(Object* obj);
 	void DrawObject(ListBox* obj);
 	void DrawObject(TileBox* obj);
+	void DrawObject(ReaderBox* obj);
 
 	void DrawRect(SDL_Rect rect, EColor color);
-	void DrawImage(SDL_Rect rect, string texname, bool keepSize = true, SDL_Rect crop = { 0, 0, 0, 0 });
+	void DrawImage(SDL_Rect rect, string texname, SDL_Rect crop = { 0, 0, 0, 0 });
 	void DrawText(const Text& txt, SDL_Rect crop = { 0, 0, 0, 0 });
 };

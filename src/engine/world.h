@@ -5,6 +5,7 @@
 class World {
 public:
 	static kptr<Engine> engine;
+	static vector<string> args;
 
 	static void PrintInfo();
 

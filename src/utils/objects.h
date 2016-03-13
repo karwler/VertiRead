@@ -2,28 +2,22 @@
 
 #include "items.h"
 
+// if variable is an int, it's value is in pixels
+// if variable is a float, it's value is 0 - 1 (1 = window resolution)
+
 class Object {
 public:
-	Object(vec2i POS = vec2i(), vec2i SCL = vec2i(100, 100), EColor CLR = EColor::rectangle);
+	Object(vec2f POS = vec2f(), vec2f SIZ = vec2f(0.2f, 0.2f), EColor CLR = EColor::rectangle);
+	Object(vec2i POS, vec2i SIZ, EColor CLR = EColor::rectangle);
 	virtual ~Object();
 
 	SDL_Rect getRect() const;
+	vec2i Pos() const;
 	vec2i Size() const;
-	virtual void setSize(vec2i newSize);
 
-	vec2i pos;
+	vec2f pos;
+	vec2f size;
 	EColor color;
-
-protected:
-	vec2i size;
-};
-
-class Image : public Object {
-public:
-	Image(Object BASE=Object(), string TEXN="");
-	virtual ~Image();
-
-	string texname;
 };
 
 class TextBox : public Object {
@@ -33,14 +27,14 @@ public:
 
 	vector<Text> getLines() const;
 	void setText(Text TXT);
-	virtual void setSize(int val, bool byWidth);
+	void setSize(int val, bool byWidth);
 
 	vec4i margin;
 private:
 	int spacing;
 	Text text;
 
-	vec2i CalculateSize(Text TXT) const;
+	vec2i CalculateSize() const;
 };
 
 class Button : public Object {
@@ -78,26 +72,27 @@ public:
 	virtual ~ScrollArea();
 
 	void DragSlider(int ypos);
-	void ScrollSlider(float mov);
-	void ScrollList(int mov);
+	void DragList(int ypos);
+	void ScrollList(int ymov);
 
 	SDL_Rect Bar() const;
 	SDL_Rect Slider() const;
 
-	int listY() const;
 	int Spacing() const;
-	int SliderY() const;
+	int ListY() const;
+	float sliderY() const;	// calculate slider position
+	int SliderY() const;	// get global slider position in pixels
 	int SliderH() const;
 
 	int barW;
 	int diffSliderMouseY;
 protected:
 	int spacing;
-	float sliderY;
-	int sliderH, sliderL;
+	int listY;
+	float sliderH;
 	int listH, listL;
 
-	void SetScollValues();
+	void SetScollValues();	// needs listH and size.y in order to calculate listL, sliderH
 };
 
 class ListBox : public ScrollArea {
@@ -130,17 +125,23 @@ private:
 	vector<TileItem> items;
 };
 
-class ReaderBox : public Object {
+class ReaderBox : public ScrollArea {
 public:
-	ReaderBox(const vector<Image*>& PICS = vector<Image*>());
+	ReaderBox(const vector<string>& PICS = vector<string>());
 	virtual ~ReaderBox();
 
-	vector<Image*> Pictures() const;
-	void SetPictures(const vector<Image*>& pictures);
+	void DragListX(int xpos);
+	void ScrollListX(int xmov);
+	void Zoom(float factor);
+
+	const vector<Image>& Pictures() const;
+	void SetPictures(const vector<string>& pictures);
+	int ListX() const;
 
 private:
+	bool showSlider, showButtons, showPlayer;
 	float zoom;
-	vec2i listP;
+	int listX, listXL;
 	
-	vector<Image*> pics;
+	vector<Image> pics;
 };

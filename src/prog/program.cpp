@@ -13,22 +13,22 @@ void Program::Event_Down() {
 
 void Program::Event_Left() {
 	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		static_cast<ReaderBox*>(World::scene()->FocusedObject());
+		static_cast<ReaderBox*>(World::scene()->FocusedObject())->ScrollListX(-15);
 }
 
 void Program::Event_Right() {
 	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		static_cast<ReaderBox*>(World::scene()->FocusedObject());
+		static_cast<ReaderBox*>(World::scene()->FocusedObject())->ScrollListX(15);
 }
 
 void Program::Event_ZoomIn() {
 	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		static_cast<ReaderBox*>(World::scene()->FocusedObject());
+		static_cast<ReaderBox*>(World::scene()->FocusedObject())->Zoom(3.f/2.f);
 }
 
 void Program::Event_ZoomOut() {
 	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		static_cast<ReaderBox*>(World::scene()->FocusedObject());
+		static_cast<ReaderBox*>(World::scene()->FocusedObject())->Zoom(2.f/3.f);
 }
 
 void Program::Event_PlayPauseSong() {
@@ -81,7 +81,8 @@ void Program::Event_OpenPlaylistList() {
 
 void Program::Event_OpenPlaylistEditor(string playlist) {
 	curMenu = EMenu::plistEditor;
-	World::scene()->SwitchMenu(curMenu, (void*)playlist.c_str());
+	editor = new PlaylistEditor(playlist);
+	World::scene()->SwitchMenu(curMenu, (void*)editor);
 }
 
 void Program::Event_OpenGeneralSettings() {

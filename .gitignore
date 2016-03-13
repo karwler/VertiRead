@@ -1,6 +1,5 @@
 bin
 build
-data
 .vs
 *.user
 *.sdf

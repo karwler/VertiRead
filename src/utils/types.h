@@ -28,6 +28,13 @@ enum class EColor : byte {
 	text
 };
 
+struct Image {
+	Image(vec2i POS=vec2i(), vec2i SIZ=vec2i(), string TEXN="");
+
+	vec2i pos, size;
+	string texname;
+};
+
 struct Text {
 	Text(string TXT = "", vec2i POS=vec2i(), int SIZE=72, EColor CLR = EColor::text);
 
@@ -42,7 +49,7 @@ public:
 	Shortcut(string NAME="", bool setDefaultKey=true, const vector<SDL_Keysym>& KEYS=vector<SDL_Keysym>());
 
 	string Name() const;
-	bool SetName(string NAME, bool setDefaultKey=true);
+	bool SetName(string sname, bool setDefaultKey=true);
 	progEFunc Call() const;
 
 	vector<SDL_Keysym> keys;
@@ -53,15 +60,15 @@ private:
 };
 
 struct Playlist {
-	Playlist(string NAME = "", vector<string> SGS = vector<string>(), vector<string> BKS = vector<string>());
+	Playlist(string NAME = "", const vector<fs::path>& SGS = vector<fs::path>(), const vector<string>& BKS = vector<string>());
 
 	string name;
-	vector<string> songs;
+	vector<fs::path> songs;
 	vector<string> books;
 };
 
 struct Directory {
-	Directory(string NAME = "", vector<string> DIRS = vector<string>(), vector<string> FILS = vector<string>());
+	Directory(string NAME = "", const vector<string>& DIRS = vector<string>(), vector<string> FILS = vector<string>());
 
 	string name;
 	vector<string> dirs;
@@ -73,7 +80,7 @@ struct GeneralSettings {
 };
 
 struct VideoSettings {
-	VideoSettings(bool VS=true, bool MAX=false, bool FSC=false, vec2i RES = vec2i(800, 600), string FONT="", string RNDR="", map<EColor, vec4b> CLRS=map<EColor, vec4b>());
+	VideoSettings(bool VS=true, bool MAX=false, bool FSC=false, vec2i RES = vec2i(800, 600), string FONT="", string RNDR="");
 
 	bool vsync;
 	bool maximized, fullscreen;
@@ -82,7 +89,7 @@ struct VideoSettings {
 	string renderer;
 	map<EColor, vec4b> colors;
 
-	void FillMissingColors();
+	void SetDefaultColors();
 };
 
 struct AudioSettings {
@@ -94,7 +101,7 @@ struct AudioSettings {
 };
 
 struct ControlsSettings {
-	ControlsSettings(bool fillMissingBindings=true, vector<Shortcut> SRTCS = vector<Shortcut>());
+	ControlsSettings(bool fillMissingBindings=false, const vector<Shortcut>& SRTCS = vector<Shortcut>());
 
 	vector<Shortcut> shortcuts;
 

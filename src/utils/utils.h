@@ -166,6 +166,7 @@ struct kvec2 {
 	double len() const { return sqrt(x*x + y*y); }
 };
 using vec2i = kvec2<int>;
+using vec2f = kvec2<float>;
 
 template<typename T>
 struct kvec3 {
@@ -281,6 +282,12 @@ bool stob(string str);
 string btos(bool b);
 SDL_Keysym stok(string str);
 string ktos(SDL_Keysym key);
+vec2i pix(vec2f p);
+int pixX(float p);
+int pixY(float p);
+vec2f prc(vec2i p);
+float prcX(int p);
+float prcY(int p);
 string getRendererName(int id);
 
 template<class T>

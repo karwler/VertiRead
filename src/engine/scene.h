@@ -14,6 +14,7 @@ public:
 	void OnMouseDown();
 	void OnMouseUp();
 	void OnMouseDrag();
+	void OnMouseWheel(int ymov);
 
 	Program* getProgram() const;
 	const vector<Object*>& Objects() const;
