@@ -6,7 +6,7 @@ class WindowSys {
 public:
 	WindowSys();
 
-	bool SetWindow(VideoSettings settings);
+	bool SetWindow(const VideoSettings& settings);
 	void DestroyWindow();
 	void DrawScene();
 	
@@ -33,7 +33,7 @@ private:
 	void DrawObject(TileBox* obj);
 	void DrawObject(ReaderBox* obj);
 
-	void DrawRect(SDL_Rect rect, EColor color);
+	void DrawRect(const SDL_Rect& rect, EColor color);
 	void DrawImage(SDL_Rect rect, string texname, SDL_Rect crop = { 0, 0, 0, 0 });
-	void DrawText(const Text& txt, SDL_Rect crop = { 0, 0, 0, 0 });
+	void DrawText(const Text& txt, const SDL_Rect& crop = { 0, 0, 0, 0 });
 };

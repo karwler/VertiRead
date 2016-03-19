@@ -2,6 +2,7 @@ A so far simple cross-platform manga reader and music player.
 Still in progress.
 
 TO DO
+- figure out a proper ui positioning and scaling method
 - make reader interface
 - make a playlist editor
 - add selectable items

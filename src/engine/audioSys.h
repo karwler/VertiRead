@@ -6,7 +6,7 @@ class AudioSys {
 public:
 	AudioSys();
 
-	bool Initialize(AudioSettings sets);
+	bool Initialize(const AudioSettings& sets);
 	void Cleanup();
 	void FreeMusic();
 	void FreeSound();
@@ -20,7 +20,7 @@ public:
 	void PlaySound(string path);
 
 	AudioSettings Settings() const;
-	void setPlaylist(Playlist newList);
+	void setPlaylist(const Playlist& newList);
 	int MusicVolume() const;
 	void setMusicVolume(int vol);
 	int SoundVolume() const;

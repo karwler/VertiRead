@@ -101,7 +101,14 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 	World::winSys()->DrawScene();
 }
 
-void Scene::Tick() {
+void Scene::ResizeMenu() {
+	for (Object* obj : objects) {
+		if (dynamic_cast<ScrollArea*>(obj))
+			static_cast<ScrollArea*>(obj)->SetValues();
+	}
+}
+
+void Scene::Tick(float dSec) {
 	// handle keyhold
 	if (InputSys::isPressed(SDL_SCANCODE_UP))
 		program->Event_Up();
@@ -116,12 +123,16 @@ void Scene::Tick() {
 	if (objectHold) {
 		if (dynamic_cast<ReaderBox*>(objectHold) && !static_cast<ReaderBox*>(objectHold)->sliderFocused) {
 			if (InputSys::isPressed(SDL_SCANCODE_LCTRL))
-				static_cast<ReaderBox*>(objectHold)->ScrollListX(-World::inputSys()->getMouseMove().x);
-			objectHold->ScrollList(-World::inputSys()->getMouseMove().y);
+				static_cast<ReaderBox*>(objectHold)->ScrollListX(-World::inputSys()->mouseMove().x);
+			objectHold->ScrollList(-World::inputSys()->mouseMove().y);
 		}
 		else
 			objectHold->DragSlider(InputSys::mousePos().y);
 	}
+
+	for (Object* it : objects)
+		if (dynamic_cast<ReaderBox*>(it))
+			static_cast<ReaderBox*>(it)->Tick(dSec);
 }
 
 void Scene::OnMouseDown() {
@@ -164,8 +175,10 @@ bool Scene::CheckSliderClick(ScrollArea* obj) {
 		if (mPos.y < obj->SliderY() || mPos.y > obj->SliderY() + obj->SliderH())
 			obj->DragSlider(mPos.y - obj->SliderH() / 2);
 		obj->diffSliderMouseY = mPos.y - obj->SliderY();
-		if (dynamic_cast<ReaderBox*>(obj))
-			static_cast<ReaderBox*>(obj)->sliderFocused = true;
+		if (dynamic_cast<ReaderBox*>(obj)) {
+			ReaderBox* rbox = static_cast<ReaderBox*>(obj);
+			rbox->sliderFocused = rbox->showSlider();		// set slider focused only if it's displayed
+		}
 		return true;
 	}
 	return false;

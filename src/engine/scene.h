@@ -11,7 +11,8 @@ public:
 	~Scene();
 	
 	void SwitchMenu(EMenu newMenu, void* dat=nullptr);
-	void Tick();
+	void ResizeMenu();
+	void Tick(float dSec);
 	void OnMouseDown();
 	void OnMouseUp();
 	void OnMouseWheel(int ymov);

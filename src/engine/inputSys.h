@@ -17,7 +17,7 @@ public:
 
 	ControlsSettings Settings() const;
 	void Settings(const ControlsSettings& settings);
-	vec2i getMouseMove() const;
+	vec2i mouseMove() const;
 
 private:
 	ControlsSettings sets;

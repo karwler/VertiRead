@@ -57,6 +57,6 @@ void InputSys::Settings(const ControlsSettings& settings) {
 	sets = settings;
 }
 
-vec2i InputSys::getMouseMove() const {
+vec2i InputSys::mouseMove() const {
 	return mousePos() - lastMousePos;
 }

@@ -45,7 +45,7 @@ int Engine::Run() {
 
 		// handle events
 		audioSys->Tick(dSec);
-		scene->Tick();
+		scene->Tick(dSec);
 		inputSys->Tick();
 		while (SDL_PollEvent(event))
 			HandleEvent(event);

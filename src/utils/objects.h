@@ -22,7 +22,7 @@ public:
 
 class TextBox : public Object {
 public:
-	TextBox(Object BASE = Object(), Text TXT = Text(), vec4i MRGN=vec4i(2, 2, 4, 4), int SPC=0);
+	TextBox(const Object& BASE = Object(), const Text& TXT = Text(), vec4i MRGN=vec4i(2, 2, 4, 4), int SPC=0);
 	virtual ~TextBox();
 
 	vector<Text> getLines() const;
@@ -39,7 +39,7 @@ private:
 
 class Button : public Object {
 public:
-	Button(Object BASE=Object(), void (Program::*CALLB)()=nullptr);
+	Button(const Object& BASE=Object(), void (Program::*CALLB)()=nullptr);
 	virtual ~Button();
 
 	virtual void OnClick();
@@ -51,7 +51,7 @@ protected:
 
 class ButtonImage : public Button {
 public:
-	ButtonImage(Object BASE = Object(), void (Program::*CALLB)() = nullptr, string TEXN = "");
+	ButtonImage(const Object& BASE = Object(), void (Program::*CALLB)() = nullptr, string TEXN = "");
 	virtual ~ButtonImage();
 
 	string texname;
@@ -59,7 +59,7 @@ public:
 
 class ButtonText : public Button {
 public:
-	ButtonText(Object BASE = Object(), void (Program::*CALLB)() = nullptr, string TXT="", EColor TCLR=EColor::text);
+	ButtonText(const Object& BASE = Object(), void (Program::*CALLB)() = nullptr, string TXT="", EColor TCLR=EColor::text);
 	virtual ~ButtonText();
 
 	string text;
@@ -68,12 +68,13 @@ public:
 
 class ScrollArea : public Object {
 public:
-	ScrollArea(Object BASE = Object(), int SPC = 5, int BARW = 10);
+	ScrollArea(const Object& BASE = Object(), int SPC = 5, int BARW = 10);
 	virtual ~ScrollArea();
 
 	void DragSlider(int ypos);
 	void DragList(int ypos);
 	void ScrollList(int ymov);
+	virtual void SetValues();
 
 	SDL_Rect Bar() const;
 	SDL_Rect Slider() const;
@@ -92,14 +93,15 @@ protected:
 	float sliderH;
 	int listH, listL;
 
-	void SetScollValues();	// needs listH and size.y in order to calculate listL, sliderH
+	void SetScrollValues();	// needs listH and size.y in order to calculate listL, sliderH
 };
 
 class ListBox : public ScrollArea {
 public:
-	ListBox(Object BASE = Object(), const vector<ListItem*>& ITMS = vector<ListItem*>(), int SPC=5, int BARW=10);
+	ListBox(const Object& BASE = Object(), const vector<ListItem*>& ITMS = vector<ListItem*>(), int SPC=5, int BARW=10);
 	virtual ~ListBox();
 
+	virtual void SetValues();
 	vector<ListItem*> Items() const;
 	void setItems(const vector<ListItem*>& objects);
 
@@ -109,9 +111,10 @@ private:
 
 class TileBox : public ScrollArea {
 public:
-	TileBox(Object BASE = Object(), const vector<TileItem>& ITMS = vector<TileItem>(), vec2i TS = vec2i(50, 50), int SPC = 5, int BARW = 10);
+	TileBox(const Object& BASE = Object(), const vector<TileItem>& ITMS = vector<TileItem>(), vec2i TS = vec2i(50, 50), int SPC = 5, int BARW = 10);
 	virtual ~TileBox();
 
+	virtual void SetValues();
 	vector<TileItem>& Items();
 	void setItems(const vector<TileItem>& objects);
 
@@ -130,18 +133,28 @@ public:
 	ReaderBox(const vector<string>& PICS = vector<string>(), float ZOOM=1.f);
 	virtual ~ReaderBox();
 
+	void Tick(float dSec);
 	void DragListX(int xpos);
 	void ScrollListX(int xmov);
 	void Zoom(float factor);
 	void AddZoom(float zadd);
 
+	SDL_Rect List() const;	// return value is the background rect
+	SDL_Rect Player() const;
+
+	virtual void SetValues();
 	const vector<Image>& Pictures() const;
-	void SetPictures(const vector<string>& pictures, float zoomFactor=1.f);
+	void SetPictures(const vector<string>& pictures);
 	int ListX() const;
+
+	bool showSlider() const;
+	bool showList() const;
+	bool showPlayer() const;
 
 	bool sliderFocused;
 private:
-	bool showSlider, showButtons, showPlayer;
+	const float hideDelay;
+	float sliderTimer, listTimer, playerTimer;
 	float zoom;
 	int listX, listXL;
 	

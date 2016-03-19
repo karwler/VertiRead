@@ -52,12 +52,34 @@ fs::path removeExtension(fs::path path) {
 	return (path.has_extension()) ? path.string().substr(0, path.string().size() - path.extension().string().size()) : path;
 }
 
-bool inRect(SDL_Rect rect, vec2i point) {
+bool inRect(const SDL_Rect& rect, vec2i point) {
 	return point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
 }
 
-bool needsCrop(SDL_Rect crop) {
+bool needsCrop(const SDL_Rect& crop) {
 	return crop.x != 0 || crop.y != 0 || crop.w != 0 || crop.h != 0;
+}
+
+SDL_Rect GetCrop(SDL_Rect item, SDL_Rect frame) {
+	item.w += item.x;
+	item.h += item.y;
+	frame.w += frame.x;
+	frame.h += frame.y;
+
+	if (item.h < frame.y || item.y > frame.h || item.w < frame.x || item.x > frame.w)	// if outside of frame
+		return {0, 0, item.w-item.x, item.h-item.y};
+
+	SDL_Rect crop = { 0, 0, 0, 0 };
+	if (item.x < frame.x && item.w > frame.x)	// left
+		crop.x = frame.x - item.x;
+	if (item.x < frame.w && item.w > frame.w)	// right
+		crop.w = item.w - frame.w;
+	if (item.y < frame.y && item.h > frame.y)	// top
+		crop.y = frame.y - item.y;
+	if (item.y < frame.h && item.h > frame.h)	// bottom
+		crop.h = item.h - frame.h;
+
+	return crop;
 }
 
 SDL_Surface* CropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {

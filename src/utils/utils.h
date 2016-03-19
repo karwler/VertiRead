@@ -273,8 +273,9 @@ int findChar(string str, char c);
 vector<string> getWords(string line, bool skipCommas=true);
 int SplitIniLine(string line, string* arg, string* val, string* key = nullptr);
 fs::path removeExtension(fs::path path);
-bool inRect(SDL_Rect rect, vec2i point);
-bool needsCrop(SDL_Rect crop);
+bool inRect(const SDL_Rect& rect, vec2i point);
+bool needsCrop(const SDL_Rect& crop);
+SDL_Rect GetCrop(SDL_Rect item, SDL_Rect frame);
 SDL_Surface* CropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop);
 
 string wtos(wstring wstr);

@@ -6,7 +6,7 @@ AudioSys::AudioSys() :
 	curSound(nullptr)
 {}
 
-bool AudioSys::Initialize(AudioSettings sets) {
+bool AudioSys::Initialize(const AudioSettings& sets) {
 	Mix_Init(MIX_INIT_FLAC | MIX_INIT_FLUIDSYNTH | MIX_INIT_MOD | MIX_INIT_MODPLUG | MIX_INIT_MP3 | MIX_INIT_OGG);
 	Mix_OpenAudio(44100, AUDIO_S16SYS, 2, 4096);
 	Mix_AllocateChannels(1);
@@ -88,7 +88,7 @@ AudioSettings AudioSys::Settings() const {
 	return sets;
 }
 
-void AudioSys::setPlaylist(Playlist newList) {
+void AudioSys::setPlaylist(const Playlist& newList) {
 	FreeMusic();
 	playlist = newList;
 }

@@ -6,7 +6,7 @@ WindowSys::WindowSys() :
 	renderer(nullptr)
 {}
 
-bool WindowSys::SetWindow(VideoSettings settings) {
+bool WindowSys::SetWindow(const VideoSettings& settings) {
 	// destroy old window if one exists
 	DestroyWindow();
 
@@ -64,6 +64,7 @@ void WindowSys::WindowEvent(const SDL_WindowEvent& winEvent) {
 		}
 		break; }
 	case SDL_WINDOWEVENT_SIZE_CHANGED:
+		World::scene()->ResizeMenu();
 		DrawScene();
 	}
 }
@@ -166,22 +167,14 @@ void WindowSys::PassDrawObject(Object* obj) {
 void WindowSys::DrawObject(ListBox* obj) {
 	int posY = obj->Pos().y - obj->ListY();
 	vector<ListItem*> items = obj->Items();
-	for (uint i = 0; i != items.size(); i++) {
-		int itemMax = posY + items[i]->height;
-		int frameMin = obj->Pos().y;
-		int frameMax = obj->Pos().y + obj->Size().y;
-
-		if (itemMax >= frameMin && posY <= frameMax) {
-			SDL_Rect crop = { 0, 0, 0, 0 };
-			if (posY < frameMin && itemMax > frameMin)
-				crop.y = itemMax - obj->Pos().x;
-			if (posY < frameMax && itemMax > frameMax)
-				crop.h = itemMax - frameMax;
-
-			DrawRect({ obj->Pos().x, posY, obj->Size().x - obj->barW, items[i]->height }, EColor::rectangle);
-			DrawText(Text(items[i]->label, vec2i(obj->Pos().x + 5, posY), items[i]->height - items[i]->height / 8), crop);
+	for (ListItem* item : items) {
+		SDL_Rect crop = GetCrop({0, posY, 0, item->height}, {0, obj->Pos().y, 0, obj->Size().y});	// no horizontal cropping
+		if (crop.h != item->height)	{	// don't draw if out of frame
+			DrawRect({ obj->Pos().x, posY+crop.y, obj->Size().x - obj->barW, item->height-crop.y-crop.h }, EColor::rectangle);
+			DrawText(Text(item->label, vec2i(obj->Pos().x + 5, posY), item->height - item->height / 8), crop);
 		}
-		posY = itemMax + obj->Spacing();
+		if ((posY += item->height + obj->Spacing()) > obj->Pos().y+obj->Size().y)
+			break;
 	}
 	DrawRect(obj->Bar(), EColor::darkened);
 	DrawRect(obj->Slider(), EColor::highlighted);
@@ -194,19 +187,14 @@ void WindowSys::DrawObject(TileBox* obj) {
 		int posX = (i - row * obj->TilesPerRow()) * (obj->TileSize().x + obj->Spacing()) + obj->Pos().x;
 		int posY = row * (obj->TileSize().y + obj->Spacing()) + obj->Pos().y;
 
-		int itemMax = posY + obj->TileSize().y;
-		int frameMax = obj->Pos().y + obj->Size().y;
-
-		if (itemMax < obj->Pos().y || posY > frameMax)
-			continue;
-		
 		int textSize = obj->TileSize().y - obj->TileSize().y / 8;
-		SDL_Rect crop = { 0, 0, 0, 0 };
-		if (posY < obj->Pos().y && itemMax > obj->Pos().y)
-			crop.y = itemMax - obj->Pos().x;
-		if (posY < frameMax && itemMax > frameMax)
-			crop.h = itemMax - frameMax;
-
+		SDL_Rect crop = GetCrop({0, posY, 0, obj->TileSize().y}, {0, obj->Pos().y, 0, obj->Size().y});	// no horizontal cropping
+		if (crop.h == obj->TileSize().y) {
+			if (posY > obj->Pos().x+obj->Size().y)
+				break;
+			else
+				continue;
+		}
 		int textWidth = CalcTextLength(tiles[i].label, textSize);
 		if (textWidth > obj->TileSize().x)
 			crop.w = textWidth - obj->TileSize().x + 10;
@@ -222,41 +210,59 @@ void WindowSys::DrawObject(ReaderBox* obj) {
 	const vector<Image>& pics = obj->Pictures();
 	for (const Image& it : pics) {
 		vec2i pos(obj->Pos().x + obj->Size().x/2 - it.size.x/2 - obj->ListX(), it.pos.y - obj->ListY());
-		vec2i itemMax = pos + it.size;
-		vec2i frameMax = obj->Pos() + obj->Size();
-
-		if (itemMax.y < obj->pos.y || pos.y > frameMax.y)
-			continue;
-
-		DrawImage({pos.x, pos.y, it.size.x, it.size.y}, it.texname);
+		SDL_Rect crop = GetCrop({pos.x, pos.y, it.size.x, it.size.y}, {obj->Pos().x, obj->Pos().y, obj->Size().x, obj->Size().y});
+		if (crop.h == it.size.y) {
+			if (pos.y + it.size.y < obj->Pos().y)
+				continue;
+			else
+				break;
+		}
+		DrawImage({pos.x, pos.y, it.size.x, it.size.y}, it.texname, crop);
 	}
-	DrawRect(obj->Bar(), EColor::darkened);
-	DrawRect(obj->Slider(), EColor::highlighted);
+	if (obj->showSlider()) {
+		DrawRect(obj->Bar(), EColor::darkened);
+		DrawRect(obj->Slider(), EColor::highlighted);
+	}
+	if (obj->showList()) {
+		DrawRect(obj->List(), EColor::darkened);
+		// buttons draw
+	}
+	if (obj->showPlayer()) {
+		DrawRect(obj->Player(), EColor::darkened);
+		// player draw
+	}
 }
 
-void WindowSys::DrawRect(SDL_Rect rect, EColor color) {
+void WindowSys::DrawRect(const SDL_Rect& rect, EColor color) {
 	SDL_SetRenderDrawColor(renderer, sets.colors[color].x, sets.colors[color].y, sets.colors[color].z, sets.colors[color].a);
 	SDL_RenderFillRect(renderer, &rect);
 }
 
 void WindowSys::DrawImage(SDL_Rect rect, string texname, SDL_Rect crop) {
-	SDL_Texture* tex = nullptr;
+	SDL_Texture* tex = IMG_LoadTexture(renderer, texname.c_str());
+	if (!tex) {
+		cerr << "couldn't load image " << texname << endl;
+		return;
+	}
 	if (needsCrop(crop)) {
+		SDL_Rect ori = {rect.x, rect.y};
+		SDL_QueryTexture(tex, nullptr, nullptr, &ori.w, &ori.h);
+		SDL_DestroyTexture(tex);
+		vec2f fac(float(ori.w) / float(rect.w), float(ori.h) / float(rect.h));
+		rect = {rect.x+crop.x, rect.y+crop.y, rect.w-crop.x-crop.w, rect.h-crop.y-crop.h};
+
 		SDL_Surface* surface = IMG_Load(texname.c_str());
-		SDL_Surface* sheet = CropSurface(surface, rect, crop);
+		SDL_Surface* sheet = CropSurface(surface, ori, {int(float(crop.x)*fac.x), int(float(crop.y)*fac.y), int(float(crop.w)*fac.x), int(float(crop.h)*fac.y)});
 		tex = SDL_CreateTextureFromSurface(renderer, sheet);
 
 		SDL_FreeSurface(sheet);
 		SDL_FreeSurface(surface);
 	}
-	else
-		tex = IMG_LoadTexture(renderer, texname.c_str());
-
 	SDL_RenderCopy(renderer, tex, nullptr, &rect);
 	SDL_DestroyTexture(tex);
 }
 
-void WindowSys::DrawText(const Text& txt, SDL_Rect crop) {
+void WindowSys::DrawText(const Text& txt, const SDL_Rect& crop) {
 	TTF_Font* font = TTF_OpenFont(sets.font.c_str(), txt.size);
 	if (!font) {
 		cerr << "couldn't load font " << sets.font << endl;
