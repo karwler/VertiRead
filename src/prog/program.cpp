@@ -23,15 +23,25 @@ void Program::Event_Right() {
 
 void Program::Event_ZoomIn() {
 	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		static_cast<ReaderBox*>(World::scene()->FocusedObject())->Zoom(3.f/2.f);
+		static_cast<ReaderBox*>(World::scene()->FocusedObject())->AddZoom(0.2f);
 }
 
 void Program::Event_ZoomOut() {
 	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		static_cast<ReaderBox*>(World::scene()->FocusedObject())->Zoom(2.f/3.f);
+		static_cast<ReaderBox*>(World::scene()->FocusedObject())->AddZoom(-0.2f);
 }
 
-void Program::Event_PlayPauseSong() {
+void Program::Event_ZoomReset() {
+	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
+		static_cast<ReaderBox*>(World::scene()->FocusedObject())->Zoom(1.f);
+}
+
+void Program::Event_CenterView() {
+	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
+		static_cast<ReaderBox*>(World::scene()->FocusedObject())->DragListX(0);
+}
+
+void Program::Event_PlayPause() {
 	World::audioSys()->PlayPauseMusic();
 }
 
@@ -107,7 +117,7 @@ void Program::Event_OpenControlsSettings() {
 
 void Program::Event_Back() {
 	if (curMenu == EMenu::reader)
-		World::scene()->SwitchMenu(curMenu = EMenu::browser);
+		World::scene()->SwitchMenu(curMenu = EMenu::browser, (void*)browser);
 	else if (curMenu == EMenu::browser) {
 		if (browser->GoUp())
 			World::scene()->SwitchMenu(curMenu, (void*)browser);

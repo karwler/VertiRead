@@ -4,7 +4,7 @@
 Scene::Scene() :
 	program(new Program),
 	library(new Library),
-	sliderHold(nullptr)
+	objectHold(nullptr)
 {}
 
 Scene::~Scene() {
@@ -14,7 +14,7 @@ Scene::~Scene() {
 void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 	Clear(objects);
 	focObject = 0;
-	sliderHold = nullptr;
+	objectHold = nullptr;
 	vec2i res = World::winSys()->Resolution();
 	switch (newMenu) {
 	case EMenu::books: {
@@ -101,6 +101,29 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 	World::winSys()->DrawScene();
 }
 
+void Scene::Tick() {
+	// handle keyhold
+	if (InputSys::isPressed(SDL_SCANCODE_UP))
+		program->Event_Up();
+	else if (InputSys::isPressed(SDL_SCANCODE_DOWN))
+		program->Event_Down();
+	else if (InputSys::isPressed(SDL_SCANCODE_LEFT))
+		program->Event_Left();
+	else if (InputSys::isPressed(SDL_SCANCODE_RIGHT))
+		program->Event_Right();
+
+	// handle mousemove
+	if (objectHold) {
+		if (dynamic_cast<ReaderBox*>(objectHold) && !static_cast<ReaderBox*>(objectHold)->sliderFocused) {
+			if (InputSys::isPressed(SDL_SCANCODE_LCTRL))
+				static_cast<ReaderBox*>(objectHold)->ScrollListX(-World::inputSys()->getMouseMove().x);
+			objectHold->ScrollList(-World::inputSys()->getMouseMove().y);
+		}
+		else
+			objectHold->DragSlider(InputSys::mousePos().y);
+	}
+}
+
 void Scene::OnMouseDown() {
 	for (Object* obj : objects) {
 		if (dynamic_cast<Button*>(obj)) {
@@ -118,6 +141,10 @@ void Scene::OnMouseDown() {
 				if (CheckTileBoxClick(static_cast<TileBox*>(obj)))
 					break;
 			}
+			else if (dynamic_cast<ReaderBox*>(obj)) {
+				if (CheckReaderBoxClick(static_cast<ReaderBox*>(obj)))
+					break;
+			}
 		}
 	}
 }
@@ -133,10 +160,12 @@ bool Scene::CheckButtonClick(Button* obj) {
 bool Scene::CheckSliderClick(ScrollArea* obj) {
 	vec2i mPos = InputSys::mousePos();
 	if (inRect(obj->Bar(), mPos)) {
-		sliderHold = obj;
+		objectHold = obj;
 		if (mPos.y < obj->SliderY() || mPos.y > obj->SliderY() + obj->SliderH())
 			obj->DragSlider(mPos.y - obj->SliderH() / 2);
 		obj->diffSliderMouseY = mPos.y - obj->SliderY();
+		if (dynamic_cast<ReaderBox*>(obj))
+			static_cast<ReaderBox*>(obj)->sliderFocused = true;
 		return true;
 	}
 	return false;
@@ -171,16 +200,21 @@ bool Scene::CheckTileBoxClick(TileBox* obj) {
 	return false;
 }
 
-void Scene::OnMouseUp() {
-	if (sliderHold) {
-		sliderHold->diffSliderMouseY = 0;
-		sliderHold = nullptr;
+bool Scene::CheckReaderBoxClick(ReaderBox* obj) {
+	if (inRect({ obj->Pos().x, obj->Pos().y, obj->Size().x, obj->Size().y }, InputSys::mousePos())) {	// needs ui subtraction
+		objectHold = obj;
+		return true;
 	}
+	return false;
 }
 
-void Scene::OnMouseDrag() {
-	if (sliderHold)
-		sliderHold->DragSlider(InputSys::mousePos().y);
+void Scene::OnMouseUp() {
+	if (objectHold) {
+		if (dynamic_cast<ReaderBox*>(objectHold))
+			static_cast<ReaderBox*>(objectHold)->sliderFocused = false;
+		objectHold->diffSliderMouseY = 0;
+		objectHold = nullptr;
+	}
 }
 
 void Scene::OnMouseWheel(int ymov) {

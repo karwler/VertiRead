@@ -100,11 +100,11 @@ Playlist Filer::LoadPlaylist(string name) {
 	return plist;
 }
 
-void Filer::SavePlaylist(Playlist plist) {
+void Filer::SavePlaylist(const Playlist& plist) {
 	vector<string> lines;
-	for (fs::path& file : plist.songs)
+	for (const fs::path& file : plist.songs)
 		lines.push_back("file=" + file.string());
-	for (string& name : plist.books)
+	for (const string& name : plist.books)
 		lines.push_back("book=" + name);
 	WriteTextFile(dirPlist() + plist.name + ".txt", lines);
 }
@@ -123,7 +123,7 @@ GeneralSettings Filer::LoadGeneralSettings() {
 	return sets;
 }
 
-void Filer::SaveSettings(GeneralSettings sets) {
+void Filer::SaveSettings(const GeneralSettings& sets) {
 	vector<string> lines;
 	// save settings
 	WriteTextFile(dirSets() + "general.ini", lines);
@@ -164,7 +164,7 @@ VideoSettings Filer::LoadVideoSettings() {
 	return sets;
 }
 
-void Filer::SaveSettings(VideoSettings sets) {
+void Filer::SaveSettings(const VideoSettings& sets) {
 	vector<string> lines;
 	lines.push_back("font=" + sets.font);
 	lines.push_back("vsync=" + btos(sets.vsync));
@@ -196,7 +196,7 @@ AudioSettings Filer::LoadAudioSettings() {
 	return sets;
 }
 
-void Filer::SaveSettings(AudioSettings sets) {
+void Filer::SaveSettings(const AudioSettings& sets) {
 	vector<string> lines;
 	lines.push_back("music_vol=" + to_string(sets.musicVolume));
 	lines.push_back("interface_vol=" + to_string(sets.soundVolume));
@@ -227,10 +227,10 @@ ControlsSettings Filer::LoadControlsSettings() {
 	return sets;
 }
 
-void Filer::SaveSettings(ControlsSettings sets) {
+void Filer::SaveSettings(const ControlsSettings& sets) {
 	vector<string> lines;
-	for (Shortcut& it : sets.shortcuts)
-		for (SDL_Keysym& key : it.keys)
+	for (const Shortcut& it : sets.shortcuts)
+		for (const SDL_Keysym& key : it.keys)
 			lines.push_back("shortcut[" + it.Name() + "]=" + ktos(key));
 	WriteTextFile(dirSets() + "controls.ini", lines);
 }

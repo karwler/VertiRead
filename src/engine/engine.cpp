@@ -45,7 +45,9 @@ int Engine::Run() {
 
 		// handle events
 		audioSys->Tick(dSec);
-		if (SDL_PollEvent(event))
+		scene->Tick();
+		inputSys->Tick();
+		while (SDL_PollEvent(event))
 			HandleEvent(event);
 	}
 	Cleanup();
@@ -66,9 +68,6 @@ void Engine::HandleEvent(SDL_Event* event) {
 	switch (event->type) {
 	case SDL_KEYDOWN: case SDL_KEYUP:
 		inputSys->KeypressEvent(event->key);
-		break;
-	case SDL_MOUSEMOTION:
-		inputSys->MouseMotionEvent(event->motion);
 		break;
 	case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEBUTTONUP:
 		inputSys->MouseButtonEvent(event->button);

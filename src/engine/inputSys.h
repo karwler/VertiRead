@@ -4,9 +4,11 @@
 
 class InputSys {
 public:
+	InputSys();
+
+	void Tick();
 	void KeypressEvent(const SDL_KeyboardEvent& key);
 	void MouseButtonEvent(const SDL_MouseButtonEvent& button);
-	void MouseMotionEvent(const SDL_MouseMotionEvent& motion);
 	void MouseWheelEvent(const SDL_MouseWheelEvent& wheel);
 
 	static bool isPressed(SDL_Scancode key);
@@ -14,8 +16,10 @@ public:
 	static vec2i mousePos();
 
 	ControlsSettings Settings() const;
-	void Settings(ControlsSettings settings);
+	void Settings(const ControlsSettings& settings);
+	vec2i getMouseMove() const;
 
 private:
 	ControlsSettings sets;
+	vec2i lastMousePos;
 };

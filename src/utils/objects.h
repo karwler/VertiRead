@@ -127,17 +127,19 @@ private:
 
 class ReaderBox : public ScrollArea {
 public:
-	ReaderBox(const vector<string>& PICS = vector<string>());
+	ReaderBox(const vector<string>& PICS = vector<string>(), float ZOOM=1.f);
 	virtual ~ReaderBox();
 
 	void DragListX(int xpos);
 	void ScrollListX(int xmov);
 	void Zoom(float factor);
+	void AddZoom(float zadd);
 
 	const vector<Image>& Pictures() const;
-	void SetPictures(const vector<string>& pictures);
+	void SetPictures(const vector<string>& pictures, float zoomFactor=1.f);
 	int ListX() const;
 
+	bool sliderFocused;
 private:
 	bool showSlider, showButtons, showPlayer;
 	float zoom;

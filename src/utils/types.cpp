@@ -30,22 +30,6 @@ bool Shortcut::SetName(string sname, bool setDefaultKey) {
 		call = &Program::Event_Back;
 		defaultKey.scancode = SDL_SCANCODE_ESCAPE;
 	}
-	else if (sname == "up") {
-		call = &Program::Event_Up;
-		defaultKey.scancode = SDL_SCANCODE_UP;
-	}
-	else if (sname == "down") {
-		call = &Program::Event_Down;
-		defaultKey.scancode = SDL_SCANCODE_DOWN;
-	}
-	else if (sname == "left") {
-		call = &Program::Event_Left;
-		defaultKey.scancode = SDL_SCANCODE_LEFT;
-	}
-	else if (sname == "right") {
-		call = &Program::Event_Right;
-		defaultKey.scancode = SDL_SCANCODE_RIGHT;
-	}
 	else if (sname == "zoom_in") {
 		call = &Program::Event_ZoomIn;
 		defaultKey.scancode = SDL_SCANCODE_E;
@@ -54,8 +38,16 @@ bool Shortcut::SetName(string sname, bool setDefaultKey) {
 		call = &Program::Event_ZoomOut;
 		defaultKey.scancode = SDL_SCANCODE_Q;
 	}
+	else if (sname == "zoom_reset") {
+		call = &Program::Event_ZoomReset;
+		defaultKey.scancode = SDL_SCANCODE_R;
+	}
+	else if (sname == "center_view") {
+		call = &Program::Event_CenterView;
+		defaultKey.scancode = SDL_SCANCODE_C;
+	}
 	else if (sname == "play_pause") {
-		call = &Program::Event_PlayPauseSong;
+		call = &Program::Event_PlayPause;
 		defaultKey.scancode = SDL_SCANCODE_F;
 	}
 	else if (sname == "next_song") {
@@ -163,32 +155,22 @@ ControlsSettings::ControlsSettings(bool fillMissingBindings, const vector<Shortc
 }
 
 void ControlsSettings::FillMissingBindings() {
-	if (!shortcut("back"))
-		shortcuts.push_back(Shortcut("back"));
-	if (!shortcut("up"))
-		shortcuts.push_back(Shortcut("up"));
-	if (!shortcut("down"))
-		shortcuts.push_back(Shortcut("down"));
-	if (!shortcut("left"))
-		shortcuts.push_back(Shortcut("left"));
-	if (!shortcut("right"))
-		shortcuts.push_back(Shortcut("right"));
-	if (!shortcut("zoom_in"))
-		shortcuts.push_back(Shortcut("zoom_in"));
-	if (!shortcut("zoom_out"))
-		shortcuts.push_back(Shortcut("zoom_out"));
-	if (!shortcut("play_pause"))
-		shortcuts.push_back(Shortcut("play_pause"));
-	if (!shortcut("next_song"))
-		shortcuts.push_back(Shortcut("next_song"));
-	if (!shortcut("prev_song"))
-		shortcuts.push_back(Shortcut("prev_song"));
-	if (!shortcut("volume_up"))
-		shortcuts.push_back(Shortcut("volume_up"));
-	if (!shortcut("volume_down"))
-		shortcuts.push_back(Shortcut("volume_down"));
-	if (!shortcut("fullscreen"))
-		shortcuts.push_back(Shortcut("fullscreen"));
+	vector<string> names;
+	names.push_back("back");
+	names.push_back("zoom_in");
+	names.push_back("zoom_out");
+	names.push_back("zoom_reset");
+	names.push_back("center_view");
+	names.push_back("play_pause");
+	names.push_back("next_song");
+	names.push_back("prev_song");
+	names.push_back("volume_up");
+	names.push_back("volume_down");
+	names.push_back("fullscreen");
+
+	for (string& it : names)
+		if (!shortcut(it))
+			shortcuts.push_back(Shortcut(it));
 }
 
 Shortcut* ControlsSettings::shortcut(string name) {

@@ -2,7 +2,6 @@ A so far simple cross-platform manga reader and music player.
 Still in progress.
 
 TO DO
-- make reader zoom
 - make reader interface
 - make a playlist editor
 - add selectable items
@@ -12,7 +11,6 @@ TO DO
 - give it a proper look
 - maybe add some animations
 - optimize it somehow
-- fix input lag
 
 LINUX
 The Qt project file is configured for Linux only.

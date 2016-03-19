@@ -9,7 +9,7 @@ bool isNumber(string str) {
 }
 
 int findChar(string str, char c) {
-	for (int i = 0; i != str.size(); i++)
+	for (uint i = 0; i != str.size(); i++)
 		if (str[i] == c)
 			return i;
 	return -1;
@@ -19,7 +19,7 @@ vector<string> getWords(string line, bool skipCommas) {
 	vector<string> words;
 	string word;
 	for (uint i = 0; i <= line.length(); i++) {
-		if (line[i] == ' ' || line[i] == ',' || i == line.length()) {
+		if (line[i] == ' ' || (skipCommas && line[i] == ',') || i == line.length()) {
 			if (word.length() != 0)
 				words.push_back(word);
 			word.clear();

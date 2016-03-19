@@ -11,7 +11,9 @@ public:
 	void Event_Right();
 	void Event_ZoomIn();
 	void Event_ZoomOut();
-	void Event_PlayPauseSong();
+	void Event_ZoomReset();
+	void Event_CenterView();
+	void Event_PlayPause();
 	void Event_NextSong();
 	void Event_PrevSong();
 	void Event_VolumeUp();

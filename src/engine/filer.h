@@ -24,16 +24,16 @@ public:
 	static vector<string> GetPicsFromDir(fs::path dir);
 
 	static Playlist LoadPlaylist(string name);
-	static void SavePlaylist(Playlist plist);
+	static void SavePlaylist(const Playlist& plist);
 
 	static GeneralSettings LoadGeneralSettings();
-	static void SaveSettings(GeneralSettings sets);
+	static void SaveSettings(const GeneralSettings& sets);
 	static VideoSettings LoadVideoSettings();
-	static void SaveSettings(VideoSettings sets);
+	static void SaveSettings(const VideoSettings& sets);
 	static AudioSettings LoadAudioSettings();
-	static void SaveSettings(AudioSettings sets);
+	static void SaveSettings(const AudioSettings& sets);
 	static ControlsSettings LoadControlsSettings();
-	static void SaveSettings(ControlsSettings sets);
+	static void SaveSettings(const ControlsSettings& sets);
 
 	static string execDir();
 	static string dirLib();

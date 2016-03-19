@@ -1,8 +1,16 @@
-#include "inputSys.h"
 #include "world.h"
 
+InputSys::InputSys()
+{
+	SDL_GetMouseState(&lastMousePos.x, &lastMousePos.y);
+}
+
+void InputSys::Tick() {
+	lastMousePos = mousePos();
+}
+
 void InputSys::KeypressEvent(const SDL_KeyboardEvent& key) {
-	if (key.type == SDL_KEYDOWN) {
+	if (key.type == SDL_KEYDOWN && !key.repeat) {	// handle only once pressed keys
 		// find first shortcut with this key assigned to it
 		for (Shortcut& sc : sets.shortcuts)
 			for (SDL_Keysym& ks : sc.keys)
@@ -21,11 +29,6 @@ void InputSys::MouseButtonEvent(const SDL_MouseButtonEvent& button) {
 		else
 			World::scene()->OnMouseUp();
 	}
-}
-
-void InputSys::MouseMotionEvent(const SDL_MouseMotionEvent& motion) {
-	if (motion.state == SDL_PRESSED)	// process further if left mouse button is pressed
-		World::scene()->OnMouseDrag();
 }
 
 void InputSys::MouseWheelEvent(const SDL_MouseWheelEvent& wheel) {
@@ -50,6 +53,10 @@ ControlsSettings InputSys::Settings() const {
 	return sets;
 }
 
-void InputSys::Settings(ControlsSettings settings) {
+void InputSys::Settings(const ControlsSettings& settings) {
 	sets = settings;
+}
+
+vec2i InputSys::getMouseMove() const {
+	return mousePos() - lastMousePos;
 }

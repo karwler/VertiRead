@@ -1,4 +1,3 @@
-#include "objects.h"
 #include "engine/world.h"
 
 // OBJECT
@@ -257,14 +256,15 @@ int TileBox::TilesPerRow() const {
 
 // READER BOX
 
-ReaderBox::ReaderBox(const vector<string>& PICS) :
+ReaderBox::ReaderBox(const vector<string>& PICS, float ZOOM) :
 	ScrollArea(Object(vec2i(0, 0), World::winSys()->Resolution(), EColor::background), 10),
+	sliderFocused(false),
 	showSlider(false), showButtons(false), showPlayer(false),
 	zoom(1.f),
 	listX(0)
 {
 	if (!PICS.empty())
-		SetPictures(PICS);
+		SetPictures(PICS, ZOOM);
 }
 ReaderBox::~ReaderBox() {}
 
@@ -282,30 +282,49 @@ void ReaderBox::ScrollListX(int xmov) {
 }
 
 void ReaderBox::Zoom(float factor) {
-	zoom *= factor;
-	// gotta resize the pics somehow
+	listY = float(listY) * factor / zoom;	// correct y position
+	zoom = factor;
+	int maxWidth = 0;
+	int ypos = 0;
+	for (Image& it : pics) {
+		// set sizes and position
+		vec2i res = World::winSys()->GetTextureSize(it.texname);
+		res.x = float(res.x) * zoom;
+		res.y = float(res.y) * zoom;
+		it.pos.y = ypos;
+		it.size = res;
+
+		if (res.x > maxWidth)
+			maxWidth = res.x;
+		ypos += res.y + spacing;
+	}
+	// calculate slider and limits related variables
+	listH = ypos;
+	listXL = (pixX(size.x) < maxWidth) ? (maxWidth - pixX(size.x)) /2: 0;
+	SetScollValues();
+	if (listY > listL)
+		listY = listL;
+	listX = 0;
+
+	World::winSys()->DrawScene();
+}
+
+void ReaderBox::AddZoom(float zadd) {
+	Zoom(zoom + zadd);
 }
 
 const vector<Image>& ReaderBox::Pictures() const {
 	return pics;
 }
 
-void ReaderBox::SetPictures(const vector<string>& pictures) {
-	int maxWidth = 0;
-	int ypos = 0;
+void ReaderBox::SetPictures(const vector<string>& pictures, float zoomFactor) {
 	for (const string& it : pictures) {
 		vec2i res = World::winSys()->GetTextureSize(it);
-		if (res.isNull())
-			continue;
-		pics.push_back(Image(vec2i(0, ypos), res, it));
-
-		if (res.x > maxWidth)
-			maxWidth = res.x;
-		ypos += res.y + spacing;
+		if (res.x != 0 && res.y != 0)	// don't add broken images
+			pics.push_back(Image(vec2i(), vec2i(), it));
 	}
-	listH = ypos;
-	listXL = (pixX(size.x) < maxWidth) ? (maxWidth - pixX(size.x)) /2: 0;
-	SetScollValues();
+	Zoom(zoomFactor);	// this one should do all needed calculations
+	listY = 0;
 }
 
 int ReaderBox::ListX() const {

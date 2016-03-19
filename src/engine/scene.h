@@ -11,9 +11,9 @@ public:
 	~Scene();
 	
 	void SwitchMenu(EMenu newMenu, void* dat=nullptr);
+	void Tick();
 	void OnMouseDown();
 	void OnMouseUp();
-	void OnMouseDrag();
 	void OnMouseWheel(int ymov);
 
 	Program* getProgram() const;
@@ -26,10 +26,11 @@ private:
 	vector<Object*> objects;
 
 	uint focObject;			// id of object currently focused by keyboard
-	ScrollArea* sliderHold;	// pointer to object currently being dragged by mouse (nullptr if none is being held)
+	ScrollArea* objectHold;	// pointer to object currently being dragged by mouse (nullptr if none is being held)
 
 	bool CheckButtonClick(Button* obj);
 	bool CheckSliderClick(ScrollArea* obj);
 	bool CheckListBoxClick(ListBox* obj);
 	bool CheckTileBoxClick(TileBox* obj);
+	bool CheckReaderBoxClick(ReaderBox* obj);
 };
