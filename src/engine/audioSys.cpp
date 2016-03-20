@@ -74,7 +74,7 @@ void AudioSys::SwitchSong(int step) {
 		else
 			curSong = 0;
 	}
-	curMusic = Mix_LoadMUS(playlist.songs[curSong].c_str());
+	curMusic = Mix_LoadMUS(playlist.songs[curSong].string().c_str());
 	Mix_PlayMusic(curMusic, 0);
 }
 

@@ -27,9 +27,10 @@
     <ClCompile Include="src\engine\scene.cpp" />
     <ClCompile Include="src\engine\windowSys.cpp" />
     <ClCompile Include="src\engine\world.cpp" />
+    <ClCompile Include="src\prog\browser.cpp" />
     <ClCompile Include="src\prog\library.cpp" />
+    <ClCompile Include="src\prog\playlistEditor.cpp" />
     <ClCompile Include="src\prog\program.cpp" />
-    <ClCompile Include="src\prog\subprograms.cpp" />
     <ClCompile Include="src\utils\items.cpp" />
     <ClCompile Include="src\utils\objects.cpp" />
     <ClCompile Include="src\utils\types.cpp" />
@@ -43,9 +44,10 @@
     <ClInclude Include="src\engine\scene.h" />
     <ClInclude Include="src\engine\windowSys.h" />
     <ClInclude Include="src\engine\world.h" />
+    <ClInclude Include="src\prog\browser.h" />
     <ClInclude Include="src\prog\library.h" />
+    <ClInclude Include="src\prog\playlistEditor.h" />
     <ClInclude Include="src\prog\program.h" />
-    <ClInclude Include="src\prog\subprograms.h" />
     <ClInclude Include="src\utils\items.h" />
     <ClInclude Include="src\utils\objects.h" />
     <ClInclude Include="src\utils\types.h" />
