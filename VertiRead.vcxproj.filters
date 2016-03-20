@@ -58,7 +58,10 @@
     <ClCompile Include="src\utils\items.cpp">
       <Filter>Source\Utils</Filter>
     </ClCompile>
-    <ClCompile Include="src\prog\subprograms.cpp">
+    <ClCompile Include="src\prog\browser.cpp">
+      <Filter>Source\Prog</Filter>
+    </ClCompile>
+    <ClCompile Include="src\prog\playlistEditor.cpp">
       <Filter>Source\Prog</Filter>
     </ClCompile>
   </ItemGroup>
@@ -102,7 +105,10 @@
     <ClInclude Include="src\utils\items.h">
       <Filter>Source\Utils</Filter>
     </ClInclude>
-    <ClInclude Include="src\prog\subprograms.h">
+    <ClInclude Include="src\prog\playlistEditor.h">
+      <Filter>Source\Prog</Filter>
+    </ClInclude>
+    <ClInclude Include="src\prog\browser.h">
       <Filter>Source\Prog</Filter>
     </ClInclude>
   </ItemGroup>

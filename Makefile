@@ -1,15 +1,105 @@
-TARGET = vertiread
-TDIR = build
-CXX = clang++
-CFLAGS = -std=c++11 -stdlib=libc++
-INCPATH = -Isrc
-LIBS = -lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_mixer -lboost_system -lboost_filesystem 
-SOURCES = $(wildcard src/*/*.cpp)
+CXX           = clang++
+CFLAGS        = -pipe -g -std=c++11 -Wall -W -fPIC
+INCPATH       = -Isrc
+LFLAGS        = -ccc-gcc-name g++ -Wl
+LIBS          = -lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_mixer -lboost_system -lboost_filesystem
+TARGET        = vertiread
+TDIR	      = build
 
-$(TARGET):
+SOURCES       = src/engine/audioSys.cpp \
+		src/engine/engine.cpp \
+		src/engine/filer.cpp \
+		src/engine/inputSys.cpp \
+		src/engine/main.cpp \
+		src/engine/scene.cpp \
+		src/engine/windowSys.cpp \
+		src/engine/world.cpp \
+		src/prog/library.cpp \
+		src/prog/program.cpp \
+		src/utils/items.cpp \
+		src/utils/objects.cpp \
+		src/utils/types.cpp \
+		src/utils/utils.cpp \
+		src/prog/browser.cpp \
+		src/prog/playlistEditor.cpp 
+
+OBJECTS       = bin/audioSys.o \
+		bin/engine.o \
+		bin/filer.o \
+		bin/inputSys.o \
+		bin/main.o \
+		bin/scene.o \
+		bin/windowSys.o \
+		bin/world.o \
+		bin/library.o \
+		bin/program.o \
+		bin/items.o \
+		bin/objects.o \
+		bin/types.o \
+		bin/utils.o \
+		bin/browser.o \
+		bin/playlistEditor.o
+
+$(TARGET): bindir $(OBJECTS)
 	mkdir -p $(TDIR)
-	$(CXX) $(CFLAGS) $(LIBS) $(INCPATH) $(SOURCES) -o $(TDIR)/$(TARGET)
+	$(CXX) $(LFLAGS) -o $(TDIR)/$(TARGET) $(OBJECTS) $(OBJCOMP) $(LIBS)
 	cp -r data $(TDIR)
+	@echo "executable '"$(TARGET)"' has been written to '"$(TDIR)"'"
+
+bin/audioSys.o: src/engine/audioSys.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/audioSys.o src/engine/audioSys.cpp
+
+bin/engine.o: src/engine/engine.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/engine.o src/engine/engine.cpp
+
+bin/filer.o: src/engine/filer.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/filer.o src/engine/filer.cpp
+
+bin/inputSys.o: src/engine/inputSys.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/inputSys.o src/engine/inputSys.cpp
+
+bin/main.o: src/engine/main.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/main.o src/engine/main.cpp
+
+bin/scene.o: src/engine/scene.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/scene.o src/engine/scene.cpp
+
+bin/windowSys.o: src/engine/windowSys.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/windowSys.o src/engine/windowSys.cpp
+
+bin/world.o: src/engine/world.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/world.o src/engine/world.cpp
+
+bin/library.o: src/prog/library.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/library.o src/prog/library.cpp
+
+bin/program.o: src/prog/program.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/program.o src/prog/program.cpp
+
+bin/items.o: src/utils/items.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/items.o src/utils/items.cpp
+
+bin/objects.o: src/utils/objects.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/objects.o src/utils/objects.cpp
+
+bin/types.o: src/utils/types.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/types.o src/utils/types.cpp
+
+bin/utils.o: src/utils/utils.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/utils.o src/utils/utils.cpp
+
+bin/browser.o: src/prog/browser.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/browser.o src/prog/browser.cpp
+
+bin/playlistEditor.o: src/prog/playlistEditor.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/playlistEditor.o src/prog/playlistEditor.cpp
+
+bindir:
+	mkdir -p bin
 
 clean:
+	rm -rf bin
+
+distclean: clean
 	rm -rf build
+

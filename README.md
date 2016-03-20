@@ -14,8 +14,8 @@ TO DO
 - optimize it somehow
 
 LINUX
+For simple build just use the Makefile.
 The Qt project file is configured for Linux only.
-There's also a half-assed makefile which should do the trick.
 All dependencies need to be installed manually:
 sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libboost-filesystem1.55-dev
 
