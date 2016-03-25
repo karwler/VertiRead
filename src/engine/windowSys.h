@@ -1,31 +1,32 @@
 #pragma once
 
-#include "utils/objects.h"
+#include "utils/scrollAreas.h"
 
 class WindowSys {
 public:
-	WindowSys();
+	WindowSys(Scene* SCNE, const VideoSettings& SETS=VideoSettings());
+	~WindowSys();
 
-	bool SetWindow(const VideoSettings& settings);
+	void SetWindow();
 	void DestroyWindow();
-	void DrawScene();
+	void DrawObjects(const vector<Object*>& objects);
 	
 	int CalcTextLength(string text, int size);
-	vec2i GetTextureSize(string tex);
 	SDL_Renderer* Renderer() const;
 
 	VideoSettings Settings() const;
 	vec2i Resolution() const;
 	void WindowEvent(const SDL_WindowEvent& window);
-	void setFullscreen(bool on);
-	void setVSync(bool on);
+	void Fullscreen(bool on);
+	void VSync(bool on);
 
 private:
 	SDL_Window* window;
 	SDL_Renderer* renderer;
 	VideoSettings sets;
+	Scene* scene;
 
-	bool CreateRenderer();
+	void CreateRenderer();
 	int GetRenderDriverIndex();
 
 	void PassDrawObject(Object* obj);
@@ -34,6 +35,6 @@ private:
 	void DrawObject(ReaderBox* obj);
 
 	void DrawRect(const SDL_Rect& rect, EColor color);
-	void DrawImage(SDL_Rect rect, string texname, SDL_Rect crop = { 0, 0, 0, 0 });
+	void DrawImage(const Image& img, SDL_Rect crop = { 0, 0, 0, 0 });
 	void DrawText(const Text& txt, const SDL_Rect& crop = { 0, 0, 0, 0 });
 };

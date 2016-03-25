@@ -33,6 +33,7 @@
     <ClCompile Include="src\prog\program.cpp" />
     <ClCompile Include="src\utils\items.cpp" />
     <ClCompile Include="src\utils\objects.cpp" />
+    <ClCompile Include="src\utils\scrollAreas.cpp" />
     <ClCompile Include="src\utils\types.cpp" />
     <ClCompile Include="src\utils\utils.cpp" />
   </ItemGroup>
@@ -50,6 +51,7 @@
     <ClInclude Include="src\prog\program.h" />
     <ClInclude Include="src\utils\items.h" />
     <ClInclude Include="src\utils\objects.h" />
+    <ClInclude Include="src\utils\scrollAreas.h" />
     <ClInclude Include="src\utils\types.h" />
     <ClInclude Include="src\utils\utils.h" />
   </ItemGroup>

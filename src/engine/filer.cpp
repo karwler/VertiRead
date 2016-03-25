@@ -1,12 +1,11 @@
-#include "filer.h"
-#include "engine/world.h"
+#include "world.h"
 
 EDirFilter operator|(EDirFilter a, EDirFilter b) {
 	return static_cast<EDirFilter>(static_cast<byte>(a) | static_cast<byte>(b));
 }
 
-int Filer::CheckDirectories() {
-	int retval = 0;
+byte Filer::CheckDirectories() {
+	byte retval = 0;
 	if (!fs::exists(dirLib()))
 		fs::create_directory(dirLib());
 	if (!fs::exists(dirPlist()))
@@ -91,7 +90,7 @@ Playlist Filer::LoadPlaylist(string name) {
 	Playlist plist(name);
 	for (string& line : lines) {
 		string arg, val;
-		SplitIniLine(line, &arg, &val);
+		splitIniLine(line, &arg, &val);
 		if (arg == "file")
 			plist.songs.push_back(val);
 		else if (arg == "book")
@@ -117,7 +116,7 @@ GeneralSettings Filer::LoadGeneralSettings() {
 	GeneralSettings sets;
 	for (string& line : lines) {
 		string arg, val;
-		SplitIniLine(line, &arg, &val);
+		splitIniLine(line, &arg, &val);
 		// load settings
 	}
 	return sets;
@@ -137,7 +136,7 @@ VideoSettings Filer::LoadVideoSettings() {
 	VideoSettings sets;
 	for (string& line : lines) {
 		string arg, val, key;
-		SplitIniLine(line, &arg, &val, &key);
+		splitIniLine(line, &arg, &val, &key);
 		if (arg == "font")
 			sets.font = val;
 		else if (arg == "vsync")
@@ -165,13 +164,13 @@ VideoSettings Filer::LoadVideoSettings() {
 }
 
 void Filer::SaveSettings(const VideoSettings& sets) {
-	vector<string> lines;
-	lines.push_back("font=" + sets.font);
-	lines.push_back("vsync=" + btos(sets.vsync));
-	lines.push_back("renderer=" + sets.renderer);
-	lines.push_back("maximized=" + btos(sets.maximized));
-	lines.push_back("fullscreen=" + btos(sets.fullscreen));
-	lines.push_back("resolution=" + to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y));
+	vector<string> lines {
+		"font=" + sets.font,
+		"vsync=" + btos(sets.vsync),
+		"renderer=" + sets.renderer,
+		"maximized=" + btos(sets.maximized),
+		"fullscreen=" + btos(sets.fullscreen),
+		"resolution=" + to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y)};
 	for (const pair<EColor, vec4b>& it : sets.colors)
 		lines.push_back("color["+to_string(int(it.first))+"]=" + to_string(it.second.x) + ' ' + to_string(it.second.y) + ' ' + to_string(it.second.z) + ' ' + to_string(it.second.a));
 	WriteTextFile(dirSets() + "video.ini", lines);
@@ -185,7 +184,7 @@ AudioSettings Filer::LoadAudioSettings() {
 	AudioSettings sets;
 	for (string& line : lines) {
 		string arg, val;
-		SplitIniLine(line, &arg, &val);
+		splitIniLine(line, &arg, &val);
 		if (arg == "music_vol")
 			sets.musicVolume = stoi(val);
 		else if (arg == "interface_vol")
@@ -197,10 +196,10 @@ AudioSettings Filer::LoadAudioSettings() {
 }
 
 void Filer::SaveSettings(const AudioSettings& sets) {
-	vector<string> lines;
-	lines.push_back("music_vol=" + to_string(sets.musicVolume));
-	lines.push_back("interface_vol=" + to_string(sets.soundVolume));
-	lines.push_back("song_delay=" + to_string(sets.songDelay));
+	vector<string> lines {
+		"music_vol=" + to_string(sets.musicVolume),
+		"interface_vol=" + to_string(sets.soundVolume),
+		"song_delay=" + to_string(sets.songDelay)};
 	WriteTextFile(dirSets() + "audio.ini", lines);
 }
 
@@ -212,7 +211,7 @@ ControlsSettings Filer::LoadControlsSettings() {
 	ControlsSettings sets;
 	for (string& line : lines) {
 		string arg, val, key;
-		SplitIniLine(line, &arg, &val, &key);
+		splitIniLine(line, &arg, &val, &key);
 		if (arg == "shortcut") {
 			Shortcut* it = sets.shortcut(key);
 			if (!it) {

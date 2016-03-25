@@ -8,6 +8,7 @@ TO DO
 - add selectable items
 - improve vector classes
 - add settings menu lists
+- test audio system
 - improve exception handling
 - give it a proper look
 - maybe add some animations

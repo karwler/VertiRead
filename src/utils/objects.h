@@ -2,27 +2,45 @@
 
 #include "items.h"
 
+enum EFixation : byte {
+	FIX_NONE = 0x0,
+	FIX_SX = 0x1,
+	FIX_SY = 0x2,
+	FIX_EX = 0x4,
+	FIX_EY = 0x8
+};
+EFixation operator|(EFixation a, EFixation b);
+
 // if variable is an int, it's value is in pixels
 // if variable is a float, it's value is 0 - 1 (1 = window resolution)
 
 class Object {
 public:
-	Object(vec2f POS = vec2f(), vec2f SIZ = vec2f(0.2f, 0.2f), EColor CLR = EColor::rectangle);
-	Object(vec2i POS, vec2i SIZ, EColor CLR = EColor::rectangle);
+	Object(vec2i POS=vec2i(), vec2i SIZ=vec2i(), EFixation FIX=FIX_NONE, EColor CLR = EColor::rectangle);
 	virtual ~Object();
+
+	template <typename T>
+	bool isA() const {
+		return dynamic_cast<T*>(const_cast<Object*>(this)) != nullptr;
+	}
 
 	SDL_Rect getRect() const;
 	vec2i Pos() const;
+	void Pos(vec2i newPos);
+	vec2i End() const;
+	void End(vec2i newEnd);
 	vec2i Size() const;
+	void Size(vec2i newSize);
 
-	vec2f pos;
-	vec2f size;
 	EColor color;
+private:
+	vec2f pos, end;
+	EFixation fix;
 };
 
 class TextBox : public Object {
 public:
-	TextBox(const Object& BASE = Object(), const Text& TXT = Text(), vec4i MRGN=vec4i(2, 2, 4, 4), int SPC=0);
+	TextBox(const Object& BASE=Object(), const Text& TXT = Text(), vec4i MRGN=vec4i(2, 2, 4, 4), int SPC=0);
 	virtual ~TextBox();
 
 	vector<Text> getLines() const;
@@ -43,7 +61,7 @@ public:
 	virtual ~Button();
 
 	virtual void OnClick();
-	void setCallback(void (Program::*func)());
+	void Callback(void (Program::*func)());
 
 protected:
 	void (Program::*callback)();
@@ -64,99 +82,4 @@ public:
 
 	string text;
 	EColor textColor;
-};
-
-class ScrollArea : public Object {
-public:
-	ScrollArea(const Object& BASE = Object(), int SPC = 5, int BARW = 10);
-	virtual ~ScrollArea();
-
-	void DragSlider(int ypos);
-	void DragList(int ypos);
-	void ScrollList(int ymov);
-	virtual void SetValues();
-
-	SDL_Rect Bar() const;
-	SDL_Rect Slider() const;
-
-	int Spacing() const;
-	int ListY() const;
-	float sliderY() const;	// calculate slider position
-	int SliderY() const;	// get global slider position in pixels
-	int SliderH() const;
-
-	int barW;
-	int diffSliderMouseY;
-protected:
-	int spacing;
-	int listY;
-	float sliderH;
-	int listH, listL;
-
-	void SetScrollValues();	// needs listH and size.y in order to calculate listL, sliderH
-};
-
-class ListBox : public ScrollArea {
-public:
-	ListBox(const Object& BASE = Object(), const vector<ListItem*>& ITMS = vector<ListItem*>(), int SPC=5, int BARW=10);
-	virtual ~ListBox();
-
-	virtual void SetValues();
-	vector<ListItem*> Items() const;
-	void setItems(const vector<ListItem*>& objects);
-
-private:
-	vector<ListItem*> items;
-};
-
-class TileBox : public ScrollArea {
-public:
-	TileBox(const Object& BASE = Object(), const vector<TileItem>& ITMS = vector<TileItem>(), vec2i TS = vec2i(50, 50), int SPC = 5, int BARW = 10);
-	virtual ~TileBox();
-
-	virtual void SetValues();
-	vector<TileItem>& Items();
-	void setItems(const vector<TileItem>& objects);
-
-	vec2i TileSize() const;
-	int TilesPerRow() const;
-
-private:
-	vec2i tileSize;
-	int tilesPerRow;
-
-	vector<TileItem> items;
-};
-
-class ReaderBox : public ScrollArea {
-public:
-	ReaderBox(const vector<string>& PICS = vector<string>(), float ZOOM=1.f);
-	virtual ~ReaderBox();
-
-	void Tick(float dSec);
-	void DragListX(int xpos);
-	void ScrollListX(int xmov);
-	void Zoom(float factor);
-	void AddZoom(float zadd);
-
-	SDL_Rect List() const;	// return value is the background rect
-	SDL_Rect Player() const;
-
-	virtual void SetValues();
-	const vector<Image>& Pictures() const;
-	void SetPictures(const vector<string>& pictures);
-	int ListX() const;
-
-	bool showSlider() const;
-	bool showList() const;
-	bool showPlayer() const;
-
-	bool sliderFocused;
-private:
-	const float hideDelay;
-	float sliderTimer, listTimer, playerTimer;
-	float zoom;
-	int listX, listXL;
-	
-	vector<Image> pics;
 };

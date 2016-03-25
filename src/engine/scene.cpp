@@ -16,27 +16,29 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 	focObject = 0;
 	objectHold = nullptr;
 	vec2i res = World::winSys()->Resolution();
+
+
 	switch (newMenu) {
 	case EMenu::books: {
-		objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(res.x / 3 - 10, 50)), &Program::Event_OpenPlaylistList, "Playlists"));
-		objects.push_back(new ButtonText(Object(vec2i(res.x / 3, 0), vec2i(res.x / 3 - 10, 50)), &Program::Event_OpenGeneralSettings, "Settings"));
-		objects.push_back(new ButtonText(Object(vec2i(res.x / 3 * 2, 0), vec2i(res.x / 3, 50)), &Program::Event_Back, "Exit"));
+		objects.push_back(new ButtonText(Object(vec2i(0,         0), vec2i(res.x/3-10, 50), FIX_SY | FIX_EY), &Program::Event_OpenPlaylistList, "Playlists"));
+		objects.push_back(new ButtonText(Object(vec2i(res.x/3,   0), vec2i(res.x/3-10, 50), FIX_SY | FIX_EY), &Program::Event_OpenGeneralSettings, "Settings"));
+		objects.push_back(new ButtonText(Object(vec2i(res.x/3*2, 0), vec2i(res.x/3,    50), FIX_SY | FIX_EY), &Program::Event_Back, "Exit"));
 		vector<TileItem> tiles;
 		vector<fs::path> names = Filer::ListDir(Filer::dirLib(), FILTER_DIR);
 		for (fs::path& it : names)
 			tiles.push_back(TileItem(it.filename().string(), it.string(), &Program::Event_OpenBrowser));
-		objects.push_back(new TileBox(Object(vec2i(0, 60), vec2i(res.x, res.y-60)), tiles, vec2i(400, 30)));
+		objects.push_back(new TileBox(Object(vec2i(0, 60), vec2i(res.x, res.y-60), FIX_SX | FIX_SY), tiles, vec2i(400, 30)));
 		focObject = objects.size() - 1;
 		break; }
 	case EMenu::browser: {
-		objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(110, 50)), &Program::Event_Back, "Back"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(90, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_Back, "Back"));
 		vector<ListItem*> items;
-		Browser* browser = (Browser*)dat;
+		Browser* browser = static_cast<Browser*>(dat);
 		for (fs::path& it : browser->ListDirs())
 			items.push_back(new BrowserButton(30, it.filename().string(), "", &Program::Event_OpenBrowser));
 		for (fs::path& it : browser->ListFiles())
 			items.push_back(new BrowserButton(30, it.filename().string(), it.parent_path().string(), &Program::Event_OpenReader));
-		objects.push_back(new ListBox(Object(vec2i(120, 0), vec2i(res.x-120, res.y), EColor::background), items));
+		objects.push_back(new ListBox(Object(vec2i(100, 0), vec2i(res.x-100, res.y), FIX_SX | FIX_SY, EColor::background), items));
 		focObject = objects.size() - 1;
 		break; }
 	case EMenu::reader:
@@ -44,71 +46,72 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 		focObject = objects.size() - 1;
 		break;
 	case EMenu::playlists: {
-		objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(res.x / 3 - 10, 50)), &Program::Event_OpenBookList, "Library"));
-		objects.push_back(new ButtonText(Object(vec2i(res.x / 3, 0), vec2i(res.x / 3 - 10, 50)), &Program::Event_OpenGeneralSettings, "Settings"));
-		objects.push_back(new ButtonText(Object(vec2i(res.x / 3 * 2, 0), vec2i(res.x / 3, 50)), &Program::Event_Back, "Exit"));
+		objects.push_back(new ButtonText(Object(vec2i(0,         0), vec2i(res.x/3-10, 50), FIX_SY | FIX_EY), &Program::Event_OpenBookList, "Library"));
+		objects.push_back(new ButtonText(Object(vec2i(res.x/3,   0), vec2i(res.x/3-10, 50), FIX_SY | FIX_EY), &Program::Event_OpenGeneralSettings, "Settings"));
+		objects.push_back(new ButtonText(Object(vec2i(res.x/3*2, 0), vec2i(res.x/3,    50), FIX_SY | FIX_EY), &Program::Event_Back, "Exit"));
 		vector<TileItem> tiles;
 		vector<fs::path> names = Filer::ListDir(Filer::dirPlist(), FILTER_FILE);
 		for (fs::path& it : names)
 			tiles.push_back(TileItem(removeExtension(it.filename()).string(), it.string(), &Program::Event_OpenPlaylistEditor));
-		objects.push_back(new TileBox(Object(vec2i(0, 60), vec2i(res.x, res.y - 60)), tiles, vec2i(400, 30)));
+		objects.push_back(new TileBox(Object(vec2i(0, 60), vec2i(res.x, res.y-60), FIX_SX | FIX_SY), tiles, vec2i(400, 30)));
 		focObject = objects.size() - 1;
 		break; }
 	case EMenu::plistEditor: {
-		PlaylistEditor* editor = (PlaylistEditor*) dat;
+		PlaylistEditor* editor = static_cast<PlaylistEditor*>(dat);
 		vector<ListItem*> items;
 		if (editor->showSongs) {
-			objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(100, 20)), &Program::Event_Back, "Books"));
-			for (fs::path& it : editor->getPlaylist().songs)
+			objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(100, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_Back, "Books"));
+			for (fs::path& it : editor->GetPlaylist().songs)
 				items.push_back(new ListItem(30, it.filename().string()));
 		}
 		else {
-			objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(100, 20)), &Program::Event_Back, "Songs"));
-			for (string& it : editor->getPlaylist().books)
+			objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(100, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_Back, "Songs"));
+			for (string& it : editor->GetPlaylist().books)
 				items.push_back(new ListItem(30, it));
 		}
-		objects.push_back(new ButtonText(Object(vec2i(0, 30), vec2i(100, 20)), &Program::Event_Back, "Add"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 60), vec2i(100, 20)), &Program::Event_Back, "Del"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 90), vec2i(100, 20)), &Program::Event_Back, "Edit"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 120), vec2i(100, 20)), &Program::Event_Back, "Save"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 150), vec2i(100, 20)), &Program::Event_Back, "Cancel"));
-		objects.push_back(new ListBox(Object(vec2i(110, 0), vec2i(res.x-110, res.y), EColor::background), items));
+		objects.push_back(new ButtonText(Object(vec2i(0, 0),   vec2i(100, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_Back, "Add"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 50),  vec2i(100, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_Back, "Del"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 100), vec2i(100, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_Back, "Edit"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 150), vec2i(100, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_Back, "Save"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 200), vec2i(100, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_Back, "Cancel"));
+		objects.push_back(new ListBox(Object(vec2i(110, 0), vec2i(res.x-110, res.y), FIX_SX | FIX_SY, EColor::background), items));
 		break; }
 	case EMenu::generalSets:
-		objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(200, 50)), &Program::Event_OpenVideoSettings, "Video"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 60), vec2i(200, 50)), &Program::Event_OpenAudioSettings, "Audio"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 120), vec2i(200, 50)), &Program::Event_OpenControlsSettings, "Controls"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 180), vec2i(200, 50)), &Program::Event_Back, "Back"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 0),   vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_OpenVideoSettings, "Video"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 50),  vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_OpenAudioSettings, "Audio"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 100), vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_OpenControlsSettings, "Controls"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 150), vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_Back, "Back"));
 		break;
 	case EMenu::videoSets:
-		objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(200, 50)), &Program::Event_OpenGeneralSettings, "General"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 60), vec2i(200, 50)), &Program::Event_OpenAudioSettings, "Audio"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 120), vec2i(200, 50)), &Program::Event_OpenControlsSettings, "Controls"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 180), vec2i(200, 50)), &Program::Event_Back, "Back"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 0),   vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_OpenGeneralSettings, "General"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 50),  vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_OpenAudioSettings, "Audio"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 100), vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_OpenControlsSettings, "Controls"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 150), vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_Back, "Back"));
 		break;
 	case EMenu::audioSets:
-		objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(200, 50)), &Program::Event_OpenGeneralSettings, "General"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 60), vec2i(200, 50)), &Program::Event_OpenVideoSettings, "Video"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 120), vec2i(200, 50)), &Program::Event_OpenControlsSettings, "Controls"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 180), vec2i(200, 50)), &Program::Event_Back, "Back"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 0),   vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_OpenGeneralSettings, "General"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 50),  vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_OpenVideoSettings, "Video"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 100), vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_OpenControlsSettings, "Controls"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 150), vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_Back, "Back"));
 		break;
 	case EMenu::controlsSets:
-		objects.push_back(new ButtonText(Object(vec2i(0, 0), vec2i(200, 50)), &Program::Event_OpenGeneralSettings, "General"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 60), vec2i(200, 50)), &Program::Event_OpenVideoSettings, "Video"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 120), vec2i(200, 50)), &Program::Event_OpenAudioSettings, "Audio"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 180), vec2i(200, 50)), &Program::Event_Back, "Back"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 0),   vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_OpenGeneralSettings, "General"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 50),  vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_OpenVideoSettings, "Video"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 100), vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_OpenAudioSettings, "Audio"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 150), vec2i(140, 40), FIX_SX | FIX_SY | FIX_EX | FIX_EY), &Program::Event_Back, "Back"));
 	}
-	World::winSys()->DrawScene();
+	World::engine->SetRedrawNeeded();
 }
 
 void Scene::ResizeMenu() {
 	for (Object* obj : objects) {
-		if (dynamic_cast<ScrollArea*>(obj))
+		if (obj->isA<ScrollArea>())
 			static_cast<ScrollArea*>(obj)->SetValues();
 	}
+	World::engine->SetRedrawNeeded();
 }
 
-void Scene::Tick(float dSec) {
+void Scene::Tick() {
 	// handle keyhold
 	if (InputSys::isPressed(SDL_SCANCODE_UP))
 		program->Event_Up();
@@ -121,7 +124,7 @@ void Scene::Tick(float dSec) {
 
 	// handle mousemove
 	if (objectHold) {
-		if (dynamic_cast<ReaderBox*>(objectHold) && !static_cast<ReaderBox*>(objectHold)->sliderFocused) {
+		if (objectHold->isA<ReaderBox>() && !static_cast<ReaderBox*>(objectHold)->sliderFocused) {
 			if (InputSys::isPressed(SDL_SCANCODE_LCTRL))
 				static_cast<ReaderBox*>(objectHold)->ScrollListX(-World::inputSys()->mouseMove().x);
 			objectHold->ScrollList(-World::inputSys()->mouseMove().y);
@@ -131,28 +134,28 @@ void Scene::Tick(float dSec) {
 	}
 
 	for (Object* it : objects)
-		if (dynamic_cast<ReaderBox*>(it))
-			static_cast<ReaderBox*>(it)->Tick(dSec);
+		if (it->isA<ReaderBox>())
+			static_cast<ReaderBox*>(it)->Tick();
 }
 
 void Scene::OnMouseDown() {
 	for (Object* obj : objects) {
-		if (dynamic_cast<Button*>(obj)) {
+		if (obj->isA<Button>()) {
 			if (CheckButtonClick(static_cast<Button*>(obj)))
 				break;
 		}
-		else if (dynamic_cast<ScrollArea*>(obj)) {
+		else if (obj->isA<ScrollArea>()) {
 			if (CheckSliderClick(static_cast<ScrollArea*>(obj)))
 				break;
-			else if (dynamic_cast<ListBox*>(obj)) {
+			else if (obj->isA<ListBox>()) {
 				if (CheckListBoxClick(static_cast<ListBox*>(obj)))
 					break;
 			}
-			else if (dynamic_cast<TileBox*>(obj)) {
+			else if (obj->isA<TileBox>()) {
 				if (CheckTileBoxClick(static_cast<TileBox*>(obj)))
 					break;
 			}
-			else if (dynamic_cast<ReaderBox*>(obj)) {
+			else if (obj->isA<ReaderBox>()) {
 				if (CheckReaderBoxClick(static_cast<ReaderBox*>(obj)))
 					break;
 			}
@@ -161,7 +164,7 @@ void Scene::OnMouseDown() {
 }
 
 bool Scene::CheckButtonClick(Button* obj) {
-	if (inRect({ obj->Pos().x, obj->Pos().y, obj->Size().x, obj->Size().y }, InputSys::mousePos())) {
+	if (inRect(obj->getRect(), InputSys::mousePos())) {
 		obj->OnClick();
 		return true;
 	}
@@ -175,7 +178,7 @@ bool Scene::CheckSliderClick(ScrollArea* obj) {
 		if (mPos.y < obj->SliderY() || mPos.y > obj->SliderY() + obj->SliderH())
 			obj->DragSlider(mPos.y - obj->SliderH() / 2);
 		obj->diffSliderMouseY = mPos.y - obj->SliderY();
-		if (dynamic_cast<ReaderBox*>(obj)) {
+		if (obj->isA<ReaderBox>()) {
 			ReaderBox* rbox = static_cast<ReaderBox*>(obj);
 			rbox->sliderFocused = rbox->showSlider();		// set slider focused only if it's displayed
 		}
@@ -189,7 +192,7 @@ bool Scene::CheckListBoxClick(ListBox* obj) {
 	int posY = obj->Pos().y + obj->ListY();
 	for (uint i = 0; i != items.size(); i++) {
 		int itemMax = posY + items[i]->height;
-		if (inRect({ obj->Pos().x, posY, obj->Size().x - obj->barW, itemMax }, InputSys::mousePos())) {
+		if (inRect({obj->Pos().x, posY, obj->Size().x - obj->barW, itemMax}, InputSys::mousePos())) {
 			items[i]->OnClick();
 			return true;
 		}
@@ -199,7 +202,7 @@ bool Scene::CheckListBoxClick(ListBox* obj) {
 }
 
 bool Scene::CheckTileBoxClick(TileBox* obj) {
-	vector<TileItem>& items = obj->Items();
+	const vector<TileItem>& items = obj->Items();
 	for (uint i = 0; i != items.size(); i++) {
 		int row = i / obj->TilesPerRow();
 		int posX = (i - row * obj->TilesPerRow()) * (obj->TileSize().x + obj->Spacing()) + obj->Pos().x;
@@ -214,7 +217,7 @@ bool Scene::CheckTileBoxClick(TileBox* obj) {
 }
 
 bool Scene::CheckReaderBoxClick(ReaderBox* obj) {
-	if (inRect({ obj->Pos().x, obj->Pos().y, obj->Size().x, obj->Size().y }, InputSys::mousePos())) {	// needs ui subtraction
+	if (inRect(obj->getRect(), InputSys::mousePos())) {	// needs ui subtraction
 		objectHold = obj;
 		return true;
 	}
@@ -223,7 +226,7 @@ bool Scene::CheckReaderBoxClick(ReaderBox* obj) {
 
 void Scene::OnMouseUp() {
 	if (objectHold) {
-		if (dynamic_cast<ReaderBox*>(objectHold))
+		if (objectHold->isA<ReaderBox>())
 			static_cast<ReaderBox*>(objectHold)->sliderFocused = false;
 		objectHold->diffSliderMouseY = 0;
 		objectHold = nullptr;
@@ -231,7 +234,7 @@ void Scene::OnMouseUp() {
 }
 
 void Scene::OnMouseWheel(int ymov) {
-	if (dynamic_cast<ScrollArea*>(FocusedObject()))
+	if (FocusedObject()->isA<ScrollArea>())
 		static_cast<ScrollArea*>(FocusedObject())->ScrollList(ymov*-20);
 }
 

@@ -1,12 +1,19 @@
-#include "audioSys.h"
 #include "world.h"
 
-AudioSys::AudioSys() :
+AudioSys::AudioSys(const AudioSettings& SETS) :
+	sets(SETS),
 	curMusic(nullptr),
-	curSound(nullptr)
-{}
+	curSound(nullptr),
+	deltaDelay(0.f)
+{
+	Initialize();
+}
 
-bool AudioSys::Initialize(const AudioSettings& sets) {
+AudioSys::~AudioSys() {
+	Cleanup();
+}
+
+void AudioSys::Initialize() {
 	Mix_Init(MIX_INIT_FLAC | MIX_INIT_FLUIDSYNTH | MIX_INIT_MOD | MIX_INIT_MODPLUG | MIX_INIT_MP3 | MIX_INIT_OGG);
 	Mix_OpenAudio(44100, AUDIO_S16SYS, 2, 4096);
 	Mix_AllocateChannels(1);
@@ -14,9 +21,8 @@ bool AudioSys::Initialize(const AudioSettings& sets) {
 	Mix_HookMusicFinished(MusicFinishCallback);
 	Mix_ChannelFinished(ChannelFinishCallback);
 
-	setMusicVolume(sets.musicVolume);
-	setSoundVolume(sets.soundVolume);
-	return true;
+	MusicVolume(sets.musicVolume);
+	SoundVolume(sets.soundVolume);
 }
 
 void AudioSys::Cleanup() {
@@ -37,10 +43,10 @@ void AudioSys::FreeSound() {
 }
 
 void AudioSys::Tick(float dSec) {
-	if (deltaDelay != 0) {
+	if (deltaDelay != 0.f) {
 		deltaDelay -= dSec;
-		if (deltaDelay <= 0) {
-			deltaDelay = 0;
+		if (deltaDelay <= 0.f) {
+			deltaDelay = 0.f;
 			SwitchSong(1);
 		}
 	}
@@ -67,14 +73,18 @@ void AudioSys::PlayPauseMusic() {
 
 void AudioSys::SwitchSong(int step) {
 	FreeMusic();
+	deltaDelay = 0.f;
+	if (playlist.empty())
+		return;
+
 	curSong += step;
-	if (curSong >= playlist.songs.size()) {
+	if (curSong >= playlist.size()) {
 		if (step < 0)
-			curSong = playlist.songs.size() - 1;
+			curSong = playlist.size() - 1;
 		else
 			curSong = 0;
 	}
-	curMusic = Mix_LoadMUS(playlist.songs[curSong].string().c_str());
+	curMusic = Mix_LoadMUS(playlist[curSong].c_str());
 	Mix_PlayMusic(curMusic, 0);
 }
 
@@ -88,7 +98,7 @@ AudioSettings AudioSys::Settings() const {
 	return sets;
 }
 
-void AudioSys::setPlaylist(const Playlist& newList) {
+void AudioSys::LoadPlaylist(const vector<std::string>& newList) {
 	FreeMusic();
 	playlist = newList;
 }
@@ -97,7 +107,7 @@ int AudioSys::MusicVolume() const {
 	return sets.musicVolume;
 }
 
-void AudioSys::setMusicVolume(int vol) {
+void AudioSys::MusicVolume(int vol) {
 	if (vol > 128)
 		sets.musicVolume = 128;
 	else if (vol < 0)
@@ -111,7 +121,7 @@ int AudioSys::SoundVolume() const {
 	return sets.soundVolume;
 }
 
-void AudioSys::setSoundVolume(int vol) {
+void AudioSys::SoundVolume(int vol) {
 	if (vol > 128)
 		sets.soundVolume = 128;
 	else if (vol < 0)

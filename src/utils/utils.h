@@ -161,7 +161,7 @@ struct kvec2 {
 		return x == n.x && y == n.y;
 	}
 	bool isNull() {
-		return x == NULL && y == NULL;
+		return x == 0 && y == 0;
 	}
 	double len() const { return sqrt(x*x + y*y); }
 };
@@ -210,7 +210,7 @@ struct kvec3 {
 		return x == n.x && y == n.y && z == n.z;
 	}
 	bool isNull() {
-		return x == NULL && y == NULL && z == NULL;
+		return x == 0 && y == 0 && z == 0;
 	}
 };
 using vec3b = kvec3<byte>;
@@ -262,22 +262,31 @@ struct kvec4 {
 		return x == n.x && y == n.y && z == n.z && a == n.a;
 	}
 	bool isNull() {
-		return x == NULL && y == NULL && z == NULL && a == NULL;
+		return x == 0 && y == 0 && z == 0 && a == 0;
 	}
 };
 using vec4b = kvec4<byte>;
 using vec4i = kvec4<int>;
 
+// files and strings
 bool isNumber(string str);
 int findChar(string str, char c);
-vector<string> getWords(string line, bool skipCommas=true);
-int SplitIniLine(string line, string* arg, string* val, string* key = nullptr);
+vector<string> getWords(string line, bool skipCommas=false);
+int splitIniLine(string line, string* arg, string* val, string* key = nullptr);
 fs::path removeExtension(fs::path path);
+
+// graphics
 bool inRect(const SDL_Rect& rect, vec2i point);
 bool needsCrop(const SDL_Rect& crop);
-SDL_Rect GetCrop(SDL_Rect item, SDL_Rect frame);
-SDL_Surface* CropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop);
+SDL_Rect getCrop(SDL_Rect item, SDL_Rect frame);
+SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop);
+vec2i textureSize(string path);
 
+// other
+void PrintInfo();
+string getRendererName(int id);
+
+// convertions
 string wtos(wstring wstr);
 bool stob(string str);
 string btos(bool b);
@@ -289,7 +298,6 @@ int pixY(float p);
 vec2f prc(vec2i p);
 float prcX(int p);
 float prcY(int p);
-string getRendererName(int id);
 
 template<class T>
 void Erase(vector<T*>& vec, uint i) {

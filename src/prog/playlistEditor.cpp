@@ -1,5 +1,5 @@
 #include "playlistEditor.h"
-#include "engine/world.h"
+#include "engine/filer.h"
 
 PlaylistEditor::PlaylistEditor(string PLIST, bool SS) :
 	showSongs(SS)
@@ -12,7 +12,7 @@ void PlaylistEditor::LoadPlaylist(string playlist) {
 	selected = -1;
 }
 
-Playlist PlaylistEditor::getPlaylist() const {
+Playlist PlaylistEditor::GetPlaylist() const {
 	return pList;
 }
 

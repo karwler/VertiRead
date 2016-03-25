@@ -1,7 +1,6 @@
 #pragma once
 
-#include "utils/objects.h"
-#include "utils/types.h"
+#include "utils/scrollAreas.h"
 #include "prog/program.h"
 #include "prog/library.h"
 
@@ -12,7 +11,7 @@ public:
 	
 	void SwitchMenu(EMenu newMenu, void* dat=nullptr);
 	void ResizeMenu();
-	void Tick(float dSec);
+	void Tick();
 	void OnMouseDown();
 	void OnMouseUp();
 	void OnMouseWheel(int ymov);

@@ -4,9 +4,10 @@
 
 class AudioSys {
 public:
-	AudioSys();
+	AudioSys(const AudioSettings& SETS=AudioSettings());
+	~AudioSys();
 
-	bool Initialize(const AudioSettings& sets);
+	void Initialize();
 	void Cleanup();
 	void FreeMusic();
 	void FreeSound();
@@ -20,15 +21,15 @@ public:
 	void PlaySound(string path);
 
 	AudioSettings Settings() const;
-	void setPlaylist(const Playlist& newList);
+	void LoadPlaylist(const vector<string>& newList);
 	int MusicVolume() const;
-	void setMusicVolume(int vol);
+	void MusicVolume(int vol);
 	int SoundVolume() const;
-	void setSoundVolume(int vol);
+	void SoundVolume(int vol);
 
 private:
 	AudioSettings sets;
-	Playlist playlist;
+	vector<string> playlist;
 	uint curSong;
 	Mix_Music* curMusic;
 	Mix_Chunk* curSound;

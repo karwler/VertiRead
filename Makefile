@@ -18,6 +18,7 @@ SOURCES       = src/engine/audioSys.cpp \
 		src/prog/program.cpp \
 		src/utils/items.cpp \
 		src/utils/objects.cpp \
+		src/utils/scrollAreas.cpp \
 		src/utils/types.cpp \
 		src/utils/utils.cpp \
 		src/prog/browser.cpp \
@@ -35,6 +36,7 @@ OBJECTS       = bin/audioSys.o \
 		bin/program.o \
 		bin/items.o \
 		bin/objects.o \
+		bin/scrollAreas.o \
 		bin/types.o \
 		bin/utils.o \
 		bin/browser.o \
@@ -81,6 +83,9 @@ bin/items.o: src/utils/items.cpp
 
 bin/objects.o: src/utils/objects.cpp
 	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/objects.o src/utils/objects.cpp
+
+bin/scrollAreas.o: src/utils/scrollAreas.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/scrollAreas.o src/utils/scrollAreas.cpp
 
 bin/types.o: src/utils/types.cpp
 	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/types.o src/utils/types.cpp

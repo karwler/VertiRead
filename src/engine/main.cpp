@@ -8,6 +8,12 @@ int main(int argc, char** argv) {
 	for (int i=0; i!=argc; i++)
 		World::args.push_back(argv[i]);
 #endif
-	World::engine = new Engine;
-	return World::engine->Run();
+	try {
+		World::engine = new Engine;
+		return World::engine->Run();
+	} catch (int err) {
+		World::engine->Cleanup();
+		cerr << "returning " << err << endl;
+		return err;
+	}
 }

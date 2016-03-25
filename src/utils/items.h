@@ -15,11 +15,11 @@ public:
 
 class BrowserButton : public ListItem {
 public:
-	BrowserButton(int H = 50, string LBL = "", string DAT="", void (Program::*CALLB)(string)=nullptr);
+	BrowserButton(int H=50, string LBL="", string DAT="", void (Program::*CALLB)(string)=nullptr);
 	virtual ~BrowserButton();
 
 	virtual void OnClick();
-	void setCallback(void (Program::*CALLB)(string));
+	void Callback(void (Program::*CALLB)(string));
 
 	string data;
 protected:
@@ -31,8 +31,8 @@ public:
 	TileItem(string LBL = "", string DAT = "", void (Program::*CALLB)(string) = nullptr);
 	~TileItem();
 
-	void OnClick();
-	void setCallback(void (Program::*CALLB)(string));
+	void OnClick() const;
+	void Callback(void (Program::*CALLB)(string));
 
 	string label;
 	string data;

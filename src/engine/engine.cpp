@@ -1,38 +1,30 @@
-#include "world.h"
+#include "engine.h"
 
 Engine::Engine() :
-	run(true)
+	run(true),
+	redraw(true)
 {}
 
 int Engine::Run() {
 	// initialize all components
-	if (SDL_Init(SDL_INIT_EVERYTHING))
-		return 1;
-	if (TTF_Init()) {
-		SDL_Quit();
-		return 2;
+	if (SDL_Init(SDL_INIT_EVERYTHING)) {
+		cerr << "SDL couldn't be initialized" << endl << SDL_GetError() << endl;
+		throw 1;
 	}
-	
-	World::PrintInfo();
+	if (TTF_Init()) {
+		cerr << "fonts couldn't be initialized" << endl << TTF_GetError() << endl;
+		throw 2;
+	}
+
+	PrintInfo();
 	Filer::CheckDirectories();
 	scene = new Scene;
 
-	winSys = new WindowSys;
-	if (!winSys->SetWindow(Filer::LoadVideoSettings())) {
-		Cleanup();
-		return 3;
-	}
-
-	audioSys = new AudioSys;
-	if (!audioSys->Initialize(Filer::LoadAudioSettings())) {
-		Cleanup();
-		return 4;
-	}
-	
-	inputSys = new InputSys;
-	inputSys->Settings(Filer::LoadControlsSettings());
+	audioSys = new AudioSys(Filer::LoadAudioSettings());
+	winSys = new WindowSys(scene, Filer::LoadVideoSettings());
+	inputSys = new InputSys(Filer::LoadControlsSettings());
 	kptr<SDL_Event> event = new SDL_Event;
-	
+
 	// initialize scene and timer
 	scene->getProgram()->Event_OpenBookList();
 	uint oldTime = SDL_GetTicks();
@@ -40,14 +32,20 @@ int Engine::Run() {
 	while (run) {
 		// get delta seconds
 		uint newTime = SDL_GetTicks();
-		dSec = (newTime - oldTime) / 1000.f;
+		dSec = float(newTime - oldTime) / 1000.f;
 		oldTime = newTime;
+
+		// draw scene if requested
+		if (redraw)
+			winSys->DrawObjects(scene->Objects());
 
 		// handle events
 		audioSys->Tick(dSec);
-		scene->Tick(dSec);
+		scene->Tick();
 		inputSys->Tick();
-		while (SDL_PollEvent(event))
+
+		uint timeout = SDL_GetTicks() + 50;
+		while (SDL_PollEvent(event) && timeout - SDL_GetTicks() > 0)
 			HandleEvent(event);
 	}
 	Cleanup();
@@ -61,6 +59,15 @@ void Engine::Close() {
 	Filer::SaveSettings(audioSys->Settings());
 	Filer::SaveSettings(inputSys->Settings());
 	run = false;
+}
+
+void Engine::Cleanup() {
+	if (audioSys)
+		audioSys.reset();
+	if (winSys)
+		winSys.reset();
+	TTF_Quit();
+	SDL_Quit();
 }
 
 void Engine::HandleEvent(SDL_Event* event) {
@@ -83,13 +90,8 @@ void Engine::HandleEvent(SDL_Event* event) {
 	}
 }
 
-void Engine::Cleanup() {
-	if (audioSys)
-		audioSys->Cleanup();
-	if (winSys)
-		winSys->DestroyWindow();
-	TTF_Quit();
-	SDL_Quit();
+void Engine::SetRedrawNeeded() {
+	redraw = true;
 }
 
 float Engine::deltaSeconds() const {

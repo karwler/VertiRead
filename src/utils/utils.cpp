@@ -1,4 +1,3 @@
-#include "utils.h"
 #include "engine/world.h"
 
 bool isNumber(string str) {
@@ -19,7 +18,7 @@ vector<string> getWords(string line, bool skipCommas) {
 	vector<string> words;
 	string word;
 	for (uint i = 0; i <= line.length(); i++) {
-		if (line[i] == ' ' || (skipCommas && line[i] == ',') || i == line.length()) {
+		if (line[i] == ' ' || (!skipCommas && line[i] == ',') || i == line.length()) {
 			if (word.length() != 0)
 				words.push_back(word);
 			word.clear();
@@ -30,7 +29,7 @@ vector<string> getWords(string line, bool skipCommas) {
 	return words;
 }
 
-int SplitIniLine(string line, string* arg, string* val, string* key) {
+int splitIniLine(string line, string* arg, string* val, string* key) {
 	int i0 = findChar(line, '=');
 	if (i0 == -1)
 		return -1;
@@ -60,7 +59,7 @@ bool needsCrop(const SDL_Rect& crop) {
 	return crop.x != 0 || crop.y != 0 || crop.w != 0 || crop.h != 0;
 }
 
-SDL_Rect GetCrop(SDL_Rect item, SDL_Rect frame) {
+SDL_Rect getCrop(SDL_Rect item, SDL_Rect frame) {
 	item.w += item.x;
 	item.h += item.y;
 	frame.w += frame.x;
@@ -82,7 +81,7 @@ SDL_Rect GetCrop(SDL_Rect item, SDL_Rect frame) {
 	return crop;
 }
 
-SDL_Surface* CropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {
+SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {
 	vec2i temp(rect.w, rect.h);
 	rect = { rect.x + crop.x, rect.y + crop.y, rect.w - crop.x - crop.w, rect.h - crop.y - crop.h };
 	crop = { crop.x, crop.y, temp.x - crop.x - crop.w, temp.y - crop.y - crop.h };
@@ -90,6 +89,44 @@ SDL_Surface* CropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {
 	SDL_Surface* sheet = SDL_CreateRGBSurface(surface->flags, crop.w, crop.h, surface->format->BitsPerPixel, surface->format->Rmask, surface->format->Gmask, surface->format->Bmask, surface->format->Amask);
 	SDL_BlitSurface(surface, &crop, sheet, 0);
 	return sheet;
+}
+
+vec2i textureSize(string path) {
+	SDL_Surface* surf = IMG_Load(path.c_str());
+	if (!surf)
+		return vec2i();
+	vec2i size(surf->w, surf->h);
+	SDL_FreeSurface(surf);
+	return size;
+}
+
+void PrintInfo() {
+	SDL_version ver;
+	SDL_GetVersion(&ver);
+	cout << "\nSDL version:" << int(ver.minor) << " - " << int(ver.major) << " p" << int(ver.patch) << endl;
+	cout << "Platform: " << SDL_GetPlatform() << endl;
+	cout << "CPU count: " << SDL_GetCPUCount() << " - " << SDL_GetCPUCacheLineSize() << endl;
+	cout << "RAM: " << SDL_GetSystemRAM() << "MB" << endl;
+	cout << "\nVideo Drivers:" << endl;
+	for (int i = 0; i != SDL_GetNumVideoDrivers(); i++)
+		cout << SDL_GetVideoDriver(i) << endl;
+	cout << "\nRenderers:" << endl;
+	for (int i = 0; i != SDL_GetNumRenderDrivers(); i++)
+		cout << getRendererName(i) << endl;
+	cout << "\nAudio Devices:" << endl;
+	for (int i = 0; i != SDL_GetNumAudioDevices(0); i++)
+		cout << SDL_GetAudioDeviceName(i, 0) << endl;
+	cout << "\nAudio Drivers:" << endl;
+	for (int i = 0; i != SDL_GetNumAudioDrivers(); i++)
+		cout << SDL_GetAudioDriver(i) << endl;
+	cout << endl;
+}
+
+string getRendererName(int id) {
+	SDL_RendererInfo info;
+	if (!SDL_GetRenderDriverInfo(id, &info))
+		SDL_GetRenderDriverInfo(-1, &info);
+	return info.name;
 }
 
 string wtos(wstring wstr) {
@@ -140,11 +177,4 @@ float prcX(int p) {
 
 float prcY(int p) {
 	return float(p) / float(World::winSys()->Resolution().y);
-}
-
-string getRendererName(int id) {
-	SDL_RendererInfo info;
-	if (!SDL_GetRenderDriverInfo(id, &info))
-		SDL_GetRenderDriverInfo(-1, &info);
-	return info.name;
 }

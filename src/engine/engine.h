@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audioSys.h"
+#include "filer.h"
 #include "inputSys.h"
 #include "windowSys.h"
 #include "scene.h"
@@ -11,7 +12,9 @@ public:
 
 	int Run();
 	void Close();
+	void Cleanup();
 
+	void SetRedrawNeeded();
 	float deltaSeconds() const;
 	int frameRate() const;
 	AudioSys* getAudioSys() const;
@@ -25,8 +28,8 @@ private:
 	kptr<WindowSys> winSys;
 	kptr<Scene> scene;
 	bool run;
+	bool redraw;
 	float dSec;
 
 	void HandleEvent(SDL_Event* event);
-	void Cleanup();
 };

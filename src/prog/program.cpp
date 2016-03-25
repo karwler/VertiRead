@@ -1,4 +1,3 @@
-#include "program.h"
 #include "engine/world.h"
 
 void Program::Event_Up() {
@@ -54,15 +53,15 @@ void Program::Event_PrevSong() {
 }
 
 void Program::Event_VolumeUp() {
-	World::audioSys()->setMusicVolume(World::audioSys()->Settings().musicVolume + 8);
+	World::audioSys()->MusicVolume(World::audioSys()->Settings().musicVolume + 8);
 }
 
 void Program::Event_VolumeDown() {
-	World::audioSys()->setMusicVolume(World::audioSys()->Settings().musicVolume - 8);
+	World::audioSys()->MusicVolume(World::audioSys()->Settings().musicVolume - 8);
 }
 
 void Program::Event_ScreenMode() {
-	World::winSys()->setFullscreen(!World::winSys()->Settings().fullscreen);
+	World::winSys()->Fullscreen(!World::winSys()->Settings().fullscreen);
 }
 
 void Program::Event_OpenBookList() {

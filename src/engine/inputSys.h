@@ -4,7 +4,7 @@
 
 class InputSys {
 public:
-	InputSys();
+	InputSys(const ControlsSettings& SETS=ControlsSettings());
 
 	void Tick();
 	void KeypressEvent(const SDL_KeyboardEvent& key);

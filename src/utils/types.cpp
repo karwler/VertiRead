@@ -1,6 +1,5 @@
-#include "types.h"
-#include "prog/program.h"
 #include "engine/filer.h"
+#include "prog/program.h"
 
 Image::Image(vec2i POS, vec2i SIZ, string TEXN) :
 	pos(POS), size(SIZ),
@@ -155,19 +154,7 @@ ControlsSettings::ControlsSettings(bool fillMissingBindings, const vector<Shortc
 }
 
 void ControlsSettings::FillMissingBindings() {
-	vector<string> names;
-	names.push_back("back");
-	names.push_back("zoom_in");
-	names.push_back("zoom_out");
-	names.push_back("zoom_reset");
-	names.push_back("center_view");
-	names.push_back("play_pause");
-	names.push_back("next_song");
-	names.push_back("prev_song");
-	names.push_back("volume_up");
-	names.push_back("volume_down");
-	names.push_back("fullscreen");
-
+	vector<string> names {"back", "zoom_in", "zoom_out", "zoom_reset", "center_view", "play_pause", "next_song", "prev_song", "volume_up", "volume_down", "fullscreen"};
 	for (string& it : names)
 		if (!shortcut(it))
 			shortcuts.push_back(Shortcut(it));

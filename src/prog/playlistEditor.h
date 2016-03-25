@@ -7,7 +7,7 @@ public:
 	PlaylistEditor(string PLIST="", bool SS=true);
 
 	void LoadPlaylist(string playlist);
-	Playlist getPlaylist() const;
+	Playlist GetPlaylist() const;
 
 	bool showSongs;
 private:

@@ -1,6 +1,7 @@
 #include "world.h"
 
-InputSys::InputSys()
+InputSys::InputSys(const ControlsSettings& SETS) :
+	sets(SETS)
 {
 	SDL_GetMouseState(&lastMousePos.x, &lastMousePos.y);
 }

@@ -1,4 +1,3 @@
-#include "items.h"
 #include "engine/world.h"
 
 // LIST ITEM
@@ -9,9 +8,7 @@ ListItem::ListItem(int H, string LBL) :
 {}
 ListItem::~ListItem() {}
 
-void ListItem::OnClick() {
-
-}
+void ListItem::OnClick() {}
 
 // BROWSER BUTTON
 
@@ -31,7 +28,7 @@ void BrowserButton::OnClick() {
 		(World::program()->*callback)(data);
 }
 
-void BrowserButton::setCallback(void(Program::* CALLB)(string)) {
+void BrowserButton::Callback(void(Program::* CALLB)(string)) {
 	callback = CALLB;
 }
 
@@ -44,7 +41,7 @@ TileItem::TileItem(string LBL, string DAT, void (Program::*CALLB)(string)) :
 {}
 TileItem::~TileItem() {}
 
-void TileItem::OnClick() {
+void TileItem::OnClick() const {
 	if (!callback)
 		return;
 	if (data.empty())
@@ -53,6 +50,6 @@ void TileItem::OnClick() {
 		(World::program()->*callback)(data);
 }
 
-void TileItem::setCallback(void (Program::*CALLB)(string)) {
+void TileItem::Callback(void (Program::*CALLB)(string)) {
 	callback = CALLB;
 }
