@@ -41,7 +41,7 @@ TileItem::TileItem(string LBL, string DAT, void (Program::*CALLB)(string)) :
 {}
 TileItem::~TileItem() {}
 
-void TileItem::OnClick() const {
+void TileItem::OnClick() {
 	if (!callback)
 		return;
 	if (data.empty())

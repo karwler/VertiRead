@@ -65,6 +65,14 @@ bool Shortcut::SetName(string sname, bool setDefaultKey) {
 		call = &Program::Event_VolumeDown;
 		defaultKey.scancode = SDL_SCANCODE_S;
 	}
+	else if (sname == "next_dir") {
+		call = &Program::Event_NextDir;
+		defaultKey.scancode = SDL_SCANCODE_P;
+	}
+	else if (sname == "prev_dir") {
+		call = &Program::Event_PrevDir;
+		defaultKey.scancode = SDL_SCANCODE_O;
+	}
 	else if (sname == "fullscreen") {
 		call = &Program::Event_ScreenMode;
 		defaultKey.scancode = SDL_SCANCODE_L;
@@ -154,7 +162,7 @@ ControlsSettings::ControlsSettings(bool fillMissingBindings, const vector<Shortc
 }
 
 void ControlsSettings::FillMissingBindings() {
-	vector<string> names {"back", "zoom_in", "zoom_out", "zoom_reset", "center_view", "play_pause", "next_song", "prev_song", "volume_up", "volume_down", "fullscreen"};
+	vector<string> names = {"back", "zoom_in", "zoom_out", "zoom_reset", "center_view", "play_pause", "next_song", "prev_song", "volume_up", "volume_down", "next_dir", "prev_dir", "fullscreen"};
 	for (string& it : names)
 		if (!shortcut(it))
 			shortcuts.push_back(Shortcut(it));

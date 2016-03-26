@@ -28,7 +28,6 @@ private:
 	uint focObject;			// id of object currently focused by keyboard
 	ScrollArea* objectHold;	// pointer to object currently being dragged by mouse (nullptr if none is being held)
 
-	bool CheckButtonClick(Button* obj);
 	bool CheckSliderClick(ScrollArea* obj);
 	bool CheckListBoxClick(ListBox* obj);
 	bool CheckTileBoxClick(TileBox* obj);

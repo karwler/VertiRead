@@ -50,7 +50,7 @@ public:
 	virtual ~TileBox();
 
 	virtual void SetValues();
-	const vector<TileItem>& Items() const;
+	vector<TileItem>& Items();
 	void Items(const vector<TileItem>& objects);
 
 	vec2i TileSize() const;
@@ -75,7 +75,9 @@ public:
 	void AddZoom(float zadd);
 
 	SDL_Rect List() const;	// return value is the background rect
+	vector<ButtonImage>& ListButtons();
 	SDL_Rect Player() const;
+	vector<ButtonImage>& PlayerButtons();
 
 	virtual void SetValues();
 	const vector<Image>& Pictures() const;
@@ -92,8 +94,11 @@ private:
 	float sliderTimer, listTimer, playerTimer;
 	float zoom;
 	int listX, listXL;
+	const int blistW, playerW;
 
 	vector<Image> pics;
+	vector<ButtonImage> listButtons;
+	vector<ButtonImage> playerButtons;
 
 	bool CheckMouseOverSlider();
 	bool CheckMouseOverList();

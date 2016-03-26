@@ -10,6 +10,8 @@ public:
 	vector<fs::path> ListDirs();
 	bool GoTo(string dirname);
 	bool GoUp();
+	boost::filesystem::path GoNext();
+	boost::filesystem::path GoPrev();
 
 	fs::path RootDir() const;
 	fs::path CurDir() const;

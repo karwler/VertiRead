@@ -1,6 +1,7 @@
 bin
 build
 .vs
+*.autosave
 *.user
 *.sdf
 *.opendb

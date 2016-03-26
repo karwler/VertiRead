@@ -36,8 +36,10 @@ int Engine::Run() {
 		oldTime = newTime;
 
 		// draw scene if requested
-		if (redraw)
+		if (redraw) {
+			redraw = false;
 			winSys->DrawObjects(scene->Objects());
+		}
 
 		// handle events
 		audioSys->Tick(dSec);
@@ -96,10 +98,6 @@ void Engine::SetRedrawNeeded() {
 
 float Engine::deltaSeconds() const {
 	return dSec;
-}
-
-int Engine::frameRate() const {
-	return 1/dSec;
 }
 
 AudioSys* Engine::getAudioSys() const {

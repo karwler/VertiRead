@@ -31,7 +31,7 @@ public:
 	TileItem(string LBL = "", string DAT = "", void (Program::*CALLB)(string) = nullptr);
 	~TileItem();
 
-	void OnClick() const;
+	void OnClick();
 	void Callback(void (Program::*CALLB)(string));
 
 	string label;

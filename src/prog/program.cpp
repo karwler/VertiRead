@@ -60,6 +60,20 @@ void Program::Event_VolumeDown() {
 	World::audioSys()->MusicVolume(World::audioSys()->Settings().musicVolume - 8);
 }
 
+void Program::Event_Mute() {
+	World::audioSys()->MusicVolume(0);
+}
+
+void Program::Event_NextDir() {
+	if (curMenu == EMenu::reader)
+		Event_OpenReader(browser->GoNext().string());
+}
+
+void Program::Event_PrevDir() {
+	if (curMenu == EMenu::reader)
+		Event_OpenReader(browser->GoPrev().string());
+}
+
 void Program::Event_ScreenMode() {
 	World::winSys()->Fullscreen(!World::winSys()->Settings().fullscreen);
 }

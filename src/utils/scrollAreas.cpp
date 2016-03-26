@@ -116,7 +116,7 @@ void TileBox::SetValues() {
 	ScrollArea::SetValues();
 }
 
-const vector<TileItem>& TileBox::Items() const {
+vector<TileItem>& TileBox::Items() {
 	return items;
 }
 
@@ -136,15 +136,43 @@ int TileBox::TilesPerRow() const {
 // READER BOX
 
 ReaderBox::ReaderBox(const vector<string>& PICS, float ZOOM) :
-	ScrollArea(Object(vec2i(), World::winSys()->Resolution(), FIX_SX | FIX_SY, EColor::background), 10),
+	ScrollArea(Object(vec2i(), vec2i(), World::winSys()->Resolution(), true, true, false, false, EColor::background), 10),
 	sliderFocused(false),
 	hideDelay(0.6f),
 	sliderTimer(1.f), listTimer(0.f), playerTimer(0.f),
 	zoom(ZOOM),
-	listX(0)
+	listX(0),
+	blistW(48),
+	playerW(400)
 {
 	if (!PICS.empty())
 		Pictures(PICS);
+
+	vec2i arcT(Pos());
+	vec2i posT(-1, -1);
+	vec2i sizT(blistW, blistW);
+	listButtons = {
+		ButtonImage(Object(arcT,                    posT, sizT, true, true, true, true), &Program::Event_NextDir, {"next_dir.png"}),
+		ButtonImage(Object(arcT+vec2i(0, sizT.x),   posT, sizT, true, true, true, true), &Program::Event_PrevDir, {"prev_dir.png"}),
+		ButtonImage(Object(arcT+vec2i(0, sizT.x*2), posT, sizT, true, true, true, true), &Program::Event_ZoomIn, {"zoom_in.png"}),
+		ButtonImage(Object(arcT+vec2i(0, sizT.x*3), posT, sizT, true, true, true, true), &Program::Event_ZoomOut, {"zoom_out.png"}),
+		ButtonImage(Object(arcT+vec2i(0, sizT.x*4), posT, sizT, true, true, true, true), &Program::Event_ZoomReset, {"zoom_r.png"}),
+		ButtonImage(Object(arcT+vec2i(0, sizT.x*5), posT, sizT, true, true, true, true), &Program::Event_CenterView, {"center.png"}),
+		ButtonImage(Object(arcT+vec2i(0, sizT.x*6), posT, sizT, true, true, true, true), &Program::Event_Back, {"back.png"}),
+	};
+
+	arcT += vec2i(Size().x/2, Size().y);
+	posT = vec2i(arcT.x-blistW/2, arcT.y-blistW);
+	vec2i ssizT(32, 32);
+	vec2i sposT(posT.x, arcT.y-blistW/2-ssizT.y/2);
+	playerButtons = {
+		ButtonImage(Object(arcT, posT,                    sizT, false, true, true, true), &Program::Event_PlayPause, {"play.png", "pause.png"}),
+		ButtonImage(Object(arcT, posT-vec2i(sizT.x, 0),   sizT, false, true, true, true), &Program::Event_PrevSong, {"prev_song.png"}),
+		ButtonImage(Object(arcT, posT+vec2i(sizT.x, 0),   sizT, false, true, true, true), &Program::Event_NextSong, {"next_song.png"}),
+		ButtonImage(Object(arcT, sposT+vec2i(sizT.x*2+20,           0), ssizT, false, true, true, true), &Program::Event_Mute, {"mute.png"}),
+		ButtonImage(Object(arcT, sposT+vec2i(sizT.x*2+20+ssizT.x,   0), ssizT, false, true, true, true), &Program::Event_VolumeDown, {"vol_down.png"}),
+		ButtonImage(Object(arcT, sposT+vec2i(sizT.x*2+20+ssizT.x*2, 0), ssizT, false, true, true, true), &Program::Event_VolumeUp, {"vol_up.png"})
+	};
 }
 ReaderBox::~ReaderBox() {}
 
@@ -173,7 +201,7 @@ bool ReaderBox::CheckMouseOverList() {
 	vec2i mPos = InputSys::mousePos();
 	SDL_Rect bRect = List();
 
-	if (((showList() && inRect(bRect, mPos)) || (!showList() && inRect({bRect.x, bRect.y, bRect.w/10, bRect.h}, mPos))) && listTimer != hideDelay) {
+	if (((showList() && inRect(bRect, mPos)) || (!showList() && inRect({bRect.x, bRect.y, bRect.w/4, bRect.h}, mPos))) && listTimer != hideDelay) {
 		listTimer = hideDelay;
 		World::engine->SetRedrawNeeded();
 		return true;
@@ -191,7 +219,7 @@ bool ReaderBox::CheckMouseOverPlayer() {
 	vec2i mPos = InputSys::mousePos();
 	SDL_Rect bRect = Player();
 
-	if (((showPlayer() && inRect(bRect, mPos)) || (!showPlayer() && inRect({bRect.x, bRect.y+bRect.h/10*9, bRect.w, bRect.h/10}, mPos))) && playerTimer != hideDelay) {
+	if (((showPlayer() && inRect(bRect, mPos)) || (!showPlayer() && inRect({bRect.x, bRect.y+bRect.h/10*9, bRect.w, bRect.h/6}, mPos))) && playerTimer != hideDelay) {
 		playerTimer = hideDelay;
 		World::engine->SetRedrawNeeded();
 		return true;
@@ -232,11 +260,19 @@ void ReaderBox::AddZoom(float zadd) {
 }
 
 SDL_Rect ReaderBox::List() const {
-	return {Pos().x, Pos().y, 100, Size().y-100};	// need to get rid of the hard coding
+	return {Pos().x, Pos().y, blistW, int(listButtons.size())*blistW};
+}
+
+vector<ButtonImage>&ReaderBox::ListButtons() {
+	return listButtons;
 }
 
 SDL_Rect ReaderBox::Player() const {
-	return {Pos().x+100, End().y-100, Size().x-200, 100};
+	return {Pos().x+Size().x/2-playerW/2, End().y-62, playerW, 62};
+}
+
+vector<ButtonImage>&ReaderBox::PlayerButtons() {
+	return playerButtons;
 }
 
 void ReaderBox::SetValues() {

@@ -18,6 +18,9 @@ public:
 	void Event_PrevSong();
 	void Event_VolumeUp();
 	void Event_VolumeDown();
+	void Event_Mute();
+	void Event_NextDir();
+	void Event_PrevDir();
 	void Event_ScreenMode();
 	void Event_OpenBookList();
 	void Event_OpenBrowser(string path);

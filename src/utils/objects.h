@@ -2,21 +2,9 @@
 
 #include "items.h"
 
-enum EFixation : byte {
-	FIX_NONE = 0x0,
-	FIX_SX = 0x1,
-	FIX_SY = 0x2,
-	FIX_EX = 0x4,
-	FIX_EY = 0x8
-};
-EFixation operator|(EFixation a, EFixation b);
-
-// if variable is an int, it's value is in pixels
-// if variable is a float, it's value is 0 - 1 (1 = window resolution)
-
 class Object {
 public:
-	Object(vec2i POS=vec2i(), vec2i SIZ=vec2i(), EFixation FIX=FIX_NONE, EColor CLR = EColor::rectangle);
+	Object(vec2i ANC=vec2i(), vec2i POS=vec2i(-1, -1), vec2i SIZ=vec2i(), bool FX=false, bool FY=false, bool KW=false, bool KH=false, EColor CLR = EColor::rectangle);
 	virtual ~Object();
 
 	template <typename T>
@@ -25,17 +13,21 @@ public:
 	}
 
 	SDL_Rect getRect() const;
+	vec2i Anchor() const;
+	void Anchor(vec2i newPos);
 	vec2i Pos() const;
 	void Pos(vec2i newPos);
 	vec2i End() const;
-	void End(vec2i newEnd);
+	void End(vec2i newPos);
 	vec2i Size() const;
 	void Size(vec2i newSize);
 
 	EColor color;
 private:
-	vec2f pos, end;
-	EFixation fix;
+	vec2f anchor;
+	vec2f pos, end;				// distance between boundries and anchor point
+	bool fixX, fixY;			// fix anchors position
+	bool keepWidth, keepHeight;	// keep distance between pos/end and anchor (don't resize)
 };
 
 class TextBox : public Object {
@@ -69,10 +61,15 @@ protected:
 
 class ButtonImage : public Button {
 public:
-	ButtonImage(const Object& BASE = Object(), void (Program::*CALLB)() = nullptr, string TEXN = "");
+	ButtonImage(const Object& BASE = Object(), void (Program::*CALLB)() = nullptr, const vector<string>& TEXS=vector<string>());
 	virtual ~ButtonImage();
 
-	string texname;
+	virtual void OnClick();
+	string CurTex() const;
+
+private:
+	vector<string> texes;
+	uint curTex;
 };
 
 class ButtonText : public Button {

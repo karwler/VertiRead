@@ -1,15 +1,18 @@
 #include "engine/world.h"
 
-EFixation operator|(EFixation a, EFixation b) {
-	return static_cast<EFixation>(static_cast<byte>(a) | static_cast<byte>(b));
-}
-
 // OBJECT
 
-Object::Object(vec2i POS, vec2i SIZ, EFixation FIX, EColor CLR) :
-	fix(FIX),
-	color(CLR)
+Object::Object(vec2i ANC, vec2i POS, vec2i SIZ, bool FX, bool FY, bool KW, bool KH, EColor CLR) :
+	color(CLR),
+	fixX(FX), fixY(FY),
+	keepWidth(KW), keepHeight(KH)
 {
+	// set positin to anchor if set to -1
+	if (POS.x == -1)
+		POS.x = ANC.x;
+	if (POS.y == -1)
+		POS.y = ANC.y;
+	Anchor(ANC);
 	Pos(POS);
 	Size(SIZ);
 }
@@ -19,36 +22,52 @@ SDL_Rect Object::getRect() const {
 	return {Pos().x, Pos().y, Size().x, Size().y};
 }
 
-vec2i Object::Pos() const {
+vec2i Object::Anchor() const {
 	vec2i ret;
-	ret.x = (fix & FIX_SX) ? pos.x : pixX(pos.x);
-	ret.y = (fix & FIX_SY) ? pos.y : pixY(pos.y);
+	ret.x = fixX ? anchor.x : pixX(anchor.x);
+	ret.y = fixY ? anchor.y : pixY(anchor.y);
+	return ret;
+}
+
+void Object::Anchor(vec2i newPos) {
+	anchor.x = fixX ? newPos.x : prcX(newPos.x);
+	anchor.y = fixY ? newPos.y : prcY(newPos.y);
+}
+
+vec2i Object::Pos() const {
+	vec2i ret = Anchor();
+	ret.x += keepWidth ? pos.x : pixX(pos.x);
+	ret.y += keepHeight ? pos.y : pixY(pos.y);
 	return ret;
 }
 
 void Object::Pos(vec2i newPos) {
-	pos.x = (fix & FIX_SX) ? newPos.x : prcX(newPos.x);
-	pos.y = (fix & FIX_SY) ? newPos.y : prcY(newPos.y);
+	vec2i dist = newPos - Anchor();
+	pos.x = keepWidth ? dist.x : prcX(dist.x);
+	pos.y = keepHeight ? dist.y : prcY(dist.y);
 }
 
 vec2i Object::End() const {
-	vec2i ret;
-	ret.x = (fix & FIX_EX) ? end.x : pixX(end.x);
-	ret.y = (fix & FIX_EY) ? end.y : pixY(end.y);
+	vec2i ret = Anchor();
+	ret.x += keepWidth ? end.x : pixX(end.x);
+	ret.y += keepHeight ? end.y : pixY(end.y);
 	return ret;
 }
 
-void Object::End(vec2i newEnd) {
-	end.x = (fix & FIX_EX) ? newEnd.x : prcX(newEnd.x);
-	end.y = (fix & FIX_EY) ? newEnd.y : prcY(newEnd.y);
+void Object::End(vec2i newPos) {
+	vec2i dist = newPos - Anchor();
+	end.x = keepWidth ? dist.x : prcX(dist.x);
+	end.y = keepHeight ? dist.y : prcY(dist.y);
 }
 
 vec2i Object::Size() const {
-	return vec2i(End().x - Pos().x, End().y - Pos().y);
+	return End() - Pos();
 }
 
 void Object::Size(vec2i newSize) {
-	End(Pos()+newSize);
+	vec2i dist = Pos() + newSize - Anchor();
+	end.x = keepWidth ? dist.x : prcX(dist.x);
+	end.y = keepHeight ? dist.y : prcY(dist.y);
 }
 
 // TEXTBOX
@@ -142,11 +161,24 @@ void Button::Callback(void (Program::*func)()) {
 
 // BUTTON IMAGE
 
-ButtonImage::ButtonImage(const Object& BASE, void (Program::*CALLB)(), string TEXN) :
+ButtonImage::ButtonImage(const Object& BASE, void (Program::*CALLB)(), const vector<string>& TEXS) :
 	Button(BASE, CALLB),
-	texname(TEXN)
+	texes(TEXS),
+	curTex(0)
 {}
 ButtonImage::~ButtonImage() {}
+
+void ButtonImage::OnClick() {
+	Button::OnClick();
+	curTex++;
+	if (curTex == texes.size())
+		curTex = 0;
+	World::engine->SetRedrawNeeded();
+}
+
+string ButtonImage::CurTex() const {
+	return texes.empty() ? "" : Filer::dirTexs() + texes[curTex];
+}
 
 // BUTTON TEXT
 

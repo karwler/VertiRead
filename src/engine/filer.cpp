@@ -18,7 +18,7 @@ byte Filer::CheckDirectories() {
 	}
 	if (!fs::exists(dirTexs())) {
 		cerr << "couldn't find texture directory" << endl;
-		retval = 1;
+		retval = 2;
 	}
 	return retval;
 }
@@ -170,7 +170,8 @@ void Filer::SaveSettings(const VideoSettings& sets) {
 		"renderer=" + sets.renderer,
 		"maximized=" + btos(sets.maximized),
 		"fullscreen=" + btos(sets.fullscreen),
-		"resolution=" + to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y)};
+		"resolution=" + to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y)
+	};
 	for (const pair<EColor, vec4b>& it : sets.colors)
 		lines.push_back("color["+to_string(int(it.first))+"]=" + to_string(it.second.x) + ' ' + to_string(it.second.y) + ' ' + to_string(it.second.z) + ' ' + to_string(it.second.a));
 	WriteTextFile(dirSets() + "video.ini", lines);
@@ -199,7 +200,8 @@ void Filer::SaveSettings(const AudioSettings& sets) {
 	vector<string> lines {
 		"music_vol=" + to_string(sets.musicVolume),
 		"interface_vol=" + to_string(sets.soundVolume),
-		"song_delay=" + to_string(sets.songDelay)};
+		"song_delay=" + to_string(sets.songDelay)
+	};
 	WriteTextFile(dirSets() + "audio.ini", lines);
 }
 

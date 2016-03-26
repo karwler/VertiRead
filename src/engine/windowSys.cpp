@@ -139,7 +139,7 @@ void WindowSys::PassDrawObject(Object* obj) {
 	}
 	else if (obj->isA<ButtonImage>()) {
 		ButtonImage* object = static_cast<ButtonImage*>(obj);
-		DrawImage(Image(object->Pos(), object->Size(), object->texname));
+		DrawImage(Image(object->Pos(), object->Size(), object->CurTex()));
 	}
 	else if (obj->isA<ButtonText>()) {
 		ButtonText* object = static_cast<ButtonText*>(obj);
@@ -216,11 +216,13 @@ void WindowSys::DrawObject(ReaderBox* obj) {
 	}
 	if (obj->showList()) {
 		DrawRect(obj->List(), EColor::darkened);
-		// buttons draw
+		for (ButtonImage& but : obj->ListButtons())
+			DrawImage(Image(but.Pos(), but.Size(), but.CurTex()));
 	}
 	if (obj->showPlayer()) {
 		DrawRect(obj->Player(), EColor::darkened);
-		// player draw
+		for (ButtonImage& but : obj->PlayerButtons())
+			DrawImage(Image(but.Pos(), but.Size(), but.CurTex()));
 	}
 }
 
@@ -231,26 +233,30 @@ void WindowSys::DrawRect(const SDL_Rect& rect, EColor color) {
 
 void WindowSys::DrawImage(const Image& img, SDL_Rect crop) {
 	SDL_Texture* tex = nullptr;
-	SDL_Rect rect  = {img.pos.x, img.pos.y, img.size.x, img.size.y};
+	SDL_Rect rect  = {img.pos.x, img.pos.y, img.size.x, img.size.y};	// the rect the image is gonna be projected on
 
 	if (needsCrop(crop)) {
 		SDL_Surface* surf = IMG_Load(img.texname.c_str());
+		if (!surf) {
+			cerr << "couldn't load texture " << img.texname << endl;
+			return;
+		}
+		SDL_Rect ori = {rect.x, rect.y, surf->w, surf->h};									// proportions of the original image
+		vec2f fac(float(ori.w) / float(rect.w), float(ori.h) / float(rect.h));				// scaling factor
+		rect = {rect.x+crop.x, rect.y+crop.y, rect.w-crop.x-crop.w, rect.h-crop.y-crop.h};	// adjust rect to crop
 
-		SDL_Rect ori = {rect.x, rect.y, surf->w, surf->h};
-		vec2f fac(float(ori.w) / float(rect.w), float(ori.h) / float(rect.h));
-		rect = {rect.x+crop.x, rect.y+crop.y, rect.w-crop.x-crop.w, rect.h-crop.y-crop.h};
-
+		// crop original image by factor
 		SDL_Surface* sheet = cropSurface(surf, ori, {int(float(crop.x)*fac.x), int(float(crop.y)*fac.y), int(float(crop.w)*fac.x), int(float(crop.h)*fac.y)});
 		tex = SDL_CreateTextureFromSurface(renderer, sheet);
 		SDL_FreeSurface(sheet);
 		SDL_FreeSurface(surf);
 	}
-	else
+	else {
 		tex = IMG_LoadTexture(renderer, img.texname.c_str());
-
-	if (!tex) {
-		cerr << "couldn't load texture " << img.texname << endl;
-		return;
+		if (!tex) {
+			cerr << "couldn't load texture " << img.texname << endl;
+			return;
+		}
 	}
 	SDL_RenderCopy(renderer, tex, nullptr, &rect);
 	SDL_DestroyTexture(tex);

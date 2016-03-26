@@ -16,7 +16,6 @@ public:
 
 	void SetRedrawNeeded();
 	float deltaSeconds() const;
-	int frameRate() const;
 	AudioSys* getAudioSys() const;
 	InputSys* getInputSys() const;
 	WindowSys* getWindowSys() const;

@@ -34,6 +34,30 @@ bool Browser::GoUp() {
 	return true;
 }
 
+fs::path Browser::GoNext() {
+	if (curDir == rootDir)
+		return curDir;
+	vector<fs::path> dirs = Filer::ListDir(curDir.parent_path(), FILTER_DIR);
+	for (vector<fs::path>::const_iterator it=dirs.begin(); it!=dirs.end(); it++)
+		if (*it == curDir) {
+			curDir = (it == dirs.end()-1) ? *dirs.begin() : *++it;
+			break;
+		}
+	return curDir;
+}
+
+fs::path Browser::GoPrev() {
+	if (curDir == rootDir)
+		return curDir;
+	vector<fs::path> dirs = Filer::ListDir(curDir.parent_path(), FILTER_DIR);
+	for (vector<fs::path>::const_iterator it=dirs.begin(); it!=dirs.end(); it++)
+		if (*it == curDir) {
+			curDir = (it == dirs.begin()) ? *(dirs.end()-1) : *--it;
+			break;
+		}
+	return curDir;
+}
+
 fs::path Browser::RootDir() const {
 	return rootDir;
 }
