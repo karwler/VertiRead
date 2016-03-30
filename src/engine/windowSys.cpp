@@ -25,10 +25,8 @@ void WindowSys::SetWindow() {
 
 	// create window and renderer
 	window = SDL_CreateWindow("VertRead", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets.resolution.x, sets.resolution.y, flags);
-	if (!window) {
-		cerr << "couldn't create window" << endl << SDL_GetError() << endl;
-		throw 1;
-	}
+	if (!window)
+		throw Exception("couldn't create window" + string(SDL_GetError()), 3);
 	CreateRenderer();
 }
 
@@ -42,10 +40,8 @@ void WindowSys::CreateRenderer() {
 
 	// create renderer based on the currently selected one
 	renderer = SDL_CreateRenderer(window, GetRenderDriverIndex(), flags);
-	if (!renderer) {
-		cerr << "couldn't create renderer" << endl << SDL_GetError() << endl;
-		throw 2;
-	}
+	if (!renderer)
+		throw Exception("couldn't create renderer" + string(SDL_GetError()), 4);
 }
 
 void WindowSys::DestroyWindow() {
@@ -144,7 +140,11 @@ void WindowSys::PassDrawObject(Object* obj) {
 	else if (obj->isA<ButtonText>()) {
 		ButtonText* object = static_cast<ButtonText*>(obj);
 		DrawRect(object->getRect(), object->color);
-		DrawText(Text(object->text, vec2i(object->Pos().x+5, object->Pos().y), object->Size().y - object->Size().y/8, object->textColor));
+
+		vec2i textSize(0, object->Size().y - object->Size().y/8);
+		textSize.x = CalcTextLength(object->text, textSize.y);
+		textSize.x = textSize.x+5 > object->Size().x ? textSize.x - object->Size().x +10 : 0;		// use textSize.x as crop variable
+		DrawText(Text(object->text, vec2i(object->Pos().x+5, object->Pos().y), textSize.y, object->textColor), {0, 0, textSize.x, 0});
 	}
 	else if (obj->isA<ListBox>())
 		DrawObject(static_cast<ListBox*>(obj));
@@ -157,58 +157,42 @@ void WindowSys::PassDrawObject(Object* obj) {
 }
 
 void WindowSys::DrawObject(ListBox* obj) {
-	int posY = obj->Pos().y - obj->ListY();
-	const vector<ListItem*> items = obj->Items();
-	for (ListItem* item : items) {
-		SDL_Rect crop = getCrop({0, posY, 0, item->height}, {0, obj->Pos().y, 0, obj->Size().y});	// no horizontal cropping
-		if (crop.h != item->height)	{	// don't draw if out of frame
-			DrawRect({obj->Pos().x, posY+crop.y, obj->Size().x - obj->barW, item->height-crop.y-crop.h }, EColor::rectangle);
-			DrawText(Text(item->label, vec2i(obj->Pos().x +5, posY), item->height - item->height /8), crop);
-		}
-		if ((posY += item->height + obj->Spacing()) > obj->End().y)
-			break;
+	vec2i interval(obj->FirstVisibleItem(), obj->LastVisibleItem());
+	vector<ListItem*> items = obj->Items();
+	for (int i=interval.x; i<=interval.y; i++) {
+		SDL_Rect crop;
+		SDL_Rect rect = obj->ItemRect(i, &crop);
+
+		DrawRect(rect, EColor::rectangle);
+		DrawText(Text(items[i]->label, vec2i(rect.x +5, rect.y-crop.y), obj->ItemH() - obj->ItemH() /8), crop);
 	}
 	DrawRect(obj->Bar(), EColor::darkened);
 	DrawRect(obj->Slider(), EColor::highlighted);
 }
 
 void WindowSys::DrawObject(TileBox* obj) {
+	vec2i interval(obj->FirstVisibleItem(), obj->LastVisibleItem());
 	const vector<TileItem>& tiles = obj->Items();
-	for (uint i = 0; i != tiles.size(); i++) {
-		int row = i / obj->TilesPerRow();
-		int posX = (i - row * obj->TilesPerRow()) * (obj->TileSize().x + obj->Spacing()) + obj->Pos().x;
-		int posY = row * (obj->TileSize().y + obj->Spacing()) + obj->Pos().y;
+	for (int i=interval.x; i<=interval.y; i++) {
+		SDL_Rect crop;
+		SDL_Rect rect = obj->ItemRect(i, &crop);
+		DrawRect(rect, EColor::rectangle);
 
-		int textSize = obj->TileSize().y - obj->TileSize().y / 8;
-		SDL_Rect crop = getCrop({0, posY, 0, obj->TileSize().y}, {0, obj->Pos().y, 0, obj->Size().y});	// no horizontal cropping
-		if (crop.h == obj->TileSize().y) {
-			if (posY > obj->End().y)
-				break;
-			else
-				continue;
-		}
-		int textWidth = CalcTextLength(tiles[i].label, textSize);
-		if (textWidth > obj->TileSize().x)
-			crop.w = textWidth - obj->TileSize().x + 10;
-
-		DrawRect({ posX, posY+crop.y, obj->TileSize().x, obj->TileSize().y-crop.y-crop.h}, EColor::rectangle);
-		DrawText(Text(tiles[i].label, vec2i(posX+5, posY), textSize), crop);
+		vec2i textSize(0, obj->TileSize().y - obj->TileSize().y /8);
+		textSize.x = CalcTextLength(tiles[i].label, textSize.y);
+		crop.w = textSize.x+5 > rect.w ? crop.w = textSize.x - rect.w +10 : 0;				// recalculate right side crop for text
+		DrawText(Text(tiles[i].label, vec2i(rect.x+5, rect.y-crop.y), textSize.y), crop);	// left side crop can be ignored
 	}
 	DrawRect(obj->Bar(), EColor::darkened);
 	DrawRect(obj->Slider(), EColor::highlighted);
 }
 
 void WindowSys::DrawObject(ReaderBox* obj) {
-	for (const Image& it : obj->Pictures()) {
-		vec2i pos(obj->Pos().x + obj->Size().x/2 - it.size.x/2 - obj->ListX(), it.pos.y - obj->ListY());
-		SDL_Rect crop = getCrop({pos.x, pos.y, it.size.x, it.size.y}, obj->getRect());
-		if (crop.h == it.size.y) {
-			if (pos.y + it.size.y < obj->Pos().y)
-				continue;
-			else
-				break;
-		}
-		DrawImage(Image(pos, it.size, it.texname), crop);
+	vec2i interval = obj->VisiblePicsInterval();
+	for (int i=interval.x; i<=interval.y; i++) {
+		SDL_Rect crop;
+		Image img = obj->getImage(i, &crop);
+		DrawImage(img, crop);
 	}
 	if (obj->showSlider()) {
 		DrawRect(obj->Bar(), EColor::darkened);

@@ -33,6 +33,8 @@ struct Image {
 
 	vec2i pos, size;
 	string texname;
+
+	SDL_Rect getRect() const;
 };
 
 struct Text {
@@ -107,4 +109,13 @@ struct ControlsSettings {
 
 	void FillMissingBindings();
 	Shortcut* shortcut(string name);
+};
+
+struct Exception {
+	Exception(string MSG="", int RV=-1);
+
+	string message;
+	int retval;
+
+	void Display();
 };

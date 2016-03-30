@@ -24,7 +24,7 @@ public:
 	void Event_ScreenMode();
 	void Event_OpenBookList();
 	void Event_OpenBrowser(string path);
-	void Event_OpenReader(string dir);
+	void Event_OpenReader(string file);
 	void Event_OpenPlaylistList();
 	void Event_OpenPlaylistEditor(string playlist);
 	void Event_OpenGeneralSettings();

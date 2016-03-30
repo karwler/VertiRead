@@ -15,57 +15,67 @@ public:
 	SDL_Rect Bar() const;
 	SDL_Rect Slider() const;
 
-	int Spacing() const;
 	int ListY() const;
-	int SliderY() const;	// get global slider position in pixels
+	virtual int ListH() const;
+	int ListL() const;
+	int SliderY() const;
 	int SliderH() const;
 
-	int barW;
+	const int barW;
+	const int spacing;
 	int diffSliderMouseY;
 protected:
-	int spacing;
 	int listY;
 	int sliderH;
 	int listH, listL;
 
-	void SetScrollValues();	// needs listH and size.y in order to calculate listL, sliderH
+	void CheckListY();		// check if listY is out of limits and correct if so
 };
 
 class ListBox : public ScrollArea {
 public:
-	ListBox(const Object& BASE = Object(), const vector<ListItem*>& ITMS = vector<ListItem*>(), int SPC=5, int BARW=10);
+	ListBox(const Object& BASE = Object(), const vector<ListItem*>& ITMS = vector<ListItem*>(), int IH=30, int SPC=5, int BARW=10);
 	virtual ~ListBox();
 
 	virtual void SetValues();
+	SDL_Rect ItemRect(int i, SDL_Rect* Crop=nullptr) const;
+	int FirstVisibleItem() const;
+	int LastVisibleItem() const;
+
 	const vector<ListItem*>& Items() const;
 	void Items(const vector<ListItem*>& objects);
+	int ItemH() const;
 
 private:
+	int itemH;
 	vector<ListItem*> items;
 };
 
 class TileBox : public ScrollArea {
 public:
-	TileBox(const Object& BASE = Object(), const vector<TileItem>& ITMS = vector<TileItem>(), vec2i TS = vec2i(50, 50), int SPC = 5, int BARW = 10);
+	TileBox(const Object& BASE = Object(), const vector<TileItem>& ITMS = vector<TileItem>(), vec2i TS = vec2i(50, 50), int BARW = 10);
 	virtual ~TileBox();
 
 	virtual void SetValues();
+	SDL_Rect ItemRect(int i, SDL_Rect* Crop=nullptr) const;
+	int FirstVisibleItem() const;
+	int LastVisibleItem() const;
+
 	vector<TileItem>& Items();
 	void Items(const vector<TileItem>& objects);
-
 	vec2i TileSize() const;
-	int TilesPerRow() const;
+	vec2i Dim() const;
 
 private:
 	vec2i tileSize;
-	int tilesPerRow;
+	vec2i dim;
 
 	vector<TileItem> items;
 };
 
 class ReaderBox : public ScrollArea {
 public:
-	ReaderBox(const vector<string>& PICS=vector<string>(), float ZOOM=1.f);
+	ReaderBox(const vector<string>& PICS=vector<string>(), string CURPIC="", float ZOOM=1.f);
 	virtual ~ReaderBox();
 
 	void Tick();
@@ -73,17 +83,21 @@ public:
 	void ScrollListX(int xmov);
 	void Zoom(float factor);
 	void AddZoom(float zadd);
+	virtual void SetValues();
 
 	SDL_Rect List() const;	// return value is the background rect
 	vector<ButtonImage>& ListButtons();
 	SDL_Rect Player() const;
 	vector<ButtonImage>& PlayerButtons();
 
-	virtual void SetValues();
-	const vector<Image>& Pictures() const;
-	void Pictures(const vector<string>& pictures);
-	int ListX() const;
+	Image getImage(int i, SDL_Rect* Crop=nullptr) const;
+	vec2i VisiblePicsInterval() const;
 
+	const vector<Image>& Pictures() const;
+	void Pictures(const vector<string>& pictures, string curPic="");
+	int ListX() const;
+	int ListW() const;
+	virtual int ListH() const;
 	bool showSlider() const;
 	bool showList() const;
 	bool showPlayer() const;
@@ -93,7 +107,7 @@ private:
 	const float hideDelay;
 	float sliderTimer, listTimer, playerTimer;
 	float zoom;
-	int listX, listXL;
+	int listX, listW, listXL;
 	const int blistW, playerW;
 
 	vector<Image> pics;
@@ -103,4 +117,5 @@ private:
 	bool CheckMouseOverSlider();
 	bool CheckMouseOverList();
 	bool CheckMouseOverPlayer();
+	void CheckListX();			// same as CheckListY
 };

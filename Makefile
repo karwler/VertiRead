@@ -14,7 +14,6 @@ SOURCES       = src/engine/audioSys.cpp \
 		src/engine/scene.cpp \
 		src/engine/windowSys.cpp \
 		src/engine/world.cpp \
-		src/prog/library.cpp \
 		src/prog/program.cpp \
 		src/utils/items.cpp \
 		src/utils/objects.cpp \
@@ -32,7 +31,6 @@ OBJECTS       = bin/audioSys.o \
 		bin/scene.o \
 		bin/windowSys.o \
 		bin/world.o \
-		bin/library.o \
 		bin/program.o \
 		bin/items.o \
 		bin/objects.o \
@@ -71,9 +69,6 @@ bin/windowSys.o: src/engine/windowSys.cpp
 
 bin/world.o: src/engine/world.cpp
 	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/world.o src/engine/world.cpp
-
-bin/library.o: src/prog/library.cpp
-	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/library.o src/prog/library.cpp
 
 bin/program.o: src/prog/program.cpp
 	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/program.o src/prog/program.cpp

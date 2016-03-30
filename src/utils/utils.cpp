@@ -65,17 +65,27 @@ SDL_Rect getCrop(SDL_Rect item, SDL_Rect frame) {
 	frame.w += frame.x;
 	frame.h += frame.y;
 
-	if (item.h < frame.y || item.y > frame.h || item.w < frame.x || item.x > frame.w)	// if outside of frame
-		return {0, 0, item.w-item.x, item.h-item.y};
-
+	vec2i outRet(item.w-item.x, item.h-item.y);	// return values in case that the item is outta frame
 	SDL_Rect crop = { 0, 0, 0, 0 };
-	if (item.x < frame.x && item.w > frame.x)	// left
+
+	if (item.w < frame.x)	// left
+		crop.w = -outRet.x;
+	else if (item.x < frame.x)
 		crop.x = frame.x - item.x;
-	if (item.x < frame.w && item.w > frame.w)	// right
+
+	if (item.x > frame.w)	// right
+		crop.w = outRet.x;
+	else if (item.w > frame.w)
 		crop.w = item.w - frame.w;
-	if (item.y < frame.y && item.h > frame.y)	// top
+
+	if (item.h < frame.y)	// top
+		crop.h = -outRet.y;
+	else if (item.y < frame.y)
 		crop.y = frame.y - item.y;
-	if (item.y < frame.h && item.h > frame.h)	// bottom
+
+	if (item.y > frame.h)	// bottom
+		crop.h = outRet.y;
+	else if (item.h > frame.h)
 		crop.h = item.h - frame.h;
 
 	return crop;
@@ -129,7 +139,7 @@ string getRendererName(int id) {
 	return info.name;
 }
 
-string wtos(wstring wstr) {
+string wtos(std::wstring wstr) {
 	string sstr;
 	for (wchar_t& c : wstr)
 		sstr += c;

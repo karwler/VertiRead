@@ -5,16 +5,12 @@ Engine::Engine() :
 	redraw(true)
 {}
 
-int Engine::Run() {
+void Engine::Run() {
 	// initialize all components
-	if (SDL_Init(SDL_INIT_EVERYTHING)) {
-		cerr << "SDL couldn't be initialized" << endl << SDL_GetError() << endl;
-		throw 1;
-	}
-	if (TTF_Init()) {
-		cerr << "fonts couldn't be initialized" << endl << TTF_GetError() << endl;
-		throw 2;
-	}
+	if (SDL_Init(SDL_INIT_EVERYTHING))
+		throw Exception("SDL couldn't be initialized" + string(SDL_GetError()), 1);
+	if (TTF_Init())
+		throw Exception("fonts couldn't be initialized" + string(SDL_GetError()), 2);
 
 	PrintInfo();
 	Filer::CheckDirectories();
@@ -51,7 +47,6 @@ int Engine::Run() {
 			HandleEvent(event);
 	}
 	Cleanup();
-	return 0;
 }
 
 void Engine::Close() {

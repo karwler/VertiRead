@@ -2,8 +2,7 @@
 
 // LIST ITEM
 
-ListItem::ListItem(int H, string LBL) :
-	height(H),
+ListItem::ListItem(string LBL) :
 	label(LBL)
 {}
 ListItem::~ListItem() {}
@@ -12,8 +11,8 @@ void ListItem::OnClick() {}
 
 // BROWSER BUTTON
 
-BrowserButton::BrowserButton(int H, string LBL, string DAT, void (Program::*CALLB)(string)) :
-	ListItem(H, LBL),
+BrowserButton::BrowserButton(string LBL, string DAT, void (Program::*CALLB)(string)) :
+	ListItem(LBL),
 	data(DAT),
 	callback(CALLB)
 {}

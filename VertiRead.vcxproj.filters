@@ -46,9 +46,6 @@
     <ClCompile Include="src\engine\world.cpp">
       <Filter>Source\Engine</Filter>
     </ClCompile>
-    <ClCompile Include="src\prog\library.cpp">
-      <Filter>Source\Prog</Filter>
-    </ClCompile>
     <ClCompile Include="src\engine\filer.cpp">
       <Filter>Source\Engine</Filter>
     </ClCompile>
@@ -98,9 +95,6 @@
     </ClInclude>
     <ClInclude Include="src\engine\world.h">
       <Filter>Source\Engine</Filter>
-    </ClInclude>
-    <ClInclude Include="src\prog\library.h">
-      <Filter>Source\Prog</Filter>
     </ClInclude>
     <ClInclude Include="src\engine\filer.h">
       <Filter>Source\Engine</Filter>

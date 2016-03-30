@@ -10,7 +10,7 @@ class Engine {
 public:
 	Engine();
 
-	int Run();
+	void Run();
 	void Close();
 	void Cleanup();
 

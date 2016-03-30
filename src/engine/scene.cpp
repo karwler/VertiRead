@@ -3,7 +3,6 @@
 
 Scene::Scene() :
 	program(new Program),
-	library(new Library),
 	objectHold(nullptr)
 {}
 
@@ -25,9 +24,9 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 	switch (newMenu) {
 	case EMenu::books: {
 		// top buttons
-		objects.push_back(new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3-10, 50), true, true, false, true), &Program::Event_OpenPlaylistList, "Playlists"));
-		objects.push_back(new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3-10, 50), true, true, false, true), &Program::Event_OpenGeneralSettings, "Settings"));
-		objects.push_back(new ButtonText(Object(vec2i(res.x/3*2, 0), posT, vec2i(res.x/3,    50), true, true, false, true), &Program::Event_Back, "Exit"));
+		objects.push_back(new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3-10, 50), false, true, false, true), &Program::Event_OpenPlaylistList, "Playlists"));
+		objects.push_back(new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3-10, 50), false, true, false, true), &Program::Event_OpenGeneralSettings, "Settings"));
+		objects.push_back(new ButtonText(Object(vec2i(res.x/3*2, 0), posT, vec2i(res.x/3,    50), false, true, false, true), &Program::Event_Back, "Exit"));
 
 		// book list
 		vector<TileItem> tiles;
@@ -45,22 +44,23 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 		vector<ListItem*> items;
 		Browser* browser = static_cast<Browser*>(dat);
 		for (fs::path& it : browser->ListDirs())
-			items.push_back(new BrowserButton(30, it.filename().string(), "", &Program::Event_OpenBrowser));
+			items.push_back(new BrowserButton(it.filename().string(), "", &Program::Event_OpenBrowser));
 		for (fs::path& it : browser->ListFiles())
-			items.push_back(new BrowserButton(30, it.filename().string(), it.parent_path().string(), &Program::Event_OpenReader));
+			items.push_back(new BrowserButton(it.filename().string(), it.string(), &Program::Event_OpenReader));
 		objects.push_back(new ListBox(Object(vec2i(100, 0), posT, vec2i(res.x-100, res.y), true, true, false, false, EColor::background), items));
 		focObject = objects.size() - 1;
 		break; }
-	case EMenu::reader:
+	case EMenu::reader: {
 		// reader box
-		objects.push_back(new ReaderBox(Filer::GetPicsFromDir(cstr(dat))));
+		fs::path file = cstr(dat);
+		objects.push_back(new ReaderBox(Filer::GetPicsFromDir(file.parent_path()), file.string()));
 		focObject = objects.size() - 1;
-		break;
+		break; }
 	case EMenu::playlists: {
 		// top buttons
-		objects.push_back(new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3-10, 50), true, true, false, true), &Program::Event_OpenBookList, "Library"));
-		objects.push_back(new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3-10, 50), true, true, false, true), &Program::Event_OpenGeneralSettings, "Settings"));
-		objects.push_back(new ButtonText(Object(vec2i(res.x/3*2, 0), posT, vec2i(res.x/3,    50), true, true, false, true), &Program::Event_Back, "Exit"));
+		objects.push_back(new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3-10, 50), false, true, false, true), &Program::Event_OpenBookList, "Library"));
+		objects.push_back(new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3-10, 50), false, true, false, true), &Program::Event_OpenGeneralSettings, "Settings"));
+		objects.push_back(new ButtonText(Object(vec2i(res.x/3*2, 0), posT, vec2i(res.x/3,    50), false, true, false, true), &Program::Event_Back, "Exit"));
 
 		// playlist list
 		vector<TileItem> tiles;
@@ -85,12 +85,12 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 		if (editor->showSongs) {
 			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, true, true, true, true), &Program::Event_Back, "Books"));
 			for (fs::path& it : editor->GetPlaylist().songs)
-				items.push_back(new ListItem(30, it.filename().string()));
+				items.push_back(new ListItem(it.filename().string()));
 		}
 		else {
 			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, true, true, true, true), &Program::Event_Back, "Songs"));
 			for (string& it : editor->GetPlaylist().books)
-				items.push_back(new ListItem(30, it));
+				items.push_back(new ListItem(it));
 		}
 		objects.push_back(new ListBox(Object(vec2i(110, 0), posT, vec2i(res.x-110, res.y), true, true, false, false, EColor::background), items));
 		break; }
@@ -200,25 +200,24 @@ bool Scene::CheckSliderClick(ScrollArea* obj) {
 }
 
 bool Scene::CheckListBoxClick(ListBox* obj) {
-	int posY = obj->Pos().y - obj->ListY();
-	for (ListItem* it : obj->Items()) {
-		if (inRect({obj->Pos().x, posY, obj->Size().x - obj->barW, it->height}, InputSys::mousePos())) {
-			it->OnClick();
+	vec2i interval(obj->FirstVisibleItem(), obj->LastVisibleItem());
+	vector<ListItem*> items = obj->Items();
+	for (int i=interval.x; i<=interval.y; i++) {
+		SDL_Rect crop;
+		SDL_Rect rect = obj->ItemRect(i, &crop);
+		if (inRect(rect, InputSys::mousePos())) {
+			items[i]->OnClick();
 			return true;
 		}
-		posY += it->height + obj->Spacing();
 	}
 	return false;
 }
 
 bool Scene::CheckTileBoxClick(TileBox* obj) {
+	vec2i interval(obj->FirstVisibleItem(), obj->LastVisibleItem());
 	vector<TileItem>& items = obj->Items();
-	for (uint i = 0; i != items.size(); i++) {
-		int row = i / obj->TilesPerRow();
-		int posX = (i - row * obj->TilesPerRow()) * (obj->TileSize().x + obj->Spacing()) + obj->Pos().x;
-		int posY = row * (obj->TileSize().y + obj->Spacing()) + obj->Pos().y;
-
-		if (inRect({ posX, posY, obj->TileSize().x, obj->TileSize().y }, InputSys::mousePos())) {
+	for (int i=interval.x; i<=interval.y; i++) {
+		if (inRect(obj->ItemRect(i), InputSys::mousePos())) {
 			items[i].OnClick();
 			return true;
 		}

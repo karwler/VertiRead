@@ -24,7 +24,7 @@ byte Filer::CheckDirectories() {
 }
 
 bool Filer::ReadTextFile(string file, vector<string>& lines) {
-	ifstream ifs(file.c_str());
+	std::ifstream ifs(file.c_str());
 	if (!ifs.good()) {
 		cerr << "couldn't read file " << file << endl;
 		return false;
@@ -36,7 +36,7 @@ bool Filer::ReadTextFile(string file, vector<string>& lines) {
 }
 
 bool Filer::WriteTextFile(string file, const vector<string>& lines) {
-	ofstream ofs(file.c_str());
+	std::ofstream ofs(file.c_str());
 	if (!ofs.good()) {
 		cerr << "couldn't write file " << file << endl;
 		return false;
@@ -172,7 +172,7 @@ void Filer::SaveSettings(const VideoSettings& sets) {
 		"fullscreen=" + btos(sets.fullscreen),
 		"resolution=" + to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y)
 	};
-	for (const pair<EColor, vec4b>& it : sets.colors)
+	for (const std::pair<EColor, vec4b>& it : sets.colors)
 		lines.push_back("color["+to_string(int(it.first))+"]=" + to_string(it.second.x) + ' ' + to_string(it.second.y) + ' ' + to_string(it.second.z) + ' ' + to_string(it.second.a));
 	WriteTextFile(dirSets() + "video.ini", lines);
 }

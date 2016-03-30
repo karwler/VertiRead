@@ -8,12 +8,19 @@ int main(int argc, char** argv) {
 	for (int i=0; i!=argc; i++)
 		World::args.push_back(argv[i]);
 #endif
+	int retval = 0;
 	try {
 		World::engine = new Engine;
-		return World::engine->Run();
-	} catch (int err) {
-		World::engine->Cleanup();
-		cerr << "returning " << err << endl;
-		return err;
+		World::engine->Run();
 	}
+	catch (Exception exc) {
+		exc.Display();
+		retval = exc.retval;
+	}
+	catch (...) {
+		cerr << "unknown error" << endl;
+		retval = -1;
+	}
+	World::engine->Cleanup();
+	return retval;
 }

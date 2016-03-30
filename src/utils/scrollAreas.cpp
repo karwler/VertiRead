@@ -5,22 +5,19 @@
 ScrollArea::ScrollArea(const Object& BASE, int SPC, int BARW) :
 	Object(BASE),
 	barW(BARW),
-	diffSliderMouseY(0),
 	spacing(SPC),
+	diffSliderMouseY(0),
 	listY(0)
 {}
 ScrollArea::~ScrollArea() {}
 
 void ScrollArea::DragSlider(int ypos) {
-	DragList((ypos - diffSliderMouseY) * listH / Size().y);
+	DragList((ypos - diffSliderMouseY - Pos().y) * listL / Size().y);
 }
 
 void ScrollArea::DragList(int ypos) {
 	listY = ypos;
-	if (listY < 0)
-		listY = 0;
-	else if (listY > listL)
-		listY = listL;
+	CheckListY();
 	World::engine->SetRedrawNeeded();
 }
 
@@ -29,11 +26,9 @@ void ScrollArea::ScrollList(int ymov)  {
 }
 
 void ScrollArea::SetValues() {
-	SetScrollValues();
-	if (listY < 0)
-		listY = 0;
-	else if (listY > listL)
-		listY = listL;
+	listL = Size().y < ListH() ? ListH() - Size().y : 0;
+	sliderH = Size().y < ListH() ? Size().y * Size().y / ListH() : Size().y;
+	CheckListY();
 }
 
 SDL_Rect ScrollArea::Bar() const {
@@ -44,31 +39,38 @@ SDL_Rect ScrollArea::Slider() const {
 	return {End().x-barW, SliderY(), barW, sliderH};
 }
 
-int ScrollArea::Spacing() const {
-	return spacing;
-}
-
 int ScrollArea::ListY() const {
 	return listY;
 }
 
+int ScrollArea::ListH() const {
+	return listH;
+}
+
+int ScrollArea::ListL() const {
+	return listL;
+}
+
 int ScrollArea::SliderY() const {
-	return (listH == 0) ? 0 : Pos().y + listY * Size().y / listH;
+	return (ListH() <= Size().y) ? Pos().y : Pos().y + listY * Size().y / ListH();
 }
 
 int ScrollArea::SliderH() const {
 	return sliderH;
 }
 
-void ScrollArea::SetScrollValues() {
-	listL = (Size().y < listH) ? listH - Size().y : 0;
-	sliderH = (listH > Size().y) ? Size().y * Size().y / listH : Size().y;
+void ScrollArea::CheckListY() {
+	if (listY < 0)
+		listY = 0;
+	else if (listY > listL)
+		listY = listL;
 }
 
 // LIST BOX
 
-ListBox::ListBox(const Object& BASE, const vector<ListItem*>& ITMS, int SPC, int BARW) :
-	ScrollArea(BASE, SPC, BARW)
+ListBox::ListBox(const Object& BASE, const vector<ListItem*>& ITMS, int IH, int SPC, int BARW) :
+	ScrollArea(BASE, SPC, BARW),
+	itemH(IH)
 {
 	if (!ITMS.empty())
 		Items(ITMS);
@@ -79,10 +81,24 @@ ListBox::~ListBox() {
 }
 
 void ListBox::SetValues() {
-	listH = items.size() * spacing - spacing;
-	for (ListItem* it : items)
-		listH += it->height;
+	listH = items.size() * (itemH + spacing) - spacing;
 	ScrollArea::SetValues();
+}
+
+SDL_Rect ListBox::ItemRect(int i, SDL_Rect* Crop) const {
+	SDL_Rect rect = {Pos().x, Pos().y - listY + i * (itemH + spacing), Size().x-barW, itemH};
+	SDL_Rect crop = getCrop(rect, getRect());
+	if (Crop)
+		*Crop = crop;
+	return {rect.x, rect.y+crop.y, rect.w, rect.h-crop.y-crop.h};	// ignore horizontal crop
+}
+
+int ListBox::FirstVisibleItem() const {
+	return listY / (itemH + spacing);
+}
+
+int ListBox::LastVisibleItem() const {
+	return listH > Size().y ? (Size().y+listY) / (itemH+spacing) : items.size()-1;
 }
 
 const vector<ListItem*>& ListBox::Items() const {
@@ -95,25 +111,42 @@ void ListBox::Items(const vector<ListItem*>& objects) {
 	SetValues();
 }
 
+int ListBox::ItemH() const {
+	return itemH;
+}
+
 // TILE BOX
 
-TileBox::TileBox(const Object& BASE, const vector<TileItem>& ITMS, vec2i TS, int SPC, int BARW) :
-	ScrollArea(BASE, SPC, BARW),
+TileBox::TileBox(const Object& BASE, const vector<TileItem>& ITMS, vec2i TS, int BARW) :
+	ScrollArea(BASE, TS.y/5, BARW),
 	tileSize(TS)
 {
-	spacing = TS.y / 5;
 	if (!ITMS.empty())
 		Items(ITMS);
 }
 TileBox::~TileBox() {}
 
 void TileBox::SetValues() {
-	tilesPerRow = (Size().x - barW) / (tileSize.x + spacing);
-	if (tilesPerRow == 0)
-		tilesPerRow = 1;
-	float height = float((items.size() * (tileSize.y + spacing)) - spacing) / tilesPerRow;
-	listH = (height / 2.f == int(height / 2.f)) ? height : height + tileSize.y;
+	dim.x = Size().x - barW > tileSize.x + spacing ? (Size().x - barW) / (tileSize.x + spacing) : 1;	// column count
+	dim.y = items.size() > dim.x ? items.size() / dim.x : 1;											// row count
+	listH = dim.y * (tileSize.y + spacing) - spacing;
 	ScrollArea::SetValues();
+}
+
+SDL_Rect TileBox::ItemRect(int i, SDL_Rect* Crop) const {
+	SDL_Rect rect = {(i - (i/dim.x) * dim.x) * (tileSize.x+spacing) + Pos().x, (i/dim.x) * (tileSize.y+spacing) + Pos().y - listY, tileSize.x, tileSize.y};
+	SDL_Rect crop = getCrop(rect, getRect());
+	if (Crop)
+		*Crop = crop;
+	return {rect.x, rect.y+crop.y, rect.w-crop.w, rect.h-crop.y-crop.h};	// ignore left x side crop
+}
+
+int TileBox::FirstVisibleItem() const {
+	return (listY+spacing) / (tileSize.y+spacing) * dim.x;
+}
+
+int TileBox::LastVisibleItem() const {
+	return listH > Size().y ? (Size().y+listY) / (tileSize.y+spacing) * dim.x + dim.x-1 : items.size()-1;
 }
 
 vector<TileItem>& TileBox::Items() {
@@ -129,13 +162,13 @@ vec2i TileBox::TileSize() const {
 	return tileSize;
 }
 
-int TileBox::TilesPerRow() const {
-	return tilesPerRow;
+vec2i TileBox::Dim() const {
+	return dim;
 }
 
 // READER BOX
 
-ReaderBox::ReaderBox(const vector<string>& PICS, float ZOOM) :
+ReaderBox::ReaderBox(const vector<string>& PICS, string CURPIC, float ZOOM) :
 	ScrollArea(Object(vec2i(), vec2i(), World::winSys()->Resolution(), true, true, false, false, EColor::background), 10),
 	sliderFocused(false),
 	hideDelay(0.6f),
@@ -146,7 +179,7 @@ ReaderBox::ReaderBox(const vector<string>& PICS, float ZOOM) :
 	playerW(400)
 {
 	if (!PICS.empty())
-		Pictures(PICS);
+		Pictures(PICS, CURPIC);
 
 	vec2i arcT(Pos());
 	vec2i posT(-1, -1);
@@ -235,10 +268,7 @@ bool ReaderBox::CheckMouseOverPlayer() {
 
 void ReaderBox::DragListX(int xpos) {
 	listX = xpos;
-	if (listX < -listXL)
-		listX = -listXL;
-	else if (listX > listXL)
-		listX = listXL;
+	CheckListX();
 	World::engine->SetRedrawNeeded();
 }
 
@@ -259,6 +289,12 @@ void ReaderBox::AddZoom(float zadd) {
 	Zoom(zoom + zadd);
 }
 
+void ReaderBox::SetValues() {
+	listXL = (Size().x < ListW()) ? (ListW() - Size().x) /2: 0;
+	CheckListX();
+	ScrollArea::SetValues();
+}
+
 SDL_Rect ReaderBox::List() const {
 	return {Pos().x, Pos().y, blistW, int(listButtons.size())*blistW};
 }
@@ -275,45 +311,65 @@ vector<ButtonImage>&ReaderBox::PlayerButtons() {
 	return playerButtons;
 }
 
-void ReaderBox::SetValues() {
-	int maxWidth = 0;
-	int ypos = 0;
-	for (Image& it : pics) {
-		// set sizes and position
-		vec2i res = textureSize(it.texname);
-		it.size = vec2i(float(res.x) * zoom, float(res.y) * zoom);
-		it.pos.y = ypos;
+Image ReaderBox::getImage(int i, SDL_Rect* Crop) const {
+	Image img(vec2i(), vec2i(pics[i].size.x*zoom, pics[i].size.y*zoom), pics[i].texname);
+	img.pos = vec2i(Pos().x + Size().x/2 - img.size.x/2 - listX, pics[i].pos.y*zoom - listY);
+	SDL_Rect crop = getCrop(img.getRect(), getRect());
+	if (Crop)
+		*Crop = crop;
+	return img;
+}
 
-		if (it.size.x > maxWidth)
-			maxWidth = it.size.x;
-		ypos += it.size.y + spacing;
+vec2i ReaderBox::VisiblePicsInterval() const {
+	vec2i interval(0, pics.size()-1);
+	for (int i=interval.x; i<=interval.y; i++)
+		if ((pics[i].pos.y + pics[i].size.y)*zoom >= listY) {
+			interval.x = i;
+			break;
+		}
+	for (int i=interval.x; i<=interval.y; i++) {
+		if (pics[i].pos.y*zoom > listY + Size().y) {
+			interval.y = i-1;
+			break;
+		}
 	}
-	// calculate slider and limits related variables
-	listH = ypos;
-	listXL = (Size().x < maxWidth) ? (maxWidth - Size().x) /2: 0;
-	ScrollArea::SetValues();
-	if (listX < -listXL)
-		listX = -listXL;
-	else if (listX > listXL)
-		listX = listXL;
+	return interval;
 }
 
 const vector<Image>& ReaderBox::Pictures() const {
 	return pics;
 }
 
-void ReaderBox::Pictures(const vector<string>& pictures) {
+void ReaderBox::Pictures(const vector<string>& pictures, string curPic) {
+	listH = 0;
+	listW = 0;
+	int startPos = 0;
 	for (const string& it : pictures) {
 		vec2i res = textureSize(it);
-		if (res.x != 0 && res.y != 0)
-			pics.push_back(Image(vec2i(), res, it));
+		if (res.hasNull())
+			continue;
+		if (it == curPic)
+			startPos = listH;
+
+		pics.push_back(Image(vec2i(0, listH), res, it));
+		if (res.x > listW)
+			listW = res.x;
+		listH += res.y + spacing;
 	}
-	listY = 0;
+	listY = startPos;
 	SetValues();
 }
 
 int ReaderBox::ListX() const {
 	return listX;
+}
+
+int ReaderBox::ListW() const {
+	return listW * zoom;
+}
+
+int ReaderBox::ListH() const {
+	return listH * zoom;
 }
 
 bool ReaderBox::showSlider() const {
@@ -326,4 +382,11 @@ bool ReaderBox::showList() const {
 
 bool ReaderBox::showPlayer() const {
 	return playerTimer != 0.f;
+}
+
+void ReaderBox::CheckListX() {
+	if (listX < -listXL)
+		listX = -listXL;
+	else if (listX > listXL)
+		listX = listXL;
 }

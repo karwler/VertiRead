@@ -89,12 +89,12 @@ void Program::Event_OpenBrowser(string path) {
 		browser->GoTo(path);
 	else
 		browser = new Browser(path);
-	World::scene()->SwitchMenu(curMenu, (void*) browser);
+	World::scene()->SwitchMenu(curMenu, browser);
 }
 
-void Program::Event_OpenReader(string dir) {
+void Program::Event_OpenReader(string file) {
 	curMenu = EMenu::reader;
-	World::scene()->SwitchMenu(curMenu, (void*)dir.c_str());
+	World::scene()->SwitchMenu(curMenu, (void*)file.c_str());
 }
 
 void Program::Event_OpenPlaylistList() {
@@ -105,7 +105,7 @@ void Program::Event_OpenPlaylistList() {
 void Program::Event_OpenPlaylistEditor(string playlist) {
 	curMenu = EMenu::plistEditor;
 	editor = new PlaylistEditor(playlist);
-	World::scene()->SwitchMenu(curMenu, (void*)editor);
+	World::scene()->SwitchMenu(curMenu, editor);
 }
 
 void Program::Event_OpenGeneralSettings() {
@@ -130,10 +130,10 @@ void Program::Event_OpenControlsSettings() {
 
 void Program::Event_Back() {
 	if (curMenu == EMenu::reader)
-		World::scene()->SwitchMenu(curMenu = EMenu::browser, (void*)browser);
+		World::scene()->SwitchMenu(curMenu = EMenu::browser, browser);
 	else if (curMenu == EMenu::browser) {
 		if (browser->GoUp())
-			World::scene()->SwitchMenu(curMenu, (void*)browser);
+			World::scene()->SwitchMenu(curMenu, browser);
 		else {
 			browser.reset();
 			World::scene()->SwitchMenu(curMenu = EMenu::books);

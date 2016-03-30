@@ -2,14 +2,14 @@ A so far simple cross-platform manga reader and music player.
 Still in progress.
 
 TO DO
+- fix tile box stretching
 - make a playlist editor
 - add selectable items
-- improve vector classes
 - add settings menu lists
+- fix mouse wheel scrolling
 - test audio system
-- improve exception handling
 - maybe add some animations
-- optimize it somehow
+- load textures while displaying reader
 
 LINUX
 For simple build just use the Makefile.

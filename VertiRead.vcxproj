@@ -28,7 +28,6 @@
     <ClCompile Include="src\engine\windowSys.cpp" />
     <ClCompile Include="src\engine\world.cpp" />
     <ClCompile Include="src\prog\browser.cpp" />
-    <ClCompile Include="src\prog\library.cpp" />
     <ClCompile Include="src\prog\playlistEditor.cpp" />
     <ClCompile Include="src\prog\program.cpp" />
     <ClCompile Include="src\utils\items.cpp" />
@@ -46,7 +45,6 @@
     <ClInclude Include="src\engine\windowSys.h" />
     <ClInclude Include="src\engine\world.h" />
     <ClInclude Include="src\prog\browser.h" />
-    <ClInclude Include="src\prog\library.h" />
     <ClInclude Include="src\prog\playlistEditor.h" />
     <ClInclude Include="src\prog\program.h" />
     <ClInclude Include="src\utils\items.h" />

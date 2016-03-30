@@ -26,7 +26,6 @@ SOURCES += src/engine/audioSys.cpp \
     src/engine/scene.cpp \
     src/engine/windowSys.cpp \
     src/engine/world.cpp \
-    src/prog/library.cpp \
     src/prog/program.cpp \
     src/utils/items.cpp \
     src/utils/objects.cpp \
@@ -43,7 +42,6 @@ HEADERS += src/engine/audioSys.h \
     src/engine/scene.h \
     src/engine/windowSys.h \
     src/engine/world.h \
-    src/prog/library.h \
     src/prog/program.h \
     src/utils/items.h \
     src/utils/objects.h \

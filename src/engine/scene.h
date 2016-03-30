@@ -2,7 +2,6 @@
 
 #include "utils/scrollAreas.h"
 #include "prog/program.h"
-#include "prog/library.h"
 
 class Scene {
 public:
@@ -22,7 +21,6 @@ public:
 	
 private:
 	kptr<Program> program;
-	kptr<Library> library;
 	vector<Object*> objects;
 
 	uint focObject;			// id of object currently focused by keyboard

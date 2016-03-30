@@ -4,18 +4,17 @@
 
 class ListItem {
 public:
-	ListItem(int H=50, string LBL="");
+	ListItem(string LBL="");
 	virtual ~ListItem();
 	
 	virtual void OnClick();
 
-	int height;
 	string label;
 };
 
 class BrowserButton : public ListItem {
 public:
-	BrowserButton(int H=50, string LBL="", string DAT="", void (Program::*CALLB)(string)=nullptr);
+	BrowserButton(string LBL="", string DAT="", void (Program::*CALLB)(string)=nullptr);
 	virtual ~BrowserButton();
 
 	virtual void OnClick();

@@ -1,10 +1,16 @@
 #include "engine/filer.h"
 #include "prog/program.h"
 
+// IMAGE
+
 Image::Image(vec2i POS, vec2i SIZ, string TEXN) :
 	pos(POS), size(SIZ),
 	texname(TEXN)
 {}
+
+SDL_Rect Image::getRect() const {
+	return {pos.x, pos.y, size.x, size.y};
+}
 
 Text::Text(string TXT, vec2i POS, int SIZE, EColor CLR) :
 	size(SIZE),
@@ -12,6 +18,8 @@ Text::Text(string TXT, vec2i POS, int SIZE, EColor CLR) :
 	color(CLR),
 	text(TXT)
 {}
+
+// SHORTCUT
 
 Shortcut::Shortcut(string NAME, bool setDefaultKey, const vector<SDL_Keysym>& KEYS) :
 	keys(KEYS)
@@ -89,6 +97,8 @@ progEFunc Shortcut::Call() const {
 	return call;
 }
 
+// PLAYLIST
+
 Playlist::Playlist(string NAME, const vector<fs::path>& SGS, const vector<string>& BKS) :
 	name(NAME),
 	songs(SGS),
@@ -101,8 +111,12 @@ Directory::Directory(string NAME, const vector<string>& DIRS, vector<string> FIL
 	files(FILS)
 {}
 
+// GENEREAL SETTINGS
+
 GeneralSettings::GeneralSettings()
 {}
+
+// VIDEO SETTINGS
 
 VideoSettings::VideoSettings(bool VS, bool MAX, bool FSC, vec2i RES, string FONT, string RNDR) :
 	vsync(VS),
@@ -123,36 +137,40 @@ VideoSettings::VideoSettings(bool VS, bool MAX, bool FSC, vec2i RES, string FONT
 
 void VideoSettings::SetDefaultColors() {
 	if (colors.count(EColor::background) == 0)
-		colors.insert(make_pair(EColor::background, vec4b(10, 10, 10, 255)));
+		colors.insert(std::make_pair(EColor::background, vec4b(10, 10, 10, 255)));
 	else
 		colors[EColor::background] = vec4b(10, 10, 10, 255);
 
 	if (colors.count(EColor::rectangle) == 0)
-		colors.insert(make_pair(EColor::rectangle, vec4b(90, 90, 90, 255)));
+		colors.insert(std::make_pair(EColor::rectangle, vec4b(90, 90, 90, 255)));
 	else
 		colors[EColor::rectangle] = vec4b(90, 90, 90, 255);
 
 	if (colors.count(EColor::highlighted) == 0)
-		colors.insert(make_pair(EColor::highlighted, vec4b(120, 120, 120, 255)));
+		colors.insert(std::make_pair(EColor::highlighted, vec4b(120, 120, 120, 255)));
 	else
 		colors[EColor::highlighted] = vec4b(120, 120, 120, 255);
 
 	if (colors.count(EColor::darkened) == 0)
-		colors.insert(make_pair(EColor::darkened, vec4b(60, 60, 60, 255)));
+		colors.insert(std::make_pair(EColor::darkened, vec4b(60, 60, 60, 255)));
 	else
 		colors[EColor::darkened] = vec4b(60, 60, 60, 255);
 
 	if (colors.count(EColor::text) == 0)
-		colors.insert(make_pair(EColor::text, vec4b(210, 210, 210, 255)));
+		colors.insert(std::make_pair(EColor::text, vec4b(210, 210, 210, 255)));
 	else
 		colors[EColor::text] = vec4b(210, 210, 210, 255);
 }
+
+// AUDIO SETTINGS
 
 AudioSettings::AudioSettings(int MV, int SV, float SD) :
 	musicVolume(MV),
 	soundVolume(SV),
 	songDelay(SD)
 {}
+
+// CONTROLS SETTINGS
 
 ControlsSettings::ControlsSettings(bool fillMissingBindings, const vector<Shortcut>& SRTCS) :
 	shortcuts(SRTCS)
@@ -173,4 +191,15 @@ Shortcut* ControlsSettings::shortcut(string name) {
 		if (it.Name() == name)
 			return &it;
 	return nullptr;
+}
+
+// EXCEPTION
+
+Exception::Exception(string MSG, int RV) :
+	message(MSG),
+	retval(RV)
+{}
+
+void Exception::Display() {
+	cerr << "ERROR: " << message << " (code " << retval << ")" << endl;
 }
