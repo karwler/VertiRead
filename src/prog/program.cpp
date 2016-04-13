@@ -1,44 +1,84 @@
 #include "engine/world.h"
 
+// reader events
+
 void Program::Event_Up() {
-	if (dynamic_cast<ScrollArea*>(World::scene()->FocusedObject()))
-		static_cast<ScrollArea*>(World::scene()->FocusedObject())->ScrollList(-30);
+	if (dCast<ScrollArea*>(World::scene()->FocusedObject())) {
+		int amt = InputSys::isPressed(SDL_SCANCODE_LSHIFT) ? 100 : InputSys::isPressed(SDL_SCANCODE_LCTRL) ? 25 : 50;
+		sCast<ScrollArea*>(World::scene()->FocusedObject())->ScrollList(-amt);
+	}
 }
 
 void Program::Event_Down() {
-	if (dynamic_cast<ScrollArea*>(World::scene()->FocusedObject()))
-		static_cast<ScrollArea*>(World::scene()->FocusedObject())->ScrollList(30);
+	if (dCast<ScrollArea*>(World::scene()->FocusedObject())) {
+		int amt = InputSys::isPressed(SDL_SCANCODE_LSHIFT) ? 100 : InputSys::isPressed(SDL_SCANCODE_LCTRL) ? 25 : 50;
+		sCast<ScrollArea*>(World::scene()->FocusedObject())->ScrollList(amt);
+	}
 }
 
 void Program::Event_Left() {
-	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		static_cast<ReaderBox*>(World::scene()->FocusedObject())->ScrollListX(-15);
+	if (dCast<ReaderBox*>(World::scene()->FocusedObject())) {
+		int amt = InputSys::isPressed(SDL_SCANCODE_LSHIFT) ? 40 : InputSys::isPressed(SDL_SCANCODE_LCTRL) ? 10 : 20;
+		sCast<ReaderBox*>(World::scene()->FocusedObject())->ScrollListX(-amt);
+	}
 }
 
 void Program::Event_Right() {
-	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		static_cast<ReaderBox*>(World::scene()->FocusedObject())->ScrollListX(15);
+	if (dCast<ReaderBox*>(World::scene()->FocusedObject())) {
+		int amt = InputSys::isPressed(SDL_SCANCODE_LSHIFT) ? 40 : InputSys::isPressed(SDL_SCANCODE_LCTRL) ? 10 : 20;
+		sCast<ReaderBox*>(World::scene()->FocusedObject())->ScrollListX(amt);
+	}
+}
+
+void Program::Event_PageUp() {
+	if (dCast<ReaderBox*>(World::scene()->FocusedObject())) {
+		ReaderBox* box = sCast<ReaderBox*>(World::scene()->FocusedObject());
+		int i = box->VisiblePictures().x;
+		i -= (i == 0) ? 0 : 1;
+		box->ScrollList(box->getImage(i).pos.y);
+	}
+}
+
+void Program::Event_PageDown() {
+	if (dCast<ReaderBox*>(World::scene()->FocusedObject())) {
+		ReaderBox* box = sCast<ReaderBox*>(World::scene()->FocusedObject());
+		int i = box->VisiblePictures().x;
+		i += (i == box->Pictures().size()-1) ? 0 : 1;
+		box->ScrollList(box->getImage(i).pos.y);
+	}
 }
 
 void Program::Event_ZoomIn() {
-	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		static_cast<ReaderBox*>(World::scene()->FocusedObject())->AddZoom(0.2f);
+	if (dCast<ReaderBox*>(World::scene()->FocusedObject()))
+		sCast<ReaderBox*>(World::scene()->FocusedObject())->AddZoom(0.2f);
 }
 
 void Program::Event_ZoomOut() {
-	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		static_cast<ReaderBox*>(World::scene()->FocusedObject())->AddZoom(-0.2f);
+	if (dCast<ReaderBox*>(World::scene()->FocusedObject()))
+		sCast<ReaderBox*>(World::scene()->FocusedObject())->AddZoom(-0.2f);
 }
 
 void Program::Event_ZoomReset() {
-	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		static_cast<ReaderBox*>(World::scene()->FocusedObject())->Zoom(1.f);
+	if (dCast<ReaderBox*>(World::scene()->FocusedObject()))
+		sCast<ReaderBox*>(World::scene()->FocusedObject())->Zoom(1.f);
 }
 
 void Program::Event_CenterView() {
-	if (dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		static_cast<ReaderBox*>(World::scene()->FocusedObject())->DragListX(0);
+	if (dCast<ReaderBox*>(World::scene()->FocusedObject()))
+		sCast<ReaderBox*>(World::scene()->FocusedObject())->DragListX(0);
 }
+
+void Program::Event_NextDir() {
+	if (curMenu == EMenu::reader)
+		Event_OpenReader((void*)browser->GoNext().string().c_str());
+}
+
+void Program::Event_PrevDir() {
+	if (curMenu == EMenu::reader)
+		Event_OpenReader((void*)browser->GoPrev().string().c_str());
+}
+
+// PLAYER EVENTS
 
 void Program::Event_PlayPause() {
 	World::audioSys()->PlayPauseMusic();
@@ -64,37 +104,67 @@ void Program::Event_Mute() {
 	World::audioSys()->MusicVolume(0);
 }
 
-void Program::Event_NextDir() {
-	if (curMenu == EMenu::reader)
-		Event_OpenReader(browser->GoNext().string());
+// PLAYLIST EDITOR EVENTS
+
+void Program::Event_AddButtonClick() {
+	if (editor) {
+		if (editor->showSongs)
+			editor->AddSong();
+		else
+			editor->AddBook();
+	}
+	else {
+		Filer::SavePlaylist(Playlist("new_playlist"));
+		Event_OpenPlaylistList();
+	}
 }
 
-void Program::Event_PrevDir() {
-	if (curMenu == EMenu::reader)
-		Event_OpenReader(browser->GoPrev().string());
+void Program::Event_DeleteButtonClick() {
+	if (editor) {
+		if (editor->showSongs)
+			editor->DelSong();
+		else
+			editor->DelBook();
+	}
+	else {
+		ListItem* item = World::scene()->SelectedButton();
+		if (item) {
+			fs::remove(Filer::dirPlist() + item->label);
+			Event_OpenPlaylistList();
+		}
+	}
 }
 
-void Program::Event_ScreenMode() {
-	World::winSys()->Fullscreen(!World::winSys()->Settings().fullscreen);
+void Program::Event_EditButtonClick() {
+	ListItem* item = World::scene()->SelectedButton();
+	if (item)
+		Event_OpenPlaylistEditor((void*)item->label.c_str());
 }
+
+void Program::Event_SaveButtonClick() {
+	if (editor)
+		Filer::SavePlaylist(editor->getPlaylist());
+}
+
+// MENU EVENTS
 
 void Program::Event_OpenBookList() {
 	curMenu = EMenu::books;
 	World::scene()->SwitchMenu(curMenu);
 }
 
-void Program::Event_OpenBrowser(string path) {
+void Program::Event_OpenBrowser(void* path) {
 	curMenu = EMenu::browser;
 	if (browser)
-		browser->GoTo(path);
+		browser->GoTo(cstr(path));
 	else
-		browser = new Browser(path);
+		browser = new Browser(cstr(path));
 	World::scene()->SwitchMenu(curMenu, browser);
 }
 
-void Program::Event_OpenReader(string file) {
+void Program::Event_OpenReader(void* file) {
 	curMenu = EMenu::reader;
-	World::scene()->SwitchMenu(curMenu, (void*)file.c_str());
+	World::scene()->SwitchMenu(curMenu, (void*)string(cstr(file)).c_str());
 }
 
 void Program::Event_OpenPlaylistList() {
@@ -102,9 +172,9 @@ void Program::Event_OpenPlaylistList() {
 	World::scene()->SwitchMenu(curMenu);
 }
 
-void Program::Event_OpenPlaylistEditor(string playlist) {
+void Program::Event_OpenPlaylistEditor(void* playlist) {
 	curMenu = EMenu::plistEditor;
-	editor = new PlaylistEditor(playlist);
+	editor = new PlaylistEditor(cstr(playlist));
 	World::scene()->SwitchMenu(curMenu, editor);
 }
 
@@ -145,6 +215,17 @@ void Program::Event_Back() {
 		World::scene()->SwitchMenu(curMenu = EMenu::playlists);
 	else
 		World::engine->Close();
+}
+
+// OTHER EVENTS
+
+void Program::Event_SelectionSet(void* box) {
+	if (editor)
+		editor->selected = sCast<ScrollArea*>(box)->SelectedItem();
+}
+
+void Program::Event_ScreenMode() {
+	World::winSys()->Fullscreen(!World::winSys()->Settings().fullscreen);
 }
 
 EMenu Program::CurrentMenu() const {

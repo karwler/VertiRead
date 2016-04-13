@@ -2,11 +2,10 @@ A so far simple cross-platform manga reader and music player.
 Still in progress.
 
 TO DO
-- fix tile box stretching
 - make a playlist editor
-- add selectable items
+- test popup boxes
 - add settings menu lists
-- fix mouse wheel scrolling
+- improve mouse wheel scrolling
 - test audio system
 - maybe add some animations
 - load textures while displaying reader

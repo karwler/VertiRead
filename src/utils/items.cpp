@@ -2,53 +2,42 @@
 
 // LIST ITEM
 
-ListItem::ListItem(string LBL) :
-	label(LBL)
+ListItem::ListItem(string LBL, ScrollArea* SA) :
+	label(LBL),
+	parent(SA)
 {}
 ListItem::~ListItem() {}
 
-void ListItem::OnClick() {}
+void ListItem::OnClick() {
+	if (parent)
+		parent->selectedItem = this;
+	World::engine->SetRedrawNeeded();
+}
 
-// BROWSER BUTTON
+bool ListItem::selectable() const {
+	return parent != nullptr;
+}
 
-BrowserButton::BrowserButton(string LBL, string DAT, void (Program::*CALLB)(string)) :
-	ListItem(LBL),
+// ITEM BUTTON
+
+ItemButton::ItemButton(string LBL, string DAT, void (Program::*CALLB)(void*), ScrollArea* SA) :
+	ListItem(LBL, SA),
 	data(DAT),
 	callback(CALLB)
 {}
-BrowserButton::~BrowserButton() {}
+ItemButton::~ItemButton() {}
 
-void BrowserButton::OnClick() {
-	if (!callback)
-		return;
-	if (data.empty())
-		(World::program()->*callback)(label);
+void ItemButton::OnClick() {
+	ListItem::OnClick();
+
+	void* dat;	// decide what to send
+	if (parent)
+		dat = parent;
+	else if (data.empty())
+		dat = (void*)label.c_str();
 	else
-		(World::program()->*callback)(data);
-}
+		dat = (void*)data.c_str();
 
-void BrowserButton::Callback(void(Program::* CALLB)(string)) {
-	callback = CALLB;
-}
-
-// TILE ITEM
-
-TileItem::TileItem(string LBL, string DAT, void (Program::*CALLB)(string)) :
-	label(LBL),
-	data(DAT),
-	callback(CALLB)
-{}
-TileItem::~TileItem() {}
-
-void TileItem::OnClick() {
-	if (!callback)
-		return;
-	if (data.empty())
-		(World::program()->*callback)(label);
-	else
-		(World::program()->*callback)(data);
-}
-
-void TileItem::Callback(void (Program::*CALLB)(string)) {
-	callback = CALLB;
+	if (callback)
+		(World::program()->*callback)(dat);
 }

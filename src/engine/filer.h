@@ -9,9 +9,9 @@ const string dsep = "/";
 #endif
 
 enum EDirFilter : byte {
-	FILTER_FILE = 0x1,
-	FILTER_DIR = 0x2,
-	FILTER_LINK = 0x4
+	FILTER_FILE = 1,
+	FILTER_DIR  = 2,
+	FILTER_LINK = 4
 };
 EDirFilter operator|(EDirFilter a, EDirFilter b);
 
@@ -22,6 +22,9 @@ public:
 	static bool WriteTextFile(string file, const vector<string>& lines);
 	static vector<fs::path> ListDir(fs::path dir, EDirFilter filter, const vector<string>& extFilter=vector<string>());
 	static vector<string> GetPicsFromDir(fs::path dir);
+
+	static map<string, string> GetTextures();
+	static map<string, string> GetSounds();
 
 	static Playlist LoadPlaylist(string name);
 	static void SavePlaylist(const Playlist& plist);

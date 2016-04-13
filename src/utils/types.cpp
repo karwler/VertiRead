@@ -1,23 +1,111 @@
-#include "engine/filer.h"
-#include "prog/program.h"
+#include "engine/world.h"
+
+// TEXTURE
+
+Texture::Texture(string FILE) :
+	tex(nullptr)
+{
+	LoadTex(FILE);
+}
+
+vec2i Texture::Res() const {
+	return res;
+}
+
+string Texture::File() const {
+	return file;
+}
+
+void Texture::LoadTex(string path) {
+	file = path;
+	if (tex)
+		SDL_DestroyTexture(tex);
+
+	tex = IMG_LoadTexture(World::winSys()->Renderer(), file.c_str());
+	if (tex)
+		SDL_QueryTexture(tex, NULL, NULL, &res.x, &res.y);
+	else {
+		res = 0;
+		cerr << "couldn't load texture " << file << endl;
+	}
+}
 
 // IMAGE
 
-Image::Image(vec2i POS, vec2i SIZ, string TEXN) :
-	pos(POS), size(SIZ),
-	texname(TEXN)
-{}
+Image::Image(vec2i POS, Texture* TEX, vec2i SIZ) :
+	pos(POS),
+	texture(TEX)
+{
+	size = SIZ.hasNull() ? size = texture->Res() : SIZ;
+}
+
+Image::Image(vec2i POS, string TEX, vec2i SIZ) :
+	pos(POS)
+{
+	texture = World::library()->getTex(TEX);
+	size = SIZ.hasNull() ? size = texture->Res() : SIZ;
+}
 
 SDL_Rect Image::getRect() const {
 	return {pos.x, pos.y, size.x, size.y};
 }
 
-Text::Text(string TXT, vec2i POS, int SIZE, EColor CLR) :
-	size(SIZE),
+// FONT
+
+FontSet::FontSet(cstr FILE) :
+	file(FILE)
+{}
+
+FontSet::~FontSet() {
+	for (const pair<int, TTF_Font*>& font : fonts)
+		if (font.second)
+			TTF_CloseFont(font.second);
+}
+
+bool FontSet::CanRun() const {
+	TTF_Font* tmp = TTF_OpenFont(file, 72);
+	if (!tmp)
+		return false;
+	TTF_CloseFont(tmp);
+	return true;
+}
+
+TTF_Font* FontSet::Get(int size) {
+	if (fonts.count(size) == 0)
+		AddSize(size);
+	return fonts.at(size);
+}
+
+vec2i FontSet::TextSize(string text, int size) {
+	vec2i siz;
+	if (Get(size))
+		TTF_SizeText(fonts.at(size), text.c_str(), &siz.x, &siz.y);
+	return siz;
+}
+
+void FontSet::AddSize(int size) {
+	if (fonts.count(size) == 0) {
+		TTF_Font* font = TTF_OpenFont(file, size);
+		if (font)
+			fonts.insert(make_pair(size, font));
+		else
+			cerr << "couldn't load font " << file << endl;
+	}
+}
+
+// TEXT
+
+Text::Text(string TXT, vec2i POS, int H, int HSCAL, EColor CLR) :
 	pos(POS),
 	color(CLR),
 	text(TXT)
-{}
+{
+	height = HSCAL == 0 ? H : H - H/HSCAL;
+}
+
+vec2i Text::size() const {
+	return World::library()->Fonts()->TextSize(text, height);
+}
 
 // SHORTCUT
 
@@ -36,6 +124,14 @@ bool Shortcut::SetName(string sname, bool setDefaultKey) {
 	if (sname == "back") {
 		call = &Program::Event_Back;
 		defaultKey.scancode = SDL_SCANCODE_ESCAPE;
+	}
+	else if (sname == "page_up") {
+		call = &Program::Event_PageUp;
+		defaultKey.scancode = SDL_SCANCODE_PAGEUP;
+	}
+	else if (sname == "page_down") {
+		call = &Program::Event_PageDown;
+		defaultKey.scancode = SDL_SCANCODE_PAGEDOWN;
 	}
 	else if (sname == "zoom_in") {
 		call = &Program::Event_ZoomIn;
@@ -118,11 +214,11 @@ GeneralSettings::GeneralSettings()
 
 // VIDEO SETTINGS
 
-VideoSettings::VideoSettings(bool VS, bool MAX, bool FSC, vec2i RES, string FONT, string RNDR) :
+VideoSettings::VideoSettings(bool VS, bool MAX, bool FSC, vec2i RES, string FNT, string RNDR) :
 	vsync(VS),
 	maximized(MAX), fullscreen(FSC),
 	resolution(RES),
-	font(FONT),
+	font(FNT),
 	renderer(RNDR)
 {
 	if (font.empty() || !fs::exists(font)) {
@@ -137,27 +233,27 @@ VideoSettings::VideoSettings(bool VS, bool MAX, bool FSC, vec2i RES, string FONT
 
 void VideoSettings::SetDefaultColors() {
 	if (colors.count(EColor::background) == 0)
-		colors.insert(std::make_pair(EColor::background, vec4b(10, 10, 10, 255)));
+		colors.insert(make_pair(EColor::background, vec4b(10, 10, 10, 255)));
 	else
 		colors[EColor::background] = vec4b(10, 10, 10, 255);
 
 	if (colors.count(EColor::rectangle) == 0)
-		colors.insert(std::make_pair(EColor::rectangle, vec4b(90, 90, 90, 255)));
+		colors.insert(make_pair(EColor::rectangle, vec4b(90, 90, 90, 255)));
 	else
 		colors[EColor::rectangle] = vec4b(90, 90, 90, 255);
 
 	if (colors.count(EColor::highlighted) == 0)
-		colors.insert(std::make_pair(EColor::highlighted, vec4b(120, 120, 120, 255)));
+		colors.insert(make_pair(EColor::highlighted, vec4b(120, 120, 120, 255)));
 	else
 		colors[EColor::highlighted] = vec4b(120, 120, 120, 255);
 
 	if (colors.count(EColor::darkened) == 0)
-		colors.insert(std::make_pair(EColor::darkened, vec4b(60, 60, 60, 255)));
+		colors.insert(make_pair(EColor::darkened, vec4b(60, 60, 60, 255)));
 	else
 		colors[EColor::darkened] = vec4b(60, 60, 60, 255);
 
 	if (colors.count(EColor::text) == 0)
-		colors.insert(std::make_pair(EColor::text, vec4b(210, 210, 210, 255)));
+		colors.insert(make_pair(EColor::text, vec4b(210, 210, 210, 255)));
 	else
 		colors[EColor::text] = vec4b(210, 210, 210, 255);
 }
@@ -180,7 +276,7 @@ ControlsSettings::ControlsSettings(bool fillMissingBindings, const vector<Shortc
 }
 
 void ControlsSettings::FillMissingBindings() {
-	vector<string> names = {"back", "zoom_in", "zoom_out", "zoom_reset", "center_view", "play_pause", "next_song", "prev_song", "volume_up", "volume_down", "next_dir", "prev_dir", "fullscreen"};
+	vector<string> names = {"back", "page_up", "page_down", "zoom_in", "zoom_out", "zoom_reset", "center_view", "play_pause", "next_song", "prev_song", "volume_up", "volume_down", "next_dir", "prev_dir", "fullscreen"};
 	for (string& it : names)
 		if (!shortcut(it))
 			shortcuts.push_back(Shortcut(it));

@@ -1,7 +1,7 @@
 #include "world.h"
 
 EDirFilter operator|(EDirFilter a, EDirFilter b) {
-	return static_cast<EDirFilter>(static_cast<byte>(a) | static_cast<byte>(b));
+	return sCast<EDirFilter>(sCast<byte>(a) | sCast<byte>(b));
 }
 
 byte Filer::CheckDirectories() {
@@ -82,6 +82,20 @@ vector<string> Filer::GetPicsFromDir(fs::path dir) {
 	return pics;
 }
 
+map<string, string> Filer::GetTextures() {
+	map<string, string> paths;
+	for (fs::directory_iterator it(dirTexs()); it != fs::directory_iterator(); it++)
+		paths.insert(make_pair(removeExtension(it->path().filename()).string(), it->path().string()));
+	return paths;
+}
+
+map<string, string> Filer::GetSounds() {
+	map<string, string> paths;
+	for (fs::directory_iterator it(dirSnds()); it != fs::directory_iterator(); it++)
+		paths.insert(make_pair(removeExtension(it->path().filename()).string(), it->path().string()));
+	return paths;
+}
+
 Playlist Filer::LoadPlaylist(string name) {
 	vector<string> lines;
 	if (!ReadTextFile(dirPlist() + name, lines))
@@ -105,7 +119,7 @@ void Filer::SavePlaylist(const Playlist& plist) {
 		lines.push_back("file=" + file.string());
 	for (const string& name : plist.books)
 		lines.push_back("book=" + name);
-	WriteTextFile(dirPlist() + plist.name + ".txt", lines);
+	WriteTextFile(dirPlist() + plist.name, lines);
 }
 
 GeneralSettings Filer::LoadGeneralSettings() {
@@ -137,10 +151,10 @@ VideoSettings Filer::LoadVideoSettings() {
 	for (string& line : lines) {
 		string arg, val, key;
 		splitIniLine(line, &arg, &val, &key);
-		if (arg == "font")
-			sets.font = val;
-		else if (arg == "vsync")
+		if (arg == "vsync")
 			sets.vsync = stob(val);
+		else if (arg == "font")
+			sets.font = val;
 		else if (arg == "renderer")
 			sets.renderer = val;
 		else if (arg == "maximized")
@@ -165,14 +179,14 @@ VideoSettings Filer::LoadVideoSettings() {
 
 void Filer::SaveSettings(const VideoSettings& sets) {
 	vector<string> lines {
-		"font=" + sets.font,
 		"vsync=" + btos(sets.vsync),
+		"font=" + sets.font,
 		"renderer=" + sets.renderer,
 		"maximized=" + btos(sets.maximized),
 		"fullscreen=" + btos(sets.fullscreen),
 		"resolution=" + to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y)
 	};
-	for (const std::pair<EColor, vec4b>& it : sets.colors)
+	for (const pair<EColor, vec4b>& it : sets.colors)
 		lines.push_back("color["+to_string(int(it.first))+"]=" + to_string(it.second.x) + ' ' + to_string(it.second.y) + ' ' + to_string(it.second.z) + ' ' + to_string(it.second.a));
 	WriteTextFile(dirSets() + "video.ini", lines);
 }
@@ -237,16 +251,17 @@ void Filer::SaveSettings(const ControlsSettings& sets) {
 }
 
 string Filer::execDir() {
+	const int MAX_LEN = 4096;
 	fs::path path;
 #ifdef _WIN32
-	TCHAR buffer[2048];
-	GetModuleFileName (NULL, buffer, 2048);
+	TCHAR buffer[MAX_LEN];
+	GetModuleFileName (NULL, buffer, MAX_LEN);
 	for (uint i = 0; buffer[i] != 0; i++)
 		path += buffer[i];
 #else
-	char buffer[2048];
+	char buffer[MAX_LEN];
 	int len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
-	if (len < 2048) {
+	if (len < MAX_LEN) {
 		buffer[len] = '\0';
 		path = buffer;
 	}

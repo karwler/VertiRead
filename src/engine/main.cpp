@@ -17,6 +17,14 @@ int main(int argc, char** argv) {
 		exc.Display();
 		retval = exc.retval;
 	}
+	catch (std::logic_error exc) {
+		cerr << "ERROR: " << exc.what() << endl;
+		retval = -3;
+	}
+	catch (std::runtime_error exc) {
+		cerr << "ERROR: " << exc.what() << endl;
+		retval = -2;
+	}
 	catch (...) {
 		cerr << "unknown error" << endl;
 		retval = -1;

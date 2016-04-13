@@ -1,10 +1,11 @@
-#pragma once
+﻿#pragma once
 
 #include "utils.h"
 
 class Scene;
 class Program;
 class Button;
+class ScrollArea;
 
 typedef void (Program::*progEFunc)();
 
@@ -28,22 +29,55 @@ enum class EColor : byte {
 	text
 };
 
-struct Image {
-	Image(vec2i POS=vec2i(), vec2i SIZ=vec2i(), string TEXN="");
+class Texture {
+public:
+	Texture(string FILE="");
 
-	vec2i pos, size;
-	string texname;
+	string File() const;
+	vec2i Res() const;
+	void LoadTex(string path);
+
+	SDL_Texture* tex;
+private:
+	string file;
+	vec2i res;
+};
+
+struct Image {
+	Image(vec2i POS=0, Texture* TEX=nullptr, vec2i SIZ=0);
+	Image(vec2i POS, string TEX, vec2i SIZ=0);
 
 	SDL_Rect getRect() const;
+
+	vec2i pos, size;
+	Texture* texture;
+};
+
+class FontSet {
+public:
+	FontSet(cstr FILE="");
+	~FontSet();
+
+	bool CanRun() const;
+	TTF_Font* Get(int size);
+	vec2i TextSize(string text, int size);
+
+private:
+	cstr file;
+	map<int, TTF_Font*> fonts;
+
+	void AddSize(int size);
 };
 
 struct Text {
-	Text(string TXT = "", vec2i POS=vec2i(), int SIZE=72, EColor CLR = EColor::text);
+	Text(string TXT="", vec2i POS=0, int H=50, int HSCAL=0, EColor CLR=EColor::text);
 
-	int size;
 	vec2i pos;
+	int height;
 	EColor color;
 	string text;
+
+	vec2i size() const;
 };
 
 class Shortcut {
@@ -62,7 +96,7 @@ private:
 };
 
 struct Playlist {
-	Playlist(string NAME = "", const vector<fs::path>& SGS = vector<fs::path>(), const vector<string>& BKS = vector<string>());
+	Playlist(string NAME="", const vector<fs::path>& SGS=vector<fs::path>(), const vector<string>& BKS=vector<string>());
 
 	string name;
 	vector<fs::path> songs;
@@ -70,7 +104,7 @@ struct Playlist {
 };
 
 struct Directory {
-	Directory(string NAME = "", const vector<string>& DIRS = vector<string>(), vector<string> FILS = vector<string>());
+	Directory(string NAME="", const vector<string>& DIRS=vector<string>(), vector<string> FILS=vector<string>());
 
 	string name;
 	vector<string> dirs;
@@ -82,7 +116,7 @@ struct GeneralSettings {
 };
 
 struct VideoSettings {
-	VideoSettings(bool VS=true, bool MAX=false, bool FSC=false, vec2i RES = vec2i(800, 600), string FONT="", string RNDR="");
+	VideoSettings(bool VS=true, bool MAX=false, bool FSC=false, vec2i RES=vec2i(800, 600), string FNT="", string RNDR="");
 
 	bool vsync;
 	bool maximized, fullscreen;
@@ -103,7 +137,7 @@ struct AudioSettings {
 };
 
 struct ControlsSettings {
-	ControlsSettings(bool fillMissingBindings=false, const vector<Shortcut>& SRTCS = vector<Shortcut>());
+	ControlsSettings(bool fillMissingBindings=false, const vector<Shortcut>& SRTCS=vector<Shortcut>());
 
 	vector<Shortcut> shortcuts;
 

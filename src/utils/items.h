@@ -4,39 +4,25 @@
 
 class ListItem {
 public:
-	ListItem(string LBL="");
+	ListItem(string LBL="", ScrollArea* SA=nullptr);
 	virtual ~ListItem();
 	
 	virtual void OnClick();
+	bool selectable() const;
 
 	string label;
+protected:
+	ScrollArea* parent;	// nullptr means "not selectable"
 };
 
-class BrowserButton : public ListItem {
+class ItemButton : public ListItem {
 public:
-	BrowserButton(string LBL="", string DAT="", void (Program::*CALLB)(string)=nullptr);
-	virtual ~BrowserButton();
+	ItemButton(string LBL="", string DAT="", void (Program::*CALLB)(void*)=nullptr, ScrollArea* SA=nullptr);
+	virtual ~ItemButton();
 
 	virtual void OnClick();
-	void Callback(void (Program::*CALLB)(string));
 
 	string data;
 protected:
-	void (Program::*callback)(string);
-};
-
-class TileItem {
-public:
-	TileItem(string LBL = "", string DAT = "", void (Program::*CALLB)(string) = nullptr);
-	~TileItem();
-
-	void OnClick();
-	void Callback(void (Program::*CALLB)(string));
-
-	string label;
-	string data;
-
-private:
-	void (Program::*callback)(string);
-
+	void (Program::*callback)(void*);
 };

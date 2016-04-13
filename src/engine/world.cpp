@@ -19,6 +19,10 @@ Scene* World::scene() {
 	return engine->getScene();
 }
 
+Library*World::library() {
+	return engine->getScene()->getLibrary();
+}
+
 Program* World::program() {
 	return engine->getScene()->getProgram();
 }

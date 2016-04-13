@@ -1,12 +1,17 @@
-CXX           = clang++
-CFLAGS        = -pipe -g -std=c++11 -Wall -W -fPIC
-INCPATH       = -Isrc
-LFLAGS        = -ccc-gcc-name g++ -Wl
-LIBS          = -lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_mixer -lboost_system -lboost_filesystem
-TARGET        = vertiread
-TDIR	      = build
+#CXX     = clang++
+#CFLAGS  = -pipe -std=c++11 -Wall -W -fPIC
+#LFLAGS  = -ccc-gcc-name g++ -Wl
 
-SOURCES       = src/engine/audioSys.cpp \
+# add the -m32 or -m64 option to the CFLAGS and LFLAGS in order to compile for either 32bit or 64bit systems
+CXX     = g++
+CFLAGS  = -pipe -std=c++11 -Wall -W
+INCPATH = -Isrc
+LFLAGS  = 
+LIBS    = -lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_mixer -lboost_system -lboost_filesystem
+TARGET  = vertiread
+TDIR	= build
+
+SOURCES = src/engine/audioSys.cpp \
 		src/engine/engine.cpp \
 		src/engine/filer.cpp \
 		src/engine/inputSys.cpp \
@@ -15,15 +20,17 @@ SOURCES       = src/engine/audioSys.cpp \
 		src/engine/windowSys.cpp \
 		src/engine/world.cpp \
 		src/prog/program.cpp \
+		src/prog/library.cpp \
 		src/utils/items.cpp \
 		src/utils/objects.cpp \
+		src/utils/popups.cpp \
 		src/utils/scrollAreas.cpp \
 		src/utils/types.cpp \
 		src/utils/utils.cpp \
 		src/prog/browser.cpp \
-		src/prog/playlistEditor.cpp 
+		src/prog/playlistEditor.cpp
 
-OBJECTS       = bin/audioSys.o \
+OBJECTS = bin/audioSys.o \
 		bin/engine.o \
 		bin/filer.o \
 		bin/inputSys.o \
@@ -32,8 +39,10 @@ OBJECTS       = bin/audioSys.o \
 		bin/windowSys.o \
 		bin/world.o \
 		bin/program.o \
+		bin/library.o \
 		bin/items.o \
 		bin/objects.o \
+		bin/popups.o \
 		bin/scrollAreas.o \
 		bin/types.o \
 		bin/utils.o \
@@ -72,12 +81,18 @@ bin/world.o: src/engine/world.cpp
 
 bin/program.o: src/prog/program.cpp
 	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/program.o src/prog/program.cpp
+	
+bin/library.o: src/prog/library.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/library.o src/prog/library.cpp
 
 bin/items.o: src/utils/items.cpp
 	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/items.o src/utils/items.cpp
 
 bin/objects.o: src/utils/objects.cpp
 	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/objects.o src/utils/objects.cpp
+	
+bin/popups.o: src/utils/popups.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/popups.o src/utils/popups.cpp
 
 bin/scrollAreas.o: src/utils/scrollAreas.cpp
 	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/scrollAreas.o src/utils/scrollAreas.cpp

@@ -31,6 +31,9 @@
     <ClCompile Include="src\prog\program.cpp">
       <Filter>Source\Prog</Filter>
     </ClCompile>
+    <ClCompile Include="src\prog\library.cpp">
+      <Filter>Source\Prog</Filter>
+    </ClCompile>
     <ClCompile Include="src\engine\scene.cpp">
       <Filter>Source\Engine</Filter>
     </ClCompile>
@@ -38,6 +41,9 @@
       <Filter>Source\Utils</Filter>
     </ClCompile>
     <ClCompile Include="src\utils\objects.cpp">
+      <Filter>Source\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\utils\popups.cpp">
       <Filter>Source\Utils</Filter>
     </ClCompile>
     <ClCompile Include="src\utils\scrollAreas.cpp">
@@ -78,6 +84,9 @@
     <ClInclude Include="src\prog\program.h">
       <Filter>Source\Prog</Filter>
     </ClInclude>
+    <ClInclude Include="src\prog\library.h">
+      <Filter>Source\Prog</Filter>
+    </ClInclude>
     <ClInclude Include="src\engine\scene.h">
       <Filter>Source\Engine</Filter>
     </ClInclude>
@@ -85,6 +94,9 @@
       <Filter>Source\Utils</Filter>
     </ClInclude>
     <ClInclude Include="src\utils\objects.h">
+      <Filter>Source\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="src\utils\popups.h">
       <Filter>Source\Utils</Filter>
     </ClInclude>
     <ClInclude Include="src\utils\scrollAreas.h">

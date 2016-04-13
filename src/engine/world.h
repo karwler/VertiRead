@@ -11,6 +11,7 @@ public:
 	static InputSys* inputSys();
 	static WindowSys* winSys();
 	static Scene* scene();
+	static Library* library();
 	static Program* program();
 
 };

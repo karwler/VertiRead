@@ -27,6 +27,8 @@ using std::endl;
 using std::vector;
 using std::list;
 using std::map;
+using std::pair;
+using std::make_pair;
 using std::string;
 using std::to_string;
 namespace fs = boost::filesystem;
@@ -55,10 +57,10 @@ using ldouble = long double;
 using cchar = const char;
 using cstr = const char*;
 
-template<class T>
+template<typename T>
 class kptr {
 public:
-	kptr(T* p = nullptr) : ptr(p) {}
+	kptr(T* p=nullptr) : ptr(p) {}
 	kptr(T v) : ptr(new T(v)) {}
 	~kptr() {
 		if (ptr)
@@ -86,7 +88,7 @@ public:
 		return *ptr;
 	}
 
-	T* reset(T* p = nullptr) {
+	T* reset(T* p=nullptr) {
 		if (ptr)
 			delete ptr;
 		ptr = p;
@@ -127,7 +129,7 @@ private:
 
 template<typename T>
 struct kvec2 {
-	kvec2(T X = 0, T Y = 0) : x(X), y(Y) {}
+	kvec2(T X=0, T Y=0) : x(X), y(Y) {}
 	T x, y;
 
 	kvec2& operator=(T n) {
@@ -234,7 +236,7 @@ using vec2f = kvec2<float>;
 
 template<typename T>
 struct kvec3 {
-	kvec3(T X = 0, T Y = 0, T Z = 0) : x(X), y(Y), z(Z) {}
+	kvec3(T X=0, T Y=0, T Z=0) : x(X), y(Y), z(Z) {}
 	T x, y, z;
 	
 	kvec3& operator=(T n) {
@@ -355,7 +357,7 @@ using vec3i = kvec3<int>;
 
 template<typename T>
 struct kvec4 {
-	kvec4(T X = 0, T Y = 0, T Z = 0, T A = 0) : x(X), y(Y), z(Z), a(A) {}
+	kvec4(T X=0, T Y=0, T Z=0, T A=0) : x(X), y(Y), z(Z), a(A) {}
 	T x, y, z, a;
 	
 	kvec4& operator=(T n) {
@@ -490,7 +492,7 @@ bool inRect(const SDL_Rect& rect, vec2i point);
 bool needsCrop(const SDL_Rect& crop);
 SDL_Rect getCrop(SDL_Rect item, SDL_Rect frame);
 SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop);
-vec2i textureSize(string path);
+SDL_Surface* cropScaledSurface(SDL_Surface* surface, vec2i origSize, SDL_Rect& rect, SDL_Rect crop);
 
 // other
 void PrintInfo();
@@ -509,28 +511,48 @@ vec2f prc(vec2i p);
 float prcX(int p);
 float prcY(int p);
 
-template<class T>
+template<typename A, typename B>
+A sCast(B var) {
+	return static_cast<A>(var);
+}
+
+template<typename A, typename B>
+A dCast(B var) {
+	return dynamic_cast<A>(var);
+}
+
+template<typename A, typename B>
+A rCast(B var) {
+	return reinterpret_cast<A>(var);
+}
+
+template<typename A, typename B>
+A cCast(B var) {
+	return const_cast<A>(var);
+}
+
+template<typename T>
 void Erase(vector<T*>& vec, uint i) {
 	delete vec[i];
 	vec.erase(vec.begin() + i);
 }
 
-template<class T>
+template<typename T>
 void Clear(vector<T*>& vec) {
-	for (uint i = 0; i != vec.size(); i++)
-		delete vec[i];
+	for (T* it : vec)
+		delete it;
 	vec.clear();
 }
 
-template<class T>
+template<typename T>
 void Erase(list<T*>& lst, uint i) {
 	delete lst[i];
 	lst.erase(lst.begin() + i);
 }
 
-template<class T>
+template<typename T>
 void Clear(list<T*>& lst) {
-	for (uint i = 0; i != lst.size(); i++)
-		delete lst[i];
+	for (T* it : lst)
+		delete it;
 	lst.clear();
 }

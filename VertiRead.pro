@@ -33,7 +33,9 @@ SOURCES += src/engine/audioSys.cpp \
     src/utils/utils.cpp \
     src/prog/browser.cpp \
     src/prog/playlistEditor.cpp \
-    src/utils/scrollAreas.cpp
+    src/utils/scrollAreas.cpp \
+    src/utils/popups.cpp \
+    src/prog/library.cpp
 
 HEADERS += src/engine/audioSys.h \
     src/engine/engine.h \
@@ -49,4 +51,6 @@ HEADERS += src/engine/audioSys.h \
     src/utils/utils.h \
     src/prog/browser.h \
     src/prog/playlistEditor.h \
-    src/utils/scrollAreas.h
+    src/utils/scrollAreas.h \
+    src/utils/popups.h \
+    src/prog/library.h

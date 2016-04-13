@@ -30,8 +30,10 @@
     <ClCompile Include="src\prog\browser.cpp" />
     <ClCompile Include="src\prog\playlistEditor.cpp" />
     <ClCompile Include="src\prog\program.cpp" />
+    <ClCompile Include="src\prog\library.cpp" />
     <ClCompile Include="src\utils\items.cpp" />
     <ClCompile Include="src\utils\objects.cpp" />
+    <ClCompile Include="src\utils\popups.cpp" />
     <ClCompile Include="src\utils\scrollAreas.cpp" />
     <ClCompile Include="src\utils\types.cpp" />
     <ClCompile Include="src\utils\utils.cpp" />
@@ -47,8 +49,10 @@
     <ClInclude Include="src\prog\browser.h" />
     <ClInclude Include="src\prog\playlistEditor.h" />
     <ClInclude Include="src\prog\program.h" />
+    <ClInclude Include="src\prog\library.h" />
     <ClInclude Include="src\utils\items.h" />
     <ClInclude Include="src\utils\objects.h" />
+    <ClInclude Include="src\utils\popups.h" />
     <ClInclude Include="src\utils\scrollAreas.h" />
     <ClInclude Include="src\utils\types.h" />
     <ClInclude Include="src\utils\utils.h" />

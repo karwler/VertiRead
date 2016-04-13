@@ -11,15 +11,15 @@ void Engine::Run() {
 		throw Exception("SDL couldn't be initialized" + string(SDL_GetError()), 1);
 	if (TTF_Init())
 		throw Exception("fonts couldn't be initialized" + string(SDL_GetError()), 2);
-
 	PrintInfo();
-	Filer::CheckDirectories();
-	scene = new Scene;
 
 	audioSys = new AudioSys(Filer::LoadAudioSettings());
-	winSys = new WindowSys(scene, Filer::LoadVideoSettings());
+	winSys = new WindowSys(Filer::LoadVideoSettings());
 	inputSys = new InputSys(Filer::LoadControlsSettings());
 	kptr<SDL_Event> event = new SDL_Event;
+
+	Filer::CheckDirectories();
+	scene = new Scene;
 
 	// initialize scene and timer
 	scene->getProgram()->Event_OpenBookList();
@@ -59,10 +59,11 @@ void Engine::Close() {
 }
 
 void Engine::Cleanup() {
-	if (audioSys)
-		audioSys.reset();
-	if (winSys)
-		winSys.reset();
+	scene.reset();
+	inputSys.reset();
+	winSys.reset();
+	audioSys.reset();
+
 	TTF_Quit();
 	SDL_Quit();
 }

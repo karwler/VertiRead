@@ -7,13 +7,14 @@ public:
 	ScrollArea(const Object& BASE=Object(), int SPC=5, int BARW=10);
 	virtual ~ScrollArea();
 
+	virtual void SetValues();
 	void DragSlider(int ypos);
 	void DragList(int ypos);
 	void ScrollList(int ymov);
-	virtual void SetValues();
 
 	SDL_Rect Bar() const;
 	SDL_Rect Slider() const;
+	virtual int SelectedItem() const;	// this class doesn't contain any items so this function returns -1
 
 	int ListY() const;
 	virtual int ListH() const;
@@ -21,6 +22,7 @@ public:
 	int SliderY() const;
 	int SliderH() const;
 
+	ListItem* selectedItem;
 	const int barW;
 	const int spacing;
 	int diffSliderMouseY;
@@ -34,13 +36,13 @@ protected:
 
 class ListBox : public ScrollArea {
 public:
-	ListBox(const Object& BASE = Object(), const vector<ListItem*>& ITMS = vector<ListItem*>(), int IH=30, int SPC=5, int BARW=10);
+	ListBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS=vector<ListItem*>(), int IH=30, int SPC=5, int BARW=10);
 	virtual ~ListBox();
 
 	virtual void SetValues();
-	SDL_Rect ItemRect(int i, SDL_Rect* Crop=nullptr) const;
-	int FirstVisibleItem() const;
-	int LastVisibleItem() const;
+	SDL_Rect ItemRect(int i, SDL_Rect* Crop=nullptr, EColor* color=nullptr) const;
+	virtual int SelectedItem() const;
+	vec2i VisibleItems() const;
 
 	const vector<ListItem*>& Items() const;
 	void Items(const vector<ListItem*>& objects);
@@ -53,16 +55,16 @@ private:
 
 class TileBox : public ScrollArea {
 public:
-	TileBox(const Object& BASE = Object(), const vector<TileItem>& ITMS = vector<TileItem>(), vec2i TS = vec2i(50, 50), int BARW = 10);
+	TileBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS=vector<ListItem*>(), vec2i TS=vec2i(50, 50), int BARW=10);
 	virtual ~TileBox();
 
 	virtual void SetValues();
-	SDL_Rect ItemRect(int i, SDL_Rect* Crop=nullptr) const;
-	int FirstVisibleItem() const;
-	int LastVisibleItem() const;
+	SDL_Rect ItemRect(int i, SDL_Rect* Crop=nullptr, EColor* color=nullptr) const;
+	virtual int SelectedItem() const;
+	vec2i VisibleItems() const;
 
-	vector<TileItem>& Items();
-	void Items(const vector<TileItem>& objects);
+	const vector<ListItem*>& Items() const;
+	void Items(const vector<ListItem*>& objects);
 	vec2i TileSize() const;
 	vec2i Dim() const;
 
@@ -70,31 +72,30 @@ private:
 	vec2i tileSize;
 	vec2i dim;
 
-	vector<TileItem> items;
+	vector<ListItem*> items;
 };
 
 class ReaderBox : public ScrollArea {
 public:
-	ReaderBox(const vector<string>& PICS=vector<string>(), string CURPIC="", float ZOOM=1.f);
+	ReaderBox(const vector<Texture*> PICS=vector<Texture*>(), string CURPIC="", float ZOOM=1.f);
 	virtual ~ReaderBox();
 
+	virtual void SetValues();
 	void Tick();
 	void DragListX(int xpos);
 	void ScrollListX(int xmov);
 	void Zoom(float factor);
 	void AddZoom(float zadd);
-	virtual void SetValues();
 
 	SDL_Rect List() const;	// return value is the background rect
 	vector<ButtonImage>& ListButtons();
 	SDL_Rect Player() const;
 	vector<ButtonImage>& PlayerButtons();
-
 	Image getImage(int i, SDL_Rect* Crop=nullptr) const;
-	vec2i VisiblePicsInterval() const;
+	vec2i VisiblePictures() const;
 
 	const vector<Image>& Pictures() const;
-	void Pictures(const vector<string>& pictures, string curPic="");
+	void Pictures(const vector<Texture*>& pictures, string curPic="");
 	int ListX() const;
 	int ListW() const;
 	virtual int ListH() const;
