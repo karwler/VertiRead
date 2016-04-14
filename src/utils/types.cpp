@@ -52,7 +52,7 @@ SDL_Rect Image::getRect() const {
 
 // FONT
 
-FontSet::FontSet(cstr FILE) :
+FontSet::FontSet(string FILE) :
 	file(FILE)
 {}
 
@@ -63,7 +63,7 @@ FontSet::~FontSet() {
 }
 
 bool FontSet::CanRun() const {
-	TTF_Font* tmp = TTF_OpenFont(file, 72);
+	TTF_Font* tmp = TTF_OpenFont(file.c_str(), 72);
 	if (!tmp)
 		return false;
 	TTF_CloseFont(tmp);
@@ -85,7 +85,7 @@ vec2i FontSet::TextSize(string text, int size) {
 
 void FontSet::AddSize(int size) {
 	if (fonts.count(size) == 0) {
-		TTF_Font* font = TTF_OpenFont(file, size);
+		TTF_Font* font = TTF_OpenFont(file.c_str(), size);
 		if (font)
 			fonts.insert(make_pair(size, font));
 		else

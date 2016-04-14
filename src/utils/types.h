@@ -55,7 +55,7 @@ struct Image {
 
 class FontSet {
 public:
-	FontSet(cstr FILE="");
+	FontSet(string FILE="");
 	~FontSet();
 
 	bool CanRun() const;
@@ -63,7 +63,7 @@ public:
 	vec2i TextSize(string text, int size);
 
 private:
-	cstr file;
+	string file;
 	map<int, TTF_Font*> fonts;
 
 	void AddSize(int size);

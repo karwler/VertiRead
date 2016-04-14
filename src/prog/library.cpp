@@ -5,7 +5,7 @@ Library::Library(string FONT, const map<string, string>& TEXS, const map<string,
 {
 	if (!fs::exists(FONT))
 		FONT = VideoSettings().font;	// should give the default font
-	fonts = new FontSet(FONT.c_str());
+	fonts = new FontSet(FONT);
 
 	for (const pair<string, string>& it : TEXS)
 		texes.insert(make_pair(it.first, Texture(it.second)));
