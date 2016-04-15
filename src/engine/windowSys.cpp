@@ -13,15 +13,12 @@ WindowSys::~WindowSys() {
 }
 
 void WindowSys::SetWindow() {
-	// destroy old window if one exists
 	DestroyWindow();
 
-	// set settings and set window flags
 	uint flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
 	if (sets.fullscreen)     flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 	else if (sets.maximized) flags |= SDL_WINDOW_MAXIMIZED;
 
-	// create window and renderer
 	window = SDL_CreateWindow("VertRead", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets.resolution.x, sets.resolution.y, flags);
 	if (!window)
 		throw Exception("couldn't create window" + string(SDL_GetError()), 3);
@@ -32,14 +29,14 @@ void WindowSys::CreateRenderer() {
 	if (renderer)
 		SDL_DestroyRenderer(renderer);
 
-	// set neeeded flags
 	uint flags = SDL_RENDERER_ACCELERATED;
 	if (sets.vsync) flags |= SDL_RENDERER_PRESENTVSYNC;
 
-	// create renderer based on the currently selected one
 	renderer = SDL_CreateRenderer(window, GetRenderDriverIndex(), flags);
 	if (!renderer)
 		throw Exception("couldn't create renderer" + string(SDL_GetError()), 4);
+
+	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 }
 
 void WindowSys::DestroyWindow() {
@@ -133,7 +130,9 @@ void WindowSys::PassDrawObject(Object* obj) {
 void WindowSys::PassDrawObject(Popup* obj) {
 	if (dCast<PopupText*>(obj))
 		DrawObject(sCast<PopupText*>(obj));
-	if (dCast<PopupMessage*>(obj))
+	else if (dCast<PopupChoice*>(obj))
+		DrawObject(sCast<PopupChoice*>(obj));
+	else if (dCast<PopupMessage*>(obj))
 		DrawObject(sCast<PopupMessage*>(obj));
 	else
 		DrawRect(obj->getRect(), obj->color);
@@ -211,15 +210,25 @@ void WindowSys::DrawObject(PopupMessage* obj) {
 	DrawText(txt);
 }
 
-void WindowSys::DrawObject(PopupText* obj) {
+void WindowSys::DrawObject(PopupChoice* obj) {
 	DrawObject(sCast<PopupMessage*>(obj));
 
-	SDL_Rect crop;
+	Text txt;
+	DrawRect(obj->getOkButton(&txt), EColor::rectangle);
+	DrawText(txt);
+}
+
+void WindowSys::DrawObject(PopupText* obj) {
+	DrawObject(sCast<PopupChoice*>(obj));
+
+	SDL_Rect crop = {0, 0, 0, 0};
 	Text txt = obj->getLine(&crop);
 	DrawText(txt, crop);
 
-	DrawRect(obj->getCancelButton(&txt), EColor::rectangle);
-	DrawText(txt);
+	SDL_Rect rect = obj->getLineBox();
+	Text Txt = txt;
+	Txt.text.resize(obj->Line()->CursorPos());
+	DrawRect({rect.x+Txt.size().x, rect.y, 3, rect.h}, EColor::highlighted);	// draw caret
 }
 
 void WindowSys::DrawRect(const SDL_Rect& rect, EColor color) {

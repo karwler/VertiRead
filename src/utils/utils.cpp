@@ -101,15 +101,6 @@ SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {
 	return sheet;
 }
 
-SDL_Surface* cropScaledSurface(SDL_Surface* surface, vec2i origSize, SDL_Rect& rect, SDL_Rect crop) {
-	SDL_Rect ori = {rect.x, rect.y, origSize.x, origSize.y};							// proportions of the original image
-	vec2f fac(float(ori.w) / float(rect.w), float(ori.h) / float(rect.h));				// scaling factor
-	rect = {rect.x+crop.x, rect.y+crop.y, rect.w-crop.x-crop.w, rect.h-crop.y-crop.h};	// adjust rect to crop
-
-	// crop original image by factor
-	return cropSurface(surface, ori, {int(float(crop.x)*fac.x), int(float(crop.y)*fac.y), int(float(crop.w)*fac.x), int(float(crop.h)*fac.y)});
-}
-
 void PrintInfo() {
 	SDL_version ver;
 	SDL_GetVersion(&ver);

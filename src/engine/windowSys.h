@@ -35,6 +35,7 @@ private:
 	void DrawObject(TileBox* obj);
 	void DrawObject(ReaderBox* obj);
 	void DrawObject(PopupMessage* obj);
+	void DrawObject(PopupChoice* obj);
 	void DrawObject(PopupText* obj);
 
 	void DrawRect(const SDL_Rect& rect, EColor color);

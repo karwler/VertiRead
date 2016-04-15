@@ -84,22 +84,23 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 	case EMenu::plistEditor: {
 		// option buttons
 		sizT.x = 100;
-		objects.push_back(new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_AddButtonClick, "Add"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_DeleteButtonClick, "Del"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SaveButtonClick, "Save"));
-		objects.push_back(new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Cancel"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_AddButtonClick, "Add"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_EditButtonClick, "Edit"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_DeleteButtonClick, "Del"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 200), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SaveButtonClick, "Save"));
+		objects.push_back(new ButtonText(Object(vec2i(0, 250), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Close"));
 
 		// playlist list
 		ListBox* box = new ListBox(Object(vec2i(110, 0), posT, vec2i(res.x-110, res.y), FIX_POS | FIX_END, EColor::background));
 		vector<ListItem*> items;
 		PlaylistEditor* editor = sCast<PlaylistEditor*>(dat);
 		if (editor->showSongs) {
-			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Books"));
+			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SwitchButtonClick, "Books"));
 			for (fs::path& it : editor->getPlaylist().songs)
 				items.push_back(new ItemButton(it.filename().string(), "", &Program::Event_SelectionSet, box));
 		}
 		else {
-			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Songs"));
+			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SwitchButtonClick, "Songs"));
 			for (string& it : editor->getPlaylist().books)
 				items.push_back(new ItemButton(it, "", &Program::Event_SelectionSet, box));
 		}
@@ -176,10 +177,16 @@ void Scene::Tick() {
 void Scene::OnMouseDown() {
 	// check if there's a popup window
 	if (popup) {
-		if (dCast<PopupMessage*>(popup.get()) && inRect(sCast<PopupMessage*>(popup.get())->getCancelButton(), InputSys::mousePos()))
-			SetPopup(nullptr);
-		else if (dCast<PopupText*>(popup.get()) && inRect(sCast<PopupText*>(popup.get())->getOkButton(), InputSys::mousePos())) {
-			// else if some other type
+		if (!inRect(popup->getRect(), InputSys::mousePos()))
+			return;
+
+		if (dCast<PopupChoice*>(popup.get())) {
+			if (CheckPopupChoiceClick(sCast<PopupChoice*>(popup.get())))
+				return;
+		}
+		else if (dCast<PopupMessage*>(popup.get())) {
+			if (CheckPopupSimpleClick(sCast<PopupMessage*>(popup.get())))
+				return;
 		}
 		return;
 	}
@@ -272,6 +279,24 @@ bool Scene::CheckReaderBoxClick(ReaderBox* obj) {
 	return false;
 }
 
+bool Scene::CheckPopupSimpleClick(PopupMessage* obj) {
+	if (inRect(obj->getCancelButton(), InputSys::mousePos())) {
+		SetPopup(nullptr);
+		return true;
+	}
+	return false;
+}
+
+bool Scene::CheckPopupChoiceClick(PopupChoice* obj) {
+	if (inRect(obj->getOkButton(), InputSys::mousePos()))
+		program->Event_PopupOk(obj);
+	else if (inRect(obj->getCancelButton(), InputSys::mousePos()))
+		SetPopup(nullptr);
+	else
+		return false;
+	return true;
+}
+
 void Scene::OnMouseUp() {
 	if (objectHold) {
 		// reset values
@@ -302,14 +327,14 @@ vector<Object*> Scene::Objects() const {
 }
 
 Object* Scene::FocusedObject() const {
-	return (objects[focObject]) ? objects[focObject] : nullptr;
+	return (popup) ? popup : (objects[focObject]) ? objects[focObject] : nullptr;
 }
 
 ListItem* Scene::SelectedButton() const {
 	// check focused object first
 	if (dCast<ScrollArea*>(FocusedObject())) {
 		ListItem* item = sCast<ScrollArea*>(FocusedObject())->selectedItem;
-		if (item->selectable())
+		if (item && item->selectable())
 			return item;
 	}
 
@@ -317,12 +342,19 @@ ListItem* Scene::SelectedButton() const {
 	for (Object* obj : objects)
 		if (dCast<ScrollArea*>(obj)) {
 			ListItem* item = sCast<ScrollArea*>(obj)->selectedItem;
-			if (item->selectable())
+			if (item && item->selectable())
 				return item;
 		}
-	return nullptr;
+	return nullptr;	// nothing found
+}
+
+bool Scene::ShowingPopup() const {
+	return popup != nullptr;
 }
 
 void Scene::SetPopup(Popup* box) {
 	popup = box;
+	if (dCast<PopupText*>(box))
+		World::inputSys()->SetCaptureText(sCast<PopupText*>(box)->Line());
+	World::engine->SetRedrawNeeded();
 }

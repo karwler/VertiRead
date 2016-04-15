@@ -16,13 +16,13 @@ void PlaylistEditor::LoadPlaylist(string playlist) {
 	selected = -1;
 }
 
-void PlaylistEditor::Rename(string name) {
-	pList.name = name;
-}
-
 void PlaylistEditor::AddSong(string path) {
 	pList.songs.push_back(path);
 	selected = pList.songs.size()-1;
+}
+
+void PlaylistEditor::RenameSong(string path) {
+	pList.songs[selected] = path;
 }
 
 void PlaylistEditor::DelSong() {
@@ -37,6 +37,10 @@ void PlaylistEditor::DelSong() {
 void PlaylistEditor::AddBook(string name) {
 	pList.books.push_back(name);
 	selected = pList.books.size()-1;
+}
+
+void PlaylistEditor::RenameBook(string name) {
+	pList.books[selected] = name;
 }
 
 void PlaylistEditor::DelBook() {

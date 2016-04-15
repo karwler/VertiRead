@@ -26,9 +26,10 @@ PopupMessage::PopupMessage(string MSG, float TO) :
 PopupMessage::~PopupMessage() {}
 
 void PopupMessage::ReposResize(vec2i siz) {
+	siz.x += 20;	// add margin
 	vec2i res = World::winSys()->Resolution();
-	pos = vec2f((res.x-siz.x)/2, (res.y-siz.y)/2);
-	end = vec2f((res.x+siz.x)/2, (res.y+siz.y)/2);
+	Pos(vec2i((res.x-siz.x)/2, (res.y-siz.y)/2));
+	End(vec2i((res.x+siz.x)/2, (res.y+siz.y)/2));
 }
 
 SDL_Rect PopupMessage::getCancelButton(Text* txt) const {
@@ -42,10 +43,31 @@ Text PopupMessage::getMessage() const {
 	return Text(msg, Pos(), msgH, 8);
 }
 
+// POPUP CHOICE
+
+PopupChoice::PopupChoice(string MSG) :
+	PopupMessage(MSG, 0.f)
+{}
+PopupChoice::~PopupChoice() {}
+
+SDL_Rect PopupChoice::getCancelButton(Text* txt) const {
+	vec2i pos(Pos().x+Size().x/2, End().y-butH);
+	if (txt)
+		*txt = Text("Cancel", pos, butH, 8);
+	return {pos.x, pos.y, Size().x/2, butH};
+}
+
+SDL_Rect PopupChoice::getOkButton(Text* txt) const {
+	vec2i pos(Pos().x, End().y-butH);
+	if (txt)
+		*txt = Text("Ok", pos, butH, 8);
+	return {pos.x, pos.y, Size().x/2, butH};
+}
+
 // POPUP TEXT
 
-PopupText::PopupText(string MSG, string LIN, float TO) :
-	PopupMessage(MSG, TO),
+PopupText::PopupText(string MSG, string LIN) :
+	PopupChoice(MSG),
 	line(LIN),
 	lineH(48)
 {
@@ -53,29 +75,19 @@ PopupText::PopupText(string MSG, string LIN, float TO) :
 }
 PopupText::~PopupText() {}
 
-SDL_Rect PopupText::getCancelButton(Text* txt) const {
-	vec2i pos(Pos().x+Size().x/2, End().y-butH);
-	if (txt)
-		*txt = Text("Cancel", pos, butH, 8);
-	return {pos.x, pos.y, Size().x/2, butH};
-}
-
-SDL_Rect PopupText::getOkButton(Text* txt) const {
-	vec2i pos(Pos().x, End().y-butH);
-	if (txt)
-		*txt = Text("Ok", pos, butH, 8);
-	return {pos.x, pos.y, Size().x/2, butH};
-}
-
 SDL_Rect PopupText::getLineBox() const {
 	return {Pos().x, Pos().y+msgH, Size().x,lineH};
 }
 
 Text PopupText::getLine(SDL_Rect* crop) const {
 	// set crop here
-	return Text(line, vec2i(Pos().x, Pos().y+msgH), lineH, 8);
+	return Text(line.getText(), vec2i(Pos().x, Pos().y+msgH), lineH, 8);
+}
+
+TextEdit* PopupText::Line() {
+	return &line;
 }
 
 void PopupText::Line(string text) {
-	line = text;
+	line = TextEdit(text);
 }

@@ -4,8 +4,10 @@
 
 class Scene;
 class Program;
+
 class Button;
 class ScrollArea;
+class PopupChoice;
 
 typedef void (Program::*progEFunc)();
 
@@ -80,6 +82,22 @@ struct Text {
 	vec2i size() const;
 };
 
+class TextEdit {
+public:
+	TextEdit(string TXT="", int CPOS=0);
+
+	int CursorPos() const;
+	void MoveCursor(int mov, bool loop=false);
+
+	string getText() const;
+	void Add(cstr c);
+	void Delete(bool current);
+
+private:
+	int cpos;
+	string text;
+};
+
 class Shortcut {
 public:
 	Shortcut(string NAME="", bool setDefaultKey=true, const vector<SDL_Keysym>& KEYS=vector<SDL_Keysym>());
@@ -89,7 +107,6 @@ public:
 	progEFunc Call() const;
 
 	vector<SDL_Keysym> keys;
-
 private:
 	string name;
 	void (Program::*call)();
@@ -137,8 +154,9 @@ struct AudioSettings {
 };
 
 struct ControlsSettings {
-	ControlsSettings(bool fillMissingBindings=false, const vector<Shortcut>& SRTCS=vector<Shortcut>());
+	ControlsSettings(vec2f SSP=vec2f(4.f, 8.f), bool fillMissingBindings=false, const vector<Shortcut>& SRTCS=vector<Shortcut>());
 
+	vec2f scrollSpeed;
 	vector<Shortcut> shortcuts;
 
 	void FillMissingBindings();

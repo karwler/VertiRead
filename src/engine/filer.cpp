@@ -228,7 +228,12 @@ ControlsSettings Filer::LoadControlsSettings() {
 	for (string& line : lines) {
 		string arg, val, key;
 		splitIniLine(line, &arg, &val, &key);
-		if (arg == "shortcut") {
+		if (arg == "scroll_speed") {
+			vector<string> elems = getWords(val);
+			if (elems.size() > 0) sets.scrollSpeed.x = stof(elems[0]);
+			if (elems.size() > 1) sets.scrollSpeed.y = stof(elems[1]);
+		}
+		else if (arg == "shortcut") {
 			Shortcut* it = sets.shortcut(key);
 			if (!it) {
 				sets.shortcuts.push_back(Shortcut(key, false));
@@ -243,7 +248,9 @@ ControlsSettings Filer::LoadControlsSettings() {
 }
 
 void Filer::SaveSettings(const ControlsSettings& sets) {
-	vector<string> lines;
+	vector<string> lines {
+		"scroll_speed=" + to_string(sets.scrollSpeed.x) + " " + to_string(sets.scrollSpeed.y)
+	};
 	for (const Shortcut& it : sets.shortcuts)
 		for (const SDL_Keysym& key : it.keys)
 			lines.push_back("shortcut[" + it.Name() + "]=" + ktos(key));

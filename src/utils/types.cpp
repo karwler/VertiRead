@@ -107,6 +107,59 @@ vec2i Text::size() const {
 	return World::library()->Fonts()->TextSize(text, height);
 }
 
+// TEXT EDIT
+
+TextEdit::TextEdit(string TXT, int CPOS) :
+	text(TXT),
+	cpos(CPOS)
+{}
+
+int TextEdit::CursorPos() const {
+	return cpos;
+}
+
+void TextEdit::MoveCursor(int mov, bool loop) {
+	cpos += mov;
+	if (loop) {
+		if (cpos < 0)
+			cpos = text.length() + cpos;
+		else if (cpos > text.length())
+			cpos = cpos - text.length();
+	}
+	else {
+		if (cpos < 0)
+			cpos = 0;
+		else if (cpos > text.length())
+			cpos = text.length();
+	}
+	World::engine->SetRedrawNeeded();
+}
+
+string TextEdit::getText() const {
+	return text;
+}
+
+void TextEdit::Add(cstr c) {
+	if (cpos == text.length())
+		text.append(c);
+	else
+		text.insert(cpos, c);
+	cpos++;
+	World::engine->SetRedrawNeeded();
+}
+
+void TextEdit::Delete(bool current) {
+	if (current) {
+		if (cpos != text.length())
+			text.erase(cpos, 1);
+	}
+	else if (cpos != 0) {
+		cpos--;
+		text.erase(cpos, 1);
+	}
+	World::engine->SetRedrawNeeded();
+}
+
 // SHORTCUT
 
 Shortcut::Shortcut(string NAME, bool setDefaultKey, const vector<SDL_Keysym>& KEYS) :
@@ -268,7 +321,8 @@ AudioSettings::AudioSettings(int MV, int SV, float SD) :
 
 // CONTROLS SETTINGS
 
-ControlsSettings::ControlsSettings(bool fillMissingBindings, const vector<Shortcut>& SRTCS) :
+ControlsSettings::ControlsSettings(vec2f SSP, bool fillMissingBindings, const vector<Shortcut>& SRTCS) :
+	scrollSpeed(SSP),
 	shortcuts(SRTCS)
 {
 	if (fillMissingBindings)

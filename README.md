@@ -2,8 +2,9 @@ A so far simple cross-platform manga reader and music player.
 Still in progress.
 
 TO DO
-- make a playlist editor
-- test popup boxes
+- add double click
+- add keyhold text control
+- finish playlist editor
 - add settings menu lists
 - improve mouse wheel scrolling
 - test audio system

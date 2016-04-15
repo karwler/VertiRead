@@ -9,10 +9,11 @@ public:
 	Playlist getPlaylist() const;
 	void LoadPlaylist(string playlist);
 
-	void Rename(string name);
 	void AddSong(string path="");
+	void RenameSong(string path);
 	void DelSong();
 	void AddBook(string name="");
+	void RenameBook(string name);
 	void DelBook();
 
 	bool showSongs;

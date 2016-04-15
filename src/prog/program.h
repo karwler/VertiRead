@@ -28,6 +28,7 @@ public:
 	void Event_Mute();
 
 	// playlist editor events
+	void Event_SwitchButtonClick();
 	void Event_AddButtonClick();
 	void Event_DeleteButtonClick();
 	void Event_EditButtonClick();
@@ -46,6 +47,9 @@ public:
 	void Event_Back();
 
 	// other events
+	void Event_PopupCancel();
+	void Event_PopupOk(PopupChoice* box);
+	void Event_TextEditConfirmed(TextEdit* box);
 	void Event_SelectionSet(void* box);
 	void Event_ScreenMode();
 

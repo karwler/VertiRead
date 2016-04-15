@@ -492,7 +492,6 @@ bool inRect(const SDL_Rect& rect, vec2i point);
 bool needsCrop(const SDL_Rect& crop);
 SDL_Rect getCrop(SDL_Rect item, SDL_Rect frame);
 SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop);
-SDL_Surface* cropScaledSurface(SDL_Surface* surface, vec2i origSize, SDL_Rect& rect, SDL_Rect crop);
 
 // other
 void PrintInfo();

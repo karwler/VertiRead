@@ -28,20 +28,26 @@ protected:
 	string msg;
 };
 
-class PopupText : public PopupMessage {
+class PopupChoice : public PopupMessage {
 public:
-	PopupText(string MSG="", string LIN="", float TO=0.f);
-	virtual ~PopupText();
+	PopupChoice(string MSG="");
+	virtual ~PopupChoice();
 
 	virtual SDL_Rect getCancelButton(Text* txt=nullptr) const;
-
 	SDL_Rect getOkButton(Text* txt=nullptr) const;
+};
+
+class PopupText : public PopupChoice {
+public:
+	PopupText(string MSG="", string LIN="");
+	virtual ~PopupText();
+
 	SDL_Rect getLineBox() const;
 	Text getLine(SDL_Rect* crop=nullptr) const;
+	TextEdit* Line();
 	void Line(string text);
 
 protected:
 	const int lineH;
-	string line;
-
+	TextEdit line;
 };

@@ -71,7 +71,7 @@ void Engine::Cleanup() {
 void Engine::HandleEvent(SDL_Event* event) {
 	// pass event to a specific handler
 	switch (event->type) {
-	case SDL_KEYDOWN: case SDL_KEYUP:
+	case SDL_KEYDOWN:
 		inputSys->KeypressEvent(event->key);
 		break;
 	case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEBUTTONUP:
@@ -82,6 +82,9 @@ void Engine::HandleEvent(SDL_Event* event) {
 		break;
 	case SDL_WINDOWEVENT:
 		winSys->WindowEvent(event->window);
+		break;
+	case SDL_TEXTINPUT:
+		inputSys->TextEvent(event->text);
 		break;
 	case SDL_QUIT:
 		Close();
