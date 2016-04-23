@@ -14,7 +14,9 @@ void Capturer::OnClick() {
 // LINE EDIT
 
 LineEdit::LineEdit(const Object& BASE, string TXT) :
-	Capturer(BASE)
+	Capturer(BASE),
+	editor(TXT),
+	textPos(0)
 {}
 LineEdit::~LineEdit() {}
 
@@ -39,6 +41,9 @@ void LineEdit::OnKeypress(SDL_Scancode key) {
 		break;
 	case SDL_SCANCODE_RETURN:
 		World::program()->Event_TextEditConfirmed(&editor);
+		break;
+	case SDL_SCANCODE_ESCAPE:
+		World::program()->Event_PopupCancel();
 	}
 }
 
@@ -47,7 +52,12 @@ void LineEdit::AddText(cstr text) {
 }
 
 Text LineEdit::getText(vec2i* sideCrop) const {
-	return Text(editor.getText(), Pos(), Size().y, 8);
+	if (sideCrop) {
+		*sideCrop = vec2i(textPos, textPos + Text(editor.getText(), 0, Size().y, 8).size().x - End().x);
+		if (sideCrop->y < 0)
+			sideCrop->y = 0;
+	}
+	return Text(editor.getText(), Pos()-vec2i(textPos, 0), Size().y, 8);
 }
 
 TextEdit* LineEdit::Editor() const {

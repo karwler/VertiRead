@@ -133,6 +133,10 @@ void WindowSys::PassDrawObject(Object* obj) {
 		DrawObject(static_cast<TileBox*>(obj));
 	else if (dynamic_cast<ReaderBox*>(obj))
 		DrawObject(static_cast<ReaderBox*>(obj));
+	else if (dynamic_cast<LineEdit*>(obj))
+		DrawObject(static_cast<LineEdit*>(obj));
+	else if (dynamic_cast<KeyGetter*>(obj))
+		DrawObject(static_cast<KeyGetter*>(obj));
 	else
 		DrawRect(obj->getRect(), obj->color);
 }
@@ -199,6 +203,23 @@ void WindowSys::DrawObject(ReaderBox* obj) {
 		for (ButtonImage& but : obj->PlayerButtons())
 			DrawImage(but.CurTex());
 	}
+}
+
+void WindowSys::DrawObject(LineEdit* obj) {
+	DrawRect(obj->getRect(), obj->color);
+
+	vec2i crop;
+	Text txt = obj->getText(&crop);
+	DrawText(txt, {crop.x, 0, crop.y, 0});
+
+	SDL_Rect rect = obj->getRect();
+	txt.text.resize(obj->Editor()->CursorPos());
+	DrawRect({rect.x+txt.size().x, rect.y, 3, rect.h}, EColor::highlighted);	// draw caret
+}
+
+void WindowSys::DrawObject(KeyGetter* obj) {
+	DrawRect(obj->getRect(), obj->color);
+	DrawText(obj->getText());
 }
 
 void WindowSys::DrawObject(Popup* obj) {

@@ -17,9 +17,9 @@ void Popup::Tick() {
 // POPUP MESSAGE
 
 PopupMessage::PopupMessage(string MSG, int W, int TH, int BH, float TO) :
-	Popup(vec2i(W, TH=BH), TO),
-	title(new Label(Object(Anchor(), Pos(), vec2i(W, TH)), MSG)),
-	cButton(new ButtonText(Object(Anchor(), Pos()+vec2i(0, TH), vec2i(W, BH)), nullptr, "Ok"))
+	Popup(vec2i(W, TH+BH), TO),
+	title(new Label(Object(Anchor(), Pos(), vec2i(W, TH), FIX_SIZ), MSG)),
+	cButton(new ButtonText(Object(Anchor(), Pos()+vec2i(0, TH), vec2i(W, BH), FIX_SIZ), nullptr, "Ok"))
 {}
 PopupMessage::~PopupMessage() {}
 
@@ -35,9 +35,8 @@ SDL_Rect PopupMessage::CancelButton() const {
 
 PopupChoice::PopupChoice(string MSG, int W, int TH, int BH) :
 	PopupMessage(MSG, W, TH, BH, 0.f),
-	kButton(new ButtonText(Object(Anchor(), Pos()+vec2i(W/2, TH), vec2i(W/2, BH)), nullptr, "Ok"))
+	kButton(new ButtonText(Object(Anchor(), Pos()+vec2i(W/2, TH), vec2i(W/2, BH), FIX_SIZ), nullptr, "Ok"))
 {
-	// fix cancel button values
 	cButton->Size(vec2i(cButton->Size().x/2, cButton->Size().y));
 	cButton->text = "Cancel";
 }
@@ -56,12 +55,21 @@ SDL_Rect PopupChoice::OkButton() const {
 // POPUP TEXT
 
 PopupText::PopupText(string MSG, string LIN, int W, int TH, int LH, int BH) :
-	PopupChoice(MSG, W, TH, BH),
-	line(new LineEdit(Object(Anchor(), Pos()+vec2i(0, TH), vec2i(W, LH)), LIN))
+	PopupChoice(MSG, W, TH, BH)
 {
-	// fix button positions
-	cButton->Pos(Pos()+vec2i(0,   TH+BH));
-	kButton->Pos(Pos()+vec2i(W/2, TH+BH));
+	// resize and reposition everything
+	Pos(Anchor()-vec2i(W, TH+LH+BH)/2);
+	End(Anchor()+vec2i(W, TH+LH+BH)/2);
+
+	title->Pos(Pos());
+	title->Size(vec2i(W, TH));
+
+	line = new LineEdit(Object(Anchor(), Pos()+vec2i(0, TH), vec2i(W, LH), FIX_SIZ), LIN);
+
+	cButton->Pos(Pos()+vec2i(0, TH+LH));
+	cButton->Size(vec2i(W/2, BH));
+	kButton->Pos(Pos()+vec2i(W/2, TH+LH));
+	kButton->Size(vec2i(W/2, BH));
 }
 PopupText::~PopupText() {}
 

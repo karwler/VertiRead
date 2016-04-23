@@ -365,6 +365,8 @@ void Scene::SetPopup(Popup* box) {
 	PopupText* poptext = dynamic_cast<PopupText*>(box);
 	if (poptext)
 		World::inputSys()->SetCapture(poptext->Line());
+	else
+		World::inputSys()->SetCapture(nullptr);
 
 	World::engine->SetRedrawNeeded();
 }

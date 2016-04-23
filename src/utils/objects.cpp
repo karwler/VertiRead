@@ -105,9 +105,11 @@ void Button::Callback(void (Program::*func)()) {
 // BUTTON IMAGE
 
 ButtonImage::ButtonImage(const Object& BASE, void (Program::*CALLB)(), const vector<string>& TEXS) :
-	Button(BASE, CALLB),
+	Object(BASE),
 	curTex(0)
 {
+	callback = CALLB;
+
 	for (const string& it : TEXS)
 		texes.push_back(World::library()->getTex(it));
 }
