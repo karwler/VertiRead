@@ -16,78 +16,61 @@ void Popup::Tick() {
 
 // POPUP MESSAGE
 
-PopupMessage::PopupMessage(string MSG, float TO) :
-	Popup(0, TO),
-	msg(MSG),
-	msgH(48), butH(48)
-{
-	ReposResize(vec2i(Text(msg, 0, msgH, 8).size().x, msgH+butH));
-}
+PopupMessage::PopupMessage(string MSG, int W, int TH, int BH, float TO) :
+	Popup(vec2i(W, TH=BH), TO),
+	title(new Label(Object(Anchor(), Pos(), vec2i(W, TH)), MSG)),
+	cButton(new ButtonText(Object(Anchor(), Pos()+vec2i(0, TH), vec2i(W, BH)), nullptr, "Ok"))
+{}
 PopupMessage::~PopupMessage() {}
 
-void PopupMessage::ReposResize(vec2i siz) {
-	siz.x += 20;	// add margin
-	vec2i res = World::winSys()->Resolution();
-	Pos(vec2i((res.x-siz.x)/2, (res.y-siz.y)/2));
-	End(vec2i((res.x+siz.x)/2, (res.y+siz.y)/2));
+vector<Object*> PopupMessage::getObjects() const {
+	return {title, cButton};
 }
 
-SDL_Rect PopupMessage::getCancelButton(Text* txt) const {
-	vec2i pos(Pos().x, End().y-butH);
-	if (txt)
-		*txt = Text("Ok", pos, butH, 8);
-	return {pos.x, pos.y, Size().x, butH};
-}
-
-Text PopupMessage::getMessage() const {
-	return Text(msg, Pos(), msgH, 8);
+SDL_Rect PopupMessage::CancelButton() const {
+	return cButton->getRect();
 }
 
 // POPUP CHOICE
 
-PopupChoice::PopupChoice(string MSG) :
-	PopupMessage(MSG, 0.f)
-{}
+PopupChoice::PopupChoice(string MSG, int W, int TH, int BH) :
+	PopupMessage(MSG, W, TH, BH, 0.f),
+	kButton(new ButtonText(Object(Anchor(), Pos()+vec2i(W/2, TH), vec2i(W/2, BH)), nullptr, "Ok"))
+{
+	// fix cancel button values
+	cButton->Size(vec2i(cButton->Size().x/2, cButton->Size().y));
+	cButton->text = "Cancel";
+}
 PopupChoice::~PopupChoice() {}
 
-SDL_Rect PopupChoice::getCancelButton(Text* txt) const {
-	vec2i pos(Pos().x+Size().x/2, End().y-butH);
-	if (txt)
-		*txt = Text("Cancel", pos, butH, 8);
-	return {pos.x, pos.y, Size().x/2, butH};
+vector<Object*> PopupChoice::getObjects() const {
+	vector<Object*> ret = PopupMessage::getObjects();
+	ret.push_back(kButton);
+	return ret;
 }
 
-SDL_Rect PopupChoice::getOkButton(Text* txt) const {
-	vec2i pos(Pos().x, End().y-butH);
-	if (txt)
-		*txt = Text("Ok", pos, butH, 8);
-	return {pos.x, pos.y, Size().x/2, butH};
+SDL_Rect PopupChoice::OkButton() const {
+	return kButton->getRect();
 }
 
 // POPUP TEXT
 
-PopupText::PopupText(string MSG, string LIN) :
-	PopupChoice(MSG),
-	line(LIN),
-	lineH(48)
+PopupText::PopupText(string MSG, string LIN, int W, int TH, int LH, int BH) :
+	PopupChoice(MSG, W, TH, BH),
+	line(new LineEdit(Object(Anchor(), Pos()+vec2i(0, TH), vec2i(W, LH)), LIN))
 {
-	ReposResize(vec2i(Text(msg, 0, msgH, 8).size().x, msgH+lineH+butH));
+	// fix button positions
+	cButton->Pos(Pos()+vec2i(0,   TH+BH));
+	kButton->Pos(Pos()+vec2i(W/2, TH+BH));
 }
 PopupText::~PopupText() {}
 
-SDL_Rect PopupText::getLineBox() const {
-	return {Pos().x, Pos().y+msgH, Size().x,lineH};
+vector<Object*> PopupText::getObjects() const {
+	vector<Object*> ret = PopupChoice::getObjects();
+	ret.push_back(line);
+	return ret;
 }
 
-Text PopupText::getLine(SDL_Rect* crop) const {
-	// set crop here
-	return Text(line.getText(), vec2i(Pos().x, Pos().y+msgH), lineH, 8);
-}
-
-TextEdit* PopupText::Line() {
-	return &line;
-}
-
-void PopupText::Line(string text) {
-	line = TextEdit(text);
+LineEdit* PopupText::Line() const {
+	return line;
 }

@@ -145,17 +145,6 @@ string btos(bool b) {
 	return b ? "true" : "false";
 }
 
-SDL_Keysym stok(string str) {
-	SDL_Keysym key;
-	key.scancode = SDL_GetScancodeFromName(str.c_str());
-	key.sym = SDL_GetKeyFromScancode(key.scancode);
-	return key;
-}
-
-string ktos(SDL_Keysym key) {
-	return SDL_GetScancodeName(key.scancode);
-}
-
 vec2i pix(vec2f p) {
 	return vec2i(p.x * World::winSys()->Resolution().x, p.y * World::winSys()->Resolution().y);
 }

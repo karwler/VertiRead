@@ -57,6 +57,9 @@
     <ClInclude Include="src\utils\types.h" />
     <ClInclude Include="src\utils\utils.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="src\resource.rc" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{1E4D1B77-2222-4E3E-AE14-6AE698AF002F}</ProjectGuid>
     <RootNamespace>VertiRead</RootNamespace>

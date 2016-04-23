@@ -4,7 +4,7 @@ InputSys::InputSys(const ControlsSettings& SETS) :
 	sets(SETS)
 {
 	SDL_GetMouseState(&lastMousePos.x, &lastMousePos.y);
-	SetCaptureText(nullptr);
+	SetCapture(nullptr);
 }
 
 void InputSys::Tick() {
@@ -12,11 +12,10 @@ void InputSys::Tick() {
 }
 
 void InputSys::KeypressEvent(const SDL_KeyboardEvent& key) {
-	if (key.repeat)	// handle only once pressed keys
-		return;
-	if (textCapture)	// different behaviour when capturing text
-		CheckTextControl(key);
-	else
+	// different behaviour when capturing or not
+	if (captured)
+		captured->OnKeypress(key.keysym.scancode);
+	else if (!key.repeat)	// handle only once pressed keys
 		CheckShortcuts(key);
 }
 
@@ -34,38 +33,18 @@ void InputSys::MouseWheelEvent(const SDL_MouseWheelEvent& wheel) {
 }
 
 void InputSys::TextEvent(const SDL_TextInputEvent& text) {
-	if (textCapture)
-		textCapture->Add(text.text);
+	static_cast<LineEdit*>(captured)->AddText(text.text);
 }
 
 void InputSys::CheckShortcuts(const SDL_KeyboardEvent& key) {
 	// find first shortcut with this key assigned to it
 	for (Shortcut& sc : sets.shortcuts)
-		for (SDL_Keysym& ks : sc.keys)
-			if (ks.scancode == key.keysym.scancode) {
+		for (SDL_Scancode& ks : sc.keys)
+			if (ks == key.keysym.scancode) {
 				// call shortcut function and brek out of all loops
 				(World::program()->*sc.Call())();
 				return;
 			}
-}
-
-void InputSys::CheckTextControl(const SDL_KeyboardEvent& key) {
-	switch (key.keysym.scancode) {
-	case SDL_SCANCODE_LEFT:
-		textCapture->MoveCursor(-1);
-		break;
-	case SDL_SCANCODE_RIGHT:
-		textCapture->MoveCursor(1);
-		break;
-	case SDL_SCANCODE_BACKSPACE:
-		textCapture->Delete(false);
-		break;
-	case SDL_SCANCODE_DELETE:
-		textCapture->Delete(true);
-		break;
-	case SDL_SCANCODE_RETURN:
-		World::program()->Event_TextEditConfirmed(textCapture);
-	}
 }
 
 bool InputSys::isPressed(SDL_Scancode key) {
@@ -94,13 +73,13 @@ vec2i InputSys::mouseMove() const {
 	return mousePos() - lastMousePos;
 }
 
-TextEdit* InputSys::CapturedTextBox() const {
-	return textCapture;
+Capturer* InputSys::CapturedObject() const {
+	return captured;
 }
 
-void InputSys::SetCaptureText(TextEdit* tbox) {
-	textCapture = tbox;
-	if (tbox)
+void InputSys::SetCapture(Capturer* cbox) {
+	captured = cbox;
+	if (dynamic_cast<LineEdit*>(captured))
 		SDL_StartTextInput();
 	else
 		SDL_StopTextInput();

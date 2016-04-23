@@ -8,8 +8,9 @@ public:
 	~Library();
 
 	FontSet* Fonts() const;
+	string getTexPath(string name) const;
 	Texture* getTex(string name) const;
-	string* getSound(string name) const;
+	string getSound(string name) const;
 
 	vector<Texture*> Pictures();
 	void LoadPics(const vector<string>& files);

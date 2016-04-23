@@ -19,14 +19,13 @@ public:
 	ControlsSettings Settings() const;
 	void Settings(const ControlsSettings& settings);
 	vec2i mouseMove() const;
-	TextEdit* CapturedTextBox() const;
-	void SetCaptureText(TextEdit* tbox);
+	Capturer* CapturedObject() const;
+	void SetCapture(Capturer* cbox);
 
 private:
 	ControlsSettings sets;
 	vec2i lastMousePos;
-	TextEdit* textCapture;
+	Capturer* captured;
 
 	void CheckShortcuts(const SDL_KeyboardEvent& key);
-	void CheckTextControl(const SDL_KeyboardEvent& key);
 };

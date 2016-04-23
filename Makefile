@@ -27,6 +27,7 @@ SOURCES = src/engine/audioSys.cpp \
 		src/utils/scrollAreas.cpp \
 		src/utils/types.cpp \
 		src/utils/utils.cpp \
+		src/utils/capturers.cpp \
 		src/prog/browser.cpp \
 		src/prog/playlistEditor.cpp
 
@@ -46,6 +47,7 @@ OBJECTS = bin/audioSys.o \
 		bin/scrollAreas.o \
 		bin/types.o \
 		bin/utils.o \
+		bin/capturers.o \
 		bin/browser.o \
 		bin/playlistEditor.o
 
@@ -102,6 +104,9 @@ bin/types.o: src/utils/types.cpp
 
 bin/utils.o: src/utils/utils.cpp
 	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/utils.o src/utils/utils.cpp
+
+bin/capturers.o: src/utils/capturers.cpp
+	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/capturers.o src/utils/capturers.cpp
 
 bin/browser.o: src/prog/browser.cpp
 	$(CXX) -c $(CFLAGS) $(INCPATH) -o bin/browser.o src/prog/browser.cpp

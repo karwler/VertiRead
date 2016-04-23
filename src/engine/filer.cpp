@@ -1,7 +1,7 @@
 #include "world.h"
 
 EDirFilter operator|(EDirFilter a, EDirFilter b) {
-	return sCast<EDirFilter>(sCast<byte>(a) | sCast<byte>(b));
+	return static_cast<EDirFilter>(static_cast<byte>(a) | static_cast<byte>(b));
 }
 
 byte Filer::CheckDirectories() {
@@ -222,7 +222,7 @@ void Filer::SaveSettings(const AudioSettings& sets) {
 ControlsSettings Filer::LoadControlsSettings() {
 	vector<string> lines;
 	if (!ReadTextFile(dirSets() + "controls.ini", lines))
-		return ControlsSettings(true);
+		return ControlsSettings(vec2f(4.f, 8.f), true);
 
 	ControlsSettings sets;
 	for (string& line : lines) {
@@ -240,7 +240,7 @@ ControlsSettings Filer::LoadControlsSettings() {
 				it = &sets.shortcuts[sets.shortcuts.size() - 1];
 			}
 			for (string word : getWords(val))
-				it->keys.push_back(stok(word));
+				it->keys.push_back(SDL_GetScancodeFromName(word.c_str()));
 		}
 	}
 	sets.FillMissingBindings();
@@ -252,8 +252,8 @@ void Filer::SaveSettings(const ControlsSettings& sets) {
 		"scroll_speed=" + to_string(sets.scrollSpeed.x) + " " + to_string(sets.scrollSpeed.y)
 	};
 	for (const Shortcut& it : sets.shortcuts)
-		for (const SDL_Keysym& key : it.keys)
-			lines.push_back("shortcut[" + it.Name() + "]=" + ktos(key));
+		for (const SDL_Scancode& key : it.keys)
+			lines.push_back("shortcut[" + it.Name() + "]=" + SDL_GetScancodeName(key));
 	WriteTextFile(dirSets() + "controls.ini", lines);
 }
 
@@ -291,9 +291,17 @@ string Filer::dirSets() {
 }
 
 string Filer::dirSnds() {
-	return execDir() + "data"+dsep+"sounds" + dsep;
+	return execDir() + "data"+dsep+"sounds"+dsep;
 }
 
 string Filer::dirTexs() {
-	return execDir() + "data"+dsep+"textures" + dsep;
+	return execDir() + "data"+dsep+"textures"+dsep;
+}
+
+string Filer::dirFonts() {
+#ifdef _WIN32
+	return string(getenv("SystemDrive")) + "\\Windows\\Fonts\\";
+#else
+	return "/usr/share/fonts/truetype/msttcorefonts/";
+#endif
 }

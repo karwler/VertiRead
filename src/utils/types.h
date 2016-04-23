@@ -2,12 +2,18 @@
 
 #include "utils.h"
 
+class Engine;
+class AudioSys;
+class InputSys;
+class WinSys;
+
 class Scene;
 class Program;
 
 class Button;
 class ScrollArea;
 class PopupChoice;
+class Capturer;
 
 typedef void (Program::*progEFunc)();
 
@@ -100,13 +106,13 @@ private:
 
 class Shortcut {
 public:
-	Shortcut(string NAME="", bool setDefaultKey=true, const vector<SDL_Keysym>& KEYS=vector<SDL_Keysym>());
+	Shortcut(string NAME="", bool setDefaultKey=true, const vector<SDL_Scancode>& KEYS=vector<SDL_Scancode>());
 
 	string Name() const;
 	bool SetName(string sname, bool setDefaultKey=true);
 	progEFunc Call() const;
 
-	vector<SDL_Keysym> keys;
+	vector<SDL_Scancode> keys;
 private:
 	string name;
 	void (Program::*call)();
@@ -142,6 +148,7 @@ struct VideoSettings {
 	string renderer;
 	map<EColor, vec4b> colors;
 
+	string FontPath() const;	// returns absolute font path
 	void SetDefaultColors();
 };
 

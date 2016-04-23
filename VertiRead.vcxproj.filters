@@ -124,4 +124,9 @@
       <Filter>Source\Prog</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="src\resource.rc">
+      <Filter>Source</Filter>
+    </ResourceCompile>
+  </ItemGroup>
 </Project>

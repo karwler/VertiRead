@@ -15,6 +15,7 @@ public:
 	SDL_Renderer* Renderer() const;
 	VideoSettings Settings() const;
 	vec2i Resolution() const;
+	static vec2i DesktopResolution();
 	void WindowEvent(const SDL_WindowEvent& window);
 	void Fullscreen(bool on);
 	void VSync(bool on);
@@ -28,15 +29,11 @@ private:
 	int GetRenderDriverIndex();
 
 	void PassDrawObject(Object* obj);
-	void PassDrawObject(Popup* obj);
-
-	void DrawObject(ButtonText* obj);
+	void DrawObject(Label* obj);
 	void DrawObject(ListBox* obj);
 	void DrawObject(TileBox* obj);
 	void DrawObject(ReaderBox* obj);
-	void DrawObject(PopupMessage* obj);
-	void DrawObject(PopupChoice* obj);
-	void DrawObject(PopupText* obj);
+	void DrawObject(Popup* obj);
 
 	void DrawRect(const SDL_Rect& rect, EColor color);
 	void DrawImage(const Image& img, SDL_Rect crop = { 0, 0, 0, 0 });

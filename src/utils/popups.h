@@ -1,13 +1,14 @@
 #pragma once
 
-#include "objects.h"
+#include "capturers.h"
 
 class Popup : public Object {
 public:
-	Popup(vec2i SIZ=vec2i(200, 200), float TO=0.f);
+	Popup(vec2i SIZ=vec2i(500, 200), float TO=0.f);
 	virtual ~Popup();
 
 	void Tick();
+	virtual vector<Object*> getObjects() const = 0;
 
 protected:
 	float timeout;	// 0 means no timeout
@@ -15,39 +16,37 @@ protected:
 
 class PopupMessage : public Popup {
 public:
-	PopupMessage(string MSG="", float TO=0.f);
+	PopupMessage(string MSG="", int W=500, int TH=48, int BH=32, float TO=0.f);
 	virtual ~PopupMessage();
 
-	void ReposResize(vec2i siz);
-
-	virtual SDL_Rect getCancelButton(Text* txt=nullptr) const;
-	Text getMessage() const;
+	virtual vector<Object*> getObjects() const;
+	SDL_Rect CancelButton() const;
 
 protected:
-	const int msgH, butH;
-	string msg;
+	kptr<Label> title;
+	kptr<ButtonText> cButton;
 };
 
 class PopupChoice : public PopupMessage {
 public:
-	PopupChoice(string MSG="");
+	PopupChoice(string MSG="", int W=500, int TH=48, int BH=32);
 	virtual ~PopupChoice();
 
-	virtual SDL_Rect getCancelButton(Text* txt=nullptr) const;
-	SDL_Rect getOkButton(Text* txt=nullptr) const;
+	virtual vector<Object*> getObjects() const;
+	SDL_Rect OkButton() const;
+
+protected:
+	kptr<ButtonText> kButton;
 };
 
 class PopupText : public PopupChoice {
 public:
-	PopupText(string MSG="", string LIN="");
+	PopupText(string MSG="", string LIN="", int W=500, int TH=48, int LH=42, int BH=32);
 	virtual ~PopupText();
 
-	SDL_Rect getLineBox() const;
-	Text getLine(SDL_Rect* crop=nullptr) const;
-	TextEdit* Line();
-	void Line(string text);
+	virtual vector<Object*> getObjects() const;
+	LineEdit* Line() const;
 
 protected:
-	const int lineH;
-	TextEdit line;
+	kptr<LineEdit> line;
 };

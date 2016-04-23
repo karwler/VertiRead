@@ -18,8 +18,9 @@ void Engine::Run() {
 	inputSys = new InputSys(Filer::LoadControlsSettings());
 	kptr<SDL_Event> event = new SDL_Event;
 
+	winSys->SetWindow();
 	Filer::CheckDirectories();
-	scene = new Scene;
+	scene = new Scene;		// initializes program and library
 
 	// initialize scene and timer
 	scene->getProgram()->Event_OpenBookList();

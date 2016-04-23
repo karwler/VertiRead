@@ -44,4 +44,5 @@ public:
 	static string dirSets();
 	static string dirSnds();
 	static string dirTexs();
+	static string dirFonts();
 };

@@ -35,7 +35,8 @@ SOURCES += src/engine/audioSys.cpp \
     src/prog/playlistEditor.cpp \
     src/utils/scrollAreas.cpp \
     src/utils/popups.cpp \
-    src/prog/library.cpp
+    src/prog/library.cpp \
+    src/utils/capturers.cpp
 
 HEADERS += src/engine/audioSys.h \
     src/engine/engine.h \
@@ -53,4 +54,5 @@ HEADERS += src/engine/audioSys.h \
     src/prog/playlistEditor.h \
     src/utils/scrollAreas.h \
     src/utils/popups.h \
-    src/prog/library.h
+    src/prog/library.h \
+    src/utils/capturers.h

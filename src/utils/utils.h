@@ -501,34 +501,12 @@ string getRendererName(int id);
 string wtos(std::wstring wstr);
 bool stob(string str);
 string btos(bool b);
-SDL_Keysym stok(string str);
-string ktos(SDL_Keysym key);
 vec2i pix(vec2f p);
 int pixX(float p);
 int pixY(float p);
 vec2f prc(vec2i p);
 float prcX(int p);
 float prcY(int p);
-
-template<typename A, typename B>
-A sCast(B var) {
-	return static_cast<A>(var);
-}
-
-template<typename A, typename B>
-A dCast(B var) {
-	return dynamic_cast<A>(var);
-}
-
-template<typename A, typename B>
-A rCast(B var) {
-	return reinterpret_cast<A>(var);
-}
-
-template<typename A, typename B>
-A cCast(B var) {
-	return const_cast<A>(var);
-}
 
 template<typename T>
 void Erase(vector<T*>& vec, uint i) {

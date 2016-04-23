@@ -3,40 +3,44 @@
 // reader events
 
 void Program::Event_Up() {
-	if (dCast<ScrollArea*>(World::scene()->FocusedObject())) {
+	ScrollArea* box = dynamic_cast<ScrollArea*>(World::scene()->FocusedObject());
+	if (box) {
 		float spd = World::inputSys()->Settings().scrollSpeed.y;
 		spd *= InputSys::isPressed(SDL_SCANCODE_LSHIFT) ? 3.f : InputSys::isPressed(SDL_SCANCODE_LALT) ? 0.5f : 1.f;
-		sCast<ScrollArea*>(World::scene()->FocusedObject())->ScrollList(-spd*World::engine->deltaSeconds()*100.f);
+		box->ScrollList(-spd*World::engine->deltaSeconds()*100.f);
 	}
 }
 
 void Program::Event_Down() {
-	if (dCast<ScrollArea*>(World::scene()->FocusedObject())) {
+	ScrollArea* box = dynamic_cast<ScrollArea*>(World::scene()->FocusedObject());
+	if (box) {
 		float spd = World::inputSys()->Settings().scrollSpeed.y;
 		spd *= InputSys::isPressed(SDL_SCANCODE_LSHIFT) ? 3.f : InputSys::isPressed(SDL_SCANCODE_LALT) ? 0.5f : 1.f;
-		sCast<ScrollArea*>(World::scene()->FocusedObject())->ScrollList(spd*World::engine->deltaSeconds()*100.f);
+		box->ScrollList(spd*World::engine->deltaSeconds()*100.f);
 	}
 }
 
 void Program::Event_Left() {
-	if (dCast<ReaderBox*>(World::scene()->FocusedObject())) {
+	ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject());
+	if (box) {
 		float spd = World::inputSys()->Settings().scrollSpeed.x;
 		spd *= InputSys::isPressed(SDL_SCANCODE_LSHIFT) ? 3.f : InputSys::isPressed(SDL_SCANCODE_LALT) ? 0.5f : 1.f;
-		sCast<ReaderBox*>(World::scene()->FocusedObject())->ScrollListX(-spd*World::engine->deltaSeconds()*100.f);
+		box->ScrollListX(-spd*World::engine->deltaSeconds()*100.f);
 	}
 }
 
 void Program::Event_Right() {
-	if (dCast<ReaderBox*>(World::scene()->FocusedObject())) {
+	ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject());
+	if (box) {
 		float spd = World::inputSys()->Settings().scrollSpeed.x;
 		spd *= InputSys::isPressed(SDL_SCANCODE_LSHIFT) ? 3.f : InputSys::isPressed(SDL_SCANCODE_LALT) ? 0.5f : 1.f;
-		sCast<ReaderBox*>(World::scene()->FocusedObject())->ScrollListX(spd*World::engine->deltaSeconds()*100.f);
+		box->ScrollListX(spd*World::engine->deltaSeconds()*100.f);
 	}
 }
 
 void Program::Event_PageUp() {
-	if (dCast<ReaderBox*>(World::scene()->FocusedObject())) {
-		ReaderBox* box = sCast<ReaderBox*>(World::scene()->FocusedObject());
+	ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject());
+	if (box) {
 		int i = box->VisiblePictures().x;
 		i -= (i == 0) ? 0 : 1;
 		box->ScrollList(box->getImage(i).pos.y);
@@ -44,8 +48,8 @@ void Program::Event_PageUp() {
 }
 
 void Program::Event_PageDown() {
-	if (dCast<ReaderBox*>(World::scene()->FocusedObject())) {
-		ReaderBox* box = sCast<ReaderBox*>(World::scene()->FocusedObject());
+	ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject());
+	if (box) {
 		int i = box->VisiblePictures().x;
 		i += (i == box->Pictures().size()-1) ? 0 : 1;
 		box->ScrollList(box->getImage(i).pos.y);
@@ -53,23 +57,27 @@ void Program::Event_PageDown() {
 }
 
 void Program::Event_ZoomIn() {
-	if (dCast<ReaderBox*>(World::scene()->FocusedObject()))
-		sCast<ReaderBox*>(World::scene()->FocusedObject())->AddZoom(0.2f);
+	ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject());
+	if (box)
+		static_cast<ReaderBox*>(World::scene()->FocusedObject())->AddZoom(0.2f);
 }
 
 void Program::Event_ZoomOut() {
-	if (dCast<ReaderBox*>(World::scene()->FocusedObject()))
-		sCast<ReaderBox*>(World::scene()->FocusedObject())->AddZoom(-0.2f);
+	ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject());
+	if (box)
+		static_cast<ReaderBox*>(World::scene()->FocusedObject())->AddZoom(-0.2f);
 }
 
 void Program::Event_ZoomReset() {
-	if (dCast<ReaderBox*>(World::scene()->FocusedObject()))
-		sCast<ReaderBox*>(World::scene()->FocusedObject())->Zoom(1.f);
+	ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject());
+	if (box)
+		box->Zoom(1.f);
 }
 
 void Program::Event_CenterView() {
-	if (dCast<ReaderBox*>(World::scene()->FocusedObject()))
-		sCast<ReaderBox*>(World::scene()->FocusedObject())->DragListX(0);
+	ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject());
+	if (box)
+		box->DragListX(0);
 }
 
 void Program::Event_NextDir() {
@@ -235,8 +243,9 @@ void Program::Event_PopupCancel() {
 }
 
 void Program::Event_PopupOk(PopupChoice* box) {
-	if (dCast<PopupText*>(box))
-		Event_TextEditConfirmed(sCast<PopupText*>(box)->Line());
+	PopupText* poptext = dynamic_cast<PopupText*>(box);
+	if (poptext)
+		Event_TextEditConfirmed(poptext->Line()->Editor());
 }
 
 void Program::Event_TextEditConfirmed(TextEdit* box) {
@@ -255,12 +264,12 @@ void Program::Event_TextEditConfirmed(TextEdit* box) {
 			editor->RenameBook(box->getText());
 		World::scene()->SwitchMenu(curMenu, editor);
 	}
-	World::inputSys()->SetCaptureText(nullptr);
+	World::inputSys()->SetCapture(nullptr);
 }
 
 void Program::Event_SelectionSet(void* box) {
 	if (editor)
-		editor->selected = sCast<ScrollArea*>(box)->SelectedItem();
+		editor->selected = static_cast<ScrollArea*>(box)->SelectedItem();
 }
 
 void Program::Event_ScreenMode() {

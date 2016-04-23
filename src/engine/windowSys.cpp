@@ -4,9 +4,7 @@ WindowSys::WindowSys(const VideoSettings& SETS) :
 	window(nullptr),
 	renderer(nullptr),
 	sets(SETS)
-{
-	SetWindow();
-}
+{}
 
 WindowSys::~WindowSys() {
 	DestroyWindow();
@@ -22,6 +20,12 @@ void WindowSys::SetWindow() {
 	window = SDL_CreateWindow("VertRead", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets.resolution.x, sets.resolution.y, flags);
 	if (!window)
 		throw Exception("couldn't create window" + string(SDL_GetError()), 3);
+
+	SDL_Surface* icon = IMG_Load(string(Filer::dirTexs()+"icon.ico").c_str());
+	if (icon) {
+		SDL_SetWindowIcon(window, icon);
+		SDL_FreeSurface(icon);
+	}
 	CreateRenderer();
 }
 
@@ -52,7 +56,7 @@ void WindowSys::DrawObjects(vector<Object*> objects) {
 	for (uint i=0; i!=objects.size()-1; i++)
 		PassDrawObject(objects[i]);									// draw normal widgets
 	if (objects[objects.size()-1])
-		PassDrawObject(sCast<Popup*>(objects[objects.size()-1]));	// last element is a popup
+		DrawObject(static_cast<Popup*>(objects[objects.size()-1]));	// last element is a popup
 	SDL_RenderPresent(renderer);
 }
 
@@ -64,6 +68,12 @@ vec2i WindowSys::Resolution() const {
 	vec2i res;
 	SDL_GetWindowSize(window, &res.x, &res.y);
 	return res;
+}
+
+vec2i WindowSys::DesktopResolution() {
+	SDL_DisplayMode mode;
+	SDL_GetDesktopDisplayMode(0, &mode);
+	return vec2i(mode.w, mode.h);
 }
 
 void WindowSys::WindowEvent(const SDL_WindowEvent& winEvent) {
@@ -113,37 +123,27 @@ int WindowSys::GetRenderDriverIndex() {
 
 void WindowSys::PassDrawObject(Object* obj) {
 	// specific drawing for each object
-	if (dCast<ButtonImage*>(obj))
-		DrawImage(sCast<ButtonImage*>(obj)->CurTex());
-	else if (dCast<ButtonText*>(obj))
-		DrawObject(sCast<ButtonText*>(obj));
-	else if (dCast<ListBox*>(obj))
-		DrawObject(sCast<ListBox*>(obj));
-	else if (dCast<TileBox*>(obj))
-		DrawObject(sCast<TileBox*>(obj));
-	else if (dCast<ReaderBox*>(obj))
-		DrawObject(sCast<ReaderBox*>(obj));
+	if (dynamic_cast<ButtonImage*>(obj))
+		DrawImage(dynamic_cast<ButtonImage*>(obj)->CurTex());
+	else if (dynamic_cast<Label*>(obj))
+		DrawObject(dynamic_cast<Label*>(obj));
+	else if (dynamic_cast<ListBox*>(obj))
+		DrawObject(static_cast<ListBox*>(obj));
+	else if (dynamic_cast<TileBox*>(obj))
+		DrawObject(static_cast<TileBox*>(obj));
+	else if (dynamic_cast<ReaderBox*>(obj))
+		DrawObject(static_cast<ReaderBox*>(obj));
 	else
 		DrawRect(obj->getRect(), obj->color);
 }
 
-void WindowSys::PassDrawObject(Popup* obj) {
-	if (dCast<PopupText*>(obj))
-		DrawObject(sCast<PopupText*>(obj));
-	else if (dCast<PopupChoice*>(obj))
-		DrawObject(sCast<PopupChoice*>(obj));
-	else if (dCast<PopupMessage*>(obj))
-		DrawObject(sCast<PopupMessage*>(obj));
-	else
-		DrawRect(obj->getRect(), obj->color);
-}
-
-void WindowSys::DrawObject(ButtonText* obj) {
+void WindowSys::DrawObject(Label* obj) {
 	DrawRect(obj->getRect(), obj->color);
 
-	int len = obj->getText().size().x;
+	Text txt = obj->getText();
+	int len = txt.size().x;
 	len = len+5 > obj->Size().x ? len - obj->Size().x +10 : 0;		// use len as crop variable
-	DrawText(obj->getText(), {0, 0, len, 0});
+	DrawText(txt, {0, 0, len, 0});
 }
 
 void WindowSys::DrawObject(ListBox* obj) {
@@ -201,34 +201,10 @@ void WindowSys::DrawObject(ReaderBox* obj) {
 	}
 }
 
-void WindowSys::DrawObject(PopupMessage* obj) {
+void WindowSys::DrawObject(Popup* obj) {
 	DrawRect(obj->getRect(), EColor::darkened);
-	DrawText(obj->getMessage());
-
-	Text txt;
-	DrawRect(obj->getCancelButton(&txt), EColor::rectangle);
-	DrawText(txt);
-}
-
-void WindowSys::DrawObject(PopupChoice* obj) {
-	DrawObject(sCast<PopupMessage*>(obj));
-
-	Text txt;
-	DrawRect(obj->getOkButton(&txt), EColor::rectangle);
-	DrawText(txt);
-}
-
-void WindowSys::DrawObject(PopupText* obj) {
-	DrawObject(sCast<PopupChoice*>(obj));
-
-	SDL_Rect crop = {0, 0, 0, 0};
-	Text txt = obj->getLine(&crop);
-	DrawText(txt, crop);
-
-	SDL_Rect rect = obj->getLineBox();
-	Text Txt = txt;
-	Txt.text.resize(obj->Line()->CursorPos());
-	DrawRect({rect.x+Txt.size().x, rect.y, 3, rect.h}, EColor::highlighted);	// draw caret
+	for (Object* it : obj->getObjects())
+		PassDrawObject(it);
 }
 
 void WindowSys::DrawRect(const SDL_Rect& rect, EColor color) {

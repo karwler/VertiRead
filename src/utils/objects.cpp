@@ -1,7 +1,7 @@
 #include "engine/world.h"
 
 EFix operator|(EFix a, EFix b) {
-	return sCast<EFix>(sCast<byte>(a) | sCast<byte>(b));
+	return static_cast<EFix>(static_cast<byte>(a) | static_cast<byte>(b));
 }
 
 // OBJECT
@@ -73,6 +73,18 @@ void Object::Size(vec2i newSize) {
 	end.y = (fix & FIX_EY) ? prcY(Pos().y + newSize.y) : (fix & FIX_H) ? dist.y : prcY(dist.y);
 }
 
+// LABEL
+
+Label::Label(const Object& BASE, string TXT) :
+	Object(BASE),
+	text(TXT)
+{}
+Label::~Label() {}
+
+Text Label::getText() const {
+	return Text(text, Pos()+vec2i(5, 0), Size().y, 8);
+}
+
 // BUTTON
 
 Button::Button(const Object& BASE, void (Program::*CALLB)()) :
@@ -116,11 +128,9 @@ Image ButtonImage::CurTex() const {
 // BUTTON TEXT
 
 ButtonText::ButtonText(const Object& BASE, void (Program::*CALLB)(), string TXT) :
-	Button(BASE, CALLB),
-	label(TXT)
-{}
-ButtonText::~ButtonText() {}
-
-Text ButtonText::getText() const {
-	return Text(label, Pos()+vec2i(5, 0), Size().y, 8);
+	Object(BASE)
+{
+	callback = CALLB;
+	text = TXT;
 }
+ButtonText::~ButtonText() {}

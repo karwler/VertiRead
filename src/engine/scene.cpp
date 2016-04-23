@@ -3,7 +3,7 @@
 
 Scene::Scene() :
 	program(new Program),
-	library(new Library(World::winSys()->Settings().font, Filer::GetTextures(), Filer::GetSounds())),
+	library(new Library(World::winSys()->Settings().FontPath(), Filer::GetTextures(), Filer::GetSounds())),
 	objectHold(nullptr)
 {}
 
@@ -44,7 +44,7 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 
 		// list
 		vector<ListItem*> items;
-		Browser* browser = sCast<Browser*>(dat);
+		Browser* browser = static_cast<Browser*>(dat);
 		for (fs::path& it : browser->ListDirs())
 			items.push_back(new ItemButton(it.filename().string(), "", &Program::Event_OpenBrowser));
 		for (fs::path& it : browser->ListFiles())
@@ -93,7 +93,7 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 		// playlist list
 		ListBox* box = new ListBox(Object(vec2i(110, 0), posT, vec2i(res.x-110, res.y), FIX_POS | FIX_END, EColor::background));
 		vector<ListItem*> items;
-		PlaylistEditor* editor = sCast<PlaylistEditor*>(dat);
+		PlaylistEditor* editor = static_cast<PlaylistEditor*>(dat);
 		if (editor->showSongs) {
 			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SwitchButtonClick, "Books"));
 			for (fs::path& it : editor->getPlaylist().songs)
@@ -137,8 +137,9 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 void Scene::ResizeMenu() {
 	// for some reason the next three lines crash which is why they've been temporarily moved to the WindowSystem::DrawObjects function
 	for (Object* obj : objects) {
-		if (dCast<ScrollArea*>(obj))
-			sCast<ScrollArea*>(obj)->SetValues();
+		ScrollArea* box = dynamic_cast<ScrollArea*>(obj);
+		if (box)
+			box->SetValues();
 	}
 	World::engine->SetRedrawNeeded();
 }
@@ -156,9 +157,10 @@ void Scene::Tick() {
 
 	// handle mousemove
 	if (objectHold) {
-		if (dCast<ReaderBox*>(objectHold) && !sCast<ReaderBox*>(objectHold)->sliderFocused) {
+		ReaderBox* box = dynamic_cast<ReaderBox*>(objectHold);
+		if (box && !box->sliderFocused) {
 			if (InputSys::isPressed(SDL_SCANCODE_LSHIFT))
-				sCast<ReaderBox*>(objectHold)->ScrollListX(-World::inputSys()->mouseMove().x);
+				box->ScrollListX(-World::inputSys()->mouseMove().x);
 			objectHold->ScrollList(-World::inputSys()->mouseMove().y);
 		}
 		else
@@ -167,10 +169,10 @@ void Scene::Tick() {
 
 	// object ticks
 	for (Object* it : objects) {
-		if (dCast<ReaderBox*>(it))
-			sCast<ReaderBox*>(it)->Tick();
-		else if (dCast<Popup*>(it))
-			sCast<Popup*>(it)->Tick();
+		if (dynamic_cast<ReaderBox*>(it))
+			static_cast<ReaderBox*>(it)->Tick();
+		else if (dynamic_cast<Popup*>(it))
+			static_cast<Popup*>(it)->Tick();
 	}
 }
 
@@ -180,12 +182,12 @@ void Scene::OnMouseDown() {
 		if (!inRect(popup->getRect(), InputSys::mousePos()))
 			return;
 
-		if (dCast<PopupChoice*>(popup.get())) {
-			if (CheckPopupChoiceClick(sCast<PopupChoice*>(popup.get())))
+		if (dynamic_cast<PopupChoice*>(popup.get())) {
+			if (CheckPopupChoiceClick(static_cast<PopupChoice*>(popup.get())))
 				return;
 		}
-		else if (dCast<PopupMessage*>(popup.get())) {
-			if (CheckPopupSimpleClick(sCast<PopupMessage*>(popup.get())))
+		else if (dynamic_cast<PopupMessage*>(popup.get())) {
+			if (CheckPopupSimpleClick(static_cast<PopupMessage*>(popup.get())))
 				return;
 		}
 		return;
@@ -196,26 +198,27 @@ void Scene::OnMouseDown() {
 		if (!inRect(obj->getRect(), InputSys::mousePos()))	// skip if mouse isn't over object
 			continue;
 
-		if (dCast<Button*>(obj)) {
-			sCast<Button*>(obj)->OnClick();
+		if (dynamic_cast<Button*>(obj)) {
+			dynamic_cast<Button*>(obj)->OnClick();
 			break;
 		}
-		else if (dCast<ScrollArea*>(obj)) {
-			if (CheckSliderClick(sCast<ScrollArea*>(obj)))	// first check if slider is clicked
+		else if (dynamic_cast<ScrollArea*>(obj)) {
+			if (CheckSliderClick(static_cast<ScrollArea*>(obj)))	// first check if slider is clicked
 				break;
-			else if (dCast<ListBox*>(obj)) {
-				if (CheckListBoxClick(sCast<ListBox*>(obj)))
+			else if (dynamic_cast<ListBox*>(obj)) {
+				if (CheckListBoxClick(static_cast<ListBox*>(obj)))
 					break;
 			}
-			else if (dCast<TileBox*>(obj)) {
-				if (CheckTileBoxClick(sCast<TileBox*>(obj)))
+			else if (dynamic_cast<TileBox*>(obj)) {
+				if (CheckTileBoxClick(static_cast<TileBox*>(obj)))
 					break;
 			}
-			else if (dCast<ReaderBox*>(obj)) {
-				if (CheckReaderBoxClick(sCast<ReaderBox*>(obj)))
+			else if (dynamic_cast<ReaderBox*>(obj)) {
+				if (CheckReaderBoxClick(static_cast<ReaderBox*>(obj)))
 					break;
 			}
 		}
+
 	}
 }
 
@@ -226,8 +229,10 @@ bool Scene::CheckSliderClick(ScrollArea* obj) {
 		if (mPos.y < obj->SliderY() || mPos.y > obj->SliderY() + obj->SliderH())	// if mouse outside of slider but inside bar
 			obj->DragSlider(mPos.y - obj->SliderH() /2);
 		obj->diffSliderMouseY = mPos.y - obj->SliderY();	// get difference between mouse y and slider y
-		if (dCast<ReaderBox*>(obj))
-			sCast<ReaderBox*>(obj)->sliderFocused = true;
+
+		ReaderBox* box = dynamic_cast<ReaderBox*>(obj);
+		if (box)
+			box->sliderFocused = true;
 		return true;
 	}
 	return false;
@@ -280,7 +285,7 @@ bool Scene::CheckReaderBoxClick(ReaderBox* obj) {
 }
 
 bool Scene::CheckPopupSimpleClick(PopupMessage* obj) {
-	if (inRect(obj->getCancelButton(), InputSys::mousePos())) {
+	if (inRect(obj->CancelButton(), InputSys::mousePos())) {
 		SetPopup(nullptr);
 		return true;
 	}
@@ -288,9 +293,9 @@ bool Scene::CheckPopupSimpleClick(PopupMessage* obj) {
 }
 
 bool Scene::CheckPopupChoiceClick(PopupChoice* obj) {
-	if (inRect(obj->getOkButton(), InputSys::mousePos()))
+	if (inRect(obj->OkButton(), InputSys::mousePos()))
 		program->Event_PopupOk(obj);
-	else if (inRect(obj->getCancelButton(), InputSys::mousePos()))
+	else if (inRect(obj->CancelButton(), InputSys::mousePos()))
 		SetPopup(nullptr);
 	else
 		return false;
@@ -300,16 +305,19 @@ bool Scene::CheckPopupChoiceClick(PopupChoice* obj) {
 void Scene::OnMouseUp() {
 	if (objectHold) {
 		// reset values
-		if (dCast<ReaderBox*>(objectHold))
-			sCast<ReaderBox*>(objectHold)->sliderFocused = false;
+		ReaderBox* box = dynamic_cast<ReaderBox*>(objectHold);
+		if (box)
+			box->sliderFocused = false;
+
 		objectHold->diffSliderMouseY = 0;
 		objectHold = nullptr;
 	}
 }
 
 void Scene::OnMouseWheel(int ymov) {
-	if (dCast<ScrollArea*>(FocusedObject()))
-		sCast<ScrollArea*>(FocusedObject())->ScrollList(ymov*-20);
+	ScrollArea* box = dynamic_cast<ScrollArea*>(FocusedObject());
+	if (box)
+		box->ScrollList(ymov*-20);
 }
 
 Program* Scene::getProgram() const {
@@ -332,19 +340,18 @@ Object* Scene::FocusedObject() const {
 
 ListItem* Scene::SelectedButton() const {
 	// check focused object first
-	if (dCast<ScrollArea*>(FocusedObject())) {
-		ListItem* item = sCast<ScrollArea*>(FocusedObject())->selectedItem;
-		if (item && item->selectable())
-			return item;
-	}
+	ScrollArea* sabox = dynamic_cast<ScrollArea*>(FocusedObject());
+	if (sabox)
+		if (sabox->selectedItem && sabox->selectedItem->selectable())
+			return sabox->selectedItem;
 
 	// if failed, look through all objects
-	for (Object* obj : objects)
-		if (dCast<ScrollArea*>(obj)) {
-			ListItem* item = sCast<ScrollArea*>(obj)->selectedItem;
-			if (item && item->selectable())
-				return item;
-		}
+	for (Object* obj : objects) {
+		ScrollArea* box = dynamic_cast<ScrollArea*>(obj);
+		if (box)
+			if (box->selectedItem && box->selectedItem->selectable())
+				return box->selectedItem;
+	}
 	return nullptr;	// nothing found
 }
 
@@ -354,7 +361,10 @@ bool Scene::ShowingPopup() const {
 
 void Scene::SetPopup(Popup* box) {
 	popup = box;
-	if (dCast<PopupText*>(box))
-		World::inputSys()->SetCaptureText(sCast<PopupText*>(box)->Line());
+
+	PopupText* poptext = dynamic_cast<PopupText*>(box);
+	if (poptext)
+		World::inputSys()->SetCapture(poptext->Line());
+
 	World::engine->SetRedrawNeeded();
 }

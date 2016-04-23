@@ -39,7 +39,17 @@ protected:
 	vec2f pos, end;				// distance between boundries and anchor point
 };
 
-class Button : public Object {
+class Label : virtual public Object {
+public:
+	Label(const Object& BASE=Object(), string TXT="");
+	virtual ~Label();
+
+	Text getText() const;
+
+	string text;
+};
+
+class Button : virtual public Object {
 public:
 	Button(const Object& BASE=Object(), void (Program::*CALLB)()=nullptr);
 	virtual ~Button();
@@ -64,12 +74,8 @@ private:
 	uint curTex;
 };
 
-class ButtonText : public Button {
+class ButtonText : public Button, public Label {
 public:
 	ButtonText(const Object& BASE=Object(), void (Program::*CALLB)()=nullptr, string TXT="");
 	virtual ~ButtonText();
-
-	Text getText() const;
-private:
-	string label;
 };

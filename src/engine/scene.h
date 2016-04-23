@@ -2,6 +2,7 @@
 
 #include "utils/scrollAreas.h"
 #include "utils/popups.h"
+#include "utils/capturers.h"
 #include "prog/library.h"
 #include "prog/program.h"
 

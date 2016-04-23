@@ -4,13 +4,24 @@
 Library::Library(string FONT, const map<string, string>& TEXS, const map<string, string>& SNDS)
 {
 	if (!fs::exists(FONT))
-		FONT = VideoSettings().font;	// should give the default font
+		FONT = VideoSettings().FontPath();	// should give the default font
 	fonts = new FontSet(FONT);
 
-	for (const pair<string, string>& it : TEXS)
-		texes.insert(make_pair(it.first, Texture(it.second)));
-	for (const pair<string, string>& it : SNDS)
-		sounds.insert(it);
+	for (const pair<string, string>& it : TEXS) {
+		SDL_Surface* test = IMG_Load(it.second.c_str());	// add only valid textures
+		if (test) {
+			texes.insert(make_pair(it.first, Texture(it.second)));
+			SDL_FreeSurface(test);
+		}
+	}
+
+	for (const pair<string, string>& it : SNDS) {
+		Mix_Chunk* test = Mix_LoadWAV(it.second.c_str());	// add only valid sound files
+		if (test) {
+			sounds.insert(it);
+			Mix_FreeChunk(test);
+		}
+	}
 }
 
 Library::~Library() {
@@ -22,12 +33,16 @@ FontSet* Library::Fonts() const {
 	return fonts;
 }
 
-Texture* Library::getTex(string name) const {
-	return cCast<Texture*>(&texes.at(name));
+string Library::getTexPath(string name) const {
+	return texes.at(name).File();
 }
 
-string* Library::getSound(string name) const {
-	return cCast<string*>(&sounds.at(name));
+Texture* Library::getTex(string name) const {
+	return const_cast<Texture*>(&texes.at(name));
+}
+
+string Library::getSound(string name) const {
+	return sounds.at(name);
 }
 
 vector<Texture*> Library::Pictures() {

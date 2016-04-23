@@ -162,7 +162,7 @@ void TextEdit::Delete(bool current) {
 
 // SHORTCUT
 
-Shortcut::Shortcut(string NAME, bool setDefaultKey, const vector<SDL_Keysym>& KEYS) :
+Shortcut::Shortcut(string NAME, bool setDefaultKey, const vector<SDL_Scancode>& KEYS) :
 	keys(KEYS)
 {
 	SetName(NAME, setDefaultKey);
@@ -173,66 +173,66 @@ string Shortcut::Name() const {
 }
 
 bool Shortcut::SetName(string sname, bool setDefaultKey) {
-	SDL_Keysym defaultKey;
+	SDL_Scancode defaultKey;
 	if (sname == "back") {
 		call = &Program::Event_Back;
-		defaultKey.scancode = SDL_SCANCODE_ESCAPE;
+		defaultKey = SDL_SCANCODE_ESCAPE;
 	}
 	else if (sname == "page_up") {
 		call = &Program::Event_PageUp;
-		defaultKey.scancode = SDL_SCANCODE_PAGEUP;
+		defaultKey = SDL_SCANCODE_PAGEUP;
 	}
 	else if (sname == "page_down") {
 		call = &Program::Event_PageDown;
-		defaultKey.scancode = SDL_SCANCODE_PAGEDOWN;
+		defaultKey = SDL_SCANCODE_PAGEDOWN;
 	}
 	else if (sname == "zoom_in") {
 		call = &Program::Event_ZoomIn;
-		defaultKey.scancode = SDL_SCANCODE_E;
+		defaultKey = SDL_SCANCODE_E;
 	}
 	else if (sname == "zoom_out") {
 		call = &Program::Event_ZoomOut;
-		defaultKey.scancode = SDL_SCANCODE_Q;
+		defaultKey = SDL_SCANCODE_Q;
 	}
 	else if (sname == "zoom_reset") {
 		call = &Program::Event_ZoomReset;
-		defaultKey.scancode = SDL_SCANCODE_R;
+		defaultKey = SDL_SCANCODE_R;
 	}
 	else if (sname == "center_view") {
 		call = &Program::Event_CenterView;
-		defaultKey.scancode = SDL_SCANCODE_C;
+		defaultKey = SDL_SCANCODE_C;
 	}
 	else if (sname == "play_pause") {
 		call = &Program::Event_PlayPause;
-		defaultKey.scancode = SDL_SCANCODE_F;
+		defaultKey = SDL_SCANCODE_F;
 	}
 	else if (sname == "next_song") {
 		call = &Program::Event_NextSong;
-		defaultKey.scancode = SDL_SCANCODE_D;
+		defaultKey = SDL_SCANCODE_D;
 	}
 	else if (sname == "prev_song") {
 		call = &Program::Event_PrevSong;
-		defaultKey.scancode = SDL_SCANCODE_A;
+		defaultKey = SDL_SCANCODE_A;
 	}
 	else if (sname == "volume_up") {
 		call = &Program::Event_VolumeUp;
-		defaultKey.scancode = SDL_SCANCODE_W;
+		defaultKey = SDL_SCANCODE_W;
 	}
 	else if (sname == "volume_down") {
 		call = &Program::Event_VolumeDown;
-		defaultKey.scancode = SDL_SCANCODE_S;
+		defaultKey = SDL_SCANCODE_S;
 	}
 	else if (sname == "next_dir") {
 		call = &Program::Event_NextDir;
-		defaultKey.scancode = SDL_SCANCODE_P;
+		defaultKey = SDL_SCANCODE_P;
 	}
 	else if (sname == "prev_dir") {
 		call = &Program::Event_PrevDir;
-		defaultKey.scancode = SDL_SCANCODE_O;
+		defaultKey = SDL_SCANCODE_O;
 	}
 	else if (sname == "fullscreen") {
 		call = &Program::Event_ScreenMode;
-		defaultKey.scancode = SDL_SCANCODE_L;
+		defaultKey = SDL_SCANCODE_L;
 	}
 	else
 		return false;
@@ -271,17 +271,16 @@ VideoSettings::VideoSettings(bool VS, bool MAX, bool FSC, vec2i RES, string FNT,
 	vsync(VS),
 	maximized(MAX), fullscreen(FSC),
 	resolution(RES),
-	font(FNT),
 	renderer(RNDR)
 {
-	if (font.empty() || !fs::exists(font)) {
-#ifdef _WIN32
-		font = string(getenv("SystemDrive")) + "\\Windows\\Fonts\\Arial.ttf";
-#else
-		font = "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf";
-#endif
-	}
+	string tempFont = fs::path(FNT).is_absolute() ? FNT : Filer::dirFonts() + FNT;
+	font = fs::is_regular_file(tempFont) ? FNT : "Arial.ttf";
+
 	SetDefaultColors();
+}
+
+string VideoSettings::FontPath() const {
+	return fs::path(font).is_absolute() ? font : Filer::dirFonts() + font;
 }
 
 void VideoSettings::SetDefaultColors() {
