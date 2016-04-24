@@ -70,6 +70,9 @@
     <ClCompile Include="src\prog\playlistEditor.cpp">
       <Filter>Source\Prog</Filter>
     </ClCompile>
+    <ClCompile Include="src\utils\capturers.cpp">
+      <Filter>Source\Utils</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\engine\windowSys.h">
@@ -122,6 +125,9 @@
     </ClInclude>
     <ClInclude Include="src\prog\browser.h">
       <Filter>Source\Prog</Filter>
+    </ClInclude>
+    <ClInclude Include="src\utils\capturers.h">
+      <Filter>Source\Utils</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -8,7 +8,7 @@ public:
 	virtual ~Popup();
 
 	void Tick();
-	virtual vector<Object*> getObjects() const = 0;
+	virtual vector<Object*> getObjects() const;
 
 protected:
 	float timeout;	// 0 means no timeout

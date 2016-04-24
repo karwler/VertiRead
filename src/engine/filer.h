@@ -20,7 +20,7 @@ public:
 	static byte CheckDirectories();
 	static bool ReadTextFile(string file, vector<string>& lines);
 	static bool WriteTextFile(string file, const vector<string>& lines);
-	static vector<fs::path> ListDir(fs::path dir, EDirFilter filter, const vector<string>& extFilter=vector<string>());
+	static vector<fs::path> ListDir(fs::path dir, EDirFilter filter, const vector<string>& extFilter={});
 	static vector<string> GetPicsFromDir(fs::path dir);
 
 	static map<string, string> GetTextures();

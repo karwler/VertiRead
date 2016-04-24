@@ -123,10 +123,10 @@ int WindowSys::GetRenderDriverIndex() {
 
 void WindowSys::PassDrawObject(Object* obj) {
 	// specific drawing for each object
-	if (dynamic_cast<ButtonImage*>(obj))
-		DrawImage(dynamic_cast<ButtonImage*>(obj)->CurTex());
-	else if (dynamic_cast<Label*>(obj))
+	if (dynamic_cast<Label*>(obj))
 		DrawObject(dynamic_cast<Label*>(obj));
+	else if (dynamic_cast<ButtonImage*>(obj))
+		DrawImage(dynamic_cast<ButtonImage*>(obj)->CurTex());
 	else if (dynamic_cast<ListBox*>(obj))
 		DrawObject(static_cast<ListBox*>(obj));
 	else if (dynamic_cast<TileBox*>(obj))
@@ -238,7 +238,7 @@ void WindowSys::DrawImage(const Image& img, SDL_Rect crop) {
 		return;
 	SDL_Rect rect = img.getRect();	// the rect the image is gonna be projected on
 	if (needsCrop(crop)) {
-		SDL_Surface* surf = IMG_Load(img.texture->File().c_str());
+		SDL_Surface* surf = IMG_Load(img.texture->File().c_str());							// gotta reload texture as surface
 		SDL_Rect ori = {rect.x, rect.y, surf->w, surf->h};									// proportions of the original image
 		vec2f fac(float(ori.w) / float(rect.w), float(ori.h) / float(rect.h));				// scaling factor
 		rect = {rect.x+crop.x, rect.y+crop.y, rect.w-crop.x-crop.w, rect.h-crop.y-crop.h};	// adjust rect to crop

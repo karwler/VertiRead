@@ -63,7 +63,7 @@ protected:
 
 class ButtonImage : public Button {
 public:
-	ButtonImage(const Object& BASE=Object(), void (Program::*CALLB)()=nullptr, const vector<string>& TEXS=vector<string>());
+	ButtonImage(const Object& BASE=Object(), void (Program::*CALLB)()=nullptr, const vector<string>& TEXS={});
 	virtual ~ButtonImage();
 
 	virtual void OnClick();

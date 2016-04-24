@@ -14,6 +14,10 @@ void Popup::Tick() {
 			World::scene()->SetPopup(nullptr);
 }
 
+vector<Object*> Popup::getObjects() const {
+	return {};
+}
+
 // POPUP MESSAGE
 
 PopupMessage::PopupMessage(string MSG, int W, int TH, int BH, float TO) :
@@ -24,7 +28,10 @@ PopupMessage::PopupMessage(string MSG, int W, int TH, int BH, float TO) :
 PopupMessage::~PopupMessage() {}
 
 vector<Object*> PopupMessage::getObjects() const {
-	return {title, cButton};
+	vector<Object*> ret;
+	ret.push_back(title.get());
+	ret.push_back(cButton.get());
+	return ret;
 }
 
 SDL_Rect PopupMessage::CancelButton() const {

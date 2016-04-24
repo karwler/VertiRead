@@ -36,7 +36,7 @@ protected:
 
 class ListBox : public ScrollArea {
 public:
-	ListBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS=vector<ListItem*>(), int IH=30, int SPC=5, int BARW=10);
+	ListBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS={}, int IH=30, int SPC=5, int BARW=10);
 	virtual ~ListBox();
 
 	virtual void SetValues();
@@ -55,7 +55,7 @@ private:
 
 class TileBox : public ScrollArea {
 public:
-	TileBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS=vector<ListItem*>(), vec2i TS=vec2i(50, 50), int BARW=10);
+	TileBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS={}, vec2i TS=vec2i(50, 50), int BARW=10);
 	virtual ~TileBox();
 
 	virtual void SetValues();
@@ -77,7 +77,7 @@ private:
 
 class ReaderBox : public ScrollArea {
 public:
-	ReaderBox(const vector<Texture*> PICS=vector<Texture*>(), string CURPIC="", float ZOOM=1.f);
+	ReaderBox(const vector<Texture*> PICS={}, string CURPIC="", float ZOOM=1.f);
 	virtual ~ReaderBox();
 
 	virtual void SetValues();

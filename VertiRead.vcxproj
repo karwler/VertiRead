@@ -31,6 +31,7 @@
     <ClCompile Include="src\prog\playlistEditor.cpp" />
     <ClCompile Include="src\prog\program.cpp" />
     <ClCompile Include="src\prog\library.cpp" />
+    <ClCompile Include="src\utils\capturers.cpp" />
     <ClCompile Include="src\utils\items.cpp" />
     <ClCompile Include="src\utils\objects.cpp" />
     <ClCompile Include="src\utils\popups.cpp" />
@@ -50,6 +51,7 @@
     <ClInclude Include="src\prog\playlistEditor.h" />
     <ClInclude Include="src\prog\program.h" />
     <ClInclude Include="src\prog\library.h" />
+    <ClInclude Include="src\utils\capturers.h" />
     <ClInclude Include="src\utils\items.h" />
     <ClInclude Include="src\utils\objects.h" />
     <ClInclude Include="src\utils\popups.h" />

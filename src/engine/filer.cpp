@@ -178,7 +178,7 @@ VideoSettings Filer::LoadVideoSettings() {
 }
 
 void Filer::SaveSettings(const VideoSettings& sets) {
-	vector<string> lines {
+	vector<string> lines = {
 		"vsync=" + btos(sets.vsync),
 		"font=" + sets.font,
 		"renderer=" + sets.renderer,
@@ -211,7 +211,7 @@ AudioSettings Filer::LoadAudioSettings() {
 }
 
 void Filer::SaveSettings(const AudioSettings& sets) {
-	vector<string> lines {
+	vector<string> lines = {
 		"music_vol=" + to_string(sets.musicVolume),
 		"interface_vol=" + to_string(sets.soundVolume),
 		"song_delay=" + to_string(sets.songDelay)
@@ -236,11 +236,10 @@ ControlsSettings Filer::LoadControlsSettings() {
 		else if (arg == "shortcut") {
 			Shortcut* it = sets.shortcut(key);
 			if (!it) {
-				sets.shortcuts.push_back(Shortcut(key, false));
+				sets.shortcuts.push_back(Shortcut(key, true, true));
 				it = &sets.shortcuts[sets.shortcuts.size() - 1];
 			}
-			for (string word : getWords(val))
-				it->keys.push_back(SDL_GetScancodeFromName(word.c_str()));
+			it->key = SDL_GetScancodeFromName(val.c_str());
 		}
 	}
 	sets.FillMissingBindings();
@@ -248,12 +247,11 @@ ControlsSettings Filer::LoadControlsSettings() {
 }
 
 void Filer::SaveSettings(const ControlsSettings& sets) {
-	vector<string> lines {
+	vector<string> lines = {
 		"scroll_speed=" + to_string(sets.scrollSpeed.x) + " " + to_string(sets.scrollSpeed.y)
 	};
 	for (const Shortcut& it : sets.shortcuts)
-		for (const SDL_Scancode& key : it.keys)
-			lines.push_back("shortcut[" + it.Name() + "]=" + SDL_GetScancodeName(key));
+		lines.push_back("shortcut[" + it.name + "]=" + SDL_GetScancodeName(it.key));
 	WriteTextFile(dirSets() + "controls.ini", lines);
 }
 

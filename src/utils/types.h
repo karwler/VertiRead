@@ -15,8 +15,6 @@ class ScrollArea;
 class PopupChoice;
 class Capturer;
 
-typedef void (Program::*progEFunc)();
-
 enum class EMenu : byte {
 	books,
 	browser,
@@ -104,22 +102,19 @@ private:
 	string text;
 };
 
-class Shortcut {
-public:
-	Shortcut(string NAME="", bool setDefaultKey=true, const vector<SDL_Scancode>& KEYS=vector<SDL_Scancode>());
+struct Shortcut {
+	Shortcut(string NAME="", bool setDefaultKey=false, bool setDefaultCall=false);	// automatic initialization
+	Shortcut(string NAME, SDL_Scancode KEY, void (Program::*CALL)());				// manual setting
 
-	string Name() const;
-	bool SetName(string sname, bool setDefaultKey=true);
-	progEFunc Call() const;
-
-	vector<SDL_Scancode> keys;
-private:
 	string name;
+	SDL_Scancode key;
 	void (Program::*call)();
+
+	bool SetDefaultByName(string sname, bool setDefaultKey, bool setDefaultCall);
 };
 
 struct Playlist {
-	Playlist(string NAME="", const vector<fs::path>& SGS=vector<fs::path>(), const vector<string>& BKS=vector<string>());
+	Playlist(string NAME="", const vector<fs::path>& SGS={}, const vector<string>& BKS={});
 
 	string name;
 	vector<fs::path> songs;
@@ -127,7 +122,7 @@ struct Playlist {
 };
 
 struct Directory {
-	Directory(string NAME="", const vector<string>& DIRS=vector<string>(), vector<string> FILS=vector<string>());
+	Directory(string NAME="", const vector<string>& DIRS={}, vector<string> FILS={});
 
 	string name;
 	vector<string> dirs;
@@ -161,7 +156,7 @@ struct AudioSettings {
 };
 
 struct ControlsSettings {
-	ControlsSettings(vec2f SSP=vec2f(4.f, 8.f), bool fillMissingBindings=false, const vector<Shortcut>& SRTCS=vector<Shortcut>());
+	ControlsSettings(vec2f SSP=vec2f(4.f, 8.f), bool fillMissingBindings=false, const vector<Shortcut>& SRTCS={});
 
 	vec2f scrollSpeed;
 	vector<Shortcut> shortcuts;
