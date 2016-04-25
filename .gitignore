@@ -1,9 +1,20 @@
+#directories
 bin
 build
+out
 .vs
 .DS_Store
+*.tlog
+
+# files
 *.o
 *.obj
+*.out
+*.res
+*.ilk
+*.idb
+*.pdb
+*.log
 *.autosave
 *.user
 *.sdf

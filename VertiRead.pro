@@ -11,7 +11,7 @@ DESTDIR = $$OUT_PWD/build/
 OBJECTS_DIR = $$OUT_PWD/bin/
 
 # copy data dir and dependencies
-win32{
+win32 {
     PWD_WIN = $$PWD
     PWD_WIN ~= s,/,\\,g
     DEST_WIN = $$DESTDIR
@@ -24,8 +24,8 @@ win32{
     }
     LIB_WIN ~= s,/,\\,g
 
-    copydll.commands = $$quote(cmd /c copy $${LIB_WIN}*.dll $${DEST_WIN})
-    copydata.commands = $$quote(cmd /c xcopy /e/i/y $${PWD_WIN}data $${DEST_WIN}data)
+    copydll.commands = $$quote(cmd /c copy $$LIB_WIN\\*.dll $${DEST_WIN})
+    copydata.commands = $$quote(cmd /c xcopy /e/i/y $$PWD_WIN\\data $$DEST_WIN\\data)
     QMAKE_EXTRA_TARGETS += copydll
     POST_TARGETDEPS += copydll
 }

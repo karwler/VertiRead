@@ -7,7 +7,8 @@ There's no settings menu yet, so in order to change the settings, you need to ed
 Used libraries are boost_filesystem, SDL2, SDL2_image, SDL2_ttf and SDL2_mixer.  
 
 The Qt project file is configured for Linux, Windows and OS X.  
-The makefile is made only for Linux.  
+Note: When setting the output directory in Qt, don’t name it ‘build’ cause it might mess up the executable’s location.  
+The makefile is only made for Linux.  
 
 ##Linux
 For simple build just use the makefile.  
@@ -29,9 +30,9 @@ The Qt project file is set to use the SDL2 frameworks and boost library.
 Both need to be installed manually.  
 The frameworks’ location is set to /Library/Frameworks.  
 Boost is assumed to be located in /usr/local/include (headers) and /usr/local/lib (objects).  
-Note: When setting the output directory in Qt, don’t call it ‘build’ cause it’ll mess up the executable’s location.  
 
 ##To do list
+- make a proper application for OS X
 - add double click
 - add browser to playlist editor
 - add settings menu lists
