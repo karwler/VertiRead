@@ -141,7 +141,7 @@ struct AudioSettings {
 };
 
 struct ControlsSettings {
-	ControlsSettings(vec2f SSP=vec2f(4.f, 8.f), bool fillMissingBindings=true, const map<string, Shortcut>& SRTCS={}, const map<string, SDL_Scancode>& HLDS={});
+	ControlsSettings(vec2f SSP=vec2f(4.f, 8.f), bool fillMissingBindings=true, const map<string, Shortcut>& SRTCS=map<string, Shortcut>(), const map<string, SDL_Scancode>& HLDS=map<string, SDL_Scancode>());
 
 	vec2f scrollSpeed;
 	map<string, Shortcut> shortcuts;

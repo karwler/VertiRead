@@ -4,7 +4,7 @@
 
 class Library {
 public:
-	Library(string FONT="", const map<string, string>& TEXS={}, const map<string, string>& SNDS={});
+	Library(string FONT="", const map<string, string>& TEXS=map<string, string>(), const map<string, string>& SNDS=map<string, string>());
 	~Library();
 
 	FontSet* Fonts() const;

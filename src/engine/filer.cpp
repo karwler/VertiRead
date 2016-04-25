@@ -268,6 +268,13 @@ string Filer::execDir() {
 	GetModuleFileName (NULL, buffer, MAX_LEN);
 	for (uint i = 0; buffer[i] != 0; i++)
 		path += buffer[i];
+#elif __APPLE__
+	char buffer[MAX_LEN];
+	uint size = sizeof(buffer);
+	if (!_NSGetExecutablePath(buffer, &size))
+		path = buffer;
+	else
+		path = fs::initial_path().string() + "/" + World::args[0];
 #else
 	char buffer[MAX_LEN];
 	int len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
@@ -304,6 +311,8 @@ string Filer::dirTexs() {
 string Filer::dirFonts() {
 #ifdef _WIN32
 	return string(getenv("SystemDrive")) + "\\Windows\\Fonts\\";
+#elif __APPLE__
+	return "/Library/Fonts/";
 #else
 	return "/usr/share/fonts/truetype/msttcorefonts/";
 #endif

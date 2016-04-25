@@ -1,6 +1,9 @@
 bin
 build
 .vs
+.DS_Store
+*.o
+*.obj
 *.autosave
 *.user
 *.sdf

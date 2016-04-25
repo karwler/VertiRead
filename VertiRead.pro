@@ -7,8 +7,8 @@ CONFIG -= app_bundle qt
 win32:TARGET = VertiRead
 unix:TARGET = vertiread
 
-DESTDIR = $$OUT_PWD/build
-OBJECTS_DIR = $$OUT_PWD/bin
+DESTDIR = $$OUT_PWD/build/
+OBJECTS_DIR = $$OUT_PWD/bin/
 
 # copy data dir and dependencies
 win32{
@@ -18,37 +18,59 @@ win32{
     DEST_WIN ~= s,/,\\,g
 
     contains(QT_ARCH, i386) {
-        LIB_WIN = $$PWD/lib/win32
+        LIB_WIN = $$PWD/lib/win32/
     } else {
-        LIB_WIN = $$PWD/lib/win64
+        LIB_WIN = $$PWD/lib/win64/
     }
     LIB_WIN ~= s,/,\\,g
 
-    copydll.commands = $$quote(cmd /c copy $$LIB_WIN\\*.dll $$DEST_WIN)
-    copydata.commands = $$quote(cmd /c xcopy /e/i/y $$PWD_WIN\\data $$DEST_WIN\\data)
+    copydll.commands = $$quote(cmd /c copy $${LIB_WIN}*.dll $${DEST_WIN})
+    copydata.commands = $$quote(cmd /c xcopy /e/i/y $${PWD_WIN}data $${DEST_WIN}data)
     QMAKE_EXTRA_TARGETS += copydll
     POST_TARGETDEPS += copydll
 }
-linux {
+unix {
     copydata.commands = cp -r $$PWD/data $$DESTDIR
 }
 QMAKE_EXTRA_TARGETS += copydata
 POST_TARGETDEPS += copydata
 
-# set dependencies
+# includepaths
+INCLUDEPATH += $$PWD/src/
+win32:INCLUDEPATH += $$PWD/include/
+macx:INCLUDEPATH += /usr/local/include/
+
+# dependencies' directories
 win32 {
-    INCLUDEPATH += $$PWD/include
     LIBS += -L$$LIB_WIN
 }
-linux {
+macx {
+    FRMWK = -F/Library/Frameworks/
+
+    QMAKE_CFLAGS += $$FRMWK
+    QMAKE_CXXFLAGS += $$FRMWK
+
+    LIBS += $$FRMWK
+    LIBS += -L/usr/local/lib/   
+}
+
+# linker flags
+macx {
+    LIBS += -framework SDL2 \
+            -framework SDL2_image \
+            -framework SDL2_ttf \
+            -framework SDL2_mixer
+}
+else {
+    LIBS += -lSDL2 \
+            -lSDL2_image \
+            -lSDL2_ttf \
+            -lSDL2_mixer
+}
+unix {
     LIBS += -lboost_system \
             -lboost_filesystem
 }
-INCLUDEPATH += $$PWD/src
-LIBS += -lSDL2 \
-        -lSDL2_image \
-        -lSDL2_ttf \
-        -lSDL2_mixer
 
 # set sources
 SOURCES += src/engine/audioSys.cpp \

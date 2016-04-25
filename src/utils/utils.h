@@ -1,15 +1,27 @@
 #pragma once
 
+// include system headers
 #ifdef _WIN32
 #include <windows.h>
+#elif __APPLE__
+#include <mach-o/dyld.h>
 #else
 #include <unistd.h>
 #endif
 
+// include SDL
 #include <SDL2/SDL.h>
+#ifdef __APPLE__
+#include <SDL2_image/SDL_image.h>
+#include <SDL2_ttf/SDL_ttf.h>
+#include <SDL2_mixer/SDL_mixer.h>
+#else
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_mixer.h>
+#endif
+
+// include others
 #include <boost/filesystem.hpp>
 #include <fstream>
 #include <iostream>
@@ -33,6 +45,7 @@ using std::string;
 using std::to_string;
 namespace fs = boost::filesystem;
 
+// undefine main cause it sometimes can cause conflicts
 #ifdef main
 #undef main
 #endif
@@ -57,6 +70,7 @@ using ldouble = long double;
 using cchar = const char;
 using cstr = const char*;
 
+// smart pointer
 template<typename T>
 class kptr {
 public:
@@ -127,6 +141,7 @@ private:
 	T* ptr;
 };
 
+// 2D vector
 template<typename T>
 struct kvec2 {
 	kvec2(T X=0, T Y=0) : x(X), y(Y) {}
@@ -234,6 +249,7 @@ struct kvec2 {
 using vec2i = kvec2<int>;
 using vec2f = kvec2<float>;
 
+// 3D vector
 template<typename T>
 struct kvec3 {
 	kvec3(T X=0, T Y=0, T Z=0) : x(X), y(Y), z(Z) {}
@@ -355,6 +371,7 @@ struct kvec3 {
 using vec3b = kvec3<byte>;
 using vec3i = kvec3<int>;
 
+// 4D vector
 template<typename T>
 struct kvec4 {
 	kvec4(T X=0, T Y=0, T Z=0, T A=0) : x(X), y(Y), z(Z), a(A) {}
