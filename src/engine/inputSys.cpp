@@ -20,7 +20,9 @@ void InputSys::KeypressEvent(const SDL_KeyboardEvent& key) {
 }
 
 void InputSys::MouseButtonEvent(const SDL_MouseButtonEvent& button) {
-	if (button.button == SDL_BUTTON_LEFT) {		// so far only left mouse button is neeeded
+	if (dynamic_cast<KeyGetter*>(captured))			// mouse button cancels key capture
+		World::program()->Event_Back();
+	else if (button.button == SDL_BUTTON_LEFT) {	// so far only left mouse button is neeeded
 		if (button.type == SDL_MOUSEBUTTONDOWN)
 			World::scene()->OnMouseDown();
 		else
@@ -38,11 +40,15 @@ void InputSys::TextEvent(const SDL_TextInputEvent& text) {
 
 void InputSys::CheckShortcuts(const SDL_KeyboardEvent& key) {
 	// find first shortcut with this key assigned to it
-	for (Shortcut& sc : sets.shortcuts)
-		if (sc.key == key.keysym.scancode) {
-			(World::program()->*sc.call)();
+	for (const pair<string, Shortcut>& sc : sets.shortcuts)
+		if (sc.second.key == key.keysym.scancode) {
+			(World::program()->*sc.second.call)();
 			break;
 		}
+}
+
+bool InputSys::isPressed(string key) const {
+	return SDL_GetKeyboardState(nullptr)[sets.holders.at(key)];
 }
 
 bool InputSys::isPressed(SDL_Scancode key) {

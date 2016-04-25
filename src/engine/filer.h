@@ -18,7 +18,7 @@ EDirFilter operator|(EDirFilter a, EDirFilter b);
 class Filer {
 public:
 	static byte CheckDirectories();
-	static bool ReadTextFile(string file, vector<string>& lines);
+	static bool ReadTextFile(string file, vector<string>& lines, bool printMessage=true);
 	static bool WriteTextFile(string file, const vector<string>& lines);
 	static vector<fs::path> ListDir(fs::path dir, EDirFilter filter, const vector<string>& extFilter={});
 	static vector<string> GetPicsFromDir(fs::path dir);

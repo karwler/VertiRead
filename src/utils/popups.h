@@ -24,7 +24,7 @@ public:
 
 protected:
 	kptr<Label> title;
-	kptr<ButtonText> cButton;
+	kptr<Label> cButton;
 };
 
 class PopupChoice : public PopupMessage {
@@ -36,7 +36,7 @@ public:
 	SDL_Rect OkButton() const;
 
 protected:
-	kptr<ButtonText> kButton;
+	kptr<Label> kButton;
 };
 
 class PopupText : public PopupChoice {

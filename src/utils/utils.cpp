@@ -104,7 +104,7 @@ SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {
 void PrintInfo() {
 	SDL_version ver;
 	SDL_GetVersion(&ver);
-	cout << "\nSDL version:" << int(ver.minor) << " - " << int(ver.major) << " p" << int(ver.patch) << endl;
+	cout << "\nSDL version: " << int(ver.minor) << " - " << int(ver.major) << " p" << int(ver.patch) << endl;
 	cout << "Platform: " << SDL_GetPlatform() << endl;
 	cout << "CPU count: " << SDL_GetCPUCount() << " - " << SDL_GetCPUCacheLineSize() << endl;
 	cout << "RAM: " << SDL_GetSystemRAM() << "MB" << endl;

@@ -136,3 +136,33 @@ ButtonText::ButtonText(const Object& BASE, void (Program::*CALLB)(), string TXT)
 	text = TXT;
 }
 ButtonText::~ButtonText() {}
+
+Checkbox::Checkbox(const Object& BASE, std::string TXT, bool ON, void (Program::*CALLB)(bool), int SPC) :
+	Object(BASE),
+	label(TXT),
+	on(ON),
+	spacing(SPC),
+	callback(CALLB)
+{}
+Checkbox::~Checkbox() {}
+
+void Checkbox::OnClick() {
+	on = !on;
+	(World::program()->*callback)(on);
+}
+
+SDL_Rect Checkbox::getButton() const {
+	int siz = Size().y;
+	return {End().x-siz, Pos().y, siz, siz};
+}
+
+SDL_Rect Checkbox::getCheckbox(EColor* color) const {
+	if (color)
+		*color = on ? EColor::highlighted : EColor::darkened;
+	SDL_Rect rect = getButton();
+	return {rect.x+spacing, rect.y+spacing, rect.w-spacing*2, rect.h-spacing*2};
+}
+
+Text Checkbox::getText() const {
+	return Text(label, Pos(), Size().y, 8);
+}

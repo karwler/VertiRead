@@ -6,7 +6,7 @@ void Program::Event_Up() {
 	ScrollArea* box = dynamic_cast<ScrollArea*>(World::scene()->FocusedObject());
 	if (box) {
 		float spd = World::inputSys()->Settings().scrollSpeed.y;
-		spd *= InputSys::isPressed(SDL_SCANCODE_LSHIFT) ? 3.f : InputSys::isPressed(SDL_SCANCODE_LALT) ? 0.5f : 1.f;
+		spd *= World::inputSys()->isPressed("fast") ? 3.f : World::inputSys()->isPressed("slow") ? 0.5f : 1.f;
 		box->ScrollList(-spd*World::engine->deltaSeconds()*100.f);
 	}
 }
@@ -15,7 +15,7 @@ void Program::Event_Down() {
 	ScrollArea* box = dynamic_cast<ScrollArea*>(World::scene()->FocusedObject());
 	if (box) {
 		float spd = World::inputSys()->Settings().scrollSpeed.y;
-		spd *= InputSys::isPressed(SDL_SCANCODE_LSHIFT) ? 3.f : InputSys::isPressed(SDL_SCANCODE_LALT) ? 0.5f : 1.f;
+		spd *= World::inputSys()->isPressed("fast") ? 3.f : World::inputSys()->isPressed("slow") ? 0.5f : 1.f;
 		box->ScrollList(spd*World::engine->deltaSeconds()*100.f);
 	}
 }
@@ -24,7 +24,7 @@ void Program::Event_Left() {
 	ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject());
 	if (box) {
 		float spd = World::inputSys()->Settings().scrollSpeed.x;
-		spd *= InputSys::isPressed(SDL_SCANCODE_LSHIFT) ? 3.f : InputSys::isPressed(SDL_SCANCODE_LALT) ? 0.5f : 1.f;
+		spd *= World::inputSys()->isPressed("fast") ? 3.f : World::inputSys()->isPressed("slow") ? 0.5f : 1.f;
 		box->ScrollListX(-spd*World::engine->deltaSeconds()*100.f);
 	}
 }
@@ -33,7 +33,7 @@ void Program::Event_Right() {
 	ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject());
 	if (box) {
 		float spd = World::inputSys()->Settings().scrollSpeed.x;
-		spd *= InputSys::isPressed(SDL_SCANCODE_LSHIFT) ? 3.f : InputSys::isPressed(SDL_SCANCODE_LALT) ? 0.5f : 1.f;
+		spd *= World::inputSys()->isPressed("fast") ? 3.f : World::inputSys()->isPressed("slow") ? 0.5f : 1.f;
 		box->ScrollListX(spd*World::engine->deltaSeconds()*100.f);
 	}
 }
@@ -214,8 +214,10 @@ void Program::Event_OpenControlsSettings() {
 }
 
 void Program::Event_Back() {
-	if (World::scene()->ShowingPopup())
-		Event_PopupCancel();
+	if (World::scene()->getPopup())
+		World::scene()->SetPopup(nullptr);
+	else if (World::inputSys()->CapturedObject())
+		World::inputSys()->SetCapture(nullptr);
 	else if (curMenu == EMenu::reader)
 		World::scene()->SwitchMenu(curMenu = EMenu::browser, browser);
 	else if (curMenu == EMenu::browser) {
@@ -236,19 +238,16 @@ void Program::Event_Back() {
 		World::engine->Close();
 }
 
+void Program::Event_Ok() {
+	if (dynamic_cast<PopupMessage*>(World::scene()->getPopup()))
+		World::scene()->SetPopup(nullptr);
+	else if (curMenu == EMenu::playlists || curMenu == EMenu::plistEditor)
+		Event_EditButtonClick();
+}
+
 // OTHER EVENTS
 
-void Program::Event_PopupCancel() {
-	World::scene()->SetPopup(nullptr);
-}
-
-void Program::Event_PopupOk(PopupChoice* box) {
-	PopupText* poptext = dynamic_cast<PopupText*>(box);
-	if (poptext)
-		Event_TextEditConfirmed(poptext->Line()->Editor());
-}
-
-void Program::Event_TextEditConfirmed(TextEdit* box) {
+void Program::Event_TextCaptureOk(TextEdit* box) {
 	if (curMenu == EMenu::playlists) {
 		if (!fs::exists(Filer::dirPlist() + box->getText())) {
 			Filer::SavePlaylist(Playlist(box->getText()));
@@ -264,6 +263,11 @@ void Program::Event_TextEditConfirmed(TextEdit* box) {
 			editor->RenameBook(box->getText());
 		World::scene()->SwitchMenu(curMenu, editor);
 	}
+	World::inputSys()->SetCapture(nullptr);
+}
+
+void Program::Event_KeyCaptureOk(SDL_Scancode key) {
+	cout << "key pressed" << SDL_GetScancodeName(key) << endl;
 	World::inputSys()->SetCapture(nullptr);
 }
 

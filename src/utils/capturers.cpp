@@ -13,16 +13,21 @@ void Capturer::OnClick() {
 
 // LINE EDIT
 
-LineEdit::LineEdit(const Object& BASE, string TXT) :
+LineEdit::LineEdit(const Object& BASE, string LBL, string TXT, void (Program::*KCALL)(TextEdit*), void (Program::*CCALL)(), ETextType TYPE) :
 	Capturer(BASE),
-	editor(TXT),
+	label(LBL),
+	type(TYPE),
+	editor(CheckText(TXT)),
 	textPos(0)
-{}
+{
+	okCall = KCALL ? KCALL : &Program::Event_TextCaptureOk;
+	cancelCall = CCALL ? CCALL : &Program::Event_Back;
+}
 LineEdit::~LineEdit() {}
 
 void LineEdit::OnClick() {
 	Capturer::OnClick();
-	// set cursor pos
+	editor.SetCursor(0);
 }
 
 void LineEdit::OnKeypress(SDL_Scancode key) {
@@ -40,36 +45,65 @@ void LineEdit::OnKeypress(SDL_Scancode key) {
 		editor.Delete(true);
 		break;
 	case SDL_SCANCODE_RETURN:
-		World::program()->Event_TextEditConfirmed(&editor);
+		(World::program()->*okCall)(&editor);
 		break;
 	case SDL_SCANCODE_ESCAPE:
-		World::program()->Event_PopupCancel();
+		(World::program()->*cancelCall)();
 	}
 }
 
-void LineEdit::AddText(cstr text) {
-	editor.Add(text);
+void LineEdit::AddText(string text) {
+	editor.Add(CheckText(text));
 }
 
 Text LineEdit::getText(vec2i* sideCrop) const {
+	int offset = getLabel().size().x;
 	if (sideCrop) {
-		*sideCrop = vec2i(textPos, textPos + Text(editor.getText(), 0, Size().y, 8).size().x - End().x);
+		*sideCrop = vec2i(textPos, textPos + Text(editor.getText(), 0, Size().y, 8).size().x - offset - End().x);
 		if (sideCrop->y < 0)
 			sideCrop->y = 0;
 	}
-	return Text(editor.getText(), Pos()-vec2i(textPos, 0), Size().y, 8);
+	return Text(editor.getText(), Pos()+vec2i(offset-textPos, 0), Size().y, 8);
+}
+
+Text LineEdit::getLabel() const {
+	return Text(label, Pos(), Size().y, 8);
 }
 
 TextEdit* LineEdit::Editor() const {
 	return const_cast<TextEdit*>(&editor);
 }
 
+string LineEdit::CheckText(string str) {
+	bool foundDot = false;
+	for (uint i=0; i!=str.length(); i++) {
+		if (type == ETextType::integer) {
+			if (str[i] < '0' || str[i] > '9')
+				str.erase(i, 1);
+		}
+		else if (type == ETextType::floating) {
+			if (str[i] == '.') {
+				if (foundDot)
+					str.erase(i, 1);
+				else
+					foundDot = true;
+			}
+			else if (str[i] < '0' || str[i] > '9')
+				str.erase(i, 1);
+		}
+	}
+	return str;
+}
+
 // KEY GETTER
 
-KeyGetter::KeyGetter(const Object& BASE, SDL_Scancode KEY) :
+KeyGetter::KeyGetter(const Object& BASE, string LBL, SDL_Scancode KEY, void (Program::*CALLB)(SDL_Scancode)) :
 	Capturer(BASE),
+	label(LBL),
 	key(KEY)
-{}
+{
+	callback = CALLB ? CALLB : &Program::Event_KeyCaptureOk;
+}
 KeyGetter::~KeyGetter() {}
 
 void KeyGetter::OnClick() {
@@ -79,9 +113,13 @@ void KeyGetter::OnClick() {
 
 void KeyGetter::OnKeypress(SDL_Scancode KEY) {
 	key = KEY;
-	World::inputSys()->SetCapture(nullptr);
+	(World::program()->*callback)(key);
 }
 
 Text KeyGetter::getText() const {
-	return Text(SDL_GetScancodeName(key), Pos(), Size().y, 8);
+	return Text(SDL_GetScancodeName(key), Pos()+vec2i(getLabel().size().x, 0), Size().y, 8);
+}
+
+Text KeyGetter::getLabel() const {
+	return Text(label, Pos(), Size().y, 8);
 }

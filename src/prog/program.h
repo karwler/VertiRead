@@ -3,6 +3,18 @@
 #include "browser.h"
 #include "playlistEditor.h"
 
+enum class EMenu : byte {
+	books,
+	browser,
+	reader,
+	playlists,
+	plistEditor,
+	generalSets,
+	videoSets,
+	audioSets,
+	controlsSets
+};
+
 class Program {
 public:
 	// reader events
@@ -45,11 +57,11 @@ public:
 	void Event_OpenAudioSettings();
 	void Event_OpenControlsSettings();
 	void Event_Back();
+	void Event_Ok();
 
 	// other events
-	void Event_PopupCancel();
-	void Event_PopupOk(PopupChoice* box);
-	void Event_TextEditConfirmed(TextEdit* box);
+	void Event_TextCaptureOk(TextEdit* box);
+	void Event_KeyCaptureOk(SDL_Scancode key);
 	void Event_SelectionSet(void* box);
 	void Event_ScreenMode();
 

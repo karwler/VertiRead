@@ -79,3 +79,20 @@ public:
 	ButtonText(const Object& BASE=Object(), void (Program::*CALLB)()=nullptr, string TXT="");
 	virtual ~ButtonText();
 };
+
+class Checkbox : public Object {
+public:
+	Checkbox(const Object& BASE=Object(), string TXT="", bool ON=false, void (Program::*CALLB)(bool)=nullptr, int SPC=5);
+	virtual ~Checkbox();
+
+	void OnClick();
+	SDL_Rect getButton() const;
+	SDL_Rect getCheckbox(EColor* color=nullptr) const;
+	Text getText() const;
+
+private:
+	string label;
+	bool on;
+	int spacing;
+	void (Program::*callback)(bool);
+};

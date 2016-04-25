@@ -15,18 +15,6 @@ class ScrollArea;
 class PopupChoice;
 class Capturer;
 
-enum class EMenu : byte {
-	books,
-	browser,
-	reader,
-	playlists,
-	plistEditor,
-	generalSets,
-	videoSets,
-	audioSets,
-	controlsSets
-};
-
 enum class EColor : byte {
 	background,
 	rectangle,
@@ -91,10 +79,11 @@ public:
 	TextEdit(string TXT="", int CPOS=0);
 
 	int CursorPos() const;
+	void SetCursor(int pos);
 	void MoveCursor(int mov, bool loop=false);
 
 	string getText() const;
-	void Add(cstr c);
+	void Add(string str);
 	void Delete(bool current);
 
 private:
@@ -103,14 +92,10 @@ private:
 };
 
 struct Shortcut {
-	Shortcut(string NAME="", bool setDefaultKey=false, bool setDefaultCall=false);	// automatic initialization
-	Shortcut(string NAME, SDL_Scancode KEY, void (Program::*CALL)());				// manual setting
+	Shortcut(SDL_Scancode KEY=SDL_SCANCODE_RCTRL, void (Program::*CALL)()=nullptr);
 
-	string name;
 	SDL_Scancode key;
 	void (Program::*call)();
-
-	bool SetDefaultByName(string sname, bool setDefaultKey, bool setDefaultCall);
 };
 
 struct Playlist {
@@ -156,13 +141,15 @@ struct AudioSettings {
 };
 
 struct ControlsSettings {
-	ControlsSettings(vec2f SSP=vec2f(4.f, 8.f), bool fillMissingBindings=false, const vector<Shortcut>& SRTCS={});
+	ControlsSettings(vec2f SSP=vec2f(4.f, 8.f), bool fillMissingBindings=true, const map<string, Shortcut>& SRTCS={}, const map<string, SDL_Scancode>& HLDS={});
 
 	vec2f scrollSpeed;
-	vector<Shortcut> shortcuts;
+	map<string, Shortcut> shortcuts;
+	map<string, SDL_Scancode> holders;
 
 	void FillMissingBindings();
-	Shortcut* shortcut(string name);
+	static Shortcut GetDefaultShortcut(string name);
+	static SDL_Scancode GetDefaultHolder(string name);
 };
 
 struct Exception {

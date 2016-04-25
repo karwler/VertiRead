@@ -75,6 +75,20 @@ private:
 	vector<ListItem*> items;
 };
 
+class ObjectBox : public ScrollArea {
+public:
+	ObjectBox(const Object& BASE=Object(), const vector<Object*>& OBJS={}, int SPC=5, int BARW=10);
+	virtual ~ObjectBox();
+
+	virtual void SetValues();
+	Object* getObject(uint id, SDL_Rect* crop=nullptr) const;
+	void Objects(const vector<Object*>& OBJS);
+	vec2i VisibleObjects() const;
+
+private:
+	vector<Object*> objects;
+};
+
 class ReaderBox : public ScrollArea {
 public:
 	ReaderBox(const vector<Texture*> PICS={}, string CURPIC="", float ZOOM=1.f);

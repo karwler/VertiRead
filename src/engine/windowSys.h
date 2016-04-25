@@ -32,9 +32,11 @@ private:
 	void DrawObject(Label* obj);
 	void DrawObject(ListBox* obj);
 	void DrawObject(TileBox* obj);
+	void DrawObject(ObjectBox* obj);
 	void DrawObject(ReaderBox* obj);
 	void DrawObject(LineEdit* obj);
 	void DrawObject(KeyGetter* obj);
+	void DrawObject(Checkbox* obj);
 	void DrawObject(Popup* obj);
 
 	void DrawRect(const SDL_Rect& rect, EColor color);

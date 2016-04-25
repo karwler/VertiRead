@@ -110,12 +110,16 @@ vec2i Text::size() const {
 // TEXT EDIT
 
 TextEdit::TextEdit(string TXT, int CPOS) :
-	text(TXT),
-	cpos(CPOS)
+	cpos(CPOS),
+	text(TXT)
 {}
 
 int TextEdit::CursorPos() const {
 	return cpos;
+}
+
+void TextEdit::SetCursor(int pos) {
+	cpos = pos < 0 ? 0 : pos > text.length() ? text.length() : pos;
 }
 
 void TextEdit::MoveCursor(int mov, bool loop) {
@@ -139,12 +143,9 @@ string TextEdit::getText() const {
 	return text;
 }
 
-void TextEdit::Add(cstr c) {
-	if (cpos == text.length())
-		text.append(c);
-	else
-		text.insert(cpos, c);
-	cpos++;
+void TextEdit::Add(string str) {
+	text.insert(cpos, str);
+	cpos += str.length();
 	World::engine->SetRedrawNeeded();
 }
 
@@ -162,94 +163,10 @@ void TextEdit::Delete(bool current) {
 
 // SHORTCUT
 
-Shortcut::Shortcut(string NAME, bool setDefaultKey, bool setDefaultCall) :
-	name(""),
-	key(SDL_SCANCODE_ESCAPE),
-	call(nullptr)
-{
-	SetDefaultByName(NAME, setDefaultKey, setDefaultCall);
-}
-
-Shortcut::Shortcut(string NAME, SDL_Scancode KEY, void (Program::*CALL)()) :
+Shortcut::Shortcut(SDL_Scancode KEY, void (Program::*CALL)()) :
 	key(KEY),
-	name(NAME),
 	call(CALL)
 {}
-
-bool Shortcut::SetDefaultByName(string sname, bool setDefaultKey, bool setDefaultCall) {
-	name = sname;
-	SDL_Scancode defaultKey;
-	void (Program::*defaultCall)();
-
-	if (name == "back") {
-		defaultCall = &Program::Event_Back;
-		defaultKey = SDL_SCANCODE_ESCAPE;
-	}
-	else if (name == "page_up") {
-		defaultCall = &Program::Event_PageUp;
-		defaultKey = SDL_SCANCODE_PAGEUP;
-	}
-	else if (name == "page_down") {
-		defaultCall = &Program::Event_PageDown;
-		defaultKey = SDL_SCANCODE_PAGEDOWN;
-	}
-	else if (name == "zoom_in") {
-		defaultCall = &Program::Event_ZoomIn;
-		defaultKey = SDL_SCANCODE_E;
-	}
-	else if (name == "zoom_out") {
-		defaultCall = &Program::Event_ZoomOut;
-		defaultKey = SDL_SCANCODE_Q;
-	}
-	else if (name == "zoom_reset") {
-		defaultCall = &Program::Event_ZoomReset;
-		defaultKey = SDL_SCANCODE_R;
-	}
-	else if (name == "center_view") {
-		defaultCall = &Program::Event_CenterView;
-		defaultKey = SDL_SCANCODE_C;
-	}
-	else if (name == "play_pause") {
-		defaultCall = &Program::Event_PlayPause;
-		defaultKey = SDL_SCANCODE_F;
-	}
-	else if (name == "next_song") {
-		defaultCall = &Program::Event_NextSong;
-		defaultKey = SDL_SCANCODE_D;
-	}
-	else if (name == "prev_song") {
-		defaultCall = &Program::Event_PrevSong;
-		defaultKey = SDL_SCANCODE_A;
-	}
-	else if (name == "volume_up") {
-		defaultCall = &Program::Event_VolumeUp;
-		defaultKey = SDL_SCANCODE_W;
-	}
-	else if (name == "volume_down") {
-		defaultCall = &Program::Event_VolumeDown;
-		defaultKey = SDL_SCANCODE_S;
-	}
-	else if (name == "next_dir") {
-		defaultCall = &Program::Event_NextDir;
-		defaultKey = SDL_SCANCODE_P;
-	}
-	else if (name == "prev_dir") {
-		defaultCall = &Program::Event_PrevDir;
-		defaultKey = SDL_SCANCODE_O;
-	}
-	else if (name == "fullscreen") {
-		defaultCall = &Program::Event_ScreenMode;
-		defaultKey = SDL_SCANCODE_L;
-	}
-	else
-		return false;
-
-	if (setDefaultKey)
-		key = defaultKey;
-	if (setDefaultCall)
-		call = defaultCall;
-	return true;
-}
 
 // PLAYLIST
 
@@ -325,26 +242,77 @@ AudioSettings::AudioSettings(int MV, int SV, float SD) :
 
 // CONTROLS SETTINGS
 
-ControlsSettings::ControlsSettings(vec2f SSP, bool fillMissingBindings, const vector<Shortcut>& SRTCS) :
+ControlsSettings::ControlsSettings(vec2f SSP, bool fillMissingBindings, const map<string, Shortcut>& SRTCS, const map<string, SDL_Scancode>& HLDS) :
 	scrollSpeed(SSP),
-	shortcuts(SRTCS)
+	shortcuts(SRTCS),
+	holders(HLDS)
 {
 	if (fillMissingBindings)
 		FillMissingBindings();
 }
 
 void ControlsSettings::FillMissingBindings() {
-	vector<string> names = {"back", "page_up", "page_down", "zoom_in", "zoom_out", "zoom_reset", "center_view", "play_pause", "next_song", "prev_song", "volume_up", "volume_down", "next_dir", "prev_dir", "fullscreen"};
+	vector<string> names = {"back", "ok", "page_up", "page_down", "zoom_in", "zoom_out", "zoom_reset", "center_view", "play_pause", "next_song", "prev_song", "volume_up", "volume_down", "next_dir", "prev_dir", "fullscreen"};
 	for (string& it : names)
-		if (!shortcut(it))
-			shortcuts.push_back(Shortcut(it, true, true));
+		if (shortcuts.count(it) == 0)
+			shortcuts.insert(make_pair(it, GetDefaultShortcut(it)));
+
+	names = {"up", "down", "left", "right", "fast", "slow"};
+	for (string& it : names)
+		if (holders.count(it) == 0)
+			holders.insert(make_pair(it, GetDefaultHolder(it)));
 }
 
-Shortcut* ControlsSettings::shortcut(string name) {
-	for (Shortcut& it : shortcuts)
-		if (it.name == name)
-			return &it;
-	return nullptr;
+Shortcut ControlsSettings::GetDefaultShortcut(string name) {
+	if (name == "back")
+		return Shortcut(SDL_SCANCODE_ESCAPE, &Program::Event_Back);
+	else if (name == "ok")
+		return Shortcut(SDL_SCANCODE_RETURN, &Program::Event_Ok);
+	else if (name == "page_up")
+		return Shortcut(SDL_SCANCODE_PAGEUP, &Program::Event_PageUp);
+	else if (name == "page_down")
+		return Shortcut(SDL_SCANCODE_PAGEDOWN, &Program::Event_PageDown);
+	else if (name == "zoom_in")
+		return Shortcut(SDL_SCANCODE_E, &Program::Event_ZoomIn);
+	else if (name == "zoom_out")
+		return Shortcut(SDL_SCANCODE_Q, &Program::Event_ZoomOut);
+	else if (name == "zoom_reset")
+		return Shortcut(SDL_SCANCODE_R, &Program::Event_ZoomReset);
+	else if (name == "center_view")
+		return Shortcut(SDL_SCANCODE_C, &Program::Event_CenterView);
+	else if (name == "play_pause")
+		return Shortcut(SDL_SCANCODE_F, &Program::Event_PlayPause);
+	else if (name == "next_song")
+		return Shortcut(SDL_SCANCODE_D, &Program::Event_NextSong);
+	else if (name == "prev_song")
+		return Shortcut(SDL_SCANCODE_A, &Program::Event_PrevSong);
+	else if (name == "volume_up")
+		return Shortcut(SDL_SCANCODE_W, &Program::Event_VolumeUp);
+	else if (name == "volume_down")
+		return Shortcut(SDL_SCANCODE_S, &Program::Event_VolumeDown);
+	else if (name == "next_dir")
+		return Shortcut(SDL_SCANCODE_P, &Program::Event_NextDir);
+	else if (name == "prev_dir")
+		return Shortcut(SDL_SCANCODE_O, &Program::Event_PrevDir);
+	else if (name == "fullscreen")
+		return Shortcut(SDL_SCANCODE_L, &Program::Event_ScreenMode);
+	return Shortcut(SDL_SCANCODE_RCTRL, nullptr);
+}
+
+SDL_Scancode ControlsSettings::GetDefaultHolder(string name) {
+	if (name == "up")
+		return SDL_SCANCODE_UP;
+	else if (name == "down")
+		return SDL_SCANCODE_DOWN;
+	else if (name == "left")
+		return SDL_SCANCODE_LEFT;
+	else if (name == "right")
+		return SDL_SCANCODE_RIGHT;
+	else if (name == "fast")
+		return SDL_SCANCODE_LSHIFT;
+	else if (name == "slow")
+		return SDL_SCANCODE_LALT;
+	return SDL_SCANCODE_RCTRL;
 }
 
 // EXCEPTION

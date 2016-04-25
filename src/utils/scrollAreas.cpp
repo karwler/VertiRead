@@ -189,6 +189,53 @@ vec2i TileBox::Dim() const {
 	return dim;
 }
 
+// OBJECTS BOX
+
+ObjectBox::ObjectBox(const Object& BASE, const vector<Object*>& OBJS, int SPC, int BARW) :
+	ScrollArea(BASE, SPC, BARW)
+{
+	if (!OBJS.empty())
+		Objects(OBJS);
+}
+
+ObjectBox::~ObjectBox() {
+	Clear(objects);
+}
+
+void ObjectBox::SetValues() {
+	listH = 0;
+	for (Object* obj : objects)
+		listH += obj->Size().y + spacing;
+	ScrollArea::SetValues();
+}
+
+Object* ObjectBox::getObject(uint id, SDL_Rect* crop) const {
+	if (crop)
+		*crop = getCrop(objects[id]->getRect(), getRect());
+	return objects[id];
+}
+
+void ObjectBox::Objects(const vector<Object*>& OBJS) {
+	Clear(objects);
+	objects = OBJS;
+	SetValues();
+}
+
+vec2i ObjectBox::VisibleObjects() const {
+	vec2i interval(0, objects.size()-1);
+	for (int i=interval.x; i<=interval.y; i++)
+		if (objects[i]->End().y >= listY) {
+			interval.x = i;
+			break;
+		}
+	for (int i=interval.x; i<=interval.y; i++)
+		if (objects[i]->Pos().y > listY + Size().y) {
+			interval.y = i-1;
+			break;
+		}
+	return interval;
+}
+
 // READER BOX
 
 ReaderBox::ReaderBox(const vector<Texture*> PICS, string CURPIC, float ZOOM) :
@@ -354,12 +401,11 @@ vec2i ReaderBox::VisiblePictures() const {
 			interval.x = i;
 			break;
 		}
-	for (int i=interval.x; i<=interval.y; i++) {
+	for (int i=interval.x; i<=interval.y; i++)
 		if (pics[i].pos.y*zoom > listY + Size().y) {
 			interval.y = i-1;
 			break;
 		}
-	}
 	return interval;
 }
 

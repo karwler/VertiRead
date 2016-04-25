@@ -23,7 +23,7 @@ public:
 	vector<Object*> Objects() const;
 	Object* FocusedObject() const;			// returns pointer to object focused by keyboard
 	ListItem* SelectedButton() const;		// find scroll area with selectable items and get the first selected one (returns nullptr if nothing found)
-	bool ShowingPopup() const;
+	Popup* getPopup() const;
 	void SetPopup(Popup* box);				// use nullptr to close
 
 private:

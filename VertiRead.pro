@@ -1,23 +1,56 @@
+# config
 TEMPLATE = app
-TARGET = vertiread
 CONFIG += c++11
 CONFIG -= app_bundle qt
 
-copydata.commands = $(COPY_DIR) $$PWD/data $$OUT_PWD
-first.depends = $(first) copydata
-export(first.depends)
-export(copydata.commands)
-QMAKE_EXTRA_TARGETS += first copydata
+# output
+win32:TARGET = VertiRead
+unix:TARGET = vertiread
 
-INCLUDEPATH += src
+DESTDIR = $$OUT_PWD/build
+OBJECTS_DIR = $$OUT_PWD/bin
 
+# copy data dir and dependencies
+win32{
+    PWD_WIN = $$PWD
+    PWD_WIN ~= s,/,\\,g
+    DEST_WIN = $$DESTDIR
+    DEST_WIN ~= s,/,\\,g
+
+    contains(QT_ARCH, i386) {
+        LIB_WIN = $$PWD/lib/win32
+    } else {
+        LIB_WIN = $$PWD/lib/win64
+    }
+    LIB_WIN ~= s,/,\\,g
+
+    copydll.commands = $$quote(cmd /c copy $$LIB_WIN\\*.dll $$DEST_WIN)
+    copydata.commands = $$quote(cmd /c xcopy /e/i/y $$PWD_WIN\\data $$DEST_WIN\\data)
+    QMAKE_EXTRA_TARGETS += copydll
+    POST_TARGETDEPS += copydll
+}
+linux {
+    copydata.commands = cp -r $$PWD/data $$DESTDIR
+}
+QMAKE_EXTRA_TARGETS += copydata
+POST_TARGETDEPS += copydata
+
+# set dependencies
+win32 {
+    INCLUDEPATH += $$PWD/include
+    LIBS += -L$$LIB_WIN
+}
+linux {
+    LIBS += -lboost_system \
+            -lboost_filesystem
+}
+INCLUDEPATH += $$PWD/src
 LIBS += -lSDL2 \
         -lSDL2_image \
         -lSDL2_ttf \
-        -lSDL2_mixer \
-        -lboost_system \
-        -lboost_filesystem
+        -lSDL2_mixer
 
+# set sources
 SOURCES += src/engine/audioSys.cpp \
     src/engine/engine.cpp \
     src/engine/filer.cpp \
@@ -56,3 +89,5 @@ HEADERS += src/engine/audioSys.h \
     src/utils/popups.h \
     src/prog/library.h \
     src/utils/capturers.h
+
+win32:RC_FILE = src/resource.rc

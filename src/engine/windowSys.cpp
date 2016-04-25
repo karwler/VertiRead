@@ -131,12 +131,16 @@ void WindowSys::PassDrawObject(Object* obj) {
 		DrawObject(static_cast<ListBox*>(obj));
 	else if (dynamic_cast<TileBox*>(obj))
 		DrawObject(static_cast<TileBox*>(obj));
+	else if (dynamic_cast<ObjectBox*>(obj))
+		DrawObject(static_cast<ObjectBox*>(obj));
 	else if (dynamic_cast<ReaderBox*>(obj))
 		DrawObject(static_cast<ReaderBox*>(obj));
 	else if (dynamic_cast<LineEdit*>(obj))
 		DrawObject(static_cast<LineEdit*>(obj));
 	else if (dynamic_cast<KeyGetter*>(obj))
 		DrawObject(static_cast<KeyGetter*>(obj));
+	else if (dynamic_cast<Checkbox*>(obj))
+		DrawObject(static_cast<Checkbox*>(obj));
 	else
 		DrawRect(obj->getRect(), obj->color);
 }
@@ -182,6 +186,15 @@ void WindowSys::DrawObject(TileBox* obj) {
 	DrawRect(obj->Slider(), EColor::highlighted);
 }
 
+void WindowSys::DrawObject(ObjectBox* obj) {
+	vec2i interval = obj->VisibleObjects();
+	for (int i=interval.x; i<=interval.y; i++)
+		PassDrawObject(obj->getObject(i));
+
+	DrawRect(obj->Bar(), EColor::darkened);
+	DrawRect(obj->Slider(), EColor::highlighted);
+}
+
 void WindowSys::DrawObject(ReaderBox* obj) {
 	vec2i interval = obj->VisiblePictures();
 	for (int i=interval.x; i<=interval.y; i++) {
@@ -207,6 +220,7 @@ void WindowSys::DrawObject(ReaderBox* obj) {
 
 void WindowSys::DrawObject(LineEdit* obj) {
 	DrawRect(obj->getRect(), obj->color);
+	DrawText(obj->getLabel());
 
 	vec2i crop;
 	Text txt = obj->getText(&crop);
@@ -219,7 +233,17 @@ void WindowSys::DrawObject(LineEdit* obj) {
 
 void WindowSys::DrawObject(KeyGetter* obj) {
 	DrawRect(obj->getRect(), obj->color);
+	DrawText(obj->getLabel());
 	DrawText(obj->getText());
+}
+
+void WindowSys::DrawObject(Checkbox* obj) {
+	DrawRect(obj->getRect(), obj->color);
+	DrawText(obj->getText());
+
+	EColor color;
+	SDL_Rect rect = obj->getCheckbox(&color);
+	DrawRect(rect, color);
 }
 
 void WindowSys::DrawObject(Popup* obj) {

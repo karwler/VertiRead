@@ -23,10 +23,11 @@ byte Filer::CheckDirectories() {
 	return retval;
 }
 
-bool Filer::ReadTextFile(string file, vector<string>& lines) {
+bool Filer::ReadTextFile(string file, vector<string>& lines, bool printMessage) {
 	std::ifstream ifs(file.c_str());
 	if (!ifs.good()) {
-		cerr << "couldn't read file " << file << endl;
+		if (printMessage)
+			cerr << "couldn't read file " << file << endl;
 		return false;
 	}
 	lines.clear();
@@ -105,26 +106,33 @@ Playlist Filer::LoadPlaylist(string name) {
 	for (string& line : lines) {
 		string arg, val;
 		splitIniLine(line, &arg, &val);
-		if (arg == "file")
-			plist.songs.push_back(val);
-		else if (arg == "book")
-			plist.books.push_back(val);
+		if (arg == "books") {
+			vector<string> elems = getWords(val);
+			for (string& it : elems)
+				plist.books.push_back(it);
+		}
+		else
+			plist.songs.push_back(line);
 	}
 	return plist;
 }
 
 void Filer::SavePlaylist(const Playlist& plist) {
-	vector<string> lines;
-	for (const fs::path& file : plist.songs)
-		lines.push_back("file=" + file.string());
+	vector<string> lines = {
+		"books="
+	};
 	for (const string& name : plist.books)
-		lines.push_back("book=" + name);
+		lines[0] += name;
+
+	for (const fs::path& file : plist.songs)
+		lines.push_back(file.string());
+
 	WriteTextFile(dirPlist() + plist.name, lines);
 }
 
 GeneralSettings Filer::LoadGeneralSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(dirSets() + "general.ini", lines))
+	if (!ReadTextFile(dirSets() + "general.ini", lines, false))
 		return GeneralSettings();
 
 	GeneralSettings sets;
@@ -144,7 +152,7 @@ void Filer::SaveSettings(const GeneralSettings& sets) {
 
 VideoSettings Filer::LoadVideoSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(dirSets() + "video.ini", lines))
+	if (!ReadTextFile(dirSets() + "video.ini", lines, false))
 		return VideoSettings();
 
 	VideoSettings sets;
@@ -193,7 +201,7 @@ void Filer::SaveSettings(const VideoSettings& sets) {
 
 AudioSettings Filer::LoadAudioSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(dirSets() + "audio.ini", lines))
+	if (!ReadTextFile(dirSets() + "audio.ini", lines, false))
 		return AudioSettings();
 
 	AudioSettings sets;
@@ -221,8 +229,8 @@ void Filer::SaveSettings(const AudioSettings& sets) {
 
 ControlsSettings Filer::LoadControlsSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(dirSets() + "controls.ini", lines))
-		return ControlsSettings(vec2f(4.f, 8.f), true);
+	if (!ReadTextFile(dirSets() + "controls.ini", lines, false))
+		return ControlsSettings();
 
 	ControlsSettings sets;
 	for (string& line : lines) {
@@ -233,16 +241,11 @@ ControlsSettings Filer::LoadControlsSettings() {
 			if (elems.size() > 0) sets.scrollSpeed.x = stof(elems[0]);
 			if (elems.size() > 1) sets.scrollSpeed.y = stof(elems[1]);
 		}
-		else if (arg == "shortcut") {
-			Shortcut* it = sets.shortcut(key);
-			if (!it) {
-				sets.shortcuts.push_back(Shortcut(key, true, true));
-				it = &sets.shortcuts[sets.shortcuts.size() - 1];
-			}
-			it->key = SDL_GetScancodeFromName(val.c_str());
-		}
+		else if (arg == "shortcut")
+			sets.shortcuts[key].key = SDL_GetScancodeFromName(val.c_str());
+		else if (arg == "holder")
+			sets.holders[key] = SDL_GetScancodeFromName(val.c_str());
 	}
-	sets.FillMissingBindings();
 	return sets;
 }
 
@@ -250,8 +253,10 @@ void Filer::SaveSettings(const ControlsSettings& sets) {
 	vector<string> lines = {
 		"scroll_speed=" + to_string(sets.scrollSpeed.x) + " " + to_string(sets.scrollSpeed.y)
 	};
-	for (const Shortcut& it : sets.shortcuts)
-		lines.push_back("shortcut[" + it.name + "]=" + SDL_GetScancodeName(it.key));
+	for (const pair<string, Shortcut>& it : sets.shortcuts)
+		lines.push_back("shortcut[" + it.first + "]=" + SDL_GetScancodeName(it.second.key));
+	for (const pair<string, SDL_Scancode>& it : sets.holders)
+		lines.push_back("holder[" + it.first + "]=" + SDL_GetScancodeName(it.second));
 	WriteTextFile(dirSets() + "controls.ini", lines);
 }
 
