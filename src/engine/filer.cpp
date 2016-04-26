@@ -260,7 +260,11 @@ void Filer::SaveSettings(const ControlsSettings& sets) {
 	WriteTextFile(dirSets() + "controls.ini", lines);
 }
 
+#ifdef __APPLE__
+string Filer::execDir(bool raw) {
+#else
 string Filer::execDir() {
+#endif
 	const int MAX_LEN = 4096;
 	fs::path path;
 #ifdef _WIN32
@@ -275,6 +279,14 @@ string Filer::execDir() {
 		path = buffer;
 	else
 		path = fs::initial_path().string() + "/" + World::args[0];
+
+	if (!raw) {
+		string test = path.string();
+		int pos = findString(test, ".app/");	// if running in a package
+		for (int i=pos; i>=0; i--)
+			if (test[i] == '/')
+				return test.substr(0, i+1);
+	}
 #else
 	char buffer[MAX_LEN];
 	int len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
@@ -297,23 +309,55 @@ string Filer::dirPlist() {
 }
 
 string Filer::dirSets() {
+#ifdef __APPLE__
+	return execDir(true) + "settings/";
+#else
 	return execDir() + "settings" + dsep;
+#endif
 }
 
 string Filer::dirSnds() {
+#ifdef __APPLE__
+	return execDir(true) + "data/sounds/";
+#else
 	return execDir() + "data"+dsep+"sounds"+dsep;
+#endif
 }
 
 string Filer::dirTexs() {
+#ifdef __APPLE__
+	return execDir(true) + "data/textures/";
+#else
 	return execDir() + "data"+dsep+"textures"+dsep;
+#endif
 }
 
-string Filer::dirFonts() {
+vector<string> Filer::dirFonts() {
 #ifdef _WIN32
-	return string(getenv("SystemDrive")) + "\\Windows\\Fonts\\";
+	return {string(getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
 #elif __APPLE__
-	return "/Library/Fonts/";
+	return {string(getenv("HOME"))+"/Library/Fonts/", "/Library/Fonts/", "/System/Library/Fonts/", "/Network/Library/Fonts/"};
 #else
-	return "/usr/share/fonts/truetype/msttcorefonts/";
+	return {"/usr/share/fonts/", "/usr/share/fonts/truetype/msttcorefonts/"};
 #endif
+}
+
+bool Filer::findFont(string font, string* dir) {
+	if (fs::path(font).is_absolute()) {	// check fontpath first
+		if (!fs::is_regular_file(font))
+			return false;
+
+		if (dir)
+			*dir = fs::path(font).parent_path().string() +dsep;
+		return true;
+	}
+
+	vector<string> paths = dirFonts();	// check global font directories
+	for (string& pt : paths)
+		if (fs::is_regular_file(pt + font)) {
+			if (dir)
+				*dir = pt;
+			return true;
+		}
+	return false;
 }

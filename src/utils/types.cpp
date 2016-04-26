@@ -195,14 +195,15 @@ VideoSettings::VideoSettings(bool VS, bool MAX, bool FSC, vec2i RES, string FNT,
 	resolution(RES),
 	renderer(RNDR)
 {
-	string tempFont = fs::path(FNT).is_absolute() ? FNT : Filer::dirFonts() + FNT;
-	font = fs::is_regular_file(tempFont) ? FNT : "Arial.ttf";
+	font = Filer::findFont(FNT) ? FNT : "Arial.ttf";
 
 	SetDefaultColors();
 }
 
 string VideoSettings::FontPath() const {
-	return fs::path(font).is_absolute() ? font : Filer::dirFonts() + font;
+	string dir;
+	Filer::findFont(font, &dir);
+	return dir+font;
 }
 
 void VideoSettings::SetDefaultColors() {

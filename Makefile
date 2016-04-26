@@ -55,6 +55,7 @@ $(TARGET): bindir $(OBJECTS)
 	mkdir -p $(TDIR)
 	$(CXX) $(LFLAGS) -o $(TDIR)/$(TARGET) $(OBJECTS) $(OBJCOMP) $(LIBS)
 	cp -r data $(TDIR)
+	cp rsc/vertiread.desktop $(TDIR)
 	@echo "executable '"$(TARGET)"' has been written to '"$(TDIR)"'"
 
 bin/audioSys.o: src/engine/audioSys.cpp

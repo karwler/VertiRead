@@ -38,11 +38,17 @@ public:
 	static ControlsSettings LoadControlsSettings();
 	static void SaveSettings(const ControlsSettings& sets);
 
+#ifdef __APPLE__
+	static string execDir(bool raw=false);
+#else
 	static string execDir();
+#endif
 	static string dirLib();
 	static string dirPlist();
 	static string dirSets();
 	static string dirSnds();
 	static string dirTexs();
-	static string dirFonts();
+
+	static vector<string> dirFonts();
+	static bool findFont(string font, string *dir=nullptr);
 };

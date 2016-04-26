@@ -21,6 +21,7 @@ void Engine::Run() {
 	winSys->SetWindow();
 	Filer::CheckDirectories();
 	scene = new Scene;		// initializes program and library
+	winSys->SetIcon(scene->getLibrary()->getTexPath("icon"));
 
 	// initialize scene and timer
 	scene->getProgram()->Event_OpenBookList();

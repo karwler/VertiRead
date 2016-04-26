@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=VertiRead
+Exec=
+Icon=
+Comment=Read Mangas and listen to music
+GenericName=Manga Reader
+Keywords=Manga;Music;Reader
+Categories=Utility
+Type=Application
+Terminal=false
+X-MultipleArgs=false
+StartupNotify=true

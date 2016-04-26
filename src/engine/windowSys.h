@@ -10,6 +10,7 @@ public:
 
 	void SetWindow();
 	void DestroyWindow();
+	void SetIcon(string file);
 	void DrawObjects(vector<Object*> objects);
 	
 	SDL_Renderer* Renderer() const;

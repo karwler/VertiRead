@@ -500,6 +500,7 @@ using vec4i = kvec4<int>;
 // files and strings
 bool isNumber(string str);
 int findChar(string str, char c);
+int findString(string str, string c);
 vector<string> getWords(string line, bool skipCommas=false);
 int splitIniLine(string line, string* arg, string* val, string* key = nullptr);
 fs::path removeExtension(fs::path path);

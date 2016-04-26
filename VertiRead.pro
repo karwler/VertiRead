@@ -7,8 +7,9 @@ CONFIG -= app_bundle qt
 win32:TARGET = VertiRead
 unix:TARGET = vertiread
 
-DESTDIR = $$OUT_PWD/build/
 OBJECTS_DIR = $$OUT_PWD/bin/
+macx:DESTDIR = $$OUT_PWD/VertiRead.app/Contents/MacOS/
+else:DESTDIR = $$OUT_PWD/build/
 
 # copy data dir and dependencies
 win32 {
@@ -24,16 +25,21 @@ win32 {
     }
     LIB_WIN ~= s,/,\\,g
 
-    copydll.commands = $$quote(cmd /c copy $$LIB_WIN\\*.dll $${DEST_WIN})
-    copydata.commands = $$quote(cmd /c xcopy /e/i/y $$PWD_WIN\\data $$DEST_WIN\\data)
-    QMAKE_EXTRA_TARGETS += copydll
-    POST_TARGETDEPS += copydll
+    postbuild.commands = $$quote(cmd /c copy $$LIB_WIN\\*.dll $${DEST_WIN}) && \
+                         $$quote(cmd /c xcopy /e/i/y $$PWD_WIN\\data $$DEST_WIN\\data)
 }
-unix {
-    copydata.commands = cp -r $$PWD/data $$DESTDIR
+macx {
+    postbuild.commands = mkdir -p $$DESTDIR/../Resources && \
+                         cp $$PWD/rsc/Info.plist $$DESTDIR/../ && \
+                         cp $$PWD/rsc/icon.icns $$DESTDIR/../Resources/ && \
+                         cp -r $$PWD/data $$DESTDIR
 }
-QMAKE_EXTRA_TARGETS += copydata
-POST_TARGETDEPS += copydata
+linux {
+    postbuild.commands = cp $$PWD/rsc/vertiread.desktop $$DESTDIR && \
+                         cp -r $$PWD/data $$DESTDIR
+}
+QMAKE_EXTRA_TARGETS += postbuild
+POST_TARGETDEPS += postbuild
 
 # includepaths
 INCLUDEPATH += $$PWD/src/
@@ -112,4 +118,4 @@ HEADERS += src/engine/audioSys.h \
     src/prog/library.h \
     src/utils/capturers.h
 
-win32:RC_FILE = src/resource.rc
+win32:RC_FILE = rsc/resource.rc

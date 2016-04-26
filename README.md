@@ -13,7 +13,9 @@ The makefile is only made for Linux.
 ##Linux
 For simple build just use the makefile.  
 It's currently configured for the g++ compiler.  
-If you want to use clang++ or set a specific architecture, just look in the top section of the makefile.
+If you want to use clang++ or set a specific architecture, just look in the top section of the makefile.  
+There’s also a pre-made launcher, which is copied to the build directory after compilation.  
+You just need to add the executable’s and icon’s path to it.  
 
 All dependencies need to be installed manually:  
 sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libboost-filesystem1.55-dev  

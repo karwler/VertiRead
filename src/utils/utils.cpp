@@ -8,9 +8,22 @@ bool isNumber(string str) {
 }
 
 int findChar(string str, char c) {
-	for (uint i = 0; i != str.size(); i++)
+	for (int i=0; i!=str.length(); i++)
 		if (str[i] == c)
 			return i;
+	return -1;
+}
+
+int findString(string str, string c) {
+	int check = 0;
+	for (int i=0; i!=str.length(); i++) {
+		if (str[i] == c[check]) {
+			if (++check == c.length())
+				return i-c.length();
+		}
+		else
+			check = 0;
+	}
 	return -1;
 }
 

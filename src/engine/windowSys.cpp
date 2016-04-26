@@ -21,11 +21,6 @@ void WindowSys::SetWindow() {
 	if (!window)
 		throw Exception("couldn't create window" + string(SDL_GetError()), 3);
 
-	SDL_Surface* icon = IMG_Load(string(Filer::dirTexs()+"icon.ico").c_str());
-	if (icon) {
-		SDL_SetWindowIcon(window, icon);
-		SDL_FreeSurface(icon);
-	}
 	CreateRenderer();
 }
 
@@ -48,6 +43,14 @@ void WindowSys::DestroyWindow() {
 		SDL_DestroyRenderer(renderer);
 	if (window)
 		SDL_DestroyWindow(window);
+}
+
+void WindowSys::SetIcon(string file) {
+	SDL_Surface* icon = IMG_Load(file.c_str());
+	if (icon) {
+		SDL_SetWindowIcon(window, icon);
+		SDL_FreeSurface(icon);
+	}
 }
 
 void WindowSys::DrawObjects(vector<Object*> objects) {
