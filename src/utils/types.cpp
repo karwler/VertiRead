@@ -184,8 +184,7 @@ Directory::Directory(string NAME, const vector<string>& DIRS, vector<string> FIL
 
 // GENEREAL SETTINGS
 
-GeneralSettings::GeneralSettings(string LANG, string LIB, string PST) :
-	language(LANG)
+GeneralSettings::GeneralSettings(string LIB, string PST)
 {
 	dirLib = LIB.empty() ? Filer::dirSets() + "library"+dsep : LIB;
 	if (dirLib[dirLib.length()-1] != dsep[0])

@@ -29,8 +29,8 @@ ItemButton::ItemButton(string LBL, string DAT, void (Program::*CALLB)(void*), Sc
 {}
 ItemButton::~ItemButton() {}
 
-void ItemButton::OnClick() {
-	ListItem::OnClick(false);
+void ItemButton::OnClick(bool doubleclick) {
+	ListItem::OnClick(doubleclick);
 
 	void* dat;	// decide what to send
 	if (parent)

@@ -9,7 +9,7 @@ byte Filer::CheckDirectories(const GeneralSettings& sets) {
 	if (!fs::exists(dirSets()))
 		fs::create_directories(dirSets());
 	if (!fs::exists(sets.libraryParh()))
-		fs::create_directories(sets.playlistParh());
+		fs::create_directories(sets.libraryParh());
 	if (!fs::exists(sets.playlistParh()))
 		fs::create_directories(sets.playlistParh());
 	if (!fs::exists(dirSnds())) {
@@ -97,23 +97,6 @@ map<string, string> Filer::GetSounds() {
 	return paths;
 }
 
-map<string, string> Filer::GetLines(string filename) {
-	vector<string> lines;
-	if (!ReadTextFile(dirLangs() + filename, lines))
-		return map<string, string>();
-
-	map<string, string> words;
-	for (string& line : lines) {
-		string arg, val;
-		splitIniLine(line, &arg, &val);
-		if (words.count(arg) == 0)
-			words.insert(make_pair(arg, val));
-		else
-			words[arg] = val;
-	}
-	return words;
-}
-
 Playlist Filer::LoadPlaylist(string name) {
 	vector<string> lines;
 	if (!ReadTextFile(World::scene()->Settings().playlistParh() + name, lines))
@@ -156,9 +139,7 @@ GeneralSettings Filer::LoadGeneralSettings() {
 	for (string& line : lines) {
 		string arg, val;
 		splitIniLine(line, &arg, &val);
-		if (arg == "language")
-			sets.language = val;
-		else if (arg == "library")
+		if (arg == "library")
 			sets.dirLib = val;
 		else if (arg == "playlists")
 			sets.dirPlist = val;
@@ -168,7 +149,6 @@ GeneralSettings Filer::LoadGeneralSettings() {
 
 void Filer::SaveSettings(const GeneralSettings& sets) {
 	vector<string> lines = {
-		"language=" + sets.language,
 		"library=" + sets.dirLib,
 		"playlists=" + sets.dirPlist
 	};
@@ -341,10 +321,6 @@ string Filer::dirData() {
 #else
 	return execDir() + "data"+dsep;
 #endif
-}
-
-string Filer::dirLangs() {
-	return dirData()+"languages"+dsep;
 }
 
 string Filer::dirSnds() {

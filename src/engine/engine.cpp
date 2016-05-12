@@ -52,7 +52,7 @@ void Engine::Run() {
 
 void Engine::Close() {
 	// save all settings before quitting
-	Filer::SaveSettings(GeneralSettings());
+	Filer::SaveSettings(scene->Settings());
 	Filer::SaveSettings(winSys->Settings());
 	Filer::SaveSettings(audioSys->Settings());
 	Filer::SaveSettings(inputSys->Settings());

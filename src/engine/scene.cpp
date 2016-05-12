@@ -30,7 +30,7 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 	case EMenu::books: {
 		// top buttons
 		objects = {
-			new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3-10, 50), FIX_Y | FIX_H), &Program::Event_OpenPlaylistList, "Playlists"),
+			new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3-10, 50), FIX_Y | FIX_H), &Program::Event_OpenPlaylistList,"Playlists"),
 			new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3-10, 50), FIX_Y | FIX_H), &Program::Event_OpenGeneralSettings, "Settings"),
 			new ButtonText(Object(vec2i(res.x/3*2, 0), posT, vec2i(res.x/3,    50), FIX_Y | FIX_H), &Program::Event_Back, "Exit")
 		};
@@ -134,7 +134,7 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 		objects = {
 			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenGeneralSettings, "General"),
 			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenAudioSettings, "Audio"),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, "Controls"),
+			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, "Vontrols"),
 			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Back")
 		};
 
@@ -148,7 +148,7 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 		objects = {
 			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenGeneralSettings, "General"),
 			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenVideoSettings, "Video"),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, "Controls"),
+			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, "Vontrols"),
 			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Back")
 		};
 
@@ -326,8 +326,9 @@ bool Scene::CheckReaderBoxClick(ReaderBox* obj, bool doubleclick) {
 		vec2i interval = obj->VisiblePictures();
 		const vector<Image>& pics = obj->Pictures();
 		for (int i=interval.x; i<=interval.y; i++) {
-			SDL_Rect rect = pics[i].getRect();
-			if (inRect(rect, mPos)) {
+			SDL_Rect crop;
+			SDL_Rect rect = obj->getImage(i, &crop).getRect();
+			if (inRect({rect.x+crop.x, rect.y+crop.y, rect.w-crop.x-crop.w, rect.h-crop.y-crop.h}, mPos)) {
 				obj->Zoom(float(obj->Size().x) / float(pics[i].size.x));
 				return true;
 			}

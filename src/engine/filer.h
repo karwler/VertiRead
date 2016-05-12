@@ -19,7 +19,6 @@ public:
 
 	static map<string, string> GetTextures();
 	static map<string, string> GetSounds();
-	static map<string, string> GetLines(string filename);
 
 	static Playlist LoadPlaylist(string name);
 	static void SavePlaylist(const Playlist& plist);

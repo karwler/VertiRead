@@ -115,9 +115,8 @@ struct Directory {
 };
 
 struct GeneralSettings {
-	GeneralSettings(string LANG="english", string LIB="", string PST="");
+	GeneralSettings( string LIB="", string PST="");
 
-	string language;
 	string dirLib;
 	string dirPlist;
 

@@ -20,7 +20,7 @@ public:
 	ItemButton(string LBL="", string DAT="", void (Program::*CALLB)(void*)=nullptr, ScrollArea* SA=nullptr);
 	virtual ~ItemButton();
 
-	virtual void OnClick();
+	virtual void OnClick(bool doubleclick);
 
 	string data;
 protected:
