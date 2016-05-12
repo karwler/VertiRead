@@ -32,7 +32,7 @@ macx {
     postbuild.commands = mkdir -p $$DESTDIR/../Resources && \
                          cp $$PWD/rsc/Info.plist $$DESTDIR/../ && \
                          cp $$PWD/rsc/icon.icns $$DESTDIR/../Resources/ && \
-                         cp -r $$PWD/data $$DESTDIR
+                         cp -r $$PWD/data $$DESTDIR/../Resources/
 }
 linux {
     postbuild.commands = cp $$PWD/rsc/vertiread.desktop $$DESTDIR && \

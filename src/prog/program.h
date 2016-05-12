@@ -2,6 +2,7 @@
 
 #include "browser.h"
 #include "playlistEditor.h"
+#include "utils/items.h"
 
 enum class EMenu : byte {
 	books,
@@ -44,6 +45,7 @@ public:
 	void Event_AddButtonClick();
 	void Event_DeleteButtonClick();
 	void Event_EditButtonClick();
+	void Event_ItemDoubleclicked(ListItem* item);
 	void Event_SaveButtonClick();
 
 	// menu events

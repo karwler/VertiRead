@@ -2,12 +2,6 @@
 
 #include "utils/types.h"
 
-#ifdef _WIN32
-const string dsep = "\\";
-#else
-const string dsep = "/";
-#endif
-
 enum EDirFilter : byte {
 	FILTER_FILE = 1,
 	FILTER_DIR  = 2,
@@ -17,7 +11,7 @@ EDirFilter operator|(EDirFilter a, EDirFilter b);
 
 class Filer {
 public:
-	static byte CheckDirectories();
+	static byte CheckDirectories(const GeneralSettings& sets);
 	static bool ReadTextFile(string file, vector<string>& lines, bool printMessage=true);
 	static bool WriteTextFile(string file, const vector<string>& lines);
 	static vector<fs::path> ListDir(fs::path dir, EDirFilter filter, const vector<string>& extFilter={});
@@ -25,6 +19,7 @@ public:
 
 	static map<string, string> GetTextures();
 	static map<string, string> GetSounds();
+	static map<string, string> GetLines(string filename);
 
 	static Playlist LoadPlaylist(string name);
 	static void SavePlaylist(const Playlist& plist);
@@ -43,9 +38,9 @@ public:
 #else
 	static string execDir();
 #endif
-	static string dirLib();
-	static string dirPlist();
 	static string dirSets();
+	static string dirData();
+	static string dirLangs();
 	static string dirSnds();
 	static string dirTexs();
 

@@ -60,6 +60,12 @@ namespace fs = boost::filesystem;
 #endif
 #endif
 
+#ifdef _WIN32
+const string dsep = "\\";
+#else
+const string dsep = "/";
+#endif
+
 using byte = unsigned char;
 using ushort = unsigned short;
 using uint = unsigned int;

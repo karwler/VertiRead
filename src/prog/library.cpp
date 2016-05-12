@@ -1,7 +1,7 @@
 #include "library.h"
 #include "engine/filer.h"
 
-Library::Library(string FONT, const map<string, string>& TEXS, const map<string, string>& SNDS)
+Library::Library(string FONT, const map<string, string>& TEXS, const map<string, string>& SNDS, string LANG)
 {
 	if (!fs::exists(FONT))
 		FONT = VideoSettings().FontPath();	// should give the default font
@@ -22,6 +22,8 @@ Library::Library(string FONT, const map<string, string>& TEXS, const map<string,
 			Mix_FreeChunk(test);
 		}
 	}
+
+	LoadLanguage(LANG);
 }
 
 Library::~Library() {
@@ -43,6 +45,14 @@ Texture* Library::getTex(string name) const {
 
 string Library::getSound(string name) const {
 	return sounds.at(name);
+}
+
+string Library::getLine(string name) const {
+	return lines.count(name) == 0 ? name : lines.at(name);
+}
+
+void Library::LoadLanguage(string language) {
+	lines = Filer::GetLines(language + ".ini");
 }
 
 vector<Texture*> Library::Pictures() {

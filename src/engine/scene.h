@@ -8,16 +8,17 @@
 
 class Scene {
 public:
-	Scene();
+	Scene(const GeneralSettings& SETS=GeneralSettings());
 	~Scene();
 	
 	void SwitchMenu(EMenu newMenu, void* dat=nullptr);
 	void ResizeMenu();
 	void Tick();
-	void OnMouseDown();
+	void OnMouseDown(bool doubleclick);
 	void OnMouseUp();
 	void OnMouseWheel(int ymov);
 
+	const GeneralSettings& Settings() const;
 	Program* getProgram() const;
 	Library* getLibrary() const;
 	vector<Object*> Objects() const;
@@ -27,6 +28,7 @@ public:
 	void SetPopup(Popup* box);				// use nullptr to close
 
 private:
+	GeneralSettings sets;
 	kptr<Program> program;
 	kptr<Library> library;
 
@@ -37,9 +39,9 @@ private:
 	ScrollArea* objectHold;	// pointer to object currently being dragged by mouse (nullptr if none is being held)
 
 	bool CheckSliderClick(ScrollArea* obj);
-	bool CheckListBoxClick(ListBox* obj);
-	bool CheckTileBoxClick(TileBox* obj);
-	bool CheckReaderBoxClick(ReaderBox* obj);
+	bool CheckListBoxClick(ListBox* obj, bool doubleclick);
+	bool CheckTileBoxClick(TileBox* obj, bool doubleclick);
+	bool CheckReaderBoxClick(ReaderBox* obj, bool doubleclick);
 	bool CheckPopupSimpleClick(PopupMessage* obj);
 	bool CheckPopupChoiceClick(PopupChoice* obj);
 };

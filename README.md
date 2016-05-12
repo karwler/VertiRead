@@ -34,8 +34,6 @@ The frameworks’ location is set to /Library/Frameworks.
 Boost is assumed to be located in /usr/local/include (headers) and /usr/local/lib (objects).  
 
 ##To do list
-- make a proper application for OS X
-- add double click
 - add browser to playlist editor
 - add settings menu lists
 - improve mouse wheel scrolling

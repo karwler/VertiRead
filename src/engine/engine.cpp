@@ -19,8 +19,7 @@ void Engine::Run() {
 	kptr<SDL_Event> event = new SDL_Event;
 
 	winSys->SetWindow();
-	Filer::CheckDirectories();
-	scene = new Scene;		// initializes program and library
+	scene = new Scene(Filer::LoadGeneralSettings());		// initializes program and library
 	winSys->SetIcon(scene->getLibrary()->getTexPath("icon"));
 
 	// initialize scene and timer

@@ -26,6 +26,7 @@ private:
 	kptr<InputSys> inputSys;
 	kptr<WindowSys> winSys;
 	kptr<Scene> scene;
+
 	bool run;
 	bool redraw;
 	float dSec;

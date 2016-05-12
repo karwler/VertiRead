@@ -139,7 +139,7 @@ void Program::Event_DeleteButtonClick() {
 	if (curMenu == EMenu::playlists) {
 		ListItem* item = World::scene()->SelectedButton();
 		if (item) {
-			fs::remove(Filer::dirPlist() + item->label);
+			fs::remove(World::scene()->Settings().playlistParh() + item->label);
 			Event_OpenPlaylistList();
 		}
 	}
@@ -163,6 +163,14 @@ void Program::Event_EditButtonClick() {
 		if (item)
 			World::scene()->SetPopup(new PopupText("Rename", item->label));
 	}
+}
+
+void Program::Event_ItemDoubleclicked(ListItem* item) {
+	// does the same as Event_EditButtonClicked
+	if (curMenu == EMenu::playlists)
+		Event_OpenPlaylistEditor((void*)item->label.c_str());
+	else if (curMenu == EMenu::plistEditor)
+		World::scene()->SetPopup(new PopupText("Rename", item->label));
 }
 
 void Program::Event_SaveButtonClick() {
@@ -249,7 +257,7 @@ void Program::Event_Ok() {
 
 void Program::Event_TextCaptureOk(TextEdit* box) {
 	if (curMenu == EMenu::playlists) {
-		if (!fs::exists(Filer::dirPlist() + box->getText())) {
+		if (!fs::exists(World::scene()->Settings().playlistParh() + box->getText())) {
 			Filer::SavePlaylist(Playlist(box->getText()));
 			Event_OpenPlaylistList();
 		}

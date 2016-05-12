@@ -184,8 +184,25 @@ Directory::Directory(string NAME, const vector<string>& DIRS, vector<string> FIL
 
 // GENEREAL SETTINGS
 
-GeneralSettings::GeneralSettings()
-{}
+GeneralSettings::GeneralSettings(string LANG, string LIB, string PST) :
+	language(LANG)
+{
+	dirLib = LIB.empty() ? Filer::dirSets() + "library"+dsep : LIB;
+	if (dirLib[dirLib.length()-1] != dsep[0])
+		dirLib += dsep;
+
+	dirPlist = PST.empty() ? Filer::dirSets() + "playlists"+dsep : PST;
+	if (dirPlist[dirPlist.length()-1] != dsep[0])
+		dirPlist += dsep;
+}
+
+string GeneralSettings::libraryParh() const {
+	return fs::path(dirLib).is_absolute() ? dirLib : Filer::execDir() + dirLib;
+}
+
+string GeneralSettings::playlistParh() const {
+	return fs::path(dirPlist).is_absolute() ? dirPlist : Filer::execDir() + dirPlist;
+}
 
 // VIDEO SETTINGS
 

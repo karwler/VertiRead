@@ -7,7 +7,7 @@ public:
 	ListItem(string LBL="", ScrollArea* SA=nullptr);
 	virtual ~ListItem();
 	
-	virtual void OnClick();
+	virtual void OnClick(bool doubleclick);
 	bool selectable() const;
 
 	string label;

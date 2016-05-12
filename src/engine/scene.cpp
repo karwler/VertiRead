@@ -1,11 +1,14 @@
 #include "scene.h"
 #include "world.h"
 
-Scene::Scene() :
+Scene::Scene(const GeneralSettings& SETS) :
+	sets(SETS),
 	program(new Program),
 	library(new Library(World::winSys()->Settings().FontPath(), Filer::GetTextures(), Filer::GetSounds())),
 	objectHold(nullptr)
-{}
+{
+	Filer::CheckDirectories(sets);
+}
 
 Scene::~Scene() {
 	Clear(objects);
@@ -34,7 +37,7 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 
 		// book list
 		vector<ListItem*> tiles;
-		vector<fs::path> names = Filer::ListDir(Filer::dirLib(), FILTER_DIR);
+		vector<fs::path> names = Filer::ListDir(sets.libraryParh(), FILTER_DIR);
 		for (fs::path& it : names)
 			tiles.push_back(new ItemButton(it.filename().string(), it.string(), &Program::Event_OpenBrowser));
 		objects.push_back(new TileBox(Object(vec2i(0, 60), posT, vec2i(res.x, res.y-60), FIX_POS | FIX_END), tiles, vec2i(400, 30)));
@@ -75,9 +78,9 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 		};
 
 		// playlist list
-		TileBox* box = new TileBox(Object(vec2i(0, 100), posT, vec2i(res.x, res.y-100), FIX_POS | FIX_END), vector<ListItem*>(), vec2i(400, 30));
+		TileBox* box = new TileBox(Object(vec2i(0, 100), posT, vec2i(res.x, res.y-100), FIX_POS | FIX_END), {}, vec2i(400, 30));
 		vector<ListItem*> tiles;
-		vector<fs::path> names = Filer::ListDir(Filer::dirPlist(), FILTER_FILE);
+		vector<fs::path> names = Filer::ListDir(sets.playlistParh(), FILTER_FILE);
 		for (fs::path& it : names)
 			tiles.push_back(new ListItem(it.filename().string(), box));
 		box->Items(tiles);
@@ -215,7 +218,7 @@ void Scene::Tick() {
 	}
 }
 
-void Scene::OnMouseDown() {
+void Scene::OnMouseDown(bool doubleclick) {
 	// check if there's a popup window
 	if (popup) {
 		if (!inRect(popup->getRect(), InputSys::mousePos()))
@@ -247,15 +250,15 @@ void Scene::OnMouseDown() {
 			if (CheckSliderClick(static_cast<ScrollArea*>(obj)))	// first check if slider is clicked
 				break;
 			else if (dynamic_cast<ListBox*>(obj)) {
-				if (CheckListBoxClick(static_cast<ListBox*>(obj)))
+				if (CheckListBoxClick(static_cast<ListBox*>(obj), doubleclick))
 					break;
 			}
 			else if (dynamic_cast<TileBox*>(obj)) {
-				if (CheckTileBoxClick(static_cast<TileBox*>(obj)))
+				if (CheckTileBoxClick(static_cast<TileBox*>(obj), doubleclick))
 					break;
 			}
 			else if (dynamic_cast<ReaderBox*>(obj)) {
-				if (CheckReaderBoxClick(static_cast<ReaderBox*>(obj)))
+				if (CheckReaderBoxClick(static_cast<ReaderBox*>(obj), doubleclick))
 					break;
 			}
 		}
@@ -279,32 +282,32 @@ bool Scene::CheckSliderClick(ScrollArea* obj) {
 	return false;
 }
 
-bool Scene::CheckListBoxClick(ListBox* obj) {
+bool Scene::CheckListBoxClick(ListBox* obj, bool doubleclick) {
 	vec2i interval = obj->VisibleItems();
 	vector<ListItem*> items = obj->Items();
 	for (int i=interval.x; i<=interval.y; i++) {
 		SDL_Rect crop;
 		SDL_Rect rect = obj->ItemRect(i, &crop);
 		if (inRect(rect, InputSys::mousePos())) {
-			items[i]->OnClick();
+			items[i]->OnClick(doubleclick);
 			return true;
 		}
 	}
 	return false;
 }
 
-bool Scene::CheckTileBoxClick(TileBox* obj) {
+bool Scene::CheckTileBoxClick(TileBox* obj, bool doubleclick) {
 	vec2i interval = obj->VisibleItems();
 	const vector<ListItem*>& items = obj->Items();
 	for (int i=interval.x; i<=interval.y; i++)
 		if (inRect(obj->ItemRect(i), InputSys::mousePos())) {
-			items[i]->OnClick();
+			items[i]->OnClick(doubleclick);
 			return true;
 		}
 	return false;
 }
 
-bool Scene::CheckReaderBoxClick(ReaderBox* obj) {
+bool Scene::CheckReaderBoxClick(ReaderBox* obj, bool doubleclick) {
 	vec2i mPos = InputSys::mousePos();
 	if (obj->showList())	// check list buttons
 		for (ButtonImage& but : obj->ListButtons())
@@ -318,9 +321,25 @@ bool Scene::CheckReaderBoxClick(ReaderBox* obj) {
 				but.OnClick();
 				return true;
 			}
-	if (inRect({obj->Pos().x, obj->Pos().y, obj->Size().x-obj->barW, obj->Size().y}, mPos)) {	// init list mouse drag
-		objectHold = obj;
-		return true;
+
+	if (doubleclick) {
+		vec2i interval = obj->VisiblePictures();
+		const vector<Image>& pics = obj->Pictures();
+		for (int i=interval.x; i<=interval.y; i++) {
+			SDL_Rect rect = pics[i].getRect();
+			if (inRect(rect, mPos)) {
+				obj->Zoom(float(obj->Size().x) / float(pics[i].size.x));
+				return true;
+			}
+		}
+	}
+	else {
+		vec2i pos = obj->Pos();
+		vec2i size = obj->Size();
+		if (inRect({pos.x, pos.y, size.x-obj->barW, size.y}, mPos)) {	// init list mouse drag
+			objectHold = obj;
+			return true;
+		}
 	}
 	return false;
 }
@@ -362,6 +381,10 @@ void Scene::OnMouseWheel(int ymov) {
 	ScrollArea* box = dynamic_cast<ScrollArea*>(FocusedObject());
 	if (box)
 		box->ScrollList(ymov*-20);
+}
+
+const GeneralSettings&Scene::Settings() const {
+	return sets;
 }
 
 Program* Scene::getProgram() const {

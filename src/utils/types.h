@@ -115,7 +115,14 @@ struct Directory {
 };
 
 struct GeneralSettings {
-	GeneralSettings();
+	GeneralSettings(string LANG="english", string LIB="", string PST="");
+
+	string language;
+	string dirLib;
+	string dirPlist;
+
+	string libraryParh() const;		// returns full path to dirLib
+	string playlistParh() const;	// same as above
 };
 
 struct VideoSettings {

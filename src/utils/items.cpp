@@ -8,8 +8,10 @@ ListItem::ListItem(string LBL, ScrollArea* SA) :
 {}
 ListItem::~ListItem() {}
 
-void ListItem::OnClick() {
-	if (parent)
+void ListItem::OnClick(bool doubleclick) {
+	if (doubleclick)
+		World::program()->Event_ItemDoubleclicked(this);
+	else if (parent)
 		parent->selectedItem = this;
 	World::engine->SetRedrawNeeded();
 }
@@ -28,7 +30,7 @@ ItemButton::ItemButton(string LBL, string DAT, void (Program::*CALLB)(void*), Sc
 ItemButton::~ItemButton() {}
 
 void ItemButton::OnClick() {
-	ListItem::OnClick();
+	ListItem::OnClick(false);
 
 	void* dat;	// decide what to send
 	if (parent)

@@ -4,14 +4,14 @@ EDirFilter operator|(EDirFilter a, EDirFilter b) {
 	return static_cast<EDirFilter>(static_cast<byte>(a) | static_cast<byte>(b));
 }
 
-byte Filer::CheckDirectories() {
+byte Filer::CheckDirectories(const GeneralSettings& sets) {
 	byte retval = 0;
-	if (!fs::exists(dirLib()))
-		fs::create_directory(dirLib());
-	if (!fs::exists(dirPlist()))
-		fs::create_directory(dirPlist());
 	if (!fs::exists(dirSets()))
-		fs::create_directory(dirSets());
+		fs::create_directories(dirSets());
+	if (!fs::exists(sets.libraryParh()))
+		fs::create_directories(sets.playlistParh());
+	if (!fs::exists(sets.playlistParh()))
+		fs::create_directories(sets.playlistParh());
 	if (!fs::exists(dirSnds())) {
 		cerr << "couldn't find sound directory" << endl;
 		retval = 1;
@@ -97,9 +97,26 @@ map<string, string> Filer::GetSounds() {
 	return paths;
 }
 
+map<string, string> Filer::GetLines(string filename) {
+	vector<string> lines;
+	if (!ReadTextFile(dirLangs() + filename, lines))
+		return map<string, string>();
+
+	map<string, string> words;
+	for (string& line : lines) {
+		string arg, val;
+		splitIniLine(line, &arg, &val);
+		if (words.count(arg) == 0)
+			words.insert(make_pair(arg, val));
+		else
+			words[arg] = val;
+	}
+	return words;
+}
+
 Playlist Filer::LoadPlaylist(string name) {
 	vector<string> lines;
-	if (!ReadTextFile(dirPlist() + name, lines))
+	if (!ReadTextFile(World::scene()->Settings().playlistParh() + name, lines))
 		return Playlist();
 
 	Playlist plist(name);
@@ -127,7 +144,7 @@ void Filer::SavePlaylist(const Playlist& plist) {
 	for (const fs::path& file : plist.songs)
 		lines.push_back(file.string());
 
-	WriteTextFile(dirPlist() + plist.name, lines);
+	WriteTextFile(World::scene()->Settings().playlistParh() + plist.name, lines);
 }
 
 GeneralSettings Filer::LoadGeneralSettings() {
@@ -139,14 +156,22 @@ GeneralSettings Filer::LoadGeneralSettings() {
 	for (string& line : lines) {
 		string arg, val;
 		splitIniLine(line, &arg, &val);
-		// load settings
+		if (arg == "language")
+			sets.language = val;
+		else if (arg == "library")
+			sets.dirLib = val;
+		else if (arg == "playlists")
+			sets.dirPlist = val;
 	}
 	return sets;
 }
 
 void Filer::SaveSettings(const GeneralSettings& sets) {
-	vector<string> lines;
-	// save settings
+	vector<string> lines = {
+		"language=" + sets.language,
+		"library=" + sets.dirLib,
+		"playlists=" + sets.dirPlist
+	};
 	WriteTextFile(dirSets() + "general.ini", lines);
 }
 
@@ -300,36 +325,34 @@ string Filer::execDir() {
 	return path.parent_path().string() + dsep;
 }
 
-string Filer::dirLib() {
-	return execDir() + "library" + dsep;
-}
-
-string Filer::dirPlist() {
-	return execDir() + "playlists" + dsep;
-}
-
 string Filer::dirSets() {
-#ifdef __APPLE__
-	return execDir(true) + "settings/";
+#ifdef _WIN32
+	return string(getenv("AppData")) + "\\VertiRead\\";
+#elif __APPLE__
+	return string(getenv("HOME")) + "/Library/Application Support/VertiRead/";
 #else
-	return execDir() + "settings" + dsep;
+	return string(getenv("HOME")) + "/.vertiread/";
 #endif
+}
+
+string Filer::dirData() {
+#ifdef __APPLE__
+	return execDir(true) + "../Resources/data/";
+#else
+	return execDir() + "data"+dsep;
+#endif
+}
+
+string Filer::dirLangs() {
+	return dirData()+"languages"+dsep;
 }
 
 string Filer::dirSnds() {
-#ifdef __APPLE__
-	return execDir(true) + "data/sounds/";
-#else
-	return execDir() + "data"+dsep+"sounds"+dsep;
-#endif
+	return dirData()+"sounds"+dsep;
 }
 
 string Filer::dirTexs() {
-#ifdef __APPLE__
-	return execDir(true) + "data/textures/";
-#else
-	return execDir() + "data"+dsep+"textures"+dsep;
-#endif
+	return dirData()+"textures"+dsep;
 }
 
 vector<string> Filer::dirFonts() {
