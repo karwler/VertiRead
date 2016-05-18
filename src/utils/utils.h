@@ -77,7 +77,7 @@ using cchar = const char;
 using cstr = const char*;
 
 // smart pointer
-template<typename T>
+template <typename T>
 class kptr {
 public:
 	kptr(T* p=nullptr) : ptr(p) {}
@@ -148,9 +148,10 @@ private:
 };
 
 // 2D vector
-template<typename T>
+template <typename T>
 struct kvec2 {
-	kvec2(T X=0, T Y=0) : x(X), y(Y) {}
+	kvec2(T N=0) : x(N), y(N) {}
+	kvec2(T X, T Y) : x(X), y(Y) {}
 	T x, y;
 
 	kvec2& operator=(T n) {
@@ -256,9 +257,10 @@ using vec2i = kvec2<int>;
 using vec2f = kvec2<float>;
 
 // 3D vector
-template<typename T>
+template <typename T>
 struct kvec3 {
-	kvec3(T X=0, T Y=0, T Z=0) : x(X), y(Y), z(Z) {}
+	kvec3(T N=0) : x(N), y(N), z(N) {}
+	kvec3(T X, T Y, T Z) : x(X), y(Y), z(Z) {}
 	T x, y, z;
 	
 	kvec3& operator=(T n) {
@@ -378,9 +380,10 @@ using vec3b = kvec3<byte>;
 using vec3i = kvec3<int>;
 
 // 4D vector
-template<typename T>
+template <typename T>
 struct kvec4 {
-	kvec4(T X=0, T Y=0, T Z=0, T A=0) : x(X), y(Y), z(Z), a(A) {}
+	kvec4(T N=0) : x(N), y(N), z(N), a(N) {}
+	kvec4(T X, T Y, T Z, T A) : x(X), y(Y), z(Z), a(A) {}
 	T x, y, z, a;
 	
 	kvec4& operator=(T n) {
@@ -504,17 +507,18 @@ using vec4b = kvec4<byte>;
 using vec4i = kvec4<int>;
 
 // files and strings
-bool isNumber(string str);
-int findChar(string str, char c);
-int findString(string str, string c);
-vector<string> getWords(string line, bool skipCommas=false);
-int splitIniLine(string line, string* arg, string* val, string* key = nullptr);
-fs::path removeExtension(fs::path path);
+bool is_num(const string& str);
+int findChar(const string& str, char c);
+int findString(const string& str, const string& c);
+vector<string> getWords(const string& line, bool skipCommas=false);
+int splitIniLine(const string& line, string* arg, string* val, string* key=nullptr);
+fs::path removeExtension(const fs::path& path);
 
 // graphics
 bool inRect(const SDL_Rect& rect, vec2i point);
 bool needsCrop(const SDL_Rect& crop);
 SDL_Rect getCrop(SDL_Rect item, SDL_Rect frame);
+SDL_Rect cropRect(const SDL_Rect& rect, const SDL_Rect& crop);
 SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop);
 
 // other
@@ -522,37 +526,44 @@ void PrintInfo();
 string getRendererName(int id);
 
 // convertions
-string wtos(std::wstring wstr);
-bool stob(string str);
+bool stob(const string& str);
 string btos(bool b);
-vec2i pix(vec2f p);
+vec2i pix(const vec2f& p);
 int pixX(float p);
 int pixY(float p);
-vec2f prc(vec2i p);
+vec2f prc(const vec2i& p);
 float prcX(int p);
 float prcY(int p);
 
-template<typename T>
-void Erase(vector<T*>& vec, uint i) {
+template <typename T>
+T sto(const string& str) {
+	T val;
+	std::stringstream ss(str);
+	ss >> val;
+	return val;
+}
+
+template <typename T>
+void erase(vector<T*>& vec, uint i) {
 	delete vec[i];
 	vec.erase(vec.begin() + i);
 }
 
-template<typename T>
-void Clear(vector<T*>& vec) {
+template <typename T>
+void clear(vector<T*>& vec) {
 	for (T* it : vec)
 		delete it;
 	vec.clear();
 }
 
-template<typename T>
-void Erase(list<T*>& lst, uint i) {
+template <typename T>
+void erase(list<T*>& lst, uint i) {
 	delete lst[i];
 	lst.erase(lst.begin() + i);
 }
 
-template<typename T>
-void Clear(list<T*>& lst) {
+template <typename T>
+void clear(list<T*>& lst) {
 	for (T* it : lst)
 		delete it;
 	lst.clear();

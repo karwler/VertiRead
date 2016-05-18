@@ -4,16 +4,16 @@
 
 class PlaylistEditor {
 public:
-	PlaylistEditor(string PLIST="", bool SS=true);
+	PlaylistEditor(const string& PLIST="", bool SS=true);
 
 	Playlist getPlaylist() const;
-	void LoadPlaylist(string playlist);
+	void LoadPlaylist(const string& playlist);
 
-	void AddSong(string path="");
-	void RenameSong(string path);
+	void AddSong(const string& path);
+	void RenameSong(const string& path);
 	void DelSong();
-	void AddBook(string name="");
-	void RenameBook(string name);
+	void AddBook(const string& name);
+	void RenameBook(const string& name);
 	void DelBook();
 
 	bool showSongs;

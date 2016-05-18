@@ -23,7 +23,7 @@ byte Filer::CheckDirectories(const GeneralSettings& sets) {
 	return retval;
 }
 
-bool Filer::ReadTextFile(string file, vector<string>& lines, bool printMessage) {
+bool Filer::ReadTextFile(const string& file, vector<string>& lines, bool printMessage) {
 	std::ifstream ifs(file.c_str());
 	if (!ifs.good()) {
 		if (printMessage)
@@ -36,7 +36,7 @@ bool Filer::ReadTextFile(string file, vector<string>& lines, bool printMessage) 
 	return true;
 }
 
-bool Filer::WriteTextFile(string file, const vector<string>& lines) {
+bool Filer::WriteTextFile(const string& file, const vector<string>& lines) {
 	std::ofstream ofs(file.c_str());
 	if (!ofs.good()) {
 		cerr << "couldn't write file " << file << endl;
@@ -47,14 +47,15 @@ bool Filer::WriteTextFile(string file, const vector<string>& lines) {
 	return true;
 }
 
-vector<fs::path> Filer::ListDir(fs::path dir, EDirFilter filter, const vector<string>& extFilter) {
+vector<fs::path> Filer::ListDir(const fs::path& dir, EDirFilter filter, const vector<string>& extFilter) {
 	vector<fs::path> names;
 	if (!fs::is_directory(dir))
 		return names;
+
 	for (fs::directory_iterator it(dir); it != fs::directory_iterator(); it++) {
 		if (filter == 0)
 			names.push_back(it->path());
-		else if (filter & FILTER_FILE && fs::is_regular_file(it->path())) {
+		else if ((filter & FILTER_FILE) && fs::is_regular_file(it->path())) {
 			if (extFilter.empty())
 				names.push_back(it->path());
 			else for (const string& ext : extFilter)
@@ -63,19 +64,20 @@ vector<fs::path> Filer::ListDir(fs::path dir, EDirFilter filter, const vector<st
 					break;
 				}
 		}
-		else if (filter & FILTER_DIR && fs::is_directory(it->path()))
+		else if ((filter & FILTER_DIR) && fs::is_directory(it->path()))
 			names.push_back(it->path());
-		else if (filter & FILTER_LINK && fs::is_symlink(it->path()))
+		else if ((filter & FILTER_LINK) && fs::is_symlink(it->path()))
 			names.push_back(it->path());
 	}
 	sort(names.begin(), names.end());
 	return names;
 }
 
-vector<string> Filer::GetPicsFromDir(fs::path dir) {
+vector<string> Filer::GetPicsFromDir(const fs::path& dir) {
 	vector<string> pics;
 	if (!fs::is_directory(dir))
 		return pics;
+
 	for (fs::directory_iterator it(dir); it != fs::directory_iterator(); it++)
 		if (fs::is_regular_file(it->path()))
 			pics.push_back(it->path().string());
@@ -97,7 +99,7 @@ map<string, string> Filer::GetSounds() {
 	return paths;
 }
 
-Playlist Filer::LoadPlaylist(string name) {
+Playlist Filer::LoadPlaylist(const string& name) {
 	vector<string> lines;
 	if (!ReadTextFile(World::scene()->Settings().playlistParh() + name, lines))
 		return Playlist();
@@ -123,7 +125,6 @@ void Filer::SavePlaylist(const Playlist& plist) {
 	};
 	for (const string& name : plist.books)
 		lines[0] += name;
-
 	for (const fs::path& file : plist.songs)
 		lines.push_back(file.string());
 
@@ -164,9 +165,7 @@ VideoSettings Filer::LoadVideoSettings() {
 	for (string& line : lines) {
 		string arg, val, key;
 		splitIniLine(line, &arg, &val, &key);
-		if (arg == "vsync")
-			sets.vsync = stob(val);
-		else if (arg == "font")
+		if (arg == "font")
 			sets.font = val;
 		else if (arg == "renderer")
 			sets.renderer = val;
@@ -192,7 +191,6 @@ VideoSettings Filer::LoadVideoSettings() {
 
 void Filer::SaveSettings(const VideoSettings& sets) {
 	vector<string> lines = {
-		"vsync=" + btos(sets.vsync),
 		"font=" + sets.font,
 		"renderer=" + sets.renderer,
 		"maximized=" + btos(sets.maximized),
@@ -200,7 +198,7 @@ void Filer::SaveSettings(const VideoSettings& sets) {
 		"resolution=" + to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y)
 	};
 	for (const pair<EColor, vec4b>& it : sets.colors)
-		lines.push_back("color["+to_string(int(it.first))+"]=" + to_string(it.second.x) + ' ' + to_string(it.second.y) + ' ' + to_string(it.second.z) + ' ' + to_string(it.second.a));
+		lines.push_back("color["+to_string(ushort(it.first))+"]=" + to_string(it.second.x) + ' ' + to_string(it.second.y) + ' ' + to_string(it.second.z) + ' ' + to_string(it.second.a));
 	WriteTextFile(dirSets() + "video.ini", lines);
 }
 
@@ -274,9 +272,11 @@ string Filer::execDir() {
 	fs::path path;
 #ifdef _WIN32
 	TCHAR buffer[MAX_LEN];
-	GetModuleFileName (NULL, buffer, MAX_LEN);
-	for (uint i = 0; buffer[i] != 0; i++)
-		path += buffer[i];
+	if (GetModuleFileName(NULL, buffer, MAX_LEN))
+		for (uint i=0; buffer[i]!=0; i++)
+			path += buffer[i];
+	else
+		path = fs::initial_path().string() + "/" + World::args[0];
 #elif __APPLE__
 	char buffer[MAX_LEN];
 	uint size = sizeof(buffer);
@@ -341,7 +341,7 @@ vector<string> Filer::dirFonts() {
 #endif
 }
 
-bool Filer::findFont(string font, string* dir) {
+bool Filer::findFont(const string& font, string* dir) {
 	if (fs::path(font).is_absolute()) {	// check fontpath first
 		if (!fs::is_regular_file(font))
 			return false;

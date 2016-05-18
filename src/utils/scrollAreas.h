@@ -6,6 +6,7 @@ class ScrollArea : public Object {
 public:
 	ScrollArea(const Object& BASE=Object(), int SPC=5, int BARW=10);
 	virtual ~ScrollArea();
+	virtual ScrollArea* Clone() const;
 
 	virtual void SetValues();
 	void DragSlider(int ypos);
@@ -14,7 +15,7 @@ public:
 
 	SDL_Rect Bar() const;
 	SDL_Rect Slider() const;
-	virtual int SelectedItem() const;	// this class doesn't contain any items so this function returns -1
+	virtual int SelectedItem() const;	// this class doesn't contain any items, therefore this function returns -1
 
 	int ListY() const;
 	virtual int ListH() const;
@@ -38,8 +39,8 @@ class ListBox : public ScrollArea {
 public:
 	ListBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS={}, int IH=30, int SPC=5, int BARW=10);
 	virtual ~ListBox();
+	virtual ListBox* Clone() const;
 
-	virtual void SetValues();
 	SDL_Rect ItemRect(int i, SDL_Rect* Crop=nullptr, EColor* color=nullptr) const;
 	virtual int SelectedItem() const;
 	vec2i VisibleItems() const;
@@ -55,8 +56,9 @@ private:
 
 class TileBox : public ScrollArea {
 public:
-	TileBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS={}, vec2i TS=vec2i(50, 50), int BARW=10);
+	TileBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS={}, const vec2i& TS=vec2i(50, 50), int BARW=10);
 	virtual ~TileBox();
+	virtual TileBox* Clone() const;
 
 	virtual void SetValues();
 	SDL_Rect ItemRect(int i, SDL_Rect* Crop=nullptr, EColor* color=nullptr) const;
@@ -79,9 +81,10 @@ class ObjectBox : public ScrollArea {
 public:
 	ObjectBox(const Object& BASE=Object(), const vector<Object*>& OBJS={}, int SPC=5, int BARW=10);
 	virtual ~ObjectBox();
+	virtual ObjectBox* Clone() const;
 
-	virtual void SetValues();
-	Object* getObject(uint id, SDL_Rect* crop=nullptr) const;
+	Object* getObject(int i, SDL_Rect* crop=nullptr) const;	// creates copy on the heap (needs to be deleted manually)
+	uint ObjectCount() const;
 	void Objects(const vector<Object*>& OBJS);
 	vec2i VisibleObjects() const;
 
@@ -91,8 +94,9 @@ private:
 
 class ReaderBox : public ScrollArea {
 public:
-	ReaderBox(const vector<Texture*> PICS={}, string CURPIC="", float ZOOM=1.f);
+	ReaderBox(const Object& BASE=Object(0, 0, 100, FIX_POS | FIX_END, EColor::background), const vector<Texture*>& PICS={}, const string& CURPIC="", float ZOOM=1.f);
 	virtual ~ReaderBox();
+	virtual ReaderBox* Clone() const;
 
 	virtual void SetValues();
 	void Tick();
@@ -109,7 +113,7 @@ public:
 	vec2i VisiblePictures() const;
 
 	const vector<Image>& Pictures() const;
-	void Pictures(const vector<Texture*>& pictures, string curPic="");
+	void Pictures(const vector<Texture*>& pictures, const string& curPic="");
 	int ListX() const;
 	int ListW() const;
 	virtual int ListH() const;

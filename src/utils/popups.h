@@ -4,8 +4,9 @@
 
 class Popup : public Object {
 public:
-	Popup(vec2i SIZ=vec2i(500, 200), float TO=0.f);
+	Popup(const vec2i& SIZ=vec2i(500, 200), float TO=0.f);
 	virtual ~Popup();
+	virtual Popup* Clone() const;
 
 	void Tick();
 	virtual vector<Object*> getObjects() const;
@@ -16,8 +17,9 @@ protected:
 
 class PopupMessage : public Popup {
 public:
-	PopupMessage(string MSG="", int W=500, int TH=48, int BH=32, float TO=0.f);
+	PopupMessage(const string& MSG="", int W=500, int TH=48, int BH=32, float TO=0.f);
 	virtual ~PopupMessage();
+	virtual PopupMessage* Clone() const;
 
 	virtual vector<Object*> getObjects() const;
 	SDL_Rect CancelButton() const;
@@ -29,8 +31,9 @@ protected:
 
 class PopupChoice : public PopupMessage {
 public:
-	PopupChoice(string MSG="", int W=500, int TH=48, int BH=32);
+	PopupChoice(const string& MSG="", int W=500, int TH=48, int BH=32);
 	virtual ~PopupChoice();
+	virtual PopupMessage* Clone() const;
 
 	virtual vector<Object*> getObjects() const;
 	SDL_Rect OkButton() const;
@@ -41,8 +44,9 @@ protected:
 
 class PopupText : public PopupChoice {
 public:
-	PopupText(string MSG="", string LIN="", int W=500, int TH=48, int LH=42, int BH=32);
+	PopupText(const string& MSG="", const string& LIN="", int W=500, int TH=48, int LH=42, int BH=32);
 	virtual ~PopupText();
+	virtual PopupText* Clone() const;
 
 	virtual vector<Object*> getObjects() const;
 	LineEdit* Line() const;

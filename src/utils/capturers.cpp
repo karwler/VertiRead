@@ -7,13 +7,21 @@ Capturer::Capturer(const Object& BASE) :
 {}
 Capturer::~Capturer() {}
 
+Capturer* Capturer::Clone() const {
+	return new Capturer(*this);
+}
+
 void Capturer::OnClick() {
 	World::inputSys()->SetCapture(this);
 }
 
+void Capturer::OnKeypress(SDL_Scancode key) {
+	// ms visual is being a bitch
+}
+
 // LINE EDIT
 
-LineEdit::LineEdit(const Object& BASE, string LBL, string TXT, void (Program::*KCALL)(TextEdit*), void (Program::*CCALL)(), ETextType TYPE) :
+LineEdit::LineEdit(const Object& BASE, const string& LBL, const string& TXT, void (Program::*KCALL)(TextEdit*), void (Program::*CCALL)(), ETextType TYPE) :
 	Capturer(BASE),
 	label(LBL),
 	type(TYPE),
@@ -24,6 +32,10 @@ LineEdit::LineEdit(const Object& BASE, string LBL, string TXT, void (Program::*K
 	cancelCall = CCALL ? CCALL : &Program::Event_Back;
 }
 LineEdit::~LineEdit() {}
+
+LineEdit* LineEdit::Clone() const {
+	return new LineEdit(*this);
+}
 
 void LineEdit::OnClick() {
 	Capturer::OnClick();
@@ -52,7 +64,7 @@ void LineEdit::OnKeypress(SDL_Scancode key) {
 	}
 }
 
-void LineEdit::AddText(string text) {
+void LineEdit::AddText(const string& text) {
 	editor.Add(CheckText(text));
 }
 
@@ -97,7 +109,7 @@ string LineEdit::CheckText(string str) {
 
 // KEY GETTER
 
-KeyGetter::KeyGetter(const Object& BASE, string LBL, SDL_Scancode KEY, void (Program::*CALLB)(SDL_Scancode)) :
+KeyGetter::KeyGetter(const Object& BASE, const string& LBL, SDL_Scancode KEY, void (Program::*CALLB)(SDL_Scancode)) :
 	Capturer(BASE),
 	label(LBL),
 	key(KEY)
@@ -105,6 +117,10 @@ KeyGetter::KeyGetter(const Object& BASE, string LBL, SDL_Scancode KEY, void (Pro
 	callback = CALLB ? CALLB : &Program::Event_KeyCaptureOk;
 }
 KeyGetter::~KeyGetter() {}
+
+KeyGetter* KeyGetter::Clone() const {
+	return new KeyGetter(*this);
+}
 
 void KeyGetter::OnClick() {
 	Capturer::OnClick();

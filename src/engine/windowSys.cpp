@@ -13,14 +13,14 @@ WindowSys::~WindowSys() {
 void WindowSys::SetWindow() {
 	DestroyWindow();
 
-	uint flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+	uint flags = SDL_WINDOW_RESIZABLE;
 	if (sets.fullscreen)     flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 	else if (sets.maximized) flags |= SDL_WINDOW_MAXIMIZED;
-
+	
 	window = SDL_CreateWindow("VertRead", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets.resolution.x, sets.resolution.y, flags);
 	if (!window)
 		throw Exception("couldn't create window" + string(SDL_GetError()), 3);
-
+	
 	CreateRenderer();
 }
 
@@ -28,10 +28,7 @@ void WindowSys::CreateRenderer() {
 	if (renderer)
 		SDL_DestroyRenderer(renderer);
 
-	uint flags = SDL_RENDERER_ACCELERATED;
-	if (sets.vsync) flags |= SDL_RENDERER_PRESENTVSYNC;
-
-	renderer = SDL_CreateRenderer(window, GetRenderDriverIndex(), flags);
+	renderer = SDL_CreateRenderer(window, GetRenderDriverIndex(), SDL_RENDERER_ACCELERATED);
 	if (!renderer)
 		throw Exception("couldn't create renderer" + string(SDL_GetError()), 4);
 
@@ -45,7 +42,7 @@ void WindowSys::DestroyWindow() {
 		SDL_DestroyWindow(window);
 }
 
-void WindowSys::SetIcon(string file) {
+void WindowSys::SetIcon(const string& file) {
 	SDL_Surface* icon = IMG_Load(file.c_str());
 	if (icon) {
 		SDL_SetWindowIcon(window, icon);
@@ -53,9 +50,11 @@ void WindowSys::SetIcon(string file) {
 	}
 }
 
-void WindowSys::DrawObjects(vector<Object*> objects) {
-	SDL_SetRenderDrawColor(renderer, sets.colors[EColor::background].x, sets.colors[EColor::background].y, sets.colors[EColor::background].z, sets.colors[EColor::background].a);
+void WindowSys::DrawObjects(const vector<Object*>& objects) {
+	vec4b bgcolor = sets.colors[EColor::background];
+	SDL_SetRenderDrawColor(renderer, bgcolor.x, bgcolor.y, bgcolor.z, bgcolor.a);
 	SDL_RenderClear(renderer);
+	
 	for (uint i=0; i!=objects.size()-1; i++)
 		PassDrawObject(objects[i]);									// draw normal widgets
 	if (objects[objects.size()-1])
@@ -106,11 +105,6 @@ void WindowSys::Fullscreen(bool on) {
 		SDL_SetWindowFullscreen(window, 0);
 }
 
-void WindowSys::VSync(bool on) {
-	sets.vsync = on;
-	CreateRenderer();
-}
-
 SDL_Renderer* WindowSys::Renderer() const {
 	return renderer;
 }
@@ -127,9 +121,11 @@ int WindowSys::GetRenderDriverIndex() {
 void WindowSys::PassDrawObject(Object* obj) {
 	// specific drawing for each object
 	if (dynamic_cast<Label*>(obj))
-		DrawObject(dynamic_cast<Label*>(obj));
+		DrawObject(obj->getRect(), obj->color, static_cast<Label*>(obj)->getText());
+	else if (dynamic_cast<ButtonText*>(obj))
+		DrawObject(obj->getRect(), obj->color, static_cast<ButtonText*>(obj)->getText());
 	else if (dynamic_cast<ButtonImage*>(obj))
-		DrawImage(dynamic_cast<ButtonImage*>(obj)->CurTex());
+		DrawImage(static_cast<ButtonImage*>(obj)->CurTex());
 	else if (dynamic_cast<ListBox*>(obj))
 		DrawObject(static_cast<ListBox*>(obj));
 	else if (dynamic_cast<TileBox*>(obj))
@@ -148,13 +144,12 @@ void WindowSys::PassDrawObject(Object* obj) {
 		DrawRect(obj->getRect(), obj->color);
 }
 
-void WindowSys::DrawObject(Label* obj) {
-	DrawRect(obj->getRect(), obj->color);
+void WindowSys::DrawObject(const SDL_Rect& bg, EColor bgColor, const Text& text) {
+	DrawRect(bg, bgColor);
 
-	Text txt = obj->getText();
-	int len = txt.size().x;
-	len = len+5 > obj->Size().x ? len - obj->Size().x +10 : 0;		// use len as crop variable
-	DrawText(txt, {0, 0, len, 0});
+	int len = text.size().x;
+	len = len+5 > bg.w ? len - bg.w +10 : 0;	// use len as crop variable
+	DrawText(text, { 0, 0, len, 0 });
 }
 
 void WindowSys::DrawObject(ListBox* obj) {
@@ -191,9 +186,13 @@ void WindowSys::DrawObject(TileBox* obj) {
 
 void WindowSys::DrawObject(ObjectBox* obj) {
 	vec2i interval = obj->VisibleObjects();
-	for (int i=interval.x; i<=interval.y; i++)
-		PassDrawObject(obj->getObject(i));
-
+	for (int i=interval.x; i<=interval.y; i++) {
+		SDL_Rect crop;
+		Object* item = obj->getObject(i, &crop);
+		SDL_Rect rect = item->getRect();
+		PassDrawObject(item);
+		delete item;
+	}
 	DrawRect(obj->Bar(), EColor::darkened);
 	DrawRect(obj->Slider(), EColor::highlighted);
 }
@@ -256,19 +255,18 @@ void WindowSys::DrawObject(Popup* obj) {
 }
 
 void WindowSys::DrawRect(const SDL_Rect& rect, EColor color) {
-	SDL_SetRenderDrawColor(renderer, sets.colors[color].x, sets.colors[color].y, sets.colors[color].z, sets.colors[color].a);
+	vec4b cclr = sets.colors[color];
+	SDL_SetRenderDrawColor(renderer, cclr.x, cclr.y, cclr.z, cclr.a);
 	SDL_RenderFillRect(renderer, &rect);
 }
 
-void WindowSys::DrawImage(const Image& img, SDL_Rect crop) {
-	if (!img.texture)	// no need to draw a nonexistent texture
-		return;
+void WindowSys::DrawImage(const Image& img,const SDL_Rect& crop) {
 	SDL_Rect rect = img.getRect();	// the rect the image is gonna be projected on
 	if (needsCrop(crop)) {
-		SDL_Surface* surf = IMG_Load(img.texture->File().c_str());							// gotta reload texture as surface
-		SDL_Rect ori = {rect.x, rect.y, surf->w, surf->h};									// proportions of the original image
-		vec2f fac(float(ori.w) / float(rect.w), float(ori.h) / float(rect.h));				// scaling factor
-		rect = {rect.x+crop.x, rect.y+crop.y, rect.w-crop.x-crop.w, rect.h-crop.y-crop.h};	// adjust rect to crop
+		SDL_Surface* surf = IMG_Load(img.texture->File().c_str());				// gotta reload texture as surface
+		SDL_Rect ori = {rect.x, rect.y, surf->w, surf->h};						// proportions of the original image
+		vec2f fac(float(ori.w) / float(rect.w), float(ori.h) / float(rect.h));	// scaling factor
+		rect = cropRect(rect, crop);												// adjust rect to crop
 
 		// crop original image by factor
 		SDL_Surface* sheet = cropSurface(surf, ori, {int(float(crop.x)*fac.x), int(float(crop.y)*fac.y), int(float(crop.w)*fac.x), int(float(crop.h)*fac.y)});
@@ -288,7 +286,7 @@ void WindowSys::DrawText(const Text& txt, const SDL_Rect& crop) {
 	SDL_Rect rect = {txt.pos.x, txt.pos.y, siz.x, siz.y};
 
 	SDL_Surface* surface = TTF_RenderText_Blended(World::library()->Fonts()->Get(txt.height), txt.text.c_str(), { sets.colors[txt.color].x, sets.colors[txt.color].y, sets.colors[txt.color].z, sets.colors[txt.color].a });
-	SDL_Texture* tex = nullptr;
+	SDL_Texture* tex;
 	if (needsCrop(crop)) {
 		SDL_Surface* sheet = cropSurface(surface, rect, crop);
 		tex = SDL_CreateTextureFromSurface(renderer, sheet);

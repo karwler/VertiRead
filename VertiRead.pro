@@ -4,12 +4,12 @@ CONFIG += c++11
 CONFIG -= app_bundle qt
 
 # output
-win32:TARGET = VertiRead
-unix:TARGET = vertiread
+win32: TARGET = VertiRead
+else: TARGET = vertiread
 
 OBJECTS_DIR = $$OUT_PWD/bin/
-macx:DESTDIR = $$OUT_PWD/VertiRead.app/Contents/MacOS/
-else:DESTDIR = $$OUT_PWD/build/
+macx: DESTDIR = $$OUT_PWD/VertiRead.app/Contents/MacOS/
+else: DESTDIR = $$OUT_PWD/build/
 
 # copy data dir and dependencies
 win32 {
@@ -43,8 +43,8 @@ POST_TARGETDEPS += postbuild
 
 # includepaths
 INCLUDEPATH += $$PWD/src/
-win32:INCLUDEPATH += $$PWD/include/
-macx:INCLUDEPATH += /usr/local/include/
+win32: INCLUDEPATH += $$PWD/include/
+macx: INCLUDEPATH += /usr/local/include/
 
 # dependencies' directories
 win32 {
@@ -76,6 +76,13 @@ else {
 unix {
     LIBS += -lboost_system \
             -lboost_filesystem
+}
+
+# macro for win_main
+win32 {
+	CONFIG(debug, debug|release) {
+		DEFINES += "DEBUG"
+	}
 }
 
 # set sources
@@ -118,4 +125,4 @@ HEADERS += src/engine/audioSys.h \
     src/prog/library.h \
     src/utils/capturers.h
 
-win32:RC_FILE = rsc/resource.rc
+win32: RC_FILE = rsc/resource.rc

@@ -4,7 +4,7 @@
 
 class ListItem {
 public:
-	ListItem(string LBL="", ScrollArea* SA=nullptr);
+	ListItem(const string& LBL="", ScrollArea* SA=nullptr);
 	virtual ~ListItem();
 	
 	virtual void OnClick(bool doubleclick);
@@ -17,7 +17,7 @@ protected:
 
 class ItemButton : public ListItem {
 public:
-	ItemButton(string LBL="", string DAT="", void (Program::*CALLB)(void*)=nullptr, ScrollArea* SA=nullptr);
+	ItemButton(const string& LBL="", const string& DAT="", void (Program::*CALLB)(void*)=nullptr, ScrollArea* SA=nullptr);
 	virtual ~ItemButton();
 
 	virtual void OnClick(bool doubleclick);

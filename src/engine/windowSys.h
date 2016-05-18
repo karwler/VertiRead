@@ -10,8 +10,8 @@ public:
 
 	void SetWindow();
 	void DestroyWindow();
-	void SetIcon(string file);
-	void DrawObjects(vector<Object*> objects);
+	void SetIcon(const string& file);
+	void DrawObjects(const vector<Object*>& objects);
 	
 	SDL_Renderer* Renderer() const;
 	VideoSettings Settings() const;
@@ -19,7 +19,6 @@ public:
 	static vec2i DesktopResolution();
 	void WindowEvent(const SDL_WindowEvent& window);
 	void Fullscreen(bool on);
-	void VSync(bool on);
 
 private:
 	SDL_Window* window;
@@ -30,7 +29,7 @@ private:
 	int GetRenderDriverIndex();
 
 	void PassDrawObject(Object* obj);
-	void DrawObject(Label* obj);
+	void DrawObject(const SDL_Rect& bg, EColor bgColor, const Text& text);
 	void DrawObject(ListBox* obj);
 	void DrawObject(TileBox* obj);
 	void DrawObject(ObjectBox* obj);
@@ -41,6 +40,6 @@ private:
 	void DrawObject(Popup* obj);
 
 	void DrawRect(const SDL_Rect& rect, EColor color);
-	void DrawImage(const Image& img, SDL_Rect crop = { 0, 0, 0, 0 });
+	void DrawImage(const Image& img, const SDL_Rect& crop = { 0, 0, 0, 0 });
 	void DrawText(const Text& txt, const SDL_Rect& crop = { 0, 0, 0, 0 });
 };

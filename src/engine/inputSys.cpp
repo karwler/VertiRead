@@ -51,7 +51,7 @@ void InputSys::CheckShortcuts(const SDL_KeyboardEvent& key) {
 		}
 }
 
-bool InputSys::isPressed(string key) const {
+bool InputSys::isPressed(const string& key) const {
 	return SDL_GetKeyboardState(nullptr)[sets.holders.at(key)];
 }
 

@@ -1,8 +1,8 @@
 #include "world.h"
 
-#ifdef _WIN32
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
-	World::args = getWords(wtos(pCmdLine), false);
+#if defined(_WIN32) && !defined(DEBUG)
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow) {
+	World::args = getWords(pCmdLine, false);
 #else
 int main(int argc, char** argv) {
 	for (int i=0; i!=argc; i++)

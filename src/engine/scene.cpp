@@ -11,27 +11,27 @@ Scene::Scene(const GeneralSettings& SETS) :
 }
 
 Scene::~Scene() {
-	Clear(objects);
+	clear(objects);
 }
 
 void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 	// reset values
-	Clear(objects);
+	clear(objects);
 	popup.reset();
 	focObject = 0;
 	objectHold = nullptr;
 
 	// little conveniences
 	vec2i res = World::winSys()->Resolution();
-	vec2i posT(-1, -1);
+	vec2i posT(-1);
 	vec2i sizT(140, 40);
 
 	switch (newMenu) {
 	case EMenu::books: {
 		// top buttons
 		objects = {
-			new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3-10, 50), FIX_Y | FIX_H), &Program::Event_OpenPlaylistList,"Playlists"),
-			new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3-10, 50), FIX_Y | FIX_H), &Program::Event_OpenGeneralSettings, "Settings"),
+			new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenPlaylistList,"Playlists"),
+			new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenGeneralSettings, "Settings"),
 			new ButtonText(Object(vec2i(res.x/3*2, 0), posT, vec2i(res.x/3,    50), FIX_Y | FIX_H), &Program::Event_Back, "Exit")
 		};
 
@@ -61,15 +61,15 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 		// reader box
 		fs::path file = cstr(dat);
 		library->LoadPics(Filer::GetPicsFromDir(file.parent_path()));
-		objects = { new ReaderBox(library->Pictures(), file.string()) };
+		objects = { new ReaderBox(Object(0, 0, World::winSys()->Resolution(), FIX_POS | FIX_END, EColor::background), library->Pictures(), file.string()) };
 		focObject = objects.size()-1;
 		break; }
 	case EMenu::playlists: {
 		// top buttons
 		sizT = vec2i(80, 30);
 		objects = {
-			new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3-10, 50), FIX_Y | FIX_H), &Program::Event_OpenBookList, "Library"),
-			new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3-10, 50), FIX_Y | FIX_H), &Program::Event_OpenGeneralSettings, "Settings"),
+			new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenBookList, "Library"),
+			new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenGeneralSettings, "Settings"),
 			new ButtonText(Object(vec2i(res.x/3*2, 0), posT, vec2i(res.x/3,    50), FIX_Y | FIX_H), &Program::Event_Back, "Exit"),
 
 			new ButtonText(Object(vec2i(0,   60), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_AddButtonClick, "New"),
@@ -124,8 +124,12 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Back")
 		};
 
+		vec2i ancT(160, 0);
+		sizT = vec2i(res.x-160, 30);
+		EFix fixT = FIX_POS | FIX_EX | FIX_H;
 		vector<Object*> items = {
-			// something
+			new LineEdit(Object(ancT, posT, sizT, fixT), "Library   ", sets.dirLib),
+			new LineEdit(Object(ancT, posT, sizT, fixT), "Playlists ", sets.dirPlist)
 		};
 		objects.push_back(new ObjectBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
 		focObject = objects.size()-1;
@@ -134,7 +138,7 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 		objects = {
 			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenGeneralSettings, "General"),
 			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenAudioSettings, "Audio"),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, "Vontrols"),
+			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, "Controls"),
 			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Back")
 		};
 
@@ -148,7 +152,7 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 		objects = {
 			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenGeneralSettings, "General"),
 			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenVideoSettings, "Video"),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, "Vontrols"),
+			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, "Controls"),
 			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Back")
 		};
 
@@ -177,7 +181,6 @@ void Scene::SwitchMenu(EMenu newMenu, void* dat) {
 }
 
 void Scene::ResizeMenu() {
-	// for some reason the next three lines crash which is why they've been temporarily moved to the WindowSystem::DrawObjects function
 	for (Object* obj : objects) {
 		ScrollArea* box = dynamic_cast<ScrollArea*>(obj);
 		if (box)
@@ -219,51 +222,59 @@ void Scene::Tick() {
 }
 
 void Scene::OnMouseDown(bool doubleclick) {
-	// check if there's a popup window
-	if (popup) {
-		if (!inRect(popup->getRect(), InputSys::mousePos()))
-			return;
+	// first check if there's a popup window
+	if (popup)
+		CheckPopupClick(popup);
+	else
+		CheckObjectsClick(objects, doubleclick);
+}
 
-		if (dynamic_cast<PopupChoice*>(popup.get())) {
-			if (CheckPopupChoiceClick(static_cast<PopupChoice*>(popup.get())))
-				return;
-		}
-		else if (dynamic_cast<PopupMessage*>(popup.get())) {
-			if (CheckPopupSimpleClick(static_cast<PopupMessage*>(popup.get())))
-				return;
-		}
-		return;
-	}
-
-	// check other objects
+void Scene::CheckObjectsClick(const vector<Object*>& objs, bool doubleclick) {
 	for (Object* obj : objects) {
 		if (!inRect(obj->getRect(), InputSys::mousePos()))	// skip if mouse isn't over object
 			continue;
 
 		if (dynamic_cast<Button*>(obj)) {
-			dynamic_cast<Button*>(obj)->OnClick();
+			static_cast<Button*>(obj)->OnClick();
+			break;
+		}
+		else if (dynamic_cast<Capturer*>(obj)) {
+			static_cast<Capturer*>(obj)->OnClick();
 			break;
 		}
 		else if (dynamic_cast<ScrollArea*>(obj)) {
 			static_cast<ScrollArea*>(obj)->selectedItem = nullptr;	// deselect all items
-
 			if (CheckSliderClick(static_cast<ScrollArea*>(obj)))	// first check if slider is clicked
 				break;
 			else if (dynamic_cast<ListBox*>(obj)) {
-				if (CheckListBoxClick(static_cast<ListBox*>(obj), doubleclick))
-					break;
+				CheckListBoxClick(static_cast<ListBox*>(obj), doubleclick);
+				break;
 			}
 			else if (dynamic_cast<TileBox*>(obj)) {
-				if (CheckTileBoxClick(static_cast<TileBox*>(obj), doubleclick))
-					break;
+				CheckTileBoxClick(static_cast<TileBox*>(obj), doubleclick);
+				break;
+			}
+			else if (dynamic_cast<ObjectBox*>(obj)) {
+				CheckObjectBoxClick(static_cast<ObjectBox*>(obj));
+				break;
 			}
 			else if (dynamic_cast<ReaderBox*>(obj)) {
-				if (CheckReaderBoxClick(static_cast<ReaderBox*>(obj), doubleclick))
-					break;
+				CheckReaderBoxClick(static_cast<ReaderBox*>(obj), doubleclick);
+				break;
 			}
 		}
 
 	}
+}
+
+void Scene::CheckPopupClick(Popup* obj) {
+	if (!inRect(popup->getRect(), InputSys::mousePos()))
+		return;
+
+	if (dynamic_cast<PopupChoice*>(obj))
+		CheckPopupChoiceClick(static_cast<PopupChoice*>(obj));
+	else if (dynamic_cast<PopupMessage*>(obj))
+		CheckPopupSimpleClick(static_cast<PopupMessage*>(obj));
 }
 
 bool Scene::CheckSliderClick(ScrollArea* obj) {
@@ -282,7 +293,7 @@ bool Scene::CheckSliderClick(ScrollArea* obj) {
 	return false;
 }
 
-bool Scene::CheckListBoxClick(ListBox* obj, bool doubleclick) {
+void Scene::CheckListBoxClick(ListBox* obj, bool doubleclick) {
 	vec2i interval = obj->VisibleItems();
 	vector<ListItem*> items = obj->Items();
 	for (int i=interval.x; i<=interval.y; i++) {
@@ -290,70 +301,82 @@ bool Scene::CheckListBoxClick(ListBox* obj, bool doubleclick) {
 		SDL_Rect rect = obj->ItemRect(i, &crop);
 		if (inRect(rect, InputSys::mousePos())) {
 			items[i]->OnClick(doubleclick);
-			return true;
+			break;
 		}
 	}
-	return false;
 }
 
-bool Scene::CheckTileBoxClick(TileBox* obj, bool doubleclick) {
+void Scene::CheckTileBoxClick(TileBox* obj, bool doubleclick) {
 	vec2i interval = obj->VisibleItems();
 	const vector<ListItem*>& items = obj->Items();
 	for (int i=interval.x; i<=interval.y; i++)
 		if (inRect(obj->ItemRect(i), InputSys::mousePos())) {
 			items[i]->OnClick(doubleclick);
-			return true;
+			break;
 		}
-	return false;
 }
 
-bool Scene::CheckReaderBoxClick(ReaderBox* obj, bool doubleclick) {
+void Scene::CheckObjectBoxClick(ObjectBox* obj) {
+	vec2i interval = obj->VisibleObjects();
+	for (int i=interval.x; i!=interval.y; i++) {
+		SDL_Rect crop;
+		Object* item = obj->getObject(i, &crop);
+
+		if (inRect(cropRect(item->getRect(), crop), InputSys::mousePos())) {
+			if (dynamic_cast<Button*>(item)) {
+				static_cast<Button*>(item)->OnClick();
+				break;
+			}
+			else if (dynamic_cast<Capturer*>(item)) {
+				static_cast<Capturer*>(item)->OnClick();
+				break;
+			}
+		}
+		delete item;
+	}
+}
+
+void Scene::CheckReaderBoxClick(ReaderBox* obj, bool doubleclick) {
 	vec2i mPos = InputSys::mousePos();
-	if (obj->showList())	// check list buttons
+	if (obj->showList())		// check list buttons
 		for (ButtonImage& but : obj->ListButtons())
 			if (inRect(but.getRect(), mPos)) {
 				but.OnClick();
-				return true;
+				break;
 			}
-	if (obj->showPlayer())	// check player buttons
+	else if (obj->showPlayer())	// check player buttons
 		for (ButtonImage& but : obj->PlayerButtons())
 			if (inRect(but.getRect(), mPos)) {
 				but.OnClick();
-				return true;
+				break;
 			}
-
-	if (doubleclick) {
+	else if (doubleclick) {
 		vec2i interval = obj->VisiblePictures();
 		const vector<Image>& pics = obj->Pictures();
 		for (int i=interval.x; i<=interval.y; i++) {
 			SDL_Rect crop;
 			SDL_Rect rect = obj->getImage(i, &crop).getRect();
-			if (inRect({rect.x+crop.x, rect.y+crop.y, rect.w-crop.x-crop.w, rect.h-crop.y-crop.h}, mPos)) {
+
+			if (inRect(cropRect(rect, crop), mPos)) {
 				obj->Zoom(float(obj->Size().x) / float(pics[i].size.x));
-				return true;
+				break;
 			}
 		}
 	}
 	else {
 		vec2i pos = obj->Pos();
 		vec2i size = obj->Size();
-		if (inRect({pos.x, pos.y, size.x-obj->barW, size.y}, mPos)) {	// init list mouse drag
+		if (inRect({pos.x, pos.y, size.x-obj->barW, size.y}, mPos))		// init list mouse drag
 			objectHold = obj;
-			return true;
-		}
 	}
-	return false;
 }
 
-bool Scene::CheckPopupSimpleClick(PopupMessage* obj) {
-	if (inRect(obj->CancelButton(), InputSys::mousePos())) {
+void Scene::CheckPopupSimpleClick(PopupMessage* obj) {
+	if (inRect(obj->CancelButton(), InputSys::mousePos()))
 		SetPopup(nullptr);
-		return true;
-	}
-	return false;
 }
 
-bool Scene::CheckPopupChoiceClick(PopupChoice* obj) {
+void Scene::CheckPopupChoiceClick(PopupChoice* obj) {
 	if (inRect(obj->OkButton(), InputSys::mousePos())) {
 		PopupText* poptext = dynamic_cast<PopupText*>(obj);
 		if (poptext)
@@ -361,9 +384,6 @@ bool Scene::CheckPopupChoiceClick(PopupChoice* obj) {
 	}
 	else if (inRect(obj->CancelButton(), InputSys::mousePos()))
 		SetPopup(nullptr);
-	else
-		return false;
-	return true;
 }
 
 void Scene::OnMouseUp() {

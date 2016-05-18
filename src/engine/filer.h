@@ -12,15 +12,15 @@ EDirFilter operator|(EDirFilter a, EDirFilter b);
 class Filer {
 public:
 	static byte CheckDirectories(const GeneralSettings& sets);
-	static bool ReadTextFile(string file, vector<string>& lines, bool printMessage=true);
-	static bool WriteTextFile(string file, const vector<string>& lines);
-	static vector<fs::path> ListDir(fs::path dir, EDirFilter filter, const vector<string>& extFilter={});
-	static vector<string> GetPicsFromDir(fs::path dir);
+	static bool ReadTextFile(const string& file, vector<string>& lines, bool printMessage=true);
+	static bool WriteTextFile(const string& file, const vector<string>& lines);
+	static vector<fs::path> ListDir(const fs::path& dir, EDirFilter filter, const vector<string>& extFilter={});
+	static vector<string> GetPicsFromDir(const fs::path& dir);
 
 	static map<string, string> GetTextures();
 	static map<string, string> GetSounds();
 
-	static Playlist LoadPlaylist(string name);
+	static Playlist LoadPlaylist(const string& name);
 	static void SavePlaylist(const Playlist& plist);
 
 	static GeneralSettings LoadGeneralSettings();
@@ -39,10 +39,9 @@ public:
 #endif
 	static string dirSets();
 	static string dirData();
-	static string dirLangs();
 	static string dirSnds();
 	static string dirTexs();
 
 	static vector<string> dirFonts();
-	static bool findFont(string font, string *dir=nullptr);
+	static bool findFont(const string& font, string* dir=nullptr);
 };

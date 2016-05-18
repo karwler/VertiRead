@@ -6,7 +6,7 @@ EFix operator|(EFix a, EFix b) {
 
 // OBJECT
 
-Object::Object(vec2i ANC, vec2i POS, vec2i SIZ, EFix FIX, EColor CLR) :
+Object::Object(const vec2i& ANC, vec2i POS, const vec2i& SIZ, EFix FIX, EColor CLR) :
 	color(CLR),
 	fix(FIX)
 {
@@ -21,6 +21,10 @@ Object::Object(vec2i ANC, vec2i POS, vec2i SIZ, EFix FIX, EColor CLR) :
 }
 Object::~Object() {}
 
+Object* Object::Clone() const {
+	return new Object(*this);
+}
+
 SDL_Rect Object::getRect() const {
 	return {Pos().x, Pos().y, Size().x, Size().y};
 }
@@ -32,7 +36,7 @@ vec2i Object::Anchor() const {
 	return ret;
 }
 
-void Object::Anchor(vec2i newPos) {
+void Object::Anchor(const vec2i& newPos) {
 	anchor.x = (fix & FIX_X) ? newPos.x : prcX(newPos.x);
 	anchor.y = (fix & FIX_Y) ? newPos.y : prcY(newPos.y);
 }
@@ -44,7 +48,7 @@ vec2i Object::Pos() const {
 	return ret;
 }
 
-void Object::Pos(vec2i newPos) {
+void Object::Pos(const vec2i& newPos) {
 	vec2i dist = newPos - Anchor();
 	pos.x = (fix & FIX_W) ? dist.x : prcX(dist.x);
 	pos.y = (fix & FIX_H) ? dist.y : prcY(dist.y);
@@ -57,7 +61,7 @@ vec2i Object::End() const {
 	return ret;
 }
 
-void Object::End(vec2i newPos) {
+void Object::End(const vec2i& newPos) {
 	vec2i dist = newPos - Anchor();
 	end.x = (fix & FIX_EX) ? prcX(newPos.x) : (fix & FIX_W) ? dist.x : prcX(dist.x);
 	end.y = (fix & FIX_EY) ? prcY(newPos.y) : (fix & FIX_H) ? dist.y : prcY(dist.y);
@@ -67,7 +71,7 @@ vec2i Object::Size() const {
 	return End() - Pos();
 }
 
-void Object::Size(vec2i newSize) {
+void Object::Size(const vec2i& newSize) {
 	vec2i dist = Pos() + newSize - Anchor();
 	end.x = (fix & FIX_EX) ? prcX(Pos().x + newSize.x) : (fix & FIX_W) ? dist.x : prcX(dist.x);
 	end.y = (fix & FIX_EY) ? prcY(Pos().y + newSize.y) : (fix & FIX_H) ? dist.y : prcY(dist.y);
@@ -75,11 +79,15 @@ void Object::Size(vec2i newSize) {
 
 // LABEL
 
-Label::Label(const Object& BASE, string TXT) :
+Label::Label(const Object& BASE, const string& TXT) :
 	Object(BASE),
 	text(TXT)
 {}
 Label::~Label() {}
+
+Label* Label::Clone() const {
+	return new Label(*this);
+}
 
 Text Label::getText() const {
 	return Text(text, Pos()+vec2i(5, 0), Size().y, 8);
@@ -93,6 +101,10 @@ Button::Button(const Object& BASE, void (Program::*CALLB)()) :
 {}
 Button::~Button() {}
 
+Button* Button::Clone() const {
+	return new Button(*this);
+}
+
 void Button::OnClick() {
 	if (callback)
 		(World::program()->*callback)();
@@ -102,18 +114,36 @@ void Button::Callback(void (Program::*func)()) {
 	callback = func;
 }
 
+// BUTTON TEXT
+
+ButtonText::ButtonText(const Object& BASE, void (Program::*CALLB)(), const string& TXT) :
+	Button(BASE, CALLB),
+	text(TXT)
+{}
+ButtonText::~ButtonText() {}
+
+ButtonText* ButtonText::Clone() const {
+	return new ButtonText(*this);
+}
+
+Text ButtonText::getText() const {
+	return Text(text, Pos()+vec2i(5, 0), Size().y, 8);;
+}
+
 // BUTTON IMAGE
 
 ButtonImage::ButtonImage(const Object& BASE, void (Program::*CALLB)(), const vector<string>& TEXS) :
-	Object(BASE),
+	Button(BASE, CALLB),
 	curTex(0)
 {
-	callback = CALLB;
-
 	for (const string& it : TEXS)
 		texes.push_back(World::library()->getTex(it));
 }
 ButtonImage::~ButtonImage() {}
+
+ButtonImage* ButtonImage::Clone() const {
+	return new ButtonImage(*this);
+}
 
 void ButtonImage::OnClick() {
 	Button::OnClick();
@@ -127,17 +157,9 @@ Image ButtonImage::CurTex() const {
 	return texes.empty() ? Image() : Image(Pos(), texes[curTex], Size());
 }
 
-// BUTTON TEXT
+// CHECKBOX
 
-ButtonText::ButtonText(const Object& BASE, void (Program::*CALLB)(), string TXT) :
-	Object(BASE)
-{
-	callback = CALLB;
-	text = TXT;
-}
-ButtonText::~ButtonText() {}
-
-Checkbox::Checkbox(const Object& BASE, std::string TXT, bool ON, void (Program::*CALLB)(bool), int SPC) :
+Checkbox::Checkbox(const Object& BASE, const string& TXT, bool ON, void (Program::*CALLB)(bool), int SPC) :
 	Object(BASE),
 	label(TXT),
 	on(ON),
@@ -145,6 +167,10 @@ Checkbox::Checkbox(const Object& BASE, std::string TXT, bool ON, void (Program::
 	callback(CALLB)
 {}
 Checkbox::~Checkbox() {}
+
+Checkbox* Checkbox::Clone() const {
+	return new Checkbox(*this);
+}
 
 void Checkbox::OnClick() {
 	on = !on;

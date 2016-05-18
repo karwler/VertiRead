@@ -2,7 +2,7 @@
 
 // TEXTURE
 
-Texture::Texture(string FILE) :
+Texture::Texture(const string& FILE) :
 	tex(nullptr)
 {
 	LoadTex(FILE);
@@ -16,7 +16,7 @@ string Texture::File() const {
 	return file;
 }
 
-void Texture::LoadTex(string path) {
+void Texture::LoadTex(const string& path) {
 	file = path;
 	if (tex)
 		SDL_DestroyTexture(tex);
@@ -32,14 +32,14 @@ void Texture::LoadTex(string path) {
 
 // IMAGE
 
-Image::Image(vec2i POS, Texture* TEX, vec2i SIZ) :
+Image::Image(const vec2i& POS, Texture* TEX, const vec2i& SIZ) :
 	pos(POS),
 	texture(TEX)
 {
 	size = SIZ.hasNull() ? size = texture->Res() : SIZ;
 }
 
-Image::Image(vec2i POS, string TEX, vec2i SIZ) :
+Image::Image(const vec2i& POS, const string& TEX, const vec2i& SIZ) :
 	pos(POS)
 {
 	texture = World::library()->getTex(TEX);
@@ -52,7 +52,7 @@ SDL_Rect Image::getRect() const {
 
 // FONT
 
-FontSet::FontSet(string FILE) :
+FontSet::FontSet(const string& FILE) :
 	file(FILE)
 {}
 
@@ -76,7 +76,7 @@ TTF_Font* FontSet::Get(int size) {
 	return fonts.at(size);
 }
 
-vec2i FontSet::TextSize(string text, int size) {
+vec2i FontSet::TextSize(const string& text, int size) {
 	vec2i siz;
 	if (Get(size))
 		TTF_SizeText(fonts.at(size), text.c_str(), &siz.x, &siz.y);
@@ -95,7 +95,7 @@ void FontSet::AddSize(int size) {
 
 // TEXT
 
-Text::Text(string TXT, vec2i POS, int H, int HSCAL, EColor CLR) :
+Text::Text(const string& TXT, const vec2i& POS, int H, int HSCAL, EColor CLR) :
 	pos(POS),
 	color(CLR),
 	text(TXT)
@@ -109,7 +109,7 @@ vec2i Text::size() const {
 
 // TEXT EDIT
 
-TextEdit::TextEdit(string TXT, int CPOS) :
+TextEdit::TextEdit(const string& TXT, int CPOS) :
 	cpos(CPOS),
 	text(TXT)
 {}
@@ -143,7 +143,7 @@ string TextEdit::getText() const {
 	return text;
 }
 
-void TextEdit::Add(string str) {
+void TextEdit::Add(const string& str) {
 	text.insert(cpos, str);
 	cpos += str.length();
 	World::engine->SetRedrawNeeded();
@@ -170,13 +170,13 @@ Shortcut::Shortcut(SDL_Scancode KEY, void (Program::*CALL)()) :
 
 // PLAYLIST
 
-Playlist::Playlist(string NAME, const vector<fs::path>& SGS, const vector<string>& BKS) :
+Playlist::Playlist(const string& NAME, const vector<fs::path>& SGS, const vector<string>& BKS) :
 	name(NAME),
 	songs(SGS),
 	books(BKS)
 {}
 
-Directory::Directory(string NAME, const vector<string>& DIRS, vector<string> FILS) :
+Directory::Directory(const string& NAME, const vector<string>& DIRS, const vector<string>& FILS) :
 	name(NAME),
 	dirs(DIRS),
 	files(FILS)
@@ -184,7 +184,7 @@ Directory::Directory(string NAME, const vector<string>& DIRS, vector<string> FIL
 
 // GENEREAL SETTINGS
 
-GeneralSettings::GeneralSettings(string LIB, string PST)
+GeneralSettings::GeneralSettings(const string& LIB, const string& PST)
 {
 	dirLib = LIB.empty() ? Filer::dirSets() + "library"+dsep : LIB;
 	if (dirLib[dirLib.length()-1] != dsep[0])
@@ -205,8 +205,7 @@ string GeneralSettings::playlistParh() const {
 
 // VIDEO SETTINGS
 
-VideoSettings::VideoSettings(bool VS, bool MAX, bool FSC, vec2i RES, string FNT, string RNDR) :
-	vsync(VS),
+VideoSettings::VideoSettings(bool MAX, bool FSC, const vec2i& RES, const string& FNT, const string& RNDR) :
 	maximized(MAX), fullscreen(FSC),
 	resolution(RES),
 	renderer(RNDR)
@@ -259,7 +258,7 @@ AudioSettings::AudioSettings(int MV, int SV, float SD) :
 
 // CONTROLS SETTINGS
 
-ControlsSettings::ControlsSettings(vec2f SSP, bool fillMissingBindings, const map<string, Shortcut>& SRTCS, const map<string, SDL_Scancode>& HLDS) :
+ControlsSettings::ControlsSettings(const vec2f& SSP, bool fillMissingBindings, const map<string, Shortcut>& SRTCS, const map<string, SDL_Scancode>& HLDS) :
 	scrollSpeed(SSP),
 	shortcuts(SRTCS),
 	holders(HLDS)
@@ -280,7 +279,7 @@ void ControlsSettings::FillMissingBindings() {
 			holders.insert(make_pair(it, GetDefaultHolder(it)));
 }
 
-Shortcut ControlsSettings::GetDefaultShortcut(string name) {
+Shortcut ControlsSettings::GetDefaultShortcut(const string& name) {
 	if (name == "back")
 		return Shortcut(SDL_SCANCODE_ESCAPE, &Program::Event_Back);
 	else if (name == "ok")
@@ -316,7 +315,7 @@ Shortcut ControlsSettings::GetDefaultShortcut(string name) {
 	return Shortcut(SDL_SCANCODE_RCTRL, nullptr);
 }
 
-SDL_Scancode ControlsSettings::GetDefaultHolder(string name) {
+SDL_Scancode ControlsSettings::GetDefaultHolder(const string& name) {
 	if (name == "up")
 		return SDL_SCANCODE_UP;
 	else if (name == "down")
@@ -334,7 +333,7 @@ SDL_Scancode ControlsSettings::GetDefaultHolder(string name) {
 
 // EXCEPTION
 
-Exception::Exception(string MSG, int RV) :
+Exception::Exception(const string& MSG, int RV) :
 	message(MSG),
 	retval(RV)
 {}

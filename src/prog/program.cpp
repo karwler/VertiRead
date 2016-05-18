@@ -128,9 +128,9 @@ void Program::Event_AddButtonClick() {
 		World::scene()->SetPopup(new PopupText("New Playlist"));
 	else if (curMenu == EMenu::plistEditor) {
 		if (editor->showSongs)
-			editor->AddSong();
+			editor->AddSong("");
 		else
-			editor->AddBook();
+			editor->AddBook("");
 		World::scene()->SwitchMenu(curMenu, editor);
 	}
 }
@@ -275,7 +275,6 @@ void Program::Event_TextCaptureOk(TextEdit* box) {
 }
 
 void Program::Event_KeyCaptureOk(SDL_Scancode key) {
-	cout << "key pressed" << SDL_GetScancodeName(key) << endl;
 	World::inputSys()->SetCapture(nullptr);
 }
 

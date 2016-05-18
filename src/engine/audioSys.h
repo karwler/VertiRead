@@ -18,7 +18,7 @@ public:
 
 	void PlayPauseMusic();
 	void SwitchSong(int step=1);
-	void PlaySound(string path);
+	void PlaySound(const string& file);
 
 	AudioSettings Settings() const;
 	void LoadPlaylist(const vector<string>& newList);

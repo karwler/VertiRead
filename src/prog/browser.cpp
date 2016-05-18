@@ -1,7 +1,7 @@
 #include "browser.h"
 #include "engine/filer.h"
 
-Browser::Browser(fs::path RD, fs::path CD) :
+Browser::Browser(const fs::path& RD, const fs::path& CD) :
 	rootDir(RD),
 	curDir(CD)
 {
@@ -19,7 +19,7 @@ vector<fs::path> Browser::ListDirs() {
 	return Filer::ListDir(curDir, FILTER_DIR);
 }
 
-bool Browser::GoTo(string dirname) {
+bool Browser::GoTo(const string& dirname) {
 	fs::path newPath = curDir.string() + dsep + dirname;
 	if (!fs::exists(newPath))
 		return false;

@@ -33,15 +33,15 @@ FontSet* Library::Fonts() const {
 	return fonts;
 }
 
-string Library::getTexPath(string name) const {
+string Library::getTexPath(const string& name) const {
 	return texes.at(name).File();
 }
 
-Texture* Library::getTex(string name) const {
+Texture* Library::getTex(const string& name) const {
 	return const_cast<Texture*>(&texes.at(name));
 }
 
-string Library::getSound(string name) const {
+string Library::getSound(const string& name) const {
 	return sounds.at(name);
 }
 

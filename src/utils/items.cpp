@@ -2,7 +2,7 @@
 
 // LIST ITEM
 
-ListItem::ListItem(string LBL, ScrollArea* SA) :
+ListItem::ListItem(const string& LBL, ScrollArea* SA) :
 	label(LBL),
 	parent(SA)
 {}
@@ -22,7 +22,7 @@ bool ListItem::selectable() const {
 
 // ITEM BUTTON
 
-ItemButton::ItemButton(string LBL, string DAT, void (Program::*CALLB)(void*), ScrollArea* SA) :
+ItemButton::ItemButton(const string& LBL, const string& DAT, void (Program::*CALLB)(void*), ScrollArea* SA) :
 	ListItem(LBL, SA),
 	data(DAT),
 	callback(CALLB)

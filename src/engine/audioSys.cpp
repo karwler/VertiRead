@@ -88,9 +88,9 @@ void AudioSys::SwitchSong(int step) {
 	Mix_PlayMusic(curMusic, 0);
 }
 
-void AudioSys::PlaySound(string name) {
+void AudioSys::PlaySound(const string& file) {
 	FreeSound();
-	curSound = Mix_LoadWAV(name.c_str());
+	curSound = Mix_LoadWAV(file.c_str());
 	Mix_PlayChannel(0, curSound, 0);
 }
 

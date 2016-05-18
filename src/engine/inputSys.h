@@ -12,7 +12,7 @@ public:
 	void MouseWheelEvent(const SDL_MouseWheelEvent& wheel);
 	void TextEvent(const SDL_TextInputEvent& text);
 
-	bool isPressed(string key) const;			// looks through holders in controls settings
+	bool isPressed(const string& key) const;	// looks through holders in controls settings
 	static bool isPressed(SDL_Scancode key);
 	static bool isPressed(byte button);
 	static vec2i mousePos();

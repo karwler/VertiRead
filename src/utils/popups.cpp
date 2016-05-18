@@ -2,11 +2,15 @@
 
 // POPUP
 
-Popup::Popup(vec2i SIZ, float TO) :
+Popup::Popup(const vec2i& SIZ, float TO) :
 	Object(World::winSys()->Resolution()/2, (World::winSys()->Resolution()-SIZ)/2, SIZ, FIX_SIZ),
 	timeout(TO)
 {}
 Popup::~Popup() {}
+
+Popup* Popup::Clone() const {
+	return new Popup(*this);
+}
 
 void Popup::Tick() {
 	if (timeout > 0.f)
@@ -20,12 +24,16 @@ vector<Object*> Popup::getObjects() const {
 
 // POPUP MESSAGE
 
-PopupMessage::PopupMessage(string MSG, int W, int TH, int BH, float TO) :
+PopupMessage::PopupMessage(const string& MSG, int W, int TH, int BH, float TO) :
 	Popup(vec2i(W, TH+BH), TO),
 	title(new Label(Object(Anchor(), Pos(), vec2i(W, TH), FIX_SIZ), MSG)),
 	cButton(new Label(Object(Anchor(), Pos()+vec2i(0, TH), vec2i(W, BH), FIX_SIZ), "Ok"))
 {}
 PopupMessage::~PopupMessage() {}
+
+PopupMessage* PopupMessage::Clone() const {
+	return new PopupMessage(*this);
+}
 
 vector<Object*> PopupMessage::getObjects() const {
 	return {title, cButton};
@@ -37,7 +45,7 @@ SDL_Rect PopupMessage::CancelButton() const {
 
 // POPUP CHOICE
 
-PopupChoice::PopupChoice(string MSG, int W, int TH, int BH) :
+PopupChoice::PopupChoice(const string& MSG, int W, int TH, int BH) :
 	PopupMessage(MSG, W, TH, BH, 0.f),
 	kButton(new Label(Object(Anchor(), Pos()+vec2i(W/2, TH), vec2i(W/2, BH), FIX_SIZ), "Ok"))
 {
@@ -45,6 +53,10 @@ PopupChoice::PopupChoice(string MSG, int W, int TH, int BH) :
 	cButton->text = "Cancel";
 }
 PopupChoice::~PopupChoice() {}
+
+PopupMessage* PopupChoice::Clone() const {
+	return new PopupMessage(*this);
+}
 
 vector<Object*> PopupChoice::getObjects() const {
 	vector<Object*> ret = PopupMessage::getObjects();
@@ -58,7 +70,7 @@ SDL_Rect PopupChoice::OkButton() const {
 
 // POPUP TEXT
 
-PopupText::PopupText(string MSG, string LIN, int W, int TH, int LH, int BH) :
+PopupText::PopupText(const string& MSG, const string& LIN, int W, int TH, int LH, int BH) :
 	PopupChoice(MSG, W, TH, BH)
 {
 	// resize and reposition everything
@@ -76,6 +88,10 @@ PopupText::PopupText(string MSG, string LIN, int W, int TH, int LH, int BH) :
 	kButton->Size(vec2i(W/2, BH));
 }
 PopupText::~PopupText() {}
+
+PopupText* PopupText::Clone() const {
+	return new PopupText(*this);
+}
 
 vector<Object*> PopupText::getObjects() const {
 	vector<Object*> ret = PopupChoice::getObjects();

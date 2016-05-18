@@ -25,11 +25,11 @@ enum class EColor : byte {
 
 class Texture {
 public:
-	Texture(string FILE="");
+	Texture(const string& FILE="");
 
 	string File() const;
 	vec2i Res() const;
-	void LoadTex(string path);
+	void LoadTex(const string& path);
 
 	SDL_Texture* tex;
 private:
@@ -38,8 +38,8 @@ private:
 };
 
 struct Image {
-	Image(vec2i POS=0, Texture* TEX=nullptr, vec2i SIZ=0);
-	Image(vec2i POS, string TEX, vec2i SIZ=0);
+	Image(const vec2i& POS=0, Texture* TEX=nullptr, const vec2i& SIZ=0);
+	Image(const vec2i& POS, const string& TEX, const vec2i& SIZ=0);
 
 	SDL_Rect getRect() const;
 
@@ -49,12 +49,12 @@ struct Image {
 
 class FontSet {
 public:
-	FontSet(string FILE="");
+	FontSet(const string& FILE="");
 	~FontSet();
 
 	bool CanRun() const;
 	TTF_Font* Get(int size);
-	vec2i TextSize(string text, int size);
+	vec2i TextSize(const string& text, int size);
 
 private:
 	string file;
@@ -64,7 +64,7 @@ private:
 };
 
 struct Text {
-	Text(string TXT="", vec2i POS=0, int H=50, int HSCAL=0, EColor CLR=EColor::text);
+	Text(const string& TXT="", const vec2i& POS=0, int H=50, int HSCAL=0, EColor CLR=EColor::text);
 
 	vec2i pos;
 	int height;
@@ -76,14 +76,14 @@ struct Text {
 
 class TextEdit {
 public:
-	TextEdit(string TXT="", int CPOS=0);
+	TextEdit(const string& TXT="", int CPOS=0);
 
 	int CursorPos() const;
 	void SetCursor(int pos);
 	void MoveCursor(int mov, bool loop=false);
 
 	string getText() const;
-	void Add(string str);
+	void Add(const string& str);
 	void Delete(bool current);
 
 private:
@@ -99,7 +99,7 @@ struct Shortcut {
 };
 
 struct Playlist {
-	Playlist(string NAME="", const vector<fs::path>& SGS={}, const vector<string>& BKS={});
+	Playlist(const string& NAME="", const vector<fs::path>& SGS={}, const vector<string>& BKS={});
 
 	string name;
 	vector<fs::path> songs;
@@ -107,7 +107,7 @@ struct Playlist {
 };
 
 struct Directory {
-	Directory(string NAME="", const vector<string>& DIRS={}, vector<string> FILS={});
+	Directory(const string& NAME="", const vector<string>& DIRS={}, const vector<string>& FILS={});
 
 	string name;
 	vector<string> dirs;
@@ -115,7 +115,7 @@ struct Directory {
 };
 
 struct GeneralSettings {
-	GeneralSettings( string LIB="", string PST="");
+	GeneralSettings(const string& LIB="", const string& PST="");
 
 	string dirLib;
 	string dirPlist;
@@ -125,9 +125,8 @@ struct GeneralSettings {
 };
 
 struct VideoSettings {
-	VideoSettings(bool VS=true, bool MAX=false, bool FSC=false, vec2i RES=vec2i(800, 600), string FNT="", string RNDR="");
+	VideoSettings(bool MAX=false, bool FSC=false, const vec2i& RES=vec2i(800, 600), const string& FNT="", const string& RNDR="");
 
-	bool vsync;
 	bool maximized, fullscreen;
 	vec2i resolution;
 	string font;
@@ -147,19 +146,19 @@ struct AudioSettings {
 };
 
 struct ControlsSettings {
-	ControlsSettings(vec2f SSP=vec2f(4.f, 8.f), bool fillMissingBindings=true, const map<string, Shortcut>& SRTCS=map<string, Shortcut>(), const map<string, SDL_Scancode>& HLDS=map<string, SDL_Scancode>());
+	ControlsSettings(const vec2f& SSP=vec2f(4.f, 8.f), bool fillMissingBindings=true, const map<string, Shortcut>& SRTCS=map<string, Shortcut>(), const map<string, SDL_Scancode>& HLDS=map<string, SDL_Scancode>());
 
 	vec2f scrollSpeed;
 	map<string, Shortcut> shortcuts;
 	map<string, SDL_Scancode> holders;
 
 	void FillMissingBindings();
-	static Shortcut GetDefaultShortcut(string name);
-	static SDL_Scancode GetDefaultHolder(string name);
+	static Shortcut GetDefaultShortcut(const string& name);
+	static SDL_Scancode GetDefaultHolder(const string& name);
 };
 
 struct Exception {
-	Exception(string MSG="", int RV=-1);
+	Exception(const string& MSG="", int RV=-1);
 
 	string message;
 	int retval;

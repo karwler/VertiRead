@@ -38,10 +38,13 @@ private:
 	uint focObject;			// id of object currently focused by keyboard
 	ScrollArea* objectHold;	// pointer to object currently being dragged by mouse (nullptr if none is being held)
 
+	void CheckObjectsClick(const vector<Object*>& objs, bool doubleclick);
+	void CheckPopupClick(Popup* obj);
 	bool CheckSliderClick(ScrollArea* obj);
-	bool CheckListBoxClick(ListBox* obj, bool doubleclick);
-	bool CheckTileBoxClick(TileBox* obj, bool doubleclick);
-	bool CheckReaderBoxClick(ReaderBox* obj, bool doubleclick);
-	bool CheckPopupSimpleClick(PopupMessage* obj);
-	bool CheckPopupChoiceClick(PopupChoice* obj);
+	void CheckListBoxClick(ListBox* obj, bool doubleclick);
+	void CheckTileBoxClick(TileBox* obj, bool doubleclick);
+	void CheckObjectBoxClick(ObjectBox* obj);
+	void CheckReaderBoxClick(ReaderBox* obj, bool doubleclick);
+	void CheckPopupSimpleClick(PopupMessage* obj);
+	void CheckPopupChoiceClick(PopupChoice* obj);
 };

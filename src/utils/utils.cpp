@@ -1,20 +1,20 @@
 #include "engine/world.h"
 
-bool isNumber(string str) {
+bool is_num(const string& str) {
 	string::const_iterator it = str.begin();
 	while (it != str.end() && isdigit(*it))
 		it++;
 	return !str.empty() && it == str.end();
 }
 
-int findChar(string str, char c) {
+int findChar(const string& str, char c) {
 	for (int i=0; i!=str.length(); i++)
 		if (str[i] == c)
 			return i;
 	return -1;
 }
 
-int findString(string str, string c) {
+int findString(const string& str, const string& c) {
 	int check = 0;
 	for (int i=0; i!=str.length(); i++) {
 		if (str[i] == c[check]) {
@@ -27,7 +27,7 @@ int findString(string str, string c) {
 	return -1;
 }
 
-vector<string> getWords(string line, bool skipCommas) {
+vector<string> getWords(const string& line, bool skipCommas) {
 	vector<string> words;
 	string word;
 	for (uint i = 0; i <= line.length(); i++) {
@@ -42,7 +42,7 @@ vector<string> getWords(string line, bool skipCommas) {
 	return words;
 }
 
-int splitIniLine(string line, string* arg, string* val, string* key) {
+int splitIniLine(const string& line, string* arg, string* val, string* key) {
 	int i0 = findChar(line, '=');
 	if (i0 == -1)
 		return -1;
@@ -60,7 +60,7 @@ int splitIniLine(string line, string* arg, string* val, string* key) {
 	return i0;
 }
 
-fs::path removeExtension(fs::path path) {
+fs::path removeExtension(const fs::path& path) {
 	return (path.has_extension()) ? path.string().substr(0, path.string().size() - path.extension().string().size()) : path;
 }
 
@@ -104,9 +104,13 @@ SDL_Rect getCrop(SDL_Rect item, SDL_Rect frame) {
 	return crop;
 }
 
+SDL_Rect cropRect(const SDL_Rect& rect, const SDL_Rect& crop) {
+	return { rect.x+crop.x, rect.y+crop.y, rect.w-crop.x-crop.w, rect.h-crop.y-crop.h };
+}
+
 SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {
 	vec2i temp(rect.w, rect.h);
-	rect = { rect.x + crop.x, rect.y + crop.y, rect.w - crop.x - crop.w, rect.h - crop.y - crop.h };
+	rect = cropRect(rect, crop);
 	crop = { crop.x, crop.y, temp.x - crop.x - crop.w, temp.y - crop.y - crop.h };
 
 	SDL_Surface* sheet = SDL_CreateRGBSurface(surface->flags, crop.w, crop.h, surface->format->BitsPerPixel, surface->format->Rmask, surface->format->Gmask, surface->format->Bmask, surface->format->Amask);
@@ -143,14 +147,7 @@ string getRendererName(int id) {
 	return info.name;
 }
 
-string wtos(std::wstring wstr) {
-	string sstr;
-	for (wchar_t& c : wstr)
-		sstr += c;
-	return sstr;
-}
-
-bool stob(string str) {
+bool stob(const string& str) {
 	return str == "true";
 }
 
@@ -158,8 +155,9 @@ string btos(bool b) {
 	return b ? "true" : "false";
 }
 
-vec2i pix(vec2f p) {
-	return vec2i(p.x * World::winSys()->Resolution().x, p.y * World::winSys()->Resolution().y);
+vec2i pix(const vec2f& p) {
+	vec2i res = World::winSys()->Resolution();
+	return vec2i(p.x * res.x, p.y *res.y);
 }
 
 int pixX(float p) {
@@ -170,8 +168,9 @@ int pixY(float p) {
 	return p * World::winSys()->Resolution().y;
 }
 
-vec2f prc(vec2i p) {
-	return vec2f(float(p.x) / float(World::winSys()->Resolution().x), float(p.y) / float(World::winSys()->Resolution().y));
+vec2f prc(const vec2i& p) {
+	vec2i res = World::winSys()->Resolution();
+	return vec2f(float(p.x) / float(res.x), float(p.y) / float(res.y));
 }
 
 float prcX(int p) {
