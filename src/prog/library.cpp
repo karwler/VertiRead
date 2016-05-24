@@ -26,7 +26,7 @@ Library::Library(string FONT, const map<string, string>& TEXS, const map<string,
 
 Library::~Library() {
 	for (const pair<string, Texture>& it : texes)
-		SDL_DestroyTexture(it.second.tex);
+		SDL_FreeSurface(it.second.surface);
 }
 
 FontSet* Library::Fonts() const {
@@ -57,13 +57,13 @@ void Library::LoadPics(const vector<string>& files) {
 		Texture tx(it);
 		if (!tx.Res().hasNull())
 			pics.push_back(tx);
-		else if (tx.tex)
-			SDL_DestroyTexture(tx.tex);
+		else if (tx.surface)
+			SDL_FreeSurface(tx.surface);
 	}
 }
 
 void Library::ClearPics() {
 	for (Texture& it : pics)
-		SDL_DestroyTexture(it.tex);
+		SDL_FreeSurface(it.surface);
 	pics.clear();
 }

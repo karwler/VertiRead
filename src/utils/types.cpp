@@ -3,31 +3,27 @@
 // TEXTURE
 
 Texture::Texture(const string& FILE) :
-	tex(nullptr)
+	surface(nullptr)
 {
-	LoadTex(FILE);
-}
-
-vec2i Texture::Res() const {
-	return res;
+	LoadSurface(FILE);
 }
 
 string Texture::File() const {
 	return file;
 }
 
-void Texture::LoadTex(const string& path) {
-	file = path;
-	if (tex)
-		SDL_DestroyTexture(tex);
+vec2i Texture::Res() const {
+	return surface ? vec2i(surface->w, surface->h) : 0;
+}
 
-	tex = IMG_LoadTexture(World::winSys()->Renderer(), file.c_str());
-	if (tex)
-		SDL_QueryTexture(tex, NULL, NULL, &res.x, &res.y);
-	else {
-		res = 0;
-		cerr << "couldn't load texture " << file << endl;
-	}
+void Texture::LoadSurface(const string& path) {
+	file = path;
+	if (surface)
+		SDL_FreeSurface(surface);
+	
+	surface = IMG_Load(file.c_str());
+	if (!surface)
+		cerr << "couldn't load surface " << file << endl;
 }
 
 // IMAGE

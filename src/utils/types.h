@@ -29,12 +29,11 @@ public:
 
 	string File() const;
 	vec2i Res() const;
-	void LoadTex(const string& path);
+	void LoadSurface(const string& path);
 
-	SDL_Texture* tex;
+	SDL_Surface* surface;
 private:
 	string file;
-	vec2i res;
 };
 
 struct Image {

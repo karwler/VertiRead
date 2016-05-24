@@ -260,25 +260,27 @@ void WindowSys::DrawRect(const SDL_Rect& rect, EColor color) {
 	SDL_RenderFillRect(renderer, &rect);
 }
 
-void WindowSys::DrawImage(const Image& img,const SDL_Rect& crop) {
+void WindowSys::DrawImage(const Image& img, const SDL_Rect& crop) {
 	SDL_Rect rect = img.getRect();	// the rect the image is gonna be projected on
+
+	SDL_Texture* tex = nullptr;
 	if (needsCrop(crop)) {
-		SDL_Surface* surf = IMG_Load(img.texture->File().c_str());				// gotta reload texture as surface
-		SDL_Rect ori = {rect.x, rect.y, surf->w, surf->h};						// proportions of the original image
-		vec2f fac(float(ori.w) / float(rect.w), float(ori.h) / float(rect.h));	// scaling factor
-		rect = cropRect(rect, crop);												// adjust rect to crop
+		SDL_Rect ori = { rect.x, rect.y, img.texture->surface->w, img.texture->surface->h };	// proportions of the original image
+		vec2f fac(float(ori.w) / float(rect.w), float(ori.h) / float(rect.h));					// scaling factor
+		rect = cropRect(rect, crop);															// adjust rect to crop
 
 		// crop original image by factor
-		SDL_Surface* sheet = cropSurface(surf, ori, {int(float(crop.x)*fac.x), int(float(crop.y)*fac.y), int(float(crop.w)*fac.x), int(float(crop.h)*fac.y)});
+		SDL_Surface* sheet = cropSurface(img.texture->surface, ori, { int(float(crop.x)*fac.x), int(float(crop.y)*fac.y), int(float(crop.w)*fac.x), int(float(crop.h)*fac.y) });
 		SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, sheet);
 
 		SDL_RenderCopy(renderer, tex, nullptr, &rect);
 		SDL_DestroyTexture(tex);
 		SDL_FreeSurface(sheet);
-		SDL_FreeSurface(surf);
 	}
 	else
-		SDL_RenderCopy(renderer, img.texture->tex, nullptr, &rect);
+		tex = SDL_CreateTextureFromSurface(renderer, img.texture->surface);
+
+	SDL_RenderCopy(renderer, tex, nullptr, &rect);
 }
 
 void WindowSys::DrawText(const Text& txt, const SDL_Rect& crop) {
