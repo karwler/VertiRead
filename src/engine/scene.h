@@ -11,7 +11,7 @@ public:
 	Scene(const GeneralSettings& SETS=GeneralSettings());
 	~Scene();
 	
-	void SwitchMenu(EMenu newMenu, void* dat=nullptr);
+	void SwitchMenu(const vector<Object*>& objs, uint focObj);
 	void ResizeMenu();
 	void Tick();
 	void OnMouseDown(bool doubleclick);

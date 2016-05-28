@@ -38,6 +38,7 @@ Boost is assumed to be located in /usr/local/include (headers) and /usr/local/li
 - fix line edit
 - finish settings menu lists
 - improve mouse wheel scrolling
-- test audio system
+- test audio system under linux and os x
 - maybe add some animations
+- figure out a way to make zooming faster
 - load textures while displaying reader

@@ -35,7 +35,7 @@ void InputSys::MouseButtonEvent(const SDL_MouseButtonEvent& button) {
 }
 
 void InputSys::MouseWheelEvent(const SDL_MouseWheelEvent& wheel) {
-	World::scene()->OnMouseWheel(wheel.y);
+	World::scene()->OnMouseWheel(wheel.y * int(sets.scrollSpeed.y) /2);
 }
 
 void InputSys::TextEvent(const SDL_TextInputEvent& text) {

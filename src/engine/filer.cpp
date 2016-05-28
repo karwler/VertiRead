@@ -108,11 +108,8 @@ Playlist Filer::LoadPlaylist(const string& name) {
 	for (string& line : lines) {
 		string arg, val;
 		splitIniLine(line, &arg, &val);
-		if (arg == "books") {
-			vector<string> elems = getWords(val);
-			for (string& it : elems)
-				plist.books.push_back(it);
-		}
+		if (arg == "book")
+			plist.books.push_back(val);
 		else
 			plist.songs.push_back(line);
 	}
@@ -120,11 +117,9 @@ Playlist Filer::LoadPlaylist(const string& name) {
 }
 
 void Filer::SavePlaylist(const Playlist& plist) {
-	vector<string> lines = {
-		"books="
-	};
+	vector<string> lines;
 	for (const string& name : plist.books)
-		lines[0] += name;
+		lines.push_back("book=" + name);
 	for (const fs::path& file : plist.songs)
 		lines.push_back(file.string());
 
@@ -270,20 +265,22 @@ string Filer::execDir() {
 #endif
 	const int MAX_LEN = 4096;
 	fs::path path;
+
 #ifdef _WIN32
-	TCHAR buffer[MAX_LEN];
+	char buffer[MAX_LEN];
 	if (GetModuleFileName(NULL, buffer, MAX_LEN))
-		for (uint i=0; buffer[i]!=0; i++)
-			path += buffer[i];
-	else
-		path = fs::initial_path().string() + "/" + World::args[0];
+		path = buffer;
+	else {
+		fs::path dir = fs::path(World::args[0]).parent_path();
+		path = dir.is_absolute() ? dir : fs::initial_path().string() + "\\" + dir.string();
+	}
 #elif __APPLE__
 	char buffer[MAX_LEN];
 	uint size = sizeof(buffer);
 	if (!_NSGetExecutablePath(buffer, &size))
 		path = buffer;
 	else
-		path = fs::initial_path().string() + "/" + World::args[0];
+		path = fs::initial_path().string() + "/" + fs::path(World::args[0]).parent_path().string();
 
 	if (!raw) {
 		string test = path.string();
@@ -300,7 +297,8 @@ string Filer::execDir() {
 		path = buffer;
 	}
 	else
-		path = fs::initial_path().string() + "/" + World::args[0];
+		path = fs::initial_path().string() + "/" + fs::path(World::args[0]).parent_path().string();
+
 #endif
 	return path.parent_path().string() + dsep;
 }
@@ -324,11 +322,11 @@ string Filer::dirData() {
 }
 
 string Filer::dirSnds() {
-	return dirData()+"sounds"+dsep;
+	return dirData() + "sounds"+dsep;
 }
 
 string Filer::dirTexs() {
-	return dirData()+"textures"+dsep;
+	return dirData() + "textures"+dsep;
 }
 
 vector<string> Filer::dirFonts() {

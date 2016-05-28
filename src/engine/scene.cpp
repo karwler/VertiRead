@@ -14,178 +14,24 @@ Scene::~Scene() {
 	clear(objects);
 }
 
-void Scene::SwitchMenu(EMenu newMenu, void* dat) {
+void Scene::SwitchMenu(const vector<Object*>& objs, uint focObj) {
 	// reset values
-	clear(objects);
 	popup.reset();
-	focObject = 0;
+	focObject = focObj;
 	objectHold = nullptr;
 
-	// little conveniences
-	vec2i res = World::winSys()->Resolution();
-	vec2i posT(-1);
-	vec2i sizT(140, 40);
-
-	switch (newMenu) {
-	case EMenu::books: {
-		// top buttons
-		objects = {
-			new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenPlaylistList,"Playlists"),
-			new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenGeneralSettings, "Settings"),
-			new ButtonText(Object(vec2i(res.x/3*2, 0), posT, vec2i(res.x/3,    50), FIX_Y | FIX_H), &Program::Event_Back, "Exit")
-		};
-
-		// book list
-		vector<ListItem*> tiles;
-		vector<fs::path> names = Filer::ListDir(sets.libraryParh(), FILTER_DIR);
-		for (fs::path& it : names)
-			tiles.push_back(new ItemButton(it.filename().string(), it.string(), &Program::Event_OpenBrowser));
-		objects.push_back(new TileBox(Object(vec2i(0, 60), posT, vec2i(res.x, res.y-60), FIX_POS | FIX_END), tiles, vec2i(400, 30)));
-		focObject = objects.size()-1;
-		break; }
-	case EMenu::browser: {
-		// back button
-		objects = { new ButtonText(Object(vec2i(0, 0), posT, vec2i(90, 40), FIX_POS | FIX_SIZ), &Program::Event_Back, "Back") };
-
-		// list
-		vector<ListItem*> items;
-		Browser* browser = static_cast<Browser*>(dat);
-		for (fs::path& it : browser->ListDirs())
-			items.push_back(new ItemButton(it.filename().string(), "", &Program::Event_OpenBrowser));
-		for (fs::path& it : browser->ListFiles())
-			items.push_back(new ItemButton(it.filename().string(), it.string(), &Program::Event_OpenReader));
-		objects.push_back(new ListBox(Object(vec2i(100, 0), posT, vec2i(res.x-100, res.y), FIX_POS | FIX_END, EColor::background), items));
-		focObject = objects.size()-1;
-		break; }
-	case EMenu::reader: {
-		// reader box
-		fs::path file = cstr(dat);
-		library->LoadPics(Filer::GetPicsFromDir(file.parent_path()));
-		objects = { new ReaderBox(Object(0, 0, World::winSys()->Resolution(), FIX_POS | FIX_END, EColor::background), library->Pictures(), file.string()) };
-		focObject = objects.size()-1;
-		break; }
-	case EMenu::playlists: {
-		// top buttons
-		sizT = vec2i(80, 30);
-		objects = {
-			new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenBookList, "Library"),
-			new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenGeneralSettings, "Settings"),
-			new ButtonText(Object(vec2i(res.x/3*2, 0), posT, vec2i(res.x/3,    50), FIX_Y | FIX_H), &Program::Event_Back, "Exit"),
-
-			new ButtonText(Object(vec2i(0,   60), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_AddButtonClick, "New"),
-			new ButtonText(Object(vec2i(90,  60), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_EditButtonClick, "Edit"),
-			new ButtonText(Object(vec2i(180, 60), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_DeleteButtonClick, "Del")
-		};
-
-		// playlist list
-		TileBox* box = new TileBox(Object(vec2i(0, 100), posT, vec2i(res.x, res.y-100), FIX_POS | FIX_END), {}, vec2i(400, 30));
-		vector<ListItem*> tiles;
-		vector<fs::path> names = Filer::ListDir(sets.playlistParh(), FILTER_FILE);
-		for (fs::path& it : names)
-			tiles.push_back(new ListItem(it.filename().string(), box));
-		box->Items(tiles);
-		objects.push_back(box);
-		focObject = objects.size()-1;
-		break; }
-	case EMenu::plistEditor: {
-		// option buttons
-		sizT.x = 100;
-		objects = {
-			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_AddButtonClick, "Add"),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_EditButtonClick, "Edit"),
-			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_DeleteButtonClick, "Del"),
-			new ButtonText(Object(vec2i(0, 200), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SaveButtonClick, "Save"),
-			new ButtonText(Object(vec2i(0, 250), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Close")
-		};
-
-		// playlist list
-		ListBox* box = new ListBox(Object(vec2i(110, 0), posT, vec2i(res.x-110, res.y), FIX_POS | FIX_END, EColor::background));
-		vector<ListItem*> items;
-		PlaylistEditor* editor = static_cast<PlaylistEditor*>(dat);
-		if (editor->showSongs) {
-			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SwitchButtonClick, "Books"));
-			for (fs::path& it : editor->getPlaylist().songs)
-				items.push_back(new ItemButton(it.filename().string(), "", &Program::Event_SelectionSet, box));
-		}
-		else {
-			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SwitchButtonClick, "Songs"));
-			for (string& it : editor->getPlaylist().books)
-				items.push_back(new ItemButton(it, "", &Program::Event_SelectionSet, box));
-		}
-		box->Items(items);
-		objects.push_back(box);
-		focObject = objects.size()-1;
-		break; }
-	case EMenu::generalSets: {
-		objects = {
-			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenVideoSettings, "Video"),
-			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenAudioSettings, "Audio"),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, "Controls"),
-			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Back")
-		};
-
-		vec2i ancT(160, 0);
-		sizT = vec2i(res.x-160, 30);
-		EFix fixT = FIX_POS | FIX_EX | FIX_H;
-		vector<Object*> items = {
-			new LineEdit(Object(ancT, posT, sizT, fixT), "Library   ", sets.dirLib),
-			new LineEdit(Object(ancT, posT, sizT, fixT), "Playlists ", sets.dirPlist)
-		};
-		objects.push_back(new ObjectBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
-		focObject = objects.size()-1;
-		break; }
-	case EMenu::videoSets: {
-		objects = {
-			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenGeneralSettings, "General"),
-			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenAudioSettings, "Audio"),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, "Controls"),
-			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Back")
-		};
-
-		vector<Object*> items = {
-			// something
-		};
-		objects.push_back(new ObjectBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
-		focObject = objects.size()-1;
-		break; }
-	case EMenu::audioSets: {
-		objects = {
-			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenGeneralSettings, "General"),
-			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenVideoSettings, "Video"),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, "Controls"),
-			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Back")
-		};
-
-		vector<Object*> items = {
-			// something
-		};
-		objects.push_back(new ObjectBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
-		focObject = objects.size()-1;
-		break; }
-	case EMenu::controlsSets: {
-		objects = {
-			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_ALL), &Program::Event_OpenGeneralSettings, "General"),
-			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_ALL), &Program::Event_OpenVideoSettings, "Video"),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_ALL), &Program::Event_OpenAudioSettings, "Audio"),
-			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_ALL), &Program::Event_Back, "Back")
-		};
-
-		vector<Object*> items = {
-			// something
-		};
-		objects.push_back(new ObjectBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
-		focObject = objects.size()-1;
-		}
-	}
+	// reset objects
+	clear(objects);
+	objects = objs;
+	
 	World::engine->SetRedrawNeeded();
 }
 
 void Scene::ResizeMenu() {
-	for (Object* obj : objects) {
-		ScrollArea* box = dynamic_cast<ScrollArea*>(obj);
-		if (box)
+	for (Object* obj : objects)
+		if (ScrollArea* box = dynamic_cast<ScrollArea*>(obj))
 			box->SetValues();
-	}
+
 	World::engine->SetRedrawNeeded();
 }
 
@@ -214,10 +60,10 @@ void Scene::Tick() {
 
 	// object ticks
 	for (Object* it : objects) {
-		if (dynamic_cast<ReaderBox*>(it))
-			static_cast<ReaderBox*>(it)->Tick();
-		else if (dynamic_cast<Popup*>(it))
-			static_cast<Popup*>(it)->Tick();
+		if (ReaderBox* box = dynamic_cast<ReaderBox*>(it))
+			box->Tick();
+		else if (Popup* box = dynamic_cast<Popup*>(it))
+			box->Tick();
 	}
 }
 
@@ -234,32 +80,33 @@ void Scene::CheckObjectsClick(const vector<Object*>& objs, bool doubleclick) {
 		if (!inRect(obj->getRect(), InputSys::mousePos()))	// skip if mouse isn't over object
 			continue;
 
-		if (dynamic_cast<Button*>(obj)) {
-			static_cast<Button*>(obj)->OnClick();
+		if (Button* but = dynamic_cast<Button*>(obj)) {
+			but->OnClick();
 			break;
 		}
-		else if (dynamic_cast<Capturer*>(obj)) {
-			static_cast<Capturer*>(obj)->OnClick();
+		else if (Capturer* cap = dynamic_cast<Capturer*>(obj)) {
+			cap->OnClick();
 			break;
 		}
-		else if (dynamic_cast<ScrollArea*>(obj)) {
-			static_cast<ScrollArea*>(obj)->selectedItem = nullptr;	// deselect all items
-			if (CheckSliderClick(static_cast<ScrollArea*>(obj)))	// first check if slider is clicked
+		else if (ScrollArea* area = dynamic_cast<ScrollArea*>(obj)) {
+			area->selectedItem = nullptr;	// deselect all items
+
+			if (CheckSliderClick(area))		// first check if slider is clicked
 				break;
-			else if (dynamic_cast<ListBox*>(obj)) {
-				CheckListBoxClick(static_cast<ListBox*>(obj), doubleclick);
-				break;
-			}
-			else if (dynamic_cast<TileBox*>(obj)) {
-				CheckTileBoxClick(static_cast<TileBox*>(obj), doubleclick);
+			else if (ListBox* box = dynamic_cast<ListBox*>(area)) {
+				CheckListBoxClick(box, doubleclick);
 				break;
 			}
-			else if (dynamic_cast<ObjectBox*>(obj)) {
-				CheckObjectBoxClick(static_cast<ObjectBox*>(obj));
+			else if (TileBox* box = dynamic_cast<TileBox*>(area)) {
+				CheckTileBoxClick(box, doubleclick);
 				break;
 			}
-			else if (dynamic_cast<ReaderBox*>(obj)) {
-				CheckReaderBoxClick(static_cast<ReaderBox*>(obj), doubleclick);
+			else if (ObjectBox* box = dynamic_cast<ObjectBox*>(area)) {
+				CheckObjectBoxClick(box);
+				break;
+			}
+			else if (ReaderBox* box = dynamic_cast<ReaderBox*>(area)) {
+				CheckReaderBoxClick(box, doubleclick);
 				break;
 			}
 		}
@@ -271,10 +118,10 @@ void Scene::CheckPopupClick(Popup* obj) {
 	if (!inRect(popup->getRect(), InputSys::mousePos()))
 		return;
 
-	if (dynamic_cast<PopupChoice*>(obj))
-		CheckPopupChoiceClick(static_cast<PopupChoice*>(obj));
-	else if (dynamic_cast<PopupMessage*>(obj))
-		CheckPopupSimpleClick(static_cast<PopupMessage*>(obj));
+	if (PopupChoice* box = dynamic_cast<PopupChoice*>(obj))
+		CheckPopupChoiceClick(box);
+	else if (PopupMessage* box = dynamic_cast<PopupMessage*>(obj))
+		CheckPopupSimpleClick(box);
 }
 
 bool Scene::CheckSliderClick(ScrollArea* obj) {
@@ -285,8 +132,7 @@ bool Scene::CheckSliderClick(ScrollArea* obj) {
 			obj->DragSlider(mPos.y - obj->SliderH() /2);
 		obj->diffSliderMouseY = mPos.y - obj->SliderY();	// get difference between mouse y and slider y
 
-		ReaderBox* box = dynamic_cast<ReaderBox*>(obj);
-		if (box)
+		if (ReaderBox* box = dynamic_cast<ReaderBox*>(obj))
 			box->sliderFocused = true;
 		return true;
 	}
@@ -296,14 +142,11 @@ bool Scene::CheckSliderClick(ScrollArea* obj) {
 void Scene::CheckListBoxClick(ListBox* obj, bool doubleclick) {
 	vec2i interval = obj->VisibleItems();
 	vector<ListItem*> items = obj->Items();
-	for (int i=interval.x; i<=interval.y; i++) {
-		SDL_Rect crop;
-		SDL_Rect rect = obj->ItemRect(i, &crop);
-		if (inRect(rect, InputSys::mousePos())) {
+	for (int i=interval.x; i<=interval.y; i++)
+		if (inRect(obj->ItemRect(i), InputSys::mousePos())) {
 			items[i]->OnClick(doubleclick);
 			break;
 		}
-	}
 }
 
 void Scene::CheckTileBoxClick(TileBox* obj, bool doubleclick) {
@@ -323,12 +166,12 @@ void Scene::CheckObjectBoxClick(ObjectBox* obj) {
 		Object* item = obj->getObject(i, &crop);
 
 		if (inRect(cropRect(item->getRect(), crop), InputSys::mousePos())) {
-			if (dynamic_cast<Button*>(item)) {
-				static_cast<Button*>(item)->OnClick();
+			if (Button* but = dynamic_cast<Button*>(item)) {
+				but->OnClick();
 				break;
 			}
-			else if (dynamic_cast<Capturer*>(item)) {
-				static_cast<Capturer*>(item)->OnClick();
+			else if (Capturer* cap = dynamic_cast<Capturer*>(item)) {
+				cap->OnClick();
 				break;
 			}
 		}
@@ -338,18 +181,20 @@ void Scene::CheckObjectBoxClick(ObjectBox* obj) {
 
 void Scene::CheckReaderBoxClick(ReaderBox* obj, bool doubleclick) {
 	vec2i mPos = InputSys::mousePos();
-	if (obj->showList())		// check list buttons
+	if (obj->showList()) {		// check list buttons
 		for (ButtonImage& but : obj->ListButtons())
 			if (inRect(but.getRect(), mPos)) {
 				but.OnClick();
 				break;
 			}
-	else if (obj->showPlayer())	// check player buttons
+	}
+	else if (obj->showPlayer()) {	// check player buttons
 		for (ButtonImage& but : obj->PlayerButtons())
 			if (inRect(but.getRect(), mPos)) {
 				but.OnClick();
 				break;
 			}
+	}
 	else if (doubleclick) {
 		vec2i interval = obj->VisiblePictures();
 		const vector<Image>& pics = obj->Pictures();
@@ -378,8 +223,7 @@ void Scene::CheckPopupSimpleClick(PopupMessage* obj) {
 
 void Scene::CheckPopupChoiceClick(PopupChoice* obj) {
 	if (inRect(obj->OkButton(), InputSys::mousePos())) {
-		PopupText* poptext = dynamic_cast<PopupText*>(obj);
-		if (poptext)
+		if (PopupText* poptext = dynamic_cast<PopupText*>(obj))
 			program->Event_TextCaptureOk(poptext->Line()->Editor());
 	}
 	else if (inRect(obj->CancelButton(), InputSys::mousePos()))
@@ -389,8 +233,7 @@ void Scene::CheckPopupChoiceClick(PopupChoice* obj) {
 void Scene::OnMouseUp() {
 	if (objectHold) {
 		// reset values
-		ReaderBox* box = dynamic_cast<ReaderBox*>(objectHold);
-		if (box)
+		if (ReaderBox* box = dynamic_cast<ReaderBox*>(objectHold))
 			box->sliderFocused = false;
 
 		objectHold->diffSliderMouseY = 0;
@@ -399,12 +242,11 @@ void Scene::OnMouseUp() {
 }
 
 void Scene::OnMouseWheel(int ymov) {
-	ScrollArea* box = dynamic_cast<ScrollArea*>(FocusedObject());
-	if (box)
+	if (ScrollArea* box = dynamic_cast<ScrollArea*>(FocusedObject()))
 		box->ScrollList(ymov*-20);
 }
 
-const GeneralSettings&Scene::Settings() const {
+const GeneralSettings& Scene::Settings() const {
 	return sets;
 }
 
@@ -428,15 +270,13 @@ Object* Scene::FocusedObject() const {
 
 ListItem* Scene::SelectedButton() const {
 	// check focused object first
-	ScrollArea* sabox = dynamic_cast<ScrollArea*>(FocusedObject());
-	if (sabox)
-		if (sabox->selectedItem && sabox->selectedItem->selectable())
-			return sabox->selectedItem;
+	if (ScrollArea* box = dynamic_cast<ScrollArea*>(FocusedObject()))
+		if (box->selectedItem && box->selectedItem->selectable())
+			return box->selectedItem;
 
 	// if failed, look through all objects
 	for (Object* obj : objects) {
-		ScrollArea* box = dynamic_cast<ScrollArea*>(obj);
-		if (box)
+		if (ScrollArea* box = dynamic_cast<ScrollArea*>(obj))
 			if (box->selectedItem && box->selectedItem->selectable())
 				return box->selectedItem;
 	}
@@ -450,8 +290,7 @@ Popup* Scene::getPopup() const {
 void Scene::SetPopup(Popup* box) {
 	popup = box;
 
-	PopupText* poptext = dynamic_cast<PopupText*>(box);
-	if (poptext)
+	if (PopupText* poptext = dynamic_cast<PopupText*>(box))
 		World::inputSys()->SetCapture(poptext->Line());
 	else
 		World::inputSys()->SetCapture(nullptr);

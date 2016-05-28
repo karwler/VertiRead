@@ -33,13 +33,17 @@ void AudioSys::Cleanup() {
 }
 
 void AudioSys::FreeMusic() {
-	if (curMusic)
+	if (curMusic) {
 		Mix_FreeMusic(curMusic);
+		curMusic = nullptr;
+	}
 }
 
 void AudioSys::FreeSound() {
-	if (curSound)
+	if (curSound) {
 		Mix_FreeChunk(curSound);
+		curSound = nullptr;
+	}
 }
 
 void AudioSys::Tick(float dSec) {
@@ -84,23 +88,31 @@ void AudioSys::SwitchSong(int step) {
 		else
 			curSong = 0;
 	}
-	curMusic = Mix_LoadMUS(playlist[curSong].c_str());
-	Mix_PlayMusic(curMusic, 0);
+	if (curMusic = Mix_LoadMUS(playlist[curSong].c_str()))
+		Mix_PlayMusic(curMusic, 0);
 }
 
 void AudioSys::PlaySound(const string& file) {
 	FreeSound();
-	curSound = Mix_LoadWAV(file.c_str());
-	Mix_PlayChannel(0, curSound, 0);
+	if (curSound = Mix_LoadWAV(file.c_str()))
+		Mix_PlayChannel(0, curSound, 0);
 }
 
 AudioSettings AudioSys::Settings() const {
 	return sets;
 }
 
-void AudioSys::LoadPlaylist(const vector<std::string>& newList) {
+void AudioSys::LoadPlaylist(const Playlist& newList) {
 	FreeMusic();
-	playlist = newList;
+
+	playlist.resize(newList.songs.size());
+	for (uint i=0; i!=newList.songs.size(); i++)
+		playlist[i] = newList.songPath(i);
+}
+
+void AudioSys::UnloadPlaylist() {
+	FreeMusic();
+	playlist.clear();
 }
 
 int AudioSys::MusicVolume() const {
@@ -108,12 +120,7 @@ int AudioSys::MusicVolume() const {
 }
 
 void AudioSys::MusicVolume(int vol) {
-	if (vol > 128)
-		sets.musicVolume = 128;
-	else if (vol < 0)
-		sets.musicVolume = 0;
-	else
-		sets.musicVolume = vol;
+	sets.musicVolume = CheckVolume(vol);
 	Mix_VolumeMusic(sets.musicVolume);
 }
 
@@ -122,11 +129,14 @@ int AudioSys::SoundVolume() const {
 }
 
 void AudioSys::SoundVolume(int vol) {
-	if (vol > 128)
-		sets.soundVolume = 128;
-	else if (vol < 0)
-		sets.soundVolume = 0;
-	else
-		sets.soundVolume = vol;
+	sets.soundVolume = CheckVolume(vol);
 	Mix_Volume(0, sets.soundVolume);
+}
+
+int AudioSys::CheckVolume(int value) {
+	if (value >= 128)
+		return 128;
+	else if (value <= 0)
+		return 0;
+	return value;
 }

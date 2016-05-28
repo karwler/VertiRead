@@ -172,6 +172,10 @@ Playlist::Playlist(const string& NAME, const vector<fs::path>& SGS, const vector
 	books(BKS)
 {}
 
+string Playlist::songPath(uint id) const {
+	return songs[id].is_absolute() ? songs[id].string() : fs::path(World::scene()->Settings().playlistParh() + name).parent_path().string() + dsep + songs[id].string();
+}
+
 Directory::Directory(const string& NAME, const vector<string>& DIRS, const vector<string>& FILS) :
 	name(NAME),
 	dirs(DIRS),

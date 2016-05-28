@@ -73,4 +73,8 @@ private:
 	EMenu curMenu;
 	kptr<Browser> browser;
 	kptr<PlaylistEditor> editor;
+
+	void SwitchScene(EMenu newMenu, void* dat=nullptr);
+	void SwitchScene(void* dat=nullptr) const;
+	string FindFittingPlaylist(const string& picPath);
 };

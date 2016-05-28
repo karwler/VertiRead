@@ -120,26 +120,26 @@ int WindowSys::GetRenderDriverIndex() {
 
 void WindowSys::PassDrawObject(Object* obj) {
 	// specific drawing for each object
-	if (dynamic_cast<Label*>(obj))
-		DrawObject(obj->getRect(), obj->color, static_cast<Label*>(obj)->getText());
-	else if (dynamic_cast<ButtonText*>(obj))
-		DrawObject(obj->getRect(), obj->color, static_cast<ButtonText*>(obj)->getText());
-	else if (dynamic_cast<ButtonImage*>(obj))
-		DrawImage(static_cast<ButtonImage*>(obj)->CurTex());
-	else if (dynamic_cast<ListBox*>(obj))
-		DrawObject(static_cast<ListBox*>(obj));
-	else if (dynamic_cast<TileBox*>(obj))
-		DrawObject(static_cast<TileBox*>(obj));
-	else if (dynamic_cast<ObjectBox*>(obj))
-		DrawObject(static_cast<ObjectBox*>(obj));
-	else if (dynamic_cast<ReaderBox*>(obj))
-		DrawObject(static_cast<ReaderBox*>(obj));
-	else if (dynamic_cast<LineEdit*>(obj))
-		DrawObject(static_cast<LineEdit*>(obj));
-	else if (dynamic_cast<KeyGetter*>(obj))
-		DrawObject(static_cast<KeyGetter*>(obj));
-	else if (dynamic_cast<Checkbox*>(obj))
-		DrawObject(static_cast<Checkbox*>(obj));
+	if (Label* lbl = dynamic_cast<Label*>(obj))
+		DrawObject(lbl->getRect(), lbl->color, lbl->getText());
+	else if (ButtonText* btxt = dynamic_cast<ButtonText*>(obj))
+		DrawObject(btxt->getRect(), btxt->color, btxt->getText());
+	else if (ButtonImage* bimg = dynamic_cast<ButtonImage*>(obj))
+		DrawImage(bimg->CurTex());
+	else if (ListBox* box = dynamic_cast<ListBox*>(obj))
+		DrawObject(box);
+	else if (TileBox* box = dynamic_cast<TileBox*>(obj))
+		DrawObject(box);
+	else if (ObjectBox* box = dynamic_cast<ObjectBox*>(obj))
+		DrawObject(box);
+	else if (ReaderBox* box = dynamic_cast<ReaderBox*>(obj))
+		DrawObject(box);
+	else if (LineEdit* edit = dynamic_cast<LineEdit*>(obj))
+		DrawObject(edit);
+	else if (KeyGetter* kget = dynamic_cast<KeyGetter*>(obj))
+		DrawObject(kget);
+	else if (Checkbox* cbox = dynamic_cast<Checkbox*>(obj))
+		DrawObject(cbox);
 	else
 		DrawRect(obj->getRect(), obj->color);
 }

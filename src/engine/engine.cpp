@@ -7,7 +7,7 @@ Engine::Engine() :
 
 void Engine::Run() {
 	// initialize all components
-	if (SDL_Init(SDL_INIT_EVERYTHING))
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO))
 		throw Exception("SDL couldn't be initialized" + string(SDL_GetError()), 1);
 	if (TTF_Init())
 		throw Exception("fonts couldn't be initialized" + string(SDL_GetError()), 2);

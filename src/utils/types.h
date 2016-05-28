@@ -103,6 +103,8 @@ struct Playlist {
 	string name;
 	vector<fs::path> songs;
 	vector<string> books;
+
+	string songPath(uint id) const;	// returns song full path if original path is relative
 };
 
 struct Directory {

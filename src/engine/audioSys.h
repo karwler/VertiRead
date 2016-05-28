@@ -21,7 +21,9 @@ public:
 	void PlaySound(const string& file);
 
 	AudioSettings Settings() const;
-	void LoadPlaylist(const vector<string>& newList);
+	void LoadPlaylist(const Playlist& newList);
+	void UnloadPlaylist();
+
 	int MusicVolume() const;
 	void MusicVolume(int vol);
 	int SoundVolume() const;
@@ -34,4 +36,6 @@ private:
 	Mix_Music* curMusic;
 	Mix_Chunk* curSound;
 	float deltaDelay;
+
+	int CheckVolume(int value);
 };
