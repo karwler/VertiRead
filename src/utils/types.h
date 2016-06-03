@@ -12,6 +12,7 @@ class Program;
 
 class Button;
 class ScrollArea;
+class ListBox;
 class PopupChoice;
 class Capturer;
 
@@ -21,6 +22,12 @@ enum class EColor : byte {
 	highlighted,
 	darkened,
 	text
+};
+
+enum class ETextType : byte {
+	text,
+	integer,
+	floating
 };
 
 class Texture {
@@ -75,7 +82,7 @@ struct Text {
 
 class TextEdit {
 public:
-	TextEdit(const string& TXT="", int CPOS=0);
+	TextEdit(const string& TXT="", ETextType TYP=ETextType::text, int CPOS=0);
 
 	int CursorPos() const;
 	void SetCursor(int pos);
@@ -87,7 +94,10 @@ public:
 
 private:
 	int cpos;
+	ETextType type;
 	string text;
+
+	void CheckText();
 };
 
 struct Shortcut {

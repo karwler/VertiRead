@@ -99,6 +99,10 @@ ListBox* ListBox::Clone() const {
 	return new ListBox(*this);
 }
 
+ListItem* ListBox::Item(int id) const {
+	return items[id];
+}
+
 SDL_Rect ListBox::ItemRect(int i, SDL_Rect* Crop, EColor* color) const {
 	vec2i pos = Pos();
 	SDL_Rect rect = {pos.x, pos.y - listY + i * (itemH + spacing), Size().x-barW, itemH};
@@ -167,15 +171,15 @@ void TileBox::SetValues() {
 	ScrollArea::SetValues();
 }
 
-SDL_Rect TileBox::ItemRect(int i, SDL_Rect* Crop, EColor* color) const {
+SDL_Rect TileBox::ItemRect(int id, SDL_Rect* Crop, EColor* color) const {
 	vec2i pos = Pos();
-	SDL_Rect rect = {(i - (i/dim.x) * dim.x) * (tileSize.x+spacing) + pos.x, (i/dim.x) * (tileSize.y+spacing) + pos.y - listY, tileSize.x, tileSize.y};
+	SDL_Rect rect = {(id - (id/dim.x) * dim.x) * (tileSize.x+spacing) + pos.x, (id/dim.x) * (tileSize.y+spacing) + pos.y - listY, tileSize.x, tileSize.y};
 	SDL_Rect crop = getCrop(rect, getRect());
 
 	if (Crop)
 		*Crop = crop;
 	if (color)
-		*color = items[i] == selectedItem ? EColor::highlighted : EColor::rectangle;
+		*color = (items[id] == selectedItem) ? EColor::highlighted : EColor::rectangle;
 	return cropRect(rect, crop);
 }
 
@@ -209,67 +213,6 @@ vec2i TileBox::TileSize() const {
 
 vec2i TileBox::Dim() const {
 	return dim;
-}
-
-// OBJECTS BOX
-
-ObjectBox::ObjectBox(const Object& BASE, const vector<Object*>& OBJS, int SPC, int BARW) :
-	ScrollArea(BASE, SPC, BARW)
-{
-	if (!OBJS.empty())
-		Objects(OBJS);
-}
-
-ObjectBox::~ObjectBox() {
-	clear(objects);
-}
-
-ObjectBox* ObjectBox::Clone() const {
-	return new ObjectBox(*this);
-}
-
-Object* ObjectBox::getObject(int i, SDL_Rect* crop) const {
-	Object* obj = objects[i]->Clone();
-	obj->Pos(obj->Pos() - vec2i(0, listY));
-
-	if (crop)
-		*crop = getCrop(obj->getRect(), getRect());
-	return obj;
-}
-
-uint ObjectBox::ObjectCount() const {
-	return objects.size();
-}
-
-void ObjectBox::Objects(const vector<Object*>& OBJS) {
-	clear(objects);
-	objects = OBJS;
-
-	// set list height and move objects down
-	listH = 0;
-	for (Object* obj : objects) {
-		obj->Pos(obj->Pos() + vec2i(0, listH));
-		obj->End(obj->End() + vec2i(0, listH));
-		listH += obj->Size().y + spacing;		// no need to put this in SetValues()
-	}
-	SetValues();
-}
-
-vec2i ObjectBox::VisibleObjects() const {
-	int sizY = Size().y;
-	vec2i interval(0, objects.size()-1);
-
-	for (int i=interval.x; i<=interval.y; i++)
-		if (objects[i]->End().y >= listY) {
-			interval.x = i;
-			break;
-		}
-	for (int i=interval.x; i<=interval.y; i++)
-		if (objects[i]->Pos().y > listY + sizY) {
-			interval.y = i-1;
-			break;
-		}
-	return interval;
 }
 
 // READER BOX

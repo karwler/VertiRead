@@ -101,10 +101,6 @@ void Scene::CheckObjectsClick(const vector<Object*>& objs, bool doubleclick) {
 				CheckTileBoxClick(box, doubleclick);
 				break;
 			}
-			else if (ObjectBox* box = dynamic_cast<ObjectBox*>(area)) {
-				CheckObjectBoxClick(box);
-				break;
-			}
 			else if (ReaderBox* box = dynamic_cast<ReaderBox*>(area)) {
 				CheckReaderBoxClick(box, doubleclick);
 				break;
@@ -159,26 +155,6 @@ void Scene::CheckTileBoxClick(TileBox* obj, bool doubleclick) {
 		}
 }
 
-void Scene::CheckObjectBoxClick(ObjectBox* obj) {
-	vec2i interval = obj->VisibleObjects();
-	for (int i=interval.x; i!=interval.y; i++) {
-		SDL_Rect crop;
-		Object* item = obj->getObject(i, &crop);
-
-		if (inRect(cropRect(item->getRect(), crop), InputSys::mousePos())) {
-			if (Button* but = dynamic_cast<Button*>(item)) {
-				but->OnClick();
-				break;
-			}
-			else if (Capturer* cap = dynamic_cast<Capturer*>(item)) {
-				cap->OnClick();
-				break;
-			}
-		}
-		delete item;
-	}
-}
-
 void Scene::CheckReaderBoxClick(ReaderBox* obj, bool doubleclick) {
 	vec2i mPos = InputSys::mousePos();
 	if (obj->showList()) {		// check list buttons
@@ -224,7 +200,7 @@ void Scene::CheckPopupSimpleClick(PopupMessage* obj) {
 void Scene::CheckPopupChoiceClick(PopupChoice* obj) {
 	if (inRect(obj->OkButton(), InputSys::mousePos())) {
 		if (PopupText* poptext = dynamic_cast<PopupText*>(obj))
-			program->Event_TextCaptureOk(poptext->Line()->Editor());
+			program->Event_TextCaptureOk(poptext->LEdit()->Editor());
 	}
 	else if (inRect(obj->CancelButton(), InputSys::mousePos()))
 		SetPopup(nullptr);
@@ -291,7 +267,7 @@ void Scene::SetPopup(Popup* box) {
 	popup = box;
 
 	if (PopupText* poptext = dynamic_cast<PopupText*>(box))
-		World::inputSys()->SetCapture(poptext->Line());
+		World::inputSys()->SetCapture(poptext->LEdit());
 	else
 		World::inputSys()->SetCapture(nullptr);
 

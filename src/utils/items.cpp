@@ -9,10 +9,11 @@ ListItem::ListItem(const string& LBL, ScrollArea* SA) :
 ListItem::~ListItem() {}
 
 void ListItem::OnClick(bool doubleclick) {
+	if (parent)
+		parent->selectedItem = this;
 	if (doubleclick)
 		World::program()->Event_ItemDoubleclicked(this);
-	else if (parent)
-		parent->selectedItem = this;
+
 	World::engine->SetRedrawNeeded();
 }
 
@@ -42,4 +43,27 @@ void ItemButton::OnClick(bool doubleclick) {
 
 	if (callback)
 		(World::program()->*callback)(dat);
+}
+
+// CHECKBOX
+
+Checkbox::Checkbox(ListBox* SA, const string& LBL, bool ON, void (Program::*CALLB)(bool), int SPC) :
+	ListItem(LBL, SA),
+	on(ON),
+	spacing(SPC),
+	callback(CALLB)
+{}
+Checkbox::~Checkbox() {}
+
+void Checkbox::OnClick(bool doubleclick) {
+	on = !on;
+	(World::program()->*callback)(on);
+}
+
+ListBox* Checkbox::Parent() const {
+	return static_cast<ListBox*>(parent);
+}
+
+bool Checkbox::On() const {
+	return on;
 }

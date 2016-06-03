@@ -89,20 +89,3 @@ private:
 	uint curTex;
 };
 
-class Checkbox : public Object {
-public:
-	Checkbox(const Object& BASE=Object(), const string& TXT="", bool ON=false, void (Program::*CALLB)(bool)=nullptr, int SPC=5);
-	virtual ~Checkbox();
-	virtual Checkbox* Clone() const;
-
-	void OnClick();
-	SDL_Rect getButton() const;
-	SDL_Rect getCheckbox(EColor* color=nullptr) const;
-	Text getText() const;
-
-private:
-	string label;
-	bool on;
-	int spacing;
-	void (Program::*callback)(bool);
-};

@@ -105,10 +105,13 @@ vec2i Text::size() const {
 
 // TEXT EDIT
 
-TextEdit::TextEdit(const string& TXT, int CPOS) :
+TextEdit::TextEdit(const string& TXT, ETextType TYP, int CPOS) :
 	cpos(CPOS),
+	type(TYP),
 	text(TXT)
-{}
+{
+	CheckText();
+}
 
 int TextEdit::CursorPos() const {
 	return cpos;
@@ -142,6 +145,7 @@ string TextEdit::getText() const {
 void TextEdit::Add(const string& str) {
 	text.insert(cpos, str);
 	cpos += str.length();
+	CheckText();
 	World::engine->SetRedrawNeeded();
 }
 
@@ -156,6 +160,30 @@ void TextEdit::Delete(bool current) {
 	}
 	World::engine->SetRedrawNeeded();
 }
+
+void TextEdit::CheckText() {
+	if (type == ETextType::text)
+		return;
+
+	bool foundDot = false;
+	for (uint i=0; i!=text.length(); i++) {
+		if (type == ETextType::integer) {
+			if (text[i] < '0' || text[i] > '9')
+				text.erase(i, 1);
+		}
+		else if (type == ETextType::floating) {
+			if (text[i] == '.') {
+				if (foundDot)
+					text.erase(i, 1);
+				else
+					foundDot = true;
+			}
+			else if (text[i] < '0' || text[i] > '9')
+				text.erase(i, 1);
+		}
+	}
+}
+
 
 // SHORTCUT
 

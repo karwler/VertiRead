@@ -41,6 +41,7 @@ public:
 	virtual ~ListBox();
 	virtual ListBox* Clone() const;
 
+	ListItem* Item(int id) const;
 	SDL_Rect ItemRect(int i, SDL_Rect* Crop=nullptr, EColor* color=nullptr) const;
 	virtual int SelectedItem() const;
 	vec2i VisibleItems() const;
@@ -61,7 +62,7 @@ public:
 	virtual TileBox* Clone() const;
 
 	virtual void SetValues();
-	SDL_Rect ItemRect(int i, SDL_Rect* Crop=nullptr, EColor* color=nullptr) const;
+	SDL_Rect ItemRect(int id, SDL_Rect* Crop=nullptr, EColor* color=nullptr) const;
 	virtual int SelectedItem() const;
 	vec2i VisibleItems() const;
 
@@ -75,21 +76,6 @@ private:
 	vec2i dim;
 
 	vector<ListItem*> items;
-};
-
-class ObjectBox : public ScrollArea {
-public:
-	ObjectBox(const Object& BASE=Object(), const vector<Object*>& OBJS={}, int SPC=5, int BARW=10);
-	virtual ~ObjectBox();
-	virtual ObjectBox* Clone() const;
-
-	Object* getObject(int i, SDL_Rect* crop=nullptr) const;	// creates copy on the heap (needs to be deleted manually)
-	uint ObjectCount() const;
-	void Objects(const vector<Object*>& OBJS);
-	vec2i VisibleObjects() const;
-
-private:
-	vector<Object*> objects;
 };
 
 class ReaderBox : public ScrollArea {

@@ -8,7 +8,7 @@ Used libraries are boost_filesystem, SDL2, SDL2_image, SDL2_ttf and SDL2_mixer.
 
 The Qt project file is configured for Linux, Windows and OS X.  
 Note: When setting the output directory in Qt, don’t name it ‘build’ cause it might mess up the executable’s location.  
-The makefile is only made for Linux.  
+The makefile is made only for Linux.  
 
 ##Linux
 For simple build just use the makefile.  
@@ -35,7 +35,8 @@ Boost is assumed to be located in /usr/local/include (headers) and /usr/local/li
 
 ##To do list
 - add browser to playlist editor
-- fix line edit
+- fix in-list line edit
+- add text scroll to line edit
 - finish settings menu lists
 - improve mouse wheel scrolling
 - test audio system under linux and os x

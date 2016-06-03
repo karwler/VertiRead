@@ -62,7 +62,7 @@ public:
 	void Event_Ok();
 
 	// other events
-	void Event_TextCaptureOk(TextEdit* box);
+	void Event_TextCaptureOk(TextEdit* edit);
 	void Event_KeyCaptureOk(SDL_Scancode key);
 	void Event_SelectionSet(void* box);
 	void Event_ScreenMode();

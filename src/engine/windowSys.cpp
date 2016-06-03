@@ -130,23 +130,15 @@ void WindowSys::PassDrawObject(Object* obj) {
 		DrawObject(box);
 	else if (TileBox* box = dynamic_cast<TileBox*>(obj))
 		DrawObject(box);
-	else if (ObjectBox* box = dynamic_cast<ObjectBox*>(obj))
-		DrawObject(box);
 	else if (ReaderBox* box = dynamic_cast<ReaderBox*>(obj))
 		DrawObject(box);
-	else if (LineEdit* edit = dynamic_cast<LineEdit*>(obj))
-		DrawObject(edit);
-	else if (KeyGetter* kget = dynamic_cast<KeyGetter*>(obj))
-		DrawObject(kget);
-	else if (Checkbox* cbox = dynamic_cast<Checkbox*>(obj))
-		DrawObject(cbox);
 	else
 		DrawRect(obj->getRect(), obj->color);
 }
 
 void WindowSys::DrawObject(const SDL_Rect& bg, EColor bgColor, const Text& text) {
 	DrawRect(bg, bgColor);
-
+	
 	int len = text.size().x;
 	len = len+5 > bg.w ? len - bg.w +10 : 0;	// use len as crop variable
 	DrawText(text, { 0, 0, len, 0 });
@@ -162,6 +154,8 @@ void WindowSys::DrawObject(ListBox* obj) {
 
 		DrawRect(rect, color);
 		DrawText(Text(items[i]->label, vec2i(rect.x+5, rect.y-crop.y), obj->ItemH(), 8), crop);
+
+		PassDrawItem(i, obj, rect, crop);
 	}
 	DrawRect(obj->Bar(), EColor::darkened);
 	DrawRect(obj->Slider(), EColor::highlighted);
@@ -179,19 +173,6 @@ void WindowSys::DrawObject(TileBox* obj) {
 		int len = Text(tiles[i]->label, 0, obj->TileSize().y, 8).size().x;
 		crop.w = len+5 > rect.w ? crop.w = len - rect.w +10 : 0;										// recalculate right side crop for text
 		DrawText(Text(tiles[i]->label, vec2i(rect.x+5, rect.y-crop.y), obj->TileSize().y, 8), crop);	// left side crop can be ignored
-	}
-	DrawRect(obj->Bar(), EColor::darkened);
-	DrawRect(obj->Slider(), EColor::highlighted);
-}
-
-void WindowSys::DrawObject(ObjectBox* obj) {
-	vec2i interval = obj->VisibleObjects();
-	for (int i=interval.x; i<=interval.y; i++) {
-		SDL_Rect crop;
-		Object* item = obj->getObject(i, &crop);
-		SDL_Rect rect = item->getRect();
-		PassDrawObject(item);
-		delete item;
 	}
 	DrawRect(obj->Bar(), EColor::darkened);
 	DrawRect(obj->Slider(), EColor::highlighted);
@@ -220,38 +201,38 @@ void WindowSys::DrawObject(ReaderBox* obj) {
 	}
 }
 
-void WindowSys::DrawObject(LineEdit* obj) {
-	DrawRect(obj->getRect(), obj->color);
-	DrawText(obj->getLabel());
-
-	vec2i crop;
-	Text txt = obj->getText(&crop);
-	DrawText(txt, {crop.x, 0, crop.y, 0});
-
-	SDL_Rect rect = obj->getRect();
-	txt.text.resize(obj->Editor()->CursorPos());
-	DrawRect({rect.x+txt.size().x, rect.y, 3, rect.h}, EColor::highlighted);	// draw caret
-}
-
-void WindowSys::DrawObject(KeyGetter* obj) {
-	DrawRect(obj->getRect(), obj->color);
-	DrawText(obj->getLabel());
-	DrawText(obj->getText());
-}
-
-void WindowSys::DrawObject(Checkbox* obj) {
-	DrawRect(obj->getRect(), obj->color);
-	DrawText(obj->getText());
-
-	EColor color;
-	SDL_Rect rect = obj->getCheckbox(&color);
-	DrawRect(rect, color);
-}
-
 void WindowSys::DrawObject(Popup* obj) {
 	DrawRect(obj->getRect(), EColor::darkened);
 	for (Object* it : obj->getObjects())
 		PassDrawObject(it);
+}
+
+void WindowSys::PassDrawItem(int id, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
+	if (Checkbox* obj = dynamic_cast<Checkbox*>(parent->Item(id)))
+		DrawItem(obj, parent, rect, crop);
+	else if (LineEdit* obj = dynamic_cast<LineEdit*>(parent->Item(id)))
+		DrawItem(obj, parent, rect, crop);
+	else if (KeyGetter* obj = dynamic_cast<KeyGetter*>(parent->Item(id)))
+		DrawItem(obj, parent, rect, crop);
+}
+
+void WindowSys::DrawItem(Checkbox* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
+	int top = (crop.y < item->spacing) ? item->spacing - crop.y : crop.y;
+	int bot = (crop.h > item->spacing) ? crop.h - item->spacing : item->spacing;
+
+	DrawRect({ rect.x+rect.w-rect.h+item->spacing, rect.y-crop.y+top, rect.w-item->spacing*2, rect.h+crop.h-top-bot }, item->On() ? EColor::highlighted : EColor::darkened);
+}
+
+void WindowSys::DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
+	int offset = Text(item->label, 0, parent->ItemH(), 8).size().x;
+
+	DrawText(Text(item->Editor()->getText(), vec2i(rect.x+offset+5, rect.y-crop.y), parent->ItemH(), 8), crop);
+}
+
+void WindowSys::DrawItem(KeyGetter* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
+	int offset = Text(item->label, 0, parent->ItemH(), 8).size().x;
+
+	DrawText(Text(item->KeyName(), vec2i(rect.x+offset+5, rect.y-crop.y), parent->ItemH(), 8), crop);
 }
 
 void WindowSys::DrawRect(const SDL_Rect& rect, EColor color) {

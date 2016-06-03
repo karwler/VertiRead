@@ -18,7 +18,7 @@ void Popup::Tick() {
 			World::scene()->SetPopup(nullptr);
 }
 
-vector<Object*> Popup::getObjects() const {
+vector<Object*> Popup::getObjects() {
 	return {};
 }
 
@@ -26,8 +26,8 @@ vector<Object*> Popup::getObjects() const {
 
 PopupMessage::PopupMessage(const string& MSG, int W, int TH, int BH, float TO) :
 	Popup(vec2i(W, TH+BH), TO),
-	title(new Label(Object(Anchor(), Pos(), vec2i(W, TH), FIX_SIZ), MSG)),
-	cButton(new Label(Object(Anchor(), Pos()+vec2i(0, TH), vec2i(W, BH), FIX_SIZ), "Ok"))
+	title(Object(Anchor(), Pos(), vec2i(W, TH), FIX_SIZ), MSG),
+	cButton(Object(Anchor(), Pos()+vec2i(0, TH), vec2i(W, BH), FIX_SIZ), "Ok")
 {}
 PopupMessage::~PopupMessage() {}
 
@@ -35,22 +35,22 @@ PopupMessage* PopupMessage::Clone() const {
 	return new PopupMessage(*this);
 }
 
-vector<Object*> PopupMessage::getObjects() const {
-	return {title, cButton};
+vector<Object*> PopupMessage::getObjects() {
+	return { const_cast<Label*>(&title), const_cast<Label*>(&cButton) };
 }
 
 SDL_Rect PopupMessage::CancelButton() const {
-	return cButton->getRect();
+	return cButton.getRect();
 }
 
 // POPUP CHOICE
 
 PopupChoice::PopupChoice(const string& MSG, int W, int TH, int BH) :
 	PopupMessage(MSG, W, TH, BH, 0.f),
-	kButton(new Label(Object(Anchor(), Pos()+vec2i(W/2, TH), vec2i(W/2, BH), FIX_SIZ), "Ok"))
+	kButton(Object(Anchor(), Pos()+vec2i(W/2, TH), vec2i(W/2, BH), FIX_SIZ), "Ok")
 {
-	cButton->Size(vec2i(cButton->Size().x/2, cButton->Size().y));
-	cButton->text = "Cancel";
+	cButton.Size(vec2i(cButton.Size().x/2, cButton.Size().y));
+	cButton.text = "Cancel";
 }
 PopupChoice::~PopupChoice() {}
 
@@ -58,34 +58,36 @@ PopupMessage* PopupChoice::Clone() const {
 	return new PopupMessage(*this);
 }
 
-vector<Object*> PopupChoice::getObjects() const {
+vector<Object*> PopupChoice::getObjects() {
 	vector<Object*> ret = PopupMessage::getObjects();
-	ret.push_back(kButton);
+	ret.push_back(const_cast<Label*>(&kButton));
 	return ret;
 }
 
 SDL_Rect PopupChoice::OkButton() const {
-	return kButton->getRect();
+	return kButton.getRect();
 }
 
 // POPUP TEXT
 
 PopupText::PopupText(const string& MSG, const string& LIN, int W, int TH, int LH, int BH) :
-	PopupChoice(MSG, W, TH, BH)
+	PopupChoice(MSG, W, TH, BH),
+	lineEdit(nullptr, "", LIN)
 {
 	// resize and reposition everything
 	Pos(Anchor()-vec2i(W, TH+LH+BH)/2);
 	End(Anchor()+vec2i(W, TH+LH+BH)/2);
 
-	title->Pos(Pos());
-	title->Size(vec2i(W, TH));
+	title.Pos(Pos());
+	title.Size(vec2i(W, TH));
 
-	line = new LineEdit(Object(Anchor(), Pos()+vec2i(0, TH), vec2i(W, LH), FIX_SIZ), "", LIN);
+	lineObject = Label(Object(Anchor(), Pos()+vec2i(0, TH), vec2i(W, LH), FIX_SIZ));
 
-	cButton->Pos(Pos()+vec2i(0, TH+LH));
-	cButton->Size(vec2i(W/2, BH));
-	kButton->Pos(Pos()+vec2i(W/2, TH+LH));
-	kButton->Size(vec2i(W/2, BH));
+	cButton.Pos(Pos()+vec2i(0, TH+LH));
+	cButton.Size(vec2i(W/2, BH));
+
+	kButton.Pos(Pos()+vec2i(W/2, TH+LH));
+	kButton.Size(vec2i(W/2, BH));
 }
 PopupText::~PopupText() {}
 
@@ -93,12 +95,13 @@ PopupText* PopupText::Clone() const {
 	return new PopupText(*this);
 }
 
-vector<Object*> PopupText::getObjects() const {
+vector<Object*> PopupText::getObjects() {
 	vector<Object*> ret = PopupChoice::getObjects();
-	ret.push_back(line);
+	lineObject.text = lineEdit.Editor()->getText();
+	ret.push_back(&lineObject);
 	return ret;
 }
 
-LineEdit* PopupText::Line() const {
-	return line;
+LineEdit* PopupText::LEdit() {
+	return &lineEdit;
 }

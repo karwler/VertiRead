@@ -9,7 +9,7 @@ public:
 	virtual Popup* Clone() const;
 
 	void Tick();
-	virtual vector<Object*> getObjects() const;
+	virtual vector<Object*> getObjects();
 
 protected:
 	float timeout;	// 0 means no timeout
@@ -21,12 +21,12 @@ public:
 	virtual ~PopupMessage();
 	virtual PopupMessage* Clone() const;
 
-	virtual vector<Object*> getObjects() const;
+	virtual vector<Object*> getObjects();
 	SDL_Rect CancelButton() const;
 
 protected:
-	kptr<Label> title;
-	kptr<Label> cButton;
+	Label title;
+	Label cButton;
 };
 
 class PopupChoice : public PopupMessage {
@@ -35,11 +35,11 @@ public:
 	virtual ~PopupChoice();
 	virtual PopupMessage* Clone() const;
 
-	virtual vector<Object*> getObjects() const;
+	virtual vector<Object*> getObjects();
 	SDL_Rect OkButton() const;
 
 protected:
-	kptr<Label> kButton;
+	Label kButton;
 };
 
 class PopupText : public PopupChoice {
@@ -48,9 +48,11 @@ public:
 	virtual ~PopupText();
 	virtual PopupText* Clone() const;
 
-	virtual vector<Object*> getObjects() const;
-	LineEdit* Line() const;
+	virtual vector<Object*> getObjects();
+	LineEdit* LEdit();
 
 protected:
-	kptr<LineEdit> line;
+	// using LineEdit and Label to simulate an independent text editing object
+	LineEdit lineEdit;
+	Label lineObject;
 };

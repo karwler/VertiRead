@@ -1,60 +1,44 @@
 #pragma once
 
-#include "objects.h"
+#include "items.h"
 
-enum class ETextType : byte {
-	text,
-	integer,
-	floating
-};
-
-class Capturer : public Object {
+class Capturer : public ListItem {
 public:
-	Capturer(const Object& BASE=Object());
+	Capturer(ListBox* SA, const string& LBL="");
 	virtual ~Capturer();
-	virtual Capturer* Clone() const;
 
 	virtual void OnClick();
 	virtual void OnKeypress(SDL_Scancode key);
+	ListBox* Parent() const;
 };
 
 class LineEdit : public Capturer {
 public:
-	LineEdit(const Object& BASE=Object(), const string& LBL="", const string& TXT="", void (Program::*KCALL)(TextEdit*)=nullptr, void (Program::*CCALL)()=nullptr, ETextType TYPE=ETextType::text);
+	LineEdit(ListBox* SA, const string& LBL="", const string& TXT="", void (Program::*KCALL)(TextEdit*)=nullptr, void (Program::*CCALL)()=nullptr, ETextType TYPE=ETextType::text);
 	virtual ~LineEdit();
-	virtual LineEdit* Clone() const;
 
 	virtual void OnClick();
 	virtual void OnKeypress(SDL_Scancode key);
-	void AddText(const string& text);
-	Text getText(vec2i* sideCrop=nullptr) const;
-	Text getLabel() const;
-	TextEdit* Editor() const;
+
+	TextEdit* Editor();
 
 private:
-	string label;
-	ETextType type;
-	TextEdit editor;
 	int textPos;
+	TextEdit editor;
 	void (Program::*okCall)(TextEdit*);
 	void (Program::*cancelCall)();
-
-	string CheckText(string str);
 };
 
 class KeyGetter : public Capturer {
 public:
-	KeyGetter(const Object& BASE=Object(), const string& LBL="", SDL_Scancode KEY=SDL_SCANCODE_ESCAPE, void (Program::*CALLB)(SDL_Scancode)=nullptr);
+	KeyGetter(ListBox* SA, const string& LBL="", SDL_Scancode KEY=SDL_SCANCODE_ESCAPE, void (Program::*CALLB)(SDL_Scancode)=nullptr);
 	virtual ~KeyGetter();
-	virtual KeyGetter* Clone() const;
 
 	virtual void OnClick();
 	virtual void OnKeypress(SDL_Scancode KEY);
-	Text getText() const;
-	Text getLabel() const;
+	string KeyName() const;
 
 private:
-	string label;
 	SDL_Scancode key;
 	void (Program::*callback)(SDL_Scancode);
 };

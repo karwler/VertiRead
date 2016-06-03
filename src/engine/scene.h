@@ -43,7 +43,6 @@ private:
 	bool CheckSliderClick(ScrollArea* obj);
 	void CheckListBoxClick(ListBox* obj, bool doubleclick);
 	void CheckTileBoxClick(TileBox* obj, bool doubleclick);
-	void CheckObjectBoxClick(ObjectBox* obj);
 	void CheckReaderBoxClick(ReaderBox* obj, bool doubleclick);
 	void CheckPopupSimpleClick(PopupMessage* obj);
 	void CheckPopupChoiceClick(PopupChoice* obj);

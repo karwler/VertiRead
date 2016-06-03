@@ -39,7 +39,7 @@ void InputSys::MouseWheelEvent(const SDL_MouseWheelEvent& wheel) {
 }
 
 void InputSys::TextEvent(const SDL_TextInputEvent& text) {
-	static_cast<LineEdit*>(captured)->AddText(text.text);
+	static_cast<LineEdit*>(captured)->Editor()->Add(text.text);
 }
 
 void InputSys::CheckShortcuts(const SDL_KeyboardEvent& key) {

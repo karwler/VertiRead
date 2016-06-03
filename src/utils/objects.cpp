@@ -127,7 +127,7 @@ ButtonText* ButtonText::Clone() const {
 }
 
 Text ButtonText::getText() const {
-	return Text(text, Pos()+vec2i(5, 0), Size().y, 8);;
+	return Text(text, Pos()+vec2i(5, 0), Size().y, 8);
 }
 
 // BUTTON IMAGE
@@ -155,40 +155,4 @@ void ButtonImage::OnClick() {
 
 Image ButtonImage::CurTex() const {
 	return texes.empty() ? Image() : Image(Pos(), texes[curTex], Size());
-}
-
-// CHECKBOX
-
-Checkbox::Checkbox(const Object& BASE, const string& TXT, bool ON, void (Program::*CALLB)(bool), int SPC) :
-	Object(BASE),
-	label(TXT),
-	on(ON),
-	spacing(SPC),
-	callback(CALLB)
-{}
-Checkbox::~Checkbox() {}
-
-Checkbox* Checkbox::Clone() const {
-	return new Checkbox(*this);
-}
-
-void Checkbox::OnClick() {
-	on = !on;
-	(World::program()->*callback)(on);
-}
-
-SDL_Rect Checkbox::getButton() const {
-	int siz = Size().y;
-	return {End().x-siz, Pos().y, siz, siz};
-}
-
-SDL_Rect Checkbox::getCheckbox(EColor* color) const {
-	if (color)
-		*color = on ? EColor::highlighted : EColor::darkened;
-	SDL_Rect rect = getButton();
-	return {rect.x+spacing, rect.y+spacing, rect.w-spacing*2, rect.h-spacing*2};
-}
-
-Text Checkbox::getText() const {
-	return Text(label, Pos(), Size().y, 8);
 }

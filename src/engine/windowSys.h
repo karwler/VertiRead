@@ -32,12 +32,13 @@ private:
 	void DrawObject(const SDL_Rect& bg, EColor bgColor, const Text& text);
 	void DrawObject(ListBox* obj);
 	void DrawObject(TileBox* obj);
-	void DrawObject(ObjectBox* obj);
 	void DrawObject(ReaderBox* obj);
-	void DrawObject(LineEdit* obj);
-	void DrawObject(KeyGetter* obj);
-	void DrawObject(Checkbox* obj);
 	void DrawObject(Popup* obj);
+	
+	void PassDrawItem(int id, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop={ 0, 0, 0, 0 });
+	void DrawItem(Checkbox* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop);
+	void DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop);
+	void DrawItem(KeyGetter* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop);
 
 	void DrawRect(const SDL_Rect& rect, EColor color);
 	void DrawImage(const Image& img, const SDL_Rect& crop = { 0, 0, 0, 0 });

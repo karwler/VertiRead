@@ -253,10 +253,10 @@ void Program::Event_Ok() {
 
 // OTHER EVENTS
 
-void Program::Event_TextCaptureOk(TextEdit* box) {
+void Program::Event_TextCaptureOk(TextEdit* edit) {
 	if (curMenu == EMenu::playlists) {
-		if (!fs::exists(World::scene()->Settings().playlistParh() + box->getText())) {
-			Filer::SavePlaylist(Playlist(box->getText()));
+		if (!fs::exists(World::scene()->Settings().playlistParh() + edit->getText())) {
+			Filer::SavePlaylist(Playlist(edit->getText()));
 			Event_OpenPlaylistList();
 		}
 		else
@@ -264,9 +264,9 @@ void Program::Event_TextCaptureOk(TextEdit* box) {
 	}
 	else if (curMenu == EMenu::plistEditor) {
 		if (editor->showSongs)
-			editor->RenameSong(box->getText());
+			editor->RenameSong(edit->getText());
 		else
-			editor->RenameBook(box->getText());
+			editor->RenameBook(edit->getText());
 		SwitchScene(editor);
 	}
 	World::inputSys()->SetCapture(nullptr);
@@ -404,11 +404,14 @@ void Program::SwitchScene(void* dat) const {
 		vec2i ancT(160, 0);
 		sizT = vec2i(res.x-160, 30);
 		EFix fixT = FIX_POS | FIX_EX | FIX_H;
-		vector<Object*> items = {
-			new LineEdit(Object(ancT, posT, sizT, fixT), "Library   ", World::scene()->Settings().dirLib),
-			new LineEdit(Object(ancT, posT, sizT, fixT), "Playlists ", World::scene()->Settings().dirPlist)
+		
+		ListBox* box = new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background));
+		vector<ListItem*> items = {
+			new LineEdit(box, "Library   ", World::scene()->Settings().dirLib),
+			new LineEdit(box, "Playlists ", World::scene()->Settings().dirPlist)
 		};
-		objects.push_back(new ObjectBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
+		box->Items(items);
+		objects.push_back(box);
 		focObject = objects.size()-1;
 		break; }
 	case EMenu::videoSets: {
@@ -419,10 +422,10 @@ void Program::SwitchScene(void* dat) const {
 			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Back")
 		};
 
-		vector<Object*> items = {
+		vector<ListItem*> items = {
 			// something
 		};
-		objects.push_back(new ObjectBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
+		objects.push_back(new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
 		focObject = objects.size()-1;
 		break; }
 	case EMenu::audioSets: {
@@ -433,10 +436,10 @@ void Program::SwitchScene(void* dat) const {
 			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Back")
 		};
 
-		vector<Object*> items = {
+		vector<ListItem*> items = {
 			// something
 		};
-		objects.push_back(new ObjectBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
+		objects.push_back(new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
 		focObject = objects.size()-1;
 		break; }
 	case EMenu::controlsSets: {
@@ -447,10 +450,10 @@ void Program::SwitchScene(void* dat) const {
 			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_ALL), &Program::Event_Back, "Back")
 		};
 
-		vector<Object*> items = {
+		vector<ListItem*> items = {
 			// something
 		};
-		objects.push_back(new ObjectBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
+		objects.push_back(new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
 		focObject = objects.size()-1;
 		}
 	}
@@ -475,7 +478,7 @@ string Program::FindFittingPlaylist(const string& picPath) {
 		Playlist playlist = Filer::LoadPlaylist(file.filename().string());
 		for (const string& book : playlist.books)
 			if (book == name)
-				return file.filename().string();
+				return playlist.name;
 	}
 	return "";
 }
