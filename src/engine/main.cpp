@@ -1,6 +1,6 @@
 #include "world.h"
 
-#if defined(_WIN32) && !defined(DEBUG)
+#if defined(_WIN32) && !defined(_DEBUG)
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow) {
 	World::args = getWords(pCmdLine, false);
 #else

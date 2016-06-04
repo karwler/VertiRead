@@ -18,4 +18,9 @@ out
 *.autosave
 *.user
 *.sdf
+*.sln
+*.vcxproj
+*.filters
+*.cmake
 *.opendb
+Makefile

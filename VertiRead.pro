@@ -7,9 +7,9 @@ CONFIG -= app_bundle qt
 win32: TARGET = VertiRead
 else: TARGET = vertiread
 
-OBJECTS_DIR = $$OUT_PWD/bin/
-macx: DESTDIR = $$OUT_PWD/VertiRead.app/Contents/MacOS/
-else: DESTDIR = $$OUT_PWD/build/
+OBJECTS_DIR = $$OUT_PWD/bin
+macx: DESTDIR = $$OUT_PWD/VertiRead.app/Contents/MacOS
+else: DESTDIR = $$OUT_PWD/build
 
 # copy data dir and dependencies
 win32 {
@@ -19,9 +19,9 @@ win32 {
     DEST_WIN ~= s,/,\\,g
 
     contains(QT_ARCH, i386) {
-        LIB_WIN = $$PWD/lib/win32/
+        LIB_WIN = $$PWD/lib/win32
     } else {
-        LIB_WIN = $$PWD/lib/win64/
+        LIB_WIN = $$PWD/lib/win64
     }
     LIB_WIN ~= s,/,\\,g
 
@@ -30,9 +30,9 @@ win32 {
 }
 macx {
     postbuild.commands = mkdir -p $$DESTDIR/../Resources && \
-                         cp $$PWD/rsc/Info.plist $$DESTDIR/../ && \
-                         cp $$PWD/rsc/icon.icns $$DESTDIR/../Resources/ && \
-                         cp -r $$PWD/data $$DESTDIR/../Resources/
+                         cp $$PWD/rsc/Info.plist $$DESTDIR/.. && \
+                         cp $$PWD/rsc/icon.icns $$DESTDIR/../Resources && \
+                         cp -r $$PWD/data $$DESTDIR/../Resources/data
 }
 linux {
     postbuild.commands = cp $$PWD/rsc/vertiread.desktop $$DESTDIR && \
@@ -42,22 +42,22 @@ QMAKE_EXTRA_TARGETS += postbuild
 POST_TARGETDEPS += postbuild
 
 # includepaths
-INCLUDEPATH += $$PWD/src/
-win32: INCLUDEPATH += $$PWD/include/
-macx: INCLUDEPATH += /usr/local/include/
+INCLUDEPATH += $$PWD/src
+win32: INCLUDEPATH += $$PWD/include
+macx: INCLUDEPATH += /usr/local/include
 
 # dependencies' directories
 win32 {
     LIBS += -L$$LIB_WIN
 }
 macx {
-    FRMWK = -F/Library/Frameworks/
+    FRMWK = -F/Library/Frameworks
 
     QMAKE_CFLAGS += $$FRMWK
     QMAKE_CXXFLAGS += $$FRMWK
 
     LIBS += $$FRMWK
-    LIBS += -L/usr/local/lib/   
+    LIBS += -L/usr/local/lib
 }
 
 # linker flags
@@ -76,13 +76,6 @@ else {
 unix {
     LIBS += -lboost_system \
             -lboost_filesystem
-}
-
-# macro for win_main
-win32 {
-	CONFIG(debug, debug|release) {
-		DEFINES += "DEBUG"
-	}
 }
 
 # set sources
