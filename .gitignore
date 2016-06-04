@@ -2,6 +2,8 @@
 bin
 build
 out
+CMakeFiles
+*.dir
 .vs
 .DS_Store
 *.tlog

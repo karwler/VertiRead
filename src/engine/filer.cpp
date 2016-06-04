@@ -268,7 +268,7 @@ string Filer::execDir() {
 
 #ifdef _WIN32
 	char buffer[MAX_LEN];
-	if (GetModuleFileName(NULL, buffer, MAX_LEN))
+	if (GetModuleFileNameA(NULL, buffer, MAX_LEN))
 		path = buffer;
 	else {
 		fs::path dir = fs::path(World::args[0]).parent_path();

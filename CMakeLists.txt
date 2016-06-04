@@ -48,7 +48,7 @@ set(SRC_FILES
 	"src/utils/utils.h")
 	
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-	set(SRC_FILES "${SRC_FILES} rsc/resource.rc")
+	list(APPEND SRC_FILES "rsc/resource.rc")
 endif()
 
 # include directories
