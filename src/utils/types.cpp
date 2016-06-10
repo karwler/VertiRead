@@ -1,5 +1,9 @@
 #include "engine/world.h"
 
+EDirFilter operator|(EDirFilter a, EDirFilter b) {
+	return static_cast<EDirFilter>(static_cast<byte>(a) | static_cast<byte>(b));
+}
+
 // TEXTURE
 
 Texture::Texture(const string& FILE) :
@@ -7,6 +11,11 @@ Texture::Texture(const string& FILE) :
 {
 	LoadSurface(FILE);
 }
+
+Texture::Texture(const string& FILE, SDL_Surface* SURF) :
+	surface(SURF),
+	file(FILE)
+{}
 
 string Texture::File() const {
 	return file;
@@ -75,7 +84,7 @@ TTF_Font* FontSet::Get(int size) {
 vec2i FontSet::TextSize(const string& text, int size) {
 	vec2i siz;
 	if (Get(size))
-		TTF_SizeText(fonts.at(size), text.c_str(), &siz.x, &siz.y);
+		TTF_SizeUTF8(fonts.at(size), text.c_str(), &siz.x, &siz.y);
 	return siz;
 }
 
@@ -212,7 +221,8 @@ Directory::Directory(const string& NAME, const vector<string>& DIRS, const vecto
 
 // GENEREAL SETTINGS
 
-GeneralSettings::GeneralSettings(const string& LIB, const string& PST)
+GeneralSettings::GeneralSettings(const string& LANG, const string& LIB, const string& PST) :
+	language(LANG)
 {
 	dirLib = LIB.empty() ? Filer::dirSets() + "library"+dsep : LIB;
 	if (dirLib[dirLib.length()-1] != dsep[0])

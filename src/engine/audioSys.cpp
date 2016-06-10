@@ -3,7 +3,6 @@
 AudioSys::AudioSys(const AudioSettings& SETS) :
 	sets(SETS),
 	curMusic(nullptr),
-	curSound(nullptr),
 	deltaDelay(0.f)
 {
 	Initialize();
@@ -19,7 +18,6 @@ void AudioSys::Initialize() {
 	Mix_AllocateChannels(1);
 	
 	Mix_HookMusicFinished(MusicFinishCallback);
-	Mix_ChannelFinished(ChannelFinishCallback);
 
 	MusicVolume(sets.musicVolume);
 	SoundVolume(sets.soundVolume);
@@ -27,7 +25,6 @@ void AudioSys::Initialize() {
 
 void AudioSys::Cleanup() {
 	FreeMusic();
-	FreeSound();
 	Mix_CloseAudio();
 	Mix_Quit();
 }
@@ -36,13 +33,6 @@ void AudioSys::FreeMusic() {
 	if (curMusic) {
 		Mix_FreeMusic(curMusic);
 		curMusic = nullptr;
-	}
-}
-
-void AudioSys::FreeSound() {
-	if (curSound) {
-		Mix_FreeChunk(curSound);
-		curSound = nullptr;
 	}
 }
 
@@ -58,10 +48,6 @@ void AudioSys::Tick(float dSec) {
 
 void AudioSys::MusicFinishCallback() {
 	World::audioSys()->deltaDelay = World::audioSys()->sets.songDelay;
-}
-
-void AudioSys::ChannelFinishCallback(int channel) {
-	World::audioSys()->FreeSound();
 }
 
 void AudioSys::PlayPauseMusic() {
@@ -92,10 +78,8 @@ void AudioSys::SwitchSong(int step) {
 		Mix_PlayMusic(curMusic, 0);
 }
 
-void AudioSys::PlaySound(const string& file) {
-	FreeSound();
-	if (curSound = Mix_LoadWAV(file.c_str()))
-		Mix_PlayChannel(0, curSound, 0);
+void AudioSys::PlaySound(const string& name) {
+	Mix_PlayChannel(0, World::library()->getSound(name), 0);
 }
 
 AudioSettings AudioSys::Settings() const {

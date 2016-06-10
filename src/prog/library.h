@@ -4,13 +4,22 @@
 
 class Library {
 public:
-	Library(string FONT="", const map<string, string>& TEXS=map<string, string>(), const map<string, string>& SNDS=map<string, string>());
+	Library(string FONT, string& LANG);
 	~Library();
 
 	FontSet* Fonts() const;
-	string getTexPath(const string& name) const;
-	Texture* getTex(const string& name) const;
-	string getSound(const string& name) const;
+	void LoadFont(const string& font);
+
+	string getLine(const string& line, ETextCase caseChange=ETextCase::first_upper) const;
+	void LoadLanguage(const string& language);
+
+	Mix_Chunk* getSound(const string& name) const;
+	void LoadSounds();
+	void ClearSounds();
+
+	Texture* getTex(const string& name);
+	void LoadTextures();
+	void ClearTextures();
 
 	vector<Texture*> Pictures();
 	void LoadPics(const vector<string>& files);
@@ -18,7 +27,9 @@ public:
 
 private:
 	kptr<FontSet> fonts;
-	map<string, Texture> texes;
-	map<string, string> sounds;
+	string& curLanguage;
+	map<string, string> lines;		// english, translated
+	map<string, Mix_Chunk*> sounds;	// name, path
+	map<string, Texture> texes;		// name, texture data
 	vector<Texture> pics;
 };

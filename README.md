@@ -19,8 +19,10 @@ sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf
 The default font is set to "Arial" so you need the mscorefonts as well:  
 sudo apt-get install ttf-mscorefonts-installer 
 
+It's possible that neither the mouse wheel nor the audio system work properly under Linux and I've got no idea why.  
+
 ##Windows
-All needed libraries are already included in the project, however they're built only for the MSVC 14 (2015).  
+All necessary libraries are already included in the project, however they're built only for the MSVC 14 (2015).  
 
 ##OS X
 The project is configured to use the SDL2 frameworks and boost library.  

@@ -30,9 +30,31 @@ enum class ETextType : byte {
 	floating
 };
 
+enum class ETextCase : byte {
+	no_change,
+	first_upper,
+	all_upper,
+	all_lower
+};
+
+enum class EClick : byte {
+	left,
+	left_double,
+	right
+};
+
+enum EDirFilter : byte {
+	FILTER_ALL  = 0,
+	FILTER_FILE = 1,
+	FILTER_DIR  = 2,
+	FILTER_LINK = 4
+};
+EDirFilter operator|(EDirFilter a, EDirFilter b);
+
 class Texture {
 public:
 	Texture(const string& FILE="");
+	Texture(const string& FILE, SDL_Surface* SURF);
 
 	string File() const;
 	vec2i Res() const;
@@ -70,7 +92,7 @@ private:
 };
 
 struct Text {
-	Text(const string& TXT="", const vec2i& POS=0, int H=50, int HSCAL=0, EColor CLR=EColor::text);
+	Text(const string& TXT="", const vec2i& POS=0, int H=50, int HSCAL=8, EColor CLR=EColor::text);
 
 	vec2i pos;
 	int height;
@@ -126,8 +148,9 @@ struct Directory {
 };
 
 struct GeneralSettings {
-	GeneralSettings(const string& LIB="", const string& PST="");
+	GeneralSettings(const string& LANG="english", const string& LIB="", const string& PST="");
 
+	string language;				// this one has to be all lower case
 	string dirLib;
 	string dirPlist;
 

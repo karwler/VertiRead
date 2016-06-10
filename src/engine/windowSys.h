@@ -10,7 +10,7 @@ public:
 
 	void SetWindow();
 	void DestroyWindow();
-	void SetIcon(const string& file);
+	void SetIcon(SDL_Surface* icon);
 	void DrawObjects(const vector<Object*>& objects);
 	
 	SDL_Renderer* Renderer() const;
@@ -37,6 +37,7 @@ private:
 	
 	void PassDrawItem(int id, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop={ 0, 0, 0, 0 });
 	void DrawItem(Checkbox* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop);
+	void DrawItem(Switchbox* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop);
 	void DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop);
 	void DrawItem(KeyGetter* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop);
 

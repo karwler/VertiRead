@@ -61,6 +61,9 @@ public:
 	void Event_Back();
 	void Event_Ok();
 
+	// general settings events
+	void Event_SwitchLanguage(const string& language);
+
 	// other events
 	void Event_TextCaptureOk(TextEdit* edit);
 	void Event_KeyCaptureOk(SDL_Scancode key);

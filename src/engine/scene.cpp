@@ -4,10 +4,10 @@
 Scene::Scene(const GeneralSettings& SETS) :
 	sets(SETS),
 	program(new Program),
-	library(new Library(World::winSys()->Settings().FontPath(), Filer::GetTextures(), Filer::GetSounds())),
 	objectHold(nullptr)
 {
 	Filer::CheckDirectories(sets);
+	library = new Library(World::winSys()->Settings().FontPath(), sets.language);
 }
 
 Scene::~Scene() {
@@ -67,42 +67,45 @@ void Scene::Tick() {
 	}
 }
 
-void Scene::OnMouseDown(bool doubleclick) {
+void Scene::OnMouseDown(EClick clickType) {
 	// first check if there's a popup window
-	if (popup)
+	if (popup && clickType == EClick::left)
 		CheckPopupClick(popup);
 	else
-		CheckObjectsClick(objects, doubleclick);
+		CheckObjectsClick(objects, clickType);
 }
 
-void Scene::CheckObjectsClick(const vector<Object*>& objs, bool doubleclick) {
+void Scene::CheckObjectsClick(const vector<Object*>& objs, EClick clickType) {
 	for (Object* obj : objects) {
 		if (!inRect(obj->getRect(), InputSys::mousePos()))	// skip if mouse isn't over object
 			continue;
 
 		if (Button* but = dynamic_cast<Button*>(obj)) {
-			but->OnClick();
+			if (clickType == EClick::left)
+				but->OnClick();
 			break;
 		}
 		else if (Capturer* cap = dynamic_cast<Capturer*>(obj)) {
-			cap->OnClick();
+			if (clickType == EClick::left)
+				cap->OnClick();
 			break;
 		}
 		else if (ScrollArea* area = dynamic_cast<ScrollArea*>(obj)) {
-			area->selectedItem = nullptr;	// deselect all items
+			if (clickType == EClick::left)
+				area->selectedItem = nullptr;	// deselect all items
 
-			if (CheckSliderClick(area))		// first check if slider is clicked
+			if (CheckSliderClick(area))			// first check if slider is clicked
 				break;
 			else if (ListBox* box = dynamic_cast<ListBox*>(area)) {
-				CheckListBoxClick(box, doubleclick);
+				CheckListBoxClick(box, clickType);
 				break;
 			}
 			else if (TileBox* box = dynamic_cast<TileBox*>(area)) {
-				CheckTileBoxClick(box, doubleclick);
+				CheckTileBoxClick(box, clickType);
 				break;
 			}
 			else if (ReaderBox* box = dynamic_cast<ReaderBox*>(area)) {
-				CheckReaderBoxClick(box, doubleclick);
+				CheckReaderBoxClick(box, clickType);
 				break;
 			}
 		}
@@ -135,27 +138,27 @@ bool Scene::CheckSliderClick(ScrollArea* obj) {
 	return false;
 }
 
-void Scene::CheckListBoxClick(ListBox* obj, bool doubleclick) {
+void Scene::CheckListBoxClick(ListBox* obj, EClick clickType) {
 	vec2i interval = obj->VisibleItems();
 	vector<ListItem*> items = obj->Items();
 	for (int i=interval.x; i<=interval.y; i++)
 		if (inRect(obj->ItemRect(i), InputSys::mousePos())) {
-			items[i]->OnClick(doubleclick);
+			items[i]->OnClick(clickType);
 			break;
 		}
 }
 
-void Scene::CheckTileBoxClick(TileBox* obj, bool doubleclick) {
+void Scene::CheckTileBoxClick(TileBox* obj, EClick clickType) {
 	vec2i interval = obj->VisibleItems();
 	const vector<ListItem*>& items = obj->Items();
 	for (int i=interval.x; i<=interval.y; i++)
 		if (inRect(obj->ItemRect(i), InputSys::mousePos())) {
-			items[i]->OnClick(doubleclick);
+			items[i]->OnClick(clickType);
 			break;
 		}
 }
 
-void Scene::CheckReaderBoxClick(ReaderBox* obj, bool doubleclick) {
+void Scene::CheckReaderBoxClick(ReaderBox* obj, EClick clickType) {
 	vec2i mPos = InputSys::mousePos();
 	if (obj->showList()) {		// check list buttons
 		for (ButtonImage& but : obj->ListButtons())
@@ -171,7 +174,7 @@ void Scene::CheckReaderBoxClick(ReaderBox* obj, bool doubleclick) {
 				break;
 			}
 	}
-	else if (doubleclick) {
+	else if (clickType == EClick::left_double || clickType == EClick::right) {
 		vec2i interval = obj->VisiblePictures();
 		const vector<Image>& pics = obj->Pictures();
 		for (int i=interval.x; i<=interval.y; i++) {
@@ -187,7 +190,7 @@ void Scene::CheckReaderBoxClick(ReaderBox* obj, bool doubleclick) {
 	else {
 		vec2i pos = obj->Pos();
 		vec2i size = obj->Size();
-		if (inRect({pos.x, pos.y, size.x-obj->barW, size.y}, mPos))		// init list mouse drag
+		if (inRect({pos.x, pos.y, size.x-obj->BarW(), size.y}, mPos))		// init list mouse drag
 			objectHold = obj;
 	}
 }

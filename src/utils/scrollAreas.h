@@ -17,6 +17,7 @@ public:
 	SDL_Rect Slider() const;
 	virtual int SelectedItem() const;	// this class doesn't contain any items, therefore this function returns -1
 
+	int BarW() const;					// returns 0 if slider isn't needed
 	int ListY() const;
 	virtual int ListH() const;
 	int ListL() const;
@@ -24,10 +25,11 @@ public:
 	int SliderH() const;
 
 	ListItem* selectedItem;
-	const int barW;
+	
 	const int spacing;
 	int diffSliderMouseY;
 protected:
+	const int barW;
 	int listY;
 	int sliderH;
 	int listH, listL;

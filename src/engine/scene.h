@@ -14,7 +14,7 @@ public:
 	void SwitchMenu(const vector<Object*>& objs, uint focObj);
 	void ResizeMenu();
 	void Tick();
-	void OnMouseDown(bool doubleclick);
+	void OnMouseDown(EClick clickType);
 	void OnMouseUp();
 	void OnMouseWheel(int ymov);
 
@@ -38,12 +38,12 @@ private:
 	uint focObject;			// id of object currently focused by keyboard
 	ScrollArea* objectHold;	// pointer to object currently being dragged by mouse (nullptr if none is being held)
 
-	void CheckObjectsClick(const vector<Object*>& objs, bool doubleclick);
+	void CheckObjectsClick(const vector<Object*>& objs, EClick clickType);
 	void CheckPopupClick(Popup* obj);
 	bool CheckSliderClick(ScrollArea* obj);
-	void CheckListBoxClick(ListBox* obj, bool doubleclick);
-	void CheckTileBoxClick(TileBox* obj, bool doubleclick);
-	void CheckReaderBoxClick(ReaderBox* obj, bool doubleclick);
+	void CheckListBoxClick(ListBox* obj, EClick clickType);
+	void CheckTileBoxClick(TileBox* obj, EClick clickType);
+	void CheckReaderBoxClick(ReaderBox* obj, EClick clickType);
 	void CheckPopupSimpleClick(PopupMessage* obj);
 	void CheckPopupChoiceClick(PopupChoice* obj);
 };

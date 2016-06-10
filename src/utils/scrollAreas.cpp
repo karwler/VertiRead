@@ -40,15 +40,19 @@ void ScrollArea::ScrollList(int ymov)  {
 }
 
 SDL_Rect ScrollArea::Bar() const {
-	return {End().x-barW, Pos().y, barW, Size().y};
+	return {End().x-barW, Pos().y, BarW(), Size().y};
 }
 
 SDL_Rect ScrollArea::Slider() const {
-	return {End().x-barW, SliderY(), barW, sliderH};
+	return { End().x-barW, SliderY(), BarW(), sliderH };
 }
 
 int ScrollArea::SelectedItem() const {
 	return -1;
+}
+
+int ScrollArea::BarW() const {
+	return (sliderH == Size().y) ? 0 : barW;
 }
 
 int ScrollArea::ListY() const {
@@ -105,7 +109,7 @@ ListItem* ListBox::Item(int id) const {
 
 SDL_Rect ListBox::ItemRect(int i, SDL_Rect* Crop, EColor* color) const {
 	vec2i pos = Pos();
-	SDL_Rect rect = {pos.x, pos.y - listY + i * (itemH + spacing), Size().x-barW, itemH};
+	SDL_Rect rect = { pos.x, pos.y - listY + i * (itemH + spacing), Size().x-BarW(), itemH };
 	SDL_Rect crop = getCrop(rect, getRect());
 
 	if (Crop)
@@ -344,6 +348,8 @@ void ReaderBox::Zoom(float factor) {
 	listX = float(listX) * factor / zoom;
 	zoom = factor;
 	SetValues();
+
+	World::engine->SetRedrawNeeded();
 }
 
 void ReaderBox::AddZoom(float zadd) {

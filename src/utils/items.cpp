@@ -8,10 +8,10 @@ ListItem::ListItem(const string& LBL, ScrollArea* SA) :
 {}
 ListItem::~ListItem() {}
 
-void ListItem::OnClick(bool doubleclick) {
+void ListItem::OnClick(EClick clickType) {
 	if (parent)
 		parent->selectedItem = this;
-	if (doubleclick)
+	if (clickType == EClick::left_double)
 		World::program()->Event_ItemDoubleclicked(this);
 
 	World::engine->SetRedrawNeeded();
@@ -30,8 +30,8 @@ ItemButton::ItemButton(const string& LBL, const string& DAT, void (Program::*CAL
 {}
 ItemButton::~ItemButton() {}
 
-void ItemButton::OnClick(bool doubleclick) {
-	ListItem::OnClick(doubleclick);
+void ItemButton::OnClick(EClick clickType) {
+	ListItem::OnClick(clickType);
 
 	void* dat;	// decide what to send
 	if (parent)
@@ -49,15 +49,16 @@ void ItemButton::OnClick(bool doubleclick) {
 
 Checkbox::Checkbox(ListBox* SA, const string& LBL, bool ON, void (Program::*CALLB)(bool), int SPC) :
 	ListItem(LBL, SA),
+	callback(CALLB),
 	on(ON),
-	spacing(SPC),
-	callback(CALLB)
+	spacing(SPC)
 {}
 Checkbox::~Checkbox() {}
 
-void Checkbox::OnClick(bool doubleclick) {
+void Checkbox::OnClick(EClick clickType) {
 	on = !on;
-	(World::program()->*callback)(on);
+	if (callback)
+		(World::program()->*callback)(on);
 }
 
 ListBox* Checkbox::Parent() const {
@@ -66,4 +67,41 @@ ListBox* Checkbox::Parent() const {
 
 bool Checkbox::On() const {
 	return on;
+}
+
+// SWITCHBOX
+
+Switchbox::Switchbox(ListBox* SA, const string& LBL, const vector<string>& OPT, const string& CUR_OPT, void (Program::*CALLB)(const string&)) :
+	ListItem(LBL, SA),
+	callback(CALLB),
+	curOpt(0),
+	options(OPT)
+{
+	if (options.empty())		// there needs to be at least one element
+		options.push_back("");
+
+	for (uint i=0; i!=options.size(); i++)
+		if (options[i] == CUR_OPT) {
+			curOpt = i;
+			break;
+		}	
+}
+Switchbox::~Switchbox() {}
+
+void Switchbox::OnClick(EClick clickType) {
+	if (clickType == EClick::left || clickType == EClick::left_double)
+		curOpt = (curOpt == options.size()-1) ? 0 : curOpt + 1;
+	else
+		curOpt = (curOpt == 0) ? options.size()-1 : curOpt - 1;
+	
+	if (callback)
+		(World::program()->*callback)(options[curOpt]);
+}
+
+ListBox* Switchbox::Parent() const {
+	return static_cast<ListBox*>(parent);
+}
+
+string Switchbox::CurOption() const {
+	return options[curOpt];
 }

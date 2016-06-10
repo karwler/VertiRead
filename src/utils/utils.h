@@ -21,7 +21,7 @@
 #include <SDL2/SDL_mixer.h>
 #endif
 
-// include others
+// include other useful stuff
 #include <boost/filesystem.hpp>
 #include <fstream>
 #include <iostream>
@@ -29,6 +29,7 @@
 #include <cstdlib>
 #include <climits>
 #include <cmath>
+#include <algorithm>
 #include <string>
 #include <vector>
 #include <list>

@@ -10,15 +10,13 @@ public:
 	void Initialize();
 	void Cleanup();
 	void FreeMusic();
-	void FreeSound();
 
 	void Tick(float dSec);
 	static void MusicFinishCallback();
-	static void ChannelFinishCallback(int channel);
 
 	void PlayPauseMusic();
 	void SwitchSong(int step=1);
-	void PlaySound(const string& file);
+	void PlaySound(const string& name);
 
 	AudioSettings Settings() const;
 	void LoadPlaylist(const Playlist& newList);
@@ -34,7 +32,6 @@ private:
 	vector<string> playlist;
 	uint curSong;
 	Mix_Music* curMusic;
-	Mix_Chunk* curSound;
 	float deltaDelay;
 
 	int CheckVolume(int value);

@@ -2,23 +2,17 @@
 
 #include "utils/types.h"
 
-enum EDirFilter : byte {
-	FILTER_FILE = 1,
-	FILTER_DIR  = 2,
-	FILTER_LINK = 4
-};
-EDirFilter operator|(EDirFilter a, EDirFilter b);
-
 class Filer {
 public:
 	static byte CheckDirectories(const GeneralSettings& sets);
 	static bool ReadTextFile(const string& file, vector<string>& lines, bool printMessage=true);
 	static bool WriteTextFile(const string& file, const vector<string>& lines);
-	static vector<fs::path> ListDir(const fs::path& dir, EDirFilter filter, const vector<string>& extFilter={});
-	static vector<string> GetPicsFromDir(const fs::path& dir);
+	static vector<fs::path> ListDir(const fs::path& dir, EDirFilter filter=FILTER_ALL, const vector<string>& extFilter={});
 
-	static map<string, string> GetTextures();
-	static map<string, string> GetSounds();
+	static map<string, string> GetLines(const string& language);
+	static map<string, Mix_Chunk*> GetSounds();
+	static map<string, Texture> GetTextures();
+	static vector<string> GetPics(const fs::path& dir);
 
 	static Playlist LoadPlaylist(const string& name);
 	static void SavePlaylist(const Playlist& plist);
@@ -39,6 +33,7 @@ public:
 #endif
 	static string dirSets();
 	static string dirData();
+	static string dirLangs();
 	static string dirSnds();
 	static string dirTexs();
 

@@ -65,7 +65,7 @@ fs::path removeExtension(const fs::path& path) {
 }
 
 bool inRect(const SDL_Rect& rect, vec2i point) {
-	return point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
+	return rect.w != 0 && rect.h != 0 && point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
 }
 
 bool needsCrop(const SDL_Rect& crop) {

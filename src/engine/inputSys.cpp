@@ -23,15 +23,17 @@ void InputSys::MouseButtonEvent(const SDL_MouseButtonEvent& button) {
 	if (dynamic_cast<KeyGetter*>(captured))			// mouse button cancels key capture
 		World::program()->Event_Back();
 	else if (button.clicks == 1) {
-		if (button.button == SDL_BUTTON_LEFT) {		// so far only left mouse button is neeeded
-			if (button.type == SDL_MOUSEBUTTONDOWN)
-				World::scene()->OnMouseDown(false);
+		if (button.button == SDL_BUTTON_LEFT) {
+			if (button.type == SDL_MOUSEBUTTONDOWN)	// single left click 
+				World::scene()->OnMouseDown(EClick::left);
 			else
-				World::scene()->OnMouseUp();
+				World::scene()->OnMouseUp();		// left up
 		}
+		else if (button.button == SDL_BUTTON_RIGHT && button.type == SDL_MOUSEBUTTONDOWN)	// songle right click
+			World::scene()->OnMouseDown(EClick::right);
 	}
-	else if (button.type == SDL_MOUSEBUTTONDOWN && button.button == SDL_BUTTON_LEFT)	// double left click
-		World::scene()->OnMouseDown(true);
+	else if (button.button == SDL_BUTTON_LEFT && button.type == SDL_MOUSEBUTTONDOWN)		// double left click
+		World::scene()->OnMouseDown(EClick::left_double);
 }
 
 void InputSys::MouseWheelEvent(const SDL_MouseWheelEvent& wheel) {

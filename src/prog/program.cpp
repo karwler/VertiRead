@@ -251,6 +251,13 @@ void Program::Event_Ok() {
 		Event_EditButtonClick();
 }
 
+// GENERAL SETTINGS EVENTS
+
+void Program::Event_SwitchLanguage(const string& language) {
+	World::library()->LoadLanguage(language);
+	SwitchScene(curMenu);
+}
+
 // OTHER EVENTS
 
 void Program::Event_TextCaptureOk(TextEdit* edit) {
@@ -307,9 +314,9 @@ void Program::SwitchScene(void* dat) const {
 	case EMenu::books: {
 		// top buttons
 		objects = {
-			new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenPlaylistList,"Playlists"),
-			new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenGeneralSettings, "Settings"),
-			new ButtonText(Object(vec2i(res.x/3*2, 0), posT, vec2i(res.x/3,    50), FIX_Y | FIX_H), &Program::Event_Back, "Exit")
+			new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenPlaylistList, World::library()->getLine("playlists")),
+			new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenGeneralSettings, World::library()->getLine("settings")),
+			new ButtonText(Object(vec2i(res.x/3*2, 0), posT, vec2i(res.x/3,    50), FIX_Y | FIX_H), &Program::Event_Back, World::library()->getLine("exit"))
 		};
 		
 		// book list
@@ -322,7 +329,7 @@ void Program::SwitchScene(void* dat) const {
 		break; }
 	case EMenu::browser: {
 		// back button
-		objects = { new ButtonText(Object(vec2i(0, 0), posT, vec2i(90, 40), FIX_POS | FIX_SIZ), &Program::Event_Back, "Back") };
+		objects = { new ButtonText(Object(vec2i(0, 0), posT, vec2i(90, 40), FIX_POS | FIX_SIZ), &Program::Event_Back, World::library()->getLine("back")) };
 
 		// list
 		vector<ListItem*> items;
@@ -337,7 +344,7 @@ void Program::SwitchScene(void* dat) const {
 	case EMenu::reader: {
 		// reader box
 		fs::path file = cstr(dat);
-		World::library()->LoadPics(Filer::GetPicsFromDir(file.parent_path()));
+		World::library()->LoadPics(Filer::GetPics(file.parent_path()));
 		objects = { new ReaderBox(Object(0, 0, World::winSys()->Resolution(), FIX_POS | FIX_END, EColor::background), World::library()->Pictures(), file.string()) };
 		focObject = objects.size()-1;
 		break; }
@@ -345,13 +352,13 @@ void Program::SwitchScene(void* dat) const {
 		// top buttons
 		sizT = vec2i(80, 30);
 		objects = {
-			new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenBookList, "Library"),
-			new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenGeneralSettings, "Settings"),
-			new ButtonText(Object(vec2i(res.x/3*2, 0), posT, vec2i(res.x/3,    50), FIX_Y | FIX_H), &Program::Event_Back, "Exit"),
+			new ButtonText(Object(vec2i(0,         0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenBookList, World::library()->getLine("library")),
+			new ButtonText(Object(vec2i(res.x/3,   0), posT, vec2i(res.x/3.1f, 50), FIX_Y | FIX_H), &Program::Event_OpenGeneralSettings, World::library()->getLine("settings")),
+			new ButtonText(Object(vec2i(res.x/3*2, 0), posT, vec2i(res.x/3,    50), FIX_Y | FIX_H), &Program::Event_Back, World::library()->getLine("exit")),
 
-			new ButtonText(Object(vec2i(0,   60), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_AddButtonClick, "New"),
-			new ButtonText(Object(vec2i(90,  60), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_EditButtonClick, "Edit"),
-			new ButtonText(Object(vec2i(180, 60), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_DeleteButtonClick, "Del")
+			new ButtonText(Object(vec2i(0,   60), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_AddButtonClick, World::library()->getLine("new")),
+			new ButtonText(Object(vec2i(90,  60), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_EditButtonClick, World::library()->getLine("edit")),
+			new ButtonText(Object(vec2i(180, 60), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_DeleteButtonClick, World::library()->getLine("del"))
 		};
 
 		// playlist list
@@ -368,11 +375,11 @@ void Program::SwitchScene(void* dat) const {
 		// option buttons
 		sizT.x = 100;
 		objects = {
-			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_AddButtonClick, "Add"),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_EditButtonClick, "Edit"),
-			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_DeleteButtonClick, "Del"),
-			new ButtonText(Object(vec2i(0, 200), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SaveButtonClick, "Save"),
-			new ButtonText(Object(vec2i(0, 250), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Close")
+			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_AddButtonClick, World::library()->getLine("add")),
+			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_EditButtonClick, World::library()->getLine("edit")),
+			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_DeleteButtonClick, World::library()->getLine("del")),
+			new ButtonText(Object(vec2i(0, 200), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SaveButtonClick, World::library()->getLine("save")),
+			new ButtonText(Object(vec2i(0, 250), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, World::library()->getLine("close"))
 		};
 
 		// playlist list
@@ -380,12 +387,12 @@ void Program::SwitchScene(void* dat) const {
 		vector<ListItem*> items;
 		PlaylistEditor* editor = static_cast<PlaylistEditor*>(dat);
 		if (editor->showSongs) {
-			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SwitchButtonClick, "Books"));
+			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SwitchButtonClick, World::library()->getLine("books")));
 			for (fs::path& it : editor->getPlaylist().songs)
 				items.push_back(new ItemButton(it.filename().string(), "", &Program::Event_SelectionSet, box));
 		}
 		else {
-			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SwitchButtonClick, "Songs"));
+			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SwitchButtonClick, World::library()->getLine("songs")));
 			for (string& it : editor->getPlaylist().books)
 				items.push_back(new ItemButton(it, "", &Program::Event_SelectionSet, box));
 		}
@@ -395,10 +402,10 @@ void Program::SwitchScene(void* dat) const {
 		break; }
 	case EMenu::generalSets: {
 		objects = {
-			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenVideoSettings, "Video"),
-			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenAudioSettings, "Audio"),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, "Controls"),
-			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Back")
+			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenVideoSettings, World::library()->getLine("video")),
+			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenAudioSettings, World::library()->getLine("audio")),
+			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, World::library()->getLine("controls")),
+			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, World::library()->getLine("back"))
 		};
 
 		vec2i ancT(160, 0);
@@ -407,8 +414,9 @@ void Program::SwitchScene(void* dat) const {
 		
 		ListBox* box = new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background));
 		vector<ListItem*> items = {
-			new LineEdit(box, "Library   ", World::scene()->Settings().dirLib),
-			new LineEdit(box, "Playlists ", World::scene()->Settings().dirPlist)
+			new Switchbox(box, World::library()->getLine("language"), {"english", "german", "polish", "russian"}, World::scene()->Settings().language, &Program::Event_SwitchLanguage),
+			new LineEdit(box, World::library()->getLine("library"), World::scene()->Settings().dirLib),
+			new LineEdit(box, World::library()->getLine("playlists"), World::scene()->Settings().dirPlist)
 		};
 		box->Items(items);
 		objects.push_back(box);
@@ -416,10 +424,10 @@ void Program::SwitchScene(void* dat) const {
 		break; }
 	case EMenu::videoSets: {
 		objects = {
-			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenGeneralSettings, "General"),
-			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenAudioSettings, "Audio"),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, "Controls"),
-			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Back")
+			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenGeneralSettings, World::library()->getLine("general")),
+			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenAudioSettings, World::library()->getLine("audio")),
+			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, World::library()->getLine("controls")),
+			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, World::library()->getLine("back"))
 		};
 
 		vector<ListItem*> items = {
@@ -430,10 +438,10 @@ void Program::SwitchScene(void* dat) const {
 		break; }
 	case EMenu::audioSets: {
 		objects = {
-			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenGeneralSettings, "General"),
-			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenVideoSettings, "Video"),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, "Controls"),
-			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, "Back")
+			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenGeneralSettings, World::library()->getLine("general")),
+			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenVideoSettings, World::library()->getLine("video")),
+			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, World::library()->getLine("vontrols")),
+			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, World::library()->getLine("back"))
 		};
 
 		vector<ListItem*> items = {
@@ -444,10 +452,10 @@ void Program::SwitchScene(void* dat) const {
 		break; }
 	case EMenu::controlsSets: {
 		objects = {
-			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_ALL), &Program::Event_OpenGeneralSettings, "General"),
-			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_ALL), &Program::Event_OpenVideoSettings, "Video"),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_ALL), &Program::Event_OpenAudioSettings, "Audio"),
-			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_ALL), &Program::Event_Back, "Back")
+			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_ALL), &Program::Event_OpenGeneralSettings, World::library()->getLine("general")),
+			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_ALL), &Program::Event_OpenVideoSettings, World::library()->getLine("video")),
+			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_ALL), &Program::Event_OpenAudioSettings, World::library()->getLine("audio")),
+			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_ALL), &Program::Event_Back, World::library()->getLine("back"))
 		};
 
 		vector<ListItem*> items = {

@@ -42,12 +42,8 @@ void WindowSys::DestroyWindow() {
 		SDL_DestroyWindow(window);
 }
 
-void WindowSys::SetIcon(const string& file) {
-	SDL_Surface* icon = IMG_Load(file.c_str());
-	if (icon) {
-		SDL_SetWindowIcon(window, icon);
-		SDL_FreeSurface(icon);
-	}
+void WindowSys::SetIcon(SDL_Surface* icon) {
+	SDL_SetWindowIcon(window, icon);
 }
 
 void WindowSys::DrawObjects(const vector<Object*>& objects) {
@@ -210,6 +206,8 @@ void WindowSys::DrawObject(Popup* obj) {
 void WindowSys::PassDrawItem(int id, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
 	if (Checkbox* obj = dynamic_cast<Checkbox*>(parent->Item(id)))
 		DrawItem(obj, parent, rect, crop);
+	else if (Switchbox* obj = dynamic_cast<Switchbox*>(parent->Item(id)))
+		DrawItem(obj, parent, rect, crop);
 	else if (LineEdit* obj = dynamic_cast<LineEdit*>(parent->Item(id)))
 		DrawItem(obj, parent, rect, crop);
 	else if (KeyGetter* obj = dynamic_cast<KeyGetter*>(parent->Item(id)))
@@ -223,16 +221,22 @@ void WindowSys::DrawItem(Checkbox* item, ListBox* parent, const SDL_Rect& rect, 
 	DrawRect({ rect.x+rect.w-rect.h+item->spacing, rect.y-crop.y+top, rect.w-item->spacing*2, rect.h+crop.h-top-bot }, item->On() ? EColor::highlighted : EColor::darkened);
 }
 
-void WindowSys::DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
-	int offset = Text(item->label, 0, parent->ItemH(), 8).size().x;
+void WindowSys::DrawItem(Switchbox* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
+	int offset = Text(item->label, 0, parent->ItemH(), 8).size().x + 20;
 
-	DrawText(Text(item->Editor()->getText(), vec2i(rect.x+offset+5, rect.y-crop.y), parent->ItemH(), 8), crop);
+	DrawText(Text(item->CurOption(), vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), 8), crop);
+}
+
+void WindowSys::DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
+	int offset = Text(item->label, 0, parent->ItemH(), 8).size().x + 20;
+
+	DrawText(Text(item->Editor()->getText(), vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), 8), crop);
 }
 
 void WindowSys::DrawItem(KeyGetter* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
-	int offset = Text(item->label, 0, parent->ItemH(), 8).size().x;
+	int offset = Text(item->label, 0, parent->ItemH(), 8).size().x + 20;
 
-	DrawText(Text(item->KeyName(), vec2i(rect.x+offset+5, rect.y-crop.y), parent->ItemH(), 8), crop);
+	DrawText(Text(item->KeyName(), vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), 8), crop);
 }
 
 void WindowSys::DrawRect(const SDL_Rect& rect, EColor color) {
@@ -268,7 +272,7 @@ void WindowSys::DrawText(const Text& txt, const SDL_Rect& crop) {
 	vec2i siz = txt.size();
 	SDL_Rect rect = {txt.pos.x, txt.pos.y, siz.x, siz.y};
 
-	SDL_Surface* surface = TTF_RenderText_Blended(World::library()->Fonts()->Get(txt.height), txt.text.c_str(), { sets.colors[txt.color].x, sets.colors[txt.color].y, sets.colors[txt.color].z, sets.colors[txt.color].a });
+	SDL_Surface* surface = TTF_RenderUTF8_Blended(World::library()->Fonts()->Get(txt.height), txt.text.c_str(), { sets.colors[txt.color].x, sets.colors[txt.color].y, sets.colors[txt.color].z, sets.colors[txt.color].a });
 	SDL_Texture* tex;
 	if (needsCrop(crop)) {
 		SDL_Surface* sheet = cropSurface(surface, rect, crop);

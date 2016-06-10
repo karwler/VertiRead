@@ -20,7 +20,7 @@ void Engine::Run() {
 
 	winSys->SetWindow();
 	scene = new Scene(Filer::LoadGeneralSettings());		// initializes program and library
-	winSys->SetIcon(scene->getLibrary()->getTexPath("icon"));
+	winSys->SetIcon(scene->getLibrary()->getTex("icon")->surface);
 
 	// initialize scene and timer
 	scene->getProgram()->Event_OpenBookList();

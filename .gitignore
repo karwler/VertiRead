@@ -1,7 +1,6 @@
 #directories
 bin
 build
-out
 CMakeFiles
 *.dir
 .vs

@@ -1,48 +1,83 @@
 #include "library.h"
 #include "engine/filer.h"
 
-Library::Library(string FONT, const map<string, string>& TEXS, const map<string, string>& SNDS)
+Library::Library(string FONT, string& LANG) :
+	curLanguage(LANG)
 {
 	if (!fs::exists(FONT))
 		FONT = VideoSettings().FontPath();	// should give the default font
-	fonts = new FontSet(FONT);
-
-	for (const pair<string, string>& it : TEXS) {
-		SDL_Surface* test = IMG_Load(it.second.c_str());	// add only valid textures
-		if (test) {
-			texes.insert(make_pair(it.first, Texture(it.second)));
-			SDL_FreeSurface(test);
-		}
-	}
-
-	for (const pair<string, string>& it : SNDS) {
-		Mix_Chunk* test = Mix_LoadWAV(it.second.c_str());	// add only valid sound files
-		if (test) {
-			sounds.insert(it);
-			Mix_FreeChunk(test);
-		}
-	}
+	if (!fs::exists(Filer::dirLangs()+curLanguage+".ini"))
+		curLanguage = GeneralSettings().language;	// same as above
+	
+	LoadFont(FONT);
+	LoadLanguage(curLanguage);
+	LoadSounds();
+	LoadTextures();
 }
 
 Library::~Library() {
-	for (const pair<string, Texture>& it : texes)
-		SDL_FreeSurface(it.second.surface);
+	ClearPics();
+	ClearTextures();
+	ClearSounds();
 }
 
 FontSet* Library::Fonts() const {
 	return fonts;
 }
 
-string Library::getTexPath(const string& name) const {
-	return texes.at(name).File();
+void Library::LoadFont(const string& font) {
+	fonts = new FontSet(font);
 }
 
-Texture* Library::getTex(const string& name) const {
-	return const_cast<Texture*>(&texes.at(name));
+string Library::getLine(const string& line, ETextCase caseChange) const {
+	string str = (lines.count(line) == 0) ? line : lines.at(line);
+	switch (caseChange) {
+	case ETextCase::first_upper:
+		if (!str.empty())
+			str[0] = toupper(str[0]);
+		break;
+	case ETextCase::all_upper:
+		std::transform(str.begin(), str.end(), str.begin(), toupper);
+		break;
+	case ETextCase::all_lower:
+		std::transform(str.begin(), str.end(), str.begin(), tolower);
+	}
+	return str;
 }
 
-string Library::getSound(const string& name) const {
+void Library::LoadLanguage(const string& language) {
+	curLanguage = language;
+	lines = Filer::GetLines(language);
+}
+
+Mix_Chunk* Library::getSound(const string& name) const {
 	return sounds.at(name);
+}
+
+void Library::LoadSounds() {
+	ClearSounds();
+	sounds = Filer::GetSounds();
+}
+
+void Library::ClearSounds() {
+	for (const pair<string, Mix_Chunk*>& it : sounds)
+		Mix_FreeChunk(it.second);
+	sounds.clear();
+}
+
+Texture* Library::getTex(const string& name) {
+	return &texes.at(name);
+}
+
+void Library::LoadTextures() {
+	ClearTextures();
+	texes = Filer::GetTextures();
+}
+
+void Library::ClearTextures() {
+	for (const pair<string, Texture>& it : texes)
+		SDL_FreeSurface(it.second.surface);
+	texes.clear();
 }
 
 vector<Texture*> Library::Pictures() {

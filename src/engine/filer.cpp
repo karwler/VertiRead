@@ -1,9 +1,5 @@
 #include "world.h"
 
-EDirFilter operator|(EDirFilter a, EDirFilter b) {
-	return static_cast<EDirFilter>(static_cast<byte>(a) | static_cast<byte>(b));
-}
-
 byte Filer::CheckDirectories(const GeneralSettings& sets) {
 	byte retval = 0;
 	if (!fs::exists(dirSets()))
@@ -12,6 +8,10 @@ byte Filer::CheckDirectories(const GeneralSettings& sets) {
 		fs::create_directories(sets.libraryParh());
 	if (!fs::exists(sets.playlistParh()))
 		fs::create_directories(sets.playlistParh());
+	if (!fs::exists(dirLangs())) {
+		cerr << "couldn't find translation directory" << endl;
+		retval = 1;
+	}
 	if (!fs::exists(dirSnds())) {
 		cerr << "couldn't find sound directory" << endl;
 		retval = 1;
@@ -53,7 +53,7 @@ vector<fs::path> Filer::ListDir(const fs::path& dir, EDirFilter filter, const ve
 		return names;
 
 	for (fs::directory_iterator it(dir); it != fs::directory_iterator(); it++) {
-		if (filter == 0)
+		if (filter == FILTER_ALL)
 			names.push_back(it->path());
 		else if ((filter & FILTER_FILE) && fs::is_regular_file(it->path())) {
 			if (extFilter.empty())
@@ -73,7 +73,37 @@ vector<fs::path> Filer::ListDir(const fs::path& dir, EDirFilter filter, const ve
 	return names;
 }
 
-vector<string> Filer::GetPicsFromDir(const fs::path& dir) {
+map<string, string> Filer::GetLines(const string& language) {
+	vector<string> lines;
+	if (!ReadTextFile(dirLangs() + language + ".ini", lines, false))
+		return map<string, string>();
+
+	map<string, string> translation;
+	for (string& line : lines) {
+		string arg, val;
+		splitIniLine(line, &arg, &val);
+		translation.insert(make_pair(arg, val));
+	}
+	return translation;
+}
+
+map<string, Mix_Chunk*> Filer::GetSounds() {
+	map<string, Mix_Chunk*> sounds;
+	for (fs::directory_iterator it(dirSnds()); it != fs::directory_iterator(); it++)
+		if (Mix_Chunk* cue = Mix_LoadWAV(it->path().string().c_str()))				// add only valid sound files
+			sounds.insert(make_pair(removeExtension(it->path().filename()).string(), cue));
+	return sounds;
+}
+
+map<string, Texture> Filer::GetTextures() {
+	map<string, Texture> texes;
+	for (fs::directory_iterator it(dirTexs()); it != fs::directory_iterator(); it++)
+		if (SDL_Surface* surf = IMG_Load(it->path().string().c_str()))				// add only valid textures
+			texes.insert(make_pair(removeExtension(it->path().filename()).string(), Texture(it->path().string(), surf)));
+	return texes;
+}
+
+vector<string> Filer::GetPics(const fs::path& dir) {
 	vector<string> pics;
 	if (!fs::is_directory(dir))
 		return pics;
@@ -83,20 +113,6 @@ vector<string> Filer::GetPicsFromDir(const fs::path& dir) {
 			pics.push_back(it->path().string());
 	sort(pics.begin(), pics.end());
 	return pics;
-}
-
-map<string, string> Filer::GetTextures() {
-	map<string, string> paths;
-	for (fs::directory_iterator it(dirTexs()); it != fs::directory_iterator(); it++)
-		paths.insert(make_pair(removeExtension(it->path().filename()).string(), it->path().string()));
-	return paths;
-}
-
-map<string, string> Filer::GetSounds() {
-	map<string, string> paths;
-	for (fs::directory_iterator it(dirSnds()); it != fs::directory_iterator(); it++)
-		paths.insert(make_pair(removeExtension(it->path().filename()).string(), it->path().string()));
-	return paths;
 }
 
 Playlist Filer::LoadPlaylist(const string& name) {
@@ -135,7 +151,9 @@ GeneralSettings Filer::LoadGeneralSettings() {
 	for (string& line : lines) {
 		string arg, val;
 		splitIniLine(line, &arg, &val);
-		if (arg == "library")
+		if (arg == "language")
+			sets.language = val;
+		else if (arg == "library")
 			sets.dirLib = val;
 		else if (arg == "playlists")
 			sets.dirPlist = val;
@@ -145,6 +163,7 @@ GeneralSettings Filer::LoadGeneralSettings() {
 
 void Filer::SaveSettings(const GeneralSettings& sets) {
 	vector<string> lines = {
+		"language=" + sets.language,
 		"library=" + sets.dirLib,
 		"playlists=" + sets.dirPlist
 	};
@@ -319,6 +338,10 @@ string Filer::dirData() {
 #else
 	return execDir() + "data"+dsep;
 #endif
+}
+
+string Filer::dirLangs() {
+	return dirData() + "languages"+dsep;
 }
 
 string Filer::dirSnds() {
