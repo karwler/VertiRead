@@ -253,7 +253,7 @@ void Program::Event_Ok() {
 
 void Program::Event_SwitchLanguage(const string& language) {
 	World::library()->LoadLanguage(language);
-	SwitchScene(curMenu);
+	SwitchScene();
 }
 
 void Program::Event_SetLibraryPath(const string& dir) {
@@ -506,8 +506,8 @@ void Program::SwitchScene(void* dat) const {
 
 		ListBox* box = new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background));
 		vector<ListItem*> items = {
-			new LineEdit(box, World::library()->getLine("scroll speed")+" x", to_string(World::inputSys()->Settings().scrollSpeed.x), ETextType::floating, &Program::Event_SetScrollX),
-			new LineEdit(box, World::library()->getLine("scroll speed")+" y", to_string(World::inputSys()->Settings().scrollSpeed.y), ETextType::floating, &Program::Event_SetScrollY)
+			new LineEdit(box, World::library()->getLine("scroll speed")+" X", to_string(World::inputSys()->Settings().scrollSpeed.x), ETextType::floating, &Program::Event_SetScrollX),
+			new LineEdit(box, World::library()->getLine("scroll speed")+" Y", to_string(World::inputSys()->Settings().scrollSpeed.y), ETextType::floating, &Program::Event_SetScrollY)
 		};
 		for (const pair<string, Shortcut>& it : World::inputSys()->Settings().shortcuts)
 			items.push_back(new KeyGetter(box, it.first, World::inputSys()->GetKeyPtr(it.first, true)));

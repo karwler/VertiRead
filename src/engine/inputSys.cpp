@@ -101,4 +101,6 @@ void InputSys::SetCapture(Capturer* cbox) {
 		SDL_StartTextInput();
 	else
 		SDL_StopTextInput();
+
+	World::engine->SetRedrawNeeded();
 }

@@ -25,8 +25,10 @@ void WindowSys::SetWindow() {
 }
 
 void WindowSys::CreateRenderer() {
-	if (renderer)
+	if (renderer) {
 		SDL_DestroyRenderer(renderer);
+		renderer = nullptr;
+	}
 
 	renderer = SDL_CreateRenderer(window, GetRenderDriverIndex(), SDL_RENDERER_ACCELERATED);
 	if (!renderer)
@@ -36,10 +38,14 @@ void WindowSys::CreateRenderer() {
 }
 
 void WindowSys::DestroyWindow() {
-	if (renderer)
+	if (renderer) {
 		SDL_DestroyRenderer(renderer);
-	if (window)
+		renderer = nullptr;
+	}
+	if (window) {
 		SDL_DestroyWindow(window);
+		window = nullptr;
+	}
 }
 
 void WindowSys::SetIcon(SDL_Surface* icon) {
@@ -240,14 +246,20 @@ void WindowSys::DrawItem(Switchbox* item, ListBox* parent, const SDL_Rect& rect,
 
 void WindowSys::DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
 	int offset = Text(item->label, 0, parent->ItemH(), 8).size().x + 20;
-
 	DrawText(Text(item->Editor()->Text(), vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), 8), crop);
+
+	if (World::inputSys()->CapturedObject() == item) {
+		offset += Text(item->Editor()->Text().substr(0, item->Editor()->CursorPos()), 0, parent->ItemH(), 8).size().x;
+		DrawRect({ rect.x+offset, rect.y, 5, rect.h }, EColor::highlighted);
+	}
 }
 
 void WindowSys::DrawItem(KeyGetter* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
 	int offset = Text(item->label, 0, parent->ItemH(), 8).size().x + 20;
+	string text = (World::inputSys()->CapturedObject() == item) ? "Gimme a key..." : item->KeyName();
+	EColor color = (World::inputSys()->CapturedObject() == item) ? EColor::highlighted : EColor::text;
 
-	DrawText(Text(item->KeyName(), vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), 8), crop);
+	DrawText(Text(text, vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), 8, color), crop);
 }
 
 void WindowSys::DrawRect(const SDL_Rect& rect, EColor color) {
@@ -259,7 +271,7 @@ void WindowSys::DrawRect(const SDL_Rect& rect, EColor color) {
 void WindowSys::DrawImage(const Image& img, const SDL_Rect& crop) {
 	SDL_Rect rect = img.getRect();	// the rect the image is gonna be projected on
 
-	SDL_Texture* tex = nullptr;
+	SDL_Texture* tex;
 	if (needsCrop(crop)) {
 		SDL_Rect ori = { rect.x, rect.y, img.texture->surface->w, img.texture->surface->h };	// proportions of the original image
 		vec2f fac(float(ori.w) / float(rect.w), float(ori.h) / float(rect.h));					// scaling factor
@@ -267,16 +279,14 @@ void WindowSys::DrawImage(const Image& img, const SDL_Rect& crop) {
 
 		// crop original image by factor
 		SDL_Surface* sheet = cropSurface(img.texture->surface, ori, { int(float(crop.x)*fac.x), int(float(crop.y)*fac.y), int(float(crop.w)*fac.x), int(float(crop.h)*fac.y) });
-		SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, sheet);
-
-		SDL_RenderCopy(renderer, tex, nullptr, &rect);
-		SDL_DestroyTexture(tex);
+		tex = SDL_CreateTextureFromSurface(renderer, sheet);
 		SDL_FreeSurface(sheet);
 	}
 	else
 		tex = SDL_CreateTextureFromSurface(renderer, img.texture->surface);
 
 	SDL_RenderCopy(renderer, tex, nullptr, &rect);
+	SDL_DestroyTexture(tex);
 }
 
 void WindowSys::DrawText(const Text& txt, const SDL_Rect& crop) {
