@@ -58,22 +58,6 @@ void WindowSys::DrawObjects(const vector<Object*>& objects) {
 	SDL_RenderPresent(renderer);
 }
 
-VideoSettings WindowSys::Settings() const {
-	return sets;
-}
-
-vec2i WindowSys::Resolution() const {
-	vec2i res;
-	SDL_GetWindowSize(window, &res.x, &res.y);
-	return res;
-}
-
-vec2i WindowSys::DesktopResolution() {
-	SDL_DisplayMode mode;
-	SDL_GetDesktopDisplayMode(0, &mode);
-	return vec2i(mode.w, mode.h);
-}
-
 void WindowSys::WindowEvent(const SDL_WindowEvent& winEvent) {
 	switch (winEvent.event) {
 	case SDL_WINDOWEVENT_RESIZED: {
@@ -90,6 +74,31 @@ void WindowSys::WindowEvent(const SDL_WindowEvent& winEvent) {
 	}
 }
 
+SDL_Renderer* WindowSys::Renderer() const {
+	return renderer;
+}
+
+VideoSettings WindowSys::Settings() const {
+	return sets;
+}
+
+void WindowSys::Renderer(const string& name) {
+	sets.renderer = name;
+	CreateRenderer();
+}
+
+vec2i WindowSys::Resolution() const {
+	vec2i res;
+	SDL_GetWindowSize(window, &res.x, &res.y);
+	return res;
+}
+
+vec2i WindowSys::DesktopResolution() {
+	SDL_DisplayMode mode;
+	SDL_GetDesktopDisplayMode(0, &mode);
+	return vec2i(mode.w, mode.h);
+}
+
 void WindowSys::Fullscreen(bool on) {
 	// determine what to do
 	sets.fullscreen = on;
@@ -101,8 +110,9 @@ void WindowSys::Fullscreen(bool on) {
 		SDL_SetWindowFullscreen(window, 0);
 }
 
-SDL_Renderer* WindowSys::Renderer() const {
-	return renderer;
+void WindowSys::Font(const string& font) {
+	sets.SetFont(font);
+	World::library()->LoadFont(sets.Fontpath());
 }
 
 int WindowSys::GetRenderDriverIndex() {
@@ -215,10 +225,11 @@ void WindowSys::PassDrawItem(int id, ListBox* parent, const SDL_Rect& rect, cons
 }
 
 void WindowSys::DrawItem(Checkbox* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
+	int offset = Text(item->label, 0, parent->ItemH(), 8).size().x + 20;
 	int top = (crop.y < item->spacing) ? item->spacing - crop.y : crop.y;
 	int bot = (crop.h > item->spacing) ? crop.h - item->spacing : item->spacing;
 
-	DrawRect({ rect.x+rect.w-rect.h+item->spacing, rect.y-crop.y+top, rect.w-item->spacing*2, rect.h+crop.h-top-bot }, item->On() ? EColor::highlighted : EColor::darkened);
+	DrawRect({ rect.x+offset+item->spacing, rect.y-crop.y+top, parent->ItemH()-item->spacing*2, rect.h+crop.h-top-bot }, item->On() ? EColor::highlighted : EColor::darkened);
 }
 
 void WindowSys::DrawItem(Switchbox* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
@@ -230,7 +241,7 @@ void WindowSys::DrawItem(Switchbox* item, ListBox* parent, const SDL_Rect& rect,
 void WindowSys::DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
 	int offset = Text(item->label, 0, parent->ItemH(), 8).size().x + 20;
 
-	DrawText(Text(item->Editor()->getText(), vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), 8), crop);
+	DrawText(Text(item->Editor()->Text(), vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), 8), crop);
 }
 
 void WindowSys::DrawItem(KeyGetter* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {

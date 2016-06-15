@@ -16,10 +16,12 @@ public:
 	static bool isPressed(SDL_Scancode key);
 	static bool isPressed(byte button);
 	static vec2i mousePos();
+	vec2i mouseMove() const;
 
 	ControlsSettings Settings() const;
-	void Settings(const ControlsSettings& settings);
-	vec2i mouseMove() const;
+	void ScrollSpeed(const vec2f& sspeed);
+	SDL_Scancode* GetKeyPtr(const string& name, bool shortcut);
+
 	Capturer* CapturedObject() const;
 	void SetCapture(Capturer* cbox);
 

@@ -20,9 +20,13 @@ void InputSys::KeypressEvent(const SDL_KeyboardEvent& key) {
 }
 
 void InputSys::MouseButtonEvent(const SDL_MouseButtonEvent& button) {
-	if (dynamic_cast<KeyGetter*>(captured))			// mouse button cancels key capture
-		World::program()->Event_Back();
-	else if (button.clicks == 1) {
+	if (captured && button.type == SDL_MOUSEBUTTONDOWN) {		// mouse button cancels keyboard capture
+		if (LineEdit* box = dynamic_cast<LineEdit*>(captured))	// confirm entered text if necessary
+			box->Confirm();
+		SetCapture(nullptr);
+	}
+	
+	if (button.clicks == 1) {
 		if (button.button == SDL_BUTTON_LEFT) {
 			if (button.type == SDL_MOUSEBUTTONDOWN)	// single left click 
 				World::scene()->OnMouseDown(EClick::left);
@@ -71,16 +75,20 @@ vec2i InputSys::mousePos() {
 	return pos;
 }
 
+vec2i InputSys::mouseMove() const {
+	return mousePos() - lastMousePos;
+}
+
 ControlsSettings InputSys::Settings() const {
 	return sets;
 }
 
-void InputSys::Settings(const ControlsSettings& settings) {
-	sets = settings;
+void InputSys::ScrollSpeed(const vec2f& sspeed) {
+	sets.scrollSpeed = sspeed;
 }
 
-vec2i InputSys::mouseMove() const {
-	return mousePos() - lastMousePos;
+SDL_Scancode* InputSys::GetKeyPtr(const string& name, bool shortcut) {
+	return shortcut ? &sets.shortcuts[name].key : &sets.holders[name];
 }
 
 Capturer* InputSys::CapturedObject() const {

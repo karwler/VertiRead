@@ -52,6 +52,7 @@ namespace fs = boost::filesystem;
 #undef main
 #endif
 
+// not sure why, but why not
 #ifndef PI
 #ifdef M_PI
 #define PI M_PI
@@ -62,6 +63,7 @@ namespace fs = boost::filesystem;
 #endif
 #endif
 
+// directory separator
 #ifdef _WIN32
 const string dsep = "\\";
 #else
@@ -77,6 +79,23 @@ using llong = long long;
 using ldouble = long double;
 using cchar = const char;
 using cstr = const char*;
+
+// predeclarations
+enum class ETextCase : byte;
+
+class Engine;
+class AudioSys;
+class InputSys;
+class WinSys;
+
+class Scene;
+class Program;
+
+class Button;
+class ScrollArea;
+class ListBox;
+class PopupChoice;
+class Capturer;
 
 // smart pointer
 template <typename T>
@@ -509,9 +528,11 @@ using vec4b = kvec4<byte>;
 using vec4i = kvec4<int>;
 
 // files and strings
+bool equalsCaseInsensitive(const string& strl, const string& strr);
 bool is_num(const string& str);
 int findChar(const string& str, char c);
 int findString(const string& str, const string& c);
+string modifyCase(string str, ETextCase caseChange);
 vector<string> getWords(const string& line, bool skipCommas=false);
 int splitIniLine(const string& line, string* arg, string* val, string* key=nullptr);
 fs::path removeExtension(const fs::path& path);
@@ -526,6 +547,7 @@ SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop);
 // other
 void PrintInfo();
 string getRendererName(int id);
+vector<string> getAvailibleRenderers(bool trustedOnly=false);
 
 // convertions
 bool stob(const string& str);
@@ -538,7 +560,7 @@ float prcX(int p);
 float prcY(int p);
 
 template <typename T>
-T sto(const string& str) {
+T to_num(const string& str) {
 	T val;
 	std::stringstream ss(str);
 	ss >> val;

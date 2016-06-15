@@ -73,6 +73,19 @@ vector<fs::path> Filer::ListDir(const fs::path& dir, EDirFilter filter, const ve
 	return names;
 }
 
+vector<string> Filer::GetAvailibleLanguages() {
+	vector<string> files = { "english" };
+	if (!fs::exists(dirLangs()))
+		return files;
+
+	for (fs::directory_iterator it(dirLangs()); it != fs::directory_iterator(); it++)
+		if (fs::is_regular_file(it->path()) && it->path().extension() == ".ini")
+			files.push_back(removeExtension(it->path().filename()).string());
+
+	sort(files.begin(), files.end());
+	return files;
+}
+
 map<string, string> Filer::GetLines(const string& language) {
 	vector<string> lines;
 	if (!ReadTextFile(dirLangs() + language + ".ini", lines, false))
@@ -180,7 +193,7 @@ VideoSettings Filer::LoadVideoSettings() {
 		string arg, val, key;
 		splitIniLine(line, &arg, &val, &key);
 		if (arg == "font")
-			sets.font = val;
+			sets.SetFont(val);
 		else if (arg == "renderer")
 			sets.renderer = val;
 		else if (arg == "maximized")
@@ -205,7 +218,7 @@ VideoSettings Filer::LoadVideoSettings() {
 
 void Filer::SaveSettings(const VideoSettings& sets) {
 	vector<string> lines = {
-		"font=" + sets.font,
+		"font=" + sets.Font(),
 		"renderer=" + sets.renderer,
 		"maximized=" + btos(sets.maximized),
 		"fullscreen=" + btos(sets.fullscreen),
@@ -352,7 +365,7 @@ string Filer::dirTexs() {
 	return dirData() + "textures"+dsep;
 }
 
-vector<string> Filer::dirFonts() {
+vector<fs::path> Filer::dirFonts() {
 #ifdef _WIN32
 	return {string(getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
 #elif __APPLE__
@@ -362,22 +375,29 @@ vector<string> Filer::dirFonts() {
 #endif
 }
 
-bool Filer::findFont(const string& font, string* dir) {
+fs::path Filer::FindFont(const fs::path& font) {
 	if (fs::path(font).is_absolute()) {	// check fontpath first
-		if (!fs::is_regular_file(font))
-			return false;
+		if (fs::is_regular_file(font))
+			return font;
 
-		if (dir)
-			*dir = fs::path(font).parent_path().string() +dsep;
-		return true;
+		return CheckDirForFont(font.filename(), font.parent_path());
 	}
 
-	vector<string> paths = dirFonts();	// check global font directories
-	for (string& pt : paths)
-		if (fs::is_regular_file(pt + font)) {
-			if (dir)
-				*dir = pt;
-			return true;
+	vector<fs::path> paths = dirFonts();	// check global font directories
+	for (fs::path& dir : paths) {
+		fs::path file = CheckDirForFont(font, dir);
+		if (!file.empty())
+			return file;
+	}
+	return "";
+}
+
+fs::path Filer::CheckDirForFont(const fs::path& font, const fs::path& dir) {
+	for (fs::directory_iterator it(dir); it != fs::directory_iterator(); it++)
+		if (fs::is_regular_file(it->path())) {
+			fs::path file = font.has_extension() ? it->path().filename() : removeExtension(it->path().filename());
+			if (equalsCaseInsensitive(file.string(), font.string()))
+				return it->path();
 		}
-	return false;
+	return "";
 }

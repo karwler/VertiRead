@@ -82,10 +82,6 @@ void AudioSys::PlaySound(const string& name) {
 	Mix_PlayChannel(0, World::library()->getSound(name), 0);
 }
 
-AudioSettings AudioSys::Settings() const {
-	return sets;
-}
-
 void AudioSys::LoadPlaylist(const Playlist& newList) {
 	FreeMusic();
 
@@ -99,8 +95,8 @@ void AudioSys::UnloadPlaylist() {
 	playlist.clear();
 }
 
-int AudioSys::MusicVolume() const {
-	return sets.musicVolume;
+AudioSettings AudioSys::Settings() const {
+	return sets;
 }
 
 void AudioSys::MusicVolume(int vol) {
@@ -108,13 +104,13 @@ void AudioSys::MusicVolume(int vol) {
 	Mix_VolumeMusic(sets.musicVolume);
 }
 
-int AudioSys::SoundVolume() const {
-	return sets.soundVolume;
-}
-
 void AudioSys::SoundVolume(int vol) {
 	sets.soundVolume = CheckVolume(vol);
 	Mix_Volume(0, sets.soundVolume);
+}
+
+void AudioSys::SongDelay(float delay) {
+	sets.songDelay = delay;
 }
 
 int AudioSys::CheckVolume(int value) {

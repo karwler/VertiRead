@@ -1,5 +1,15 @@
 #include "engine/world.h"
 
+bool equalsCaseInsensitive(const string& strl, const string& strr) {
+	if (strl.length() != strr.length())
+		return false;
+
+	for (uint i=0; i!=strl.length(); i++)
+		if (tolower(strl[i]) != tolower(strr[i]))
+			return false;
+	return true;
+}
+
 bool is_num(const string& str) {
 	string::const_iterator it = str.begin();
 	while (it != str.end() && isdigit(*it))
@@ -25,6 +35,21 @@ int findString(const string& str, const string& c) {
 			check = 0;
 	}
 	return -1;
+}
+
+string modifyCase(string str, ETextCase caseChange) {
+	switch (caseChange) {
+	case ETextCase::first_upper:
+		if (!str.empty())
+			str[0] = toupper(str[0]);
+		break;
+	case ETextCase::all_upper:
+		std::transform(str.begin(), str.end(), str.begin(), toupper);
+		break;
+	case ETextCase::all_lower:
+		std::transform(str.begin(), str.end(), str.begin(), tolower);
+	}
+	return str;
 }
 
 vector<string> getWords(const string& line, bool skipCommas) {
@@ -61,7 +86,7 @@ int splitIniLine(const string& line, string* arg, string* val, string* key) {
 }
 
 fs::path removeExtension(const fs::path& path) {
-	return (path.has_extension()) ? path.string().substr(0, path.string().size() - path.extension().string().size()) : path;
+	return path.has_extension() ? path.string().substr(0, path.string().size() - path.extension().string().size()) : path;
 }
 
 bool inRect(const SDL_Rect& rect, vec2i point) {
@@ -145,6 +170,16 @@ string getRendererName(int id) {
 	if (!SDL_GetRenderDriverInfo(id, &info))
 		SDL_GetRenderDriverInfo(-1, &info);
 	return info.name;
+}
+
+vector<string> getAvailibleRenderers(bool trustedOnly) {
+	vector<string> renderers;
+	for (int i=0; i!=SDL_GetNumRenderDrivers(); i++) {
+		string name = getRendererName(i);
+		if (!trustedOnly || (trustedOnly && equalsCaseInsensitive(name, "direct3d")) || (trustedOnly && equalsCaseInsensitive(name, "opengl")) || (trustedOnly && equalsCaseInsensitive(name, "software")))
+			renderers.push_back(name);
+	}
+	return renderers;
 }
 
 bool stob(const string& str) {

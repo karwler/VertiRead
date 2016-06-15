@@ -12,13 +12,15 @@ public:
 	void DestroyWindow();
 	void SetIcon(SDL_Surface* icon);
 	void DrawObjects(const vector<Object*>& objects);
+	void WindowEvent(const SDL_WindowEvent& window);
 	
 	SDL_Renderer* Renderer() const;
 	VideoSettings Settings() const;
+	void Renderer(const string& name);
 	vec2i Resolution() const;
 	static vec2i DesktopResolution();
-	void WindowEvent(const SDL_WindowEvent& window);
 	void Fullscreen(bool on);
+	void Font(const string& font);
 
 private:
 	SDL_Window* window;

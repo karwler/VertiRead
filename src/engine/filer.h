@@ -9,6 +9,7 @@ public:
 	static bool WriteTextFile(const string& file, const vector<string>& lines);
 	static vector<fs::path> ListDir(const fs::path& dir, EDirFilter filter=FILTER_ALL, const vector<string>& extFilter={});
 
+	static vector<string> GetAvailibleLanguages();
 	static map<string, string> GetLines(const string& language);
 	static map<string, Mix_Chunk*> GetSounds();
 	static map<string, Texture> GetTextures();
@@ -37,6 +38,8 @@ public:
 	static string dirSnds();
 	static string dirTexs();
 
-	static vector<string> dirFonts();
-	static bool findFont(const string& font, string* dir=nullptr);
+	static vector<fs::path> dirFonts();
+	static fs::path FindFont(const fs::path& font);	// on success returns absolute path to font file, otherwise returns empty path
+private:
+	static fs::path CheckDirForFont(const fs::path& font, const fs::path& dir);	// returns same as FindFont
 };

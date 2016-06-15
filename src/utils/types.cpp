@@ -119,6 +119,7 @@ TextEdit::TextEdit(const string& TXT, ETextType TYP, int CPOS) :
 	type(TYP),
 	text(TXT)
 {
+	CheckCaret();
 	CheckText();
 }
 
@@ -147,8 +148,17 @@ void TextEdit::MoveCursor(int mov, bool loop) {
 	World::engine->SetRedrawNeeded();
 }
 
-string TextEdit::getText() const {
+string TextEdit::Text() const {
 	return text;
+}
+
+void TextEdit::Text(const string& str, bool resetCpos) {
+	text = str;
+	
+	if (resetCpos)
+		cpos = 0;
+	else
+		CheckCaret();
 }
 
 void TextEdit::Add(const string& str) {
@@ -168,6 +178,13 @@ void TextEdit::Delete(bool current) {
 		text.erase(cpos, 1);
 	}
 	World::engine->SetRedrawNeeded();
+}
+
+void TextEdit::CheckCaret() {
+	if (cpos < 0)
+		cpos = 0;
+	else if (cpos > text.size())
+		cpos = text.size();
 }
 
 void TextEdit::CheckText() {
@@ -193,7 +210,6 @@ void TextEdit::CheckText() {
 	}
 }
 
-
 // SHORTCUT
 
 Shortcut::Shortcut(SDL_Scancode KEY, void (Program::*CALL)()) :
@@ -218,6 +234,17 @@ Directory::Directory(const string& NAME, const vector<string>& DIRS, const vecto
 	dirs(DIRS),
 	files(FILS)
 {}
+
+// EXCEPTION
+
+Exception::Exception(const string& MSG, int RV) :
+	message(MSG),
+	retval(RV)
+{}
+
+void Exception::Display() {
+	cerr << "ERROR: " << message << " (code " << retval << ")" << endl;
+}
 
 // GENEREAL SETTINGS
 
@@ -248,15 +275,21 @@ VideoSettings::VideoSettings(bool MAX, bool FSC, const vec2i& RES, const string&
 	resolution(RES),
 	renderer(RNDR)
 {
-	font = Filer::findFont(FNT) ? FNT : "Arial.ttf";
-
+	SetFont(FNT);
 	SetDefaultColors();
 }
 
-string VideoSettings::FontPath() const {
-	string dir;
-	Filer::findFont(font, &dir);
-	return dir+font;
+string VideoSettings::Font() const {
+	return font;
+}
+
+string VideoSettings::Fontpath() const {
+	return fontpath;
+}
+
+void VideoSettings::SetFont(const string& newFont) {
+	fontpath = Filer::FindFont(newFont).string();
+	font = fontpath.empty() ? "" : newFont;
 }
 
 void VideoSettings::SetDefaultColors() {
@@ -367,15 +400,4 @@ SDL_Scancode ControlsSettings::GetDefaultHolder(const string& name) {
 	else if (name == "slow")
 		return SDL_SCANCODE_LALT;
 	return SDL_SCANCODE_RCTRL;
-}
-
-// EXCEPTION
-
-Exception::Exception(const string& MSG, int RV) :
-	message(MSG),
-	retval(RV)
-{}
-
-void Exception::Display() {
-	cerr << "ERROR: " << message << " (code " << retval << ")" << endl;
 }

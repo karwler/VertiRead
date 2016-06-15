@@ -18,14 +18,13 @@ public:
 	void SwitchSong(int step=1);
 	void PlaySound(const string& name);
 
-	AudioSettings Settings() const;
 	void LoadPlaylist(const Playlist& newList);
 	void UnloadPlaylist();
 
-	int MusicVolume() const;
+	AudioSettings Settings() const;
 	void MusicVolume(int vol);
-	int SoundVolume() const;
 	void SoundVolume(int vol);
+	void SongDelay(float delay);
 
 private:
 	AudioSettings sets;

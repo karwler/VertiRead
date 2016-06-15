@@ -2,8 +2,7 @@ cmake_minimum_required(VERSION 2.8.12)
 cmake_policy(SET CMP0015 NEW)
 #cmake_policy(SET CMP0043 NEW)
 
-project (VertiRead CXX)
-set(CMAKE_SUPPRESS_REGENERATION true)
+project(VertiRead CXX)
 set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 

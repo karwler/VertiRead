@@ -61,12 +61,21 @@ public:
 	void Event_Back();
 	void Event_Ok();
 
-	// general settings events
+	// settings events
 	void Event_SwitchLanguage(const string& language);
+	void Event_SetLibraryPath(const string& dir);
+	void Event_SetPlaylistsPath(const string& dir);
+	void Event_SwitchFullscreen(bool on);
+	void Event_SetFont(const string& font);
+	void Event_SetRenderer(const string& renderer);
+	void Event_SetMusicVolume(const string& mvol);
+	void Event_SetSoundVolume(const string& svol);
+	void Event_SetSongDelay(const string& sdelay);
+	void Event_SetScrollX(const string& scrollx);
+	void Event_SetScrollY(const string& scrolly);
 
 	// other events
-	void Event_TextCaptureOk(TextEdit* edit);
-	void Event_KeyCaptureOk(SDL_Scancode key);
+	void Event_TextCaptureOk(const string& str);
 	void Event_SelectionSet(void* box);
 	void Event_ScreenMode();
 

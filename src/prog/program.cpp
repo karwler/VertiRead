@@ -220,8 +220,6 @@ void Program::Event_OpenControlsSettings() {
 void Program::Event_Back() {
 	if (World::scene()->getPopup())
 		World::scene()->SetPopup(nullptr);
-	else if (World::inputSys()->CapturedObject())
-		World::inputSys()->SetCapture(nullptr);
 	else if (curMenu == EMenu::reader) {
 		World::audioSys()->UnloadPlaylist();
 		SwitchScene(EMenu::browser, browser);
@@ -234,12 +232,12 @@ void Program::Event_Back() {
 			SwitchScene(EMenu::books);
 		}
 	}
-	else if (curMenu >= EMenu::generalSets)
-		SwitchScene(EMenu::books);
 	else if (curMenu == EMenu::plistEditor) {
 		editor.reset();
 		SwitchScene(EMenu::playlists);
 	}
+	else if (curMenu >= EMenu::generalSets)
+		SwitchScene(EMenu::books);
 	else
 		World::engine->Close();
 }
@@ -251,19 +249,63 @@ void Program::Event_Ok() {
 		Event_EditButtonClick();
 }
 
-// GENERAL SETTINGS EVENTS
+// SETTINGS EVENTS
 
 void Program::Event_SwitchLanguage(const string& language) {
 	World::library()->LoadLanguage(language);
 	SwitchScene(curMenu);
 }
 
+void Program::Event_SetLibraryPath(const string& dir) {
+	World::scene()->LibraryPath(dir);
+}
+
+void Program::Event_SetPlaylistsPath(const string& dir) {
+	World::scene()->PlaylistsPath(dir);
+}
+
+void Program::Event_SwitchFullscreen(bool on) {
+	World::winSys()->Fullscreen(on);
+}
+
+void Program::Event_SetFont(const string& font) {
+	World::winSys()->Font(font);
+	SwitchScene();
+}
+
+void Program::Event_SetRenderer(const string& renderer) {
+	World::winSys()->Renderer(renderer);
+	SwitchScene();
+}
+
+void Program::Event_SetMusicVolume(const string& mvol) {
+	World::audioSys()->MusicVolume(stoi(mvol));
+	SwitchScene();
+}
+
+void Program::Event_SetSoundVolume(const string& svol) {
+	World::audioSys()->SoundVolume(stoi(svol));
+	SwitchScene();
+}
+
+void Program::Event_SetSongDelay(const string& sdelay) {
+	World::audioSys()->SongDelay(stof(sdelay));
+}
+
+void Program::Event_SetScrollX(const string& scrollx) {
+	World::inputSys()->ScrollSpeed(vec2f(stof(scrollx), World::inputSys()->Settings().scrollSpeed.y));
+}
+
+void Program::Event_SetScrollY(const string& scrolly) {
+	World::inputSys()->ScrollSpeed(vec2f(World::inputSys()->Settings().scrollSpeed.x, stof(scrolly)));
+}
+
 // OTHER EVENTS
 
-void Program::Event_TextCaptureOk(TextEdit* edit) {
+void Program::Event_TextCaptureOk(const string& str) {
 	if (curMenu == EMenu::playlists) {
-		if (!fs::exists(World::scene()->Settings().playlistParh() + edit->getText())) {
-			Filer::SavePlaylist(Playlist(edit->getText()));
+		if (!fs::exists(World::scene()->Settings().playlistParh() + str)) {
+			Filer::SavePlaylist(Playlist(str));
 			Event_OpenPlaylistList();
 		}
 		else
@@ -271,15 +313,11 @@ void Program::Event_TextCaptureOk(TextEdit* edit) {
 	}
 	else if (curMenu == EMenu::plistEditor) {
 		if (editor->showSongs)
-			editor->RenameSong(edit->getText());
+			editor->RenameSong(str);
 		else
-			editor->RenameBook(edit->getText());
+			editor->RenameBook(str);
 		SwitchScene(editor);
 	}
-	World::inputSys()->SetCapture(nullptr);
-}
-
-void Program::Event_KeyCaptureOk(SDL_Scancode key) {
 	World::inputSys()->SetCapture(nullptr);
 }
 
@@ -414,9 +452,9 @@ void Program::SwitchScene(void* dat) const {
 		
 		ListBox* box = new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background));
 		vector<ListItem*> items = {
-			new Switchbox(box, World::library()->getLine("language"), {"english", "german", "polish", "russian"}, World::scene()->Settings().language, &Program::Event_SwitchLanguage),
-			new LineEdit(box, World::library()->getLine("library"), World::scene()->Settings().dirLib),
-			new LineEdit(box, World::library()->getLine("playlists"), World::scene()->Settings().dirPlist)
+			new Switchbox(box, World::library()->getLine("language"), Filer::GetAvailibleLanguages(), World::scene()->Settings().language, &Program::Event_SwitchLanguage),
+			new LineEdit(box, World::library()->getLine("library"), World::scene()->Settings().dirLib, ETextType::text, &Program::Event_SetLibraryPath),
+			new LineEdit(box, World::library()->getLine("playlists"), World::scene()->Settings().dirPlist, ETextType::text, &Program::Event_SetPlaylistsPath)
 		};
 		box->Items(items);
 		objects.push_back(box);
@@ -430,24 +468,32 @@ void Program::SwitchScene(void* dat) const {
 			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, World::library()->getLine("back"))
 		};
 
+		ListBox* box = new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background));
 		vector<ListItem*> items = {
-			// something
+			new Checkbox(box, World::library()->getLine("fullscreen"), World::winSys()->Settings().fullscreen, &Program::Event_SwitchFullscreen),
+			new LineEdit(box, World::library()->getLine("font"), World::winSys()->Settings().Font(), ETextType::text, &Program::Event_SetFont),
+			new Switchbox(box, World::library()->getLine("renderer"), getAvailibleRenderers(true), World::winSys()->Settings().renderer, &Program::Event_SetRenderer),
 		};
-		objects.push_back(new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
+		box->Items(items);
+		objects.push_back(box);
 		focObject = objects.size()-1;
 		break; }
 	case EMenu::audioSets: {
 		objects = {
 			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenGeneralSettings, World::library()->getLine("general")),
 			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenVideoSettings, World::library()->getLine("video")),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, World::library()->getLine("vontrols")),
+			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenControlsSettings, World::library()->getLine("controls")),
 			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, World::library()->getLine("back"))
 		};
 
+		ListBox* box = new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background));
 		vector<ListItem*> items = {
-			// something
+			new LineEdit(box, World::library()->getLine("music vol"), to_string(World::audioSys()->Settings().musicVolume), ETextType::integer, &Program::Event_SetMusicVolume),
+			new LineEdit(box, World::library()->getLine("sound vol"), to_string(World::audioSys()->Settings().soundVolume), ETextType::integer, &Program::Event_SetSoundVolume),
+			new LineEdit(box, World::library()->getLine("song delay"), to_string(World::audioSys()->Settings().songDelay), ETextType::floating, &Program::Event_SetSongDelay)
 		};
-		objects.push_back(new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
+		box->Items(items);
+		objects.push_back(box);
 		focObject = objects.size()-1;
 		break; }
 	case EMenu::controlsSets: {
@@ -458,10 +504,18 @@ void Program::SwitchScene(void* dat) const {
 			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_ALL), &Program::Event_Back, World::library()->getLine("back"))
 		};
 
+		ListBox* box = new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background));
 		vector<ListItem*> items = {
-			// something
+			new LineEdit(box, World::library()->getLine("scroll speed")+" x", to_string(World::inputSys()->Settings().scrollSpeed.x), ETextType::floating, &Program::Event_SetScrollX),
+			new LineEdit(box, World::library()->getLine("scroll speed")+" y", to_string(World::inputSys()->Settings().scrollSpeed.y), ETextType::floating, &Program::Event_SetScrollY)
 		};
-		objects.push_back(new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background), items));
+		for (const pair<string, Shortcut>& it : World::inputSys()->Settings().shortcuts)
+			items.push_back(new KeyGetter(box, it.first, World::inputSys()->GetKeyPtr(it.first, true)));
+		for (const pair<string, SDL_Scancode>& it : World::inputSys()->Settings().holders)
+			items.push_back(new KeyGetter(box, it.first, World::inputSys()->GetKeyPtr(it.first, false)));
+
+		box->Items(items);
+		objects.push_back(box);
 		focObject = objects.size()-1;
 		}
 	}

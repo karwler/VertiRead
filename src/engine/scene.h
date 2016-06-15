@@ -18,7 +18,10 @@ public:
 	void OnMouseUp();
 	void OnMouseWheel(int ymov);
 
-	const GeneralSettings& Settings() const;
+	GeneralSettings Settings() const;
+	void LibraryPath(const string& dir);
+	void PlaylistsPath(const string& dir);
+
 	Program* getProgram() const;
 	Library* getLibrary() const;
 	vector<Object*> Objects() const;

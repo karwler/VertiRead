@@ -7,12 +7,12 @@ Capturer::Capturer(ListBox* SA, const string& LBL) :
 {}
 Capturer::~Capturer() {}
 
-void Capturer::OnClick() {
+void Capturer::OnClick(EClick clickType) {
 	World::inputSys()->SetCapture(this);
 }
 
 void Capturer::OnKeypress(SDL_Scancode key) {
-	// ms visual is being a bitch
+	// ms visual is being a bitch which is the reason why this definition exists
 }
 
 ListBox* Capturer::Parent() const {
@@ -21,18 +21,18 @@ ListBox* Capturer::Parent() const {
 
 // LINE EDIT
 
-LineEdit::LineEdit(ListBox* SA, const string& LBL, const string& TXT, void (Program::*KCALL)(TextEdit*), void (Program::*CCALL)(), ETextType TYPE) :
+LineEdit::LineEdit(ListBox* SA, const string& LBL, const string& TXT, ETextType TYPE, void (Program::*KCALL)(const string&), void (Program::*CCALL)()) :
 	Capturer(SA, LBL),
 	editor(TXT),
+	cancelCall(CCALL),
 	textPos(0)
 {
 	okCall = KCALL ? KCALL : &Program::Event_TextCaptureOk;
-	cancelCall = CCALL ? CCALL : &Program::Event_Back;
 }
 LineEdit::~LineEdit() {}
 
-void LineEdit::OnClick() {
-	Capturer::OnClick();
+void LineEdit::OnClick(EClick clickType) {
+	Capturer::OnClick(clickType);
 	editor.SetCursor(0);
 }
 
@@ -51,11 +51,18 @@ void LineEdit::OnKeypress(SDL_Scancode key) {
 		editor.Delete(true);
 		break;
 	case SDL_SCANCODE_RETURN:
-		(World::program()->*okCall)(&editor);
+		Confirm();
 		break;
 	case SDL_SCANCODE_ESCAPE:
-		(World::program()->*cancelCall)();
+		if (cancelCall)
+			(World::program()->*cancelCall)();
+		World::inputSys()->SetCapture(nullptr);
 	}
+}
+
+void LineEdit::Confirm() {
+	(World::program()->*okCall)(editor.Text());
+	World::inputSys()->SetCapture(nullptr);
 }
 
 TextEdit* LineEdit::Editor() {
@@ -64,24 +71,18 @@ TextEdit* LineEdit::Editor() {
 
 // KEY GETTER
 
-KeyGetter::KeyGetter(ListBox* SA, const string& LBL, SDL_Scancode KEY, void (Program::*CALLB)(SDL_Scancode)) :
+KeyGetter::KeyGetter(ListBox* SA, const string& LBL, SDL_Scancode* KEY) :
 	Capturer(SA, LBL),
 	key(KEY)
-{
-	callback = CALLB ? CALLB : &Program::Event_KeyCaptureOk;
-}
+{}
 KeyGetter::~KeyGetter() {}
 
-void KeyGetter::OnClick() {
-	Capturer::OnClick();
-	key = SDL_SCANCODE_ESCAPE;
-}
-
 void KeyGetter::OnKeypress(SDL_Scancode KEY) {
-	key = KEY;
-	(World::program()->*callback)(key);
+	if (key)
+		*key = KEY;
+	World::inputSys()->SetCapture(nullptr);
 }
 
 string KeyGetter::KeyName() const {
-	return SDL_GetScancodeName(key);
+	return (key) ? SDL_GetScancodeName(*key) : "";
 }

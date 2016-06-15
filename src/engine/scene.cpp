@@ -7,7 +7,7 @@ Scene::Scene(const GeneralSettings& SETS) :
 	objectHold(nullptr)
 {
 	Filer::CheckDirectories(sets);
-	library = new Library(World::winSys()->Settings().FontPath(), sets.language);
+	library = new Library(World::winSys()->Settings().Fontpath(), sets.language);
 }
 
 Scene::~Scene() {
@@ -50,7 +50,7 @@ void Scene::Tick() {
 	if (objectHold) {
 		ReaderBox* box = dynamic_cast<ReaderBox*>(objectHold);
 		if (box && !box->sliderFocused) {
-			if (InputSys::isPressed(SDL_SCANCODE_LSHIFT))
+			if (InputSys::isPressed(SDL_SCANCODE_LSHIFT) || InputSys::isPressed(SDL_BUTTON_RIGHT))
 				box->ScrollListX(-World::inputSys()->mouseMove().x);
 			objectHold->ScrollList(-World::inputSys()->mouseMove().y);
 		}
@@ -83,11 +83,6 @@ void Scene::CheckObjectsClick(const vector<Object*>& objs, EClick clickType) {
 		if (Button* but = dynamic_cast<Button*>(obj)) {
 			if (clickType == EClick::left)
 				but->OnClick();
-			break;
-		}
-		else if (Capturer* cap = dynamic_cast<Capturer*>(obj)) {
-			if (clickType == EClick::left)
-				cap->OnClick();
 			break;
 		}
 		else if (ScrollArea* area = dynamic_cast<ScrollArea*>(obj)) {
@@ -174,7 +169,7 @@ void Scene::CheckReaderBoxClick(ReaderBox* obj, EClick clickType) {
 				break;
 			}
 	}
-	else if (clickType == EClick::left_double || clickType == EClick::right) {
+	else if (clickType == EClick::left_double) {
 		vec2i interval = obj->VisiblePictures();
 		const vector<Image>& pics = obj->Pictures();
 		for (int i=interval.x; i<=interval.y; i++) {
@@ -203,7 +198,7 @@ void Scene::CheckPopupSimpleClick(PopupMessage* obj) {
 void Scene::CheckPopupChoiceClick(PopupChoice* obj) {
 	if (inRect(obj->OkButton(), InputSys::mousePos())) {
 		if (PopupText* poptext = dynamic_cast<PopupText*>(obj))
-			program->Event_TextCaptureOk(poptext->LEdit()->Editor());
+			program->Event_TextCaptureOk(poptext->LEdit()->Editor()->Text());
 	}
 	else if (inRect(obj->CancelButton(), InputSys::mousePos()))
 		SetPopup(nullptr);
@@ -225,8 +220,16 @@ void Scene::OnMouseWheel(int ymov) {
 		box->ScrollList(ymov*-20);
 }
 
-const GeneralSettings& Scene::Settings() const {
+GeneralSettings Scene::Settings() const {
 	return sets;
+}
+
+void Scene::LibraryPath(const string& dir) {
+	sets.dirLib = dir;
+}
+
+void Scene::PlaylistsPath(const string& dir) {
+	sets.dirPlist = dir;
 }
 
 Program* Scene::getProgram() const {

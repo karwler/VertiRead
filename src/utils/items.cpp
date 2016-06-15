@@ -33,7 +33,8 @@ ItemButton::~ItemButton() {}
 void ItemButton::OnClick(EClick clickType) {
 	ListItem::OnClick(clickType);
 
-	void* dat;	// decide what to send
+	// decide what to send
+	void* dat;
 	if (parent)
 		dat = parent;
 	else if (data.empty())
@@ -59,6 +60,8 @@ void Checkbox::OnClick(EClick clickType) {
 	on = !on;
 	if (callback)
 		(World::program()->*callback)(on);
+
+	World::engine->SetRedrawNeeded();
 }
 
 ListBox* Checkbox::Parent() const {

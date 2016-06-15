@@ -2,19 +2,7 @@
 
 #include "utils.h"
 
-class Engine;
-class AudioSys;
-class InputSys;
-class WinSys;
-
-class Scene;
-class Program;
-
-class Button;
-class ScrollArea;
-class ListBox;
-class PopupChoice;
-class Capturer;
+// enums and flags
 
 enum class EColor : byte {
 	background,
@@ -51,6 +39,8 @@ enum EDirFilter : byte {
 };
 EDirFilter operator|(EDirFilter a, EDirFilter b);
 
+// image related stuff
+
 class Texture {
 public:
 	Texture(const string& FILE="");
@@ -74,6 +64,8 @@ struct Image {
 	vec2i pos, size;
 	Texture* texture;
 };
+
+// text related stuff
 
 class FontSet {
 public:
@@ -110,7 +102,8 @@ public:
 	void SetCursor(int pos);
 	void MoveCursor(int mov, bool loop=false);
 
-	string getText() const;
+	string Text() const;
+	void Text(const string& str, bool resetCpos=true);
 	void Add(const string& str);
 	void Delete(bool current);
 
@@ -119,8 +112,11 @@ private:
 	ETextType type;
 	string text;
 
+	void CheckCaret();
 	void CheckText();
 };
+
+// some random types
 
 struct Shortcut {
 	Shortcut(SDL_Scancode KEY=SDL_SCANCODE_RCTRL, void (Program::*CALL)()=nullptr);
@@ -130,7 +126,7 @@ struct Shortcut {
 };
 
 struct Playlist {
-	Playlist(const string& NAME="", const vector<fs::path>& SGS={}, const vector<string>& BKS={});
+	Playlist(const string& NAME="", const vector<fs::path>& SGS= {}, const vector<string>& BKS= {});
 
 	string name;
 	vector<fs::path> songs;
@@ -140,12 +136,23 @@ struct Playlist {
 };
 
 struct Directory {
-	Directory(const string& NAME="", const vector<string>& DIRS={}, const vector<string>& FILS={});
+	Directory(const string& NAME="", const vector<string>& DIRS= {}, const vector<string>& FILS= {});
 
 	string name;
 	vector<string> dirs;
 	vector<string> files;
 };
+
+struct Exception {
+	Exception(const string& MSG="", int RV=-1);
+
+	string message;
+	int retval;
+
+	void Display();
+};
+
+// settings structs
 
 struct GeneralSettings {
 	GeneralSettings(const string& LANG="english", const string& LIB="", const string& PST="");
@@ -158,17 +165,23 @@ struct GeneralSettings {
 	string playlistParh() const;	// same as above
 };
 
-struct VideoSettings {
-	VideoSettings(bool MAX=false, bool FSC=false, const vec2i& RES=vec2i(800, 600), const string& FNT="", const string& RNDR="");
+class VideoSettings {
+public:
+	VideoSettings(bool MAX=false, bool FSC=false, const vec2i& RES=vec2i(800, 600), const string& FNT="Arial", const string& RNDR="");
+
+	string Font() const;
+	string Fontpath() const;
+	void SetFont(const string& newFont);
+	void SetDefaultColors();
 
 	bool maximized, fullscreen;
 	vec2i resolution;
-	string font;
 	string renderer;
 	map<EColor, vec4b> colors;
 
-	string FontPath() const;	// returns absolute font path
-	void SetDefaultColors();
+private:
+	string font;
+	string fontpath;	// stores absolute path to font
 };
 
 struct AudioSettings {
@@ -189,13 +202,4 @@ struct ControlsSettings {
 	void FillMissingBindings();
 	static Shortcut GetDefaultShortcut(const string& name);
 	static SDL_Scancode GetDefaultHolder(const string& name);
-};
-
-struct Exception {
-	Exception(const string& MSG="", int RV=-1);
-
-	string message;
-	int retval;
-
-	void Display();
 };

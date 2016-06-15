@@ -32,11 +32,7 @@ Boost is assumed to be located in /usr/local/include (headers) and /usr/local/li
 
 ##To do list
 - add browser to playlist editor
-- fix in-list line edit
 - add text scroll to line edit
-- finish settings menu lists
-- improve mouse wheel scrolling
-- test audio system under linux and os x
+- fix mosue scroll and music play under linux
 - maybe add some animations
-- figure out a way to make zooming faster
-- load textures while displaying reader
+- maybe load textures while displaying reader

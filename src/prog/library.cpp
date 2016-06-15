@@ -5,7 +5,7 @@ Library::Library(string FONT, string& LANG) :
 	curLanguage(LANG)
 {
 	if (!fs::exists(FONT))
-		FONT = VideoSettings().FontPath();	// should give the default font
+		FONT = VideoSettings().Fontpath();	// should give the default font
 	if (!fs::exists(Filer::dirLangs()+curLanguage+".ini"))
 		curLanguage = GeneralSettings().language;	// same as above
 	
@@ -30,19 +30,7 @@ void Library::LoadFont(const string& font) {
 }
 
 string Library::getLine(const string& line, ETextCase caseChange) const {
-	string str = (lines.count(line) == 0) ? line : lines.at(line);
-	switch (caseChange) {
-	case ETextCase::first_upper:
-		if (!str.empty())
-			str[0] = toupper(str[0]);
-		break;
-	case ETextCase::all_upper:
-		std::transform(str.begin(), str.end(), str.begin(), toupper);
-		break;
-	case ETextCase::all_lower:
-		std::transform(str.begin(), str.end(), str.begin(), tolower);
-	}
-	return str;
+	return modifyCase((lines.count(line) == 0) ? line : lines.at(line), caseChange);
 }
 
 void Library::LoadLanguage(const string& language) {

@@ -97,7 +97,7 @@ PopupText* PopupText::Clone() const {
 
 vector<Object*> PopupText::getObjects() {
 	vector<Object*> ret = PopupChoice::getObjects();
-	lineObject.text = lineEdit.Editor()->getText();
+	lineObject.text = lineEdit.Editor()->Text();
 	ret.push_back(&lineObject);
 	return ret;
 }
