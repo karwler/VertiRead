@@ -8,6 +8,7 @@ public:
 	virtual ~ListItem();
 	
 	virtual void OnClick(EClick clickType);
+	virtual string getData() const;
 	bool selectable() const;
 
 	string label;
@@ -21,10 +22,12 @@ public:
 	virtual ~ItemButton();
 
 	virtual void OnClick(EClick clickType);
+	virtual string getData() const;		// returns either label or data
+	void Data(const string& dat);
 
-	string data;
 private:
 	void (Program::*callback)(void*);
+	string data;
 };
 
 class Checkbox : public ListItem {

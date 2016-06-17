@@ -24,6 +24,7 @@
 // include other useful stuff
 #include <boost/filesystem.hpp>
 #include <fstream>
+#include <streambuf>
 #include <iostream>
 #include <sstream>
 #include <cstdlib>
@@ -47,7 +48,7 @@ using std::string;
 using std::to_string;
 namespace fs = boost::filesystem;
 
-// undefine main cause it sometimes can cause conflicts
+// undefine main because it can sometimes cause conflicts
 #ifdef main
 #undef main
 #endif
@@ -65,9 +66,9 @@ namespace fs = boost::filesystem;
 
 // directory separator
 #ifdef _WIN32
-const string dsep = "\\";
+const char dsep '\\';
 #else
-const string dsep = "/";
+const char dsep = '/';
 #endif
 
 using byte = unsigned char;
@@ -536,6 +537,7 @@ string modifyCase(string str, ETextCase caseChange);
 vector<string> getWords(const string& line, bool skipCommas=false);
 int splitIniLine(const string& line, string* arg, string* val, string* key=nullptr);
 fs::path removeExtension(const fs::path& path);
+std::istream& readLine(std::istream& ifs, string& str);
 
 // graphics
 bool inRect(const SDL_Rect& rect, vec2i point);

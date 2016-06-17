@@ -4,7 +4,7 @@
 PlaylistEditor::PlaylistEditor(const string& PLIST, bool SS) :
 	showSongs(SS)
 {
-	LoadPlaylist(PLIST);	// if playlist couldn't be loaded,a blank playlist will be set up
+	LoadPlaylist(PLIST);	// if playlist couldn't be loaded, a blank playlist will be set up
 }
 
 Playlist PlaylistEditor::getPlaylist() const {
@@ -26,9 +26,7 @@ void PlaylistEditor::RenameSong(const string& path) {
 }
 
 void PlaylistEditor::DelSong() {
-	if (selected >= pList.songs.size())	// just in case
-		selected = -1;
-	else {
+	if (selected != -1) {
 		pList.songs.erase(pList.songs.begin()+selected);
 		selected = -1;
 	}
@@ -44,9 +42,7 @@ void PlaylistEditor::RenameBook(const string& name) {
 }
 
 void PlaylistEditor::DelBook() {
-	if (selected >= pList.books.size())
-		selected = -1;
-	else {
+	if (selected != -1) {
 		pList.books.erase(pList.books.begin()+selected);
 		selected = -1;
 	}

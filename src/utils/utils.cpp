@@ -89,6 +89,31 @@ fs::path removeExtension(const fs::path& path) {
 	return path.has_extension() ? path.string().substr(0, path.string().size() - path.extension().string().size()) : path;
 }
 
+std::istream& readLine(std::istream& ifs, string& str) {
+	str.clear();
+
+	std::istream::sentry se(ifs, true);
+	std::streambuf* sbf = ifs.rdbuf();
+
+	while (true) {
+		int c = sbf->sbumpc();
+		switch (c) {
+		case '\n':
+			return ifs;
+		case '\r':
+			if (sbf->sgetc() == '\n')
+				sbf->sbumpc();
+			return ifs;
+		case EOF:
+			if (str.empty())
+				ifs.setstate(std::ios::eofbit);
+			return ifs;
+		default:
+			str += char(c);
+		}
+	}
+}
+
 bool inRect(const SDL_Rect& rect, vec2i point) {
 	return rect.w != 0 && rect.h != 0 && point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
 }

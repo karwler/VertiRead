@@ -154,15 +154,25 @@ struct Exception {
 
 // settings structs
 
-struct GeneralSettings {
-	GeneralSettings(const string& LANG="english", const string& LIB="", const string& PST="");
+class GeneralSettings {
+public:
+	GeneralSettings(const string& LANG="", const string& LIB="", const string& PST="");
 
-	string language;				// this one has to be all lower case
+	string Lang() const;
+	void Lang(const string& language);
+
+	string DirLib() const;
+	string LibraryParh() const;		// returns full path to dirLib
+	void DirLib(const string& dir);
+
+	string DirPlist() const;
+	string PlaylistParh() const;	// same as above
+	void DirPlist(const string& dir);
+
+private:
+	string lang;					// this one has to be all lower case
 	string dirLib;
 	string dirPlist;
-
-	string libraryParh() const;		// returns full path to dirLib
-	string playlistParh() const;	// same as above
 };
 
 class VideoSettings {

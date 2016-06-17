@@ -4,7 +4,7 @@
 
 class Library {
 public:
-	Library(string FONT, string& LANG);
+	Library(string FONT, GeneralSettings& GSET);
 	~Library();
 
 	FontSet* Fonts() const;
@@ -27,7 +27,7 @@ public:
 
 private:
 	kptr<FontSet> fonts;
-	string& curLanguage;
+	GeneralSettings& curGSets;
 	map<string, string> lines;		// english, translated
 	map<string, Mix_Chunk*> sounds;	// name, path
 	map<string, Texture> texes;		// name, texture data

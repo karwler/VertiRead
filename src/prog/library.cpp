@@ -1,16 +1,14 @@
 #include "library.h"
 #include "engine/filer.h"
 
-Library::Library(string FONT, string& LANG) :
-	curLanguage(LANG)
+Library::Library(string FONT, GeneralSettings& GSET) :
+	curGSets(GSET)
 {
 	if (!fs::exists(FONT))
 		FONT = VideoSettings().Fontpath();	// should give the default font
-	if (!fs::exists(Filer::dirLangs()+curLanguage+".ini"))
-		curLanguage = GeneralSettings().language;	// same as above
-	
+
 	LoadFont(FONT);
-	LoadLanguage(curLanguage);
+	LoadLanguage(curGSets.Lang());
 	LoadSounds();
 	LoadTextures();
 }
@@ -34,7 +32,7 @@ string Library::getLine(const string& line, ETextCase caseChange) const {
 }
 
 void Library::LoadLanguage(const string& language) {
-	curLanguage = language;
+	curGSets.Lang(language);
 	lines = Filer::GetLines(language);
 }
 

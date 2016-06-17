@@ -1,6 +1,7 @@
 #pragma once
 
 #include "capturers.h"
+#include "objects.h"
 
 class Popup : public Object {
 public:
@@ -52,7 +53,8 @@ public:
 	LineEdit* LEdit();
 
 protected:
-	// using LineEdit and Label to simulate an independent text editing object
+	// using LineEdit, Label and Object to simulate an independent text editing object
 	LineEdit lineEdit;
 	Label lineObject;
+	Object caretObject;
 };

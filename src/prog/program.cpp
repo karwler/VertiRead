@@ -130,7 +130,7 @@ void Program::Event_AddButtonClick() {
 void Program::Event_DeleteButtonClick() {
 	if (curMenu == EMenu::playlists) {
 		if (ListItem* item = World::scene()->SelectedButton()) {
-			fs::remove(World::scene()->Settings().playlistParh() + item->label);
+			fs::remove(World::scene()->Settings().PlaylistParh() + item->label);
 			Event_OpenPlaylistList();
 		}
 	}
@@ -151,7 +151,7 @@ void Program::Event_EditButtonClick() {
 	}
 	else if (curMenu == EMenu::plistEditor) {
 		if (ListItem* item = World::scene()->SelectedButton())
-			World::scene()->SetPopup(new PopupText("Rename", item->label));
+			World::scene()->SetPopup(new PopupText("Rename", item->getData()));
 	}
 }
 
@@ -160,7 +160,7 @@ void Program::Event_ItemDoubleclicked(ListItem* item) {
 	if (curMenu == EMenu::playlists)
 		Event_OpenPlaylistEditor((void*)item->label.c_str());
 	else if (curMenu == EMenu::plistEditor)
-		World::scene()->SetPopup(new PopupText("Rename", item->label));
+		World::scene()->SetPopup(new PopupText("Rename", item->getData()));
 }
 
 void Program::Event_SaveButtonClick() {
@@ -304,7 +304,7 @@ void Program::Event_SetScrollY(const string& scrolly) {
 
 void Program::Event_TextCaptureOk(const string& str) {
 	if (curMenu == EMenu::playlists) {
-		if (!fs::exists(World::scene()->Settings().playlistParh() + str)) {
+		if (!fs::exists(World::scene()->Settings().PlaylistParh() + str)) {
 			Filer::SavePlaylist(Playlist(str));
 			Event_OpenPlaylistList();
 		}
@@ -328,6 +328,32 @@ void Program::Event_SelectionSet(void* box) {
 
 void Program::Event_ScreenMode() {
 	World::winSys()->Fullscreen(!World::winSys()->Settings().fullscreen);
+}
+
+void Program::FileDropEvent(char* file) {
+	if (curMenu == EMenu::plistEditor) {
+		if (editor->showSongs) {
+			if (fs::is_directory(file)) {
+				vector<fs::path> files = Filer::ListDirRecursively(file, FILTER_FILE);
+				for (fs::path& it : files)
+					editor->AddSong(it.string());
+			}
+			else
+				editor->AddSong(file);
+			SwitchScene(editor);
+		}
+		else if (fs::is_directory(file)) {
+			fs::path path = file;
+			string libDir = World::scene()->Settings().LibraryParh();
+			if (libDir[libDir.length()-1] == dsep)		// remove last char if it's a dsep
+				libDir.resize(libDir.size()-1);
+
+			if (path.parent_path() == libDir) {
+				editor->AddBook(path.filename().string());
+				SwitchScene(editor);
+			}
+		}
+	}
 }
 
 EMenu Program::CurrentMenu() const {
@@ -359,7 +385,7 @@ void Program::SwitchScene(void* dat) const {
 		
 		// book list
 		vector<ListItem*> tiles;
-		vector<fs::path> names = Filer::ListDir(World::scene()->Settings().libraryParh(), FILTER_DIR);
+		vector<fs::path> names = Filer::ListDir(World::scene()->Settings().LibraryParh(), FILTER_DIR);
 		for (fs::path& it : names)
 			tiles.push_back(new ItemButton(it.filename().string(), it.string(), &Program::Event_OpenBrowser));
 		objects.push_back(new TileBox(Object(vec2i(0, 60), posT, vec2i(res.x, res.y-60), FIX_POS | FIX_END), tiles, vec2i(400, 30)));
@@ -402,7 +428,7 @@ void Program::SwitchScene(void* dat) const {
 		// playlist list
 		TileBox* box = new TileBox(Object(vec2i(0, 100), posT, vec2i(res.x, res.y-100), FIX_POS | FIX_END), {}, vec2i(400, 30));
 		vector<ListItem*> tiles;
-		vector<fs::path> names = Filer::ListDir(World::scene()->Settings().playlistParh(), FILTER_FILE);
+		vector<fs::path> names = Filer::ListDir(World::scene()->Settings().PlaylistParh(), FILTER_FILE);
 		for (fs::path& it : names)
 			tiles.push_back(new ListItem(it.filename().string(), box));
 		box->Items(tiles);
@@ -427,7 +453,7 @@ void Program::SwitchScene(void* dat) const {
 		if (editor->showSongs) {
 			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SwitchButtonClick, World::library()->getLine("books")));
 			for (fs::path& it : editor->getPlaylist().songs)
-				items.push_back(new ItemButton(it.filename().string(), "", &Program::Event_SelectionSet, box));
+				items.push_back(new ItemButton(it.filename().string(), it.string(), &Program::Event_SelectionSet, box));
 		}
 		else {
 			objects.push_back(new ButtonText(Object(vec2i(0, 0), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_SwitchButtonClick, World::library()->getLine("songs")));
@@ -446,15 +472,11 @@ void Program::SwitchScene(void* dat) const {
 			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, World::library()->getLine("back"))
 		};
 
-		vec2i ancT(160, 0);
-		sizT = vec2i(res.x-160, 30);
-		EFix fixT = FIX_POS | FIX_EX | FIX_H;
-		
 		ListBox* box = new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background));
 		vector<ListItem*> items = {
-			new Switchbox(box, World::library()->getLine("language"), Filer::GetAvailibleLanguages(), World::scene()->Settings().language, &Program::Event_SwitchLanguage),
-			new LineEdit(box, World::library()->getLine("library"), World::scene()->Settings().dirLib, ETextType::text, &Program::Event_SetLibraryPath),
-			new LineEdit(box, World::library()->getLine("playlists"), World::scene()->Settings().dirPlist, ETextType::text, &Program::Event_SetPlaylistsPath)
+			new Switchbox(box, World::library()->getLine("language"), Filer::GetAvailibleLanguages(), World::scene()->Settings().Lang(), &Program::Event_SwitchLanguage),
+			new LineEdit(box, World::library()->getLine("library"), World::scene()->Settings().DirLib(), ETextType::text, &Program::Event_SetLibraryPath),
+			new LineEdit(box, World::library()->getLine("playlists"), World::scene()->Settings().DirPlist(), ETextType::text, &Program::Event_SetPlaylistsPath)
 		};
 		box->Items(items);
 		objects.push_back(box);
@@ -525,9 +547,9 @@ void Program::SwitchScene(void* dat) const {
 string Program::FindFittingPlaylist(const string& picPath) {
 	// get book name
 	string name;
-	uint start = World::scene()->Settings().libraryParh().length();
+	uint start = World::scene()->Settings().LibraryParh().length();
 	for (uint i=start; i!=picPath.length(); i++)
-		if (picPath[i] == dsep[0]) {
+		if (picPath[i] == dsep) {
 			name = picPath.substr(start, i-start);
 			break;
 		}
@@ -535,12 +557,14 @@ string Program::FindFittingPlaylist(const string& picPath) {
 		return "";
 
 	// check playlist files for matching book name
-	vector<fs::path> files = Filer::ListDir(World::scene()->Settings().playlistParh(), FILTER_FILE);
-	for (const fs::path& file : files) {
+	vector<fs::path> files = Filer::ListDir(World::scene()->Settings().PlaylistParh(), FILTER_FILE);
+	for (fs::path& file : files) {
 		Playlist playlist = Filer::LoadPlaylist(file.filename().string());
-		for (const string& book : playlist.books)
+		for (string& book : playlist.books) {
+			cout << book << "_" << book << endl;
 			if (book == name)
 				return playlist.name;
+		}
 	}
 	return "";
 }

@@ -82,6 +82,7 @@ PopupText::PopupText(const string& MSG, const string& LIN, int W, int TH, int LH
 	title.Size(vec2i(W, TH));
 
 	lineObject = Label(Object(Anchor(), Pos()+vec2i(0, TH), vec2i(W, LH), FIX_SIZ));
+	caretObject = Object(Anchor(), 0, 0, FIX_POS | FIX_END, EColor::highlighted);	// pos and size need to be recalculated every redraw anyway
 
 	cButton.Pos(Pos()+vec2i(0, TH+LH));
 	cButton.Size(vec2i(W/2, BH));
@@ -97,8 +98,15 @@ PopupText* PopupText::Clone() const {
 
 vector<Object*> PopupText::getObjects() {
 	vector<Object*> ret = PopupChoice::getObjects();
+
 	lineObject.text = lineEdit.Editor()->Text();
 	ret.push_back(&lineObject);
+
+	int offset = Text(lineEdit.Editor()->Text().substr(0, lineEdit.Editor()->CursorPos()), 0, lineObject.Size().y, 8).size().x;
+	caretObject.Pos(lineObject.Pos()+vec2i(offset, 0));
+	caretObject.End(caretObject.Pos()+vec2i(5, lineObject.Size().y));
+	ret.push_back(&caretObject);
+
 	return ret;
 }
 

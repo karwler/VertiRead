@@ -78,6 +78,7 @@ public:
 	void Event_TextCaptureOk(const string& str);
 	void Event_SelectionSet(void* box);
 	void Event_ScreenMode();
+	void FileDropEvent(char* file);
 
 	EMenu CurrentMenu() const;
 	

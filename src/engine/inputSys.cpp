@@ -20,8 +20,8 @@ void InputSys::KeypressEvent(const SDL_KeyboardEvent& key) {
 }
 
 void InputSys::MouseButtonEvent(const SDL_MouseButtonEvent& button) {
-	if (captured && button.type == SDL_MOUSEBUTTONDOWN) {		// mouse button cancels keyboard capture
-		if (LineEdit* box = dynamic_cast<LineEdit*>(captured))	// confirm entered text if necessary
+	if (captured && !World::scene()->getPopup() && button.type == SDL_MOUSEBUTTONDOWN) {	// mouse button cancels keyboard capture (except if popup is shown)
+		if (LineEdit* box = dynamic_cast<LineEdit*>(captured))		// confirm entered text if necessary
 			box->Confirm();
 		SetCapture(nullptr);
 	}

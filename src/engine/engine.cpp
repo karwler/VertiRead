@@ -78,6 +78,9 @@ void Engine::HandleEvent(SDL_Event* event) {
 	case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEBUTTONUP:
 		inputSys->MouseButtonEvent(event->button);
 		break;
+	case SDL_DROPFILE:
+		scene->getProgram()->FileDropEvent(event->drop.file);
+		break;
 	case SDL_MOUSEWHEEL:
 		inputSys->MouseWheelEvent(event->wheel);
 		break;

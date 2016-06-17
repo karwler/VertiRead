@@ -17,6 +17,10 @@ void ListItem::OnClick(EClick clickType) {
 	World::engine->SetRedrawNeeded();
 }
 
+string ListItem::getData() const {
+	return label;
+}
+
 bool ListItem::selectable() const {
 	return parent != nullptr;
 }
@@ -37,13 +41,19 @@ void ItemButton::OnClick(EClick clickType) {
 	void* dat;
 	if (parent)
 		dat = parent;
-	else if (data.empty())
-		dat = (void*)label.c_str();
 	else
-		dat = (void*)data.c_str();
+		dat = (void*)getData().c_str();
 
 	if (callback)
 		(World::program()->*callback)(dat);
+}
+
+string ItemButton::getData() const {
+	return data.empty() ? label : data;
+}
+
+void ItemButton::Data(const string& dat) {
+	data = dat;
 }
 
 // CHECKBOX

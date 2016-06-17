@@ -7,7 +7,9 @@ public:
 	static byte CheckDirectories(const GeneralSettings& sets);
 	static bool ReadTextFile(const string& file, vector<string>& lines, bool printMessage=true);
 	static bool WriteTextFile(const string& file, const vector<string>& lines);
+
 	static vector<fs::path> ListDir(const fs::path& dir, EDirFilter filter=FILTER_ALL, const vector<string>& extFilter={});
+	static vector<fs::path> ListDirRecursively(const fs::path& dir, EDirFilter filter=FILTER_ALL, const vector<string>& extFilter={});
 
 	static vector<string> GetAvailibleLanguages();
 	static map<string, string> GetLines(const string& language);

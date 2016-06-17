@@ -7,7 +7,7 @@ Scene::Scene(const GeneralSettings& SETS) :
 	objectHold(nullptr)
 {
 	Filer::CheckDirectories(sets);
-	library = new Library(World::winSys()->Settings().Fontpath(), sets.language);
+	library = new Library(World::winSys()->Settings().Fontpath(), sets);
 }
 
 Scene::~Scene() {
@@ -86,8 +86,10 @@ void Scene::CheckObjectsClick(const vector<Object*>& objs, EClick clickType) {
 			break;
 		}
 		else if (ScrollArea* area = dynamic_cast<ScrollArea*>(obj)) {
-			if (clickType == EClick::left)
-				area->selectedItem = nullptr;	// deselect all items
+			if (clickType == EClick::left) {
+				area->selectedItem = nullptr;		// deselect all items
+				World::engine->SetRedrawNeeded();
+			}
 
 			if (CheckSliderClick(area))			// first check if slider is clicked
 				break;
@@ -225,11 +227,11 @@ GeneralSettings Scene::Settings() const {
 }
 
 void Scene::LibraryPath(const string& dir) {
-	sets.dirLib = dir;
+	sets.DirLib(dir);
 }
 
 void Scene::PlaylistsPath(const string& dir) {
-	sets.dirPlist = dir;
+	sets.DirPlist(dir);
 }
 
 Program* Scene::getProgram() const {

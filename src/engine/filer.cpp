@@ -4,10 +4,10 @@ byte Filer::CheckDirectories(const GeneralSettings& sets) {
 	byte retval = 0;
 	if (!fs::exists(dirSets()))
 		fs::create_directories(dirSets());
-	if (!fs::exists(sets.libraryParh()))
-		fs::create_directories(sets.libraryParh());
-	if (!fs::exists(sets.playlistParh()))
-		fs::create_directories(sets.playlistParh());
+	if (!fs::exists(sets.LibraryParh()))
+		fs::create_directories(sets.LibraryParh());
+	if (!fs::exists(sets.PlaylistParh()))
+		fs::create_directories(sets.PlaylistParh());
 	if (!fs::exists(dirLangs())) {
 		cerr << "couldn't find translation directory" << endl;
 		retval = 1;
@@ -31,7 +31,7 @@ bool Filer::ReadTextFile(const string& file, vector<string>& lines, bool printMe
 		return false;
 	}
 	lines.clear();
-	for (string line; getline(ifs, line);)
+	for (string line; readLine(ifs, line);)
 		lines.push_back(line);
 	return true;
 }
@@ -52,7 +52,7 @@ vector<fs::path> Filer::ListDir(const fs::path& dir, EDirFilter filter, const ve
 	if (!fs::is_directory(dir))
 		return names;
 
-	for (fs::directory_iterator it(dir); it != fs::directory_iterator(); it++) {
+	for (fs::directory_iterator it(dir); it!=fs::directory_iterator(); it++) {
 		if (filter == FILTER_ALL)
 			names.push_back(it->path());
 		else if ((filter & FILTER_FILE) && fs::is_regular_file(it->path())) {
@@ -70,6 +70,28 @@ vector<fs::path> Filer::ListDir(const fs::path& dir, EDirFilter filter, const ve
 			names.push_back(it->path());
 	}
 	sort(names.begin(), names.end());
+	return names;
+}
+
+vector<fs::path> Filer::ListDirRecursively(const fs::path& dir, EDirFilter filter, const vector<string>& extFilter) {
+	vector<fs::path> names;
+	for (fs::recursive_directory_iterator it(dir); it!=fs::recursive_directory_iterator(); it++) {
+		if (filter == FILTER_ALL)
+			names.push_back(it->path());
+		else if ((filter & FILTER_FILE) && fs::is_regular_file(it->path())) {
+			if (extFilter.empty())
+				names.push_back(it->path());
+			else for (const string& ext : extFilter)
+				if (it->path().extension() == ext) {
+					names.push_back(it->path());
+					break;
+				}
+		}
+		else if ((filter & FILTER_DIR) && fs::is_directory(it->path()))
+			names.push_back(it->path());
+		else if ((filter & FILTER_LINK) && fs::is_symlink(it->path()))
+			names.push_back(it->path());
+	}
 	return names;
 }
 
@@ -130,11 +152,14 @@ vector<string> Filer::GetPics(const fs::path& dir) {
 
 Playlist Filer::LoadPlaylist(const string& name) {
 	vector<string> lines;
-	if (!ReadTextFile(World::scene()->Settings().playlistParh() + name, lines))
+	if (!ReadTextFile(World::scene()->Settings().PlaylistParh() + name, lines))
 		return Playlist();
 
 	Playlist plist(name);
 	for (string& line : lines) {
+		if (line.empty())
+			continue;
+
 		string arg, val;
 		splitIniLine(line, &arg, &val);
 		if (arg == "book")
@@ -152,7 +177,7 @@ void Filer::SavePlaylist(const Playlist& plist) {
 	for (const fs::path& file : plist.songs)
 		lines.push_back(file.string());
 
-	WriteTextFile(World::scene()->Settings().playlistParh() + plist.name, lines);
+	WriteTextFile(World::scene()->Settings().PlaylistParh() + plist.name, lines);
 }
 
 GeneralSettings Filer::LoadGeneralSettings() {
@@ -165,20 +190,20 @@ GeneralSettings Filer::LoadGeneralSettings() {
 		string arg, val;
 		splitIniLine(line, &arg, &val);
 		if (arg == "language")
-			sets.language = val;
+			sets.Lang(val);
 		else if (arg == "library")
-			sets.dirLib = val;
+			sets.DirLib(val);
 		else if (arg == "playlists")
-			sets.dirPlist = val;
+			sets.DirPlist(val);
 	}
 	return sets;
 }
 
 void Filer::SaveSettings(const GeneralSettings& sets) {
 	vector<string> lines = {
-		"language=" + sets.language,
-		"library=" + sets.dirLib,
-		"playlists=" + sets.dirPlist
+		"language=" + sets.Lang(),
+		"library=" + sets.DirLib(),
+		"playlists=" + sets.DirPlist()
 	};
 	WriteTextFile(dirSets() + "general.ini", lines);
 }
@@ -371,7 +396,7 @@ vector<fs::path> Filer::dirFonts() {
 #elif __APPLE__
 	return {string(getenv("HOME"))+"/Library/Fonts/", "/Library/Fonts/", "/System/Library/Fonts/", "/Network/Library/Fonts/"};
 #else
-	return {"/usr/share/fonts/", "/usr/share/fonts/truetype/msttcorefonts/"};
+	return {"/usr/share/fonts/"};
 #endif
 }
 
@@ -393,7 +418,7 @@ fs::path Filer::FindFont(const fs::path& font) {
 }
 
 fs::path Filer::CheckDirForFont(const fs::path& font, const fs::path& dir) {
-	for (fs::directory_iterator it(dir); it != fs::directory_iterator(); it++)
+	for (fs::recursive_directory_iterator it(dir); it!=fs::recursive_directory_iterator(); it++)
 		if (fs::is_regular_file(it->path())) {
 			fs::path file = font.has_extension() ? it->path().filename() : removeExtension(it->path().filename());
 			if (equalsCaseInsensitive(file.string(), font.string()))

@@ -114,8 +114,8 @@ void AudioSys::SongDelay(float delay) {
 }
 
 int AudioSys::CheckVolume(int value) {
-	if (value >= 128)
-		return 128;
+	if (value >= MIX_MAX_VOLUME)
+		return MIX_MAX_VOLUME;
 	else if (value <= 0)
 		return 0;
 	return value;

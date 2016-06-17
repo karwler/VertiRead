@@ -226,7 +226,7 @@ Playlist::Playlist(const string& NAME, const vector<fs::path>& SGS, const vector
 {}
 
 string Playlist::songPath(uint id) const {
-	return songs[id].is_absolute() ? songs[id].string() : fs::path(World::scene()->Settings().playlistParh() + name).parent_path().string() + dsep + songs[id].string();
+	return songs[id].is_absolute() ? songs[id].string() : fs::path(World::scene()->Settings().PlaylistParh() + name).parent_path().string() + dsep + songs[id].string();
 }
 
 Directory::Directory(const string& NAME, const vector<string>& DIRS, const vector<string>& FILS) :
@@ -248,24 +248,51 @@ void Exception::Display() {
 
 // GENEREAL SETTINGS
 
-GeneralSettings::GeneralSettings(const string& LANG, const string& LIB, const string& PST) :
-	language(LANG)
+GeneralSettings::GeneralSettings(const string& LANG, const string& LIB, const string& PST)
 {
-	dirLib = LIB.empty() ? Filer::dirSets() + "library"+dsep : LIB;
-	if (dirLib[dirLib.length()-1] != dsep[0])
-		dirLib += dsep;
-
-	dirPlist = PST.empty() ? Filer::dirSets() + "playlists"+dsep : PST;
-	if (dirPlist[dirPlist.length()-1] != dsep[0])
-		dirPlist += dsep;
+	Lang(LANG);
+	DirLib(LIB);
+	DirPlist(PST);
 }
 
-string GeneralSettings::libraryParh() const {
+string GeneralSettings::Lang() const {
+	return lang;
+}
+
+void GeneralSettings::Lang(const string& language) {
+	lang = language;
+	std::transform(lang.begin(), lang.end(), lang.begin(), tolower);
+
+	if (!fs::exists(Filer::dirLangs()+lang+".ini"))
+		lang = "english";
+}
+
+string GeneralSettings::DirLib() const {
+	return dirLib;
+}
+
+string GeneralSettings::LibraryParh() const {
 	return fs::path(dirLib).is_absolute() ? dirLib : Filer::execDir() + dirLib;
 }
 
-string GeneralSettings::playlistParh() const {
+void GeneralSettings::DirLib(const string& dir) {
+	dirLib = dir.empty() ? Filer::dirSets() + "library"+dsep : dir;
+	if (dirLib[dirLib.length()-1] != dsep)
+		dirLib += dsep;
+}
+
+string GeneralSettings::DirPlist() const {
+	return dirPlist;
+}
+
+string GeneralSettings::PlaylistParh() const {
 	return fs::path(dirPlist).is_absolute() ? dirPlist : Filer::execDir() + dirPlist;
+}
+
+void GeneralSettings::DirPlist(const string& dir) {
+	dirPlist = dir.empty() ? Filer::dirSets() + "playlists"+dsep : dir;
+	if (dirPlist[dirPlist.length()-1] != dsep)
+		dirPlist += dsep;
 }
 
 // VIDEO SETTINGS
