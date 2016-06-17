@@ -14,7 +14,7 @@ public:
 	void Close();
 	void Cleanup();
 
-	void SetRedrawNeeded();
+	void SetRedrawNeeded(byte count=1);
 	float deltaSeconds() const;
 	AudioSys* getAudioSys() const;
 	InputSys* getInputSys() const;
@@ -28,7 +28,7 @@ private:
 	kptr<Scene> scene;
 
 	bool run;
-	bool redraw;
+	byte redraws;
 	float dSec;
 
 	void HandleEvent(SDL_Event* event);

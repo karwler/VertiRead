@@ -1,8 +1,7 @@
 #include "engine.h"
 
 Engine::Engine() :
-	run(true),
-	redraw(true)
+	run(true)
 {}
 
 void Engine::Run() {
@@ -22,8 +21,9 @@ void Engine::Run() {
 	scene = new Scene(Filer::LoadGeneralSettings());		// initializes program and library
 	winSys->SetIcon(scene->getLibrary()->getTex("icon")->surface);
 
-	// initialize scene and timer
+	// initialize values
 	scene->getProgram()->Event_OpenBookList();
+	redraws = 8;	// linux sometimes can't keep up with the window, which is why there need to be a few redraw calls at the start
 	uint oldTime = SDL_GetTicks();
 
 	while (run) {
@@ -33,8 +33,8 @@ void Engine::Run() {
 		oldTime = newTime;
 
 		// draw scene if requested
-		if (redraw) {
-			redraw = false;
+		if (redraws != 0) {
+			redraws--;
 			winSys->DrawObjects(scene->Objects());
 		}
 
@@ -78,9 +78,6 @@ void Engine::HandleEvent(SDL_Event* event) {
 	case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEBUTTONUP:
 		inputSys->MouseButtonEvent(event->button);
 		break;
-	case SDL_DROPFILE:
-		scene->getProgram()->FileDropEvent(event->drop.file);
-		break;
 	case SDL_MOUSEWHEEL:
 		inputSys->MouseWheelEvent(event->wheel);
 		break;
@@ -90,13 +87,16 @@ void Engine::HandleEvent(SDL_Event* event) {
 	case SDL_TEXTINPUT:
 		inputSys->TextEvent(event->text);
 		break;
+	case SDL_DROPFILE:
+		scene->getProgram()->FileDropEvent(event->drop.file);
+		break;
 	case SDL_QUIT:
 		Close();
 	}
 }
 
-void Engine::SetRedrawNeeded() {
-	redraw = true;
+void Engine::SetRedrawNeeded(byte count) {
+	redraws = count;
 }
 
 float Engine::deltaSeconds() const {

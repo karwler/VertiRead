@@ -32,6 +32,7 @@ private:
 
 	void PassDrawObject(Object* obj);
 	void DrawObject(const SDL_Rect& bg, EColor bgColor, const Text& text);
+	void DrawObject(LineEditor* obj);
 	void DrawObject(ListBox* obj);
 	void DrawObject(TileBox* obj);
 	void DrawObject(ReaderBox* obj);
@@ -40,7 +41,7 @@ private:
 	void PassDrawItem(int id, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop={ 0, 0, 0, 0 });
 	void DrawItem(Checkbox* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop);
 	void DrawItem(Switchbox* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop);
-	void DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop);
+	void DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, SDL_Rect crop);
 	void DrawItem(KeyGetter* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop);
 
 	void DrawRect(const SDL_Rect& rect, EColor color);

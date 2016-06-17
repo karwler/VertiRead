@@ -1,6 +1,6 @@
 #pragma once
 
-#include "items.h"
+#include "capturers.h"
 
 enum EFix : byte {
 	NO_FIX  = 0x0,
@@ -89,3 +89,16 @@ private:
 	uint curTex;
 };
 
+class LineEditor : public Object, public LineEdit {
+public:
+	LineEditor(const Object& BASE=Object(), const string& TXT="", ETextType TYPE=ETextType::text, void (Program::*KCALL)(const string&)=nullptr, void (Program::*CCALL)()=nullptr);
+	virtual ~LineEditor();
+	virtual LineEditor* Clone() const;
+
+	virtual Text getText() const;
+	virtual SDL_Rect getCaret() const;
+
+private:
+	virtual void CheckCaretRight();
+	virtual void CheckCaretLeft();
+};

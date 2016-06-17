@@ -560,11 +560,9 @@ string Program::FindFittingPlaylist(const string& picPath) {
 	vector<fs::path> files = Filer::ListDir(World::scene()->Settings().PlaylistParh(), FILTER_FILE);
 	for (fs::path& file : files) {
 		Playlist playlist = Filer::LoadPlaylist(file.filename().string());
-		for (string& book : playlist.books) {
-			cout << book << "_" << book << endl;
+		for (string& book : playlist.books)
 			if (book == name)
 				return playlist.name;
-		}
 	}
 	return "";
 }

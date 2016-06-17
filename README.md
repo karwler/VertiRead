@@ -23,7 +23,7 @@ There’s a pre-made launcher, which is copied to the build directory after comp
 If you want a menu entry for the program, just set the executable’s and icon’s path to the .desktop file and move it to either "/usr/share/applications" or "~/.local/share/applications".  
 
 Settings files are being saved in "~/.vertiread".  
-Note: It's possible that neither the mouse wheel nor the audio system work properly under Linux and I've got no idea why.  
+Note: It's possible that the mouse wheel won't work properly under Linux and I've got no idea why.  
 
 ##Windows
 All necessary libraries are already included in the project, however they're built only for the MSVC 14 (2015).  
@@ -38,9 +38,7 @@ Boost is assumed to be located in /usr/local/include (headers) and /usr/local/li
 Settings files are being saved in "~/Library/Application Support/VertiRead".  
 
 ##To do list
-- check if it's compiling under linux and os x
 - add browser to playlist editor
-- add text scroll to line edit
-- fix mosue scroll and music play under linux
+- fix mosue scroll under linux
 - maybe add some animations
 - maybe load textures while displaying reader

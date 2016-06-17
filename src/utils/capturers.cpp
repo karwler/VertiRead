@@ -40,12 +40,15 @@ void LineEdit::OnKeypress(SDL_Scancode key) {
 	switch (key) {
 	case SDL_SCANCODE_LEFT:
 		editor.MoveCursor(-1);
+		CheckCaretLeft();
 		break;
 	case SDL_SCANCODE_RIGHT:
 		editor.MoveCursor(1);
+		CheckCaretRight();
 		break;
 	case SDL_SCANCODE_BACKSPACE:
 		editor.Delete(false);
+		CheckCaretLeft();
 		break;
 	case SDL_SCANCODE_DELETE:
 		editor.Delete(true);
@@ -65,8 +68,47 @@ void LineEdit::Confirm() {
 	World::inputSys()->SetCapture(nullptr);
 }
 
+int LineEdit::TextPos() const {
+	return textPos;
+}
+
+void LineEdit::ResetTextPos() {
+	textPos = 0;
+}
+
 TextEdit* LineEdit::Editor() {
 	return &editor;
+}
+
+Text LineEdit::getText() const {
+	ListBox* box = static_cast<ListBox*>(parent);
+
+	int offset = Text(label, 0, box->ItemH()).size().x + 20;
+	return Text(editor.Text(), vec2i(offset-textPos, 0), box->ItemH());
+}
+
+SDL_Rect LineEdit::getCaret() const {
+	ListBox* box = static_cast<ListBox*>(parent);
+
+	int offset = Text(editor.Text().substr(0, editor.CursorPos()), 0, box->ItemH()).size().x - textPos;
+	return { offset, 0, 5, box->ItemH() };
+}
+
+void LineEdit::CheckCaretRight() {
+	if (ListBox* box = dynamic_cast<ListBox*>(parent)) {
+		SDL_Rect caret = getCaret();
+		int diff = caret.x + caret.w - parent->Size().x + parent->BarW() + Text(label, 0, box->ItemH()).size().x + 20;
+		if (diff > 0)
+			textPos += diff;
+	}
+}
+
+void LineEdit::CheckCaretLeft() {
+	if (parent) {
+		SDL_Rect caret = getCaret();
+		if (caret.x < 0)
+			textPos += caret.x;
+	}
 }
 
 // KEY GETTER

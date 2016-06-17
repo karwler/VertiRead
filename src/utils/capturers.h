@@ -21,13 +21,21 @@ public:
 	virtual void OnKeypress(SDL_Scancode key);
 	
 	void Confirm();
+	int TextPos() const;
+	void ResetTextPos();
 	TextEdit* Editor();
+	virtual Text getText() const;		// warning: text doesn't have global positioning
+	virtual SDL_Rect getCaret() const;	// warning: caret doesn't have global positioning
 
-private:
+protected:
 	int textPos;
 	TextEdit editor;
+private:
 	void (Program::*okCall)(const string&);
 	void (Program::*cancelCall)();
+
+	virtual void CheckCaretRight();
+	virtual void CheckCaretLeft();
 };
 
 class KeyGetter : public Capturer {

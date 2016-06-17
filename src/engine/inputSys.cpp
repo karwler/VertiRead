@@ -1,7 +1,8 @@
 #include "world.h"
 
 InputSys::InputSys(const ControlsSettings& SETS) :
-	sets(SETS)
+	sets(SETS),
+	captured(nullptr)
 {
 	SDL_GetMouseState(&lastMousePos.x, &lastMousePos.y);
 	SetCapture(nullptr);
@@ -25,7 +26,7 @@ void InputSys::MouseButtonEvent(const SDL_MouseButtonEvent& button) {
 			box->Confirm();
 		SetCapture(nullptr);
 	}
-	
+
 	if (button.clicks == 1) {
 		if (button.button == SDL_BUTTON_LEFT) {
 			if (button.type == SDL_MOUSEBUTTONDOWN)	// single left click 
@@ -96,6 +97,9 @@ Capturer* InputSys::CapturedObject() const {
 }
 
 void InputSys::SetCapture(Capturer* cbox) {
+	if (LineEdit* edit = dynamic_cast<LineEdit*>(captured))		// do some cleanup first
+		edit->ResetTextPos();
+
 	captured = cbox;
 	if (dynamic_cast<LineEdit*>(captured))
 		SDL_StartTextInput();

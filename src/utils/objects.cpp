@@ -156,3 +156,38 @@ void ButtonImage::OnClick() {
 Image ButtonImage::CurTex() const {
 	return texes.empty() ? Image() : Image(Pos(), texes[curTex], Size());
 }
+
+LineEditor::LineEditor(const Object& BASE, const string& TXT, ETextType TYPE, void (Program::*KCALL)(const string&), void (Program::*CCALL)()) :
+	Object(BASE),
+	LineEdit(nullptr, "", TXT, TYPE, KCALL, CCALL)
+{}
+LineEditor::~LineEditor() {}
+
+LineEditor*LineEditor::Clone() const {
+	return new LineEditor(*this);
+}
+
+Text LineEditor::getText() const {
+	return Text(editor.Text(), Pos()-vec2i(textPos, 0), Size().y);
+}
+
+SDL_Rect LineEditor::getCaret() const {
+	vec2i pos = Pos();
+	int height = Size().y;
+
+	return { Text(editor.Text().substr(0, editor.CursorPos()), 0, height).size().x - textPos + pos.x, pos.y, 5, height };
+}
+
+void LineEditor::CheckCaretRight() {
+	SDL_Rect caret = getCaret();
+	int diff = caret.x + caret.w - End().x;
+	if (diff > 0)
+		textPos += diff;
+}
+
+void LineEditor::CheckCaretLeft() {
+	SDL_Rect caret = getCaret();
+	int diff = Pos().x - caret.x;
+	if (diff > 0)
+		textPos -= diff;
+}

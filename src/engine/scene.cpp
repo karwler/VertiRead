@@ -85,6 +85,10 @@ void Scene::CheckObjectsClick(const vector<Object*>& objs, EClick clickType) {
 				but->OnClick();
 			break;
 		}
+		else if (LineEditor* edt = dynamic_cast<LineEditor*>(obj)) {
+			edt->OnClick(clickType);
+			break;
+		}
 		else if (ScrollArea* area = dynamic_cast<ScrollArea*>(obj)) {
 			if (clickType == EClick::left) {
 				area->selectedItem = nullptr;		// deselect all items
