@@ -66,7 +66,7 @@ namespace fs = boost::filesystem;
 
 // directory separator
 #ifdef _WIN32
-const char dsep '\\';
+const char dsep = '\\';
 #else
 const char dsep = '/';
 #endif
