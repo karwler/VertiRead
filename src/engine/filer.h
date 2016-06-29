@@ -4,7 +4,7 @@
 
 class Filer {
 public:
-	static byte CheckDirectories(const GeneralSettings& sets);
+	static uint8 CheckDirectories(const GeneralSettings& sets);
 	static bool ReadTextFile(const string& file, vector<string>& lines, bool printMessage=true);
 	static bool WriteTextFile(const string& file, const vector<string>& lines);
 

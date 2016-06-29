@@ -8,7 +8,7 @@ public:
 	virtual ~ListItem();
 	
 	virtual void OnClick(EClick clickType);
-	virtual string getData() const;
+	virtual const string& getData() const;
 	bool selectable() const;
 
 	string label;
@@ -22,7 +22,7 @@ public:
 	virtual ~ItemButton();
 
 	virtual void OnClick(EClick clickType);
-	virtual string getData() const;		// returns either label or data
+	virtual const string& getData() const;		// returns either label or data
 	void Data(const string& dat);
 
 private:

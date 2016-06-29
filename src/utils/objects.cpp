@@ -1,7 +1,7 @@
 #include "engine/world.h"
 
 EFix operator|(EFix a, EFix b) {
-	return static_cast<EFix>(static_cast<byte>(a) | static_cast<byte>(b));
+	return static_cast<EFix>(static_cast<uint8>(a) | static_cast<uint8>(b));
 }
 
 // OBJECT

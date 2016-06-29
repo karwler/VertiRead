@@ -179,7 +179,7 @@ void Program::Event_OpenBrowser(void* path) {
 		browser->GoTo(cstr(path));
 	else
 		browser = new Browser(cstr(path));
-
+	
 	SwitchScene(EMenu::browser, browser);
 }
 

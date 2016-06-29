@@ -20,25 +20,26 @@ void InputSys::KeypressEvent(const SDL_KeyboardEvent& key) {
 		CheckShortcuts(key);
 }
 
-void InputSys::MouseButtonEvent(const SDL_MouseButtonEvent& button) {
-	if (captured && !World::scene()->getPopup() && button.type == SDL_MOUSEBUTTONDOWN) {	// mouse button cancels keyboard capture (except if popup is shown)
+void InputSys::MouseButtonDownEvent(const SDL_MouseButtonEvent& button) {
+	if (captured && !World::scene()->getPopup()) {				// mouse button cancels keyboard capture (except if popup is shown)
 		if (LineEdit* box = dynamic_cast<LineEdit*>(captured))		// confirm entered text if necessary
 			box->Confirm();
 		SetCapture(nullptr);
 	}
 
 	if (button.clicks == 1) {
-		if (button.button == SDL_BUTTON_LEFT) {
-			if (button.type == SDL_MOUSEBUTTONDOWN)	// single left click 
-				World::scene()->OnMouseDown(EClick::left);
-			else
-				World::scene()->OnMouseUp();		// left up
-		}
-		else if (button.button == SDL_BUTTON_RIGHT && button.type == SDL_MOUSEBUTTONDOWN)	// songle right click
+		if (button.button == SDL_BUTTON_LEFT)		// single left click
+			World::scene()->OnMouseDown(EClick::left);
+		else if (button.button == SDL_BUTTON_RIGHT)	// single right click
 			World::scene()->OnMouseDown(EClick::right);
 	}
-	else if (button.button == SDL_BUTTON_LEFT && button.type == SDL_MOUSEBUTTONDOWN)		// double left click
+	else if (button.button == SDL_BUTTON_LEFT)		// double left click
 		World::scene()->OnMouseDown(EClick::left_double);
+}
+
+void InputSys::MouseButtonUpEvent(const SDL_MouseButtonEvent& button) {
+	if (button.clicks == 1 && button.button == SDL_BUTTON_LEFT)
+		World::scene()->OnMouseUp();	// left up
 }
 
 void InputSys::MouseWheelEvent(const SDL_MouseWheelEvent& wheel) {
@@ -66,7 +67,7 @@ bool InputSys::isPressed(SDL_Scancode key) {
 	return SDL_GetKeyboardState(nullptr)[key];
 }
 
-bool InputSys::isPressed(byte button) {
+bool InputSys::isPressed(uint8 button) {
 	return SDL_GetMouseState(nullptr, nullptr) & button;
 }
 

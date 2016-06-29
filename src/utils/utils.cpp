@@ -1,6 +1,6 @@
 #include "engine/world.h"
 
-bool equalsCaseInsensitive(const string& strl, const string& strr) {
+bool strcmpCI(const string& strl, const string& strr) {
 	if (strl.length() != strr.length())
 		return false;
 
@@ -85,7 +85,7 @@ int splitIniLine(const string& line, string* arg, string* val, string* key) {
 	return i0;
 }
 
-fs::path removeExtension(const fs::path& path) {
+fs::path delExt(const fs::path& path) {
 	return path.has_extension() ? path.string().substr(0, path.string().size() - path.extension().string().size()) : path;
 }
 
@@ -201,7 +201,7 @@ vector<string> getAvailibleRenderers(bool trustedOnly) {
 	vector<string> renderers;
 	for (int i=0; i!=SDL_GetNumRenderDrivers(); i++) {
 		string name = getRendererName(i);
-		if (!trustedOnly || (trustedOnly && equalsCaseInsensitive(name, "direct3d")) || (trustedOnly && equalsCaseInsensitive(name, "opengl")) || (trustedOnly && equalsCaseInsensitive(name, "software")))
+		if (!trustedOnly || (trustedOnly && strcmpCI(name, "direct3d")) || (trustedOnly && strcmpCI(name, "opengl")) || (trustedOnly && strcmpCI(name, "software")))
 			renderers.push_back(name);
 	}
 	return renderers;

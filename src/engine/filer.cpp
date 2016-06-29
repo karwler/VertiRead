@@ -1,7 +1,7 @@
 #include "world.h"
 
-byte Filer::CheckDirectories(const GeneralSettings& sets) {
-	byte retval = 0;
+uint8 Filer::CheckDirectories(const GeneralSettings& sets) {
+	uint8 retval = 0;
 	if (!fs::exists(dirSets()))
 		fs::create_directories(dirSets());
 	if (!fs::exists(sets.LibraryParh()))
@@ -14,11 +14,11 @@ byte Filer::CheckDirectories(const GeneralSettings& sets) {
 	}
 	if (!fs::exists(dirSnds())) {
 		cerr << "couldn't find sound directory" << endl;
-		retval = 1;
+		retval = 2;
 	}
 	if (!fs::exists(dirTexs())) {
 		cerr << "couldn't find texture directory" << endl;
-		retval = 2;
+		retval = 3;
 	}
 	return retval;
 }
@@ -102,7 +102,7 @@ vector<string> Filer::GetAvailibleLanguages() {
 
 	for (fs::directory_iterator it(dirLangs()); it != fs::directory_iterator(); it++)
 		if (fs::is_regular_file(it->path()) && it->path().extension() == ".ini")
-			files.push_back(removeExtension(it->path().filename()).string());
+			files.push_back(delExt(it->path().filename()).string());
 
 	sort(files.begin(), files.end());
 	return files;
@@ -126,7 +126,7 @@ map<string, Mix_Chunk*> Filer::GetSounds() {
 	map<string, Mix_Chunk*> sounds;
 	for (fs::directory_iterator it(dirSnds()); it != fs::directory_iterator(); it++)
 		if (Mix_Chunk* cue = Mix_LoadWAV(it->path().string().c_str()))				// add only valid sound files
-			sounds.insert(make_pair(removeExtension(it->path().filename()).string(), cue));
+			sounds.insert(make_pair(delExt(it->path().filename()).string(), cue));
 	return sounds;
 }
 
@@ -134,7 +134,7 @@ map<string, Texture> Filer::GetTextures() {
 	map<string, Texture> texes;
 	for (fs::directory_iterator it(dirTexs()); it != fs::directory_iterator(); it++)
 		if (SDL_Surface* surf = IMG_Load(it->path().string().c_str()))				// add only valid textures
-			texes.insert(make_pair(removeExtension(it->path().filename()).string(), Texture(it->path().string(), surf)));
+			texes.insert(make_pair(delExt(it->path().filename()).string(), Texture(it->path().string(), surf)));
 	return texes;
 }
 
@@ -372,9 +372,9 @@ string Filer::dirSets() {
 
 string Filer::dirData() {
 #ifdef __APPLE__
-	return execDir(true) + "../Resources/data/";
+	return execDir(true) + "../Resources/";
 #else
-	return execDir() + "data"+dsep;
+	return execDir();
 #endif
 }
 
@@ -420,8 +420,8 @@ fs::path Filer::FindFont(const fs::path& font) {
 fs::path Filer::CheckDirForFont(const fs::path& font, const fs::path& dir) {
 	for (fs::recursive_directory_iterator it(dir); it!=fs::recursive_directory_iterator(); it++)
 		if (fs::is_regular_file(it->path())) {
-			fs::path file = font.has_extension() ? it->path().filename() : removeExtension(it->path().filename());
-			if (equalsCaseInsensitive(file.string(), font.string()))
+			fs::path file = font.has_extension() ? it->path().filename() : delExt(it->path().filename());
+			if (strcmpCI(file.string(), font.string()))
 				return it->path();
 		}
 	return "";

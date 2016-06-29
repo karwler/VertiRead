@@ -17,7 +17,7 @@ void ListItem::OnClick(EClick clickType) {
 	World::engine->SetRedrawNeeded();
 }
 
-string ListItem::getData() const {
+const string& ListItem::getData() const {
 	return label;
 }
 
@@ -43,12 +43,12 @@ void ItemButton::OnClick(EClick clickType) {
 		dat = parent;
 	else
 		dat = (void*)getData().c_str();
-
+	
 	if (callback)
 		(World::program()->*callback)(dat);
 }
 
-string ItemButton::getData() const {
+const string& ItemButton::getData() const {
 	return data.empty() ? label : data;
 }
 

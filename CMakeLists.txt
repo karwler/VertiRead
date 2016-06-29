@@ -162,19 +162,19 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 						COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LIB_DIR}/${dll_file} ${EXECUTABLE_OUTPUT_PATH})
 	endforeach()
 	add_custom_command(TARGET VertiRead POST_BUILD
-					COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/data ${EXECUTABLE_OUTPUT_PATH}/data)
+					COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/data ${EXECUTABLE_OUTPUT_PATH})
 	
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	add_custom_command(TARGET VertiRead POST_BUILD
 					COMMAND ${CMAKE_COMMAND} -E make_directory ${EXECUTABLE_OUTPUT_PATH}/../Resources
 					COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/rsc/Info.plist ${EXECUTABLE_OUTPUT_PATH}/..
 					COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/rsc/icon.icns ${EXECUTABLE_OUTPUT_PATH}/../Resources
-					COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/data ${EXECUTABLE_OUTPUT_PATH}/../Resources/data)
+					COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/data ${EXECUTABLE_OUTPUT_PATH}/../Resources)
 
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 	add_custom_command(TARGET VertiRead POST_BUILD
 					COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/rsc/vertiread.desktop ${EXECUTABLE_OUTPUT_PATH}
-					COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/data ${EXECUTABLE_OUTPUT_PATH}/data)
+					COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/data ${EXECUTABLE_OUTPUT_PATH})
 endif()
 
 # filter file for ms visual studio

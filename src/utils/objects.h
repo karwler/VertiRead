@@ -2,7 +2,7 @@
 
 #include "capturers.h"
 
-enum EFix : byte {
+enum EFix : uint8 {
 	NO_FIX  = 0x0,
 	FIX_X   = 0x1,
 	FIX_Y   = 0x2,

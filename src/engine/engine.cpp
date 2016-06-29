@@ -69,33 +69,36 @@ void Engine::Cleanup() {
 	SDL_Quit();
 }
 
-void Engine::HandleEvent(SDL_Event* event) {
+void Engine::HandleEvent(const SDL_Event& event) {
 	// pass event to a specific handler
-	switch (event->type) {
+	switch (event.type) {
 	case SDL_KEYDOWN:
-		inputSys->KeypressEvent(event->key);
+		inputSys->KeypressEvent(event.key);
 		break;
-	case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEBUTTONUP:
-		inputSys->MouseButtonEvent(event->button);
+	case SDL_MOUSEBUTTONDOWN:
+		inputSys->MouseButtonDownEvent(event.button);
+		break;
+	case SDL_MOUSEBUTTONUP:
+		inputSys->MouseButtonUpEvent(event.button);
 		break;
 	case SDL_MOUSEWHEEL:
-		inputSys->MouseWheelEvent(event->wheel);
+		inputSys->MouseWheelEvent(event.wheel);
 		break;
 	case SDL_WINDOWEVENT:
-		winSys->WindowEvent(event->window);
+		winSys->WindowEvent(event.window);
 		break;
 	case SDL_TEXTINPUT:
-		inputSys->TextEvent(event->text);
+		inputSys->TextEvent(event.text);
 		break;
 	case SDL_DROPFILE:
-		scene->getProgram()->FileDropEvent(event->drop.file);
+		scene->getProgram()->FileDropEvent(event.drop.file);
 		break;
 	case SDL_QUIT:
 		Close();
 	}
 }
 
-void Engine::SetRedrawNeeded(byte count) {
+void Engine::SetRedrawNeeded(uint8 count) {
 	redraws = count;
 }
 

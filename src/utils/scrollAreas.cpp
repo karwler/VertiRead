@@ -407,16 +407,15 @@ const vector<Image>& ReaderBox::Pictures() const {
 void ReaderBox::Pictures(const vector<Texture*>& pictures, const string& curPic) {
 	listH = 0;
 	listW = 0;
-	int startPos = 0;
+	listY = 0;
 	for (Texture* it : pictures) {
 		pics.push_back(Image(vec2i(0, listH), it));
 		if (it->File() == curPic)
-			startPos = listH;
+			listY = listH;
 		if (it->Res().x > listW)
 			listW = it->Res().x;
 		listH += it->Res().y + spacing;
 	}
-	listY = startPos;
 	SetValues();
 }
 

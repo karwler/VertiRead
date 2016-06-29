@@ -4,7 +4,7 @@
 
 // enums and flags
 
-enum class EColor : byte {
+enum class EColor : uint8 {
 	background,
 	rectangle,
 	highlighted,
@@ -12,26 +12,26 @@ enum class EColor : byte {
 	text
 };
 
-enum class ETextType : byte {
+enum class ETextType : uint8 {
 	text,
 	integer,
 	floating
 };
 
-enum class ETextCase : byte {
+enum class ETextCase : uint8 {
 	no_change,
 	first_upper,
 	all_upper,
 	all_lower
 };
 
-enum class EClick : byte {
+enum class EClick : uint8 {
 	left,
 	left_double,
 	right
 };
 
-enum EDirFilter : byte {
+enum EDirFilter : uint8 {
 	FILTER_ALL  = 0,
 	FILTER_FILE = 1,
 	FILTER_DIR  = 2,
@@ -132,7 +132,7 @@ struct Playlist {
 	vector<fs::path> songs;
 	vector<string> books;
 
-	string songPath(uint id) const;	// returns song full path if original path is relative
+	string songPath(uint id) const;	// returns song's full path if original path is relative
 };
 
 struct Directory {

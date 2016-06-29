@@ -1,7 +1,7 @@
 #include "engine/world.h"
 
 EDirFilter operator|(EDirFilter a, EDirFilter b) {
-	return static_cast<EDirFilter>(static_cast<byte>(a) | static_cast<byte>(b));
+	return static_cast<EDirFilter>(static_cast<uint8>(a) | static_cast<uint8>(b));
 }
 
 // TEXTURE

@@ -4,7 +4,7 @@
 #include "playlistEditor.h"
 #include "utils/items.h"
 
-enum class EMenu : byte {
+enum class EMenu : uint8 {
 	books,
 	browser,
 	reader,
