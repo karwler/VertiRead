@@ -26,3 +26,8 @@ Library*World::library() {
 Program* World::program() {
 	return engine->getScene()->getProgram();
 }
+
+void World::PlaySound(const string& sound) {
+	if (engine->getAudioSys())
+		engine->getAudioSys()->PlaySound(sound);
+}

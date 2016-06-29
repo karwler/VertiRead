@@ -5,10 +5,9 @@
 class AudioSys {
 public:
 	AudioSys(const AudioSettings& SETS=AudioSettings());
-	~AudioSys();
 
-	void Initialize();
-	void Cleanup();
+	uint8 Initialize();
+	void Close();
 	void FreeMusic();
 
 	void Tick(float dSec);

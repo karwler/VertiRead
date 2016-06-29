@@ -95,6 +95,7 @@ public:
 	virtual ~LineEditor();
 	virtual LineEditor* Clone() const;
 
+	virtual void OnClick(EClick clickType);
 	virtual Text getText() const;
 	virtual SDL_Rect getCaret() const;
 

@@ -4,7 +4,7 @@ bool strcmpCI(const string& strl, const string& strr) {
 	if (strl.length() != strr.length())
 		return false;
 
-	for (uint i=0; i!=strl.length(); i++)
+	for (size_t i=0; i!=strl.length(); i++)
 		if (tolower(strl[i]) != tolower(strr[i]))
 			return false;
 	return true;
@@ -17,24 +17,30 @@ bool is_num(const string& str) {
 	return !str.empty() && it == str.end();
 }
 
-int findChar(const string& str, char c) {
-	for (int i=0; i!=str.length(); i++)
-		if (str[i] == c)
-			return i;
-	return -1;
+bool findChar(const string& str, char c, size_t* id) {
+	for (size_t i=0; i!=str.length(); i++)
+		if (str[i] == c) {
+			if (id)
+				*id = i;
+			return true;
+		}
+	return false;
 }
 
-int findString(const string& str, const string& c) {
-	int check = 0;
-	for (int i=0; i!=str.length(); i++) {
+bool findString(const string& str, const string& c, size_t* id) {
+	size_t check = 0;
+	for (size_t i=0; i!=str.length(); i++) {
 		if (str[i] == c[check]) {
-			if (++check == c.length())
-				return i-c.length();
+			if (++check == c.length()) {
+				if (id)
+					*id = i-c.length();
+				return true;
+			}
 		}
 		else
 			check = 0;
 	}
-	return -1;
+	return false;
 }
 
 string modifyCase(string str, ETextCase caseChange) {
@@ -55,7 +61,7 @@ string modifyCase(string str, ETextCase caseChange) {
 vector<string> getWords(const string& line, bool skipCommas) {
 	vector<string> words;
 	string word;
-	for (uint i = 0; i <= line.length(); i++) {
+	for (size_t i=0; i!=line.length(); i++) {
 		if (line[i] == ' ' || (!skipCommas && line[i] == ',') || i == line.length()) {
 			if (word.length() != 0)
 				words.push_back(word);
@@ -67,22 +73,30 @@ vector<string> getWords(const string& line, bool skipCommas) {
 	return words;
 }
 
-int splitIniLine(const string& line, string* arg, string* val, string* key) {
-	int i0 = findChar(line, '=');
-	if (i0 == -1)
-		return -1;
+bool splitIniLine(const string& line, string* arg, string* val, string* key, size_t* id) {
+	size_t i0;;
+	if (!findChar(line, '=', &i0))
+		return false;
+	
 	if (val)
 		*val = line.substr(i0 + 1);
 	string left = line.substr(0, i0);
-	int i1 = findChar(left, '[');
-	int i2 = findChar(left, ']');
-	if (i1 < i2 && i1 != -1) {
-		if (key) *key = line.substr(i1 + 1, i2 - i1 - 1);
-		if (arg) *arg = line.substr(0, i1);
+
+	size_t i1 = 0, i2 = 0;
+	findChar(left, '[', &i1);
+	findChar(left, ']', &i2);
+	if (i1 < i2) {
+		if (arg)
+			*arg = line.substr(0, i1);
+		if (key)
+			*key = line.substr(i1+1, i2-i1-1);
 	}
 	else if (arg)
 		*arg = left;
-	return i0;
+
+	if (id)
+		*id = i0;
+	return true;
 }
 
 fs::path delExt(const fs::path& path) {
@@ -171,21 +185,21 @@ SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {
 void PrintInfo() {
 	SDL_version ver;
 	SDL_GetVersion(&ver);
-	cout << "\nSDL version: " << int(ver.minor) << " - " << int(ver.major) << " p" << int(ver.patch) << endl;
+	cout << "\nSDL version: " << to_str(ver.minor) << " - " << to_str(ver.major) << " p" << to_str(ver.patch) << endl;
 	cout << "Platform: " << SDL_GetPlatform() << endl;
 	cout << "CPU count: " << SDL_GetCPUCount() << " - " << SDL_GetCPUCacheLineSize() << endl;
 	cout << "RAM: " << SDL_GetSystemRAM() << "MB" << endl;
 	cout << "\nVideo Drivers:" << endl;
-	for (int i = 0; i != SDL_GetNumVideoDrivers(); i++)
+	for (int i=0; i!=SDL_GetNumVideoDrivers(); i++)
 		cout << SDL_GetVideoDriver(i) << endl;
 	cout << "\nRenderers:" << endl;
-	for (int i = 0; i != SDL_GetNumRenderDrivers(); i++)
+	for (int i=0; i!=SDL_GetNumRenderDrivers(); i++)
 		cout << getRendererName(i) << endl;
 	cout << "\nAudio Devices:" << endl;
-	for (int i = 0; i != SDL_GetNumAudioDevices(0); i++)
+	for (int i=0; i!=SDL_GetNumAudioDevices(0); i++)
 		cout << SDL_GetAudioDeviceName(i, 0) << endl;
 	cout << "\nAudio Drivers:" << endl;
-	for (int i = 0; i != SDL_GetNumAudioDrivers(); i++)
+	for (int i=0; i!=SDL_GetNumAudioDrivers(); i++)
 		cout << SDL_GetAudioDriver(i) << endl;
 	cout << endl;
 }

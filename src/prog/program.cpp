@@ -318,7 +318,7 @@ void Program::Event_TextCaptureOk(const string& str) {
 			editor->RenameBook(str);
 		SwitchScene(editor);
 	}
-	World::inputSys()->SetCapture(nullptr);
+	World::inputSys()->ResetCapture();
 }
 
 void Program::Event_SelectionSet(void* box) {
@@ -366,6 +366,7 @@ void Program::SwitchScene(EMenu newMenu, void* dat) {
 }
 
 void Program::SwitchScene(void* dat) const {
+	World::library()->Fonts()->Clear();
 	uint focObject = 0;
 	vector<Object*> objects;
 
@@ -547,8 +548,8 @@ void Program::SwitchScene(void* dat) const {
 string Program::FindFittingPlaylist(const string& picPath) {
 	// get book name
 	string name;
-	uint start = World::scene()->Settings().LibraryParh().length();
-	for (uint i=start; i!=picPath.length(); i++)
+	size_t start = World::scene()->Settings().LibraryParh().length();
+	for (size_t i=start; i!=picPath.length(); i++)
 		if (picPath[i] == dsep) {
 			name = picPath.substr(start, i-start);
 			break;

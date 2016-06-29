@@ -61,10 +61,10 @@ FontSet::FontSet(const string& FILE) :
 	file(FILE)
 {}
 
-FontSet::~FontSet() {
-	for (const pair<int, TTF_Font*>& font : fonts)
-		if (font.second)
-			TTF_CloseFont(font.second);
+void FontSet::Clear() {
+	for (const pair<int, TTF_Font*>& it : fonts)
+		TTF_CloseFont(it.second);
+	fonts.clear();
 }
 
 bool FontSet::CanRun() const {
@@ -76,26 +76,24 @@ bool FontSet::CanRun() const {
 }
 
 TTF_Font* FontSet::Get(int size) {
-	if (fonts.count(size) == 0)
-		AddSize(size);
-	return fonts.at(size);
+	return (fonts.count(size) == 0) ? AddSize(size) : fonts.at(size);
+}
+
+TTF_Font* FontSet::AddSize(int size) {
+	TTF_Font* font = TTF_OpenFont(file.c_str(), size);
+	if (font)
+		fonts.insert(make_pair(size, font));
+	else
+		cerr << "couldn't load font " << file << endl;
+	return font;
 }
 
 vec2i FontSet::TextSize(const string& text, int size) {
 	vec2i siz;
-	if (Get(size))
-		TTF_SizeUTF8(fonts.at(size), text.c_str(), &siz.x, &siz.y);
+	TTF_Font* font = Get(size);
+	if (font)
+		TTF_SizeUTF8(font, text.c_str(), &siz.x, &siz.y);
 	return siz;
-}
-
-void FontSet::AddSize(int size) {
-	if (fonts.count(size) == 0) {
-		TTF_Font* font = TTF_OpenFont(file.c_str(), size);
-		if (font)
-			fonts.insert(make_pair(size, font));
-		else
-			cerr << "couldn't load font " << file << endl;
-	}
 }
 
 // TEXT
@@ -192,7 +190,7 @@ void TextEdit::CheckText() {
 		return;
 
 	bool foundDot = false;
-	for (uint i=0; i!=text.length(); i++) {
+	for (size_t i=0; i!=text.length(); i++) {
 		if (type == ETextType::integer) {
 			if (text[i] < '0' || text[i] > '9')
 				text.erase(i, 1);

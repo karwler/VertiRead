@@ -40,7 +40,6 @@ using std::cout;
 using std::cerr;
 using std::endl;
 using std::vector;
-using std::list;
 using std::map;
 using std::pair;
 using std::make_pair;
@@ -48,9 +47,21 @@ using std::string;
 using std::to_string;
 namespace fs = boost::filesystem;
 
-// undefine main because it can sometimes cause conflicts
+// undefine some stuff to prevent conflicts
 #ifdef main
 #undef main
+#endif
+
+#ifdef CreateWindow
+#undef CreateWindow
+#endif
+
+#ifdef PlaySound
+#undef PlaySound
+#endif
+
+#ifdef DrawText
+#undef DrawText
 #endif
 
 // not sure why, but why not
@@ -109,6 +120,7 @@ class ScrollArea;
 class ListBox;
 class PopupChoice;
 class Capturer;
+class LineEditor;
 
 // smart pointer
 
@@ -680,11 +692,11 @@ using vec4i = kvec4<int>;
 // files and strings
 bool strcmpCI(const string& strl, const string& strr);	// case insensitive string comparison
 bool is_num(const string& str);
-int findChar(const string& str, char c);
-int findString(const string& str, const string& c);
+bool findChar(const string& str, char c, size_t* id=nullptr);
+bool findString(const string& str, const string& c, size_t* id=nullptr);
 string modifyCase(string str, ETextCase caseChange);
 vector<string> getWords(const string& line, bool skipCommas=false);
-int splitIniLine(const string& line, string* arg, string* val, string* key=nullptr);
+bool splitIniLine(const string& line, string* arg, string* val, string* key=nullptr, size_t* id=nullptr);
 fs::path delExt(const fs::path& path);					// remove file extension from filepath/filename
 std::istream& readLine(std::istream& ifs, string& str);
 

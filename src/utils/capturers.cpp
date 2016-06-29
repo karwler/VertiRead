@@ -8,11 +8,11 @@ Capturer::Capturer(ListBox* SA, const string& LBL) :
 Capturer::~Capturer() {}
 
 void Capturer::OnClick(EClick clickType) {
-	World::inputSys()->SetCapture(this);
+	World::inputSys()->SetCaptureCP(this);
 }
 
 void Capturer::OnKeypress(SDL_Scancode key) {
-	// ms visual is being a bitch which is the reason why this definition exists
+	// ms visual is being a bitch, which is the reason why this definition exists
 }
 
 ListBox* Capturer::Parent() const {
@@ -32,7 +32,7 @@ LineEdit::LineEdit(ListBox* SA, const string& LBL, const string& TXT, ETextType 
 LineEdit::~LineEdit() {}
 
 void LineEdit::OnClick(EClick clickType) {
-	Capturer::OnClick(clickType);
+	World::inputSys()->SetCaptureCP(this);
 	editor.SetCursor(0);
 }
 
@@ -59,13 +59,13 @@ void LineEdit::OnKeypress(SDL_Scancode key) {
 	case SDL_SCANCODE_ESCAPE:
 		if (cancelCall)
 			(World::program()->*cancelCall)();
-		World::inputSys()->SetCapture(nullptr);
+		World::inputSys()->ResetCapture();
 	}
 }
 
 void LineEdit::Confirm() {
 	(World::program()->*okCall)(editor.Text());
-	World::inputSys()->SetCapture(nullptr);
+	World::inputSys()->ResetCapture();
 }
 
 int LineEdit::TextPos() const {
@@ -122,7 +122,7 @@ KeyGetter::~KeyGetter() {}
 void KeyGetter::OnKeypress(SDL_Scancode KEY) {
 	if (key)
 		*key = KEY;
-	World::inputSys()->SetCapture(nullptr);
+	World::inputSys()->ResetCapture();
 }
 
 string KeyGetter::KeyName() const {

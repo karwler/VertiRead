@@ -6,42 +6,41 @@ WindowSys::WindowSys(const VideoSettings& SETS) :
 	sets(SETS)
 {}
 
-WindowSys::~WindowSys() {
-	DestroyWindow();
-}
-
-void WindowSys::SetWindow() {
+void WindowSys::CreateWindow() {
 	DestroyWindow();
 
-	uint flags = SDL_WINDOW_RESIZABLE;
-	if (sets.fullscreen)     flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-	else if (sets.maximized) flags |= SDL_WINDOW_MAXIMIZED;
+	uint32 flags = SDL_WINDOW_RESIZABLE;
+	if (sets.fullscreen)
+		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+	else if (sets.maximized)
+		flags |= SDL_WINDOW_MAXIMIZED;
 	
 	window = SDL_CreateWindow("VertRead", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets.resolution.x, sets.resolution.y, flags);
 	if (!window)
-		throw Exception("couldn't create window" + string(SDL_GetError()), 3);
+		throw Exception("couldn't create window\n" + string(SDL_GetError()), 3);
 	
 	CreateRenderer();
 }
 
 void WindowSys::CreateRenderer() {
-	if (renderer) {
-		SDL_DestroyRenderer(renderer);
-		renderer = nullptr;
-	}
+	DestroyRenderer();
 
 	renderer = SDL_CreateRenderer(window, GetRenderDriverIndex(), SDL_RENDERER_ACCELERATED);
 	if (!renderer)
-		throw Exception("couldn't create renderer" + string(SDL_GetError()), 4);
+		throw Exception("couldn't create renderer\n" + string(SDL_GetError()), 4);
 
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 }
 
-void WindowSys::DestroyWindow() {
+void WindowSys::DestroyRenderer() {
 	if (renderer) {
 		SDL_DestroyRenderer(renderer);
 		renderer = nullptr;
 	}
+}
+
+void WindowSys::DestroyWindow() {
+	DestroyRenderer();
 	if (window) {
 		SDL_DestroyWindow(window);
 		window = nullptr;
@@ -49,7 +48,8 @@ void WindowSys::DestroyWindow() {
 }
 
 void WindowSys::SetIcon(SDL_Surface* icon) {
-	SDL_SetWindowIcon(window, icon);
+	if (icon)
+		SDL_SetWindowIcon(window, icon);
 }
 
 void WindowSys::DrawObjects(const vector<Object*>& objects) {
@@ -57,7 +57,7 @@ void WindowSys::DrawObjects(const vector<Object*>& objects) {
 	SDL_SetRenderDrawColor(renderer, bgcolor.x, bgcolor.y, bgcolor.z, bgcolor.a);
 	SDL_RenderClear(renderer);
 
-	for (uint i=0; i!=objects.size()-1; i++)
+	for (size_t i=0; i!=objects.size()-1; i++)
 		PassDrawObject(objects[i]);									// draw normal widgets
 	if (objects[objects.size()-1])
 		DrawObject(static_cast<Popup*>(objects[objects.size()-1]));	// last element is a popup
@@ -68,7 +68,7 @@ void WindowSys::WindowEvent(const SDL_WindowEvent& winEvent) {
 	switch (winEvent.event) {
 	case SDL_WINDOWEVENT_RESIZED: {
 		// update settings if needed
-		uint flags = SDL_GetWindowFlags(window);
+		uint32 flags = SDL_GetWindowFlags(window);
 		if (!(flags & SDL_WINDOW_FULLSCREEN_DESKTOP)) {
 			sets.maximized = (flags & SDL_WINDOW_MAXIMIZED) ? true : false;
 			if (!sets.maximized)
@@ -111,7 +111,7 @@ void WindowSys::Fullscreen(bool on) {
 	if (sets.fullscreen)
 		SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
 	else if (sets.maximized)
-		SetWindow();
+		CreateWindow();
 	else
 		SDL_SetWindowFullscreen(window, 0);
 }
@@ -272,7 +272,7 @@ void WindowSys::DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, 
 	DrawText(text, crop);
 
 	// draw caret if selected
-	if (World::inputSys()->CapturedObject() == item) {
+	if (World::inputSys()->CurCaptured() == ECapture::CP && World::inputSys()->CapturedCP() == item) {
 		offset += Text(item->Editor()->Text().substr(0, item->Editor()->CursorPos()), 0, parent->ItemH()).size().x - item->TextPos();
 		DrawRect({ rect.x+offset, rect.y, 5, rect.h }, EColor::highlighted);
 	}
@@ -280,8 +280,8 @@ void WindowSys::DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, 
 
 void WindowSys::DrawItem(KeyGetter* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
 	int offset = Text(item->label, 0, parent->ItemH()).size().x + 20;
-	string text = (World::inputSys()->CapturedObject() == item) ? "Gimme a key..." : item->KeyName();
-	EColor color = (World::inputSys()->CapturedObject() == item) ? EColor::highlighted : EColor::text;
+	string text = (World::inputSys()->CurCaptured() == ECapture::CP && World::inputSys()->CapturedCP() == item) ? "Gimme a key..." : item->KeyName();
+	EColor color = (World::inputSys()->CurCaptured() == ECapture::CP && World::inputSys()->CapturedCP() == item) ? EColor::highlighted : EColor::text;
 
 	DrawText(Text(text, vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), 8, color), crop);
 }

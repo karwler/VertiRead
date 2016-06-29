@@ -2,6 +2,12 @@
 
 #include "utils/types.h"
 
+enum class ECapture : uint8 {
+	NONE,
+	CP,
+	LE
+};
+
 class InputSys {
 public:
 	InputSys(const ControlsSettings& SETS=ControlsSettings());
@@ -23,13 +29,23 @@ public:
 	void ScrollSpeed(const vec2f& sspeed);
 	SDL_Scancode* GetKeyPtr(const string& name, bool shortcut);
 
-	Capturer* CapturedObject() const;
-	void SetCapture(Capturer* cbox);
+	Capturer* CapturedCP() const;
+	Capturer* CapturedLE() const;
+	ECapture CurCaptured() const;
+	void ResetCapture();
+	void SetCaptureCP(Capturer* cbox);
+	void SetCaptureLE(LineEditor* cbox);
 
 private:
 	ControlsSettings sets;
 	vec2i lastMousePos;
-	Capturer* captured;
+
+	// this shit's needed, cause of pointer value issues
+	union {
+		Capturer* capCP;
+		LineEditor* capLE;
+	};
+	ECapture curCap;
 
 	void CheckShortcuts(const SDL_KeyboardEvent& key);
 };

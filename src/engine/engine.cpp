@@ -1,34 +1,33 @@
 #include "engine.h"
 
-Engine::Engine() :
-	run(true)
-{}
-
 void Engine::Run() {
 	// initialize all components
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO))
-		throw Exception("SDL couldn't be initialized" + string(SDL_GetError()), 1);
+		throw Exception("couldn't initialize SDL\n" + string(SDL_GetError()), 1);
 	if (TTF_Init())
-		throw Exception("fonts couldn't be initialized" + string(SDL_GetError()), 2);
+		throw Exception("couldn't initialize fonts\n" + string(SDL_GetError()), 2);
 	PrintInfo();
 
-	audioSys = new AudioSys(Filer::LoadAudioSettings());
 	winSys = new WindowSys(Filer::LoadVideoSettings());
 	inputSys = new InputSys(Filer::LoadControlsSettings());
-	kptr<SDL_Event> event = new SDL_Event;
+	audioSys = new AudioSys(Filer::LoadAudioSettings());
+	if (audioSys->Initialize() > 1)		// delete audio sys if it completely failed to initialize
+		audioSys.reset();
 
-	winSys->SetWindow();
+	winSys->CreateWindow();
 	scene = new Scene(Filer::LoadGeneralSettings());		// initializes program and library
 	winSys->SetIcon(scene->getLibrary()->getTex("icon")->surface);
 
 	// initialize values
 	scene->getProgram()->Event_OpenBookList();
+	run = true;
 	redraws = 8;	// linux sometimes can't keep up with the window, which is why there need to be a few redraw calls at the start
-	uint oldTime = SDL_GetTicks();
+	SDL_Event event;
+	uint32 oldTime = SDL_GetTicks();
 
 	while (run) {
 		// get delta seconds
-		uint newTime = SDL_GetTicks();
+		uint32 newTime = SDL_GetTicks();
 		dSec = float(newTime - oldTime) / 1000.f;
 		oldTime = newTime;
 
@@ -43,11 +42,10 @@ void Engine::Run() {
 		scene->Tick();
 		inputSys->Tick();
 
-		uint timeout = SDL_GetTicks() + 50;
-		while (SDL_PollEvent(event) && timeout - SDL_GetTicks() > 0)
+		uint32 timeout = SDL_GetTicks() + 50;
+		while (SDL_PollEvent(&event) && timeout - SDL_GetTicks() > 0)
 			HandleEvent(event);
 	}
-	Cleanup();
 }
 
 void Engine::Close() {
@@ -60,10 +58,10 @@ void Engine::Close() {
 }
 
 void Engine::Cleanup() {
-	scene.reset();
-	inputSys.reset();
-	winSys.reset();
-	audioSys.reset();
+	scene->getLibrary()->Fonts()->Clear();
+	if (audioSys)
+		audioSys->Close();
+	winSys->DestroyWindow();
 
 	TTF_Quit();
 	SDL_Quit();

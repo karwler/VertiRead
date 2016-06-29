@@ -16,11 +16,11 @@ Scene::~Scene() {
 
 void Scene::SwitchMenu(const vector<Object*>& objs, uint focObj) {
 	// reset values
-	popup.reset();
 	focObject = focObj;
 	objectHold = nullptr;
 
 	// reset objects
+	popup.reset();
 	clear(objects);
 	objects = objs;
 	
@@ -279,9 +279,9 @@ void Scene::SetPopup(Popup* box) {
 	popup = box;
 
 	if (PopupText* poptext = dynamic_cast<PopupText*>(box))
-		World::inputSys()->SetCapture(poptext->LEdit());
+		World::inputSys()->SetCaptureLE(poptext->LEdit());
 	else
-		World::inputSys()->SetCapture(nullptr);
+		World::inputSys()->ResetCapture();
 
 	World::engine->SetRedrawNeeded();
 }

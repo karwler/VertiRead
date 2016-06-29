@@ -116,8 +116,8 @@ map<string, string> Filer::GetLines(const string& language) {
 	map<string, string> translation;
 	for (string& line : lines) {
 		string arg, val;
-		splitIniLine(line, &arg, &val);
-		translation.insert(make_pair(arg, val));
+		if (splitIniLine(line, &arg, &val))
+			translation.insert(make_pair(arg, val));
 	}
 	return translation;
 }
@@ -157,14 +157,13 @@ Playlist Filer::LoadPlaylist(const string& name) {
 
 	Playlist plist(name);
 	for (string& line : lines) {
-		if (line.empty())
+		string arg, val;
+		if (!splitIniLine(line, &arg, &val))
 			continue;
 
-		string arg, val;
-		splitIniLine(line, &arg, &val);
 		if (arg == "book")
 			plist.books.push_back(val);
-		else
+		else if (arg == "song")
 			plist.songs.push_back(line);
 	}
 	return plist;
@@ -188,7 +187,9 @@ GeneralSettings Filer::LoadGeneralSettings() {
 	GeneralSettings sets;
 	for (string& line : lines) {
 		string arg, val;
-		splitIniLine(line, &arg, &val);
+		if (!splitIniLine(line, &arg, &val))
+			continue;
+
 		if (arg == "language")
 			sets.Lang(val);
 		else if (arg == "library")
@@ -216,7 +217,9 @@ VideoSettings Filer::LoadVideoSettings() {
 	VideoSettings sets;
 	for (string& line : lines) {
 		string arg, val, key;
-		splitIniLine(line, &arg, &val, &key);
+		if (!splitIniLine(line, &arg, &val, &key))
+			continue;
+
 		if (arg == "font")
 			sets.SetFont(val);
 		else if (arg == "renderer")
@@ -262,7 +265,9 @@ AudioSettings Filer::LoadAudioSettings() {
 	AudioSettings sets;
 	for (string& line : lines) {
 		string arg, val;
-		splitIniLine(line, &arg, &val);
+		if (!splitIniLine(line, &arg, &val))
+			continue;
+
 		if (arg == "music_vol")
 			sets.musicVolume = stoi(val);
 		else if (arg == "interface_vol")
@@ -290,7 +295,9 @@ ControlsSettings Filer::LoadControlsSettings() {
 	ControlsSettings sets;
 	for (string& line : lines) {
 		string arg, val, key;
-		splitIniLine(line, &arg, &val, &key);
+		if (!splitIniLine(line, &arg, &val, &key))
+			continue;
+
 		if (arg == "scroll_speed") {
 			vector<string> elems = getWords(val);
 			if (elems.size() > 0) sets.scrollSpeed.x = stof(elems[0]);
@@ -322,7 +329,7 @@ string Filer::execDir() {
 #endif
 	const int MAX_LEN = 4096;
 	fs::path path;
-
+	
 #ifdef _WIN32
 	char buffer[MAX_LEN];
 	if (GetModuleFileNameA(NULL, buffer, MAX_LEN))
@@ -341,10 +348,11 @@ string Filer::execDir() {
 
 	if (!raw) {
 		string test = path.string();
-		int pos = findString(test, ".app/");	// if running in a package
-		for (int i=pos; i>=0; i--)
-			if (test[i] == '/')
-				return test.substr(0, i+1);
+		size_t pos = 0;
+		if (findString(test, ".app/", &pos))	// if running in a package
+			for (size_t i=pos; i!=0; i--)
+				if (test[i] == '/')
+					return test.substr(0, i+1);
 	}
 #else
 	char buffer[MAX_LEN];
@@ -404,7 +412,6 @@ fs::path Filer::FindFont(const fs::path& font) {
 	if (fs::path(font).is_absolute()) {	// check fontpath first
 		if (fs::is_regular_file(font))
 			return font;
-
 		return CheckDirForFont(font.filename(), font.parent_path());
 	}
 

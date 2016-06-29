@@ -14,4 +14,5 @@ public:
 	static Library* library();
 	static Program* program();
 
+	static void PlaySound(const string& sound);
 };

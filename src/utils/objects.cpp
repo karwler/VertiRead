@@ -167,6 +167,11 @@ LineEditor*LineEditor::Clone() const {
 	return new LineEditor(*this);
 }
 
+void LineEditor::OnClick(EClick clickType) {
+	World::inputSys()->SetCaptureLE(this);
+	editor.SetCursor(0);
+}
+
 Text LineEditor::getText() const {
 	return Text(editor.Text(), Pos()-vec2i(textPos, 0), Size().y);
 }

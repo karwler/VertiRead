@@ -81,7 +81,7 @@ PopupText::PopupText(const string& MSG, const string& LIN, int W, int TH, int LH
 	title.Size(vec2i(W, TH));
 
 	lineObject = LineEditor(Object(Anchor(), Pos()+vec2i(0, TH), vec2i(W, LH), FIX_SIZ), LIN, ETextType::text, nullptr, &Program::Event_Back);
-
+	
 	cButton.Pos(Pos()+vec2i(0, TH+LH));
 	cButton.Size(vec2i(W/2, BH));
 

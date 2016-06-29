@@ -1,11 +1,10 @@
 #include "world.h"
 
 InputSys::InputSys(const ControlsSettings& SETS) :
-	sets(SETS),
-	captured(nullptr)
+	sets(SETS)
 {
 	SDL_GetMouseState(&lastMousePos.x, &lastMousePos.y);
-	SetCapture(nullptr);
+	ResetCapture();
 }
 
 void InputSys::Tick() {
@@ -14,17 +13,25 @@ void InputSys::Tick() {
 
 void InputSys::KeypressEvent(const SDL_KeyboardEvent& key) {
 	// different behaviour when capturing or not
-	if (captured)
-		captured->OnKeypress(key.keysym.scancode);
+	if (curCap == ECapture::CP)
+		capCP->OnKeypress(key.keysym.scancode);
+	else if (curCap == ECapture::LE)
+		capLE->OnKeypress(key.keysym.scancode);
 	else if (!key.repeat)	// handle only once pressed keys
 		CheckShortcuts(key);
 }
 
 void InputSys::MouseButtonDownEvent(const SDL_MouseButtonEvent& button) {
-	if (captured && !World::scene()->getPopup()) {				// mouse button cancels keyboard capture (except if popup is shown)
-		if (LineEdit* box = dynamic_cast<LineEdit*>(captured))		// confirm entered text if necessary
-			box->Confirm();
-		SetCapture(nullptr);
+	if (curCap != ECapture::NONE && !World::scene()->getPopup()) {	// mouse button cancels keyboard capture (except if popup is shown)
+		// confirm entered text if necessary
+		if (curCap == ECapture::CP) {
+			if (LineEdit* box = dynamic_cast<LineEdit*>(capCP))
+				box->Confirm();
+		}
+		else
+			capLE->Confirm();
+
+		ResetCapture();
 	}
 
 	if (button.clicks == 1) {
@@ -47,7 +54,10 @@ void InputSys::MouseWheelEvent(const SDL_MouseWheelEvent& wheel) {
 }
 
 void InputSys::TextEvent(const SDL_TextInputEvent& text) {
-	static_cast<LineEdit*>(captured)->Editor()->Add(text.text);
+	if (curCap == ECapture::CP)										// text input should only run if line edit is being captured, 
+		static_cast<LineEdit*>(capCP)->Editor()->Add(text.text);	// therefore a cast check isn't necessary
+	else
+		capLE->Editor()->Add(text.text);
 }
 
 void InputSys::CheckShortcuts(const SDL_KeyboardEvent& key) {
@@ -93,19 +103,50 @@ SDL_Scancode* InputSys::GetKeyPtr(const string& name, bool shortcut) {
 	return shortcut ? &sets.shortcuts[name].key : &sets.holders[name];
 }
 
-Capturer* InputSys::CapturedObject() const {
-	return captured;
+Capturer* InputSys::CapturedCP() const {
+	return capCP;
 }
 
-void InputSys::SetCapture(Capturer* cbox) {
-	if (LineEdit* edit = dynamic_cast<LineEdit*>(captured))		// do some cleanup first
-		edit->ResetTextPos();
+Capturer* InputSys::CapturedLE() const {
+	return capLE;
+}
 
-	captured = cbox;
-	if (dynamic_cast<LineEdit*>(captured))
+ECapture InputSys::CurCaptured() const {
+	return curCap;
+}
+
+void InputSys::ResetCapture() {
+	// do some cleanup first
+	if (curCap == ECapture::CP) {
+		if (LineEdit* edit = dynamic_cast<LineEdit*>(capCP))
+			edit->ResetTextPos();
+		capCP = nullptr;
+	}
+	else if (curCap == ECapture::LE) {
+		capLE->ResetTextPos();
+		capLE = nullptr;
+	}
+	curCap = ECapture::NONE;
+	SDL_StopTextInput();
+}
+
+void InputSys::SetCaptureCP(Capturer* cbox) {
+	ResetCapture();
+
+	capCP = cbox;
+	curCap = ECapture::CP;
+	if (dynamic_cast<LineEdit*>(capCP))
 		SDL_StartTextInput();
-	else
-		SDL_StopTextInput();
 
+	World::engine->SetRedrawNeeded();
+}
+
+void InputSys::SetCaptureLE(LineEditor* cbox) {
+	ResetCapture();
+
+	capLE = cbox;
+	curCap = ECapture::LE;
+	SDL_StartTextInput();
+	
 	World::engine->SetRedrawNeeded();
 }

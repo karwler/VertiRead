@@ -70,17 +70,16 @@ struct Image {
 class FontSet {
 public:
 	FontSet(const string& FILE="");
-	~FontSet();
 
+	void Clear();
 	bool CanRun() const;
 	TTF_Font* Get(int size);
+	TTF_Font* AddSize(int size);
 	vec2i TextSize(const string& text, int size);
 
 private:
 	string file;
 	map<int, TTF_Font*> fonts;
-
-	void AddSize(int size);
 };
 
 struct Text {

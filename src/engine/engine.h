@@ -8,8 +8,6 @@
 
 class Engine {
 public:
-	Engine();
-
 	void Run();
 	void Close();
 	void Cleanup();

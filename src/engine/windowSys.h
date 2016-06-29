@@ -6,9 +6,8 @@
 class WindowSys {
 public:
 	WindowSys(const VideoSettings& SETS=VideoSettings());
-	~WindowSys();
 
-	void SetWindow();
+	void CreateWindow();
 	void DestroyWindow();
 	void SetIcon(SDL_Surface* icon);
 	void DrawObjects(const vector<Object*>& objects);
@@ -17,8 +16,8 @@ public:
 	SDL_Renderer* Renderer() const;
 	VideoSettings Settings() const;
 	void Renderer(const string& name);
-	vec2i Resolution() const;
-	static vec2i DesktopResolution();
+	vec2i Resolution() const;			// returns the actual resolution (not the settings)
+	static vec2i DesktopResolution();	// screen resolution
 	void Fullscreen(bool on);
 	void Font(const string& font);
 
@@ -28,6 +27,7 @@ private:
 	VideoSettings sets;
 
 	void CreateRenderer();
+	void DestroyRenderer();
 	int GetRenderDriverIndex();
 
 	void PassDrawObject(Object* obj);

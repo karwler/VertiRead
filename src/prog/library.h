@@ -7,13 +7,13 @@ public:
 	Library(string FONT, GeneralSettings& GSET);
 	~Library();
 
-	FontSet* Fonts() const;
+	FontSet* Fonts();
 	void LoadFont(const string& font);
 
 	string getLine(const string& line, ETextCase caseChange=ETextCase::first_upper) const;
 	void LoadLanguage(const string& language);
 
-	Mix_Chunk* getSound(const string& name) const;
+	Mix_Chunk* getSound(const string& name);
 	void LoadSounds();
 	void ClearSounds();
 
@@ -26,8 +26,8 @@ public:
 	void ClearPics();
 
 private:
-	kptr<FontSet> fonts;
 	GeneralSettings& curGSets;
+	FontSet fonts;
 	map<string, string> lines;		// english, translated
 	map<string, Mix_Chunk*> sounds;	// name, path
 	map<string, Texture> texes;		// name, texture data

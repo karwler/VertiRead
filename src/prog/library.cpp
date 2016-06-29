@@ -19,12 +19,13 @@ Library::~Library() {
 	ClearSounds();
 }
 
-FontSet* Library::Fonts() const {
-	return fonts;
+FontSet* Library::Fonts() {
+	return &fonts;
 }
 
 void Library::LoadFont(const string& font) {
-	fonts = new FontSet(font);
+	fonts.Clear();
+	fonts = FontSet(font);
 }
 
 string Library::getLine(const string& line, ETextCase caseChange) const {
@@ -36,8 +37,8 @@ void Library::LoadLanguage(const string& language) {
 	lines = Filer::GetLines(language);
 }
 
-Mix_Chunk* Library::getSound(const string& name) const {
-	return sounds.at(name);
+Mix_Chunk* Library::getSound(const string& name) {
+	return (sounds.count(name) == 0) ? nullptr : sounds[name];
 }
 
 void Library::LoadSounds() {
@@ -52,7 +53,7 @@ void Library::ClearSounds() {
 }
 
 Texture* Library::getTex(const string& name) {
-	return &texes.at(name);
+	return (texes.count(name) == 0) ? nullptr : &texes[name];
 }
 
 void Library::LoadTextures() {
@@ -68,7 +69,7 @@ void Library::ClearTextures() {
 
 vector<Texture*> Library::Pictures() {
 	vector<Texture*> txs(pics.size());
-	for (uint i=0; i!=pics.size(); i++)
+	for (size_t i=0; i!=pics.size(); i++)
 		txs[i] = &pics[i];
 	return txs;
 }

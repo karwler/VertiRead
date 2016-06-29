@@ -93,7 +93,7 @@ Switchbox::Switchbox(ListBox* SA, const string& LBL, const vector<string>& OPT, 
 	if (options.empty())		// there needs to be at least one element
 		options.push_back("");
 
-	for (uint i=0; i!=options.size(); i++)
+	for (size_t i=0; i!=options.size(); i++)
 		if (options[i] == CUR_OPT) {
 			curOpt = i;
 			break;
