@@ -169,8 +169,8 @@ TileBox* TileBox::Clone() const {
 
 void TileBox::SetValues() {
 	int sizX = Size().x;
-	dim.x = sizX - barW > tileSize.x + spacing ? (sizX - barW) / (tileSize.x + spacing) : 1;	// column count
-	dim.y = items.size() > dim.x ? items.size() / dim.x : 1;									// row count
+	dim.x = (sizX - barW > tileSize.x + spacing) ? (sizX - barW) / (tileSize.x + spacing) : 1;	// column count
+	dim.y = (items.size() > dim.x) ? items.size() / dim.x : 1;									// row count
 	listH = dim.y * (tileSize.y + spacing) - spacing;
 	ScrollArea::SetValues();
 }

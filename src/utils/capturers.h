@@ -8,7 +8,7 @@ public:
 	virtual ~Capturer();
 
 	virtual void OnClick(EClick clickType);
-	virtual void OnKeypress(SDL_Scancode key);
+	virtual void OnKeypress(SDL_Scancode key) = 0;
 	ListBox* Parent() const;
 };
 
@@ -21,6 +21,7 @@ public:
 	virtual void OnKeypress(SDL_Scancode key);
 	
 	void Confirm();
+	void Cancel();
 	int TextPos() const;
 	void ResetTextPos();
 	TextEdit* Editor();

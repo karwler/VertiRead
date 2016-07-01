@@ -336,7 +336,7 @@ string Filer::execDir() {
 		path = buffer;
 	else {
 		fs::path dir = fs::path(World::args[0]).parent_path();
-		path = dir.is_absolute() ? dir : fs::initial_path().string() + "\\" + dir.string();
+		path = dir.is_absolute() ? dir : fs::initial_path().string() + '\\' + dir.string();
 	}
 #elif __APPLE__
 	char buffer[MAX_LEN];
@@ -344,7 +344,7 @@ string Filer::execDir() {
 	if (!_NSGetExecutablePath(buffer, &size))
 		path = buffer;
 	else
-		path = fs::initial_path().string() + "/" + fs::path(World::args[0]).parent_path().string();
+		path = fs::initial_path().string() + '/' + fs::path(World::args[0]).parent_path().string();
 
 	if (!raw) {
 		string test = path.string();
@@ -370,11 +370,11 @@ string Filer::execDir() {
 
 string Filer::dirSets() {
 #ifdef _WIN32
-	return string(getenv("AppData")) + "\\VertiRead\\";
+	return string(std::getenv("AppData")) + "\\VertiRead\\";
 #elif __APPLE__
-	return string(getenv("HOME")) + "/Library/Application Support/VertiRead/";
+	return string(std::getenv("HOME")) + "/Library/Application Support/VertiRead/";
 #else
-	return string(getenv("HOME")) + "/.vertiread/";
+	return string(std::getenv("HOME")) + "/.vertiread/";
 #endif
 }
 
@@ -400,11 +400,11 @@ string Filer::dirTexs() {
 
 vector<fs::path> Filer::dirFonts() {
 #ifdef _WIN32
-	return {string(getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
+	return {string(std::getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
 #elif __APPLE__
-	return {string(getenv("HOME"))+"/Library/Fonts/", "/Library/Fonts/", "/System/Library/Fonts/", "/Network/Library/Fonts/"};
+	return {string(std::getenv("HOME"))+"/Library/Fonts/", "/Library/Fonts/", "/System/Library/Fonts/", "/Network/Library/Fonts/"};
 #else
-	return {"/usr/share/fonts/"};
+	return { "/usr/share/fonts/" };
 #endif
 }
 

@@ -154,7 +154,7 @@ void WindowSys::DrawObject(const SDL_Rect& bg, EColor bgColor, const Text& text)
 	DrawRect(bg, bgColor);
 	
 	int len = text.size().x;
-	len = len+5 > bg.w ? len - bg.w +10 : 0;	// use len as crop variable
+	len = (len+5) > bg.w ? len - bg.w +10 : 0;	// use len as crop variable
 	DrawText(text, { 0, 0, len, 0 });
 }
 
@@ -199,7 +199,7 @@ void WindowSys::DrawObject(TileBox* obj) {
 		DrawRect(rect, color);
 
 		int len = Text(tiles[i]->label, 0, obj->TileSize().y).size().x;
-		crop.w = len+5 > rect.w ? crop.w = len - rect.w +10 : 0;									// recalculate right side crop for text
+		crop.w = (len+5 > rect.w) ? crop.w = len - rect.w +10 : 0;									// recalculate right side crop for text
 		DrawText(Text(tiles[i]->label, vec2i(rect.x+5, rect.y-crop.y), obj->TileSize().y), crop);	// left side crop can be ignored
 	}
 	DrawRect(obj->Bar(), EColor::darkened);
@@ -272,7 +272,7 @@ void WindowSys::DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, 
 	DrawText(text, crop);
 
 	// draw caret if selected
-	if (World::inputSys()->CurCaptured() == ECapture::CP && World::inputSys()->CapturedCP() == item) {
+	if (World::inputSys()->Captured() == item) {
 		offset += Text(item->Editor()->Text().substr(0, item->Editor()->CursorPos()), 0, parent->ItemH()).size().x - item->TextPos();
 		DrawRect({ rect.x+offset, rect.y, 5, rect.h }, EColor::highlighted);
 	}
@@ -280,10 +280,10 @@ void WindowSys::DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, 
 
 void WindowSys::DrawItem(KeyGetter* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
 	int offset = Text(item->label, 0, parent->ItemH()).size().x + 20;
-	string text = (World::inputSys()->CurCaptured() == ECapture::CP && World::inputSys()->CapturedCP() == item) ? "Gimme a key..." : item->KeyName();
-	EColor color = (World::inputSys()->CurCaptured() == ECapture::CP && World::inputSys()->CapturedCP() == item) ? EColor::highlighted : EColor::text;
+	string text = (World::inputSys()->Captured() == item) ? "Gimme a key..." : item->KeyName();
+	EColor color = (World::inputSys()->Captured() == item) ? EColor::highlighted : EColor::text;
 
-	DrawText(Text(text, vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), 8, color), crop);
+	DrawText(Text(text, vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), ETextAlign::left, color), crop);
 }
 
 void WindowSys::DrawRect(const SDL_Rect& rect, EColor color) {

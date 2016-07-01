@@ -12,6 +12,12 @@ enum class EColor : uint8 {
 	text
 };
 
+enum class ETextAlign : uint8 {
+	left,
+	center,
+	right
+};
+
 enum class ETextType : uint8 {
 	text,
 	integer,
@@ -83,10 +89,11 @@ private:
 };
 
 struct Text {
-	Text(const string& TXT="", const vec2i& POS=0, int H=50, int HSCAL=8, EColor CLR=EColor::text);
+	Text(const string& TXT="", const vec2i& POS=0, int H=50, ETextAlign ALG=ETextAlign::left, EColor CLR=EColor::text, int HSCAL=8);
 
 	vec2i pos;
 	int height;
+	ETextAlign align;
 	EColor color;
 	string text;
 
@@ -97,9 +104,9 @@ class TextEdit {
 public:
 	TextEdit(const string& TXT="", ETextType TYP=ETextType::text, int CPOS=0);
 
-	int CursorPos() const;
-	void SetCursor(int pos);
-	void MoveCursor(int mov, bool loop=false);
+	size_t CursorPos() const;
+	void SetCursor(size_t pos);
+	void MoveCursor(bool right, bool loop=false);
 
 	string Text() const;
 	void Text(const string& str, bool resetCpos=true);
@@ -107,7 +114,7 @@ public:
 	void Delete(bool current);
 
 private:
-	int cpos;
+	size_t cpos;
 	ETextType type;
 	string text;
 

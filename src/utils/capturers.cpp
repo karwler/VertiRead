@@ -8,11 +8,7 @@ Capturer::Capturer(ListBox* SA, const string& LBL) :
 Capturer::~Capturer() {}
 
 void Capturer::OnClick(EClick clickType) {
-	World::inputSys()->SetCaptureCP(this);
-}
-
-void Capturer::OnKeypress(SDL_Scancode key) {
-	// ms visual is being a bitch, which is the reason why this definition exists
+	World::inputSys()->SetCapture(this);
 }
 
 ListBox* Capturer::Parent() const {
@@ -32,18 +28,19 @@ LineEdit::LineEdit(ListBox* SA, const string& LBL, const string& TXT, ETextType 
 LineEdit::~LineEdit() {}
 
 void LineEdit::OnClick(EClick clickType) {
-	World::inputSys()->SetCaptureCP(this);
+	World::inputSys()->SetCapture(this);
 	editor.SetCursor(0);
 }
 
 void LineEdit::OnKeypress(SDL_Scancode key) {
+	bool redraw = true;
 	switch (key) {
 	case SDL_SCANCODE_LEFT:
-		editor.MoveCursor(-1);
+		editor.MoveCursor(false);
 		CheckCaretLeft();
 		break;
 	case SDL_SCANCODE_RIGHT:
-		editor.MoveCursor(1);
+		editor.MoveCursor(true);
 		CheckCaretRight();
 		break;
 	case SDL_SCANCODE_BACKSPACE:
@@ -57,15 +54,26 @@ void LineEdit::OnKeypress(SDL_Scancode key) {
 		Confirm();
 		break;
 	case SDL_SCANCODE_ESCAPE:
-		if (cancelCall)
-			(World::program()->*cancelCall)();
-		World::inputSys()->ResetCapture();
+		Cancel();
+		break;
+	default:
+		redraw = false;
 	}
+	if (redraw)
+		World::engine->SetRedrawNeeded();
 }
 
 void LineEdit::Confirm() {
+	ResetTextPos();
 	(World::program()->*okCall)(editor.Text());
-	World::inputSys()->ResetCapture();
+	World::inputSys()->SetCapture(nullptr);
+}
+
+void LineEdit::Cancel() {
+	ResetTextPos();
+	if (cancelCall)
+		(World::program()->*cancelCall)();
+	World::inputSys()->SetCapture(nullptr);
 }
 
 int LineEdit::TextPos() const {
@@ -122,7 +130,7 @@ KeyGetter::~KeyGetter() {}
 void KeyGetter::OnKeypress(SDL_Scancode KEY) {
 	if (key)
 		*key = KEY;
-	World::inputSys()->ResetCapture();
+	World::inputSys()->SetCapture(nullptr);
 }
 
 string KeyGetter::KeyName() const {

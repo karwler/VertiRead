@@ -276,12 +276,11 @@ Popup* Scene::getPopup() const {
 }
 
 void Scene::SetPopup(Popup* box) {
-	popup = box;
-
 	if (PopupText* poptext = dynamic_cast<PopupText*>(box))
-		World::inputSys()->SetCaptureLE(poptext->LEdit());
+		World::inputSys()->SetCapture(poptext->LEdit());
 	else
-		World::inputSys()->ResetCapture();
+		World::inputSys()->SetCapture(nullptr);
+	popup = box;
 
 	World::engine->SetRedrawNeeded();
 }

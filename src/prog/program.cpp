@@ -318,7 +318,6 @@ void Program::Event_TextCaptureOk(const string& str) {
 			editor->RenameBook(str);
 		SwitchScene(editor);
 	}
-	World::inputSys()->ResetCapture();
 }
 
 void Program::Event_SelectionSet(void* box) {
@@ -521,10 +520,10 @@ void Program::SwitchScene(void* dat) const {
 		break; }
 	case EMenu::controlsSets: {
 		objects = {
-			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_ALL), &Program::Event_OpenGeneralSettings, World::library()->getLine("general")),
-			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_ALL), &Program::Event_OpenVideoSettings, World::library()->getLine("video")),
-			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_ALL), &Program::Event_OpenAudioSettings, World::library()->getLine("audio")),
-			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_ALL), &Program::Event_Back, World::library()->getLine("back"))
+			new ButtonText(Object(vec2i(0, 0),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenGeneralSettings, World::library()->getLine("general")),
+			new ButtonText(Object(vec2i(0, 50),  posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenVideoSettings, World::library()->getLine("video")),
+			new ButtonText(Object(vec2i(0, 100), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_OpenAudioSettings, World::library()->getLine("audio")),
+			new ButtonText(Object(vec2i(0, 150), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, World::library()->getLine("back"))
 		};
 
 		ListBox* box = new ListBox(Object(vec2i(160, 0), posT, vec2i(res.x-160, res.y), FIX_POS | FIX_END, EColor::background));

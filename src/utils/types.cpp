@@ -98,12 +98,13 @@ vec2i FontSet::TextSize(const string& text, int size) {
 
 // TEXT
 
-Text::Text(const string& TXT, const vec2i& POS, int H, int HSCAL, EColor CLR) :
+Text::Text(const string& TXT, const vec2i& POS, int H, ETextAlign ALG, EColor CLR, int HSCAL) :
 	pos(POS),
+	align(ALG),
 	color(CLR),
 	text(TXT)
 {
-	height = HSCAL == 0 ? H : H - H/HSCAL;
+	height = (HSCAL == 0) ? H : H - H/HSCAL;
 }
 
 vec2i Text::size() const {
@@ -121,29 +122,27 @@ TextEdit::TextEdit(const string& TXT, ETextType TYP, int CPOS) :
 	CheckText();
 }
 
-int TextEdit::CursorPos() const {
+size_t TextEdit::CursorPos() const {
 	return cpos;
 }
 
-void TextEdit::SetCursor(int pos) {
-	cpos = pos < 0 ? 0 : pos > text.length() ? text.length() : pos;
+void TextEdit::SetCursor(size_t pos) {
+	cpos = (pos < 0) ? 0 : pos > text.length() ? text.length() : pos;
 }
 
-void TextEdit::MoveCursor(int mov, bool loop) {
-	cpos += mov;
+void TextEdit::MoveCursor(bool right, bool loop) {
 	if (loop) {
-		if (cpos < 0)
-			cpos = text.length() + cpos;
-		else if (cpos > text.length())
-			cpos = cpos - text.length();
+		if (right)
+			cpos = (cpos == text.length()-1) ? 0 : cpos+1;
+		else
+			cpos = (cpos == 0) ? text.length()-1 : cpos-1;
 	}
 	else {
-		if (cpos < 0)
-			cpos = 0;
-		else if (cpos > text.length())
-			cpos = text.length();
+		if (right && cpos != text.length()-1)
+			cpos++;
+		else if (!right && cpos != 0)
+			cpos--;
 	}
-	World::engine->SetRedrawNeeded();
 }
 
 string TextEdit::Text() const {
@@ -163,7 +162,6 @@ void TextEdit::Add(const string& str) {
 	text.insert(cpos, str);
 	cpos += str.length();
 	CheckText();
-	World::engine->SetRedrawNeeded();
 }
 
 void TextEdit::Delete(bool current) {
@@ -175,7 +173,6 @@ void TextEdit::Delete(bool current) {
 		cpos--;
 		text.erase(cpos, 1);
 	}
-	World::engine->SetRedrawNeeded();
 }
 
 void TextEdit::CheckCaret() {

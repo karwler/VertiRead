@@ -38,6 +38,7 @@ Boost is assumed to be located in /usr/local/include (headers) and /usr/local/li
 Settings files are being saved in "~/Library/Application Support/VertiRead".  
 
 ##To do list
+- implement text alignment
 - add browser to playlist editor
 - fix mosue scroll under linux
 - maybe add some animations

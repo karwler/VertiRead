@@ -90,7 +90,7 @@ Label* Label::Clone() const {
 }
 
 Text Label::getText() const {
-	return Text(text, Pos()+vec2i(5, 0), Size().y, 8);
+	return Text(text, Pos()+vec2i(5, 0), Size().y);
 }
 
 // BUTTON
@@ -127,7 +127,7 @@ ButtonText* ButtonText::Clone() const {
 }
 
 Text ButtonText::getText() const {
-	return Text(text, Pos()+vec2i(5, 0), Size().y, 8);
+	return Text(text, Pos()+vec2i(5, 0), Size().y);
 }
 
 // BUTTON IMAGE
@@ -165,11 +165,6 @@ LineEditor::~LineEditor() {}
 
 LineEditor*LineEditor::Clone() const {
 	return new LineEditor(*this);
-}
-
-void LineEditor::OnClick(EClick clickType) {
-	World::inputSys()->SetCaptureLE(this);
-	editor.SetCursor(0);
 }
 
 Text LineEditor::getText() const {
