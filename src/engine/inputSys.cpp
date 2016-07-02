@@ -48,7 +48,7 @@ void InputSys::MouseWheelEvent(const SDL_MouseWheelEvent& wheel) {
 
 void InputSys::TextEvent(const SDL_TextInputEvent& text) {
 	static_cast<LineEdit*>(captured)->Editor()->Add(text.text);	// text input should only run if line edit is being captured, therefore a cast check isn't necessary
-	World::engine->SetRedrawNeeded();
+	World::engine()->SetRedrawNeeded();
 }
 
 void InputSys::CheckShortcuts(const SDL_KeyboardEvent& key) {
@@ -104,5 +104,5 @@ void InputSys::SetCapture(Capturer* cbox) {
 	else
 		SDL_StopTextInput();
 
-	World::engine->SetRedrawNeeded();
+	World::engine()->SetRedrawNeeded();
 }

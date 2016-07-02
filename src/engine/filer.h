@@ -11,6 +11,8 @@ public:
 	static vector<fs::path> ListDir(const fs::path& dir, EDirFilter filter=FILTER_ALL, const vector<string>& extFilter={});
 	static vector<fs::path> ListDirRecursively(const fs::path& dir, EDirFilter filter=FILTER_ALL, const vector<string>& extFilter={});
 
+	static vector<string> GetAvailibleThemes();
+	static void GetColors(map<EColor, vec4b>& colors, const string& theme);
 	static vector<string> GetAvailibleLanguages();
 	static map<string, string> GetLines(const string& language);
 	static map<string, Mix_Chunk*> GetSounds();

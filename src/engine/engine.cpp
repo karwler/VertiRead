@@ -21,7 +21,7 @@ void Engine::Run() {
 	// initialize values
 	scene->getProgram()->Event_OpenBookList();
 	run = true;
-	redraws = 8;	// linux sometimes can't keep up with the window, which is why there need to be a few redraw calls at the start
+	redraws = 32;	// linux sometimes can't keep up with the window, which is why there need's to be a few redraw calls at the start
 	SDL_Event event;
 	uint32 oldTime = SDL_GetTicks();
 

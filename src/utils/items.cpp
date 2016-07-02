@@ -14,7 +14,7 @@ void ListItem::OnClick(EClick clickType) {
 	if (clickType == EClick::left_double)
 		World::program()->Event_ItemDoubleclicked(this);
 
-	World::engine->SetRedrawNeeded();
+	World::engine()->SetRedrawNeeded();
 }
 
 const string& ListItem::getData() const {
@@ -29,8 +29,8 @@ bool ListItem::selectable() const {
 
 ItemButton::ItemButton(const string& LBL, const string& DAT, void (Program::*CALLB)(void*), ScrollArea* SA) :
 	ListItem(LBL, SA),
-	data(DAT),
-	callback(CALLB)
+	callback(CALLB),
+	data(DAT)
 {}
 ItemButton::~ItemButton() {}
 
@@ -60,9 +60,9 @@ void ItemButton::Data(const string& dat) {
 
 Checkbox::Checkbox(ListBox* SA, const string& LBL, bool ON, void (Program::*CALLB)(bool), int SPC) :
 	ListItem(LBL, SA),
+	spacing(SPC),
 	callback(CALLB),
-	on(ON),
-	spacing(SPC)
+	on(ON)
 {}
 Checkbox::~Checkbox() {}
 
@@ -71,7 +71,7 @@ void Checkbox::OnClick(EClick clickType) {
 	if (callback)
 		(World::program()->*callback)(on);
 
-	World::engine->SetRedrawNeeded();
+	World::engine()->SetRedrawNeeded();
 }
 
 ListBox* Checkbox::Parent() const {

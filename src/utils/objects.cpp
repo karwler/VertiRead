@@ -43,15 +43,15 @@ void Object::Anchor(const vec2i& newPos) {
 
 vec2i Object::Pos() const {
 	vec2i ret = Anchor();
-	ret.x += (fix & FIX_W) ? pos.x : pixX(pos.x);
-	ret.y += (fix & FIX_H) ? pos.y : pixY(pos.y);
+	ret.x = (fix & FIX_PX) ? pixX(pos.x) : (fix & FIX_W) ? ret.x + pos.x : ret.x + pixX(pos.x);
+	ret.y = (fix & FIX_PY) ? pixY(pos.y) : (fix & FIX_H) ? ret.y + pos.y : ret.y + pixY(pos.y);
 	return ret;
 }
 
 void Object::Pos(const vec2i& newPos) {
 	vec2i dist = newPos - Anchor();
-	pos.x = (fix & FIX_W) ? dist.x : prcX(dist.x);
-	pos.y = (fix & FIX_H) ? dist.y : prcY(dist.y);
+	pos.x = (fix & FIX_PX) ? prcX(newPos.x) : (fix & FIX_W) ? dist.x : prcX(dist.x);
+	pos.y = (fix & FIX_PY) ? prcY(newPos.y) : (fix & FIX_H) ? dist.y : prcY(dist.y);
 }
 
 vec2i Object::End() const {
@@ -156,7 +156,7 @@ void ButtonImage::OnClick() {
 	curTex++;
 	if (curTex == texes.size())
 		curTex = 0;
-	World::engine->SetRedrawNeeded();
+	World::engine()->SetRedrawNeeded();
 }
 
 Image ButtonImage::CurTex() const {

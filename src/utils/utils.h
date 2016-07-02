@@ -105,6 +105,7 @@ using char32 = char32_t;
 using wchar = wchar_t;
 
 // predeclarations
+enum class EColor : uint8;
 enum class ETextCase : uint8;
 
 class Engine;
@@ -321,7 +322,7 @@ struct kvec2 {
 
 template <typename T>
 double length(const kvec2<T>& vec) {
-	return std::sqrt(vec.x*vec.x + vec.y*vec.y);
+	return sqrt(vec.x*vec.x + vec.y*vec.y);
 }
 
 template <typename T>
@@ -488,7 +489,7 @@ struct kvec3 {
 
 template <typename T>
 double length(const kvec3<T>& vec) {
-	return std::sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
+	return sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
 }
 
 template <typename T>
@@ -667,7 +668,7 @@ struct kvec4 {
 
 template <typename T>
 double length(const kvec4<T>& vec) {
-	return std::sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z + vec.a*vec.a);
+	return sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z + vec.a*vec.a);
 }
 
 template <typename T>
@@ -709,6 +710,8 @@ SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop);
 
 // other
 void PrintInfo();
+map<EColor, vec4b> GetDefaultColors();
+vec4b GetDefaultColor(EColor color);
 string getRendererName(int id);
 vector<string> getAvailibleRenderers(bool trustedOnly=false);
 
@@ -748,4 +751,15 @@ void clear(vector<T*>& vec) {
 	for (T* it : vec)
 		delete it;
 	vec.clear();
+}
+
+template <typename T>
+bool contains(const vector<T>& vec, const T& elem, size_t* id=nullptr) {
+	for (size_t i=0; i!=vec.size(); i++)
+		if (vec[i] == elem) {
+			if (id)
+				*id = i;
+			return true;
+		}
+	return false;
 }

@@ -20,6 +20,7 @@ public:
 	static vec2i DesktopResolution();	// screen resolution
 	void Fullscreen(bool on);
 	void Font(const string& font);
+	void Theme(const string& theme);
 
 private:
 	SDL_Window* window;

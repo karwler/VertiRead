@@ -4,9 +4,7 @@
 
 class World {
 public:
-	static kptr<Engine> engine;
-	static vector<string> args;
-
+	static Engine* engine();
 	static AudioSys* audioSys();
 	static InputSys* inputSys();
 	static WindowSys* winSys();
@@ -15,4 +13,8 @@ public:
 	static Program* program();
 
 	static void PlaySound(const string& sound);
+
+	static vector<string> args;
+private:
+	static Engine base;
 };

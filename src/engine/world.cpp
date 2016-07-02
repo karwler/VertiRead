@@ -1,33 +1,37 @@
 #include "world.h"
 
-kptr<Engine> World::engine;
+Engine World::base;
 vector<string> World::args;
 
+Engine* World::engine() {
+	return &base;
+}
+
 AudioSys* World::audioSys() {
-	return engine->getAudioSys();
+	return base.getAudioSys();
 }
 
 InputSys* World::inputSys() {
-	return engine->getInputSys();
+	return base.getInputSys();
 }
 
 WindowSys* World::winSys() {
-	return engine->getWindowSys();
+	return base.getWindowSys();
 }
 
 Scene* World::scene() {
-	return engine->getScene();
+	return base.getScene();
 }
 
 Library*World::library() {
-	return engine->getScene()->getLibrary();
+	return base.getScene()->getLibrary();
 }
 
 Program* World::program() {
-	return engine->getScene()->getProgram();
+	return base.getScene()->getProgram();
 }
 
 void World::PlaySound(const string& sound) {
-	if (engine->getAudioSys())
-		engine->getAudioSys()->PlaySound(sound);
+	if (base.getAudioSys())
+		base.getAudioSys()->PlaySound(sound);
 }

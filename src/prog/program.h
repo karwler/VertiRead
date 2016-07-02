@@ -66,6 +66,7 @@ public:
 	void Event_SetLibraryPath(const string& dir);
 	void Event_SetPlaylistsPath(const string& dir);
 	void Event_SwitchFullscreen(bool on);
+	void Event_SetTheme(const string& theme);
 	void Event_SetFont(const string& font);
 	void Event_SetRenderer(const string& renderer);
 	void Event_SetMusicVolume(const string& mvol);

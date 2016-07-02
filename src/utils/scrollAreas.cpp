@@ -32,7 +32,7 @@ void ScrollArea::DragSlider(int ypos) {
 void ScrollArea::DragList(int ypos) {
 	listY = ypos;
 	CheckListY();
-	World::engine->SetRedrawNeeded();
+	World::engine()->SetRedrawNeeded();
 }
 
 void ScrollArea::ScrollList(int ymov)  {
@@ -238,13 +238,13 @@ ReaderBox::ReaderBox(const Object& BASE, const vector<Texture*>& PICS, const str
 	vec2i posT(-1);
 	vec2i sizT(blistW);
 	listButtons = {
-		ButtonImage(Object(arcT,                    posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_NextDir, {"next_dir"}),
-		ButtonImage(Object(arcT+vec2i(0, sizT.x),   posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_PrevDir, {"prev_dir"}),
-		ButtonImage(Object(arcT+vec2i(0, sizT.x*2), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_ZoomIn, {"zoom_in"}),
-		ButtonImage(Object(arcT+vec2i(0, sizT.x*3), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_ZoomOut, {"zoom_out"}),
-		ButtonImage(Object(arcT+vec2i(0, sizT.x*4), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_ZoomReset, {"zoom_r"}),
-		ButtonImage(Object(arcT+vec2i(0, sizT.x*5), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_CenterView, {"center"}),
-		ButtonImage(Object(arcT+vec2i(0, sizT.x*6), posT, sizT, FIX_POS | FIX_SIZ), &Program::Event_Back, {"back"}),
+		ButtonImage(Object(arcT,                    posT, sizT, FIX_ANC | FIX_SIZ), &Program::Event_NextDir, {"next_dir"}),
+		ButtonImage(Object(arcT+vec2i(0, sizT.x),   posT, sizT, FIX_ANC | FIX_SIZ), &Program::Event_PrevDir, {"prev_dir"}),
+		ButtonImage(Object(arcT+vec2i(0, sizT.x*2), posT, sizT, FIX_ANC | FIX_SIZ), &Program::Event_ZoomIn, {"zoom_in"}),
+		ButtonImage(Object(arcT+vec2i(0, sizT.x*3), posT, sizT, FIX_ANC | FIX_SIZ), &Program::Event_ZoomOut, {"zoom_out"}),
+		ButtonImage(Object(arcT+vec2i(0, sizT.x*4), posT, sizT, FIX_ANC | FIX_SIZ), &Program::Event_ZoomReset, {"zoom_r"}),
+		ButtonImage(Object(arcT+vec2i(0, sizT.x*5), posT, sizT, FIX_ANC | FIX_SIZ), &Program::Event_CenterView, {"center"}),
+		ButtonImage(Object(arcT+vec2i(0, sizT.x*6), posT, sizT, FIX_ANC | FIX_SIZ), &Program::Event_Back, {"back"}),
 	};
 
 	arcT += vec2i(Size().x/2, Size().y);
@@ -284,13 +284,13 @@ void ReaderBox::Tick() {
 bool ReaderBox::CheckMouseOverSlider() {
 	if (inRect(Bar(), InputSys::mousePos()) && sliderTimer != hideDelay) {
 		sliderTimer = hideDelay;
-		World::engine->SetRedrawNeeded();
+		World::engine()->SetRedrawNeeded();
 		return true;
 	}
 	if (showSlider() && !sliderFocused)
-		if ((sliderTimer -= World::engine->deltaSeconds()) <= 0.f) {
+		if ((sliderTimer -= World::engine()->deltaSeconds()) <= 0.f) {
 			sliderTimer = 0.f;
-			World::engine->SetRedrawNeeded();
+			World::engine()->SetRedrawNeeded();
 			return true;
 		}
 	return false;
@@ -302,13 +302,13 @@ bool ReaderBox::CheckMouseOverList() {
 
 	if (((showList() && inRect(bRect, mPos)) || (!showList() && inRect({bRect.x, bRect.y, bRect.w/4, bRect.h}, mPos))) && listTimer != hideDelay) {
 		listTimer = hideDelay;
-		World::engine->SetRedrawNeeded();
+		World::engine()->SetRedrawNeeded();
 		return true;
 	}
 	if (showList())
-		if ((listTimer -= World::engine->deltaSeconds()) < 0.f) {
+		if ((listTimer -= World::engine()->deltaSeconds()) < 0.f) {
 			listTimer = 0.f;
-			World::engine->SetRedrawNeeded();
+			World::engine()->SetRedrawNeeded();
 			return true;
 		}
 	return false;
@@ -320,13 +320,13 @@ bool ReaderBox::CheckMouseOverPlayer() {
 
 	if (((showPlayer() && inRect(bRect, mPos)) || (!showPlayer() && inRect({bRect.x, bRect.y+bRect.h/10*9, bRect.w, bRect.h/6}, mPos))) && playerTimer != hideDelay) {
 		playerTimer = hideDelay;
-		World::engine->SetRedrawNeeded();
+		World::engine()->SetRedrawNeeded();
 		return true;
 	}
 	if (showPlayer())
-		if ((playerTimer -= World::engine->deltaSeconds()) < 0.f) {
+		if ((playerTimer -= World::engine()->deltaSeconds()) < 0.f) {
 			playerTimer = 0.f;
-			World::engine->SetRedrawNeeded();
+			World::engine()->SetRedrawNeeded();
 			return true;
 		}
 	return false;
@@ -335,7 +335,7 @@ bool ReaderBox::CheckMouseOverPlayer() {
 void ReaderBox::DragListX(int xpos) {
 	listX = xpos;
 	CheckListX();
-	World::engine->SetRedrawNeeded();
+	World::engine()->SetRedrawNeeded();
 }
 
 void ReaderBox::ScrollListX(int xmov) {
@@ -349,7 +349,7 @@ void ReaderBox::Zoom(float factor) {
 	zoom = factor;
 	SetValues();
 
-	World::engine->SetRedrawNeeded();
+	World::engine()->SetRedrawNeeded();
 }
 
 void ReaderBox::AddZoom(float zadd) {

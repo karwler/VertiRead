@@ -106,19 +106,23 @@ vec2i WindowSys::DesktopResolution() {
 }
 
 void WindowSys::Fullscreen(bool on) {
-	// determine what to do
 	sets.fullscreen = on;
-	if (sets.fullscreen)
-		SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
-	else if (sets.maximized)
-		CreateWindow();
-	else
-		SDL_SetWindowFullscreen(window, 0);
+	CreateWindow();
+
+	World::engine()->SetRedrawNeeded(32);
 }
 
 void WindowSys::Font(const string& font) {
 	sets.SetFont(font);
 	World::library()->LoadFont(sets.Fontpath());
+}
+
+void WindowSys::Theme(const string& theme) {
+	sets.SetDefaultTheme();
+	sets.theme = theme;
+	Filer::GetColors(sets.colors, sets.theme);
+
+	World::engine()->SetRedrawNeeded();
 }
 
 int WindowSys::GetRenderDriverIndex() {
@@ -200,7 +204,7 @@ void WindowSys::DrawObject(TileBox* obj) {
 		DrawRect(rect, color);
 
 		int len = Text(tiles[i]->label, 0, obj->TileSize().y).size().x;
-		crop.w = (len+5 > rect.w) ? crop.w = len - rect.w +10 : 0;									// recalculate right side crop for text
+		crop.w = (len+5 > rect.w) ? len - rect.w +10 : 0;									// recalculate right side crop for text
 		DrawText(Text(tiles[i]->label, vec2i(rect.x+5, rect.y-crop.y), obj->TileSize().y), crop);	// left side crop can be ignored
 	}
 	DrawRect(obj->Bar(), EColor::darkened);

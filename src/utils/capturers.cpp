@@ -19,7 +19,7 @@ ListBox* Capturer::Parent() const {
 
 LineEdit::LineEdit(ListBox* SA, const string& LBL, const string& TXT, ETextType TYPE, void (Program::*KCALL)(const string&), void (Program::*CCALL)()) :
 	Capturer(SA, LBL),
-	editor(TXT),
+	editor(TXT, TYPE),
 	cancelCall(CCALL),
 	textPos(0)
 {
@@ -60,7 +60,7 @@ void LineEdit::OnKeypress(SDL_Scancode key) {
 		redraw = false;
 	}
 	if (redraw)
-		World::engine->SetRedrawNeeded();
+		World::engine()->SetRedrawNeeded();
 }
 
 void LineEdit::Confirm() {

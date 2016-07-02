@@ -10,8 +10,7 @@ int main(int argc, char** argv) {
 #endif
 	int retval = 0;
 	try {
-		World::engine = new Engine;
-		World::engine->Run();
+		World::engine()->Run();
 	}
 	catch (Exception exc) {
 		exc.Display();
@@ -29,6 +28,6 @@ int main(int argc, char** argv) {
 		cerr << "unknown error" << endl;
 		retval = -1;
 	}
-	World::engine->Cleanup();
+	World::engine()->Cleanup();
 	return retval;
 }

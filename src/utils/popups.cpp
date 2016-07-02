@@ -14,7 +14,7 @@ Popup* Popup::Clone() const {
 
 void Popup::Tick() {
 	if (timeout > 0.f)
-		if ((timeout -= World::engine->deltaSeconds()) <= 0.f)
+		if ((timeout -= World::engine()->deltaSeconds()) <= 0.f)
 			World::scene()->SetPopup(nullptr);
 }
 

@@ -24,7 +24,7 @@ void Scene::SwitchMenu(const vector<Object*>& objs, uint focObj) {
 	clear(objects);
 	objects = objs;
 	
-	World::engine->SetRedrawNeeded();
+	World::engine()->SetRedrawNeeded();
 }
 
 void Scene::ResizeMenu() {
@@ -32,7 +32,7 @@ void Scene::ResizeMenu() {
 		if (ScrollArea* box = dynamic_cast<ScrollArea*>(obj))
 			box->SetValues();
 
-	World::engine->SetRedrawNeeded();
+	World::engine()->SetRedrawNeeded();
 }
 
 void Scene::Tick() {
@@ -69,13 +69,13 @@ void Scene::Tick() {
 
 void Scene::OnMouseDown(EClick clickType) {
 	// first check if there's a popup window
-	if (popup && clickType == EClick::left)
-		CheckPopupClick(popup);
+	if (popup)
+		CheckPopupClick();
 	else
-		CheckObjectsClick(objects, clickType);
+		CheckObjectsClick(clickType);
 }
 
-void Scene::CheckObjectsClick(const vector<Object*>& objs, EClick clickType) {
+void Scene::CheckObjectsClick(EClick clickType) {
 	for (Object* obj : objects) {
 		if (!inRect(obj->getRect(), InputSys::mousePos()))	// skip if mouse isn't over object
 			continue;
@@ -92,7 +92,7 @@ void Scene::CheckObjectsClick(const vector<Object*>& objs, EClick clickType) {
 		else if (ScrollArea* area = dynamic_cast<ScrollArea*>(obj)) {
 			if (clickType == EClick::left) {
 				area->selectedItem = nullptr;		// deselect all items
-				World::engine->SetRedrawNeeded();
+				World::engine()->SetRedrawNeeded();
 			}
 
 			if (CheckSliderClick(area))			// first check if slider is clicked
@@ -114,13 +114,13 @@ void Scene::CheckObjectsClick(const vector<Object*>& objs, EClick clickType) {
 	}
 }
 
-void Scene::CheckPopupClick(Popup* obj) {
+void Scene::CheckPopupClick() {
 	if (!inRect(popup->getRect(), InputSys::mousePos()))
 		return;
 
-	if (PopupChoice* box = dynamic_cast<PopupChoice*>(obj))
+	if (PopupChoice* box = dynamic_cast<PopupChoice*>(popup.get()))
 		CheckPopupChoiceClick(box);
-	else if (PopupMessage* box = dynamic_cast<PopupMessage*>(obj))
+	else if (PopupMessage* box = dynamic_cast<PopupMessage*>(popup.get()))
 		CheckPopupSimpleClick(box);
 }
 
@@ -282,5 +282,5 @@ void Scene::SetPopup(Popup* box) {
 		World::inputSys()->SetCapture(nullptr);
 	popup = box;
 
-	World::engine->SetRedrawNeeded();
+	World::engine()->SetRedrawNeeded();
 }

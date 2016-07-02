@@ -50,10 +50,10 @@ string modifyCase(string str, ETextCase caseChange) {
 			str[0] = toupper(str[0]);
 		break;
 	case ETextCase::all_upper:
-		std::transform(str.begin(), str.end(), str.begin(), toupper);
+		transform(str.begin(), str.end(), str.begin(), toupper);
 		break;
 	case ETextCase::all_lower:
-		std::transform(str.begin(), str.end(), str.begin(), tolower);
+		transform(str.begin(), str.end(), str.begin(), tolower);
 	}
 	return str;
 }
@@ -185,7 +185,7 @@ SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {
 void PrintInfo() {
 	SDL_version ver;
 	SDL_GetVersion(&ver);
-	cout << "\nSDL version: " << to_str(ver.minor) << " - " << to_str(ver.major) << " p" << to_str(ver.patch) << endl;
+	cout << "\nSDL version: min=" << to_str(ver.minor) << " max=" << to_string(ver.major) << " patch=" << to_string(ver.patch) << endl;
 	cout << "Platform: " << SDL_GetPlatform() << endl;
 	cout << "CPU count: " << SDL_GetCPUCount() << " - " << SDL_GetCPUCacheLineSize() << endl;
 	cout << "RAM: " << SDL_GetSystemRAM() << "MB" << endl;
@@ -253,4 +253,30 @@ float prcX(int p) {
 
 float prcY(int p) {
 	return float(p) / float(World::winSys()->Resolution().y);
+}
+
+map<EColor, vec4b> GetDefaultColors() {
+	map<EColor, vec4b> colors = {
+		make_pair(EColor::background, GetDefaultColor(EColor::background)),
+		make_pair(EColor::rectangle, GetDefaultColor(EColor::rectangle)),
+		make_pair(EColor::highlighted, GetDefaultColor(EColor::highlighted)),
+		make_pair(EColor::darkened, GetDefaultColor(EColor::darkened)),
+		make_pair(EColor::text, GetDefaultColor(EColor::text))
+	};
+	return colors;
+}
+
+vec4b GetDefaultColor(EColor color) {
+	switch (color) {
+	case EColor::background:
+		return vec4b(10, 10, 10, 255);
+	case EColor::rectangle:
+		return vec4b(90, 90, 90, 255);
+	case EColor::highlighted:
+		return vec4b(120, 120, 120, 255);
+	case EColor::darkened:
+		return vec4b(60, 60, 60, 255);
+	case EColor::text:
+		return vec4b(210, 210, 210, 255);
+	}
 }

@@ -95,6 +95,46 @@ vector<fs::path> Filer::ListDirRecursively(const fs::path& dir, EDirFilter filte
 	return names;
 }
 
+vector<string> Filer::GetAvailibleThemes() {
+	vector<string> lines;
+	if (!ReadTextFile(dirData() + "themes.ini", lines))
+		return {};
+
+	vector<string> themes;
+	for (string& line : lines) {
+		string arg, val, key;
+		if (splitIniLine(line, &arg, &val, &key))
+			if (!contains(themes, arg))
+				themes.push_back(arg);
+	}
+	sort(themes.begin(), themes.end());
+	return themes;
+}
+
+void Filer::GetColors(map<EColor, vec4b>& colors, const string& theme) {
+	vector<string> lines;
+	if (!ReadTextFile(dirData() + "themes.ini", lines))
+		return;
+
+	for (string& line : lines) {
+		string arg, val, key;
+		if (!splitIniLine(line, &arg, &val, &key))
+			continue;
+
+		if (arg == theme) {
+			EColor clr = EColor(stoi(key));
+			if (colors.count(clr) == 0)
+				colors.insert(make_pair(clr, GetDefaultColor(clr)));
+
+			vector<string> elems = getWords(val);
+			if (elems.size() > 0) colors[clr].x = stoi(elems[0]);
+			if (elems.size() > 1) colors[clr].y = stoi(elems[1]);
+			if (elems.size() > 2) colors[clr].z = stoi(elems[2]);
+			if (elems.size() > 3) colors[clr].a = stoi(elems[3]);
+		}
+	}
+}
+
 vector<string> Filer::GetAvailibleLanguages() {
 	vector<string> files = { "english" };
 	if (!fs::exists(dirLangs()))
@@ -233,14 +273,10 @@ VideoSettings Filer::LoadVideoSettings() {
 			if (elems.size() > 0) sets.resolution.x = stoi(elems[0]);
 			if (elems.size() > 1) sets.resolution.y = stoi(elems[1]);
 		}
-		else if (arg == "color") {
-			vector<string> elems = getWords(val);
-			if (elems.size() > 0) sets.colors[EColor(stoi(key))].x = stoi(elems[0]);
-			if (elems.size() > 1) sets.colors[EColor(stoi(key))].y = stoi(elems[1]);
-			if (elems.size() > 2) sets.colors[EColor(stoi(key))].z = stoi(elems[2]);
-			if (elems.size() > 3) sets.colors[EColor(stoi(key))].a = stoi(elems[3]);
-		}
+		else if (arg == "theme")
+			sets.theme = val;
 	}
+	GetColors(sets.colors, sets.theme);
 	return sets;
 }
 
@@ -250,10 +286,9 @@ void Filer::SaveSettings(const VideoSettings& sets) {
 		"renderer=" + sets.renderer,
 		"maximized=" + btos(sets.maximized),
 		"fullscreen=" + btos(sets.fullscreen),
-		"resolution=" + to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y)
+		"resolution=" + to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y),
+		"theme=" + sets.theme
 	};
-	for (const pair<EColor, vec4b>& it : sets.colors)
-		lines.push_back("color["+to_string(ushort(it.first))+"]=" + to_string(it.second.x) + ' ' + to_string(it.second.y) + ' ' + to_string(it.second.z) + ' ' + to_string(it.second.a));
 	WriteTextFile(dirSets() + "video.ini", lines);
 }
 
@@ -370,11 +405,11 @@ string Filer::execDir() {
 
 string Filer::dirSets() {
 #ifdef _WIN32
-	return string(std::getenv("AppData")) + "\\VertiRead\\";
+	return string(getenv("AppData")) + "\\VertiRead\\";
 #elif __APPLE__
-	return string(std::getenv("HOME")) + "/Library/Application Support/VertiRead/";
+	return string(getenv("HOME")) + "/Library/Application Support/VertiRead/";
 #else
-	return string(std::getenv("HOME")) + "/.vertiread/";
+	return string(getenv("HOME")) + "/.vertiread/";
 #endif
 }
 
@@ -400,9 +435,9 @@ string Filer::dirTexs() {
 
 vector<fs::path> Filer::dirFonts() {
 #ifdef _WIN32
-	return {string(std::getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
+	return {string(getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
 #elif __APPLE__
-	return {string(std::getenv("HOME"))+"/Library/Fonts/", "/Library/Fonts/", "/System/Library/Fonts/", "/Network/Library/Fonts/"};
+	return {string(getenv("HOME"))+"/Library/Fonts/", "/Library/Fonts/", "/System/Library/Fonts/", "/Network/Library/Fonts/"};
 #else
 	return { "/usr/share/fonts/" };
 #endif

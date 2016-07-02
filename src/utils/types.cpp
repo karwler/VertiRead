@@ -41,18 +41,18 @@ Image::Image(const vec2i& POS, Texture* TEX, const vec2i& SIZ) :
 	pos(POS),
 	texture(TEX)
 {
-	size = SIZ.hasNull() ? size = texture->Res() : SIZ;
+	size = SIZ.hasNull() ? texture->Res() : SIZ;
 }
 
 Image::Image(const vec2i& POS, const string& TEX, const vec2i& SIZ) :
 	pos(POS)
 {
 	texture = World::library()->getTex(TEX);
-	size = SIZ.hasNull() ? size = texture->Res() : SIZ;
+	size = SIZ.hasNull() ? texture->Res() : SIZ;
 }
 
 SDL_Rect Image::getRect() const {
-	return {pos.x, pos.y, size.x, size.y};
+	return { pos.x, pos.y, size.x, size.y };
 }
 
 // FONT
@@ -128,12 +128,11 @@ vec2i Text::size() const {
 
 // TEXT EDIT
 
-TextEdit::TextEdit(const string& TXT, ETextType TYP, int CPOS) :
-	cpos(CPOS),
-	type(TYP),
+TextEdit::TextEdit(const string& TXT, ETextType TYPE, size_t CPOS) :
+	type(TYPE),
 	text(TXT)
 {
-	CheckCaret();
+	SetCursor(CPOS);
 	CheckText();
 }
 
@@ -142,18 +141,18 @@ size_t TextEdit::CursorPos() const {
 }
 
 void TextEdit::SetCursor(size_t pos) {
-	cpos = (pos >= text.length()) ? text.length()-1 : pos;
+	cpos = (pos > text.length()) ? text.length() : pos;
 }
 
 void TextEdit::MoveCursor(bool right, bool loop) {
 	if (loop) {
 		if (right)
-			cpos = (cpos == text.length()-1) ? 0 : cpos+1;
+			cpos = (cpos == text.length()) ? 0 : cpos+1;
 		else
-			cpos = (cpos == 0) ? text.length()-1 : cpos-1;
+			cpos = (cpos == 0) ? text.length() : cpos-1;
 	}
 	else {
-		if (right && cpos != text.length()-1)
+		if (right && cpos != text.length())
 			cpos++;
 		else if (!right && cpos != 0)
 			cpos--;
@@ -191,10 +190,8 @@ void TextEdit::Delete(bool current) {
 }
 
 void TextEdit::CheckCaret() {
-	if (cpos < 0)
-		cpos = 0;
-	else if (cpos > text.size())
-		cpos = text.size();
+	if (cpos > text.length())
+		cpos = text.length();
 }
 
 void TextEdit::CheckText() {
@@ -313,7 +310,7 @@ VideoSettings::VideoSettings(bool MAX, bool FSC, const vec2i& RES, const string&
 	renderer(RNDR)
 {
 	SetFont(FNT);
-	SetDefaultColors();
+	SetDefaultTheme();
 }
 
 string VideoSettings::Font() const {
@@ -329,31 +326,9 @@ void VideoSettings::SetFont(const string& newFont) {
 	font = fontpath.empty() ? "" : newFont;
 }
 
-void VideoSettings::SetDefaultColors() {
-	if (colors.count(EColor::background) == 0)
-		colors.insert(make_pair(EColor::background, vec4b(10, 10, 10, 255)));
-	else
-		colors[EColor::background] = vec4b(10, 10, 10, 255);
-
-	if (colors.count(EColor::rectangle) == 0)
-		colors.insert(make_pair(EColor::rectangle, vec4b(90, 90, 90, 255)));
-	else
-		colors[EColor::rectangle] = vec4b(90, 90, 90, 255);
-
-	if (colors.count(EColor::highlighted) == 0)
-		colors.insert(make_pair(EColor::highlighted, vec4b(120, 120, 120, 255)));
-	else
-		colors[EColor::highlighted] = vec4b(120, 120, 120, 255);
-
-	if (colors.count(EColor::darkened) == 0)
-		colors.insert(make_pair(EColor::darkened, vec4b(60, 60, 60, 255)));
-	else
-		colors[EColor::darkened] = vec4b(60, 60, 60, 255);
-
-	if (colors.count(EColor::text) == 0)
-		colors.insert(make_pair(EColor::text, vec4b(210, 210, 210, 255)));
-	else
-		colors[EColor::text] = vec4b(210, 210, 210, 255);
+void VideoSettings::SetDefaultTheme() {
+	theme.clear();
+	colors = GetDefaultColors();
 }
 
 // AUDIO SETTINGS

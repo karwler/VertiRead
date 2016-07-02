@@ -82,7 +82,7 @@ private:
 
 class ReaderBox : public ScrollArea {
 public:
-	ReaderBox(const Object& BASE=Object(0, 0, 100, FIX_POS | FIX_END, EColor::background), const vector<Texture*>& PICS={}, const string& CURPIC="", float ZOOM=1.f);
+	ReaderBox(const Object& BASE=Object(0, 0, 100, FIX_ANC | FIX_END, EColor::background), const vector<Texture*>& PICS={}, const string& CURPIC="", float ZOOM=1.f);
 	virtual ~ReaderBox();
 	virtual ReaderBox* Clone() const;
 

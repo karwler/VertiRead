@@ -102,7 +102,7 @@ struct Text {
 
 class TextEdit {
 public:
-	TextEdit(const string& TXT="", ETextType TYP=ETextType::text, int CPOS=0);
+	TextEdit(const string& TXT="", ETextType TYPE=ETextType::text, size_t CPOS=0);
 
 	size_t CursorPos() const;
 	void SetCursor(size_t pos);
@@ -183,16 +183,17 @@ private:
 
 class VideoSettings {
 public:
-	VideoSettings(bool MAX=false, bool FSC=false, const vec2i& RES=vec2i(800, 600), const string& FNT="Arial", const string& RNDR="");
+	VideoSettings(bool MAX=false, bool FSC=false, const vec2i& RES=vec2i(800, 600), const string& FNT="arial", const string& RNDR="");
 
 	string Font() const;
 	string Fontpath() const;
 	void SetFont(const string& newFont);
-	void SetDefaultColors();
+	void SetDefaultTheme();
 
 	bool maximized, fullscreen;
 	vec2i resolution;
 	string renderer;
+	string theme;
 	map<EColor, vec4b> colors;
 
 private:
