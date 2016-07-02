@@ -15,29 +15,31 @@ uint8 AudioSys::Initialize() {
 		return 2;
 	}
 	if (!(flags & MIX_INIT_FLAC)) {
-		cerr << "couldn't initialize flac\n" << Mix_GetError() << endl;
+		cerr << "couldn't initialize flac" << endl;
 		retval = 1;
 	}
 	if (!(flags & MIX_INIT_FLUIDSYNTH)) {
-		cerr << "couldn't initialize fluidsynth\n" << Mix_GetError() << endl;
+		cerr << "couldn't initialize fluidsynth" << endl;
 		retval = 1;
 	}
 	if (!(flags & MIX_INIT_MOD)) {
-		cerr << "couldn't initialize mod\n" << Mix_GetError() << endl;
+		cerr << "couldn't initialize mod" << endl;
 		retval = 1;
 	}
 	if (!(flags & MIX_INIT_MODPLUG)) {
-		cerr << "couldn't initialize modplug\n" << Mix_GetError() << endl;
+		cerr << "couldn't initialize modplug" << endl;
 		retval = 1;
 	}
 	if (!(flags & MIX_INIT_MP3)) {
-		cerr << "couldn't initialize mp3\n" << Mix_GetError() << endl;
+		cerr << "couldn't initialize mp3" << endl;
 		retval = 1;
 	}
 	if (!(flags & MIX_INIT_OGG)) {
-		cerr << "couldn't initialize ogg\n" << Mix_GetError() << endl;
+		cerr << "couldn't initialize ogg"<< endl;
 		retval = 1;
 	}
+	if (retval != 0)
+		cerr << Mix_GetError() << endl;
 
 	if (Mix_OpenAudio(44100, AUDIO_S16SYS, 2, 4096)) {
 		cerr << "couldn't open audio\n" << Mix_GetError() << endl;

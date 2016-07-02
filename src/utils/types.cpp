@@ -98,13 +98,28 @@ vec2i FontSet::TextSize(const string& text, int size) {
 
 // TEXT
 
-Text::Text(const string& TXT, const vec2i& POS, int H, ETextAlign ALG, EColor CLR, int HSCAL) :
+Text::Text(const string& TXT, const vec2i& POS, int H, EColor CLR, int HSCAL) :
 	pos(POS),
-	align(ALG),
 	color(CLR),
 	text(TXT)
 {
 	height = (HSCAL == 0) ? H : H - H/HSCAL;
+}
+
+void Text::SetPosToRect(const SDL_Rect& rect, ETextAlign align, int offset) {
+	int len = size().x;
+
+	switch (align) {
+	case ETextAlign::left:
+		pos.x = rect.x+offset;
+		break;
+	case ETextAlign::center:
+		pos.x = rect.x + (rect.w-len)/2;
+		break;
+	case ETextAlign::right:
+		pos.x = rect.x+rect.w-len-offset;
+	}
+	pos.y = rect.y;
 }
 
 vec2i Text::size() const {
@@ -127,7 +142,7 @@ size_t TextEdit::CursorPos() const {
 }
 
 void TextEdit::SetCursor(size_t pos) {
-	cpos = (pos < 0) ? 0 : pos > text.length() ? text.length() : pos;
+	cpos = (pos >= text.length()) ? text.length()-1 : pos;
 }
 
 void TextEdit::MoveCursor(bool right, bool loop) {

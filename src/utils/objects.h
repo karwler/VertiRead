@@ -42,12 +42,13 @@ protected:
 
 class Label : public Object {
 public:
-	Label(const Object& BASE=Object(), const string& TXT="");
+	Label(const Object& BASE=Object(), const string& TXT="", ETextAlign ALG=ETextAlign::left);
 	virtual ~Label();
 	virtual Label* Clone() const;
 
 	Text getText() const;
 
+	ETextAlign align;
 	string text;
 };
 
@@ -66,12 +67,13 @@ protected:
 
 class ButtonText : public Button {
 public:
-	ButtonText(const Object& BASE=Object(), void (Program::*CALLB)()=nullptr, const string& TXT="");
+	ButtonText(const Object& BASE=Object(), void (Program::*CALLB)()=nullptr, const string& TXT="", ETextAlign ALG=ETextAlign::left);
 	virtual ~ButtonText();
 	virtual ButtonText* Clone() const;
 
 	Text getText() const;
 
+	ETextAlign align;
 	string text;
 };
 

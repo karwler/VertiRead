@@ -673,7 +673,7 @@ double length(const kvec4<T>& vec) {
 template <typename T>
 kvec4<T> normalize(const kvec4<T>& vec) {
 	double l = vec.len();
-	return kvec4(double(vec.x)/l, double(vec.y)/l, double(vec.z)/l, double(vec.a)/l);
+	return kvec4<T>(double(vec.x)/l, double(vec.y)/l, double(vec.z)/l, double(vec.a)/l);
 }
 
 template <typename T>

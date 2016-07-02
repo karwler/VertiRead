@@ -1,10 +1,9 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.1.0)
 cmake_policy(SET CMP0015 NEW)
 #cmake_policy(SET CMP0043 NEW)
 
 project(VertiRead CXX)
 set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 # source files
 set(SRC_FILES
@@ -118,6 +117,7 @@ endif()
 	
 # set main target
 add_executable(VertiRead ${SRC_FILES})
+target_compile_features(VertiRead PUBLIC cxx_nullptr cxx_enum_forward_declarations cxx_variadic_templates cxx_alias_templates cxx_raw_string_literals cxx_unicode_literals cxx_long_long_type cxx_rvalue_references)
 
 # linker flags
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")

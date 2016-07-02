@@ -79,8 +79,9 @@ void Object::Size(const vec2i& newSize) {
 
 // LABEL
 
-Label::Label(const Object& BASE, const string& TXT) :
+Label::Label(const Object& BASE, const string& TXT, ETextAlign ALG) :
 	Object(BASE),
+	align(ALG),
 	text(TXT)
 {}
 Label::~Label() {}
@@ -90,7 +91,9 @@ Label* Label::Clone() const {
 }
 
 Text Label::getText() const {
-	return Text(text, Pos()+vec2i(5, 0), Size().y);
+	Text txt(text, 0, Size().y);
+	txt.SetPosToRect(getRect(), align);
+	return txt;
 }
 
 // BUTTON
@@ -116,8 +119,9 @@ void Button::Callback(void (Program::*func)()) {
 
 // BUTTON TEXT
 
-ButtonText::ButtonText(const Object& BASE, void (Program::*CALLB)(), const string& TXT) :
+ButtonText::ButtonText(const Object& BASE, void (Program::*CALLB)(), const string& TXT, ETextAlign ALG) :
 	Button(BASE, CALLB),
+	align(ALG),
 	text(TXT)
 {}
 ButtonText::~ButtonText() {}
@@ -127,7 +131,9 @@ ButtonText* ButtonText::Clone() const {
 }
 
 Text ButtonText::getText() const {
-	return Text(text, Pos()+vec2i(5, 0), Size().y);
+	Text txt(text, 0, Size().y);
+	txt.SetPosToRect(getRect(), align);
+	return txt;
 }
 
 // BUTTON IMAGE

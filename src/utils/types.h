@@ -89,14 +89,14 @@ private:
 };
 
 struct Text {
-	Text(const string& TXT="", const vec2i& POS=0, int H=50, ETextAlign ALG=ETextAlign::left, EColor CLR=EColor::text, int HSCAL=8);
+	Text(const string& TXT="", const vec2i& POS=0, int H=50, EColor CLR=EColor::text, int HSCAL=8);
 
 	vec2i pos;
 	int height;
-	ETextAlign align;
 	EColor color;
 	string text;
 
+	void SetPosToRect(const SDL_Rect& rect, ETextAlign align, int offset=5);
 	vec2i size() const;
 };
 

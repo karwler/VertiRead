@@ -4,7 +4,7 @@ So far it's usable for reading, basic playlist editing and should be theoretical
 It still has some bugs and unfinished/untested parts.  
 
 Used libraries are boost_system, boost_filesystem, SDL2, SDL2_image, SDL2_ttf and SDL2_mixer.  
-Your compiler needs to support at least c++11.  
+The minimum required cmake version is 3.1.0 and your compiler needs to support at least c++11.  
 
 The Qt project and CMakeLists files are configured for Linux, Windows and OS X.  
 Note: When setting the output directory in Qt, don’t name it ‘build’, cause it might mess up the executable’s location.  
@@ -38,7 +38,6 @@ Boost is assumed to be located in /usr/local/include (headers) and /usr/local/li
 Settings files are being saved in "~/Library/Application Support/VertiRead".  
 
 ##To do list
-- implement text alignment
 - add browser to playlist editor
 - fix mosue scroll under linux
 - maybe add some animations

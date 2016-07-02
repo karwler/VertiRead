@@ -154,8 +154,9 @@ void WindowSys::DrawObject(const SDL_Rect& bg, EColor bgColor, const Text& text)
 	DrawRect(bg, bgColor);
 	
 	int len = text.size().x;
-	len = (len+5) > bg.w ? len - bg.w +10 : 0;	// use len as crop variable
-	DrawText(text, { 0, 0, len, 0 });
+	int left = (text.pos.x < bg.x) ? bg.x-text.pos.x : 0;
+	int right = (text.pos.x+len > bg.x+bg.w) ? text.pos.x+len-bg.x-bg.w : 0;
+	DrawText(text, { left, 0, right, 0 });
 }
 
 void WindowSys::DrawObject(LineEditor* obj) {
@@ -283,7 +284,7 @@ void WindowSys::DrawItem(KeyGetter* item, ListBox* parent, const SDL_Rect& rect,
 	string text = (World::inputSys()->Captured() == item) ? "Gimme a key..." : item->KeyName();
 	EColor color = (World::inputSys()->Captured() == item) ? EColor::highlighted : EColor::text;
 
-	DrawText(Text(text, vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), ETextAlign::left, color), crop);
+	DrawText(Text(text, vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), color), crop);
 }
 
 void WindowSys::DrawRect(const SDL_Rect& rect, EColor color) {
