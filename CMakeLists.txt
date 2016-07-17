@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1.0)
 cmake_policy(SET CMP0015 NEW)
-#cmake_policy(SET CMP0043 NEW)
+cmake_policy(SET CMP0043 NEW)
 
 project(VertiRead CXX)
 set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
@@ -32,6 +32,7 @@ set(SRC_FILES
 	"src/prog/program.h"
 	"src/utils/capturers.cpp"
 	"src/utils/capturers.h"
+	"src/utils/defaults.h"
 	"src/utils/items.cpp"
 	"src/utils/items.h"
 	"src/utils/objects.cpp"
@@ -47,6 +48,13 @@ set(SRC_FILES
 	
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	list(APPEND SRC_FILES "rsc/resource.rc")
+endif()
+
+# set macros
+if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+	if (MSVC)
+		add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+	endif()
 endif()
 
 # include directories

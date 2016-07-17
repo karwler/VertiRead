@@ -1,9 +1,5 @@
 #include "engine/world.h"
 
-EDirFilter operator|(EDirFilter a, EDirFilter b) {
-	return static_cast<EDirFilter>(static_cast<uint8>(a) | static_cast<uint8>(b));
-}
-
 // TEXTURE
 
 Texture::Texture(const string& FILE) :
@@ -57,9 +53,17 @@ SDL_Rect Image::getRect() const {
 
 // FONT
 
-FontSet::FontSet(const string& FILE) :
-	file(FILE)
-{}
+bool FontSet::Initialize(const string& FILE) {
+	TTF_Font* tmp = TTF_OpenFont(FILE.c_str(), 72);
+	if (!tmp) {
+		cerr << "couldn't open font " << file << endl << TTF_GetError() << endl;
+		file.clear();
+		return false;
+	}
+	TTF_CloseFont(tmp);
+	file = FILE;
+	return true;
+}
 
 void FontSet::Clear() {
 	for (const pair<int, TTF_Font*>& it : fonts)
@@ -68,15 +72,11 @@ void FontSet::Clear() {
 }
 
 bool FontSet::CanRun() const {
-	TTF_Font* tmp = TTF_OpenFont(file.c_str(), 72);
-	if (!tmp)
-		return false;
-	TTF_CloseFont(tmp);
-	return true;
+	return !file.empty();
 }
 
 TTF_Font* FontSet::Get(int size) {
-	return (fonts.count(size) == 0) ? AddSize(size) : fonts.at(size);
+	return (CanRun() && fonts.count(size) == 0) ? AddSize(size) : fonts.at(size);
 }
 
 TTF_Font* FontSet::AddSize(int size) {
@@ -84,7 +84,7 @@ TTF_Font* FontSet::AddSize(int size) {
 	if (font)
 		fonts.insert(make_pair(size, font));
 	else
-		cerr << "couldn't load font " << file << endl;
+		cerr << "couldn't load font " << file << endl << TTF_GetError() << endl;
 	return font;
 }
 
@@ -219,10 +219,200 @@ void TextEdit::CheckText() {
 
 // SHORTCUT
 
-Shortcut::Shortcut(SDL_Scancode KEY, void (Program::*CALL)()) :
-	key(KEY),
+Shortcut::Shortcut()
+{
+	ClearKey();
+	ClearCtr();
+}
+
+Shortcut::Shortcut(SDL_Scancode KEY)
+{
+	Key(KEY);
+	ClearCtr();
+}
+
+Shortcut::Shortcut(uint8 JCT, EKey jctType)
+{
+	ClearKey();
+	switch (jctType) {
+	case K_BUTTON:
+		JButton(JCT);
+		break;
+	case K_HAT:
+		JHat(JCT);
+		break;
+	case K_AXIS_P:
+		JAxis(JCT, true);
+		break;
+	case K_AXIS_N:
+		JAxis(JCT, false);
+		break;
+	default:
+		ClearCtr();
+	}
+}
+
+Shortcut::Shortcut(SDL_Scancode KEY, uint8 JCT, EKey jctType)
+{
+	Key(KEY);
+	switch (jctType) {
+	case K_BUTTON:
+		JButton(JCT);
+		break;
+	case K_HAT:
+		JHat(JCT);
+		break;
+	case K_AXIS_P:
+		JAxis(JCT, true);
+		break;
+	case K_AXIS_N:
+		JAxis(JCT, false);
+		break;
+	default:
+		ClearCtr();
+	}
+}
+
+Shortcut::~Shortcut() {}
+
+bool Shortcut::KeyAssigned() const {
+	return assigned & K_KEY;
+}
+
+SDL_Scancode Shortcut::Key() const {
+	return key;
+}
+
+void Shortcut::Key(SDL_Scancode KEY) {
+	key = KEY;
+	assigned |= K_KEY;
+}
+
+void Shortcut::ClearKey() {
+	assigned ^= assigned & K_KEY;
+}
+
+bool Shortcut::JButtonAssigned() const {
+	return assigned & K_BUTTON;
+}
+
+bool Shortcut::JHatAssigned() const {
+	return assigned & K_HAT;
+}
+
+bool Shortcut::JAxisAssigned() const {
+	return (assigned & K_AXIS_P) || (assigned & K_AXIS_N);
+}
+
+bool Shortcut::JPosAxisAssigned() const {
+	return assigned & K_AXIS_P;
+}
+
+bool Shortcut::JNegAxisAssigned() const {
+	return assigned & K_AXIS_N;
+}
+
+uint8 Shortcut::JCtr() const {
+	return jctr;
+}
+
+void Shortcut::JButton(uint8 BUTT) {
+	jctr = BUTT;
+	assigned ^= assigned & (K_HAT | K_AXIS_P | K_AXIS_N);
+	assigned |= K_BUTTON;
+}
+
+void Shortcut::JHat(uint8 HAT) {
+	jctr = HAT;
+	assigned ^= assigned & (K_BUTTON | K_AXIS_P | K_AXIS_N);
+	assigned |= K_HAT;
+}
+
+void Shortcut::JAxis(uint8 AXIS, bool positive) {
+	jctr = AXIS;
+	if (positive) {
+		assigned ^= assigned & (K_BUTTON | K_HAT | K_AXIS_N);
+		assigned |= K_AXIS_P;
+	}
+	else {
+		assigned ^= assigned & (K_BUTTON | K_HAT | K_AXIS_P);
+		assigned |= K_AXIS_N;
+	}
+}
+
+void Shortcut::ClearCtr() {
+	assigned &= K_KEY;
+}
+
+Shortcut::EKey operator~(Shortcut::EKey a) {
+	return static_cast<Shortcut::EKey>(~static_cast<uint8>(a));
+}
+Shortcut::EKey operator&(Shortcut::EKey a, Shortcut::EKey b) {
+	return static_cast<Shortcut::EKey>(static_cast<uint8>(a) & static_cast<uint8>(b));
+}
+Shortcut::EKey operator&=(Shortcut::EKey& a, Shortcut::EKey b) {
+	return a = static_cast<Shortcut::EKey>(static_cast<uint8>(a) & static_cast<uint8>(b));
+}
+Shortcut::EKey operator^(Shortcut::EKey a, Shortcut::EKey b) {
+	return static_cast<Shortcut::EKey>(static_cast<uint8>(a) ^ static_cast<uint8>(b));
+}
+Shortcut::EKey operator^=(Shortcut::EKey& a, Shortcut::EKey b) {
+	return a = static_cast<Shortcut::EKey>(static_cast<uint8>(a) ^ static_cast<uint8>(b));
+}
+Shortcut::EKey operator|(Shortcut::EKey a, Shortcut::EKey b) {
+	return static_cast<Shortcut::EKey>(static_cast<uint8>(a) | static_cast<uint8>(b));
+}
+Shortcut::EKey operator|=(Shortcut::EKey& a, Shortcut::EKey b) {
+	return a = static_cast<Shortcut::EKey>(static_cast<uint8>(a) | static_cast<uint8>(b));
+}
+
+// SHORTCUT KEY
+
+ShortcutKey::ShortcutKey(void (Program::*CALL)()) :
+	Shortcut(),
 	call(CALL)
 {}
+
+ShortcutKey::ShortcutKey(SDL_Scancode KEY, void (Program::*CALL)()) :
+	Shortcut(KEY),
+	call(CALL)
+{}
+
+ShortcutKey::ShortcutKey(uint8 JCT, EKey jctType, void (Program::*CALL)()) :
+	Shortcut(JCT, jctType),
+	call(CALL)
+{}
+
+ShortcutKey::ShortcutKey(SDL_Scancode KEY, uint8 JCT, EKey jctType, void (Program::*CALL)()) :
+	Shortcut(KEY, JCT, jctType),
+	call(CALL)
+{}
+
+ShortcutKey::~ShortcutKey() {}
+
+// SHORTCUT AXIS
+
+ShortcutAxis::ShortcutAxis(void (Program::*CALL)(float)) :
+	Shortcut(),
+	call(CALL)
+{}
+
+ShortcutAxis::ShortcutAxis(SDL_Scancode KEY, void (Program::*CALL)(float)) :
+	Shortcut(KEY),
+	call(CALL)
+{}
+
+ShortcutAxis::ShortcutAxis(uint8 JCT, EKey jctType, void (Program::*CALL)(float)) :
+	Shortcut(JCT, jctType),
+	call(CALL)
+{}
+
+ShortcutAxis::ShortcutAxis(SDL_Scancode KEY, uint8 JCT, EKey jctType, void (Program::*CALL)(float)) :
+	Shortcut(KEY, JCT, jctType),
+	call(CALL)
+{}
+
+ShortcutAxis::~ShortcutAxis() {}
 
 // PLAYLIST
 
@@ -278,7 +468,7 @@ string GeneralSettings::DirLib() const {
 	return dirLib;
 }
 
-string GeneralSettings::LibraryParh() const {
+string GeneralSettings::LibraryPath() const {
 	return fs::path(dirLib).is_absolute() ? dirLib : Filer::execDir() + dirLib;
 }
 
@@ -331,6 +521,33 @@ void VideoSettings::SetDefaultTheme() {
 	colors = GetDefaultColors();
 }
 
+map<EColor, vec4b> VideoSettings::GetDefaultColors() {
+	map<EColor, vec4b> colors = {
+		make_pair(EColor::background, GetDefaultColor(EColor::background)),
+		make_pair(EColor::rectangle, GetDefaultColor(EColor::rectangle)),
+		make_pair(EColor::highlighted, GetDefaultColor(EColor::highlighted)),
+		make_pair(EColor::darkened, GetDefaultColor(EColor::darkened)),
+		make_pair(EColor::text, GetDefaultColor(EColor::text))
+	};
+	return colors;
+}
+
+vec4b VideoSettings::GetDefaultColor(EColor color) {
+	switch (color) {
+	case EColor::background:
+		return DEFAULT_COLOR_BACKGROUND;
+	case EColor::rectangle:
+		return DEFAULT_COLOR_RECTANGLE;
+	case EColor::highlighted:
+		return DEFAULT_COLOR_HIGHLIGHTED;
+	case EColor::darkened:
+		return DEFAULT_COLOR_DARKENED;
+	case EColor::text:
+		return DEFAULT_COLOR_TEXT;
+	}
+	return 0;	// just so msvc doesn't bitch around
+}
+
 // AUDIO SETTINGS
 
 AudioSettings::AudioSettings(int MV, int SV, float SD) :
@@ -341,75 +558,76 @@ AudioSettings::AudioSettings(int MV, int SV, float SD) :
 
 // CONTROLS SETTINGS
 
-ControlsSettings::ControlsSettings(const vec2f& SSP, bool fillMissingBindings, const map<string, Shortcut>& SRTCS, const map<string, SDL_Scancode>& HLDS) :
+ControlsSettings::ControlsSettings(const vec2f& SSP, bool fillMissingBindings, const map<string, Shortcut*>& CTS) :
 	scrollSpeed(SSP),
-	shortcuts(SRTCS),
-	holders(HLDS)
+	shortcuts(CTS)
 {
 	if (fillMissingBindings)
 		FillMissingBindings();
 }
 
 void ControlsSettings::FillMissingBindings() {
-	vector<string> names = {"back", "ok", "page_up", "page_down", "zoom_in", "zoom_out", "zoom_reset", "center_view", "play_pause", "next_song", "prev_song", "volume_up", "volume_down", "next_dir", "prev_dir", "fullscreen"};
+	vector<string> names = { SHORTCUT_OK, SHORTCUT_BACK, SHORTCUT_ZOOM_IN, SHORTCUT_ZOOM_OUT, SHORTCUT_ZOOM_RESET, SHORTCUT_CENTER_VIEW, SHORTCUT_FAST, SHORTCUT_SLOW, SHORTCUT_PLAY_PAUSE, SHORTCUT_FULLSCREEN, SHORTCUT_NEXT_DIR, SHORTCUT_PREV_DIR, SHORTCUT_NEXT_SONG, SHORTCUT_PREV_SONG, SHORTCUT_VOLUME_UP, SHORTCUT_VOLUME_DOWN, SHORTCUT_PAGE_UP, SHORTCUT_PAGE_DOWN, SHORTCUT_UP, SHORTCUT_DOWN, SHORTCUT_RIGHT, SHORTCUT_LEFT, SHORTCUT_CURSOR_UP, SHORTCUT_CURSOR_DOWN, SHORTCUT_CURSOR_RIGHT, SHORTCUT_CURSOR_LEFT };
 	for (string& it : names)
-		if (shortcuts.count(it) == 0)
-			shortcuts.insert(make_pair(it, GetDefaultShortcut(it)));
-
-	names = {"up", "down", "left", "right", "fast", "slow"};
-	for (string& it : names)
-		if (holders.count(it) == 0)
-			holders.insert(make_pair(it, GetDefaultHolder(it)));
+		if (shortcuts.count(it) == 0) {
+			Shortcut* sc = GetDefaultShortcut(it);
+			if (sc)
+				shortcuts.insert(make_pair(it, sc));
+		}
 }
 
-Shortcut ControlsSettings::GetDefaultShortcut(const string& name) {
-	if (name == "back")
-		return Shortcut(SDL_SCANCODE_ESCAPE, &Program::Event_Back);
-	else if (name == "ok")
-		return Shortcut(SDL_SCANCODE_RETURN, &Program::Event_Ok);
-	else if (name == "page_up")
-		return Shortcut(SDL_SCANCODE_PAGEUP, &Program::Event_PageUp);
-	else if (name == "page_down")
-		return Shortcut(SDL_SCANCODE_PAGEDOWN, &Program::Event_PageDown);
-	else if (name == "zoom_in")
-		return Shortcut(SDL_SCANCODE_E, &Program::Event_ZoomIn);
-	else if (name == "zoom_out")
-		return Shortcut(SDL_SCANCODE_Q, &Program::Event_ZoomOut);
-	else if (name == "zoom_reset")
-		return Shortcut(SDL_SCANCODE_R, &Program::Event_ZoomReset);
-	else if (name == "center_view")
-		return Shortcut(SDL_SCANCODE_C, &Program::Event_CenterView);
-	else if (name == "play_pause")
-		return Shortcut(SDL_SCANCODE_F, &Program::Event_PlayPause);
-	else if (name == "next_song")
-		return Shortcut(SDL_SCANCODE_D, &Program::Event_NextSong);
-	else if (name == "prev_song")
-		return Shortcut(SDL_SCANCODE_A, &Program::Event_PrevSong);
-	else if (name == "volume_up")
-		return Shortcut(SDL_SCANCODE_W, &Program::Event_VolumeUp);
-	else if (name == "volume_down")
-		return Shortcut(SDL_SCANCODE_S, &Program::Event_VolumeDown);
-	else if (name == "next_dir")
-		return Shortcut(SDL_SCANCODE_P, &Program::Event_NextDir);
-	else if (name == "prev_dir")
-		return Shortcut(SDL_SCANCODE_O, &Program::Event_PrevDir);
-	else if (name == "fullscreen")
-		return Shortcut(SDL_SCANCODE_L, &Program::Event_ScreenMode);
-	return Shortcut(SDL_SCANCODE_RCTRL, nullptr);
-}
-
-SDL_Scancode ControlsSettings::GetDefaultHolder(const string& name) {
-	if (name == "up")
-		return SDL_SCANCODE_UP;
-	else if (name == "down")
-		return SDL_SCANCODE_DOWN;
-	else if (name == "left")
-		return SDL_SCANCODE_LEFT;
-	else if (name == "right")
-		return SDL_SCANCODE_RIGHT;
-	else if (name == "fast")
-		return SDL_SCANCODE_LSHIFT;
-	else if (name == "slow")
-		return SDL_SCANCODE_LALT;
-	return SDL_SCANCODE_RCTRL;
+Shortcut* ControlsSettings::GetDefaultShortcut(const string& name) {
+	if (name == SHORTCUT_OK)
+		return new ShortcutKey(DEFAULT_KEY_OK, DEFAULT_CBINDING_OK, DEFAULT_CTYPE_0, &Program::Event_Ok);
+	else if (name == SHORTCUT_BACK)
+		return new ShortcutKey(DEFAULT_KEY_BACK, DEFAULT_CBINDING_BACK, DEFAULT_CTYPE_0, &Program::Event_Back);
+	else if (name == SHORTCUT_ZOOM_IN)
+		return new ShortcutKey(DEFAULT_KEY_ZOOM_IN, DEFAULT_CBINDING_ZOOM_IN, DEFAULT_CTYPE_0, &Program::Event_ZoomIn);
+	else if (name == SHORTCUT_ZOOM_OUT)
+		return new ShortcutKey(DEFAULT_KEY_ZOOM_OUT, DEFAULT_CBINDING_ZOOM_OUT, DEFAULT_CTYPE_0, &Program::Event_ZoomOut);
+	else if (name == SHORTCUT_ZOOM_RESET)
+		return new ShortcutKey(DEFAULT_KEY_ZOOM_RESET, DEFAULT_CBINDING_ZOOM_RESET, DEFAULT_CTYPE_0, &Program::Event_ZoomReset);
+	else if (name == SHORTCUT_CENTER_VIEW)
+		return new ShortcutKey(DEFAULT_KEY_CENTER_VIEW, DEFAULT_CBINDING_CENTER_VIEW, DEFAULT_CTYPE_0, &Program::Event_CenterView);
+	else if (name == SHORTCUT_FAST)
+		return new ShortcutAxis(DEFAULT_KEY_FAST, DEFAULT_CBINDING_FAST, DEFAULT_CTYPE_0);
+	else if (name == SHORTCUT_SLOW)
+		return new ShortcutAxis(DEFAULT_KEY_SLOW, DEFAULT_CBINDING_SLOW, DEFAULT_CTYPE_0);
+	else if (name == SHORTCUT_PLAY_PAUSE)
+		return new ShortcutKey(DEFAULT_KEY_PLAY_PAUSE, DEFAULT_CBINDING_PLAY_PAUSE, DEFAULT_CTYPE_0, &Program::Event_PlayPause);
+	else if (name == SHORTCUT_FULLSCREEN)
+		return new ShortcutKey(DEFAULT_KEY_FULLSCREEN, DEFAULT_CBINDING_FULLSCREEN, DEFAULT_CTYPE_0, &Program::Event_ScreenMode);
+	else if (name == SHORTCUT_NEXT_DIR)
+		return new ShortcutKey(DEFAULT_KEY_NEXT_DIR, DEFAULT_CBINDING_NEXT_DIR, DEFAULT_CTYPE_1, &Program::Event_NextDir);
+	else if (name == SHORTCUT_PREV_DIR)
+		return new ShortcutKey(DEFAULT_KEY_PREV_DIR, DEFAULT_CBINDING_PREV_DIR, DEFAULT_CTYPE_1, &Program::Event_PrevDir);
+	else if (name == SHORTCUT_NEXT_SONG)
+		return new ShortcutKey(DEFAULT_KEY_NEXT_SONG, DEFAULT_CBINDING_DPAD_RIGHT, DEFAULT_CTYPE_2, &Program::Event_NextSong);
+	else if (name == SHORTCUT_PREV_SONG)
+		return new ShortcutKey(DEFAULT_KEY_PREV_SONG, DEFAULT_CBINDING_DPAD_LEFT, DEFAULT_CTYPE_2, &Program::Event_PrevSong);
+	else if (name == SHORTCUT_VOLUME_UP)
+		return new ShortcutKey(DEFAULT_KEY_VOLUME_UP, DEFAULT_CBINDING_DPAD_UP, DEFAULT_CTYPE_2, &Program::Event_VolumeUp);
+	else if (name == SHORTCUT_VOLUME_DOWN)
+		return new ShortcutKey(DEFAULT_KEY_VOLUME_DOWN, DEFAULT_CBINDING_DPAD_DOWN, DEFAULT_CTYPE_2, &Program::Event_VolumeDown);
+	else if (name == SHORTCUT_PAGE_UP)
+		return new ShortcutKey(DEFAULT_KEY_PAGE_UP, &Program::Event_PageUp);
+	else if (name == SHORTCUT_PAGE_DOWN)
+		return new ShortcutKey(DEFAULT_KEY_PAGE_DOWN, &Program::Event_PageDown);
+	else if (name == SHORTCUT_UP)
+		return new ShortcutAxis(DEFAULT_KEY_UP, DEFAULT_CBINDING_VERTICAL, DEFAULT_CTYPE_4, &Program::Event_Up);
+	else if (name == SHORTCUT_DOWN)
+		return new ShortcutAxis(DEFAULT_KEY_DOWN, DEFAULT_CBINDING_VERTICAL, DEFAULT_CTYPE_3, &Program::Event_Down);
+	else if (name == SHORTCUT_RIGHT)
+		return new ShortcutAxis(DEFAULT_KEY_RIGHT, DEFAULT_CBINDING_HORIZONTAL, DEFAULT_CTYPE_3, &Program::Event_Right);
+	else if (name == SHORTCUT_LEFT)
+		return new ShortcutAxis(DEFAULT_KEY_LEFT, DEFAULT_CBINDING_HORIZONTAL, DEFAULT_CTYPE_4, &Program::Event_Left);
+	else if (name == SHORTCUT_CURSOR_UP)
+		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_VERT, DEFAULT_CTYPE_4, &Program::Event_CursorUp);
+	else if (name == SHORTCUT_CURSOR_DOWN)
+		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_VERT, DEFAULT_CTYPE_3, &Program::Event_CursorDown);
+	else if (name == SHORTCUT_CURSOR_RIGHT)
+		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_HORI, DEFAULT_CTYPE_3, &Program::Event_CursorRight);
+	else if (name == SHORTCUT_CURSOR_LEFT)
+		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_HORI, DEFAULT_CTYPE_4, &Program::Event_CursorLeft);
+	return nullptr;
 }

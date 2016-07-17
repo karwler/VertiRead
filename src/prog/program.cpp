@@ -2,35 +2,39 @@
 
 // reader events
 
-void Program::Event_Up() {
+void Program::Event_Up(float amt) {
 	if (ScrollArea* box = dynamic_cast<ScrollArea*>(World::scene()->FocusedObject())) {
-		float spd = World::inputSys()->Settings().scrollSpeed.y;
-		spd *= World::inputSys()->isPressed("fast") ? 3.f : World::inputSys()->isPressed("slow") ? 0.5f : 1.f;
-		box->ScrollList(-spd*World::engine()->deltaSeconds()*100.f);
+		float speed = amt * World::inputSys()->Settings().scrollSpeed.y * World::engine()->deltaSeconds();
+		float factor = 1.f;
+		speed *= World::inputSys()->isPressed("fast", &factor) ? fastScrollFactor : World::inputSys()->isPressed("slow") ? slowScrollFactor : normalScrollFactor;
+		box->ScrollList(speed * -factor);
 	}
 }
 
-void Program::Event_Down() {
+void Program::Event_Down(float amt) {
 	if (ScrollArea* box = dynamic_cast<ScrollArea*>(World::scene()->FocusedObject())) {
-		float spd = World::inputSys()->Settings().scrollSpeed.y;
-		spd *= World::inputSys()->isPressed("fast") ? 3.f : World::inputSys()->isPressed("slow") ? 0.5f : 1.f;
-		box->ScrollList(spd*World::engine()->deltaSeconds()*100.f);
+		float speed = amt * World::inputSys()->Settings().scrollSpeed.y * World::engine()->deltaSeconds();
+		float factor = 1.f;
+		speed *= World::inputSys()->isPressed("fast", &factor) ? fastScrollFactor : World::inputSys()->isPressed("slow") ? slowScrollFactor : normalScrollFactor;
+		box->ScrollList(speed * factor);
 	}
 }
 
-void Program::Event_Left() {
+void Program::Event_Right(float amt) {
 	if (ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject())) {
-		float spd = World::inputSys()->Settings().scrollSpeed.x;
-		spd *= World::inputSys()->isPressed("fast") ? 3.f : World::inputSys()->isPressed("slow") ? 0.5f : 1.f;
-		box->ScrollListX(-spd*World::engine()->deltaSeconds()*100.f);
+		float speed = amt * World::inputSys()->Settings().scrollSpeed.x * World::engine()->deltaSeconds();
+		float factor = 1.f;
+		speed *= World::inputSys()->isPressed("fast", &factor) ? fastScrollFactor : World::inputSys()->isPressed("slow") ? slowScrollFactor : normalScrollFactor;
+		box->ScrollListX(speed * factor);
 	}
 }
 
-void Program::Event_Right() {
+void Program::Event_Left(float amt) {
 	if (ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject())) {
-		float spd = World::inputSys()->Settings().scrollSpeed.x;
-		spd *= World::inputSys()->isPressed("fast") ? 3.f : World::inputSys()->isPressed("slow") ? 0.5f : 1.f;
-		box->ScrollListX(spd*World::engine()->deltaSeconds()*100.f);
+		float speed = amt * World::inputSys()->Settings().scrollSpeed.x * World::engine()->deltaSeconds();
+		float factor = 1.f;
+		speed *= World::inputSys()->isPressed("fast", &factor) ? fastScrollFactor : World::inputSys()->isPressed("slow") ? slowScrollFactor : normalScrollFactor;
+		box->ScrollListX(speed * -factor);
 	}
 }
 
@@ -51,13 +55,13 @@ void Program::Event_PageDown() {
 }
 
 void Program::Event_ZoomIn() {
-	if (ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		box->AddZoom(0.2f);
+	if (ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject())) 
+		box->MultZoom(zoomFactor);
 }
 
 void Program::Event_ZoomOut() {
 	if (ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		box->AddZoom(-0.2f);
+		box->DivZoom(zoomFactor);
 }
 
 void Program::Event_ZoomReset() {
@@ -78,6 +82,22 @@ void Program::Event_NextDir() {
 void Program::Event_PrevDir() {
 	if (curMenu == EMenu::reader)
 		Event_OpenReader((void*)browser->GoPrev().string().c_str());
+}
+
+void Program::Event_CursorUp(float amt) {
+	World::winSys()->MoveMouse(World::inputSys()->mousePos() - vec2i(0, std::ceil(amt * World::engine()->deltaSeconds() * mouseDragFactor)));
+}
+
+void Program::Event_CursorDown(float amt) {
+	World::winSys()->MoveMouse(World::inputSys()->mousePos() + vec2i(0, std::ceil(amt * World::engine()->deltaSeconds() * mouseDragFactor)));
+}
+
+void Program::Event_CursorRight(float amt) {
+	World::winSys()->MoveMouse(World::inputSys()->mousePos() + vec2i(std::ceil(amt * World::engine()->deltaSeconds() * mouseDragFactor), 0));
+}
+
+void Program::Event_CursorLeft(float amt) {
+	World::winSys()->MoveMouse(World::inputSys()->mousePos() - vec2i(std::ceil(amt * World::engine()->deltaSeconds() * mouseDragFactor), 0));
 }
 
 // PLAYER EVENTS
@@ -111,7 +131,14 @@ void Program::Event_Mute() {
 void Program::Event_SwitchButtonClick() {
 	editor->showSongs = !editor->showSongs;
 
-	SwitchScene(editor);
+	SwitchScene();
+}
+
+void Program::Event_BrowseButtonClick() {
+	if (editor->showSongs)
+		Event_OpenSongBrowser("");
+	else
+		SwitchScene(EMenu::bookSearch);
 }
 
 void Program::Event_AddButtonClick() {
@@ -123,7 +150,18 @@ void Program::Event_AddButtonClick() {
 		else
 			editor->AddBook("");
 
-		SwitchScene(editor);
+		SwitchScene();
+	}
+	else if (curMenu == EMenu::songSearch) {
+		if (ListItem* item = World::scene()->SelectedButton()) {
+			if (browser->CurDir().string() == string(1, dsep))
+				editor->AddSong(dsep+item->label);
+			else
+				editor->AddSong(browser->CurDir().string()+dsep+item->label);
+			browser.reset();
+
+			SwitchScene(EMenu::plistEditor);
+		}
 	}
 }
 
@@ -140,7 +178,7 @@ void Program::Event_DeleteButtonClick() {
 		else
 			editor->DelBook();
 
-		SwitchScene(editor);
+		SwitchScene();
 	}
 }
 
@@ -161,11 +199,47 @@ void Program::Event_ItemDoubleclicked(ListItem* item) {
 		Event_OpenPlaylistEditor((void*)item->label.c_str());
 	else if (curMenu == EMenu::plistEditor)
 		World::scene()->SetPopup(new PopupText("Rename", item->getData()));
+	else if (curMenu == EMenu::songSearch) {
+#ifdef _WIN32
+		if (browser->CurDir() == "\\")
+			Event_OpenSongBrowser(item->label+dsep);
+#else
+		if (browser->CurDir() == "/" && fs::is_directory(dsep + item->label))
+			Event_OpenSongBrowser(dsep+item->label);
+#endif
+		else if (fs::is_directory(browser->CurDir().string() + dsep + item->label))
+			Event_OpenSongBrowser(item->label);
+		else {
+			if (browser->CurDir().string() == string(1, dsep))
+				editor->AddSong(dsep+item->label);
+			else
+				editor->AddSong(browser->CurDir().string()+dsep+item->label);
+			browser.reset();
+			SwitchScene(EMenu::plistEditor);
+		}
+	}
+	else if (curMenu == EMenu::bookSearch) {
+		editor->AddBook(item->label);
+		SwitchScene(EMenu::plistEditor);
+	}
 }
 
 void Program::Event_SaveButtonClick() {
 	if (editor)
 		Filer::SavePlaylist(editor->getPlaylist());
+}
+
+void Program::Event_UpButtonClick() {
+	if (browser->GoUp())
+		SwitchScene();
+	else
+		Event_Back();
+}
+
+void Program::Event_AddBook(void* name) {
+	editor->AddBook(cstr(name));
+
+	SwitchScene(EMenu::plistEditor);
 }
 
 // MENU EVENTS
@@ -180,14 +254,14 @@ void Program::Event_OpenBrowser(void* path) {
 	else
 		browser = new Browser(cstr(path));
 	
-	SwitchScene(EMenu::browser, browser);
+	SwitchScene(EMenu::browser);
 }
 
 void Program::Event_OpenReader(void* file) {
 	string filename = FindFittingPlaylist(cstr(file));
 	if (!filename.empty())
 		World::audioSys()->LoadPlaylist(Filer::LoadPlaylist(filename));
-
+	
 	SwitchScene(EMenu::reader, file);
 }
 
@@ -198,7 +272,20 @@ void Program::Event_OpenPlaylistList() {
 void Program::Event_OpenPlaylistEditor(void* playlist) {
 	editor = new PlaylistEditor(cstr(playlist));
 
-	SwitchScene(EMenu::plistEditor, editor);
+	SwitchScene(EMenu::plistEditor);
+}
+
+void Program::Event_OpenSongBrowser(const string& dir) {
+	if (browser)
+		browser->GoTo(dir); 
+	else {
+#ifdef _WIN32
+		browser = new Browser("\\", getenv("UserProfile"));
+#else
+		browser = new Browser("/", getenv("HOME"));
+#endif
+	}
+	SwitchScene(EMenu::songSearch);
 }
 
 void Program::Event_OpenGeneralSettings() {
@@ -217,12 +304,19 @@ void Program::Event_OpenControlsSettings() {
 	SwitchScene(EMenu::controlsSets);
 }
 
+void Program::Event_Ok() {
+	if (dynamic_cast<PopupMessage*>(World::scene()->getPopup()))
+		World::scene()->SetPopup(nullptr);
+	else if (curMenu == EMenu::playlists || curMenu == EMenu::plistEditor)
+		Event_EditButtonClick();
+}
+
 void Program::Event_Back() {
 	if (World::scene()->getPopup())
 		World::scene()->SetPopup(nullptr);
 	else if (curMenu == EMenu::reader) {
 		World::audioSys()->UnloadPlaylist();
-		SwitchScene(EMenu::browser, browser);
+		SwitchScene(EMenu::browser);
 	}
 	else if (curMenu == EMenu::browser) {
 		if (browser->GoUp())
@@ -236,17 +330,16 @@ void Program::Event_Back() {
 		editor.reset();
 		SwitchScene(EMenu::playlists);
 	}
+	else if (curMenu == EMenu::songSearch) {
+		browser.reset();
+		SwitchScene(EMenu::plistEditor);
+	}
+	else if (curMenu == EMenu::bookSearch)
+		SwitchScene(EMenu::plistEditor);
 	else if (curMenu >= EMenu::generalSets)
 		SwitchScene(EMenu::books);
 	else
 		World::engine()->Close();
-}
-
-void Program::Event_Ok() {
-	if (dynamic_cast<PopupMessage*>(World::scene()->getPopup()))
-		World::scene()->SetPopup(nullptr);
-	else if (curMenu == EMenu::playlists || curMenu == EMenu::plistEditor)
-		Event_EditButtonClick();
 }
 
 // SETTINGS EVENTS
@@ -320,7 +413,7 @@ void Program::Event_TextCaptureOk(const string& str) {
 			editor->RenameSong(str);
 		else
 			editor->RenameBook(str);
-		SwitchScene(editor);
+		SwitchScene();
 	}
 }
 
@@ -335,32 +428,28 @@ void Program::Event_ScreenMode() {
 
 void Program::FileDropEvent(char* file) {
 	if (curMenu == EMenu::plistEditor) {
+		cout << "drop " << file << endl;
 		if (editor->showSongs) {
-			if (fs::is_directory(file)) {
-				vector<fs::path> files = Filer::ListDirRecursively(file, FILTER_FILE);
-				for (fs::path& it : files)
-					editor->AddSong(it.string());
-			}
-			else
-				editor->AddSong(file);
-			SwitchScene(editor);
+			editor->AddSong(file);
+			SwitchScene();
 		}
 		else if (fs::is_directory(file)) {
 			fs::path path = file;
-			string libDir = World::scene()->Settings().LibraryParh();
+			string libDir = World::scene()->Settings().LibraryPath();
 			if (libDir[libDir.length()-1] == dsep)		// remove last char if it's a dsep
 				libDir.resize(libDir.size()-1);
 
 			if (path.parent_path() == libDir) {
 				editor->AddBook(path.filename().string());
-				SwitchScene(editor);
+				SwitchScene();
+			}
+			else if (path == libDir) {
+				for (fs::path& it : Filer::ListDir(path, FILTER_DIR))
+					editor->AddBook(it.filename().string());
+				SwitchScene();
 			}
 		}
 	}
-}
-
-EMenu Program::CurrentMenu() const {
-	return curMenu;
 }
 
 void Program::SwitchScene(EMenu newMenu, void* dat) {
@@ -369,8 +458,12 @@ void Program::SwitchScene(EMenu newMenu, void* dat) {
 }
 
 void Program::SwitchScene(void* dat) const {
+	// clean up library
 	World::library()->Fonts()->Clear();
-	uint focObject = 0;
+	World::library()->ClearPics();
+
+	// prepare necessary variables
+	size_t focObject = 0;
 	vector<Object*> objects;
 
 	// little conveniences
@@ -388,8 +481,7 @@ void Program::SwitchScene(void* dat) const {
 		
 		// book list
 		vector<ListItem*> tiles;
-		vector<fs::path> names = Filer::ListDir(World::scene()->Settings().LibraryParh(), FILTER_DIR);
-		for (fs::path& it : names)
+		for (fs::path& it : Filer::ListDir(World::scene()->Settings().LibraryPath(), FILTER_DIR))
 			tiles.push_back(new ItemButton(it.filename().string(), it.string(), &Program::Event_OpenBrowser));
 		objects.push_back(new TileBox(Object(vec2i(0, 60), -1, vec2i(res.x, res.y-60), FIX_ANC | FIX_END), tiles, vec2i(400, 30)));
 
@@ -401,7 +493,6 @@ void Program::SwitchScene(void* dat) const {
 
 		// list
 		vector<ListItem*> items;
-		Browser* browser = static_cast<Browser*>(dat);
 		for (fs::path& it : browser->ListDirs())
 			items.push_back(new ItemButton(it.filename().string(), "", &Program::Event_OpenBrowser));
 		for (fs::path& it : browser->ListFiles())
@@ -412,7 +503,13 @@ void Program::SwitchScene(void* dat) const {
 	case EMenu::reader: {
 		// reader box
 		fs::path file = cstr(dat);
-		World::library()->LoadPics(Filer::GetPics(file.parent_path()));
+		if (fs::is_directory(file)) {
+			World::library()->LoadPics(Filer::GetPics(file));
+			file.clear();
+		}
+		else 
+			World::library()->LoadPics(Filer::GetPics(file.parent_path()));
+		
 		objects = { new ReaderBox(Object(0, 0, World::winSys()->Resolution(), FIX_ANC | FIX_END, EColor::background), World::library()->Pictures(), file.string()) };
 		focObject = objects.size()-1;
 		break; }
@@ -432,8 +529,7 @@ void Program::SwitchScene(void* dat) const {
 		// playlist list
 		TileBox* box = new TileBox(Object(vec2i(0, 100), -1, vec2i(res.x, res.y-100), FIX_ANC | FIX_END), {}, vec2i(400, 30));
 		vector<ListItem*> tiles;
-		vector<fs::path> names = Filer::ListDir(World::scene()->Settings().PlaylistParh(), FILTER_FILE);
-		for (fs::path& it : names)
+		for (fs::path& it : Filer::ListDir(World::scene()->Settings().PlaylistParh(), FILTER_FILE))
 			tiles.push_back(new ListItem(it.filename().string(), box));
 		box->Items(tiles);
 		objects.push_back(box);
@@ -443,17 +539,17 @@ void Program::SwitchScene(void* dat) const {
 		// option buttons
 		sizT.x = 100;
 		objects = {
-			new ButtonText(Object(vec2i(0, 50),  -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_AddButtonClick, World::library()->getLine("add")),
-			new ButtonText(Object(vec2i(0, 100), -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_EditButtonClick, World::library()->getLine("edit")),
-			new ButtonText(Object(vec2i(0, 150), -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_DeleteButtonClick, World::library()->getLine("del")),
-			new ButtonText(Object(vec2i(0, 200), -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_SaveButtonClick, World::library()->getLine("save")),
-			new ButtonText(Object(vec2i(0, 250), -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_Back, World::library()->getLine("close"))
+			new ButtonText(Object(vec2i(0, 50),  -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_BrowseButtonClick, World::library()->getLine("browse")),
+			new ButtonText(Object(vec2i(0, 100), -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_AddButtonClick, World::library()->getLine("add")),
+			new ButtonText(Object(vec2i(0, 150), -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_EditButtonClick, World::library()->getLine("edit")),
+			new ButtonText(Object(vec2i(0, 200), -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_DeleteButtonClick, World::library()->getLine("del")),
+			new ButtonText(Object(vec2i(0, 250), -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_SaveButtonClick, World::library()->getLine("save")),
+			new ButtonText(Object(vec2i(0, 300), -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_Back, World::library()->getLine("close"))
 		};
 
 		// playlist list
-		ListBox* box = new ListBox(Object(vec2i(110, 0), -1, vec2i(res.x-110, res.y), FIX_ANC | FIX_END, EColor::background));
+		ListBox* box = new ListBox(Object(vec2i(sizT.x+10, 0), -1, vec2i(res.x-110, res.y), FIX_ANC | FIX_END, EColor::background));
 		vector<ListItem*> items;
-		PlaylistEditor* editor = static_cast<PlaylistEditor*>(dat);
 		if (editor->showSongs) {
 			objects.push_back(new ButtonText(Object(vec2i(0, 0), -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_SwitchButtonClick, World::library()->getLine("books")));
 			for (fs::path& it : editor->getPlaylist().songs)
@@ -466,6 +562,36 @@ void Program::SwitchScene(void* dat) const {
 		}
 		box->Items(items);
 		objects.push_back(box);
+		focObject = objects.size()-1;
+		break; }
+	case EMenu::songSearch: {
+		// buttons
+		objects = {
+			new ButtonText(Object(vec2i(0, 0),   -1, vec2i(90, 40), FIX_ANC | FIX_SIZ), &Program::Event_AddButtonClick, World::library()->getLine("add")),
+			new ButtonText(Object(vec2i(0, 50),  -1, vec2i(90, 40), FIX_ANC | FIX_SIZ), &Program::Event_UpButtonClick, World::library()->getLine("up")),
+			new ButtonText(Object(vec2i(0, 100), -1, vec2i(90, 40), FIX_ANC | FIX_SIZ), &Program::Event_Back, World::library()->getLine("back"))
+		};
+
+		// list
+		ListBox* box = new ListBox(Object(vec2i(100, 0), -1, vec2i(res.x-100, res.y), FIX_ANC | FIX_END, EColor::background));
+		vector<ListItem*> items;
+		for (fs::path& it : browser->ListDirs())
+			items.push_back(new ListItem(it.filename().string(), box));
+		for (fs::path& it : browser->ListFiles())
+			items.push_back(new ListItem(it.filename().string(), box));
+		box->Items(items);
+		objects.push_back(box);
+		focObject = objects.size()-1;
+		break; }
+	case EMenu::bookSearch: {
+		// back button
+		objects = {	new ButtonText(Object(vec2i(0, 0), -1, vec2i(90, 40), FIX_ANC | FIX_SIZ), &Program::Event_Back, World::library()->getLine("back"))	};
+
+		// list
+		vector<ListItem*> items;
+		for (fs::path& it : Filer::ListDir(World::scene()->Settings().DirLib(), FILTER_DIR))
+			items.push_back(new ItemButton(it.filename().string(), "", &Program::Event_AddBook));
+		objects.push_back(new ListBox(Object(vec2i(100, 0), -1, vec2i(res.x-100, res.y), FIX_ANC | FIX_END, EColor::background), items));
 		focObject = objects.size()-1;
 		break; }
 	case EMenu::generalSets: {
@@ -536,10 +662,8 @@ void Program::SwitchScene(void* dat) const {
 			new LineEdit(box, World::library()->getLine("scroll speed")+" X", to_string(World::inputSys()->Settings().scrollSpeed.x), ETextType::floating, &Program::Event_SetScrollX),
 			new LineEdit(box, World::library()->getLine("scroll speed")+" Y", to_string(World::inputSys()->Settings().scrollSpeed.y), ETextType::floating, &Program::Event_SetScrollY)
 		};
-		for (const pair<string, Shortcut>& it : World::inputSys()->Settings().shortcuts)
-			items.push_back(new KeyGetter(box, it.first, World::inputSys()->GetKeyPtr(it.first, true)));
-		for (const pair<string, SDL_Scancode>& it : World::inputSys()->Settings().holders)
-			items.push_back(new KeyGetter(box, it.first, World::inputSys()->GetKeyPtr(it.first, false)));
+		for (const pair<string, Shortcut*>& it : World::inputSys()->Settings().shortcuts)
+			items.push_back(new KeyGetter(box, it.first, World::inputSys()->GetShortcut(it.first)));
 
 		box->Items(items);
 		objects.push_back(box);
@@ -552,7 +676,7 @@ void Program::SwitchScene(void* dat) const {
 string Program::FindFittingPlaylist(const string& picPath) {
 	// get book name
 	string name;
-	size_t start = World::scene()->Settings().LibraryParh().length();
+	size_t start = World::scene()->Settings().LibraryPath().length();
 	for (size_t i=start; i!=picPath.length(); i++)
 		if (picPath[i] == dsep) {
 			name = picPath.substr(start, i-start);
@@ -562,8 +686,7 @@ string Program::FindFittingPlaylist(const string& picPath) {
 		return "";
 
 	// check playlist files for matching book name
-	vector<fs::path> files = Filer::ListDir(World::scene()->Settings().PlaylistParh(), FILTER_FILE);
-	for (fs::path& file : files) {
+	for (fs::path& file : Filer::ListDir(World::scene()->Settings().PlaylistParh(), FILTER_FILE)) {
 		Playlist playlist = Filer::LoadPlaylist(file.filename().string());
 		for (string& book : playlist.books)
 			if (book == name)

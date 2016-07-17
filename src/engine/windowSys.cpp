@@ -4,7 +4,13 @@ WindowSys::WindowSys(const VideoSettings& SETS) :
 	window(nullptr),
 	renderer(nullptr),
 	sets(SETS)
-{}
+{
+	ShowMouse(true);
+}
+
+WindowSys::~WindowSys() {
+	DestroyWindow();
+}
 
 void WindowSys::CreateWindow() {
 	DestroyWindow();
@@ -50,6 +56,19 @@ void WindowSys::DestroyWindow() {
 void WindowSys::SetIcon(SDL_Surface* icon) {
 	if (icon)
 		SDL_SetWindowIcon(window, icon);
+}
+
+bool WindowSys::ShowMouse() const {
+	return showMouse;
+}
+
+void WindowSys::ShowMouse(bool on) {
+	showMouse = on;
+	SDL_ShowCursor(showMouse ? SDL_ENABLE : SDL_DISABLE);
+}
+
+void WindowSys::MoveMouse(const vec2i& mPos) {
+	SDL_WarpMouseInWindow(window, mPos.x, mPos.y);
 }
 
 void WindowSys::DrawObjects(const vector<Object*>& objects) {
@@ -285,7 +304,7 @@ void WindowSys::DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, 
 
 void WindowSys::DrawItem(KeyGetter* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
 	int offset = Text(item->label, 0, parent->ItemH()).size().x + 20;
-	string text = (World::inputSys()->Captured() == item) ? "Gimme a key..." : item->KeyName();
+	string text = (World::inputSys()->Captured() == item) ? "Gimme a key..." : item->Text();
 	EColor color = (World::inputSys()->Captured() == item) ? EColor::highlighted : EColor::text;
 
 	DrawText(Text(text, vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), color), crop);

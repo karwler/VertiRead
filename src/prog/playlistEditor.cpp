@@ -17,7 +17,13 @@ void PlaylistEditor::LoadPlaylist(const string& playlist) {
 }
 
 void PlaylistEditor::AddSong(const string& path) {
-	pList.songs.push_back(path);
+	if (fs::is_directory(path)) {
+		for (fs::path& it : Filer::ListDirRecursively(path, FILTER_FILE))
+			pList.songs.push_back(it.string());
+	}
+	else
+		pList.songs.push_back(path);
+
 	selected = pList.songs.size()-1;
 }
 

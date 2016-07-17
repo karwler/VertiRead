@@ -12,9 +12,9 @@ Popup* Popup::Clone() const {
 	return new Popup(*this);
 }
 
-void Popup::Tick() {
+void Popup::Tick(float dSec) {
 	if (timeout > 0.f)
-		if ((timeout -= World::engine()->deltaSeconds()) <= 0.f)
+		if ((timeout -= dSec) <= 0.f)
 			World::scene()->SetPopup(nullptr);
 }
 

@@ -2,7 +2,7 @@
 
 #if defined(_WIN32) && !defined(_DEBUG)
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow) {
-	World::args = getWords(pCmdLine, false);
+	World::args = getWords(pCmdLine, , ' ', ' ');
 #else
 int main(int argc, char** argv) {
 	for (int i=0; i!=argc; i++)

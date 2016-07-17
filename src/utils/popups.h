@@ -8,7 +8,7 @@ public:
 	virtual ~Popup();
 	virtual Popup* Clone() const;
 
-	void Tick();
+	void Tick(float dSec);
 	virtual vector<Object*> getObjects();
 
 protected:

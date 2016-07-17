@@ -6,10 +6,14 @@
 class WindowSys {
 public:
 	WindowSys(const VideoSettings& SETS=VideoSettings());
+	~WindowSys();
 
 	void CreateWindow();
 	void DestroyWindow();
 	void SetIcon(SDL_Surface* icon);
+	bool ShowMouse() const;
+	void ShowMouse(bool on);
+	void MoveMouse(const vec2i& mPos);
 	void DrawObjects(const vector<Object*>& objects);
 	void WindowEvent(const SDL_WindowEvent& window);
 	
@@ -26,6 +30,7 @@ private:
 	SDL_Window* window;
 	SDL_Renderer* renderer;
 	VideoSettings sets;
+	bool showMouse;
 
 	void CreateRenderer();
 	void DestroyRenderer();

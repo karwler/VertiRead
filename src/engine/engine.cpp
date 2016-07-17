@@ -2,7 +2,7 @@
 
 void Engine::Run() {
 	// initialize all components
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO))
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK))
 		throw Exception("couldn't initialize SDL\n" + string(SDL_GetError()), 1);
 	if (TTF_Init())
 		throw Exception("couldn't initialize fonts\n" + string(SDL_GetError()), 2);
@@ -39,7 +39,7 @@ void Engine::Run() {
 
 		// handle events
 		audioSys->Tick(dSec);
-		scene->Tick();
+		scene->Tick(dSec);
 		inputSys->Tick();
 
 		uint32 timeout = SDL_GetTicks() + 50;
@@ -54,14 +54,15 @@ void Engine::Close() {
 	Filer::SaveSettings(winSys->Settings());
 	Filer::SaveSettings(audioSys->Settings());
 	Filer::SaveSettings(inputSys->Settings());
+	
 	run = false;
 }
 
 void Engine::Cleanup() {
-	scene->getLibrary()->Fonts()->Clear();
-	if (audioSys)
-		audioSys->Close();
-	winSys->DestroyWindow();
+	scene.reset();
+	audioSys.reset();
+	inputSys.reset();
+	winSys.reset();
 
 	TTF_Quit();
 	SDL_Quit();
@@ -73,6 +74,15 @@ void Engine::HandleEvent(const SDL_Event& event) {
 	case SDL_KEYDOWN:
 		inputSys->KeypressEvent(event.key);
 		break;
+	case SDL_JOYBUTTONDOWN:
+		inputSys->ControllerButtonEvent(event.jbutton);
+		break;
+	case SDL_JOYHATMOTION:
+		inputSys->ControllerHatEvent(event.jhat);
+		break;
+	case SDL_JOYAXISMOTION:
+		inputSys->ControllerAxisEvent(event.jaxis);
+		break;
 	case SDL_MOUSEBUTTONDOWN:
 		inputSys->MouseButtonDownEvent(event.button);
 		break;
@@ -82,11 +92,14 @@ void Engine::HandleEvent(const SDL_Event& event) {
 	case SDL_MOUSEWHEEL:
 		inputSys->MouseWheelEvent(event.wheel);
 		break;
+	case SDL_TEXTINPUT:
+		inputSys->TextEvent(event.text);
+		break;
 	case SDL_WINDOWEVENT:
 		winSys->WindowEvent(event.window);
 		break;
-	case SDL_TEXTINPUT:
-		inputSys->TextEvent(event.text);
+	case SDL_JOYDEVICEADDED: case SDL_JOYDEVICEREMOVED:
+		inputSys->UpdateControllers();
 		break;
 	case SDL_DROPFILE:
 		scene->getProgram()->FileDropEvent(event.drop.file);

@@ -116,6 +116,7 @@ HEADERS += src/engine/audioSys.h \
     src/utils/items.h \
     src/utils/objects.h \
     src/utils/types.h \
+	src/utils/defaults.h \
     src/utils/utils.h \
     src/prog/browser.h \
     src/prog/playlistEditor.h \

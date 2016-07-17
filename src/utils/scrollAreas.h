@@ -6,7 +6,7 @@ class ScrollArea : public Object {
 public:
 	ScrollArea(const Object& BASE=Object(), int SPC=5, int BARW=10);
 	virtual ~ScrollArea();
-	virtual ScrollArea* Clone() const;
+	virtual ScrollArea* Clone() const = 0;
 
 	virtual void SetValues();
 	void DragSlider(int ypos);
@@ -87,11 +87,12 @@ public:
 	virtual ReaderBox* Clone() const;
 
 	virtual void SetValues();
-	void Tick();
+	void Tick(float dSec);
 	void DragListX(int xpos);
 	void ScrollListX(int xmov);
 	void Zoom(float factor);
-	void AddZoom(float zadd);
+	void MultZoom(float zfactor);
+	void DivZoom(float zfactor);
 
 	SDL_Rect List() const;	// return value is the background rect
 	vector<ButtonImage>& ListButtons();
@@ -105,6 +106,7 @@ public:
 	int ListX() const;
 	int ListW() const;
 	virtual int ListH() const;
+	bool showMouse() const;
 	bool showSlider() const;
 	bool showList() const;
 	bool showPlayer() const;
@@ -112,7 +114,7 @@ public:
 	bool sliderFocused;
 private:
 	const float hideDelay;
-	float sliderTimer, listTimer, playerTimer;
+	float mouseTimer, sliderTimer, listTimer, playerTimer;
 	float zoom;
 	int listX, listW, listXL;
 	const int blistW, playerW;
@@ -121,8 +123,9 @@ private:
 	vector<ButtonImage> listButtons;
 	vector<ButtonImage> playerButtons;
 
-	bool CheckMouseOverSlider();
-	bool CheckMouseOverList();
-	bool CheckMouseOverPlayer();
+	void CheckMouseShow(float dSec);
+	void CheckMouseOverSlider(float dSec);
+	void CheckMouseOverList(float dSec);
+	void CheckMouseOverPlayer(float dSec);
 	void CheckListX();			// same as CheckListY
 };

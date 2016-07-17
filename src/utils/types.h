@@ -1,8 +1,9 @@
 ﻿#pragma once
 
 #include "utils.h"
+#include "defaults.h"
 
-// enums and flags
+// enumerations
 
 enum class EColor : uint8 {
 	background,
@@ -37,14 +38,6 @@ enum class EClick : uint8 {
 	right
 };
 
-enum EDirFilter : uint8 {
-	FILTER_ALL  = 0,
-	FILTER_FILE = 1,
-	FILTER_DIR  = 2,
-	FILTER_LINK = 4
-};
-EDirFilter operator|(EDirFilter a, EDirFilter b);
-
 // image related stuff
 
 class Texture {
@@ -75,17 +68,18 @@ struct Image {
 
 class FontSet {
 public:
-	FontSet(const string& FILE="");
-
+	bool Initialize(const string& FILE="");
 	void Clear();
+
 	bool CanRun() const;
 	TTF_Font* Get(int size);
-	TTF_Font* AddSize(int size);
 	vec2i TextSize(const string& text, int size);
 
 private:
 	string file;
 	map<int, TTF_Font*> fonts;
+
+	TTF_Font* AddSize(int size);
 };
 
 struct Text {
@@ -124,11 +118,71 @@ private:
 
 // some random types
 
-struct Shortcut {
-	Shortcut(SDL_Scancode KEY=SDL_SCANCODE_RCTRL, void (Program::*CALL)()=nullptr);
+class Shortcut {
+public:
+	enum EKey : uint8 {
+		K_KEY    = 0x1,
+		K_BUTTON = 0x2,
+		K_HAT    = 0x4,
+		K_AXIS_P = 0x8,		// use only positive values
+		K_AXIS_N = 0x10		// use only negative values
+	};
 
+	Shortcut();
+	Shortcut(SDL_Scancode KEY);
+	Shortcut(uint8 JCT, EKey jctType);		// jctType cannot be K_KEY
+	Shortcut(SDL_Scancode KEY, uint8 JCT, EKey jctType);
+	virtual ~Shortcut();
+
+	bool KeyAssigned() const;
+	SDL_Scancode Key() const;
+	void Key(SDL_Scancode KEY);
+	void ClearKey();
+
+	bool JButtonAssigned() const;
+	bool JHatAssigned() const;
+	bool JAxisAssigned() const;
+	bool JPosAxisAssigned() const;
+	bool JNegAxisAssigned() const;
+	uint8 JCtr() const;
+	void JButton(uint8 BUTT);
+	void JHat(uint8 HAT);
+	void JAxis(uint8 AXIS, bool positive);
+	void ClearCtr();
+
+private:
+	EKey assigned;		// stores data for checking whether key and/or button/axis are assigned
 	SDL_Scancode key;
+	uint8 jctr;
+};
+Shortcut::EKey operator~(Shortcut::EKey a);
+Shortcut::EKey operator&(Shortcut::EKey a, Shortcut::EKey b);
+Shortcut::EKey operator&=(Shortcut::EKey& a, Shortcut::EKey b);
+Shortcut::EKey operator^(Shortcut::EKey a, Shortcut::EKey b);
+Shortcut::EKey operator^=(Shortcut::EKey& a, Shortcut::EKey b);
+Shortcut::EKey operator|(Shortcut::EKey a, Shortcut::EKey b);
+Shortcut::EKey operator|=(Shortcut::EKey& a, Shortcut::EKey b);
+
+class ShortcutKey : public Shortcut {	// keys are handled by the event system
+public:
+	ShortcutKey(void (Program::*CALL)()=nullptr);
+	ShortcutKey(SDL_Scancode KEY, void (Program::*CALL)()=nullptr);
+	ShortcutKey(uint8 JCT, EKey jctType, void (Program::*CALL)()=nullptr);
+	ShortcutKey(SDL_Scancode KEY, uint8 JCT, EKey jctType, void (Program::*CALL)()=nullptr);
+	virtual ~ShortcutKey();
+
 	void (Program::*call)();
+};
+
+class ShortcutAxis : public Shortcut {	// axes are handled in the scene's tick function
+public:
+	ShortcutAxis(void (Program::*CALL)(float)=nullptr);
+	ShortcutAxis(SDL_Scancode KEY, void (Program::*CALL)(float)=nullptr);
+	ShortcutAxis(uint8 JCT, EKey jctType, void (Program::*CALL)(float)=nullptr);
+	ShortcutAxis(SDL_Scancode KEY, uint8 JCT, EKey jctType, void (Program::*CALL)(float)=nullptr);
+	virtual ~ShortcutAxis();
+
+	void (Program::*call)(float);
 };
 
 struct Playlist {
@@ -162,13 +216,13 @@ struct Exception {
 
 class GeneralSettings {
 public:
-	GeneralSettings(const string& LANG="", const string& LIB="", const string& PST="");
+	GeneralSettings(const string& LANG=DEFAULT_LANGUAGE, const string& LIB="", const string& PST="");
 
 	string Lang() const;
 	void Lang(const string& language);
 
 	string DirLib() const;
-	string LibraryParh() const;		// returns full path to dirLib
+	string LibraryPath() const;		// returns full path to dirLib
 	void DirLib(const string& dir);
 
 	string DirPlist() const;
@@ -183,12 +237,15 @@ private:
 
 class VideoSettings {
 public:
-	VideoSettings(bool MAX=false, bool FSC=false, const vec2i& RES=vec2i(800, 600), const string& FNT="arial", const string& RNDR="");
+	VideoSettings(bool MAX=false, bool FSC=false, const vec2i& RES=DEFAULT_RESOLUTION, const string& FNT=DEFAULT_FONT, const string& RNDR="");
 
 	string Font() const;
 	string Fontpath() const;
 	void SetFont(const string& newFont);
 	void SetDefaultTheme();
+	
+	static map<EColor, vec4b> GetDefaultColors();
+	static vec4b GetDefaultColor(EColor color);
 
 	bool maximized, fullscreen;
 	vec2i resolution;
@@ -202,7 +259,7 @@ private:
 };
 
 struct AudioSettings {
-	AudioSettings(int MV=128, int SV=90, float SD=0.5f);
+	AudioSettings(int MV=DEFAULT_MUSIC_VOL, int SV=DEFAULT_SOUND_VOL, float SD=DEFAULT_SONG_DELAY);
 
 	int musicVolume;
 	int soundVolume;
@@ -210,13 +267,11 @@ struct AudioSettings {
 };
 
 struct ControlsSettings {
-	ControlsSettings(const vec2f& SSP=vec2f(4.f, 8.f), bool fillMissingBindings=true, const map<string, Shortcut>& SRTCS=map<string, Shortcut>(), const map<string, SDL_Scancode>& HLDS=map<string, SDL_Scancode>());
+	ControlsSettings(const vec2f& SSP=DEFAULT_SCROLL_SPEED, bool fillMissingBindings=true, const map<string, Shortcut*>& CTS=map<string, Shortcut*>());
 
 	vec2f scrollSpeed;
-	map<string, Shortcut> shortcuts;
-	map<string, SDL_Scancode> holders;
+	map<string, Shortcut*> shortcuts;
 
 	void FillMissingBindings();
-	static Shortcut GetDefaultShortcut(const string& name);
-	static SDL_Scancode GetDefaultHolder(const string& name);
+	static Shortcut* GetDefaultShortcut(const string& name);	// returns nullptr if none found
 };

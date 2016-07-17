@@ -11,10 +11,10 @@ public:
 	Scene(const GeneralSettings& SETS=GeneralSettings());
 	~Scene();
 	
-	void SwitchMenu(const vector<Object*>& objs, uint focObj);
+	void SwitchMenu(const vector<Object*>& objs, size_t focObj);
 	void ResizeMenu();
-	void Tick();
-	void OnMouseDown(EClick clickType);
+	void Tick(float dSec);
+	void OnMouseDown(EClick clickType, bool handleHold=true);
 	void OnMouseUp();
 	void OnMouseWheel(int ymov);
 
@@ -22,8 +22,8 @@ public:
 	void LibraryPath(const string& dir);
 	void PlaylistsPath(const string& dir);
 
-	Program* getProgram() const;
-	Library* getLibrary() const;
+	Program* getProgram();
+	Library* getLibrary();
 	vector<Object*> Objects() const;
 	Object* FocusedObject() const;			// returns pointer to object focused by keyboard
 	ListItem* SelectedButton() const;		// find scroll area with selectable items and get the first selected one (returns nullptr if nothing found)
@@ -31,22 +31,22 @@ public:
 	void SetPopup(Popup* box);				// use nullptr to close
 
 private:
+	Program program;
+	Library library;
 	GeneralSettings sets;
-	kptr<Program> program;
-	kptr<Library> library;
 
 	vector<Object*> objects;
 	kptr<Popup> popup;
 
-	uint focObject;			// id of object currently focused by keyboard
+	size_t focObject;		// id of object currently focused by keyboard
 	ScrollArea* objectHold;	// pointer to object currently being dragged by mouse (nullptr if none is being held)
 
-	void CheckObjectsClick(EClick clickType);
+	void CheckObjectsClick(EClick clickType, bool handleHold);
 	void CheckPopupClick();
 	bool CheckSliderClick(ScrollArea* obj);
 	void CheckListBoxClick(ListBox* obj, EClick clickType);
 	void CheckTileBoxClick(TileBox* obj, EClick clickType);
-	void CheckReaderBoxClick(ReaderBox* obj, EClick clickType);
+	void CheckReaderBoxClick(ReaderBox* obj, EClick clickType, bool handleHold);
 	void CheckPopupSimpleClick(PopupMessage* obj);
 	void CheckPopupChoiceClick(PopupChoice* obj);
 };

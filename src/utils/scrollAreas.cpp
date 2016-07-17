@@ -12,10 +12,6 @@ ScrollArea::ScrollArea(const Object& BASE, int SPC, int BARW) :
 {}
 ScrollArea::~ScrollArea() {}
 
-ScrollArea* ScrollArea::Clone() const {
-	return new ScrollArea(*this);
-}
-
 void ScrollArea::SetValues() {
 	int sizY = Size().y;
 	int lstH = ListH();
@@ -225,7 +221,7 @@ ReaderBox::ReaderBox(const Object& BASE, const vector<Texture*>& PICS, const str
 	ScrollArea(BASE, 10),
 	sliderFocused(false),
 	hideDelay(0.6f),
-	sliderTimer(1.f), listTimer(0.f), playerTimer(0.f),
+	mouseTimer(hideDelay), sliderTimer(0.f), listTimer(0.f), playerTimer(0.f),
 	zoom(ZOOM),
 	listX(0),
 	blistW(48),
@@ -262,7 +258,8 @@ ReaderBox::ReaderBox(const Object& BASE, const vector<Texture*>& PICS, const str
 }
 
 ReaderBox::~ReaderBox() {
-	World::library()->ClearPics();
+	if (!World::winSys()->ShowMouse())
+		World::winSys()->ShowMouse(true);
 }
 
 ReaderBox* ReaderBox::Clone() const {
@@ -275,61 +272,89 @@ void ReaderBox::SetValues() {
 	ScrollArea::SetValues();
 }
 
-void ReaderBox::Tick() {
-	if (!CheckMouseOverSlider())
-		if (!CheckMouseOverList())
-			CheckMouseOverPlayer();
+void ReaderBox::Tick(float dSec) {
+	// check and set UI visibility
+	CheckMouseShow(dSec);
+	CheckMouseOverSlider(dSec);
+	CheckMouseOverList(dSec);
+	CheckMouseOverPlayer(dSec);
 }
 
-bool ReaderBox::CheckMouseOverSlider() {
-	if (inRect(Bar(), InputSys::mousePos()) && sliderTimer != hideDelay) {
-		sliderTimer = hideDelay;
-		World::engine()->SetRedrawNeeded();
-		return true;
+void ReaderBox::CheckMouseShow(float dSec) {
+	if (inRect(getRect(), InputSys::mousePos())) {
+		if (World::inputSys()->mouseMove().isNull()) {
+			if (mouseTimer != 0.f && !showSlider() && !showList() && !showPlayer()) {
+				mouseTimer -= dSec;
+				if (mouseTimer <= 0.f) {
+					mouseTimer = 0.f;
+					World::winSys()->ShowMouse(false);
+					World::engine()->SetRedrawNeeded();
+				}
+			}
+		}
+		else if (mouseTimer != hideDelay) {
+			mouseTimer = hideDelay;
+			World::winSys()->ShowMouse(true);
+			World::engine()->SetRedrawNeeded();
+		}
 	}
-	if (showSlider() && !sliderFocused)
-		if ((sliderTimer -= World::engine()->deltaSeconds()) <= 0.f) {
+	else if (!World::winSys()->ShowMouse())
+		World::winSys()->ShowMouse(true);
+}
+
+void ReaderBox::CheckMouseOverSlider(float dSec) {
+	if (inRect(Bar(), InputSys::mousePos())) {
+		if (sliderTimer != hideDelay) {
+			sliderTimer = hideDelay;
+			World::engine()->SetRedrawNeeded();
+		}
+	}
+	else if (sliderTimer != 0.f && !sliderFocused) {
+		sliderTimer -= dSec;
+		if (sliderTimer <= 0.f) {
 			sliderTimer = 0.f;
 			World::engine()->SetRedrawNeeded();
-			return true;
 		}
-	return false;
+	}
 }
 
-bool ReaderBox::CheckMouseOverList() {
+void ReaderBox::CheckMouseOverList(float dSec) {
 	vec2i mPos = InputSys::mousePos();
 	SDL_Rect bRect = List();
 
-	if (((showList() && inRect(bRect, mPos)) || (!showList() && inRect({bRect.x, bRect.y, bRect.w/4, bRect.h}, mPos))) && listTimer != hideDelay) {
-		listTimer = hideDelay;
-		World::engine()->SetRedrawNeeded();
-		return true;
+	if ((showList() && inRect(bRect, mPos)) || (!showList() && inRect({bRect.x, bRect.y, bRect.w/4, bRect.h}, mPos))) {
+		if (listTimer != hideDelay) {
+			listTimer = hideDelay;
+			World::engine()->SetRedrawNeeded();
+		}
 	}
-	if (showList())
-		if ((listTimer -= World::engine()->deltaSeconds()) < 0.f) {
+	else if (listTimer != 0.f) {
+		listTimer -= dSec;
+		if (listTimer <= 0.f) {
 			listTimer = 0.f;
 			World::engine()->SetRedrawNeeded();
-			return true;
 		}
-	return false;
+	}
 }
 
-bool ReaderBox::CheckMouseOverPlayer() {
+void ReaderBox::CheckMouseOverPlayer(float dSec) {
 	vec2i mPos = InputSys::mousePos();
 	SDL_Rect bRect = Player();
+	int pInitH = bRect.h/4;
 
-	if (((showPlayer() && inRect(bRect, mPos)) || (!showPlayer() && inRect({bRect.x, bRect.y+bRect.h/10*9, bRect.w, bRect.h/6}, mPos))) && playerTimer != hideDelay) {
-		playerTimer = hideDelay;
-		World::engine()->SetRedrawNeeded();
-		return true;
+	if ((showPlayer() && inRect(bRect, mPos)) || (!showPlayer() && inRect({bRect.x, bRect.y+bRect.h-pInitH, bRect.w, pInitH}, mPos))) {
+		if (playerTimer != hideDelay) {
+			playerTimer = hideDelay;
+			World::engine()->SetRedrawNeeded();
+		}
 	}
-	if (showPlayer())
-		if ((playerTimer -= World::engine()->deltaSeconds()) < 0.f) {
+	else if (playerTimer != 0.f) {
+		playerTimer -= dSec;
+		if (playerTimer <= 0.f) {
 			playerTimer = 0.f;
 			World::engine()->SetRedrawNeeded();
-			return true;
 		}
-	return false;
+	}
 }
 
 void ReaderBox::DragListX(int xpos) {
@@ -352,8 +377,12 @@ void ReaderBox::Zoom(float factor) {
 	World::engine()->SetRedrawNeeded();
 }
 
-void ReaderBox::AddZoom(float zadd) {
-	Zoom(zoom + zadd);
+void ReaderBox::MultZoom(float zfactor) {
+	Zoom(zoom * zfactor);
+}
+
+void ReaderBox::DivZoom(float zfactor) {
+	Zoom(zoom / zfactor);
 }
 
 SDL_Rect ReaderBox::List() const {
@@ -377,7 +406,7 @@ Image ReaderBox::getImage(int i, SDL_Rect* Crop) const {
 	Image img = pics[i];
 	img.size = vec2i(pics[i].size.x*zoom, pics[i].size.y*zoom);
 	img.pos = vec2i(Pos().x + Size().x/2 - img.size.x/2 - listX, pics[i].pos.y*zoom - listY);
-
+	
 	if (Crop)
 		*Crop = getCrop(img.getRect(), getRect());
 	return img;
@@ -429,6 +458,10 @@ int ReaderBox::ListW() const {
 
 int ReaderBox::ListH() const {
 	return listH * zoom;
+}
+
+bool ReaderBox::showMouse() const {
+	return mouseTimer != 0.f;
 }
 
 bool ReaderBox::showSlider() const {

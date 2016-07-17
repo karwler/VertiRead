@@ -9,6 +9,9 @@ public:
 
 	virtual void OnClick(EClick clickType);
 	virtual void OnKeypress(SDL_Scancode key) = 0;
+	virtual void OnJButton(uint8 jbutton) = 0;
+	virtual void OnJHat(uint8 jhat) = 0;
+	virtual void OnJAxis(uint8 jaxis, bool positive) = 0;
 	ListBox* Parent() const;
 };
 
@@ -19,6 +22,9 @@ public:
 
 	virtual void OnClick(EClick clickType);
 	virtual void OnKeypress(SDL_Scancode key);
+	virtual void OnJButton(uint8 jbutton);
+	virtual void OnJHat(uint8 jhat);
+	virtual void OnJAxis(uint8 jaxis, bool positive);
 	
 	void Confirm();
 	void Cancel();
@@ -41,12 +47,16 @@ private:
 
 class KeyGetter : public Capturer {
 public:
-	KeyGetter(ListBox* SA, const string& LBL="", SDL_Scancode* KEY=nullptr);
+	KeyGetter(ListBox* SA, const string& LBL="", Shortcut* SHC=nullptr);
 	virtual ~KeyGetter();
 
-	virtual void OnKeypress(SDL_Scancode KEY);
-	string KeyName() const;
+	virtual void OnKeypress(SDL_Scancode key);
+	virtual void OnJButton(uint8 jbutton);
+	virtual void OnJHat(uint8 jhat);
+	virtual void OnJAxis(uint8 jaxis, bool positive);
+	
+	string Text() const;
 
 private:
-	SDL_Scancode* key;
+	Shortcut* shortcut;
 };

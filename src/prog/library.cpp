@@ -1,9 +1,11 @@
 #include "library.h"
 #include "engine/filer.h"
 
-Library::Library(string FONT, GeneralSettings& GSET) :
+Library::Library(GeneralSettings& GSET) :
 	curGSets(GSET)
-{
+{}
+
+void Library::Initialize(string FONT) {
 	if (!fs::exists(FONT))
 		FONT = VideoSettings().Fontpath();	// should give the default font
 
@@ -13,7 +15,7 @@ Library::Library(string FONT, GeneralSettings& GSET) :
 	LoadTextures();
 }
 
-Library::~Library() {
+void Library::Close() {
 	ClearPics();
 	ClearTextures();
 	ClearSounds();
@@ -25,7 +27,7 @@ FontSet* Library::Fonts() {
 
 void Library::LoadFont(const string& font) {
 	fonts.Clear();
-	fonts = FontSet(font);
+	fonts.Initialize(font);
 }
 
 string Library::getLine(const string& line, ETextCase caseChange) const {
@@ -75,6 +77,7 @@ vector<Texture*> Library::Pictures() {
 }
 
 void Library::LoadPics(const vector<string>& files) {
+	ClearPics();
 	for (const string& it : files) {
 		Texture tx(it);
 		if (!tx.Res().hasNull())

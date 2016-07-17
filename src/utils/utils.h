@@ -64,23 +64,11 @@ namespace fs = boost::filesystem;
 #undef DrawText
 #endif
 
-// not sure why, but why not
-#ifndef PI
-#ifdef M_PI
+// pi
 #define PI M_PI
-#endif
-#else
-#ifndef M_PI
-#define M_PI PI
-#endif
-#endif
 
-// directory separator
-#ifdef _WIN32
-const char dsep = '\\';
-#else
-const char dsep = '/';
-#endif
+#define D2R(x) (x)/180*PI	// degrees to radians
+#define R2D(x) (x)*180/PI	// radians to degrees
 
 using byte = unsigned char;
 using ushort = unsigned short;
@@ -104,27 +92,23 @@ using char16 = char16_t;
 using char32 = char32_t;
 using wchar = wchar_t;
 
-// predeclarations
+// forward declaraions
 enum class EColor : uint8;
 enum class ETextCase : uint8;
 
-class Engine;
 class AudioSys;
+class Engine;
 class InputSys;
 class WinSys;
 
 class Scene;
 class Program;
 
-class Button;
 class ScrollArea;
 class ListBox;
-class PopupChoice;
 class Capturer;
-class LineEditor;
 
 // smart pointer
-
 template <typename T>
 class kptr {
 public:
@@ -196,7 +180,6 @@ private:
 };
 
 // 2D vector
-
 template <typename T>
 struct kvec2 {
 	kvec2(T N=0) : x(N), y(N) {}
@@ -311,41 +294,82 @@ struct kvec2 {
 		return x == 0 || y == 0;
 	}
 
-	double len() const { return length(*this); }
+	T len() const { return length(*this); }
 	kvec2 norm() const { return normalize(*this); }
-	bool isUnit() const { return isUnit(*this); }
+	bool isUnit() const { return ::isUnit(*this); }
 	template <typename A>
-	T dot(const kvec2<A>& n) const { return dot(*this, n); }
+	T dot(const kvec2<A>& n) const { return ::dot(*this, n); }
 	template <typename A>
-	kvec2 reflect(const kvec2<A>& n) const { return reflect(*this, n); }
+	T cross(const kvec2<A>& n) const { return ::cross(*this, n); }
+	template <typename A>
+	kvec2 reflect(const kvec2<A>& n) const { return ::reflect(*this, n); }
+	template <typename A>
+	kvec2 rotate(A n) const { return ::rotate(*this, n); }
 };
 
+template <typename A, typename B>
+kvec2<B> operator+(A n, const kvec2<B>& v) {
+	return v + n;
+}
+template <typename A, typename B>
+kvec2<B> operator-(A n, const kvec2<B>& v) {
+	return v - n;
+}
+template <typename A, typename B>
+kvec2<B> operator*(A n, const kvec2<B>& v) {
+	return v * n;
+}
+template <typename A, typename B>
+kvec2<B> operator/(A n, const kvec2<B>& v) {
+	return v / n;
+}
+
+template <typename A, typename B>
+bool operator==(A n, const kvec2<B>& v) {
+	return v == n;
+}
+template <typename A, typename B>
+bool operator!=(A n, const kvec2<B>& v) {
+	return v != n;
+}
+
 template <typename T>
-double length(const kvec2<T>& vec) {
-	return sqrt(vec.x*vec.x + vec.y*vec.y);
+T length(const kvec2<T>& vec) {
+	return std::sqrt(vec.x*vec.x + vec.y*vec.y);
 }
 
 template <typename T>
 kvec2<T> normalize(const kvec2<T>& vec) {
-	double l = length(vec);
-	return kvec2<T>(double(vec.x)/l, double(vec.y)/l);
+	T l = length(vec);
+	return kvec2<T>(vec.x/l, vec.y/l);
 }
 
 template <typename T>
 bool isUnit(const kvec2<T>& vec) {
-	return length(vec) == 1.0;
+	return length(vec) == T(1);
 }
 
 template <typename A, typename B>
-A dotProduct(const kvec2<A>& v1, const kvec2<B>& v2) {
-	return v1.x*v2.x + v1.y*v2.y;
+A dot(const kvec2<A>& v0, const kvec2<B>& v1) {
+	return v0.x*v1.x + v0.y*v1.y;
 }
 
 template <typename A, typename B>
-bool reflect(const kvec2<A>& vec, kvec2<B> nrm) {
+A cross(const kvec2<A>& v0, const kvec2<B>& v1) {
+	return v0.x*v1.y - v0.y*v1.x;
+}
+
+template <typename A, typename B>
+kvec2<A> reflect(const kvec2<A>& vec, kvec2<B> nrm) {
 	if (!isUnit(nrm))
 		nrm = normalize(nrm);
-	return vec - 2 * dotProduct(vec, nrm) * nrm;
+	return vec - 2 * dot(vec, nrm) * nrm;
+}
+
+template <typename A, typename B>
+kvec2<A> rotate(const kvec2<A>& vec, B ang) {
+	ang = D2R(ang);
+	return kvec2<A>(vec.x*std::cos(ang) - vec.y*std::sin(ang), vec.x*std::sin(ang) + vec.y*std::cos(ang));
 }
 
 using vec2i = kvec2<int>;
@@ -476,55 +500,103 @@ struct kvec3 {
 		return x == 0 || y == 0 || z == 0;
 	}
 
-	double len() const { return length(*this); }
+	T len() const { return length(*this); }
 	kvec3 norm() const { return normalize(*this); }
-	bool isUnit() const { return isUnit(*this); }
+	bool isUnit() const { return ::isUnit(*this); }
 	template <typename A>
-	double dot(const kvec3<A>& n) const { return dotProduct(*this, n); }
+	T dot(const kvec3<A>& n) const { return ::dot(*this, n); }
 	template <typename A>
-	kvec3 cross(const kvec3<A>& n) const { return crossProduct(*this, n); }
+	kvec3 cross(const kvec3<A>& n) const { return ::cross(*this, n); }
 	template <typename A>
-	kvec3 reflect(const kvec3<A>& n) const { return reflect(*this, n); }
+	kvec3 reflect(const kvec3<A>& n) const { return ::reflect(*this, n); }
+	template <typename A>
+	kvec3 rotate(const kvec3<A>& n) const { return ::rotate(*this, n); }
 };
 
+template <typename A, typename B>
+kvec3<B> operator+(A n, const kvec3<B>& v) {
+	return v + n;
+}
+template <typename A, typename B>
+kvec3<B> operator-(A n, const kvec3<B>& v) {
+	return v - n;
+}
+template <typename A, typename B>
+kvec3<B> operator*(A n, const kvec3<B>& v) {
+	return v * n;
+}
+template <typename A, typename B>
+kvec3<B> operator/(A n, const kvec3<B>& v) {
+	return v / n;
+}
+
+template <typename A, typename B>
+bool operator==(A n, const kvec3<B>& v) {
+	return v == n;
+}
+template <typename A, typename B>
+bool operator!=(A n, const kvec3<B>& v) {
+	return v != n;
+}
+
 template <typename T>
-double length(const kvec3<T>& vec) {
-	return sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
+T length(const kvec3<T>& vec) {
+	return std::sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
 }
 
 template <typename T>
 kvec3<T> normalize(const kvec3<T>& vec) {
-	double l = vec.len();
-	return kvec3<T>(double(vec.x)/l, double(vec.y)/l, double(vec.z)/l);
+	T l = vec.len();
+	return kvec3<T>(vec.x/l, vec.y/l, vec.z/l);
 }
 
 template <typename T>
 bool isUnit(const kvec3<T>& vec) {
-	return vec.len() == 1.0;
+	return vec.len() == T(1);
 }
 
 template <typename A, typename B>
-A dotProduct(const kvec3<A>& v1, const kvec3<B>& v2) {
-	return v1.x*v2.x + v1.y*v2.y + v1.z*v2.z;
+A dot(const kvec3<A>& v0, const kvec3<B>& v1) {
+	return v0.x*v1.x + v0.y*v1.y + v0.z*v1.z;
 }
 
 template <typename A, typename B>
-kvec3<A> crossProduct(const kvec3<A>& v1, const kvec3<B>& v2) {
-	return kvec3<A>(v1.y*v2.z - v1.z*v2.y, v1.z*v2.x - v1.x*v2.z, v1.x*v2.y - v1.y*v2.x);
+kvec3<A> cross(const kvec3<A>& v0, const kvec3<B>& v1) {
+	return kvec3<A>(v0.y*v1.z - v0.z*v1.y, v0.z*v1.x - v0.x*v1.z, v0.x*v1.y - v0.y*v1.x);
 }
 
 template <typename A, typename B>
-bool reflect(const kvec3<A>& vec, kvec3<B> nrm) {
+kvec3<A> reflect(const kvec3<A>& vec, kvec3<B> nrm) {
 	if (!isUnit(nrm))
 		nrm = normalize(nrm);
-	return vec - 2 * dotProduct(vec, nrm) * nrm;
+	return vec - 2 * dot(vec, nrm) * nrm;
+}
+
+template <typename A, typename B>
+kvec3<A> rotate(const kvec3<A>& vec, kvec3<B> ang) {
+	ang = kvec3<B>(D2R(ang.x), D2R(ang.y), D2R(ang.z));
+	kvec3<A> ret;
+
+	// X-axis
+	ret.y = vec.y*std::cos(ang.x) - vec.z*std::sin(ang.x);
+	ret.z = vec.y*std::sin(ang.x) + vec.z*std::cos(ang.x);
+
+	// Y-axis
+	ret.x =  vec.x*std::cos(ang.y) + vec.z*std::sin(ang.y);
+	ret.z = -vec.x*std::sin(ang.y) + vec.z*std::cos(ang.y);
+
+	// Z-axis
+	ret.x = vec.x*std::cos(ang.z) - vec.y*std::sin(ang.z);
+	ret.y = vec.x*std::sin(ang.z) + vec.y*std::cos(ang.z);
+
+	return ret;
+
 }
 
 using vec3i = kvec3<int>;
 using vec3f = kvec3<float>;
 
 // 4D vector
-
 template <typename T>
 struct kvec4 {
 	kvec4(T N=0) : x(N), y(N), z(N), a(N) {}
@@ -659,47 +731,74 @@ struct kvec4 {
 		return x == 0 || y == 0 || z == 0 || a == 0;
 	}
 
-	double len() const { return length(*this); }
+	T len() const { return length(*this); }
 	kvec4 norm() const { return normalize(*this); }
-	bool isUnit() const { return isUnit(*this); }
+	bool isUnit() const { return ::isUnit(*this); }
 	template <typename A>
-	double dot(const kvec4& n) const { return dotProduct(*this, n); }
+	T dot(const kvec4& n) const { return ::dot(*this, n); }
 };
 
+template <typename A, typename B>
+kvec4<B> operator+(A n, const kvec4<B>& v) {
+	return v + n;
+}
+template <typename A, typename B>
+kvec4<B> operator-(A n, const kvec4<B>& v) {
+	return v - n;
+}
+template <typename A, typename B>
+kvec4<B> operator*(A n, const kvec4<B>& v) {
+	return v * n;
+}
+template <typename A, typename B>
+kvec4<B> operator/(A n, const kvec4<B>& v) {
+	return v / n;
+}
+
+template <typename A, typename B>
+bool operator==(A n, const kvec4<B>& v) {
+	return v == n;
+}
+template <typename A, typename B>
+bool operator!=(A n, const kvec4<B>& v) {
+	return v != n;
+}
+
 template <typename T>
-double length(const kvec4<T>& vec) {
-	return sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z + vec.a*vec.a);
+T length(const kvec4<T>& vec) {
+	return std::sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z + vec.a*vec.a);
 }
 
 template <typename T>
 kvec4<T> normalize(const kvec4<T>& vec) {
-	double l = vec.len();
-	return kvec4<T>(double(vec.x)/l, double(vec.y)/l, double(vec.z)/l, double(vec.a)/l);
+	T l = vec.len();
+	return kvec4<T>(vec.x/l, vec.y/l, vec.z/l, vec.a/l);
 }
 
 template <typename T>
 bool isUnit(const kvec4<T>& vec) {
-	return vec.len() == 1.0;
+	return vec.len() == T(1);
 }
 
 template <typename A, typename B>
-A dotProduct(const kvec4<A>& v1, const kvec4<B>& v2) {
-	return v1.x*v2.x + v1.y*v2.y + v1.z*v2.z + v1.a*v2.a;
+A dot(const kvec4<A>& v0, const kvec4<B>& v1) {
+	return v0.x*v1.x + v0.y*v1.y + v0.z*v1.z + v0.a*v1.a;
 }
 
 using vec4b = kvec4<uint8>;
 using vec4i = kvec4<int>;
 
 // files and strings
-bool strcmpCI(const string& strl, const string& strr);	// case insensitive string comparison
-bool is_num(const string& str);
-bool findChar(const string& str, char c, size_t* id=nullptr);
-bool findString(const string& str, const string& c, size_t* id=nullptr);
-string modifyCase(string str, ETextCase caseChange);
-vector<string> getWords(const string& line, bool skipCommas=false);
-bool splitIniLine(const string& line, string* arg, string* val, string* key=nullptr, size_t* id=nullptr);
+bool isNum(const std::string& str);
+bool strcmpCI(const std::string& strl, const std::string& strr);
+bool findChar(const std::string& str, char c, size_t* id=nullptr);
+bool findString(const std::string& str, const std::string& c, size_t* id=nullptr);
+std::vector<std::string> getWords(const std::string& line, char splitter, char spacer);
+bool splitIniLine(const std::string& line, std::string* arg, std::string* val, std::string* key=nullptr, bool* isTitle=nullptr, size_t* id=nullptr);
+std::istream& readLine(std::istream& ifs, std::string& str);
+
 fs::path delExt(const fs::path& path);					// remove file extension from filepath/filename
-std::istream& readLine(std::istream& ifs, string& str);
+string modifyCase(string str, ETextCase caseChange);
 
 // graphics
 bool inRect(const SDL_Rect& rect, vec2i point);
@@ -710,20 +809,22 @@ SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop);
 
 // other
 void PrintInfo();
-map<EColor, vec4b> GetDefaultColors();
-vec4b GetDefaultColor(EColor color);
 string getRendererName(int id);
 vector<string> getAvailibleRenderers(bool trustedOnly=false);
 
 // convertions
-bool stob(const string& str);
-string btos(bool b);
+bool stob(const std::string& str);
+std::string btos(bool b);
+
 vec2i pix(const vec2f& p);
 int pixX(float p);
 int pixY(float p);
 vec2f prc(const vec2i& p);
 float prcX(int p);
 float prcY(int p);
+
+float axisToFloat(int16 axisValue);
+int16 floatToAxis(float axisValue);
 
 template <typename T>
 T to_num(const string& str) {
@@ -740,6 +841,7 @@ string to_str(T val) {
 	return ss.str();
 }
 
+// pointer container cleaners
 template <typename T>
 void erase(vector<T*>& vec, uint i) {
 	delete vec[i];
@@ -762,4 +864,17 @@ bool contains(const vector<T>& vec, const T& elem, size_t* id=nullptr) {
 			return true;
 		}
 	return false;
+}
+
+template <typename A, typename B>
+void erase(map<A, B*>& mp, const A& key) {
+	delete mp[key];
+	mp.erase(key);
+}
+
+template <typename A, typename B>
+void clear(map<A, B*>& mp) {
+	for (const pair<A, B*>& it : mp)
+		delete it.second;
+	mp.clear();
 }

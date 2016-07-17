@@ -1,6 +1,13 @@
 #include "engine/world.h"
 
-bool strcmpCI(const string& strl, const string& strr) {
+bool isNum(const std::string& str) {
+	std::string::const_iterator it = str.begin();
+	while (it != str.end() && isdigit(*it))
+		it++;
+	return !str.empty() && it == str.end();
+}
+
+bool strcmpCI(const std::string& strl, const std::string& strr) {
 	if (strl.length() != strr.length())
 		return false;
 
@@ -10,14 +17,7 @@ bool strcmpCI(const string& strl, const string& strr) {
 	return true;
 }
 
-bool is_num(const string& str) {
-	string::const_iterator it = str.begin();
-	while (it != str.end() && isdigit(*it))
-		it++;
-	return !str.empty() && it == str.end();
-}
-
-bool findChar(const string& str, char c, size_t* id) {
+bool findChar(const std::string& str, char c, size_t* id) {
 	for (size_t i=0; i!=str.length(); i++)
 		if (str[i] == c) {
 			if (id)
@@ -27,7 +27,7 @@ bool findChar(const string& str, char c, size_t* id) {
 	return false;
 }
 
-bool findString(const string& str, const string& c, size_t* id) {
+bool findString(const std::string& str, const std::string& c, size_t* id) {
 	size_t check = 0;
 	for (size_t i=0; i!=str.length(); i++) {
 		if (str[i] == c[check]) {
@@ -43,44 +43,54 @@ bool findString(const string& str, const string& c, size_t* id) {
 	return false;
 }
 
-string modifyCase(string str, ETextCase caseChange) {
-	switch (caseChange) {
-	case ETextCase::first_upper:
-		if (!str.empty())
-			str[0] = toupper(str[0]);
-		break;
-	case ETextCase::all_upper:
-		transform(str.begin(), str.end(), str.begin(), toupper);
-		break;
-	case ETextCase::all_lower:
-		transform(str.begin(), str.end(), str.begin(), tolower);
-	}
-	return str;
-}
+std::vector<std::string> getWords(const std::string & line, char splitter, char spacer) {
+	std::vector<std::string> words;
 
-vector<string> getWords(const string& line, bool skipCommas) {
-	vector<string> words;
-	string word;
-	for (size_t i=0; i!=line.length(); i++) {
-		if (line[i] == ' ' || (!skipCommas && line[i] == ',') || i == line.length()) {
-			if (word.length() != 0)
-				words.push_back(word);
-			word.clear();
+	size_t i = 0;
+	while (i != line.length() && line[i] == spacer)
+		i++;
+	size_t start = i;
+	size_t end = line.length();
+
+	for (; i<=line.length(); i++) {
+		if (line[i] == splitter || i == line.length()) {
+			if (end > i)
+				end = i;
+
+			if (start < end)
+				words.push_back(line.substr(start, end-start));
+
+			while (i != line.length() && (line[i] == spacer || line[i] == splitter))
+				i++;
+			start = i;
+			end = line.length();
+		}
+		else if (line[i] == spacer) {
+			if (end > i)
+				end = i;
 		}
 		else
-			word += line[i];
+			end = line.length();
 	}
 	return words;
 }
 
-bool splitIniLine(const string& line, string* arg, string* val, string* key, size_t* id) {
+bool splitIniLine(const std::string& line, std::string* arg, std::string* val, std::string* key, bool* isTitle, size_t* id) {
+	if (line[0] == '[' && line[line.length()-1] == ']') {
+		if (arg)
+			*arg = line.substr(1, line.length()-2);
+		if (isTitle)
+			*isTitle = true;
+		return true;
+	}
+	
 	size_t i0;;
 	if (!findChar(line, '=', &i0))
 		return false;
-	
+
 	if (val)
 		*val = line.substr(i0 + 1);
-	string left = line.substr(0, i0);
+	std::string left = line.substr(0, i0);
 
 	size_t i1 = 0, i2 = 0;
 	findChar(left, '[', &i1);
@@ -94,16 +104,14 @@ bool splitIniLine(const string& line, string* arg, string* val, string* key, siz
 	else if (arg)
 		*arg = left;
 
+	if (isTitle)
+		*isTitle = false;
 	if (id)
 		*id = i0;
 	return true;
 }
 
-fs::path delExt(const fs::path& path) {
-	return path.has_extension() ? path.string().substr(0, path.string().size() - path.extension().string().size()) : path;
-}
-
-std::istream& readLine(std::istream& ifs, string& str) {
+std::istream& readLine(std::istream& ifs, std::string& str) {
 	str.clear();
 
 	std::istream::sentry se(ifs, true);
@@ -126,6 +134,25 @@ std::istream& readLine(std::istream& ifs, string& str) {
 			str += char(c);
 		}
 	}
+}
+
+fs::path delExt(const fs::path& path) {
+	return path.has_extension() ? path.string().substr(0, path.string().size() - path.extension().string().size()) : path;
+}
+
+string modifyCase(string str, ETextCase caseChange) {
+	switch (caseChange) {
+	case ETextCase::first_upper:
+		if (!str.empty())
+			str[0] = toupper(str[0]);
+		break;
+	case ETextCase::all_upper:
+		transform(str.begin(), str.end(), str.begin(), toupper);
+		break;
+	case ETextCase::all_lower:
+		transform(str.begin(), str.end(), str.begin(), tolower);
+	}
+	return str;
 }
 
 bool inRect(const SDL_Rect& rect, vec2i point) {
@@ -221,11 +248,11 @@ vector<string> getAvailibleRenderers(bool trustedOnly) {
 	return renderers;
 }
 
-bool stob(const string& str) {
+bool stob(const std::string& str) {
 	return str == "true";
 }
 
-string btos(bool b) {
+std::string btos(bool b) {
 	return b ? "true" : "false";
 }
 
@@ -255,28 +282,10 @@ float prcY(int p) {
 	return float(p) / float(World::winSys()->Resolution().y);
 }
 
-map<EColor, vec4b> GetDefaultColors() {
-	map<EColor, vec4b> colors = {
-		make_pair(EColor::background, GetDefaultColor(EColor::background)),
-		make_pair(EColor::rectangle, GetDefaultColor(EColor::rectangle)),
-		make_pair(EColor::highlighted, GetDefaultColor(EColor::highlighted)),
-		make_pair(EColor::darkened, GetDefaultColor(EColor::darkened)),
-		make_pair(EColor::text, GetDefaultColor(EColor::text))
-	};
-	return colors;
+float axisToFloat(int16 axisValue) {
+	return float(axisValue) / float(32768);
 }
 
-vec4b GetDefaultColor(EColor color) {
-	switch (color) {
-	case EColor::background:
-		return vec4b(10, 10, 10, 255);
-	case EColor::rectangle:
-		return vec4b(90, 90, 90, 255);
-	case EColor::highlighted:
-		return vec4b(120, 120, 120, 255);
-	case EColor::darkened:
-		return vec4b(60, 60, 60, 255);
-	case EColor::text:
-		return vec4b(210, 210, 210, 255);
-	}
+int16 floatToAxis(float axisValue) {
+	return axisValue * float(32768);
 }

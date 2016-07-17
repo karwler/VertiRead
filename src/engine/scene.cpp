@@ -3,18 +3,19 @@
 
 Scene::Scene(const GeneralSettings& SETS) :
 	sets(SETS),
-	program(new Program),
+	library(sets),
 	objectHold(nullptr)
 {
 	Filer::CheckDirectories(sets);
-	library = new Library(World::winSys()->Settings().Fontpath(), sets);
+	library.Initialize(World::winSys()->Settings().Fontpath());
 }
 
 Scene::~Scene() {
 	clear(objects);
+	library.Fonts()->Clear();
 }
 
-void Scene::SwitchMenu(const vector<Object*>& objs, uint focObj) {
+void Scene::SwitchMenu(const vector<Object*>& objs, size_t focObj) {
 	// reset values
 	focObject = focObj;
 	objectHold = nullptr;
@@ -23,7 +24,7 @@ void Scene::SwitchMenu(const vector<Object*>& objs, uint focObj) {
 	popup.reset();
 	clear(objects);
 	objects = objs;
-	
+
 	World::engine()->SetRedrawNeeded();
 }
 
@@ -35,22 +36,15 @@ void Scene::ResizeMenu() {
 	World::engine()->SetRedrawNeeded();
 }
 
-void Scene::Tick() {
+void Scene::Tick(float dSec) {
 	// handle keyhold
-	if (World::inputSys()->isPressed("up"))
-		program->Event_Up();
-	else if (World::inputSys()->isPressed("down"))
-		program->Event_Down();
-	else if (World::inputSys()->isPressed("left"))
-		program->Event_Left();
-	else if (World::inputSys()->isPressed("right"))
-		program->Event_Right();
+	World::inputSys()->CheckAxisShortcuts();
 
 	// handle mousemove
 	if (objectHold) {
 		ReaderBox* box = dynamic_cast<ReaderBox*>(objectHold);
 		if (box && !box->sliderFocused) {
-			if (InputSys::isPressed(SDL_SCANCODE_LSHIFT) || InputSys::isPressed(SDL_BUTTON_RIGHT))
+			if (InputSys::isPressedK(SDL_SCANCODE_LSHIFT) || InputSys::isPressedM(SDL_BUTTON_RIGHT))
 				box->ScrollListX(-World::inputSys()->mouseMove().x);
 			objectHold->ScrollList(-World::inputSys()->mouseMove().y);
 		}
@@ -61,21 +55,21 @@ void Scene::Tick() {
 	// object ticks
 	for (Object* it : objects) {
 		if (ReaderBox* box = dynamic_cast<ReaderBox*>(it))
-			box->Tick();
+			box->Tick(dSec);
 		else if (Popup* box = dynamic_cast<Popup*>(it))
-			box->Tick();
+			box->Tick(dSec);
 	}
 }
 
-void Scene::OnMouseDown(EClick clickType) {
+void Scene::OnMouseDown(EClick clickType, bool handleHold) {
 	// first check if there's a popup window
 	if (popup)
 		CheckPopupClick();
 	else
-		CheckObjectsClick(clickType);
+		CheckObjectsClick(clickType, handleHold);
 }
 
-void Scene::CheckObjectsClick(EClick clickType) {
+void Scene::CheckObjectsClick(EClick clickType, bool handleHold) {
 	for (Object* obj : objects) {
 		if (!inRect(obj->getRect(), InputSys::mousePos()))	// skip if mouse isn't over object
 			continue;
@@ -95,7 +89,7 @@ void Scene::CheckObjectsClick(EClick clickType) {
 				World::engine()->SetRedrawNeeded();
 			}
 
-			if (CheckSliderClick(area))			// first check if slider is clicked
+			if (handleHold && CheckSliderClick(area))	// first check if slider is clicked
 				break;
 			else if (ListBox* box = dynamic_cast<ListBox*>(area)) {
 				CheckListBoxClick(box, clickType);
@@ -106,7 +100,7 @@ void Scene::CheckObjectsClick(EClick clickType) {
 				break;
 			}
 			else if (ReaderBox* box = dynamic_cast<ReaderBox*>(area)) {
-				CheckReaderBoxClick(box, clickType);
+				CheckReaderBoxClick(box, clickType, handleHold);
 				break;
 			}
 		}
@@ -159,7 +153,7 @@ void Scene::CheckTileBoxClick(TileBox* obj, EClick clickType) {
 		}
 }
 
-void Scene::CheckReaderBoxClick(ReaderBox* obj, EClick clickType) {
+void Scene::CheckReaderBoxClick(ReaderBox* obj, EClick clickType, bool handleHold) {
 	vec2i mPos = InputSys::mousePos();
 	if (obj->showList()) {		// check list buttons
 		for (ButtonImage& but : obj->ListButtons())
@@ -188,7 +182,7 @@ void Scene::CheckReaderBoxClick(ReaderBox* obj, EClick clickType) {
 			}
 		}
 	}
-	else {
+	else if (handleHold) {
 		vec2i pos = obj->Pos();
 		vec2i size = obj->Size();
 		if (inRect({pos.x, pos.y, size.x-obj->BarW(), size.y}, mPos))		// init list mouse drag
@@ -204,7 +198,7 @@ void Scene::CheckPopupSimpleClick(PopupMessage* obj) {
 void Scene::CheckPopupChoiceClick(PopupChoice* obj) {
 	if (inRect(obj->OkButton(), InputSys::mousePos())) {
 		if (PopupText* poptext = dynamic_cast<PopupText*>(obj))
-			program->Event_TextCaptureOk(poptext->LEdit()->Editor()->Text());
+			program.Event_TextCaptureOk(poptext->LEdit()->Editor()->Text());
 	}
 	else if (inRect(obj->CancelButton(), InputSys::mousePos()))
 		SetPopup(nullptr);
@@ -238,12 +232,12 @@ void Scene::PlaylistsPath(const string& dir) {
 	sets.DirPlist(dir);
 }
 
-Program* Scene::getProgram() const {
-	return program;
+Program* Scene::getProgram() {
+	return &program;
 }
 
-Library* Scene::getLibrary() const {
-	return library;
+Library* Scene::getLibrary() {
+	return &library;
 }
 
 vector<Object*> Scene::Objects() const {
@@ -263,11 +257,11 @@ ListItem* Scene::SelectedButton() const {
 			return box->selectedItem;
 
 	// if failed, look through all objects
-	for (Object* obj : objects) {
+	for (Object* obj : objects)
 		if (ScrollArea* box = dynamic_cast<ScrollArea*>(obj))
 			if (box->selectedItem && box->selectedItem->selectable())
 				return box->selectedItem;
-	}
+
 	return nullptr;	// nothing found
 }
 

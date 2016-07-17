@@ -18,7 +18,13 @@ enum EFix : uint8 {		// fix basically means "store value in pixels instead of a 
 	FIX_END  = 0xC0,	// end point won't be dependent on size (overrides fix_size flag when accessing end point)
 	FIX_ALL  = 0xFF
 };
+EFix operator~(EFix a);
+EFix operator&(EFix a, EFix b);
+EFix operator&=(EFix& a, EFix b);
+EFix operator^(EFix a, EFix b);
+EFix operator^=(EFix& a, EFix b);
 EFix operator|(EFix a, EFix b);
+EFix operator|=(EFix& a, EFix b);
 
 class Object {
 public:

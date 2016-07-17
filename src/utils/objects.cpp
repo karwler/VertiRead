@@ -1,7 +1,27 @@
 #include "engine/world.h"
 
+// FIX
+
+EFix operator~(EFix a) {
+	return static_cast<EFix>(~static_cast<uint8>(a));
+}
+EFix operator&(EFix a, EFix b) {
+	return static_cast<EFix>(static_cast<uint8>(a) & static_cast<uint8>(b));
+}
+EFix operator&=(EFix& a, EFix b) {
+	return a = static_cast<EFix>(static_cast<uint8>(a) & static_cast<uint8>(b));
+}
+EFix operator^(EFix a, EFix b) {
+	return static_cast<EFix>(static_cast<uint8>(a) ^ static_cast<uint8>(b));
+}
+EFix operator^=(EFix& a, EFix b) {
+	return a = static_cast<EFix>(static_cast<uint8>(a) ^ static_cast<uint8>(b));
+}
 EFix operator|(EFix a, EFix b) {
 	return static_cast<EFix>(static_cast<uint8>(a) | static_cast<uint8>(b));
+}
+EFix operator|=(EFix& a, EFix b) {
+	return a = static_cast<EFix>(static_cast<uint8>(a) | static_cast<uint8>(b));
 }
 
 // OBJECT

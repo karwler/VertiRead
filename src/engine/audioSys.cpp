@@ -6,6 +6,12 @@ AudioSys::AudioSys(const AudioSettings& SETS) :
 	deltaDelay(0.f)
 {}
 
+AudioSys::~AudioSys() {
+	FreeMusic();
+	Mix_CloseAudio();
+	Mix_Quit();
+}
+
 uint8 AudioSys::Initialize() {
 	uint8 retval = 0;
 
@@ -53,12 +59,6 @@ uint8 AudioSys::Initialize() {
 	SoundVolume(sets.soundVolume);
 
 	return retval;
-}
-
-void AudioSys::Close() {
-	FreeMusic();
-	Mix_CloseAudio();
-	Mix_Quit();
 }
 
 void AudioSys::FreeMusic() {

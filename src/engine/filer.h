@@ -2,6 +2,20 @@
 
 #include "utils/types.h"
 
+enum EDirFilter : uint8 {
+	FILTER_FILE = 0x1,
+	FILTER_DIR  = 0x2,
+	FILTER_LINK = 0x4,
+	FILTER_ALL  = 0xFF
+};
+EDirFilter operator~(EDirFilter a);
+EDirFilter operator&(EDirFilter a, EDirFilter b);
+EDirFilter operator&=(EDirFilter& a, EDirFilter b);
+EDirFilter operator^(EDirFilter a, EDirFilter b);
+EDirFilter operator^=(EDirFilter& a, EDirFilter b);
+EDirFilter operator|(EDirFilter a, EDirFilter b);
+EDirFilter operator|=(EDirFilter& a, EDirFilter b);
+
 class Filer {
 public:
 	static uint8 CheckDirectories(const GeneralSettings& sets);
@@ -31,6 +45,10 @@ public:
 	static ControlsSettings LoadControlsSettings();
 	static void SaveSettings(const ControlsSettings& sets);
 
+#ifdef _WIN32
+	static bool isDriveLetter(const string& path);
+	static vector<char> ListDrives();
+#endif
 #ifdef __APPLE__
 	static string execDir(bool raw=false);
 #else

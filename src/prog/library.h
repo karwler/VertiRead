@@ -4,8 +4,10 @@
 
 class Library {
 public:
-	Library(string FONT, GeneralSettings& GSET);
-	~Library();
+	Library(GeneralSettings& GSET);
+
+	void Initialize(string FONT);
+	void Close();
 
 	FontSet* Fonts();
 	void LoadFont(const string& font);
