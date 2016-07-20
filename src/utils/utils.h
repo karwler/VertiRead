@@ -190,103 +190,108 @@ struct kvec2 {
 	T x, y;
 
 	template <typename A>
-	kvec2& operator=(const kvec2<A>& n) {
-		x = n.x;
-		y = n.y;
-		return *this;
-	}
-	kvec2& operator=(T n) {
-		x = n;
-		y = n;
-		return *this;
-	}
-	template <typename A>
-	kvec2 operator+(const kvec2<A>& n) const {
-		return kvec2(x + n.x, y + n.y);
-	}
-	kvec2 operator+(T n) const {
-		return kvec2(x+n, y+n);
-	}
-	template <typename A>
-	kvec2 operator-(const kvec2<A>& n) const {
-		return kvec2(x - n.x, y - n.y);
-	}
-	kvec2 operator-(T n) const {
-		return kvec2(x-n, y-n);
-	}
-	template <typename A>
-	kvec2 operator*(const kvec2<A>& n) const {
-		return kvec2(x * n.x, y * n.y);
-	}
-	kvec2 operator*(T n) const {
-		return kvec2(x*n, y*n);
-	}
-	template <typename A>
-	kvec2 operator/(const kvec2<A>& n) const {
-		return kvec2(x / n.x, y / n.y);
-	}
-	kvec2 operator/(T n) const {
-		return kvec2(x/n, y/n);
-	}
-	template <typename A>
-	kvec2& operator+=(const kvec2<A>& n) {
-		x += n.x;
-		y += n.y;
-		return *this;
-	}
-	kvec2& operator+=(T n) {
-		x += n;
-		y += n;
-		return *this;
-	}
-	template <typename A>
-	kvec2& operator-=(const kvec2<A>& n) {
-		x -= n.x;
-		y -= n.y;
-		return *this;
-	}
-	kvec2& operator-=(T n) {
-		x -= n;
-		y -= n;
-		return *this;
-	}
-	template <typename A>
-	kvec2& operator*=(const kvec2<A>& n) {
-		x *= n.x;
-		y *= n.y;
-		return *this;
-	}
-	kvec2& operator*=(T n) {
-		x *= n;
-		y *= n;
-		return *this;
-	}
-	template <typename A>
-	kvec2& operator/=(const kvec2<A>& n) {
-		x /= n.x;
-		y /= n.y;
-		return *this;
-	}
-	kvec2& operator/=(T n) {
-		x /= n;
-		y /= n;
+	kvec2& operator=(const kvec2<A>& v) {
+		x = v.x;
+		y = v.y;
 		return *this;
 	}
 
-	template <typename A>
-	bool operator==(const kvec2<A>& n) const {
-		return x == n.x && y == n.y;
-	}
-	bool operator==(T n) const {
-		return x == n && y == n;
+	friend kvec2 operator+(const kvec2& a, const kvec2& b) {
+		return kvec2(a.x + b.x, a.y + b.y);
 	}
 	template <typename A>
-	bool operator!=(const kvec2<A>& n) const {
-		return x != n.x || y != n.y;
+	friend kvec2 operator+(const kvec2& a, const kvec2<A>& b) {
+		return kvec2(a.x + b.x, a.y + b.y);
 	}
-	bool operator!=(T n) const {
-		return x != n || y != n;
+
+	friend kvec2 operator-(const kvec2& a, const kvec2& b) {
+		return kvec2(a.x - b.x, a.y - b.y);
 	}
+	template <typename A>
+	friend kvec2 operator-(const kvec2& a, const kvec2<A>& b) {
+		return kvec2(a.x - b.x, a.y - b.y);
+	}
+
+	friend kvec2 operator*(const kvec2& a, const kvec2& b) {
+		return kvec2(a.x * b.x, a.y * b.y);
+	}
+	template <typename A>
+	friend kvec2 operator*(const kvec2& a, const kvec2<A>& b) {
+		return kvec2(a.x * b.x, a.y * b.y);
+	}
+
+	friend kvec2 operator/(const kvec2& a, const kvec2& b) {
+		return kvec2(a.x / b.x, a.y / b.y);
+	}
+	template <typename A>
+	friend kvec2 operator/(const kvec2& a, const kvec2<A>& b) {
+		return kvec2(a.x / b.x, a.y / b.y);
+	}
+
+	kvec2& operator+=(const kvec2& v) {
+		x += v.x;
+		y += v.y;
+		return *this;
+	}
+	template <typename A>
+	kvec2& operator+=(const kvec2<A>& v) {
+		x += v.x;
+		y += v.y;
+		return *this;
+	}
+
+	kvec2& operator-=(const kvec2& v) {
+		x -= v.x;
+		y -= v.y;
+		return *this;
+	}
+	template <typename A>
+	kvec2& operator-=(const kvec2<A>& v) {
+		x -= v.x;
+		y -= v.y;
+		return *this;
+	}
+
+	kvec2& operator*=(const kvec2& v) {
+		x *= v.x;
+		y *= v.y;
+		return *this;
+	}
+	template <typename A>
+	kvec2& operator*=(const kvec2<A>& v) {
+		x *= v.x;
+		y *= v.y;
+		return *this;
+	}
+
+	kvec2& operator/=(const kvec2& v) {
+		x /= v.x;
+		y /= v.y;
+		return *this;
+	}
+	template <typename A>
+	kvec2& operator/=(const kvec2<A>& v) {
+		x /= v.x;
+		y /= v.y;
+		return *this;
+	}
+
+	friend bool operator==(const kvec2& a, const kvec2& b) {
+		return a.x == b.x && a.y == b.y;
+	}
+	template <typename A>
+	friend bool operator==(const kvec2& a, const kvec2<A>& b) {
+		return a.x == b.x && a.y == b.y;
+	}
+
+	friend bool operator!=(const kvec2& a, const kvec2& b) {
+		return a.x != b.x || a.y != b.y;
+	}
+	template <typename A>
+	friend bool operator!=(const kvec2& a, const kvec2<A>& b) {
+		return a.x != b.x || a.y != b.y;
+	}
+
 	bool isNull() const {
 		return x == 0 && y == 0;
 	}
@@ -294,68 +299,55 @@ struct kvec2 {
 		return x == 0 || y == 0;
 	}
 
-	T len() const { return length(*this); }
-	kvec2 norm() const { return normalize(*this); }
-	bool isUnit() const { return ::isUnit(*this); }
+	T len() const {
+		return length(*this);
+	}
+	kvec2 norm() const {
+		return normalize(*this);
+	}
+	bool unit() const {
+		return isUnit(*this);
+	}
 	template <typename A>
-	T dot(const kvec2<A>& n) const { return ::dot(*this, n); }
+	T dot(const kvec2<A>& vec) const {
+		return dotP(*this, vec);
+	}
 	template <typename A>
-	T cross(const kvec2<A>& n) const { return ::cross(*this, n); }
+	T cross(const kvec2<A>& vec) const {
+		return crossP(*this, vec);
+	}
 	template <typename A>
-	kvec2 reflect(const kvec2<A>& n) const { return ::reflect(*this, n); }
-	template <typename A>
-	kvec2 rotate(A n) const { return ::rotate(*this, n); }
+	kvec2 refl(const kvec2<A>& nrm) const {
+		return reflect(*this, nrm);
+	}
+	kvec2 rot(T ang) const {
+		return rotate(*this, ang);
+	}
 };
 
-template <typename A, typename B>
-kvec2<B> operator+(A n, const kvec2<B>& v) {
-	return v + n;
-}
-template <typename A, typename B>
-kvec2<B> operator-(A n, const kvec2<B>& v) {
-	return v - n;
-}
-template <typename A, typename B>
-kvec2<B> operator*(A n, const kvec2<B>& v) {
-	return v * n;
-}
-template <typename A, typename B>
-kvec2<B> operator/(A n, const kvec2<B>& v) {
-	return v / n;
-}
-
-template <typename A, typename B>
-bool operator==(A n, const kvec2<B>& v) {
-	return v == n;
-}
-template <typename A, typename B>
-bool operator!=(A n, const kvec2<B>& v) {
-	return v != n;
-}
-
-template <typename T>
-T length(const kvec2<T>& vec) {
+template <typename A>
+A length(const kvec2<A>& vec) {
 	return std::sqrt(vec.x*vec.x + vec.y*vec.y);
 }
 
-template <typename T>
-kvec2<T> normalize(const kvec2<T>& vec) {
-	T l = length(vec);
-	return kvec2<T>(vec.x/l, vec.y/l);
+template <typename A>
+kvec2<A> normalize(const kvec2<A>& vec) {
+	A l = length(vec);
+	return kvec2<A>(vec.x/l, vec.y/l);
 }
 
-template <typename T>
-bool isUnit(const kvec2<T>& vec) {
-	return length(vec) == T(1);
+template <typename A>
+bool isUnit(const kvec2<A>& vec) {
+	return length(vec) == 1;
 }
 
 template <typename A, typename B>
-A dot(const kvec2<A>& v0, const kvec2<B>& v1) {
+A dotP(const kvec2<A>& v0, const kvec2<B>& v1) {
 	return v0.x*v1.x + v0.y*v1.y;
 }
 
 template <typename A, typename B>
-A cross(const kvec2<A>& v0, const kvec2<B>& v1) {
+A crossP(const kvec2<A>& v0, const kvec2<B>& v1) {
 	return v0.x*v1.y - v0.y*v1.x;
 }
 
@@ -363,11 +355,11 @@ template <typename A, typename B>
 kvec2<A> reflect(const kvec2<A>& vec, kvec2<B> nrm) {
 	if (!isUnit(nrm))
 		nrm = normalize(nrm);
-	return vec - 2 * dot(vec, nrm) * nrm;
+	return vec - 2 * dotP(vec, nrm) * nrm;
 }
 
-template <typename A, typename B>
-kvec2<A> rotate(const kvec2<A>& vec, B ang) {
+template <typename A>
+kvec2<A> rotate(const kvec2<A>& vec, A ang) {
 	ang = D2R(ang);
 	return kvec2<A>(vec.x*std::cos(ang) - vec.y*std::sin(ang), vec.x*std::sin(ang) + vec.y*std::cos(ang));
 }
@@ -386,113 +378,117 @@ struct kvec3 {
 	T x, y, z;
 
 	template <typename A>
-	kvec3& operator=(const kvec3<A>& n) {
-		x = n.x;
-		y = n.y;
-		z = n.z;
-		return *this;
-	}
-	kvec3& operator=(T n) {
-		x = n;
-		y = n;
-		z = n;
-		return *this;
-	}
-	template <typename A>
-	kvec3 operator+(const kvec3<A>& n) const {
-		return kvec3(x + n.x, y + n.y, z + n.z);
-	}
-	kvec3 operator+(T n) const {
-		return kvec3(x+n, y+n, z+n);
-	}
-	template <typename A>
-	kvec3 operator-(const kvec3<A>& n) const {
-		return kvec3(x - n.x, y - n.y, z - n.z);
-	}
-	kvec3 operator-(T n) const {
-		return kvec3(x-n, y-n, z-n);
-	}
-	template <typename A>
-	kvec3 operator*(const kvec3<A>& n) const {
-		return kvec3(x * n.x, y * n.y, z * n.z);
-	}
-	kvec3 operator*(T n) const {
-		return kvec3(x*n, y*n, z*n);
-	}
-	template <typename A>
-	kvec3 operator/(const kvec3<A>& n) const {
-		return kvec3(x / n.x, y / n.y, z / n.z);
-	}
-	kvec3 operator/(T n) const {
-		return kvec3(x/n, y/n, z/n);
-	}
-	template <typename A>
-	kvec3& operator+=(const kvec3<A>& n) {
-		x += n.x;
-		y += n.y;
-		z += n.z;
-		return *this;
-	}
-	kvec3& operator+=(T n) {
-		x += n;
-		y += n;
-		z += n;
-		return *this;
-	}
-	template <typename A>
-	kvec3& operator-=(const kvec3<A>& n) {
-		x -= n.x;
-		y -= n.y;
-		z -= n.z;
-		return *this;
-	}
-	kvec3& operator-=(T n) {
-		x -= n;
-		y -= n;
-		z -= n;
-		return *this;
-	}
-	template <typename A>
-	kvec3& operator*=(const kvec3<A>& n) {
-		x *= n.x;
-		y *= n.y;
-		z *= n.z;
-		return *this;
-	}
-	kvec3& operator*=(T n) {
-		x *= n;
-		y *= n;
-		z *= n;
-		return *this;
-	}
-	template <typename A>
-	kvec3& operator/=(const kvec3<A>& n) {
-		x /= n.x;
-		y /= n.y;
-		z /= n.z;
-		return *this;
-	}
-	kvec3& operator/=(T n) {
-		x /= n;
-		y /= n;
-		z /= n;
+	kvec3& operator=(const kvec3<A>& v) {
+		x = v.x;
+		y = v.y;
+		z = v.z;
 		return *this;
 	}
 
-	template <typename A>
-	bool operator==(const kvec3<A>& n) const {
-		return x == n.x && y == n.y && z == n.z;
-	}
-	bool operator==(T n) const {
-		return x == n && y == n && z == n;
+	friend kvec3 operator+(const kvec3& a, const kvec3& b) {
+		return kvec3(a.x + b.x, a.y + b.y, a.z + b.z);
 	}
 	template <typename A>
-	bool operator!=(const kvec3<A>& n) const {
-		return x != n.x || y != n.y || z != n.z;
+	friend kvec3 operator+(const kvec3& a, const kvec3<A>& b) {
+		return kvec3(a.x + b.x, a.y + b.y, a.z + b.z);
 	}
-	bool operator!=(T n) const {
-		return x != n || y != n || z != n;
+
+	friend kvec3 operator-(const kvec3& a, const kvec3& b) {
+		return kvec3(a.x - b.x, a.y - b.y, a.z - b.z);
 	}
+	template <typename A>
+	friend kvec3 operator-(const kvec3& a, const kvec3<A>& b) {
+		return kvec3(a.x - b.x, a.y - b.y, a.z - b.z);
+	}
+
+	friend kvec3 operator*(const kvec3& a, const kvec3& b) {
+		return kvec3(a.x * b.x, a.y * b.y, a.z * b.z);
+	}
+	template <typename A>
+	friend kvec3 operator*(const kvec3& a, const kvec3<A>& b) {
+		return kvec3(a.x * b.x, a.y * b.y, a.z * b.z);
+	}
+
+	friend kvec3 operator/(const kvec3& a, const kvec3& b) {
+		return kvec3(a.x / b.x, a.y / b.y, a.z / b.z);
+	}
+	template <typename A>
+	friend kvec3 operator/(const kvec3& a, const kvec3<A>& b) {
+		return kvec3(a.x / b.x, a.y / b.y, a.z / b.z);
+	}
+
+	kvec3& operator+=(const kvec3& v) {
+		x += v.x;
+		y += v.y;
+		z += v.z;
+		return *this;
+	}
+	template <typename A>
+	kvec3& operator+=(const kvec3<A>& v) {
+		x += v.x;
+		y += v.y;
+		z += v.z;
+		return *this;
+	}
+
+	kvec3& operator-=(const kvec3& v) {
+		x -= v.x;
+		y -= v.y;
+		z -= v.z;
+		return *this;
+	}
+	template <typename A>
+	kvec3& operator-=(const kvec3<A>& v) {
+		x -= v.x;
+		y -= v.y;
+		z -= v.z;
+		return *this;
+	}
+
+	kvec3& operator*=(const kvec3& v) {
+		x *= v.x;
+		y *= v.y;
+		z *= v.z;
+		return *this;
+	}
+	template <typename A>
+	kvec3& operator*=(const kvec3<A>& v) {
+		x *= v.x;
+		y *= v.y;
+		z *= v.z;
+		return *this;
+	}
+
+	kvec3& operator/=(const kvec3& v) {
+		x /= v.x;
+		y /= v.y;
+		z /= v.z;
+		return *this;
+	}
+	template <typename A>
+	kvec3& operator/=(const kvec3<A>& v) {
+		x /= v.x;
+		y /= v.y;
+		z /= v.z;
+		return *this;
+	}
+
+	friend bool operator==(const kvec3& a, const kvec3& b) {
+		return a.x == b.x && a.y == b.y && a.z == b.z;
+	}
+	template <typename A>
+	friend bool operator==(const kvec3& a, const kvec3<A>& b) {
+		return a.x == b.x && a.y == b.y && a.z == b.z;
+	}
+
+	friend bool operator!=(const kvec3& a, const kvec3& b) {
+		return a.x != b.x || a.y != b.y || a.z == b.z;
+	}
+	template <typename A>
+	friend bool operator!=(const kvec3& a, const kvec3<A>& b) {
+		return a.x != b.x || a.y != b.y || a.z != b.z;
+	}
+
 	bool isNull() const {
 		return x == 0 && y == 0 && z == 0;
 	}
@@ -500,44 +496,32 @@ struct kvec3 {
 		return x == 0 || y == 0 || z == 0;
 	}
 
-	T len() const { return length(*this); }
-	kvec3 norm() const { return normalize(*this); }
-	bool isUnit() const { return ::isUnit(*this); }
+	T len() const {
+		return length(*this);
+	}
+	kvec3 norm() const {
+		return normalize(*this);
+	}
+	bool unit() const {
+		return isUnit(*this);
+	}
 	template <typename A>
-	T dot(const kvec3<A>& n) const { return ::dot(*this, n); }
+	T dot(const kvec3<A>& vec) const {
+		return dotP(*this, vec);
+	 }
 	template <typename A>
-	kvec3 cross(const kvec3<A>& n) const { return ::cross(*this, n); }
+	kvec3 cross(const kvec3<A>& vec) const {
+		return crossP(*this, vec);
+	}
 	template <typename A>
-	kvec3 reflect(const kvec3<A>& n) const { return ::reflect(*this, n); }
+	kvec3 refl(const kvec3<A>& nrm) const {
+		return reflect(*this, nrm);
+	}
 	template <typename A>
-	kvec3 rotate(const kvec3<A>& n) const { return ::rotate(*this, n); }
+	kvec3 rot(const kvec3<A>& ang) const {
+		return rotate(*this, ang);
+	}
 };
-
-template <typename A, typename B>
-kvec3<B> operator+(A n, const kvec3<B>& v) {
-	return v + n;
-}
-template <typename A, typename B>
-kvec3<B> operator-(A n, const kvec3<B>& v) {
-	return v - n;
-}
-template <typename A, typename B>
-kvec3<B> operator*(A n, const kvec3<B>& v) {
-	return v * n;
-}
-template <typename A, typename B>
-kvec3<B> operator/(A n, const kvec3<B>& v) {
-	return v / n;
-}
-
-template <typename A, typename B>
-bool operator==(A n, const kvec3<B>& v) {
-	return v == n;
-}
-template <typename A, typename B>
-bool operator!=(A n, const kvec3<B>& v) {
-	return v != n;
-}
 
 template <typename T>
 T length(const kvec3<T>& vec) {
@@ -552,16 +536,16 @@ kvec3<T> normalize(const kvec3<T>& vec) {
 
 template <typename T>
 bool isUnit(const kvec3<T>& vec) {
-	return vec.len() == T(1);
+	return vec.len() == 1;
 }
 
 template <typename A, typename B>
-A dot(const kvec3<A>& v0, const kvec3<B>& v1) {
+A dotP(const kvec3<A>& v0, const kvec3<B>& v1) {
 	return v0.x*v1.x + v0.y*v1.y + v0.z*v1.z;
 }
 
 template <typename A, typename B>
-kvec3<A> cross(const kvec3<A>& v0, const kvec3<B>& v1) {
+kvec3<A> crossP(const kvec3<A>& v0, const kvec3<B>& v1) {
 	return kvec3<A>(v0.y*v1.z - v0.z*v1.y, v0.z*v1.x - v0.x*v1.z, v0.x*v1.y - v0.y*v1.x);
 }
 
@@ -569,7 +553,7 @@ template <typename A, typename B>
 kvec3<A> reflect(const kvec3<A>& vec, kvec3<B> nrm) {
 	if (!isUnit(nrm))
 		nrm = normalize(nrm);
-	return vec - 2 * dot(vec, nrm) * nrm;
+	return vec - 2 * dotP(vec, nrm) * nrm;
 }
 
 template <typename A, typename B>
@@ -607,162 +591,140 @@ struct kvec4 {
 	T x, y, z, a;
 
 	template <typename A>
-	kvec4& operator=(const kvec4<A>& n) {
-		x = n.x;
-		y = n.y;
-		z = n.z;
-		a = n.a;
-		return *this;
-	}
-	kvec4& operator=(T n) {
-		x = n;
-		y = n;
-		z = n;
-		a = n;
-		return *this;
-	}
-	template <typename A>
-	kvec4 operator+(const kvec4<A>& n) const {
-		return kvec4(x + n.x, y + n.y, z + n.z, a + n.a);
-	}
-	kvec4 operator+(T n) const {
-		return kvec4(x+n, y+n, z+n, a+n);
-	}
-	template <typename A>
-	kvec4 operator-(const kvec4<A>& n) const {
-		return kvec4(x - n.x, y - n.y, z - n.z, a - n.a);
-	}
-	kvec4 operator-(T n) const {
-		return kvec4(x-n, y-n, z-n, a-n);
-	}
-	template <typename A>
-	kvec4 operator*(const kvec4<A>& n) const {
-		return kvec4(x * n.x, y * n.y, z * n.z, a * n.a);
-	}
-	kvec4 operator*(T n) const {
-		return kvec4(x*n, y*n, z*n, a*n);
-	}
-	template <typename A>
-	kvec4 operator/(const kvec4<A>& n) const {
-		return kvec4(x / n.x, y / n.y, z / n.z, a / n.a);
-	}
-	kvec4 operator/(T n) const {
-		return kvec4(x/n, y/n, z/n, a/n);
-	}
-	template <typename A>
-	kvec4& operator+=(const kvec4<A>& n) {
-		x += n.x;
-		y += n.y;
-		z += n.z;
-		a += n.a;
-		return *this;
-	}
-	kvec4& operator+=(T n) {
-		x += n;
-		y += n;
-		z += n;
-		a += n;
-		return *this;
-	}
-	template <typename A>
-	kvec4& operator-=(const kvec4<A>& n) {
-		x -= n.x;
-		y -= n.y;
-		z -= n.z;
-		a -= n.a;
-		return *this;
-	}
-	kvec4& operator-=(T n) {
-		x -= n;
-		y -= n;
-		z -= n;
-		a -= n;
-		return *this;
-	}
-	template <typename A>
-	kvec4& operator*=(const kvec4<A>& n) {
-		x *= n.x;
-		y *= n.y;
-		z *= n.z;
-		a *= n.a;
-		return *this;
-	}
-	kvec4& operator*=(T n) {
-		x *= n;
-		y *= n;
-		z *= n;
-		a *= n;
-		return *this;
-	}
-	template <typename A>
-	kvec4& operator/=(const kvec4<A>& n) {
-		x /= n.x;
-		y /= n.y;
-		z /= n.z;
-		a /= n.a;
-		return *this;
-	}
-	kvec4& operator/=(T n) {
-		x /= n;
-		y /= n;
-		z /= n;
-		a /= n;
+	kvec4& operator=(const kvec4<A>& v) {
+		x = v.x;
+		y = v.y;
+		z = v.z;
+		a = v.a;
 		return *this;
 	}
 
-	template <typename A>
-	bool operator==(const kvec4<A>& n) const {
-		return x == n.x && y == n.y && z == n.z && a == n.a;
-	}
-	bool operator==(T n) const {
-		return x == n && y == n && z == n && a == n;
+	friend kvec4 operator+(const kvec4& a, const kvec4& b) {
+		return kvec4(a.x + b.x, a.y + b.y, a.z + b.z, a.a + b.a);
 	}
 	template <typename A>
-	bool operator!=(const kvec4<A>& n) const {
-		return x != n.x || y != n.y || z != n.z || a != n.a;
-	}
-	bool operator!=(T n) const {
-		return x != n || y != n || z != n || a != n;
-	}
-	bool isNull() const {
-		return x == 0 && y == 0 && z == 0 && a == 0;
-	}
-	bool hasNull() const {
-		return x == 0 || y == 0 || z == 0 || a == 0;
+	friend kvec4 operator+(const kvec4& a, const kvec4<A>& b) {
+		return kvec4(a.x + b.x, a.y + b.y, a.z + b.z, a.a + b.a);
 	}
 
-	T len() const { return length(*this); }
-	kvec4 norm() const { return normalize(*this); }
-	bool isUnit() const { return ::isUnit(*this); }
+	friend kvec4 operator-(const kvec4& a, const kvec4& b) {
+		return kvec4(a.x - b.x, a.y - b.y, a.z - b.z, a.a - b.a);
+	}
 	template <typename A>
-	T dot(const kvec4& n) const { return ::dot(*this, n); }
+	friend kvec4 operator-(const kvec4& a, const kvec4<A>& b) {
+		return kvec4(a.x - b.x, a.y - b.y, a.z - b.z, a.a - b.a);
+	}
+
+	friend kvec4 operator*(const kvec4& a, const kvec4& b) {
+		return kvec4(a.x * b.x, a.y * b.y, a.z * b.z, a.a * b.a);
+	}
+	template <typename A>
+	friend kvec4 operator*(const kvec4& a, const kvec4<A>& b) {
+		return kvec4(a.x * b.x, a.y * b.y, a.z * b.z, a.a * b.a);
+	}
+
+	friend kvec4 operator/(const kvec4& a, const kvec4& b) {
+		return kvec4(a.x / b.x, a.y / b.y, a.z / b.z, a.a / b.a);
+	}
+	template <typename A>
+	friend kvec4 operator/(const kvec4& a, const kvec4<A>& b) {
+		return kvec4(a.x / b.x, a.y / b.y, a.z / b.z, a.a / b.a);
+	}
+
+	kvec4& operator+=(const kvec4& v) {
+		x += v.x;
+		y += v.y;
+		z += v.z;
+		a += v.a;
+		return *this;
+	}
+	template <typename A>
+	kvec4& operator+=(const kvec4<A>& v) {
+		x += v.x;
+		y += v.y;
+		z += v.z;
+		a += v.a;
+		return *this;
+	}
+
+	kvec4& operator-=(const kvec4& v) {
+		x -= v.x;
+		y -= v.y;
+		z -= v.z;
+		a -= v.a;
+		return *this;
+	}
+	template <typename A>
+	kvec4& operator-=(const kvec4<A>& v) {
+		x -= v.x;
+		y -= v.y;
+		z -= v.z;
+		a -= v.a;
+		return *this;
+	}
+
+	kvec4& operator*=(const kvec4& v) {
+		x *= v.x;
+		y *= v.y;
+		z *= v.z;
+		a *= v.a;
+		return *this;
+	}
+	template <typename A>
+	kvec4& operator*=(const kvec4<A>& v) {
+		x *= v.x;
+		y *= v.y;
+		z *= v.z;
+		a *= v.a;
+		return *this;
+	}
+
+	kvec4& operator/=(const kvec4& v) {
+		x /= v.x;
+		y /= v.y;
+		z /= v.z;
+		a /= v.a;
+		return *this;
+	}
+	template <typename A>
+	kvec4& operator/=(const kvec4<A>& v) {
+		x /= v.x;
+		y /= v.y;
+		z /= v.z;
+		a /= v.a;
+		return *this;
+	}
+
+	friend bool operator==(const kvec4& a, const kvec4& b) {
+		return a.x == b.x && a.y == b.y && a.z == b.z && a.a == b.a;
+	}
+	template <typename A>
+	friend bool operator==(const kvec4& a, const kvec4<A>& b) {
+		return a.x == b.x && a.y == b.y && a.z == b.z && a.a == b.a;
+	}
+
+	friend bool operator!=(const kvec4& a, const kvec4& b) {
+		return a.x != b.x || a.y != b.y || a.z != b.z || a.a != b.a;
+	}
+	template <typename A>
+	friend bool operator!=(const kvec4& a, const kvec4<A>& b) {
+		return a.x != b.x || a.y != b.y || a.z != b.z || a.a != b.a;
+	}
+
+	T len() const {
+		return length(*this);
+	}
+	kvec4 norm() const {
+		return normalize(*this);
+	}
+	bool unit() const {
+		return isUnit(*this);
+	}
+	template <typename A>
+	T dot(const kvec4& vec) const {
+		return dotP(*this, vec);
+	}
 };
-
-template <typename A, typename B>
-kvec4<B> operator+(A n, const kvec4<B>& v) {
-	return v + n;
-}
-template <typename A, typename B>
-kvec4<B> operator-(A n, const kvec4<B>& v) {
-	return v - n;
-}
-template <typename A, typename B>
-kvec4<B> operator*(A n, const kvec4<B>& v) {
-	return v * n;
-}
-template <typename A, typename B>
-kvec4<B> operator/(A n, const kvec4<B>& v) {
-	return v / n;
-}
-
-template <typename A, typename B>
-bool operator==(A n, const kvec4<B>& v) {
-	return v == n;
-}
-template <typename A, typename B>
-bool operator!=(A n, const kvec4<B>& v) {
-	return v != n;
-}
 
 template <typename T>
 T length(const kvec4<T>& vec) {
@@ -777,7 +739,7 @@ kvec4<T> normalize(const kvec4<T>& vec) {
 
 template <typename T>
 bool isUnit(const kvec4<T>& vec) {
-	return vec.len() == T(1);
+	return vec.len() == 1;
 }
 
 template <typename A, typename B>
