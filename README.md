@@ -41,5 +41,3 @@ By default the latter is enabled. In order to change to the X-Box controller def
 ##To do list
 - clean up browser.cpp and program.cpp
 - fix mosue scroll under linux
-- maybe add some animations
-- maybe load textures while displaying reader

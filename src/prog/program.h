@@ -93,7 +93,6 @@ private:
 		audioSets,
 		controlsSets
 	} curMenu;
-	float scrollFactor;
 	kptr<Browser> browser;
 	kptr<PlaylistEditor> editor;
 
