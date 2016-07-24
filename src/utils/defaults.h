@@ -23,7 +23,7 @@ const char dsep = '/';
 
 // audio settings
 #define DEFAULT_MUSIC_VOL  128
-#define DEFAULT_SOUND_VOL  90
+#define DEFAULT_SOUND_VOL  0
 #define DEFAULT_SONG_DELAY 0.5f
 
 // controls settings

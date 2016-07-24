@@ -19,6 +19,7 @@ void Scene::SwitchMenu(const vector<Object*>& objs, size_t focObj) {
 	// reset values
 	focObject = focObj;
 	objectHold = nullptr;
+	World::inputSys()->SetCapture(nullptr);
 
 	// reset objects
 	popup.reset();
@@ -200,8 +201,10 @@ void Scene::CheckPopupChoiceClick(PopupChoice* obj) {
 		if (PopupText* poptext = dynamic_cast<PopupText*>(obj))
 			program.Event_TextCaptureOk(poptext->LEdit()->Editor()->Text());
 	}
-	else if (inRect(obj->CancelButton(), InputSys::mousePos()))
+	else if (inRect(obj->CancelButton(), InputSys::mousePos())) {
+		World::PlaySound("back");
 		SetPopup(nullptr);
+	}
 }
 
 void Scene::OnMouseUp() {
@@ -217,7 +220,7 @@ void Scene::OnMouseUp() {
 
 void Scene::OnMouseWheel(int ymov) {
 	if (ScrollArea* box = dynamic_cast<ScrollArea*>(FocusedObject()))
-		box->ScrollList(ymov*-20);
+		box->ScrollList(ymov*-10);
 }
 
 GeneralSettings Scene::Settings() const {
