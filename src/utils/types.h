@@ -1,7 +1,10 @@
 ﻿#pragma once
 
 #include "utils.h"
-#include "defaults.h"
+#include "kklib/vec2.h"
+#include "kklib/vec3.h"
+#include "kklib/vec4.h"
+#include "prog/defaults.h"
 
 // enumerations
 
@@ -186,17 +189,17 @@ public:
 };
 
 struct Playlist {
-	Playlist(const string& NAME="", const vector<fs::path>& SGS= {}, const vector<string>& BKS= {});
+	Playlist(const string& NAME="", const vector<string>& SGS={}, const vector<string>& BKS= {});
 
 	string name;
-	vector<fs::path> songs;
+	vector<string> songs;
 	vector<string> books;
 
 	string songPath(uint id) const;	// returns song's full path if original path is relative
 };
 
 struct Directory {
-	Directory(const string& NAME="", const vector<string>& DIRS= {}, const vector<string>& FILS= {});
+	Directory(const string& NAME="", const vector<string>& DIRS={}, const vector<string>& FILS= {});
 
 	string name;
 	vector<string> dirs;
@@ -226,7 +229,7 @@ public:
 	void DirLib(const string& dir);
 
 	string DirPlist() const;
-	string PlaylistParh() const;	// same as above
+	string PlaylistPath() const;	// same as above
 	void DirPlist(const string& dir);
 
 private:

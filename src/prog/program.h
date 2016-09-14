@@ -3,6 +3,7 @@
 #include "browser.h"
 #include "playlistEditor.h"
 #include "utils/items.h"
+#include "kklib/sptr.h"
 
 class Program {
 public:
@@ -93,8 +94,8 @@ private:
 		audioSets,
 		controlsSets
 	} curMenu;
-	kptr<Browser> browser;
-	kptr<PlaylistEditor> editor;
+	kk::sptr<Browser> browser;
+	kk::sptr<PlaylistEditor> editor;
 
 	void SwitchScene(EMenu newMenu, void* dat=nullptr);
 	void SwitchScene(void* dat=nullptr) const;

@@ -76,12 +76,12 @@ void Program::Event_CenterView() {
 
 void Program::Event_NextDir() {
 	if (curMenu == EMenu::reader)
-		Event_OpenReader((void*)browser->GoNext().string().c_str());
+		Event_OpenReader((void*)browser->GoNext().c_str());
 }
 
 void Program::Event_PrevDir() {
 	if (curMenu == EMenu::reader)
-		Event_OpenReader((void*)browser->GoPrev().string().c_str());
+		Event_OpenReader((void*)browser->GoPrev().c_str());
 }
 
 void Program::Event_CursorUp(float amt) {
@@ -159,10 +159,10 @@ void Program::Event_AddButtonClick() {
 	}
 	else if (curMenu == EMenu::songSearch) {
 		if (ListItem* item = World::scene()->SelectedButton()) {
-			if (browser->CurDir().string() == string(1, dsep))
+			if (browser->CurDir() == string(1, dsep))
 				editor->AddSong(dsep+item->label);
 			else
-				editor->AddSong(browser->CurDir().string()+dsep+item->label);
+				editor->AddSong(browser->CurDir()+item->label);
 			browser.reset();
 
 			SwitchScene(EMenu::plistEditor);
@@ -175,7 +175,7 @@ void Program::Event_DeleteButtonClick() {
 
 	if (curMenu == EMenu::playlists) {
 		if (ListItem* item = World::scene()->SelectedButton()) {
-			fs::remove(World::scene()->Settings().PlaylistParh() + item->label);
+			Filer::Remove(World::scene()->Settings().PlaylistPath()+item->label);
 			Event_OpenPlaylistList();
 		}
 	}
@@ -215,16 +215,16 @@ void Program::Event_ItemDoubleclicked(ListItem* item) {
 		if (browser->CurDir() == "\\")
 			Event_OpenSongBrowser(item->label+dsep);
 #else
-		if (browser->CurDir() == "/" && fs::is_directory(dsep + item->label))
+		if (browser->CurDir() == "/" && Filer::FileType(dsep + item->label) == EFileType::dir)
 			Event_OpenSongBrowser(dsep+item->label);
 #endif
-		else if (fs::is_directory(browser->CurDir().string() + dsep + item->label))
+		else if (Filer::FileType(browser->CurDir() + item->label) == EFileType::dir)
 			Event_OpenSongBrowser(item->label);
 		else {
-			if (browser->CurDir().string() == string(1, dsep))
+			if (browser->CurDir() == string(1, dsep))
 				editor->AddSong(dsep+item->label);
 			else
-				editor->AddSong(browser->CurDir().string()+dsep+item->label);
+				editor->AddSong(browser->CurDir() + item->label);
 			browser.reset();
 			SwitchScene(EMenu::plistEditor);
 		}
@@ -254,7 +254,7 @@ void Program::Event_UpButtonClick() {
 void Program::Event_AddBook(void* name) {
 	World::PlaySound("click");
 
-	editor->AddBook(cstr(name));
+	editor->AddBook((const char*)name);
 	SwitchScene(EMenu::plistEditor);
 }
 
@@ -267,11 +267,11 @@ void Program::Event_OpenBookList() {
 
 void Program::Event_OpenBrowser(void* path) {
 	World::PlaySound("click");
-
+	
 	if (browser)
-		browser->GoTo(cstr(path));
+		browser->GoTo(string((const char*)path));
 	else
-		browser = new Browser(cstr(path));
+		browser = new Browser((const char*)path);
 	
 	SwitchScene(EMenu::browser);
 }
@@ -279,7 +279,7 @@ void Program::Event_OpenBrowser(void* path) {
 void Program::Event_OpenReader(void* file) {
 	World::PlaySound("open");
 
-	string filename = FindFittingPlaylist(cstr(file));
+	string filename = FindFittingPlaylist((const char*)file);
 	if (!filename.empty())
 		World::audioSys()->LoadPlaylist(Filer::LoadPlaylist(filename));
 	
@@ -294,7 +294,7 @@ void Program::Event_OpenPlaylistList() {
 void Program::Event_OpenPlaylistEditor(void* playlist) {
 	World::PlaySound("click");
 
-	editor = new PlaylistEditor(cstr(playlist));
+	editor = new PlaylistEditor((const char*)playlist);
 	SwitchScene(EMenu::plistEditor);
 }
 
@@ -449,7 +449,7 @@ void Program::Event_SetScrollY(const string& scrolly) {
 
 void Program::Event_TextCaptureOk(const string& str) {
 	if (curMenu == EMenu::playlists) {
-		if (!fs::exists(World::scene()->Settings().PlaylistParh() + str)) {
+		if (!Filer::Exists(World::scene()->Settings().PlaylistPath() + str)) {
 			Filer::SavePlaylist(Playlist(str));
 			Event_OpenPlaylistList();
 		}
@@ -483,19 +483,16 @@ void Program::FileDropEvent(char* file) {
 			editor->AddSong(file);
 			SwitchScene();
 		}
-		else if (fs::is_directory(file)) {
-			fs::path path = file;
+		else if (Filer::FileType(file) == EFileType::dir) {
 			string libDir = World::scene()->Settings().LibraryPath();
-			if (libDir[libDir.length()-1] == dsep)		// remove last char if it's a dsep
-				libDir.resize(libDir.size()-1);
-
-			if (path.parent_path() == libDir) {
-				editor->AddBook(path.filename().string());
+			if (parentPath(file) == libDir) {
+				editor->AddBook(filename(file));
 				SwitchScene();
 			}
-			else if (path == libDir) {
-				for (fs::path& it : Filer::ListDir(path, FILTER_DIR))
-					editor->AddBook(it.filename().string());
+			else if (file == libDir) {
+				string path = appendDsep(file);
+				for (string& it : Filer::ListDir(path, FILTER_DIR))
+					editor->AddBook(filename(path+it));
 				SwitchScene();
 			}
 		}
@@ -530,9 +527,10 @@ void Program::SwitchScene(void* dat) const {
 		};
 		
 		// book list
+		string libPath = World::scene()->Settings().LibraryPath();
 		vector<ListItem*> tiles;
-		for (fs::path& it : Filer::ListDir(World::scene()->Settings().LibraryPath(), FILTER_DIR))
-			tiles.push_back(new ItemButton(it.filename().string(), it.string(), &Program::Event_OpenBrowser));
+		for (string& it : Filer::ListDir(libPath, FILTER_DIR))
+			tiles.push_back(new ItemButton(it, libPath+it, &Program::Event_OpenBrowser));
 		objects.push_back(new TileBox(Object(vec2i(0, 60), -1, vec2i(res.x, res.y-60), FIX_ANC | FIX_END), tiles, vec2i(400, 30)));
 
 		focObject = objects.size()-1;
@@ -543,24 +541,24 @@ void Program::SwitchScene(void* dat) const {
 
 		// list
 		vector<ListItem*> items;
-		for (fs::path& it : browser->ListDirs())
-			items.push_back(new ItemButton(it.filename().string(), "", &Program::Event_OpenBrowser));
-		for (fs::path& it : browser->ListFiles())
-			items.push_back(new ItemButton(it.filename().string(), it.string(), &Program::Event_OpenReader));
+		for (string& it : browser->ListDirs())
+			items.push_back(new ItemButton(it, "", &Program::Event_OpenBrowser));
+		for (string& it : browser->ListFiles())
+			items.push_back(new ItemButton(it, browser->CurDir()+it, &Program::Event_OpenReader));
 		objects.push_back(new ListBox(Object(vec2i(100, 0), -1, vec2i(res.x-100, res.y), FIX_ANC | FIX_END, EColor::background), items));
 		focObject = objects.size()-1;
 		break; }
 	case EMenu::reader: {
 		// reader box
-		fs::path file = cstr(dat);
-		if (fs::is_directory(file)) {
+		string file = (const char*)dat;
+		if (Filer::FileType(file) == EFileType::dir) {
 			World::library()->LoadPics(Filer::GetPics(file));
 			file.clear();
 		}
 		else 
-			World::library()->LoadPics(Filer::GetPics(file.parent_path()));
+			World::library()->LoadPics(Filer::GetPics(parentPath(file)));
 		
-		objects = { new ReaderBox(Object(0, 0, World::winSys()->Resolution(), FIX_ANC | FIX_END, EColor::background), World::library()->Pictures(), file.string()) };
+		objects = { new ReaderBox(Object(0, 0, World::winSys()->Resolution(), FIX_ANC | FIX_END, EColor::background), World::library()->Pictures(), file) };
 		focObject = objects.size()-1;
 		break; }
 	case EMenu::playlists: {
@@ -579,8 +577,8 @@ void Program::SwitchScene(void* dat) const {
 		// playlist list
 		TileBox* box = new TileBox(Object(vec2i(0, 100), -1, vec2i(res.x, res.y-100), FIX_ANC | FIX_END), {}, vec2i(400, 30));
 		vector<ListItem*> tiles;
-		for (fs::path& it : Filer::ListDir(World::scene()->Settings().PlaylistParh(), FILTER_FILE))
-			tiles.push_back(new ListItem(it.filename().string(), box));
+		for (string& it : Filer::ListDir(World::scene()->Settings().PlaylistPath(), FILTER_FILE))
+			tiles.push_back(new ListItem(it, box));
 		box->Items(tiles);
 		objects.push_back(box);
 		focObject = objects.size()-1;
@@ -602,8 +600,8 @@ void Program::SwitchScene(void* dat) const {
 		vector<ListItem*> items;
 		if (editor->showSongs) {
 			objects.push_back(new ButtonText(Object(vec2i(0, 0), -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_SwitchButtonClick, World::library()->getLine("books")));
-			for (fs::path& it : editor->getPlaylist().songs)
-				items.push_back(new ItemButton(it.filename().string(), it.string(), &Program::Event_SelectionSet, box));
+			for (string& it : editor->getPlaylist().songs)
+				items.push_back(new ItemButton(filename(it), it, &Program::Event_SelectionSet, box));
 		}
 		else {
 			objects.push_back(new ButtonText(Object(vec2i(0, 0), -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_SwitchButtonClick, World::library()->getLine("songs")));
@@ -625,10 +623,10 @@ void Program::SwitchScene(void* dat) const {
 		// list
 		ListBox* box = new ListBox(Object(vec2i(100, 0), -1, vec2i(res.x-100, res.y), FIX_ANC | FIX_END, EColor::background));
 		vector<ListItem*> items;
-		for (fs::path& it : browser->ListDirs())
-			items.push_back(new ListItem(it.filename().string(), box));
-		for (fs::path& it : browser->ListFiles())
-			items.push_back(new ListItem(it.filename().string(), box));
+		for (string& it : browser->ListDirs())
+			items.push_back(new ListItem(it, box));
+		for (string& it : browser->ListFiles())
+			items.push_back(new ListItem(it, box));
 		box->Items(items);
 		objects.push_back(box);
 		focObject = objects.size()-1;
@@ -639,8 +637,8 @@ void Program::SwitchScene(void* dat) const {
 
 		// list
 		vector<ListItem*> items;
-		for (fs::path& it : Filer::ListDir(World::scene()->Settings().DirLib(), FILTER_DIR))
-			items.push_back(new ItemButton(it.filename().string(), "", &Program::Event_AddBook));
+		for (string& it : Filer::ListDir(World::scene()->Settings().DirLib(), FILTER_DIR))
+			items.push_back(new ItemButton(it, "", &Program::Event_AddBook));
 		objects.push_back(new ListBox(Object(vec2i(100, 0), -1, vec2i(res.x-100, res.y), FIX_ANC | FIX_END, EColor::background), items));
 		focObject = objects.size()-1;
 		break; }
@@ -736,8 +734,8 @@ string Program::FindFittingPlaylist(const string& picPath) {
 		return "";
 
 	// check playlist files for matching book name
-	for (fs::path& file : Filer::ListDir(World::scene()->Settings().PlaylistParh(), FILTER_FILE)) {
-		Playlist playlist = Filer::LoadPlaylist(file.filename().string());
+	for (string& file : Filer::ListDir(World::scene()->Settings().PlaylistPath(), FILTER_FILE)) {
+		Playlist playlist = Filer::LoadPlaylist(file);
 		for (string& book : playlist.books)
 			if (book == name)
 				return playlist.name;

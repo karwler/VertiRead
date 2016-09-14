@@ -20,10 +20,10 @@ public:
 	Scene* getScene() const;
 
 private:
-	kptr<AudioSys> audioSys;
-	kptr<InputSys> inputSys;
-	kptr<WindowSys> winSys;
-	kptr<Scene> scene;
+	kk::sptr<AudioSys> audioSys;
+	kk::sptr<InputSys> inputSys;
+	kk::sptr<WindowSys> winSys;
+	kk::sptr<Scene> scene;
 
 	bool run;
 	uint8 redraws;

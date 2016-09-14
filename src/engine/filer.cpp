@@ -1,4 +1,19 @@
 #include "world.h"
+#include <fstream>
+#include <streambuf>
+#include <algorithm>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dirent.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+	#ifdef __APPLE__
+	#include <mach-o/dyld.h>
+	#else
+	#include <unistd.h>
+	#endif
+#endif
 
 // DIR FILTER
 
@@ -26,100 +41,56 @@ EDirFilter operator|=(EDirFilter& a, EDirFilter b) {
 
 // FILER
 
+const string Filer::dirExec = Filer::GetDirExec();
+
+#ifdef __APPLE__
+const string Filer::dirData = GetDirExec(true) + "../Resources/";
+#else
+const string Filer::dirData = dirExec;
+#endif
+
+#ifdef _WIN32
+const string Filer::dirSets = string(getenv("AppData")) + "\\VertiRead\\";
+#elif __APPLE__
+const string Filer::dirSets = string(getenv("HOME")) + "/Library/Application Support/VertiRead/";
+#else
+const string Filer::dirSets = string(getenv("HOME")) + "/.vertiread/";
+#endif
+
+const string Filer::dirLangs = Filer::dirData + "languages"+dsep;
+const string Filer::dirSnds = Filer::dirData + "sounds"+dsep;
+const string Filer::dirTexs = Filer::dirData + "textures"+dsep;
+
 uint8 Filer::CheckDirectories(const GeneralSettings& sets) {
 	uint8 retval = 0;
-	if (!fs::exists(dirSets()))
-		fs::create_directories(dirSets());
-	if (!fs::exists(sets.LibraryPath()))
-		fs::create_directories(sets.LibraryPath());
-	if (!fs::exists(sets.PlaylistParh()))
-		fs::create_directories(sets.PlaylistParh());
-	if (!fs::exists(dirLangs())) {
+	if (!Exists(dirSets))
+		MkDir(dirSets);
+	if (!Exists(sets.LibraryPath()))
+		MkDir(sets.LibraryPath());
+	if (!Exists(sets.PlaylistPath()))
+		MkDir(sets.PlaylistPath());
+	if (!Exists(dirData + "themes.ini")) {
+		cerr << "couldn't find themes.ini" << endl;
+		retval |= 1;
+	}
+	if (!Exists(dirLangs)) {
 		cerr << "couldn't find translation directory" << endl;
-		retval = 1;
+		retval |= 2;
 	}
-	if (!fs::exists(dirSnds())) {
+	if (!Exists(dirSnds)) {
 		cerr << "couldn't find sound directory" << endl;
-		retval = 2;
+		retval |= 4;
 	}
-	if (!fs::exists(dirTexs())) {
+	if (!Exists(dirTexs)) {
 		cerr << "couldn't find texture directory" << endl;
-		retval = 3;
+		retval |= 8;
 	}
 	return retval;
 }
 
-bool Filer::ReadTextFile(const string& file, vector<string>& lines, bool printMessage) {
-	std::ifstream ifs(file.c_str());
-	if (!ifs.good()) {
-		if (printMessage)
-			cerr << "couldn't read file " << file << endl;
-		return false;
-	}
-	lines.clear();
-	for (string line; readLine(ifs, line);)
-		lines.push_back(line);
-	return true;
-}
-
-bool Filer::WriteTextFile(const string& file, const vector<string>& lines) {
-	std::ofstream ofs(file.c_str());
-	if (!ofs.good()) {
-		cerr << "couldn't write file " << file << endl;
-		return false;
-	}
-	for (const string& line : lines)
-		ofs << line << endl;
-	return true;
-}
-
-vector<fs::path> Filer::ListDir(const fs::path& dir, EDirFilter filter, const vector<string>& extFilter) {
-	vector<fs::path> names;
-	if (!fs::is_directory(dir))
-		return names;
-
-	for (fs::directory_iterator it(dir); it!=fs::directory_iterator(); it++) {
-		if ((filter & FILTER_FILE) && fs::is_regular_file(it->path())) {
-			if (extFilter.empty())
-				names.push_back(it->path());
-			else for (const string& ext : extFilter)
-				if (it->path().extension() == ext) {
-					names.push_back(it->path());
-					break;
-				}
-		}
-		else if ((filter & FILTER_DIR) && fs::is_directory(it->path()))
-			names.push_back(it->path());
-		else if ((filter & FILTER_LINK) && fs::is_symlink(it->path()))
-			names.push_back(it->path());
-	}
-	sort(names.begin(), names.end());
-	return names;
-}
-
-vector<fs::path> Filer::ListDirRecursively(const fs::path& dir, EDirFilter filter, const vector<string>& extFilter) {
-	vector<fs::path> names;
-	for (fs::recursive_directory_iterator it(dir); it!=fs::recursive_directory_iterator(); it++) {
-		if ((filter & FILTER_FILE) && fs::is_regular_file(it->path())) {
-			if (extFilter.empty())
-				names.push_back(it->path());
-			else for (const string& ext : extFilter)
-				if (it->path().extension() == ext) {
-					names.push_back(it->path());
-					break;
-				}
-		}
-		else if ((filter & FILTER_DIR) && fs::is_directory(it->path()))
-			names.push_back(it->path());
-		else if ((filter & FILTER_LINK) && fs::is_symlink(it->path()))
-			names.push_back(it->path());
-	}
-	return names;
-}
-
 vector<string> Filer::GetAvailibleThemes() {
 	vector<string> lines;
-	if (!ReadTextFile(dirData() + "themes.ini", lines))
+	if (!ReadTextFile(dirData + "themes.ini", lines))
 		return {};
 
 	vector<string> themes;
@@ -130,13 +101,13 @@ vector<string> Filer::GetAvailibleThemes() {
 			if (!isTitle && !contains(themes, arg))
 				themes.push_back(arg);
 	}
-	sort(themes.begin(), themes.end());
+	std::sort(themes.begin(), themes.end());
 	return themes;
 }
 
 void Filer::GetColors(map<EColor, vec4b>& colors, const string& theme) {
 	vector<string> lines;
-	if (!ReadTextFile(dirData() + "themes.ini", lines))
+	if (!ReadTextFile(dirData + "themes.ini", lines), false)
 		return;
 
 	for (string& line : lines) {
@@ -161,20 +132,18 @@ void Filer::GetColors(map<EColor, vec4b>& colors, const string& theme) {
 
 vector<string> Filer::GetAvailibleLanguages() {
 	vector<string> files = { "english" };
-	if (!fs::exists(dirLangs()))
+	if (!Exists(dirLangs))
 		return files;
 
-	for (fs::directory_iterator it(dirLangs()); it != fs::directory_iterator(); it++)
-		if (fs::is_regular_file(it->path()) && it->path().extension() == ".ini")
-			files.push_back(delExt(it->path().filename()).string());
-
+	for (string& it : ListDir(dirLangs, FILTER_FILE, {"ini"}))
+		files.push_back(delExt(it));
 	sort(files.begin(), files.end());
 	return files;
 }
 
 map<string, string> Filer::GetLines(const string& language) {
 	vector<string> lines;
-	if (!ReadTextFile(dirLangs() + language + ".ini", lines, false))
+	if (!ReadTextFile(dirLangs + language + ".ini", lines, false))
 		return map<string, string>();
 
 	map<string, string> translation;
@@ -189,35 +158,36 @@ map<string, string> Filer::GetLines(const string& language) {
 
 map<string, Mix_Chunk*> Filer::GetSounds() {
 	map<string, Mix_Chunk*> sounds;
-	for (fs::directory_iterator it(dirSnds()); it != fs::directory_iterator(); it++)
-		if (Mix_Chunk* cue = Mix_LoadWAV(it->path().string().c_str()))				// add only valid sound files
-			sounds.insert(make_pair(delExt(it->path().filename()).string(), cue));
+	for (string& it : ListDir(dirSnds, FILTER_FILE))
+		if (Mix_Chunk* cue = Mix_LoadWAV(string(dirLangs+it).c_str()))				// add only valid sound files
+			sounds.insert(make_pair(delExt(it), cue));
 	return sounds;
 }
 
 map<string, Texture> Filer::GetTextures() {
 	map<string, Texture> texes;
-	for (fs::directory_iterator it(dirTexs()); it != fs::directory_iterator(); it++)
-		if (SDL_Surface* surf = IMG_Load(it->path().string().c_str()))				// add only valid textures
-			texes.insert(make_pair(delExt(it->path().filename()).string(), Texture(it->path().string(), surf)));
+	for (string& it : ListDir(dirTexs, FILTER_FILE)) {
+		string path = dirTexs + it;
+		if (SDL_Surface* surf = IMG_Load(path.c_str()))				// add only valid textures
+			texes.insert(make_pair(delExt(it), Texture(path, surf)));
+	}
 	return texes;
 }
 
-vector<string> Filer::GetPics(const fs::path& dir) {
+vector<string> Filer::GetPics(const string& dir) {
 	vector<string> pics;
-	if (!fs::is_directory(dir))
+	if (FileType(dir) != EFileType::dir)
 		return pics;
 
-	for (fs::directory_iterator it(dir); it != fs::directory_iterator(); it++)
-		if (fs::is_regular_file(it->path()))
-			pics.push_back(it->path().string());
-	sort(pics.begin(), pics.end());
+	pics = ListDir(dir, FILTER_FILE);
+	for (string& it : pics)
+		it = dir + it;
 	return pics;
 }
 
 Playlist Filer::LoadPlaylist(const string& name) {
 	vector<string> lines;
-	if (!ReadTextFile(World::scene()->Settings().PlaylistParh() + name, lines))
+	if (!ReadTextFile(World::scene()->Settings().PlaylistPath() + name, lines))
 		return Playlist();
 
 	Playlist plist(name);
@@ -239,15 +209,15 @@ void Filer::SavePlaylist(const Playlist& plist) {
 	vector<string> lines;
 	for (const string& name : plist.books)
 		lines.push_back("book=" + name);
-	for (const fs::path& file : plist.songs)
-		lines.push_back(file.string());
+	for (const string& file : plist.songs)
+		lines.push_back("song=" + file);
 
-	WriteTextFile(World::scene()->Settings().PlaylistParh() + plist.name, lines);
+	WriteTextFile(World::scene()->Settings().PlaylistPath() + plist.name, lines);
 }
 
 GeneralSettings Filer::LoadGeneralSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(dirSets() + "general.ini", lines, false))
+	if (!ReadTextFile(dirSets + "general.ini", lines, false))
 		return GeneralSettings();
 
 	GeneralSettings sets;
@@ -273,12 +243,12 @@ void Filer::SaveSettings(const GeneralSettings& sets) {
 		"library=" + sets.DirLib(),
 		"playlists=" + sets.DirPlist()
 	};
-	WriteTextFile(dirSets() + "general.ini", lines);
+	WriteTextFile(dirSets + "general.ini", lines);
 }
 
 VideoSettings Filer::LoadVideoSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(dirSets() + "video.ini", lines, false))
+	if (!ReadTextFile(dirSets + "video.ini", lines, false))
 		return VideoSettings();
 
 	VideoSettings sets;
@@ -317,12 +287,12 @@ void Filer::SaveSettings(const VideoSettings& sets) {
 		"resolution=" + to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y),
 		"theme=" + sets.theme
 	};
-	WriteTextFile(dirSets() + "video.ini", lines);
+	WriteTextFile(dirSets + "video.ini", lines);
 }
 
 AudioSettings Filer::LoadAudioSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(dirSets() + "audio.ini", lines, false))
+	if (!ReadTextFile(dirSets + "audio.ini", lines, false))
 		return AudioSettings();
 
 	AudioSettings sets;
@@ -348,12 +318,12 @@ void Filer::SaveSettings(const AudioSettings& sets) {
 		"interface_vol=" + to_string(sets.soundVolume),
 		"song_delay=" + to_string(sets.songDelay)
 	};
-	WriteTextFile(dirSets() + "audio.ini", lines);
+	WriteTextFile(dirSets + "audio.ini", lines);
 }
 
 ControlsSettings Filer::LoadControlsSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(dirSets() + "controls.ini", lines, false))
+	if (!ReadTextFile(dirSets + "controls.ini", lines, false))
 		return ControlsSettings();
 
 	ControlsSettings sets;
@@ -408,13 +378,193 @@ void Filer::SaveSettings(const ControlsSettings& sets) {
 		for (string& val : values)
 			lines.push_back("shortcut[" + it.first + "]=" + val);
 	}
-	WriteTextFile(dirSets() + "controls.ini", lines);
-}
-#ifdef _WIN32
-bool Filer::isDriveLetter(const string& path) {
-	return (path.length() == 2 && path[1] == ':') || (path.length() == 3 && path[1] == ':' && path[2] == dsep);
+	WriteTextFile(dirSets + "controls.ini", lines);
 }
 
+bool Filer::ReadTextFile(const string& file, string& data) {
+	std::ifstream ifs(file.c_str());
+	if (!ifs.good()) {
+		cerr << "couldn't opem file " << file << endl;
+		return false;
+	}
+	data = string((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+	return true;
+}
+
+bool Filer::ReadTextFile(const string& file, vector<string>& lines, bool printMessage) {
+	std::ifstream ifs(file.c_str());
+	if (!ifs.good()) {
+		if (printMessage)
+			cerr << "couldn't open file " << file << endl;
+		return false;
+	}
+	lines.clear();
+	for (string line; ReadLine(ifs, line);)
+		lines.push_back(line);
+	return true;
+}
+
+bool Filer::WriteTextFile(const string& file, const vector<string>& lines) {
+	std::ofstream ofs(file.c_str());
+	if (!ofs.good()) {
+		cerr << "couldn't write file " << file << endl;
+		return false;
+	}
+	for (const string& line : lines)
+		ofs << line << endl;
+	return true;
+}
+
+bool Filer::MkDir(const string& path) {
+#ifdef _WIN32
+	return CreateDirectoryA(path.c_str(), NULL);
+#else
+	return !mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+#endif
+}
+
+bool Filer::Remove(const string& path) {
+	return std::remove(path.c_str());
+}
+
+bool Filer::Rename(const string& path, const string& newPath) {
+	return std::rename(path.c_str(), newPath.c_str());
+}
+
+vector<string> Filer::ListDir(const string& dir, EDirFilter filter, const vector<string>& extFilter) {
+	vector<string> entries;
+#ifdef _WIN32
+	WIN32_FIND_DATAA data;
+	HANDLE hFile = FindFirstFileA(string(dir+"*").c_str(), &data);
+	if (hFile != INVALID_HANDLE_VALUE)
+		while (FindNextFileA(hFile, &data) != 0 || GetLastError() != ERROR_NO_MORE_FILES) {
+			if (data.cFileName == string(".") || data.cFileName == string(".."))
+				continue;
+			
+			if ((filter & FILTER_FILE) && ((data.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE) || data.dwFileAttributes == FILE_ATTRIBUTE_NORMAL)) {
+				if (extFilter.empty())
+					entries.push_back(data.cFileName);
+				else for (const string& ext : extFilter)
+					if (data.cFileName == ext) {
+						entries.push_back(data.cFileName);
+						break;
+					}
+			}
+			else if ((filter & FILTER_DIR) && (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+				entries.push_back(data.cFileName);
+			else if ((filter & FILTER_LINK) && (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
+				entries.push_back(data.cFileName);
+		}
+#else
+	DIR* directory = opendir(directory.c_str());
+	if (directory) {
+		dirent* data = readdir(directory);
+		while (data) {
+			if (data.cFileName == string(".") || data.cFileName == string("..")) {
+				data = readdir(directory);
+				continue;
+			}
+			if ((filter & FILTER_FILE) && data->d_type == DT_REG) {
+				if (extFilter.empty())
+					entries.push_back(data.cFileName);
+				else for (const string& ext : extFilter)
+					if (data.cFileName == ext) {
+						entries.push_back(data.cFileName);
+						break;
+					}
+			}
+			else if ((filter & FILTER_DIR) && data->d_type == DT_DIR)
+				entries.push_back(data.cFileName);
+			else if ((filter & FILTER_LINK) && data->d_type == DT_LNK)
+				entries.push_back(data.cFileName);
+
+			data = readdir(directory);
+		}
+		closedir(directory);
+	}
+#endif
+	std::sort(entries.begin(), entries.end());
+	return entries;
+}
+
+vector<string> Filer::ListDirRecursively(const string& dir) {
+	vector<string> entries;
+#ifdef _WIN32
+	WIN32_FIND_DATAA data;
+	HANDLE hFile = FindFirstFileA(string(dir+"*").c_str(), &data);
+	if (hFile != INVALID_HANDLE_VALUE)
+		while (FindNextFileA(hFile, &data) != 0 || GetLastError() != ERROR_NO_MORE_FILES) {
+			if (data.cFileName == string(".") || data.cFileName == string(".."))
+				continue;
+
+			if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+				vector<string> newEs = ListDirRecursively(dir+data.cFileName+dsep);
+				std::sort(newEs.begin(), newEs.end());
+				for (string& it : newEs)
+					it = dir + it;
+				entries.insert(entries.end(), newEs.begin(), newEs.end());
+			}
+			else
+				entries.push_back(data.cFileName);
+		}
+#else
+	DIR* directory = opendir(directory.c_str());
+	if (directory) {
+		dirent* data = readdir(directory);
+		while (data) {
+			if (data.cFileName == string(".") || data.cFileName == string("..")) {
+				data = readdir(directory);
+				continue;
+			}
+			if (data->d_type == DT_DIR) {
+				vector<string> newEs = ListDirRecursively(dir+data->d_name+dsep);
+				std::sort(newEs.begin(), newEs.end());
+				for (string& it : newEs)
+					it = dir + it;
+				entries.insert(entries.end(), newEs.begin(), newEs.end());
+			}
+			else
+				entries.push_back(data->d_name);
+
+			data = readdir(directory);
+		}
+		closedir(directory);
+	}
+#endif
+	return entries;
+}
+
+EFileType Filer::FileType(const string& path) {
+#ifdef _WIN32
+	ulong attrib = GetFileAttributesA(path.c_str());
+	if ((attrib & FILE_ATTRIBUTE_ARCHIVE) || attrib == FILE_ATTRIBUTE_NORMAL)
+		return EFileType::reg;
+	if (attrib & FILE_ATTRIBUTE_DIRECTORY)
+		return EFileType::dir;
+	if (attrib & FILE_ATTRIBUTE_SPARSE_FILE)
+		return EFileType::link;
+#else
+	struct stat ps;
+	stat(path.c_str(), &ps);
+	if (S_ISREG(ps.st_mode))
+		return EFileType::reg;
+	if (S_ISDIR(ps.st_mode))
+		return EFileType::dir;
+	if (S_ISLNK(ps.st_mode))
+		return EFileType::link;
+#endif
+	return EFileType::other;
+}
+bool Filer::Exists(const string& path) {
+#ifdef _WIN32
+	return (GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES);
+#else
+	struct stat ps;
+	return (stat(path.c_str(), &ps) == 0);
+#endif
+}
+
+#ifdef _WIN32
 vector<char> Filer::ListDrives() {
 	vector<char> letters;
 	ulong drives = GetLogicalDrives();
@@ -427,28 +577,22 @@ vector<char> Filer::ListDrives() {
 #endif
 
 #ifdef __APPLE__
-string Filer::execDir(bool raw) {
+string Filer::GetDirExec(bool raw) {
 #else
-string Filer::execDir() {
+string Filer::GetDirExec() {
 #endif
 	const int MAX_LEN = 4096;
-	fs::path path;
+	string path;
 	
 #ifdef _WIN32
 	char buffer[MAX_LEN];
-	if (GetModuleFileNameA(NULL, buffer, MAX_LEN))
-		path = buffer;
-	else {
-		fs::path dir = fs::path(World::args[0]).parent_path();
-		path = dir.is_absolute() ? dir : fs::initial_path().string() + dsep + dir.string();
-	}
+	GetModuleFileNameA(NULL, buffer, MAX_LEN);
+	path = buffer;
 #elif __APPLE__
 	char buffer[MAX_LEN];
 	uint size = sizeof(buffer);
-	if (!_NSGetExecutablePath(buffer, &size))
-		path = buffer;
-	else
-		path = fs::initial_path().string() + dsep + fs::path(World::args[0]).parent_path().string();
+	_NSGetExecutablePath(buffer, &size);
+	path = buffer;
 
 	if (!raw) {
 		string test = path.string();
@@ -461,48 +605,13 @@ string Filer::execDir() {
 #else
 	char buffer[MAX_LEN];
 	int len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
-	if (len < MAX_LEN) {
-		buffer[len] = '\0';
-		path = buffer;
-	}
-	else
-		path = fs::initial_path().string() + dsep + fs::path(World::args[0]).parent_path().string();
-
+	buffer[len] = '\0';
+	path = buffer;
 #endif
-	return path.parent_path().string() + dsep;
+	return parentPath(path);
 }
 
-string Filer::dirSets() {
-#ifdef _WIN32
-	return string(getenv("AppData")) + "\\VertiRead\\";
-#elif __APPLE__
-	return string(getenv("HOME")) + "/Library/Application Support/VertiRead/";
-#else
-	return string(getenv("HOME")) + "/.vertiread/";
-#endif
-}
-
-string Filer::dirData() {
-#ifdef __APPLE__
-	return execDir(true) + "../Resources/";
-#else
-	return execDir();
-#endif
-}
-
-string Filer::dirLangs() {
-	return dirData() + "languages"+dsep;
-}
-
-string Filer::dirSnds() {
-	return dirData() + "sounds"+dsep;
-}
-
-string Filer::dirTexs() {
-	return dirData() + "textures"+dsep;
-}
-
-vector<fs::path> Filer::dirFonts() {
+vector<string> Filer::dirFonts() {
 #ifdef _WIN32
 	return {string(getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
 #elif __APPLE__
@@ -512,27 +621,51 @@ vector<fs::path> Filer::dirFonts() {
 #endif
 }
 
-fs::path Filer::FindFont(const fs::path& font) {
-	if (fs::path(font).is_absolute()) {	// check fontpath first
-		if (fs::is_regular_file(font))
+string Filer::FindFont(const string& font) {
+	if (isAbsolute(font)) {	// check fontpath first
+		if (FileType(font) == EFileType::reg)
 			return font;
-		return CheckDirForFont(font.filename(), font.parent_path());
+		return CheckDirForFont(filename(font), parentPath(font));
 	}
 
-	for (fs::path& dir : dirFonts()) {	// check global font directories
-		fs::path file = CheckDirForFont(font, dir);
+	for (string& dir : dirFonts()) {	// check global font directories
+		string file = CheckDirForFont(font, dir);
 		if (!file.empty())
 			return file;
 	}
 	return "";
 }
 
-fs::path Filer::CheckDirForFont(const fs::path& font, const fs::path& dir) {
-	for (fs::recursive_directory_iterator it(dir); it!=fs::recursive_directory_iterator(); it++)
-		if (fs::is_regular_file(it->path())) {
-			fs::path file = font.has_extension() ? it->path().filename() : delExt(it->path().filename());
-			if (strcmpCI(file.string(), font.string()))
-				return it->path();
-		}
+string Filer::CheckDirForFont(const string& font, const string& dir) {
+	for (string& it : ListDirRecursively(dir)) {
+		string file = findChar(font, '.') ? filename(it) : delExt(filename(it));
+		if (strcmpCI(file, font))
+			return dir + it;
+	}
 	return "";
+}
+
+std::istream& Filer::ReadLine(std::istream& ifs, string& str) {
+	str.clear();
+
+	std::istream::sentry se(ifs, true);
+	std::streambuf* sbf = ifs.rdbuf();
+
+	while (true) {
+		int c = sbf->sbumpc();
+		switch (c) {
+		case '\n':
+			return ifs;
+		case '\r':
+			if (sbf->sgetc() == '\n')
+				sbf->sbumpc();
+			return ifs;
+		case EOF:
+			if (str.empty())
+				ifs.setstate(std::ios::eofbit);
+			return ifs;
+		default:
+			str += char(c);
+		}
+	}
 }

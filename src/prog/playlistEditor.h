@@ -9,7 +9,7 @@ public:
 	Playlist getPlaylist() const;
 	void LoadPlaylist(const string& playlist);
 
-	void AddSong(const string& path);
+	void AddSong(string path);
 	void RenameSong(const string& path);
 	void DelSong();
 	void AddBook(const string& name);

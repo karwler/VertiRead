@@ -2,6 +2,13 @@
 
 #include "utils/types.h"
 
+enum EFileType : uint8 {
+	reg,
+	dir,
+	link,
+	other
+};
+
 enum EDirFilter : uint8 {
 	FILTER_FILE = 0x1,
 	FILTER_DIR  = 0x2,
@@ -19,11 +26,6 @@ EDirFilter operator|=(EDirFilter& a, EDirFilter b);
 class Filer {
 public:
 	static uint8 CheckDirectories(const GeneralSettings& sets);
-	static bool ReadTextFile(const string& file, vector<string>& lines, bool printMessage=true);
-	static bool WriteTextFile(const string& file, const vector<string>& lines);
-
-	static vector<fs::path> ListDir(const fs::path& dir, EDirFilter filter=FILTER_ALL, const vector<string>& extFilter={});
-	static vector<fs::path> ListDirRecursively(const fs::path& dir, EDirFilter filter=FILTER_ALL, const vector<string>& extFilter={});
 
 	static vector<string> GetAvailibleThemes();
 	static void GetColors(map<EColor, vec4b>& colors, const string& theme);
@@ -31,7 +33,7 @@ public:
 	static map<string, string> GetLines(const string& language);
 	static map<string, Mix_Chunk*> GetSounds();
 	static map<string, Texture> GetTextures();
-	static vector<string> GetPics(const fs::path& dir);
+	static vector<string> GetPics(const string& dir);
 
 	static Playlist LoadPlaylist(const string& name);
 	static void SavePlaylist(const Playlist& plist);
@@ -45,23 +47,37 @@ public:
 	static ControlsSettings LoadControlsSettings();
 	static void SaveSettings(const ControlsSettings& sets);
 
+	static bool ReadTextFile(const string& file, string& data);
+	static bool ReadTextFile(const string& file, vector<string>& lines, bool printMessage=true);
+	static bool WriteTextFile(const string& file, const vector<string>& lines);
+	static bool MkDir(const string& path);
+	static bool Remove(const string& path);
+	static bool Rename(const string& path, const string& newPath);
+	static vector<string> ListDir(const string& dir, EDirFilter filter=FILTER_ALL, const vector<string>& extFilter={});
+	static vector<string> ListDirRecursively(const string& dir);
+	static EFileType FileType(const string& path);
+	static bool Exists(const string& path);
+
 #ifdef _WIN32
-	static bool isDriveLetter(const string& path);
 	static vector<char> ListDrives();
 #endif
 #ifdef __APPLE__
-	static string execDir(bool raw=false);
+	static string GetDirExec(bool raw=false);
 #else
-	static string execDir();
+	static string GetDirExec();
 #endif
-	static string dirSets();
-	static string dirData();
-	static string dirLangs();
-	static string dirSnds();
-	static string dirTexs();
 
-	static vector<fs::path> dirFonts();
-	static fs::path FindFont(const fs::path& font);	// on success returns absolute path to font file, otherwise returns empty path
+	static vector<string> dirFonts();
+	static string FindFont(const string& font);	// on success returns absolute path to font file, otherwise returns empty path
+	
+	static const string dirExec;
+	static const string dirData;
+	static const string dirSets;
+	static const string dirLangs;
+	static const string dirSnds;
+	static const string dirTexs;
+
 private:
-	static fs::path CheckDirForFont(const fs::path& font, const fs::path& dir);	// returns same as FindFont
+	static string CheckDirForFont(const string& font, const string& dir);	// returns same as FindFont
+	static std::istream& ReadLine(std::istream& ifs, string& str);
 };

@@ -1,4 +1,5 @@
 #include "engine/world.h"
+#include <algorithm>
 
 // TEXTURE
 
@@ -416,14 +417,14 @@ ShortcutAxis::~ShortcutAxis() {}
 
 // PLAYLIST
 
-Playlist::Playlist(const string& NAME, const vector<fs::path>& SGS, const vector<string>& BKS) :
+Playlist::Playlist(const string& NAME, const vector<string>& SGS, const vector<string>& BKS) :
 	name(NAME),
 	songs(SGS),
 	books(BKS)
 {}
 
 string Playlist::songPath(uint id) const {
-	return songs[id].is_absolute() ? songs[id].string() : fs::path(World::scene()->Settings().PlaylistParh() + name).parent_path().string() + dsep + songs[id].string();
+	return isAbsolute(songs[id]) ? songs[id] : parentPath(World::scene()->Settings().PlaylistPath() + name) + songs[id];
 }
 
 Directory::Directory(const string& NAME, const vector<string>& DIRS, const vector<string>& FILS) :
@@ -460,7 +461,7 @@ void GeneralSettings::Lang(const string& language) {
 	lang = language;
 	std::transform(lang.begin(), lang.end(), lang.begin(), tolower);
 
-	if (!fs::exists(Filer::dirLangs()+lang+".ini"))
+	if (!Filer::Exists(Filer::dirLangs+lang+".ini"))
 		lang = "english";
 }
 
@@ -469,27 +470,23 @@ string GeneralSettings::DirLib() const {
 }
 
 string GeneralSettings::LibraryPath() const {
-	return fs::path(dirLib).is_absolute() ? dirLib : Filer::execDir() + dirLib;
+	return isAbsolute(dirLib) ? dirLib : Filer::dirExec + dirLib;
 }
 
 void GeneralSettings::DirLib(const string& dir) {
-	dirLib = dir.empty() ? Filer::dirSets() + "library"+dsep : dir;
-	if (dirLib[dirLib.length()-1] != dsep)
-		dirLib += dsep;
+	dirLib = dir.empty() ? Filer::dirSets + "library"+dsep : appendDsep(dir);
 }
 
 string GeneralSettings::DirPlist() const {
 	return dirPlist;
 }
 
-string GeneralSettings::PlaylistParh() const {
-	return fs::path(dirPlist).is_absolute() ? dirPlist : Filer::execDir() + dirPlist;
+string GeneralSettings::PlaylistPath() const {
+	return isAbsolute(dirPlist) ? dirPlist : Filer::dirExec + dirPlist;
 }
 
 void GeneralSettings::DirPlist(const string& dir) {
-	dirPlist = dir.empty() ? Filer::dirSets() + "playlists"+dsep : dir;
-	if (dirPlist[dirPlist.length()-1] != dsep)
-		dirPlist += dsep;
+	dirPlist = dir.empty() ? Filer::dirSets + "playlists"+dsep : appendDsep(dir);
 }
 
 // VIDEO SETTINGS
@@ -512,7 +509,7 @@ string VideoSettings::Fontpath() const {
 }
 
 void VideoSettings::SetFont(const string& newFont) {
-	fontpath = Filer::FindFont(newFont).string();
+	fontpath = Filer::FindFont(newFont);
 	font = fontpath.empty() ? "" : newFont;
 }
 

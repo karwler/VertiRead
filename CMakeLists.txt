@@ -22,8 +22,14 @@ set(SRC_FILES
 	"src/engine/windowSys.h"
 	"src/engine/world.cpp"
 	"src/engine/world.h"
+	"src/kklib/aliases.h"
+	"src/kklib/sptr.h"
+	"src/kklib/vec2.h"
+	"src/kklib/vec3.h"
+	"src/kklib/vec4.h"
 	"src/prog/browser.cpp"
 	"src/prog/browser.h"
+	"src/prog/defaults.h"
 	"src/prog/library.cpp"
 	"src/prog/library.h"
 	"src/prog/playlistEditor.cpp"
@@ -32,7 +38,6 @@ set(SRC_FILES
 	"src/prog/program.h"
 	"src/utils/capturers.cpp"
 	"src/utils/capturers.h"
-	"src/utils/defaults.h"
 	"src/utils/items.cpp"
 	"src/utils/items.h"
 	"src/utils/objects.cpp"
@@ -119,8 +124,6 @@ elseif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	find_library(LIB_SDL2_TTF SDL2_ttf)
 	find_library(LIB_SDL2_MIX SDL2_mixer)
 	
-	link_directories(/usr/local/lib)
-
 endif()
 	
 # set main target
@@ -132,10 +135,10 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	target_link_libraries(VertiRead SDL2.lib SDL2_mixer.lib SDL2_image.lib SDL2_ttf.lib)
 	
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-	target_link_libraries(VertiRead ${LIB_SDL2} ${LIB_SDL2_IMG} ${LIB_SDL2_TTF} ${LIB_SDL2_MIX} boost_system boost_filesystem)
+	target_link_libraries(VertiRead ${LIB_SDL2} ${LIB_SDL2_IMG} ${LIB_SDL2_TTF} ${LIB_SDL2_MIX})
 
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-	target_link_libraries(VertiRead SDL2 SDL2_mixer SDL2_image SDL2_ttf boost_system boost_filesystem)
+	target_link_libraries(VertiRead SDL2 SDL2_mixer SDL2_image SDL2_ttf)
 
 endif()
 

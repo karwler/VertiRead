@@ -4,19 +4,19 @@
 
 class Browser {
 public:
-	Browser(const fs::path& RD=fs::path(), const fs::path& CD=fs::path());
+	Browser(const string& RD=string(), const string& CD=string());
 
-	vector<fs::path> ListFiles();
-	vector<fs::path> ListDirs();
+	vector<string> ListFiles();
+	vector<string> ListDirs();
 	bool GoTo(const string& dirname);
 	bool GoUp();
-	fs::path GoNext();
-	fs::path GoPrev();
+	string GoNext();
+	string GoPrev();
 
-	fs::path RootDir() const;
-	fs::path CurDir() const;
+	string RootDir() const;
+	string CurDir() const;
 	
 private:
-	fs::path rootDir;
-	fs::path curDir;
+	string rootDir;
+	string curDir;
 };

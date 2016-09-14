@@ -1,13 +1,17 @@
 #include "engine/world.h"
+#include <algorithm>
 
-bool isNum(const std::string& str) {
-	std::string::const_iterator it = str.begin();
-	while (it != str.end() && isdigit(*it))
-		it++;
-	return !str.empty() && it == str.end();
+bool isNum(const string& str) {
+	if (str.empty())
+		return false;
+
+	for (char c : str)
+		if (!isdigit(c))
+			return false;
+	return true;
 }
 
-bool strcmpCI(const std::string& strl, const std::string& strr) {
+bool strcmpCI(const string& strl, const std::string& strr) {
 	if (strl.length() != strr.length())
 		return false;
 
@@ -17,7 +21,7 @@ bool strcmpCI(const std::string& strl, const std::string& strr) {
 	return true;
 }
 
-bool findChar(const std::string& str, char c, size_t* id) {
+bool findChar(const string& str, char c, size_t* id) {
 	for (size_t i=0; i!=str.length(); i++)
 		if (str[i] == c) {
 			if (id)
@@ -27,7 +31,7 @@ bool findChar(const std::string& str, char c, size_t* id) {
 	return false;
 }
 
-bool findString(const std::string& str, const std::string& c, size_t* id) {
+bool findString(const string& str, const string& c, size_t* id) {
 	size_t check = 0;
 	for (size_t i=0; i!=str.length(); i++) {
 		if (str[i] == c[check]) {
@@ -43,8 +47,64 @@ bool findString(const std::string& str, const std::string& c, size_t* id) {
 	return false;
 }
 
-std::vector<std::string> getWords(const std::string & line, char splitter, char spacer) {
-	std::vector<std::string> words;
+bool isAbsolute(const string& path) {
+	return path[0] == dsep || (path[1] == ':' && path[2] == dsep);
+}
+
+string parentPath(const string& path) {
+	size_t start = (path[path.length()-1] == dsep) ? path.length()-2 : path.length()-1;
+	for (size_t i=start; i!=SIZE_MAX; i--)
+		if (path[i] == dsep)
+			return path.substr(0, i+1);
+	return path;
+}
+
+string filename(const string& path) {
+	for (size_t i=path.length()-1; i!=SIZE_MAX; i--)
+		if (path[i] == dsep)
+			return path.substr(i+1);
+	return path;
+}
+
+string getExt(const string& path) {
+	for (size_t i=path.length()-1; i!=SIZE_MAX; i--)
+		if (path[i] == '.')
+			return path.substr(i+1);
+	return "";
+}
+
+string delExt(const string& path) {
+	for (size_t i=path.length()-1; i!=SIZE_MAX; i--)
+		if (path[i] == '.')
+			return path.substr(0, i);
+	return path;
+}
+
+string appendDsep(const string& path) {
+	return (path[path.length()-1] == dsep) ? path : path + dsep;
+}
+
+bool isDriveLetter(const string& path) {
+	return (path.length() == 2 && path[1] == ':') || (path.length() == 3 && path[1] == ':' && path[2] == dsep);
+}
+
+string modifyCase(string str, ETextCase caseChange) {
+	switch (caseChange) {
+	case ETextCase::first_upper:
+		if (!str.empty())
+			str[0] = toupper(str[0]);
+		break;
+	case ETextCase::all_upper:
+		std::transform(str.begin(), str.end(), str.begin(), toupper);
+		break;
+	case ETextCase::all_lower:
+		std::transform(str.begin(), str.end(), str.begin(), tolower);
+	}
+	return str;
+}
+
+vector<std::string> getWords(const string & line, char splitter, char spacer) {
+	vector<std::string> words;
 
 	size_t i = 0;
 	while (i != line.length() && line[i] == spacer)
@@ -75,7 +135,7 @@ std::vector<std::string> getWords(const std::string & line, char splitter, char 
 	return words;
 }
 
-bool splitIniLine(const std::string& line, std::string* arg, std::string* val, std::string* key, bool* isTitle, size_t* id) {
+bool splitIniLine(const string& line, string* arg, string* val, string* key, bool* isTitle, size_t* id) {
 	if (line[0] == '[' && line[line.length()-1] == ']') {
 		if (arg)
 			*arg = line.substr(1, line.length()-2);
@@ -90,7 +150,7 @@ bool splitIniLine(const std::string& line, std::string* arg, std::string* val, s
 
 	if (val)
 		*val = line.substr(i0 + 1);
-	std::string left = line.substr(0, i0);
+	string left = line.substr(0, i0);
 
 	size_t i1 = 0, i2 = 0;
 	findChar(left, '[', &i1);
@@ -109,50 +169,6 @@ bool splitIniLine(const std::string& line, std::string* arg, std::string* val, s
 	if (id)
 		*id = i0;
 	return true;
-}
-
-std::istream& readLine(std::istream& ifs, std::string& str) {
-	str.clear();
-
-	std::istream::sentry se(ifs, true);
-	std::streambuf* sbf = ifs.rdbuf();
-
-	while (true) {
-		int c = sbf->sbumpc();
-		switch (c) {
-		case '\n':
-			return ifs;
-		case '\r':
-			if (sbf->sgetc() == '\n')
-				sbf->sbumpc();
-			return ifs;
-		case EOF:
-			if (str.empty())
-				ifs.setstate(std::ios::eofbit);
-			return ifs;
-		default:
-			str += char(c);
-		}
-	}
-}
-
-fs::path delExt(const fs::path& path) {
-	return path.has_extension() ? path.string().substr(0, path.string().size() - path.extension().string().size()) : path;
-}
-
-string modifyCase(string str, ETextCase caseChange) {
-	switch (caseChange) {
-	case ETextCase::first_upper:
-		if (!str.empty())
-			str[0] = toupper(str[0]);
-		break;
-	case ETextCase::all_upper:
-		transform(str.begin(), str.end(), str.begin(), toupper);
-		break;
-	case ETextCase::all_lower:
-		transform(str.begin(), str.end(), str.begin(), tolower);
-	}
-	return str;
 }
 
 bool inRect(const SDL_Rect& rect, vec2i point) {
@@ -212,7 +228,7 @@ SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {
 void PrintInfo() {
 	SDL_version ver;
 	SDL_GetVersion(&ver);
-	cout << "\nSDL version: min=" << to_str(ver.minor) << " max=" << to_string(ver.major) << " patch=" << to_string(ver.patch) << endl;
+	cout << "\nSDL version: min=" << to_string(ver.minor) << " max=" << to_string(ver.major) << " patch=" << to_string(ver.patch) << endl;
 	cout << "Platform: " << SDL_GetPlatform() << endl;
 	cout << "CPU count: " << SDL_GetCPUCount() << " - " << SDL_GetCPUCacheLineSize() << endl;
 	cout << "RAM: " << SDL_GetSystemRAM() << "MB" << endl;

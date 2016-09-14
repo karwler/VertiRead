@@ -16,10 +16,11 @@ void PlaylistEditor::LoadPlaylist(const string& playlist) {
 	selected = -1;
 }
 
-void PlaylistEditor::AddSong(const string& path) {
-	if (fs::is_directory(path)) {
-		for (fs::path& it : Filer::ListDirRecursively(path, FILTER_FILE))
-			pList.songs.push_back(it.string());
+void PlaylistEditor::AddSong(string path) {
+	if (Filer::FileType(path) == EFileType::dir) {
+		path = appendDsep(path);
+		for (string& it : Filer::ListDirRecursively(path))
+			pList.songs.push_back(path+it);
 	}
 	else
 		pList.songs.push_back(path);

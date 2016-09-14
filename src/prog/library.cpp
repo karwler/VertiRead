@@ -6,7 +6,7 @@ Library::Library(GeneralSettings& GSET) :
 {}
 
 void Library::Initialize(string FONT) {
-	if (!fs::exists(FONT))
+	if (!Filer::Exists(FONT))
 		FONT = VideoSettings().Fontpath();	// should give the default font
 
 	LoadFont(FONT);

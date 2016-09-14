@@ -25,10 +25,10 @@ public:
 	Program* getProgram();
 	Library* getLibrary();
 	vector<Object*> Objects() const;
-	Object* FocusedObject() const;			// returns pointer to object focused by keyboard
-	ListItem* SelectedButton() const;		// find scroll area with selectable items and get the first selected one (returns nullptr if nothing found)
+	Object* FocusedObject() const;		// returns pointer to object focused by keyboard
+	ListItem* SelectedButton() const;	// find scroll area with selectable items and get the first selected one (returns nullptr if nothing found)
 	Popup* getPopup() const;
-	void SetPopup(Popup* box);				// use nullptr to close
+	void SetPopup(Popup* box);			// use nullptr to close
 
 private:
 	Program program;
@@ -36,7 +36,7 @@ private:
 	GeneralSettings sets;
 
 	vector<Object*> objects;
-	kptr<Popup> popup;
+	kk::sptr<Popup> popup;
 
 	size_t focObject;		// id of object currently focused by keyboard
 	ScrollArea* objectHold;	// pointer to object currently being dragged by mouse (nullptr if none is being held)
