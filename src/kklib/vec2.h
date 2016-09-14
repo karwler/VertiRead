@@ -200,13 +200,13 @@ A distancePointLine(const vec2<A>& v, const vec2<A>& w, const vec2<A>& p) {
 		return length(v-p);
 
 	A t = std::max(A(0), std::min(A(1), dotP(p - v, w - v) / l2));
-	vec2f projection = v + t * (w - v);
+	vec2<A> projection = v + t * (w - v);
 	return length(projection - p);
 }
 
 template <typename A>
 A findLookAtRotation(const vec2<A>& a, const vec2<A>& b) {
-	kvec2<A> point = b - a;
+	vec2<A> point = b - a;
 	if (point.isNull())
 		return 0;
 

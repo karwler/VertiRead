@@ -115,19 +115,19 @@ struct vec4 {
 
 template <typename A, typename B>
 vec4<A> operator+(const vec4<A>& a, const vec4<B>& b) {
-	return kvec4<A>(a.x + b.x, a.y + b.y, a.z + b.z, a.a + b.a);
+	return vec4<A>(a.x + b.x, a.y + b.y, a.z + b.z, a.a + b.a);
 }
 template <typename A, typename B>
 vec4<A> operator-(const vec4<A>& a, const vec4<B>& b) {
-	return kvec4<A>(a.x - b.x, a.y - b.y, a.z - b.z, a.a - b.a);
+	return vec4<A>(a.x - b.x, a.y - b.y, a.z - b.z, a.a - b.a);
 }
 template <typename A, typename B>
 vec4<A> operator*(const vec4<A>& a, const vec4<B>& b) {
-	return kvec4<A>(a.x * b.x, a.y * b.y, a.z * b.z, a.a * b.a);
+	return vec4<A>(a.x * b.x, a.y * b.y, a.z * b.z, a.a * b.a);
 }
 template <typename A, typename B>
 vec4<A> operator/(const vec4<A>& a, const vec4<B>& b) {
-	return kvec4<A>(a.x / b.x, a.y / b.y, a.z / b.z, a.a / b.a);
+	return vec4<A>(a.x / b.x, a.y / b.y, a.z / b.z, a.a / b.a);
 }
 
 template <typename A, typename B>
@@ -147,7 +147,7 @@ T length(const vec4<T>& vec) {
 template <typename T>
 vec4<T> normalize(const vec4<T>& vec) {
 	T l = vec.len();
-	return kvec4<T>(vec.x/l, vec.y/l, vec.z/l, vec.a/l);
+	return vec4<T>(vec.x/l, vec.y/l, vec.z/l, vec.a/l);
 }
 
 template <typename T>

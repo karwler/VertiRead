@@ -54,7 +54,7 @@ public:
 	static bool Remove(const string& path);
 	static bool Rename(const string& path, const string& newPath);
 	static vector<string> ListDir(const string& dir, EDirFilter filter=FILTER_ALL, const vector<string>& extFilter={});
-	static vector<string> ListDirRecursively(const string& dir);
+	static vector<string> ListDirRecursively(const string& dir, size_t offs=0);
 	static EFileType FileType(const string& path);
 	static bool Exists(const string& path);
 

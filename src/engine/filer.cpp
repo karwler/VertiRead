@@ -5,14 +5,16 @@
 #ifdef _WIN32
 #include <windows.h>
 #else
-#include <dirent.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 	#ifdef __APPLE__
 	#include <mach-o/dyld.h>
 	#else
+	namespace uni {		// necessary to prevent conflicts
 	#include <unistd.h>
+	}
 	#endif
+#include <dirent.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #endif
 
 // DIR FILTER
@@ -424,7 +426,7 @@ bool Filer::MkDir(const string& path) {
 }
 
 bool Filer::Remove(const string& path) {
-	return std::remove(path.c_str());
+	return remove(path.c_str());
 }
 
 bool Filer::Rename(const string& path, const string& newPath) {
@@ -456,27 +458,27 @@ vector<string> Filer::ListDir(const string& dir, EDirFilter filter, const vector
 				entries.push_back(data.cFileName);
 		}
 #else
-	DIR* directory = opendir(directory.c_str());
+	DIR* directory = opendir(dir.c_str());
 	if (directory) {
 		dirent* data = readdir(directory);
 		while (data) {
-			if (data.cFileName == string(".") || data.cFileName == string("..")) {
+			if (data->d_name == string(".") || data->d_name == string("..")) {
 				data = readdir(directory);
 				continue;
 			}
 			if ((filter & FILTER_FILE) && data->d_type == DT_REG) {
 				if (extFilter.empty())
-					entries.push_back(data.cFileName);
+					entries.push_back(data->d_name);
 				else for (const string& ext : extFilter)
-					if (data.cFileName == ext) {
-						entries.push_back(data.cFileName);
+					if (data->d_name == ext) {
+						entries.push_back(data->d_name);
 						break;
 					}
 			}
 			else if ((filter & FILTER_DIR) && data->d_type == DT_DIR)
-				entries.push_back(data.cFileName);
+				entries.push_back(data->d_name);
 			else if ((filter & FILTER_LINK) && data->d_type == DT_LNK)
-				entries.push_back(data.cFileName);
+				entries.push_back(data->d_name);
 
 			data = readdir(directory);
 		}
@@ -487,7 +489,9 @@ vector<string> Filer::ListDir(const string& dir, EDirFilter filter, const vector
 	return entries;
 }
 
-vector<string> Filer::ListDirRecursively(const string& dir) {
+vector<string> Filer::ListDirRecursively(const string& dir, size_t offs) {
+	if (offs == 0)
+		offs = dir.length();
 	vector<string> entries;
 #ifdef _WIN32
 	WIN32_FIND_DATAA data;
@@ -498,33 +502,29 @@ vector<string> Filer::ListDirRecursively(const string& dir) {
 				continue;
 
 			if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-				vector<string> newEs = ListDirRecursively(dir+data.cFileName+dsep);
+				vector<string> newEs = ListDirRecursively(dir+data.cFileName+dsep, offs);
 				std::sort(newEs.begin(), newEs.end());
-				for (string& it : newEs)
-					it = dir + it;
 				entries.insert(entries.end(), newEs.begin(), newEs.end());
 			}
 			else
-				entries.push_back(data.cFileName);
+				entries.push_back(dir.substr(offs) + data.cFileName);
 		}
 #else
-	DIR* directory = opendir(directory.c_str());
+	DIR* directory = opendir(dir.c_str());
 	if (directory) {
 		dirent* data = readdir(directory);
 		while (data) {
-			if (data.cFileName == string(".") || data.cFileName == string("..")) {
+			if (data->d_name == string(".") || data->d_name == string("..")) {
 				data = readdir(directory);
 				continue;
 			}
 			if (data->d_type == DT_DIR) {
-				vector<string> newEs = ListDirRecursively(dir+data->d_name+dsep);
+				vector<string> newEs = ListDirRecursively(dir+data->d_name+dsep, offs);
 				std::sort(newEs.begin(), newEs.end());
-				for (string& it : newEs)
-					it = dir + it;
 				entries.insert(entries.end(), newEs.begin(), newEs.end());
 			}
 			else
-				entries.push_back(data->d_name);
+				entries.push_back(dir.substr(offs) + data->d_name);
 
 			data = readdir(directory);
 		}
@@ -604,7 +604,7 @@ string Filer::GetDirExec() {
 	}
 #else
 	char buffer[MAX_LEN];
-	int len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
+	int len = uni::readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
 	buffer[len] = '\0';
 	path = buffer;
 #endif
