@@ -38,7 +38,8 @@ void Engine::Run() {
 		}
 
 		// handle events
-		audioSys->Tick(dSec);
+        if (audioSys)
+            audioSys->Tick(dSec);
 		scene->Tick(dSec);
 		inputSys->Tick();
 
@@ -52,7 +53,8 @@ void Engine::Close() {
 	// save all settings before quitting
 	Filer::SaveSettings(scene->Settings());
 	Filer::SaveSettings(winSys->Settings());
-	Filer::SaveSettings(audioSys->Settings());
+    if (audioSys)
+        Filer::SaveSettings(audioSys->Settings());
 	Filer::SaveSettings(inputSys->Settings());
 	
 	run = false;

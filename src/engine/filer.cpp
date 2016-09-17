@@ -594,13 +594,12 @@ string Filer::GetDirExec() {
 	_NSGetExecutablePath(buffer, &size);
 	path = buffer;
 
-	if (!raw) {
-		string test = path.string();
+    if (!raw) {
 		size_t pos = 0;
-		if (findString(test, ".app/", &pos))	// if running in a package
+        if (findString(path, ".app/", &pos))	// if running in a package
 			for (size_t i=pos; i!=0; i--)
-				if (test[i] == dsep)
-					return test.substr(0, i+1);
+                if (path[i] == dsep)
+                    return path.substr(0, i+1);
 	}
 #else
 	char buffer[MAX_LEN];

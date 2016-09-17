@@ -36,6 +36,5 @@ There are two sets of default controller key bindings. One is for X-Box controll
 By default the latter is enabled. In order to change to the X-Box controller defaults, uncomment the line "//#define USE_XCONTROLLER_DEFAULTS".  
 
 ##To do list
-- implament full os x support
 - clean up browser.cpp and program.cpp
 - fix mosue scroll under linux
