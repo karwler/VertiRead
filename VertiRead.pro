@@ -97,7 +97,8 @@ SOURCES += src/engine/audioSys.cpp \
     src/utils/scrollAreas.cpp \
     src/utils/popups.cpp \
     src/prog/library.cpp \
-    src/utils/capturers.cpp
+    src/utils/capturers.cpp \
+	src/utils/settings.cpp
 
 HEADERS += src/engine/audioSys.h \
     src/engine/engine.h \
@@ -123,5 +124,6 @@ HEADERS += src/engine/audioSys.h \
 	src/kklib/vec2.h \
 	src/kklib/vec3.h \
 	src/kklib/vec4.h \
+	src/utils/settings.h
 
 win32: RC_FILE = rsc/resource.rc

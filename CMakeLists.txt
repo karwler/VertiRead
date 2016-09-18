@@ -46,6 +46,8 @@ set(SRC_FILES
 	"src/utils/popups.h"
 	"src/utils/scrollAreas.cpp"
 	"src/utils/scrollAreas.h"
+	"src/utils/settings.cpp"
+	"src/utils/settings.h"
 	"src/utils/types.cpp"
 	"src/utils/types.h"
 	"src/utils/utils.cpp"

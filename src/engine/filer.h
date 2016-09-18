@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/types.h"
+#include "utils/settings.h"
 
 enum EFileType : uint8 {
 	reg,

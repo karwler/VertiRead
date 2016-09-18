@@ -1,5 +1,6 @@
 #pragma once
 
+#include "utils/settings.h"
 #include "utils/scrollAreas.h"
 #include "utils/popups.h"
 
