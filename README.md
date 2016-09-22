@@ -29,7 +29,7 @@ The frameworks’ location is set to /Library/Frameworks.
 Settings files are being saved in "~/Library/Application Support/VertiRead".  
 
 ##Changing the default settings
-Most defaults and constants are set in the "src/utils/defaults.h" file.  
+Most defaults and constants are set in the "src/prog/defaults.h" file.  
 Just look around and see what you can find.  
 
 There are two sets of default controller key bindings. One is for X-Box controllers and the other one is made for the PS2 controller I've been using to test the program.  
