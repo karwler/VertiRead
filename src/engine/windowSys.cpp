@@ -198,7 +198,7 @@ void WindowSys::DrawObject(LineEditor* obj) {
 
 void WindowSys::DrawObject(ListBox* obj) {
 	vec2i interval = obj->VisibleItems();
-	if (interval.y > interval.x)
+	if (interval.x > interval.y)
 		return;
 	
 	vector<ListItem*> items = obj->Items();
@@ -218,7 +218,7 @@ void WindowSys::DrawObject(ListBox* obj) {
 
 void WindowSys::DrawObject(TileBox* obj) {
 	vec2i interval = obj->VisibleItems();
-	if (interval.y > interval.x)
+	if (interval.x > interval.y)
 		return;
 	
 	const vector<ListItem*>& tiles = obj->Items();
