@@ -1,8 +1,11 @@
 #include "world.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #if defined(_WIN32) && !defined(_DEBUG)
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow) {
-	World::args = getWords(pCmdLine, , ' ', ' ');
+	World::args = getWords(pCmdLine, ' ', ' ');
 #else
 int main(int argc, char** argv) {
 	for (int i=0; i!=argc; i++)
