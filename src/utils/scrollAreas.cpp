@@ -122,11 +122,12 @@ int ListBox::SelectedItem() const {
 	return -1;
 }
 
-vec2i ListBox::VisibleItems() const {
+vec2t ListBox::VisibleItems() const {
+	if (items.size() == 0)
+		return vec2t(1, 0);
+	
 	int sizY = Size().y;
-	vec2i interval(listY / (itemH + spacing));
-	interval.y = listH > sizY ? (sizY+listY) / (itemH+spacing) : items.size()-1;
-	return interval;
+	return vec2t(listY / (itemH + spacing), (listH > sizY) ? (sizY+listY) / (itemH+spacing) : items.size()-1);
 }
 
 const vector<ListItem*>& ListBox::Items() const {
@@ -190,11 +191,12 @@ int TileBox::SelectedItem() const {
 	return -1;
 }
 
-vec2i TileBox::VisibleItems() const {
+vec2t TileBox::VisibleItems() const {
+	if (items.size() == 0)
+		return vec2t(1, 0);
+	
 	int sizY = Size().y;
-	vec2i interval((listY+spacing) / (tileSize.y+spacing) * dim.x);
-	interval.y = listH > sizY ? (sizY+listY) / (tileSize.y+spacing) * dim.x + dim.x-1 : items.size()-1;
-	return interval;
+	return vec2t((listY+spacing) / (tileSize.y+spacing) * dim.x, (listH > sizY) ? (sizY+listY) / (tileSize.y+spacing) * dim.x + dim.x-1 : items.size()-1);
 }
 
 const vector<ListItem*>& TileBox::Items() const {
@@ -412,16 +414,16 @@ Image ReaderBox::getImage(int i, SDL_Rect* Crop) const {
 	return img;
 }
 
-vec2i ReaderBox::VisiblePictures() const {
+vec2t ReaderBox::VisiblePictures() const {
 	int sizY = Size().y;
-	vec2i interval(0, pics.size()-1);
+	vec2t interval(0, pics.size()-1);
 
-	for (int i=interval.x; i<=interval.y; i++)
+	for (size_t i=interval.x; i<=interval.y; i++)
 		if ((pics[i].pos.y + pics[i].size.y)*zoom >= listY) {
 			interval.x = i;
 			break;
 		}
-	for (int i=interval.x; i<=interval.y; i++)
+	for (size_t i=interval.x; i<=interval.y; i++)
 		if (pics[i].pos.y*zoom > listY + sizY) {
 			interval.y = i-1;
 			break;

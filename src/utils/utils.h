@@ -32,6 +32,7 @@ using std::to_string;
 using kk::vec2i;
 using kk::vec2f;
 using kk::vec4b;
+using vec2t = kk::vec2<size_t>;
 
 #ifdef main
 #undef main

@@ -46,7 +46,7 @@ public:
 	ListItem* Item(int id) const;
 	SDL_Rect ItemRect(int i, SDL_Rect* Crop=nullptr, EColor* color=nullptr) const;
 	virtual int SelectedItem() const;
-	vec2i VisibleItems() const;
+	vec2t VisibleItems() const;
 
 	const vector<ListItem*>& Items() const;
 	void Items(const vector<ListItem*>& objects);
@@ -66,7 +66,7 @@ public:
 	virtual void SetValues();
 	SDL_Rect ItemRect(int id, SDL_Rect* Crop=nullptr, EColor* color=nullptr) const;
 	virtual int SelectedItem() const;
-	vec2i VisibleItems() const;
+	vec2t VisibleItems() const;
 
 	const vector<ListItem*>& Items() const;
 	void Items(const vector<ListItem*>& objects);
@@ -99,7 +99,7 @@ public:
 	SDL_Rect Player() const;
 	vector<ButtonImage>& PlayerButtons();
 	Image getImage(int i, SDL_Rect* Crop=nullptr) const;
-	vec2i VisiblePictures() const;
+	vec2t VisiblePictures() const;
 
 	const vector<Image>& Pictures() const;
 	void Pictures(const vector<Texture*>& pictures, const string& curPic="");

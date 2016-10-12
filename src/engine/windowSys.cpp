@@ -198,6 +198,9 @@ void WindowSys::DrawObject(LineEditor* obj) {
 
 void WindowSys::DrawObject(ListBox* obj) {
 	vec2i interval = obj->VisibleItems();
+	if (interval.y > interval.x)
+		return;
+	
 	vector<ListItem*> items = obj->Items();
 	for (int i=interval.x; i<=interval.y; i++) {
 		EColor color;
@@ -215,6 +218,9 @@ void WindowSys::DrawObject(ListBox* obj) {
 
 void WindowSys::DrawObject(TileBox* obj) {
 	vec2i interval = obj->VisibleItems();
+	if (interval.y > interval.x)
+		return;
+	
 	const vector<ListItem*>& tiles = obj->Items();
 	for (int i=interval.x; i<=interval.y; i++) {
 		EColor color;
@@ -231,7 +237,7 @@ void WindowSys::DrawObject(TileBox* obj) {
 }
 
 void WindowSys::DrawObject(ReaderBox* obj) {
-	vec2i interval = obj->VisiblePictures();
+	vec2i interval = obj->VisiblePictures();	
 	for (int i=interval.x; i<=interval.y; i++) {
 		SDL_Rect crop;
 		Image img = obj->getImage(i, &crop);
