@@ -201,20 +201,27 @@ void TextEdit::CheckText() {
 	bool foundDot = false;
 	for (size_t i=0; i!=text.length(); i++) {
 		if (type == ETextType::integer) {
-			if (text[i] < '0' || text[i] > '9')
+			if (text[i] < '0' || text[i] > '9') {
 				text.erase(i, 1);
+				i--;
+			}
 		}
 		else if (type == ETextType::floating) {
 			if (text[i] == '.') {
-				if (foundDot)
+				if (foundDot) {
 					text.erase(i, 1);
+					i--;
+				}
 				else
 					foundDot = true;
 			}
-			else if (text[i] < '0' || text[i] > '9')
+			else if (text[i] < '0' || text[i] > '9') {
 				text.erase(i, 1);
+				i--;
+			}
 		}
 	}
+	CheckCaret();
 }
 
 // SHORTCUT
