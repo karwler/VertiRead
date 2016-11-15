@@ -2,7 +2,7 @@
 
 void Engine::Run() {
 	// initialize all components
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK))
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER))
 		throw Exception("couldn't initialize SDL\n" + string(SDL_GetError()), 1);
 	if (TTF_Init())
 		throw Exception("couldn't initialize fonts\n" + string(SDL_GetError()), 2);
@@ -77,13 +77,19 @@ void Engine::HandleEvent(const SDL_Event& event) {
 		inputSys->KeypressEvent(event.key);
 		break;
 	case SDL_JOYBUTTONDOWN:
-		inputSys->ControllerButtonEvent(event.jbutton);
+		inputSys->JoystickButtonEvent(event.jbutton);
 		break;
 	case SDL_JOYHATMOTION:
-		inputSys->ControllerHatEvent(event.jhat);
+		inputSys->JoystickHatEvent(event.jhat);
 		break;
 	case SDL_JOYAXISMOTION:
-		inputSys->ControllerAxisEvent(event.jaxis);
+		inputSys->JoystickAxisEvent(event.jaxis);
+		break;
+	case SDL_CONTROLLERBUTTONDOWN:
+		inputSys->GamepadButtonEvent(event.cbutton);
+		break;
+	case SDL_CONTROLLERAXISMOTION:
+		inputSys->GamepadAxisEvent(event.caxis);
 		break;
 	case SDL_MOUSEBUTTONDOWN:
 		inputSys->MouseButtonDownEvent(event.button);

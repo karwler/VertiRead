@@ -66,27 +66,17 @@ void LineEdit::OnKeypress(SDL_Scancode key) {
 void LineEdit::OnJButton(uint8 jbutton) {
 	bool redraw = true;
 	switch (jbutton) {
-#ifdef USE_XCONTROLLER_DEFAULTS
-	case DEFAULT_CBINDING_DPAD_RIGHT:
-		editor.MoveCursor(true);
-		CheckCaretRight();
-		break;
-	case DEFAULT_CBINDING_DPAD_LEFT:
-		editor.MoveCursor(false);
-		CheckCaretLeft();
-		break;
-#endif
-	case DEFAULT_CBINDING_ZOOM_OUT:
+	case 3:
 		editor.Delete(false);
 		CheckCaretLeft();
 		break;
-	case DEFAULT_CBINDING_ZOOM_IN:
+	case 0:
 		editor.Delete(true);
 		break;
-	case DEFAULT_CBINDING_OK:
+	case 2:
 		Confirm();
 		break;
-	case DEFAULT_CBINDING_BACK:
+	case 1:
 		Cancel();
 		break;
 	default:
@@ -96,16 +86,47 @@ void LineEdit::OnJButton(uint8 jbutton) {
 		World::engine()->SetRedrawNeeded();
 }
 
-void LineEdit::OnJHat(uint8 jhat) {
+void LineEdit::OnJHat(uint8 jhat, uint8 value) {
 	bool redraw = true;
-	switch (jhat) {
-	case SDL_HAT_RIGHT:
+	if (value & SDL_HAT_RIGHT) {
+		editor.MoveCursor(true);
+		CheckCaretRight();
+	}
+	else if (value & SDL_HAT_LEFT) {
+		editor.MoveCursor(false);
+		CheckCaretLeft();
+	}
+	else
+		redraw = false;
+	if (redraw)
+		World::engine()->SetRedrawNeeded();
+}
+
+void LineEdit::OnJAxis(uint8 jaxis, bool positive) {}
+
+void LineEdit::OnGButton(uint8 gbutton) {
+	bool redraw = true;
+	switch (gbutton) {
+	case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
 		editor.MoveCursor(true);
 		CheckCaretRight();
 		break;
-	case SDL_HAT_LEFT:
+	case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
 		editor.MoveCursor(false);
 		CheckCaretLeft();
+		break;
+	case SDL_CONTROLLER_BUTTON_X:
+		editor.Delete(false);
+		CheckCaretLeft();
+		break;
+	case SDL_CONTROLLER_BUTTON_Y:
+		editor.Delete(true);
+		break;
+	case SDL_CONTROLLER_BUTTON_A:
+		Confirm();
+		break;
+	case SDL_CONTROLLER_BUTTON_B:
+		Cancel();
 		break;
 	default:
 		redraw = false;
@@ -114,25 +135,7 @@ void LineEdit::OnJHat(uint8 jhat) {
 		World::engine()->SetRedrawNeeded();
 }
 
-void LineEdit::OnJAxis(uint8 jaxis, bool positive) {
-	bool redraw = true;
-	switch (jaxis) {
-	case DEFAULT_CBINDING_HORIZONTAL:
-		if (positive) {
-			editor.MoveCursor(true);
-			CheckCaretRight();
-		}
-		else {
-			editor.MoveCursor(false);
-			CheckCaretLeft();
-		}
-		break;
-	default:
-		redraw = false;
-	}
-	if (redraw)
-		World::engine()->SetRedrawNeeded();
-}
+void LineEdit::OnGAxis(uint8 gaxis, bool positive) {}
 
 void LineEdit::Confirm() {
 	ResetTextPos();
@@ -210,9 +213,16 @@ void KeyGetter::OnJButton(uint8 jbutton) {
 	World::inputSys()->SetCapture(nullptr);
 }
 
-void KeyGetter::OnJHat(uint8 jhat) {
-	if (shortcut)
-		shortcut->JHat(jhat);
+void KeyGetter::OnJHat(uint8 jhat, uint8 value) {
+	if (shortcut) {
+		if (value != SDL_HAT_UP && value != SDL_HAT_RIGHT && value != SDL_HAT_DOWN && value != SDL_HAT_LEFT) {
+			if (value & SDL_HAT_RIGHT)
+				value = SDL_HAT_RIGHT;
+			else if (value & SDL_HAT_LEFT)
+				value = SDL_HAT_LEFT;
+		}
+		shortcut->JHat(jhat, value);
+	}
 	World::inputSys()->SetCapture(nullptr);
 }
 
@@ -222,18 +232,32 @@ void KeyGetter::OnJAxis(uint8 jaxis, bool positive) {
 	World::inputSys()->SetCapture(nullptr);
 }
 
+void KeyGetter::OnGButton(uint8 gbutton) {
+	if (shortcut)
+		shortcut->GButton(gbutton);
+	World::inputSys()->SetCapture(nullptr);
+}
+
+void KeyGetter::OnGAxis(uint8 gaxis, bool positive) {
+	if (shortcut)
+		shortcut->GAxis(gaxis, positive);
+	World::inputSys()->SetCapture(nullptr);
+}
+
 string KeyGetter::Text() const {
-	string line = (shortcut->KeyAssigned()) ? SDL_GetScancodeName(shortcut->Key()) : "-void-";
+	string line = string((shortcut->KeyAssigned()) ? SDL_GetScancodeName(shortcut->Key()) : "-void-") +  "    |  ";
+
 	if (shortcut->JButtonAssigned())
-		line += "    |  B " + to_string(shortcut->JCtr());
+		line += "B " + to_string(shortcut->CtrID());
 	else if (shortcut->JHatAssigned())
-		line += "    |  H " + to_string(shortcut->JCtr());
-	else if (shortcut->JAxisAssigned()) {
-		line += "    |  A ";
-		line += shortcut->JPosAxisAssigned() ? "+" : "-";
-		line += to_string(shortcut->JCtr());
-	}
+		line += "H " + to_string(shortcut->CtrID()) + " " + jtHatToStr(shortcut->JHatVal());
+	else if (shortcut->JAxisAssigned())
+		line += "A " + string((shortcut->JPosAxisAssigned()) ? "+" : "-") + to_string(shortcut->CtrID());
+	else if (shortcut->GButtonAssigned())
+		line += gpButtonToStr(shortcut->CtrID());
+	else if (shortcut->GAxisAssigned())
+		line += ((shortcut->GPosAxisAssigned()) ? "+" : "-") + gpAxisToStr(shortcut->CtrID());
 	else
-		line += "    |  -void-";
+		line += " -void-";
 	return line;
 }

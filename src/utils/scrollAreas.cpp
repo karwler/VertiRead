@@ -59,6 +59,10 @@ int ScrollArea::ListH() const {
 	return listH;
 }
 
+float ScrollArea::Zoom() const {
+	return 1.f;
+}
+
 int ScrollArea::ListL() const {
 	return listL;
 }
@@ -460,6 +464,10 @@ int ReaderBox::ListW() const {
 
 int ReaderBox::ListH() const {
 	return listH * zoom;
+}
+
+float ReaderBox::Zoom() const {
+	return zoom;
 }
 
 bool ReaderBox::showMouse() const {

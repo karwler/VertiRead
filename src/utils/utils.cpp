@@ -1,22 +1,55 @@
 #include "engine/world.h"
 #include <algorithm>
+#include <cctype>
 
 bool isNum(const string& str) {
 	if (str.empty())
 		return false;
 
 	for (char c : str)
-		if (!isdigit(c))
+		if (!std::isdigit(c))
 			return false;
 	return true;
 }
 
-bool strcmpCI(const string& strl, const std::string& strr) {
+long NSC_GetNextNum(const string& str, size_t start, size_t& length) {
+	size_t i = start;
+	while (i != str.size() && std::isdigit(str[i]))
+		i++;
+
+	length = i - start;
+	return stol(str.substr(start, length));
+}
+
+bool numStrCompare(const string& sa, const string& sb) {
+	size_t ia = 0, ib = 0;
+	while (ia != sa.size() && ib != sb.size()) {
+		if (std::isdigit(sa[ia]) && std::isdigit(sb[ib])) {
+			size_t la, lb;
+			long na = NSC_GetNextNum(sa, ia, la);
+			long nb = NSC_GetNextNum(sb, ib, lb);
+
+			if (na != nb)
+				return na < nb;
+			ia += la;
+			ib += lb;
+		}
+		else if (sa[ia] != sb[ib])
+			return sa[ia] <= sb[ib];
+		else {
+			ia++;
+			ib++;
+		}
+	}
+	return sa.size() <= sb.size();
+}
+
+bool strcmpCI(const string& strl, const string& strr) {
 	if (strl.length() != strr.length())
 		return false;
 
 	for (size_t i=0; i!=strl.length(); i++)
-		if (tolower(strl[i]) != tolower(strr[i]))
+		if (std::tolower(strl[i]) != std::tolower(strr[i]))
 			return false;
 	return true;
 }
@@ -92,18 +125,18 @@ string modifyCase(string str, ETextCase caseChange) {
 	switch (caseChange) {
 	case ETextCase::first_upper:
 		if (!str.empty())
-			str[0] = toupper(str[0]);
+			str[0] = std::toupper(str[0]);
 		break;
 	case ETextCase::all_upper:
-		std::transform(str.begin(), str.end(), str.begin(), toupper);
+		std::transform(str.begin(), str.end(), str.begin(), std::toupper);
 		break;
 	case ETextCase::all_lower:
-		std::transform(str.begin(), str.end(), str.begin(), tolower);
+		std::transform(str.begin(), str.end(), str.begin(), std::tolower);
 	}
 	return str;
 }
 
-vector<std::string> getWords(const string & line, char splitter, char spacer) {
+vector<string> getWords(const string& line, char splitter, char spacer) {
 	vector<std::string> words;
 
 	size_t i = 0;
@@ -169,6 +202,10 @@ bool splitIniLine(const string& line, string* arg, string* val, string* key, boo
 	if (id)
 		*id = i0;
 	return true;
+}
+
+void sortStrVec(vector<string>& vec) {
+	std::sort(vec.begin(), vec.end(), numStrCompare);
 }
 
 bool inRect(const SDL_Rect& rect, vec2i point) {
@@ -264,12 +301,165 @@ vector<string> getAvailibleRenderers(bool trustedOnly) {
 	return renderers;
 }
 
-bool stob(const std::string& str) {
+bool stob(const string& str) {
 	return str == "true";
 }
 
-std::string btos(bool b) {
+string btos(bool b) {
 	return b ? "true" : "false";
+}
+
+string jtHatToStr(uint8 jhat) {
+	switch (jhat) {
+	case SDL_HAT_CENTERED:
+		return "Center";
+	case SDL_HAT_UP:
+		return "Up";
+	case SDL_HAT_RIGHT:
+		return "Right";
+	case SDL_HAT_DOWN:
+		return "Down";
+	case SDL_HAT_LEFT:
+		return "Left";
+	case SDL_HAT_RIGHTUP:
+		return "Right-Up";
+	case SDL_HAT_RIGHTDOWN:
+		return "Right-Down";
+	case SDL_HAT_LEFTDOWN:
+		return "Left-Down";
+	case SDL_HAT_LEFTUP:
+		return "Left-Up";
+	}
+	return "invalid";
+}
+
+uint8 jtStrToHat(string str) {
+	std::transform(str.begin(), str.end(), str.begin(), std::tolower);
+	if (str == "center")
+		return SDL_HAT_CENTERED;
+	if (str == "up")
+		return SDL_HAT_UP;
+	if (str == "right")
+		return SDL_HAT_RIGHT;
+	if (str == "down")
+		return SDL_HAT_DOWN;
+	if (str == "left")
+		return SDL_HAT_LEFT;
+	if (str == "right-up")
+		return SDL_HAT_RIGHTUP;
+	if (str == "right-down")
+		return SDL_HAT_RIGHTDOWN;
+	if (str == "left-down")
+		return SDL_HAT_LEFTDOWN;
+	if (str == "left-up")
+		return SDL_HAT_LEFTUP;
+	return 0x10;
+}
+
+string gpButtonToStr(uint8 gbutton) {
+	switch (gbutton) {
+	case SDL_CONTROLLER_BUTTON_A:
+		return "A";
+	case SDL_CONTROLLER_BUTTON_B:
+		return "B";
+	case SDL_CONTROLLER_BUTTON_X:
+		return "X";
+	case SDL_CONTROLLER_BUTTON_Y:
+		return "Y";
+	case SDL_CONTROLLER_BUTTON_BACK:
+		return "Back";
+	case SDL_CONTROLLER_BUTTON_GUIDE:
+		return "Guide";
+	case SDL_CONTROLLER_BUTTON_START:
+		return "Start";
+	case SDL_CONTROLLER_BUTTON_LEFTSTICK:
+		return "Stick L";
+	case SDL_CONTROLLER_BUTTON_RIGHTSTICK:
+		return "Stick R";
+	case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
+		return "LB";
+	case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
+		return "RB";
+	case SDL_CONTROLLER_BUTTON_DPAD_UP:
+		return "Up";
+	case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+		return "Down";
+	case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+		return "Left";
+	case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+		return "Right";
+	}
+	return "invalid";
+}
+
+uint8 gpStrToButton(string str) {
+	std::transform(str.begin(), str.end(), str.begin(), std::tolower);
+	if (str == "a")
+		return SDL_CONTROLLER_BUTTON_A;
+	if (str == "b")
+		return SDL_CONTROLLER_BUTTON_B;
+	if (str == "x")
+		return SDL_CONTROLLER_BUTTON_X;
+	if (str == "y")
+		return SDL_CONTROLLER_BUTTON_Y;
+	if (str == "back")
+		return SDL_CONTROLLER_BUTTON_BACK;
+	if (str == "guide")
+		return SDL_CONTROLLER_BUTTON_GUIDE;
+	if (str == "start")
+		return SDL_CONTROLLER_BUTTON_START;
+	if (str == "stick l")
+		return SDL_CONTROLLER_BUTTON_LEFTSTICK;
+	if (str == "stick r")
+		return SDL_CONTROLLER_BUTTON_RIGHTSTICK;
+	if (str == "lb")
+		return SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
+	if (str == "rb")
+		return SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
+	if (str == "up")
+		return SDL_CONTROLLER_BUTTON_DPAD_UP;
+	if (str == "down")
+		return SDL_CONTROLLER_BUTTON_DPAD_DOWN;
+	if (str == "left")
+		return SDL_CONTROLLER_BUTTON_DPAD_LEFT;
+	if (str == "right")
+		return SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
+	return SDL_CONTROLLER_BUTTON_MAX;
+}
+
+string gpAxisToStr(uint8 gaxis) {
+	switch (gaxis) {
+	case SDL_CONTROLLER_AXIS_LEFTX:
+		return "LX";
+	case SDL_CONTROLLER_AXIS_LEFTY:
+		return "LY";
+	case SDL_CONTROLLER_AXIS_RIGHTX:
+		return "RX";
+	case SDL_CONTROLLER_AXIS_RIGHTY:
+		return "RY";
+	case SDL_CONTROLLER_AXIS_TRIGGERLEFT:
+		return "LT";
+	case SDL_CONTROLLER_AXIS_TRIGGERRIGHT:
+		return "RT";
+	}
+	return "invalid";
+}
+
+uint8 gpStrToAxis(string str) {
+	std::transform(str.begin(), str.end(), str.begin(), std::tolower);
+	if (str == "lx")
+		return SDL_CONTROLLER_AXIS_LEFTX;
+	if (str == "ly")
+		return SDL_CONTROLLER_AXIS_LEFTY;
+	if (str == "rx")
+		return SDL_CONTROLLER_AXIS_RIGHTX;
+	if (str == "ry")
+		return SDL_CONTROLLER_AXIS_RIGHTY;
+	if (str == "lt")
+		return SDL_CONTROLLER_AXIS_TRIGGERLEFT;
+	if (str == "rt")
+		return SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
+	return SDL_CONTROLLER_AXIS_MAX;
 }
 
 vec2i pix(const vec2f& p) {

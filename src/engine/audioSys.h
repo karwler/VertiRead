@@ -28,7 +28,7 @@ public:
 private:
 	AudioSettings sets;
 	vector<string> playlist;
-	uint curSong;
+	size_t curSong;
 	Mix_Music* curMusic;
 	float deltaDelay;
 

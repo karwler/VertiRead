@@ -73,6 +73,7 @@ public:
 	void Event_SetSongDelay(const string& sdelay);
 	void Event_SetScrollX(const string& scrollx);
 	void Event_SetScrollY(const string& scrolly);
+	void Event_SetDeadzone(const string& deadz);
 
 	// other events
 	void Event_TextCaptureOk(const string& str);
@@ -99,5 +100,6 @@ private:
 
 	void SwitchScene(EMenu newMenu, void* dat=nullptr);
 	void SwitchScene(void* dat=nullptr) const;
+	float ModifySpeed(float value, float* axisFactor=nullptr, float normalFactor=1.f, float fastFactor=4.f, float slowFactor=0.5f);
 	string FindFittingPlaylist(const string& picPath);
 };

@@ -56,9 +56,10 @@ struct AudioSettings {
 };
 
 struct ControlsSettings {
-	ControlsSettings(const vec2f& SSP=DEFAULT_SCROLL_SPEED, bool fillMissingBindings=true, const map<string, Shortcut*>& CTS=map<string, Shortcut*>());
+	ControlsSettings(const vec2f& SSP=DEFAULT_SCROLL_SPEED, int16 DDZ=DEFAULT_DEADZONE, bool fillMissingBindings=true, const map<string, Shortcut*>& CTS=map<string, Shortcut*>());
 
 	vec2f scrollSpeed;
+	int16 deadzone;
 	map<string, Shortcut*> shortcuts;
 
 	void FillMissingBindings();

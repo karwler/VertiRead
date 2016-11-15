@@ -20,6 +20,7 @@ public:
 	int BarW() const;					// returns 0 if slider isn't needed
 	int ListY() const;
 	virtual int ListH() const;
+	virtual float Zoom() const;
 	int ListL() const;
 	int SliderY() const;
 	int SliderH() const;
@@ -106,6 +107,7 @@ public:
 	int ListX() const;
 	int ListW() const;
 	virtual int ListH() const;
+	virtual float Zoom() const;
 	bool showMouse() const;
 	bool showSlider() const;
 	bool showList() const;

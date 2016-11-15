@@ -1,7 +1,7 @@
 #include "world.h"
 #include <fstream>
 #include <streambuf>
-#include <algorithm>
+#include <cctype>
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -103,7 +103,7 @@ vector<string> Filer::GetAvailibleThemes() {
 			if (!isTitle && !contains(themes, arg))
 				themes.push_back(arg);
 	}
-	std::sort(themes.begin(), themes.end());
+	sortStrVec(themes);
 	return themes;
 }
 
@@ -139,7 +139,8 @@ vector<string> Filer::GetAvailibleLanguages() {
 
 	for (string& it : ListDir(dirLangs, FILTER_FILE, {"ini"}))
 		files.push_back(delExt(it));
-	sort(files.begin(), files.end());
+
+	sortStrVec(files);
 	return files;
 }
 
@@ -337,23 +338,37 @@ ControlsSettings Filer::LoadControlsSettings() {
 
 		if (arg == "scroll_speed") {
 			vector<string> elems = getWords(val, ' ', ',');
-			if (elems.size() > 0) sets.scrollSpeed.x = stof(elems[0]);
-			if (elems.size() > 1) sets.scrollSpeed.y = stof(elems[1]);
+			if (elems.size() > 0)
+				sets.scrollSpeed.x = stof(elems[0]);
+			if (elems.size() > 1)
+				sets.scrollSpeed.y = stof(elems[1]);
 		}
+		else if (arg == "deadzone")
+			sets.deadzone = stoi(val);
 		else if (arg == "shortcut" && sets.shortcuts.count(key) != 0) {		// shortcuts have to already contain a variable for this key
 			Shortcut* sc = sets.shortcuts[key];
-			switch (toupper(val[0])) {
+			switch (std::toupper(val[0])) {
 			case 'K':	// keyboard key
 				sc->Key(SDL_GetScancodeFromName(val.substr(2).c_str()));
 				break;
-			case 'B':	// controller button
+			case 'B':	// joystick button
 				sc->JButton(stoi(val.substr(2)));
 				break;
-			case 'H':	// controller hat
-				sc->JHat(stoi(val.substr(2)));
+			case 'H':	// joystick hat
+				for (size_t i=2; i<val.size(); i++)
+					if (val[i] < '0' || val[i] > '9') {
+						sc->JHat(stoi(val.substr(2, i-2)), jtStrToHat(val.substr(i+1)));
+						break;
+					}
 				break;
-			case 'A':	// controller axis
+			case 'A':	// joystick axis
 				sc->JAxis(stoi(val.substr(3)), (val[2] != '-'));
+				break;
+			case 'G':	// gamepad button
+				sc->GButton(gpStrToButton(val.substr(2)));
+				break;
+			case 'X':	// gamepad axis
+				sc->GAxis(gpStrToAxis(val.substr(3)), (val[2] != '-'));
 			}
 		}
 	}
@@ -362,20 +377,23 @@ ControlsSettings Filer::LoadControlsSettings() {
 
 void Filer::SaveSettings(const ControlsSettings& sets) {
 	vector<string> lines = {
-		"scroll_speed=" + to_string(sets.scrollSpeed.x) + " " + to_string(sets.scrollSpeed.y)
+		"scroll_speed=" + to_string(sets.scrollSpeed.x) + " " + to_string(sets.scrollSpeed.y),
+		"deadzone=" + to_string(sets.deadzone)
 	};
 	for (const pair<string, Shortcut*>& it : sets.shortcuts) {
 		vector<string> values;
 		if (it.second->KeyAssigned())
 			values.push_back("K_" + string(SDL_GetScancodeName(it.second->Key())));
 		if (it.second->JButtonAssigned())
-			values.push_back("B_" + to_string(it.second->JCtr()));
+			values.push_back("B_" + to_string(it.second->CtrID()));
 		else if (it.second->JHatAssigned())
-			values.push_back("H_" + to_string(it.second->JCtr()));
-		else if (it.second->JAxisAssigned()) {
-			string val = it.second->JPosAxisAssigned() ? "A_+" : "A_-";
-			values.push_back(val + to_string(it.second->JCtr()));
-		}
+			values.push_back("H_" + to_string(it.second->CtrID()) + "_" + jtHatToStr(it.second->JHatVal()));
+		else if (it.second->JAxisAssigned())
+			values.push_back(string(it.second->JPosAxisAssigned() ? "A_+" : "A_-") + to_string(it.second->CtrID()));
+		else if (it.second->GButtonAssigned())
+			values.push_back("G_" + gpButtonToStr(it.second->CtrID()));
+		else if (it.second->GButtonAssigned())
+			values.push_back(string(it.second->GPosAxisAssigned() ? "X_+" : "X_-") + gpAxisToStr(it.second->CtrID()));
 
 		for (string& val : values)
 			lines.push_back("shortcut[" + it.first + "]=" + val);
@@ -419,7 +437,7 @@ bool Filer::WriteTextFile(const string& file, const vector<string>& lines) {
 
 bool Filer::MkDir(const string& path) {
 #ifdef _WIN32
-	return CreateDirectoryA(path.c_str(), NULL);
+	return CreateDirectoryA(path.c_str(), 0);
 #else
 	return !mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 #endif
@@ -485,7 +503,7 @@ vector<string> Filer::ListDir(const string& dir, EDirFilter filter, const vector
 		closedir(directory);
 	}
 #endif
-	std::sort(entries.begin(), entries.end());
+	sortStrVec(entries);
 	return entries;
 }
 
@@ -503,7 +521,7 @@ vector<string> Filer::ListDirRecursively(const string& dir, size_t offs) {
 
 			if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 				vector<string> newEs = ListDirRecursively(dir+data.cFileName+dsep, offs);
-				std::sort(newEs.begin(), newEs.end());
+				sortStrVec(newEs);
 				entries.insert(entries.end(), newEs.begin(), newEs.end());
 			}
 			else
@@ -520,7 +538,7 @@ vector<string> Filer::ListDirRecursively(const string& dir, size_t offs) {
 			}
 			if (data->d_type == DT_DIR) {
 				vector<string> newEs = ListDirRecursively(dir+data->d_name+dsep, offs);
-				std::sort(newEs.begin(), newEs.end());
+				sortStrVec(newEs);
 				entries.insert(entries.end(), newEs.begin(), newEs.end());
 			}
 			else

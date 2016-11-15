@@ -56,6 +56,6 @@ public:
 
 private:
 	void (Program::*callback)(const string&);
-	uint curOpt;
+	size_t curOpt;
 	vector<string> options;
 };

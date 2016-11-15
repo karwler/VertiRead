@@ -10,8 +10,11 @@ public:
 	virtual void OnClick(EClick clickType);
 	virtual void OnKeypress(SDL_Scancode key) = 0;
 	virtual void OnJButton(uint8 jbutton) = 0;
-	virtual void OnJHat(uint8 jhat) = 0;
+	virtual void OnJHat(uint8 jhat, uint8 value) = 0;
 	virtual void OnJAxis(uint8 jaxis, bool positive) = 0;
+	virtual void OnGButton(uint8 gbutton) = 0;
+	virtual void OnGAxis(uint8 gaxis, bool positive) = 0;
+
 	ListBox* Parent() const;
 };
 
@@ -23,8 +26,10 @@ public:
 	virtual void OnClick(EClick clickType);
 	virtual void OnKeypress(SDL_Scancode key);
 	virtual void OnJButton(uint8 jbutton);
-	virtual void OnJHat(uint8 jhat);
+	virtual void OnJHat(uint8 jhat, uint8 value);
 	virtual void OnJAxis(uint8 jaxis, bool positive);
+	virtual void OnGButton(uint8 gbutton);
+	virtual void OnGAxis(uint8 gaxis, bool positive);
 	
 	void Confirm();
 	void Cancel();
@@ -52,8 +57,10 @@ public:
 
 	virtual void OnKeypress(SDL_Scancode key);
 	virtual void OnJButton(uint8 jbutton);
-	virtual void OnJHat(uint8 jhat);
+	virtual void OnJHat(uint8 jhat, uint8 value);
 	virtual void OnJAxis(uint8 jaxis, bool positive);
+	virtual void OnGButton(uint8 gbutton);
+	virtual void OnGAxis(uint8 gaxis, bool positive);
 	
 	string Text() const;
 

@@ -4,37 +4,33 @@
 
 void Program::Event_Up(float amt) {
 	if (ScrollArea* box = dynamic_cast<ScrollArea*>(World::scene()->FocusedObject())) {
-		float speed = amt * World::inputSys()->Settings().scrollSpeed.y * World::engine()->deltaSeconds();
 		float factor = 1.f;
-		speed *= World::inputSys()->isPressed("fast", &factor) ? fastScrollFactor : World::inputSys()->isPressed("slow") ? slowScrollFactor : normalScrollFactor;
-		box->ScrollList(speed * -factor);
+		amt = ModifySpeed(amt * box->Zoom() * World::inputSys()->Settings().scrollSpeed.y, &factor, normalScrollFactor, fastScrollFactor, slowScrollFactor);
+		box->ScrollList(-amt * factor);
 	}
 }
 
 void Program::Event_Down(float amt) {
 	if (ScrollArea* box = dynamic_cast<ScrollArea*>(World::scene()->FocusedObject())) {
-		float speed = amt * World::inputSys()->Settings().scrollSpeed.y * World::engine()->deltaSeconds();
 		float factor = 1.f;
-		speed *= World::inputSys()->isPressed("fast", &factor) ? fastScrollFactor : World::inputSys()->isPressed("slow") ? slowScrollFactor : normalScrollFactor;
-		box->ScrollList(speed * factor);
+		amt = ModifySpeed(amt * box->Zoom() * World::inputSys()->Settings().scrollSpeed.y, &factor, normalScrollFactor, fastScrollFactor, slowScrollFactor);
+		box->ScrollList(amt * factor);
 	}
 }
 
 void Program::Event_Right(float amt) {
 	if (ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject())) {
-		float speed = amt * World::inputSys()->Settings().scrollSpeed.x * World::engine()->deltaSeconds();
 		float factor = 1.f;
-		speed *= World::inputSys()->isPressed("fast", &factor) ? fastScrollFactor : World::inputSys()->isPressed("slow") ? slowScrollFactor : normalScrollFactor;
-		box->ScrollListX(speed * factor);
+		amt = ModifySpeed(amt * box->Zoom() * World::inputSys()->Settings().scrollSpeed.x, &factor, normalScrollFactor, fastScrollFactor, slowScrollFactor);
+		box->ScrollListX(amt * factor);
 	}
 }
 
 void Program::Event_Left(float amt) {
 	if (ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject())) {
-		float speed = amt * World::inputSys()->Settings().scrollSpeed.x * World::engine()->deltaSeconds();
 		float factor = 1.f;
-		speed *= World::inputSys()->isPressed("fast", &factor) ? fastScrollFactor : World::inputSys()->isPressed("slow") ? slowScrollFactor : normalScrollFactor;
-		box->ScrollListX(speed * -factor);
+		amt = ModifySpeed(amt * box->Zoom() * World::inputSys()->Settings().scrollSpeed.x, &factor, normalScrollFactor, fastScrollFactor, slowScrollFactor);
+		box->ScrollListX(-amt * factor);
 	}
 }
 
@@ -85,19 +81,27 @@ void Program::Event_PrevDir() {
 }
 
 void Program::Event_CursorUp(float amt) {
-	World::winSys()->MoveMouse(World::inputSys()->mousePos() - vec2i(0, std::ceil(amt * World::engine()->deltaSeconds() * mouseDragFactor)));
+	float factor = 1.f;
+	amt = ModifySpeed(amt, &factor, normalMDragFactor, fastMDragFactor, slowMDragFactor);
+	World::winSys()->MoveMouse(World::inputSys()->mousePos() - vec2i(0, std::ceil(amt * factor)));
 }
 
 void Program::Event_CursorDown(float amt) {
-	World::winSys()->MoveMouse(World::inputSys()->mousePos() + vec2i(0, std::ceil(amt * World::engine()->deltaSeconds() * mouseDragFactor)));
+	float factor = 1.f;
+	amt = ModifySpeed(amt, &factor, normalMDragFactor, fastMDragFactor, slowMDragFactor);
+	World::winSys()->MoveMouse(World::inputSys()->mousePos() + vec2i(0, std::ceil(amt * factor)));
 }
 
 void Program::Event_CursorRight(float amt) {
-	World::winSys()->MoveMouse(World::inputSys()->mousePos() + vec2i(std::ceil(amt * World::engine()->deltaSeconds() * mouseDragFactor), 0));
+	float factor = 1.f;
+	amt = ModifySpeed(amt, &factor, normalMDragFactor, fastMDragFactor, slowMDragFactor);
+	World::winSys()->MoveMouse(World::inputSys()->mousePos() + vec2i(std::ceil(amt * factor), 0));
 }
 
 void Program::Event_CursorLeft(float amt) {
-	World::winSys()->MoveMouse(World::inputSys()->mousePos() - vec2i(std::ceil(amt * World::engine()->deltaSeconds() * mouseDragFactor), 0));
+	float factor = 1.f;
+	amt = ModifySpeed(amt, &factor, normalMDragFactor, fastMDragFactor, slowMDragFactor);
+	World::winSys()->MoveMouse(World::inputSys()->mousePos() - vec2i(std::ceil(amt * factor), 0));
 }
 
 // PLAYER EVENTS
@@ -338,6 +342,8 @@ void Program::Event_Ok() {
 	}
 	else if (curMenu == EMenu::playlists || curMenu == EMenu::plistEditor)
 		Event_EditButtonClick();
+	else
+		World::scene()->OnMouseDown(EClick::left, false);	// simulate mouse single left click
 }
 
 void Program::Event_Back() {
@@ -443,6 +449,11 @@ void Program::Event_SetScrollX(const string& scrollx) {
 void Program::Event_SetScrollY(const string& scrolly) {
 	World::PlaySound("click");
 	World::inputSys()->ScrollSpeed(vec2f(World::inputSys()->Settings().scrollSpeed.x, stof(scrolly)));
+}
+
+void Program::Event_SetDeadzone(const string& deadz) {
+	World::PlaySound("click");
+	World::inputSys()->Deadzone(stoi(deadz));
 }
 
 // OTHER EVENTS
@@ -708,7 +719,8 @@ void Program::SwitchScene(void* dat) const {
 		ListBox* box = new ListBox(Object(vec2i(160, 0), -1, vec2i(res.x-160, res.y), FIX_ANC | FIX_END, EColor::background));
 		vector<ListItem*> items = {
 			new LineEdit(box, World::library()->getLine("scroll speed")+" X", to_string(World::inputSys()->Settings().scrollSpeed.x), ETextType::floating, &Program::Event_SetScrollX),
-			new LineEdit(box, World::library()->getLine("scroll speed")+" Y", to_string(World::inputSys()->Settings().scrollSpeed.y), ETextType::floating, &Program::Event_SetScrollY)
+			new LineEdit(box, World::library()->getLine("scroll speed")+" Y", to_string(World::inputSys()->Settings().scrollSpeed.y), ETextType::floating, &Program::Event_SetScrollY),
+			new LineEdit(box, World::library()->getLine("deadzone"), to_string(World::inputSys()->Settings().deadzone), ETextType::integer, &Program::Event_SetDeadzone)
 		};
 		for (const pair<string, Shortcut*>& it : World::inputSys()->Settings().shortcuts)
 			items.push_back(new KeyGetter(box, it.first, World::inputSys()->GetShortcut(it.first)));
@@ -719,6 +731,16 @@ void Program::SwitchScene(void* dat) const {
 		}
 	}
 	World::scene()->SwitchMenu(objects, focObject);
+}
+
+float Program::ModifySpeed(float value, float* axisFactor, float normalFactor, float fastFactor, float slowFactor) {
+	if (World::inputSys()->isPressed(SHORTCUT_FAST, axisFactor))
+		value *= fastFactor;
+	else if (World::inputSys()->isPressed(SHORTCUT_SLOW, axisFactor))
+		value *= slowFactor;
+	else
+		value *= normalFactor;
+	return value * World::engine()->deltaSeconds();
 }
 
 string Program::FindFittingPlaylist(const string& picPath) {

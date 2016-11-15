@@ -56,9 +56,10 @@ class Capturer;
 
 // files and strings
 bool isNum(const string& str);
-bool strcmpCI(const string& strl, const std::string& strr);
+bool numStrCompare(const string& sa, const string& sb);
+bool strcmpCI(const string& strl, const string& strr);
 bool findChar(const string& str, char c, size_t* id=nullptr);
-bool findString(const string& str, const std::string& c, size_t* id=nullptr);
+bool findString(const string& str, const string& c, size_t* id=nullptr);
 bool isAbsolute(const string& path);
 string parentPath(const string& path);
 string filename(const string& path);
@@ -69,6 +70,7 @@ bool isDriveLetter(const string& path);
 string modifyCase(string str, ETextCase caseChange);
 vector<string> getWords(const string& line, char splitter, char spacer);
 bool splitIniLine(const string& line, string* arg, string* val, string* key=nullptr, bool* isTitle=nullptr, size_t* id=nullptr);
+void sortStrVec(vector<string>& vec);
 
 // graphics
 bool inRect(const SDL_Rect& rect, vec2i point);
@@ -83,8 +85,14 @@ string getRendererName(int id);
 vector<string> getAvailibleRenderers(bool trustedOnly=false);
 
 // convertions
-bool stob(const std::string& str);
-std::string btos(bool b);
+bool stob(const string& str);
+string btos(bool b);
+string jtHatToStr(uint8 jhat);
+uint8 jtStrToHat(string str);
+string gpButtonToStr(uint8 gbutton);
+uint8 gpStrToButton(string str);
+string gpAxisToStr(uint8 gaxis);
+uint8 gpStrToAxis(string str);
 
 vec2i pix(const vec2f& p);
 int pixX(float p);

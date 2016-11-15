@@ -29,11 +29,11 @@ The frameworks’ location is set to /Library/Frameworks.
 Settings files are being saved in "~/Library/Application Support/VertiRead".  
 
 ##Changing the default settings
-Most defaults and constants are set in the "src/prog/defaults.h" file.  
+Most defaults and constants are defined in the "src/prog/defaults.h" file.  
 Just look around and see what you can find.  
 
-There are two sets of default controller key bindings. One is for X-Box controllers and the other one is made for the PS2 controller I've been using to test the program.  
-By default the latter is enabled. In order to change to the X-Box controller defaults, uncomment the line "//#define USE_XCONTROLLER_DEFAULTS".  
+There are two sets of default controller key bindings. One is for X-Box controllers and the other one is made for the other controller I've been using to test the program.  
+By default the latter is enabled. In order to change to the X-Box controller defaults, uncomment the line "//#define USE_XGAMEPAD_DEFAULTS" or give the compiler a define with this name.  
 
 ##To do list
 - clean up browser.cpp and program.cpp

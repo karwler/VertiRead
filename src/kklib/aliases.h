@@ -1,7 +1,8 @@
 #pragma once
 
-#include <cstdint>
+#define _USE_MATH_DEFINES
 #include <cmath>
+#include <cstdint>
 
 using byte = unsigned char;
 using uchar = unsigned char;
@@ -58,5 +59,12 @@ using vec4d = vec4<double>;
 
 #define PI M_PI
 
-#define D2R(x) (x)/180*PI	// degrees to radians
-#define R2D(x) (x)*180/PI	// radians to degrees
+template <typename T>
+T D2R(T deg) {
+	return deg / T(180) * T(PI);	// degrees to radians
+}
+
+template <typename T>
+T R2D(T rad) {
+	return rad * T(180) / T(PI);	// radians to degrees
+}

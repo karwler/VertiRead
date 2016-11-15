@@ -2,6 +2,7 @@
 #include "engine/filer.h"
 #include "prog/program.h"
 #include <algorithm>
+#include <cctype>
 
 // GENEREAL SETTINGS
 
@@ -18,7 +19,7 @@ string GeneralSettings::Lang() const {
 
 void GeneralSettings::Lang(const string& language) {
 	lang = language;
-	std::transform(lang.begin(), lang.end(), lang.begin(), tolower);
+	std::transform(lang.begin(), lang.end(), lang.begin(), std::tolower);
 
 	if (!Filer::Exists(Filer::dirLangs+lang+".ini"))
 		lang = "english";
@@ -114,8 +115,9 @@ AudioSettings::AudioSettings(int MV, int SV, float SD) :
 
 // CONTROLS SETTINGS
 
-ControlsSettings::ControlsSettings(const vec2f& SSP, bool fillMissingBindings, const map<string, Shortcut*>& CTS) :
+ControlsSettings::ControlsSettings(const vec2f& SSP, int16 DDZ, bool fillMissingBindings, const map<string, Shortcut*>& CTS) :
 	scrollSpeed(SSP),
+	deadzone(DDZ),
 	shortcuts(CTS)
 {
 	if (fillMissingBindings)
@@ -160,30 +162,30 @@ Shortcut* ControlsSettings::GetDefaultShortcut(const string& name) {
 	else if (name == SHORTCUT_NEXT_SONG)
 		return new ShortcutKey(DEFAULT_KEY_NEXT_SONG, DEFAULT_CBINDING_DPAD_RIGHT, DEFAULT_CTYPE_2, &Program::Event_NextSong);
 	else if (name == SHORTCUT_PREV_SONG)
-		return new ShortcutKey(DEFAULT_KEY_PREV_SONG, DEFAULT_CBINDING_DPAD_LEFT, DEFAULT_CTYPE_2, &Program::Event_PrevSong);
+		return new ShortcutKey(DEFAULT_KEY_PREV_SONG, DEFAULT_CBINDING_DPAD_LEFT, DEFAULT_CTYPE_3, &Program::Event_PrevSong);
 	else if (name == SHORTCUT_VOLUME_UP)
-		return new ShortcutKey(DEFAULT_KEY_VOLUME_UP, DEFAULT_CBINDING_DPAD_UP, DEFAULT_CTYPE_2, &Program::Event_VolumeUp);
+		return new ShortcutKey(DEFAULT_KEY_VOLUME_UP, DEFAULT_CBINDING_DPAD_UP, DEFAULT_CTYPE_4, &Program::Event_VolumeUp);
 	else if (name == SHORTCUT_VOLUME_DOWN)
-		return new ShortcutKey(DEFAULT_KEY_VOLUME_DOWN, DEFAULT_CBINDING_DPAD_DOWN, DEFAULT_CTYPE_2, &Program::Event_VolumeDown);
+		return new ShortcutKey(DEFAULT_KEY_VOLUME_DOWN, DEFAULT_CBINDING_DPAD_DOWN, DEFAULT_CTYPE_5, &Program::Event_VolumeDown);
 	else if (name == SHORTCUT_PAGE_UP)
 		return new ShortcutKey(DEFAULT_KEY_PAGE_UP, &Program::Event_PageUp);
 	else if (name == SHORTCUT_PAGE_DOWN)
 		return new ShortcutKey(DEFAULT_KEY_PAGE_DOWN, &Program::Event_PageDown);
 	else if (name == SHORTCUT_UP)
-		return new ShortcutAxis(DEFAULT_KEY_UP, DEFAULT_CBINDING_VERTICAL, DEFAULT_CTYPE_4, &Program::Event_Up);
+		return new ShortcutAxis(DEFAULT_KEY_UP, DEFAULT_CBINDING_VERTICAL, DEFAULT_CTYPE_7, &Program::Event_Up);
 	else if (name == SHORTCUT_DOWN)
-		return new ShortcutAxis(DEFAULT_KEY_DOWN, DEFAULT_CBINDING_VERTICAL, DEFAULT_CTYPE_3, &Program::Event_Down);
+		return new ShortcutAxis(DEFAULT_KEY_DOWN, DEFAULT_CBINDING_VERTICAL, DEFAULT_CTYPE_6, &Program::Event_Down);
 	else if (name == SHORTCUT_RIGHT)
-		return new ShortcutAxis(DEFAULT_KEY_RIGHT, DEFAULT_CBINDING_HORIZONTAL, DEFAULT_CTYPE_3, &Program::Event_Right);
+		return new ShortcutAxis(DEFAULT_KEY_RIGHT, DEFAULT_CBINDING_HORIZONTAL, DEFAULT_CTYPE_6, &Program::Event_Right);
 	else if (name == SHORTCUT_LEFT)
-		return new ShortcutAxis(DEFAULT_KEY_LEFT, DEFAULT_CBINDING_HORIZONTAL, DEFAULT_CTYPE_4, &Program::Event_Left);
+		return new ShortcutAxis(DEFAULT_KEY_LEFT, DEFAULT_CBINDING_HORIZONTAL, DEFAULT_CTYPE_7, &Program::Event_Left);
 	else if (name == SHORTCUT_CURSOR_UP)
-		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_VERT, DEFAULT_CTYPE_4, &Program::Event_CursorUp);
+		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_VERT, DEFAULT_CTYPE_7, &Program::Event_CursorUp);
 	else if (name == SHORTCUT_CURSOR_DOWN)
-		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_VERT, DEFAULT_CTYPE_3, &Program::Event_CursorDown);
+		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_VERT, DEFAULT_CTYPE_6, &Program::Event_CursorDown);
 	else if (name == SHORTCUT_CURSOR_RIGHT)
-		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_HORI, DEFAULT_CTYPE_3, &Program::Event_CursorRight);
+		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_HORI, DEFAULT_CTYPE_6, &Program::Event_CursorRight);
 	else if (name == SHORTCUT_CURSOR_LEFT)
-		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_HORI, DEFAULT_CTYPE_4, &Program::Event_CursorLeft);
+		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_HORI, DEFAULT_CTYPE_7, &Program::Event_CursorLeft);
 	return nullptr;
 }

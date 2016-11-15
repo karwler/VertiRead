@@ -224,153 +224,236 @@ void TextEdit::CheckText() {
 	CheckCaret();
 }
 
+// CONTROLLER
+
+Controller::Controller() :
+	joystick(nullptr),
+	gamepad(nullptr)
+{}
+
+bool Controller::Open(int id) {
+	if (SDL_IsGameController(id))
+		gamepad = SDL_GameControllerOpen(id);
+
+	joystick = (gamepad) ? SDL_GameControllerGetJoystick(gamepad) : SDL_JoystickOpen(id);
+	return joystick != nullptr;
+}
+
+void Controller::Close() {
+	if (gamepad) {
+		SDL_GameControllerClose(gamepad);
+		gamepad = nullptr;
+		joystick = nullptr;
+	}
+	else if (joystick) {
+		SDL_JoystickClose(joystick);
+		joystick = nullptr;
+	}
+}
+
 // SHORTCUT
 
 Shortcut::Shortcut()
 {
-	ClearKey();
-	ClearCtr();
+	ClearAsgKey();
+	ClearAsgCtr();
 }
 
 Shortcut::Shortcut(SDL_Scancode KEY)
 {
 	Key(KEY);
-	ClearCtr();
+	ClearAsgCtr();
 }
 
-Shortcut::Shortcut(uint8 JCT, EKey jctType)
+Shortcut::Shortcut(uint8 CTR, EAssgnment ASG)
 {
-	ClearKey();
-	switch (jctType) {
-	case K_BUTTON:
-		JButton(JCT);
+	ClearAsgKey();
+	switch (ASG) {
+	case ASG_JBUTTON:
+		JButton(CTR);
 		break;
-	case K_HAT:
-		JHat(JCT);
+	case ASG_JAXIS_P:
+		JAxis(CTR, true);
 		break;
-	case K_AXIS_P:
-		JAxis(JCT, true);
+	case ASG_JAXIS_N:
+		JAxis(CTR, false);
 		break;
-	case K_AXIS_N:
-		JAxis(JCT, false);
+	case ASG_GBUTTON:
+		GButton(CTR);
+		break;
+	case ASG_GAXIS_P:
+		GAxis(CTR, true);
+		break;
+	case ASG_GAXIS_N:
+		GAxis(CTR, false);
 		break;
 	default:
-		ClearCtr();
+		ClearAsgCtr();
 	}
 }
 
-Shortcut::Shortcut(SDL_Scancode KEY, uint8 JCT, EKey jctType)
+Shortcut::Shortcut(uint8 HAT, uint8 VAL)
+{
+	ClearAsgKey();
+	JHat(HAT, VAL);
+}
+
+Shortcut::Shortcut(SDL_Scancode KEY, uint8 CTR, EAssgnment ASG)
 {
 	Key(KEY);
-	switch (jctType) {
-	case K_BUTTON:
-		JButton(JCT);
+	switch (ASG) {
+	case ASG_JBUTTON:
+		JButton(CTR);
 		break;
-	case K_HAT:
-		JHat(JCT);
+	case ASG_JAXIS_P:
+		JAxis(CTR, true);
 		break;
-	case K_AXIS_P:
-		JAxis(JCT, true);
+	case ASG_JAXIS_N:
+		JAxis(CTR, false);
 		break;
-	case K_AXIS_N:
-		JAxis(JCT, false);
+	case ASG_GBUTTON:
+		GButton(CTR);
+		break;
+	case ASG_GAXIS_P:
+		GAxis(CTR, true);
+		break;
+	case ASG_GAXIS_N:
+		GAxis(CTR, false);
 		break;
 	default:
-		ClearCtr();
+		ClearAsgCtr();
 	}
+}
+
+Shortcut::Shortcut(SDL_Scancode KEY, uint8 HAT, uint8 VAL)
+{
+	Key(KEY);
+	JHat(HAT, VAL);
 }
 
 Shortcut::~Shortcut() {}
-
-bool Shortcut::KeyAssigned() const {
-	return assigned & K_KEY;
-}
 
 SDL_Scancode Shortcut::Key() const {
 	return key;
 }
 
-void Shortcut::Key(SDL_Scancode KEY) {
-	key = KEY;
-	assigned |= K_KEY;
+bool Shortcut::KeyAssigned() const {
+	return asg & ASG_KEY;
 }
 
-void Shortcut::ClearKey() {
-	assigned ^= assigned & K_KEY;
+void Shortcut::Key(SDL_Scancode KEY) {
+	key = KEY;
+	asg |= ASG_KEY;
+}
+
+void Shortcut::ClearAsgKey() {
+	asg ^= asg & ASG_KEY;
+}
+
+uint8 Shortcut::CtrID() const {
+	return ctrID;
 }
 
 bool Shortcut::JButtonAssigned() const {
-	return assigned & K_BUTTON;
+	return asg & ASG_JBUTTON;
 }
 
-bool Shortcut::JHatAssigned() const {
-	return assigned & K_HAT;
+void Shortcut::JButton(uint8 BUT) {
+	ctrID = BUT;
+
+	ClearAsgCtr();
+	asg |= ASG_JBUTTON;
 }
 
 bool Shortcut::JAxisAssigned() const {
-	return (assigned & K_AXIS_P) || (assigned & K_AXIS_N);
+	return (asg & ASG_JAXIS_P) || (asg & ASG_JAXIS_N);
 }
 
 bool Shortcut::JPosAxisAssigned() const {
-	return assigned & K_AXIS_P;
+	return asg & ASG_JAXIS_P;
 }
 
 bool Shortcut::JNegAxisAssigned() const {
-	return assigned & K_AXIS_N;
-}
-
-uint8 Shortcut::JCtr() const {
-	return jctr;
-}
-
-void Shortcut::JButton(uint8 BUTT) {
-	jctr = BUTT;
-	assigned ^= assigned & (K_HAT | K_AXIS_P | K_AXIS_N);
-	assigned |= K_BUTTON;
-}
-
-void Shortcut::JHat(uint8 HAT) {
-	jctr = HAT;
-	assigned ^= assigned & (K_BUTTON | K_AXIS_P | K_AXIS_N);
-	assigned |= K_HAT;
+	return asg & ASG_JAXIS_N;
 }
 
 void Shortcut::JAxis(uint8 AXIS, bool positive) {
-	jctr = AXIS;
-	if (positive) {
-		assigned ^= assigned & (K_BUTTON | K_HAT | K_AXIS_N);
-		assigned |= K_AXIS_P;
-	}
-	else {
-		assigned ^= assigned & (K_BUTTON | K_HAT | K_AXIS_P);
-		assigned |= K_AXIS_N;
-	}
+	ctrID = AXIS;
+
+	ClearAsgCtr();
+	asg |= (positive) ? ASG_JAXIS_P : ASG_JAXIS_N;
 }
 
-void Shortcut::ClearCtr() {
-	assigned &= K_KEY;
+uint8 Shortcut::JHatVal() const {
+	return jHatVal;
 }
 
-Shortcut::EKey operator~(Shortcut::EKey a) {
-	return static_cast<Shortcut::EKey>(~static_cast<uint8>(a));
+bool Shortcut::JHatAssigned() const {
+	return asg & ASG_JHAT;
 }
-Shortcut::EKey operator&(Shortcut::EKey a, Shortcut::EKey b) {
-	return static_cast<Shortcut::EKey>(static_cast<uint8>(a) & static_cast<uint8>(b));
+
+void Shortcut::JHat(uint8 HAT, uint8 VAL) {
+	ctrID = HAT;
+	jHatVal = VAL;
+
+	ClearAsgCtr();
+	asg |= ASG_JHAT;
 }
-Shortcut::EKey operator&=(Shortcut::EKey& a, Shortcut::EKey b) {
-	return a = static_cast<Shortcut::EKey>(static_cast<uint8>(a) & static_cast<uint8>(b));
+
+bool Shortcut::GButtonAssigned() const {
+	return asg & ASG_GBUTTON;
 }
-Shortcut::EKey operator^(Shortcut::EKey a, Shortcut::EKey b) {
-	return static_cast<Shortcut::EKey>(static_cast<uint8>(a) ^ static_cast<uint8>(b));
+
+void Shortcut::GButton(uint8 BUT) {
+	ctrID = BUT;
+
+	ClearAsgCtr();
+	asg = ASG_GBUTTON;
 }
-Shortcut::EKey operator^=(Shortcut::EKey& a, Shortcut::EKey b) {
-	return a = static_cast<Shortcut::EKey>(static_cast<uint8>(a) ^ static_cast<uint8>(b));
+
+bool Shortcut::GAxisAssigned() const {
+	return (asg & ASG_GAXIS_P) || (asg & ASG_GAXIS_N);
 }
-Shortcut::EKey operator|(Shortcut::EKey a, Shortcut::EKey b) {
-	return static_cast<Shortcut::EKey>(static_cast<uint8>(a) | static_cast<uint8>(b));
+
+bool Shortcut::GPosAxisAssigned() const {
+	return asg & ASG_GAXIS_P;
 }
-Shortcut::EKey operator|=(Shortcut::EKey& a, Shortcut::EKey b) {
-	return a = static_cast<Shortcut::EKey>(static_cast<uint8>(a) | static_cast<uint8>(b));
+
+bool Shortcut::GNegAxisAssigned() const {
+	return asg & ASG_GAXIS_N;
+}
+
+void Shortcut::GAxis(uint8 AXIS, bool positive) {
+	ctrID = AXIS;
+
+	ClearAsgCtr();
+	asg |= (positive) ? ASG_GAXIS_P : ASG_GAXIS_N;
+}
+
+void Shortcut::ClearAsgCtr() {
+	asg &= ASG_KEY;
+}
+
+Shortcut::EAssgnment operator~(Shortcut::EAssgnment a) {
+	return static_cast<Shortcut::EAssgnment>(~static_cast<uint8>(a));
+}
+Shortcut::EAssgnment operator&(Shortcut::EAssgnment a, Shortcut::EAssgnment b) {
+	return static_cast<Shortcut::EAssgnment>(static_cast<uint8>(a) & static_cast<uint8>(b));
+}
+Shortcut::EAssgnment operator&=(Shortcut::EAssgnment& a, Shortcut::EAssgnment b) {
+	return a = static_cast<Shortcut::EAssgnment>(static_cast<uint8>(a) & static_cast<uint8>(b));
+}
+Shortcut::EAssgnment operator^(Shortcut::EAssgnment a, Shortcut::EAssgnment b) {
+	return static_cast<Shortcut::EAssgnment>(static_cast<uint8>(a) ^ static_cast<uint8>(b));
+}
+Shortcut::EAssgnment operator^=(Shortcut::EAssgnment& a, Shortcut::EAssgnment b) {
+	return a = static_cast<Shortcut::EAssgnment>(static_cast<uint8>(a) ^ static_cast<uint8>(b));
+}
+Shortcut::EAssgnment operator|(Shortcut::EAssgnment a, Shortcut::EAssgnment b) {
+	return static_cast<Shortcut::EAssgnment>(static_cast<uint8>(a) | static_cast<uint8>(b));
+}
+Shortcut::EAssgnment operator|=(Shortcut::EAssgnment& a, Shortcut::EAssgnment b) {
+	return a = static_cast<Shortcut::EAssgnment>(static_cast<uint8>(a) | static_cast<uint8>(b));
 }
 
 // SHORTCUT KEY
@@ -385,13 +468,23 @@ ShortcutKey::ShortcutKey(SDL_Scancode KEY, void (Program::*CALL)()) :
 	call(CALL)
 {}
 
-ShortcutKey::ShortcutKey(uint8 JCT, EKey jctType, void (Program::*CALL)()) :
-	Shortcut(JCT, jctType),
+ShortcutKey::ShortcutKey(uint8 CTR, EAssgnment ASG, void (Program::*CALL)()) :
+	Shortcut(CTR, ASG),
 	call(CALL)
 {}
 
-ShortcutKey::ShortcutKey(SDL_Scancode KEY, uint8 JCT, EKey jctType, void (Program::*CALL)()) :
-	Shortcut(KEY, JCT, jctType),
+ShortcutKey::ShortcutKey(uint8 HAT, uint8 VAL, void (Program::*CALL)()) :
+	Shortcut(HAT, VAL),
+	call(CALL)
+{}
+
+ShortcutKey::ShortcutKey(SDL_Scancode KEY, uint8 CTR, EAssgnment ASG, void (Program::*CALL)()) :
+	Shortcut(KEY, CTR, ASG),
+	call(CALL)
+{}
+
+ShortcutKey::ShortcutKey(SDL_Scancode KEY, uint8 HAT, uint8 VAL, void (Program::*CALL)()) :
+	Shortcut(KEY, HAT, VAL),
 	call(CALL)
 {}
 
@@ -409,13 +502,23 @@ ShortcutAxis::ShortcutAxis(SDL_Scancode KEY, void (Program::*CALL)(float)) :
 	call(CALL)
 {}
 
-ShortcutAxis::ShortcutAxis(uint8 JCT, EKey jctType, void (Program::*CALL)(float)) :
-	Shortcut(JCT, jctType),
+ShortcutAxis::ShortcutAxis(uint8 CTR, EAssgnment ASG, void (Program::*CALL)(float)) :
+	Shortcut(CTR, ASG),
 	call(CALL)
 {}
 
-ShortcutAxis::ShortcutAxis(SDL_Scancode KEY, uint8 JCT, EKey jctType, void (Program::*CALL)(float)) :
-	Shortcut(KEY, JCT, jctType),
+ShortcutAxis::ShortcutAxis(uint8 HAT, uint8 VAL, void (Program::*CALL)(float)) :
+	Shortcut(HAT, VAL),
+	call(CALL)
+{}
+
+ShortcutAxis::ShortcutAxis(SDL_Scancode KEY, uint8 CTR, EAssgnment ASG, void (Program::*CALL)(float)) :
+	Shortcut(KEY, CTR, ASG),
+	call(CALL)
+{}
+
+ShortcutAxis::ShortcutAxis(SDL_Scancode KEY, uint8 HAT, uint8 VAL, void (Program::*CALL)(float)) :
+	Shortcut(KEY, HAT, VAL),
 	call(CALL)
 {}
 
@@ -429,7 +532,7 @@ Playlist::Playlist(const string& NAME, const vector<string>& SGS, const vector<s
 	books(BKS)
 {}
 
-string Playlist::songPath(uint id) const {
+string Playlist::songPath(size_t id) const {
 	return isAbsolute(songs[id]) ? songs[id] : parentPath(World::scene()->Settings().PlaylistPath() + name) + songs[id];
 }
 
