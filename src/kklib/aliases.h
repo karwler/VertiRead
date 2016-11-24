@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstdint>
 
-using byte = unsigned char;
 using uchar = unsigned char;
 using ushort = unsigned short;
 using uint = unsigned int;
@@ -23,9 +22,11 @@ using int64 = int64_t;
 using uint64 = uint64_t;
 
 using char8 = char;
+using uchar8 = unsigned char;
 using char16 = char16_t;
 using char32 = char32_t;
 using wchar = wchar_t;
+using uwchar = unsigned wchar_t;
 
 namespace kk {
 
@@ -40,7 +41,7 @@ using vec2d = vec2<double>;
 template <typename T>
 struct vec3;
 
-using vec3b = vec3<byte>;
+using vec3c = vec3<uchar>;
 using vec3i = vec3<int>;
 using vec3u = vec3<uint>;
 using vec3f = vec3<float>;
@@ -49,7 +50,7 @@ using vec3d = vec3<double>;
 template <typename T>
 struct vec4;
 
-using vec4b = vec4<byte>;
+using vec4c = vec4<uchar>;
 using vec4i = vec4<int>;
 using vec4u = vec4<uint>;
 using vec4f = vec4<float>;

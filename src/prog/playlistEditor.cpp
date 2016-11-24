@@ -13,7 +13,7 @@ Playlist PlaylistEditor::getPlaylist() const {
 
 void PlaylistEditor::LoadPlaylist(const string& playlist) {
 	pList = Filer::LoadPlaylist(playlist);
-	selected = -1;
+	selected = false;
 }
 
 void PlaylistEditor::AddSong(string path) {
@@ -29,13 +29,13 @@ void PlaylistEditor::AddSong(string path) {
 }
 
 void PlaylistEditor::RenameSong(const string& path) {
-	pList.songs[selected] = path;
+	pList.songs[selected.id] = path;
 }
 
 void PlaylistEditor::DelSong() {
-	if (selected != -1) {
-		pList.songs.erase(pList.songs.begin()+selected);
-		selected = -1;
+	if (selected.sl) {
+		pList.songs.erase(pList.songs.begin()+selected.id);
+		selected = false;
 	}
 }
 
@@ -45,13 +45,13 @@ void PlaylistEditor::AddBook(const string& name) {
 }
 
 void PlaylistEditor::RenameBook(const string& name) {
-	pList.books[selected] = name;
+	pList.books[selected.id] = name;
 }
 
 void PlaylistEditor::DelBook() {
-	if (selected != -1) {
-		pList.books.erase(pList.books.begin()+selected);
-		selected = -1;
+	if (selected.sl) {
+		pList.books.erase(pList.books.begin()+selected.id);
+		selected = false;
 	}
 }
 

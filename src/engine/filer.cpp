@@ -107,7 +107,7 @@ vector<string> Filer::GetAvailibleThemes() {
 	return themes;
 }
 
-void Filer::GetColors(map<EColor, vec4b>& colors, const string& theme) {
+void Filer::GetColors(map<EColor, vec4c>& colors, const string& theme) {
 	vector<string> lines;
 	if (!ReadTextFile(dirData + "themes.ini", lines), false)
 		return;
@@ -347,7 +347,7 @@ ControlsSettings Filer::LoadControlsSettings() {
 			sets.deadzone = stoi(val);
 		else if (arg == "shortcut" && sets.shortcuts.count(key) != 0) {		// shortcuts have to already contain a variable for this key
 			Shortcut* sc = sets.shortcuts[key];
-			switch (std::toupper(val[0])) {
+			switch (toupper(val[0])) {
 			case 'K':	// keyboard key
 				sc->Key(SDL_GetScancodeFromName(val.substr(2).c_str()));
 				break;
@@ -384,16 +384,18 @@ void Filer::SaveSettings(const ControlsSettings& sets) {
 		vector<string> values;
 		if (it.second->KeyAssigned())
 			values.push_back("K_" + string(SDL_GetScancodeName(it.second->Key())));
+
 		if (it.second->JButtonAssigned())
-			values.push_back("B_" + to_string(it.second->CtrID()));
+			values.push_back("B_" + to_string(it.second->JctID()));
 		else if (it.second->JHatAssigned())
-			values.push_back("H_" + to_string(it.second->CtrID()) + "_" + jtHatToStr(it.second->JHatVal()));
+			values.push_back("H_" + to_string(it.second->JctID()) + "_" + jtHatToStr(it.second->JHatVal()));
 		else if (it.second->JAxisAssigned())
-			values.push_back(string(it.second->JPosAxisAssigned() ? "A_+" : "A_-") + to_string(it.second->CtrID()));
+			values.push_back(string(it.second->JPosAxisAssigned() ? "A_+" : "A_-") + to_string(it.second->JctID()));
+
+		if (it.second->GButtonAssigned())
+			values.push_back("G_" + gpButtonToStr(it.second->GctID()));
 		else if (it.second->GButtonAssigned())
-			values.push_back("G_" + gpButtonToStr(it.second->CtrID()));
-		else if (it.second->GButtonAssigned())
-			values.push_back(string(it.second->GPosAxisAssigned() ? "X_+" : "X_-") + gpAxisToStr(it.second->CtrID()));
+			values.push_back(string(it.second->GPosAxisAssigned() ? "X_+" : "X_-") + gpAxisToStr(it.second->GctID()));
 
 		for (string& val : values)
 			lines.push_back("shortcut[" + it.first + "]=" + val);

@@ -1,4 +1,3 @@
-#include "scene.h"
 #include "world.h"
 
 Scene::Scene(const GeneralSettings& SETS) :

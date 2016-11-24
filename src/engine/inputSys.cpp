@@ -126,7 +126,7 @@ void InputSys::CheckShortcutsK(SDL_Scancode key) {
 void InputSys::CheckShortcutsB(uint8 jbutton) {
 	for (const pair<string, Shortcut*>& it : sets.shortcuts)
 		if (ShortcutKey* sc = dynamic_cast<ShortcutKey*>(it.second))
-			if (sc->JButtonAssigned() && sc->CtrID() == jbutton && sc->call) {
+			if (sc->JButtonAssigned() && sc->JctID() == jbutton && sc->call) {
 				(World::program()->*sc->call)();
 				break;
 			}
@@ -135,7 +135,7 @@ void InputSys::CheckShortcutsB(uint8 jbutton) {
 void InputSys::CheckShortcutsH(uint8 jhat, uint8 val) {
 	for (const pair<string, Shortcut*>& it : sets.shortcuts)
 		if (ShortcutKey* sc = dynamic_cast<ShortcutKey*>(it.second))
-			if (sc->JHatAssigned() && sc->CtrID() == jhat && sc->JHatVal() == val && sc->call) {
+			if (sc->JHatAssigned() && sc->JctID() == jhat && sc->JHatVal() == val && sc->call) {
 				(World::program()->*sc->call)();
 				break;
 			}
@@ -144,7 +144,7 @@ void InputSys::CheckShortcutsH(uint8 jhat, uint8 val) {
 void InputSys::CheckShortcutsA(uint8 jaxis, bool positive) {
 	for (const pair<string, Shortcut*>& it : sets.shortcuts)
 		if (ShortcutKey* sc = dynamic_cast<ShortcutKey*>(it.second))
-			if (((sc->JPosAxisAssigned() && positive) || (sc->JNegAxisAssigned() && !positive)) && sc->CtrID() == jaxis && sc->call) {
+			if (((sc->JPosAxisAssigned() && positive) || (sc->JNegAxisAssigned() && !positive)) && sc->JctID() == jaxis && sc->call) {
 				(World::program()->*sc->call)();
 				break;
 			}
@@ -153,7 +153,7 @@ void InputSys::CheckShortcutsA(uint8 jaxis, bool positive) {
 void InputSys::CheckShortcutsG(uint8 gbutton) {
 	for (const pair<string, Shortcut*>& it : sets.shortcuts)
 		if (ShortcutKey* sc = dynamic_cast<ShortcutKey*>(it.second))
-			if (sc->GButtonAssigned() && sc->CtrID() == gbutton && sc->call) {
+			if (sc->GButtonAssigned() && sc->GctID() == gbutton && sc->call) {
 				(World::program()->*sc->call)();
 				break;
 			}
@@ -162,7 +162,7 @@ void InputSys::CheckShortcutsG(uint8 gbutton) {
 void InputSys::CheckShortcutsX(uint8 gaxis, bool positive) {
 	for (const pair<string, Shortcut*>& it : sets.shortcuts)
 		if (ShortcutKey* sc = dynamic_cast<ShortcutKey*>(it.second))
-			if (((sc->GPosAxisAssigned() && positive) || (sc->GNegAxisAssigned() && !positive)) && sc->CtrID() == gaxis && sc->call) {
+			if (((sc->GPosAxisAssigned() && positive) || (sc->GNegAxisAssigned() && !positive)) && sc->GctID() == gaxis && sc->call) {
 				(World::program()->*sc->call)();
 				break;
 			}
@@ -178,30 +178,34 @@ bool InputSys::isPressed(const string& holder, float* amt) const {
 }
 
 bool InputSys::isPressed(const ShortcutAxis* sc, float* amt) const {
-	if (sc->KeyAssigned() && SDL_GetKeyboardState(nullptr)[sc->Key()])	// check keyboard keys
-		return true;
+	if (sc->KeyAssigned()) {			// check keyboard keys
+		if (SDL_GetKeyboardState(nullptr)[sc->Key()])
+			return true;
+	}
+
 	if (sc->JButtonAssigned()) {		// check controller buttons
-		if (isPressedB(sc->CtrID()))
+		if (isPressedB(sc->JctID()))
 			return true;
 	}
 	else if (sc->JHatAssigned()) {
-		if (isPressedH(sc->CtrID(), sc->JHatVal()))
+		if (isPressedH(sc->JctID(), sc->JHatVal()))
 			return true;
 	}
 	else if (sc->JAxisAssigned()) {		// check controller axes
-		float val = getAxisJ(sc->CtrID());
+		float val = getAxisJ(sc->JctID());
 		if ((sc->JPosAxisAssigned() && val > 0.f) || (sc->JNegAxisAssigned() && val < 0.f)) {
 			if (amt)
 				*amt = (sc->JPosAxisAssigned()) ? val : -val;
 			return true;
 		}
 	}
-	else if (sc->GButtonAssigned()) {		// check controller buttons
-		if (isPressedG(sc->CtrID()))
+
+	if (sc->GButtonAssigned()) {		// check controller buttons
+		if (isPressedG(sc->GctID()))
 			return true;
 	}
 	else if (sc->GAxisAssigned()) {		// check controller axes
-		float val = getAxisG(sc->CtrID());
+		float val = getAxisG(sc->GctID());
 		if ((sc->GPosAxisAssigned() && val > 0.f) || (sc->GNegAxisAssigned() && val < 0.f)) {
 			if (amt)
 				*amt = (sc->GPosAxisAssigned()) ? val : -val;
@@ -228,7 +232,7 @@ bool InputSys::isPressedB(uint8 jbutton) const {
 
 bool InputSys::isPressedG(uint8 gbutton) const {
 	for (const Controller& it : controllers)
-		if (it.gamepad && SDL_GameControllerGetButton(it.gamepad, static_cast<SDL_GameControllerButton>(gbutton)));
+		if (it.gamepad && SDL_GameControllerGetButton(it.gamepad, static_cast<SDL_GameControllerButton>(gbutton)))
 			return true;
 	return false;
 }

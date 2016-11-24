@@ -2,32 +2,22 @@
 #include <algorithm>
 #include <cctype>
 
-bool isNum(const string& str) {
-	if (str.empty())
-		return false;
-
-	for (char c : str)
-		if (!std::isdigit(c))
-			return false;
-	return true;
-}
-
-long NSC_GetNextNum(const string& str, size_t start, size_t& length) {
+ullong NSC_GetNextNum(const string& str, size_t start, size_t& length) {
 	size_t i = start;
-	while (i != str.size() && std::isdigit(str[i]))
+	while (i != str.size() && isdigit(str[i]))
 		i++;
 
 	length = i - start;
-	return stol(str.substr(start, length));
+	return stoull(str.substr(start, length));
 }
 
 bool numStrCompare(const string& sa, const string& sb) {
 	size_t ia = 0, ib = 0;
 	while (ia != sa.size() && ib != sb.size()) {
-		if (std::isdigit(sa[ia]) && std::isdigit(sb[ib])) {
+		if (isdigit(sa[ia]) && isdigit(sb[ib])) {
 			size_t la, lb;
-			long na = NSC_GetNextNum(sa, ia, la);
-			long nb = NSC_GetNextNum(sb, ib, lb);
+			ullong na = NSC_GetNextNum(sa, ia, la);
+			ullong nb = NSC_GetNextNum(sb, ib, lb);
 
 			if (na != nb)
 				return na < nb;
@@ -49,7 +39,7 @@ bool strcmpCI(const string& strl, const string& strr) {
 		return false;
 
 	for (size_t i=0; i!=strl.length(); i++)
-		if (std::tolower(strl[i]) != std::tolower(strr[i]))
+		if (tolower(strl[i]) != tolower(strr[i]))
 			return false;
 	return true;
 }
@@ -125,13 +115,13 @@ string modifyCase(string str, ETextCase caseChange) {
 	switch (caseChange) {
 	case ETextCase::first_upper:
 		if (!str.empty())
-			str[0] = std::toupper(str[0]);
+			str[0] = toupper(str[0]);
 		break;
 	case ETextCase::all_upper:
-		std::transform(str.begin(), str.end(), str.begin(), std::toupper);
+		std::transform(str.begin(), str.end(), str.begin(), toupper);
 		break;
 	case ETextCase::all_lower:
-		std::transform(str.begin(), str.end(), str.begin(), std::tolower);
+		std::transform(str.begin(), str.end(), str.begin(), tolower);
 	}
 	return str;
 }
@@ -334,7 +324,7 @@ string jtHatToStr(uint8 jhat) {
 }
 
 uint8 jtStrToHat(string str) {
-	std::transform(str.begin(), str.end(), str.begin(), std::tolower);
+	std::transform(str.begin(), str.end(), str.begin(), tolower);
 	if (str == "center")
 		return SDL_HAT_CENTERED;
 	if (str == "up")
@@ -373,9 +363,9 @@ string gpButtonToStr(uint8 gbutton) {
 	case SDL_CONTROLLER_BUTTON_START:
 		return "Start";
 	case SDL_CONTROLLER_BUTTON_LEFTSTICK:
-		return "Stick L";
+		return "LS";
 	case SDL_CONTROLLER_BUTTON_RIGHTSTICK:
-		return "Stick R";
+		return "RS";
 	case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
 		return "LB";
 	case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
@@ -393,7 +383,7 @@ string gpButtonToStr(uint8 gbutton) {
 }
 
 uint8 gpStrToButton(string str) {
-	std::transform(str.begin(), str.end(), str.begin(), std::tolower);
+	std::transform(str.begin(), str.end(), str.begin(), tolower);
 	if (str == "a")
 		return SDL_CONTROLLER_BUTTON_A;
 	if (str == "b")
@@ -408,9 +398,9 @@ uint8 gpStrToButton(string str) {
 		return SDL_CONTROLLER_BUTTON_GUIDE;
 	if (str == "start")
 		return SDL_CONTROLLER_BUTTON_START;
-	if (str == "stick l")
+	if (str == "ls")
 		return SDL_CONTROLLER_BUTTON_LEFTSTICK;
-	if (str == "stick r")
+	if (str == "rs")
 		return SDL_CONTROLLER_BUTTON_RIGHTSTICK;
 	if (str == "lb")
 		return SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
@@ -446,7 +436,7 @@ string gpAxisToStr(uint8 gaxis) {
 }
 
 uint8 gpStrToAxis(string str) {
-	std::transform(str.begin(), str.end(), str.begin(), std::tolower);
+	std::transform(str.begin(), str.end(), str.begin(), tolower);
 	if (str == "lx")
 		return SDL_CONTROLLER_AXIS_LEFTX;
 	if (str == "ly")

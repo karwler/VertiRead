@@ -31,7 +31,8 @@ using std::to_string;
 
 using kk::vec2i;
 using kk::vec2f;
-using kk::vec4b;
+using kk::vec4c;
+
 using vec2t = kk::vec2<size_t>;
 
 #ifdef main
@@ -55,7 +56,6 @@ class ListBox;
 class Capturer;
 
 // files and strings
-bool isNum(const string& str);
 bool numStrCompare(const string& sa, const string& sb);
 bool strcmpCI(const string& strl, const string& strr);
 bool findChar(const string& str, char c, size_t* id=nullptr);

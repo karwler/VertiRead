@@ -44,7 +44,7 @@ void Program::Event_PageUp() {
 
 void Program::Event_PageDown() {
 	if (ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject())) {
-		int i = box->VisiblePictures().x;
+		size_t i = box->VisiblePictures().x;
 		i += (i == box->Pictures().size()-1) ? 0 : 1;
 		box->ScrollList(box->getImage(i).pos.y);
 	}
@@ -340,8 +340,6 @@ void Program::Event_Ok() {
 		World::PlaySound("click");
 		World::scene()->SetPopup(nullptr);
 	}
-	else if (curMenu == EMenu::playlists || curMenu == EMenu::plistEditor)
-		Event_EditButtonClick();
 	else
 		World::scene()->OnMouseDown(EClick::left, false);	// simulate mouse single left click
 }
@@ -596,7 +594,7 @@ void Program::SwitchScene(void* dat) const {
 		break; }
 	case EMenu::plistEditor: {
 		// option buttons
-		sizT.x = 100;
+		sizT.x = 120;
 		objects = {
 			new ButtonText(Object(vec2i(0, 50),  -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_BrowseButtonClick, World::library()->getLine("browse")),
 			new ButtonText(Object(vec2i(0, 100), -1, sizT, FIX_ANC | FIX_SIZ), &Program::Event_AddButtonClick, World::library()->getLine("add")),

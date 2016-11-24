@@ -43,8 +43,8 @@ SDL_Rect ScrollArea::Slider() const {
 	return { End().x-barW, SliderY(), BarW(), sliderH };
 }
 
-int ScrollArea::SelectedItem() const {
-	return -1;
+btsel ScrollArea::SelectedItem() const {
+	return btsel();
 }
 
 int ScrollArea::BarW() const {
@@ -119,11 +119,11 @@ SDL_Rect ListBox::ItemRect(int i, SDL_Rect* Crop, EColor* color) const {
 	return cropRect(rect, crop);
 }
 
-int ListBox::SelectedItem() const {
-	for (int i=0; i!=items.size(); i++)
+btsel ListBox::SelectedItem() const {
+	for (size_t i=0; i!=items.size(); i++)
 		if (items[i] == selectedItem)
 			return i;
-	return -1;
+	return btsel();
 }
 
 vec2t ListBox::VisibleItems() const {
@@ -188,11 +188,11 @@ SDL_Rect TileBox::ItemRect(int id, SDL_Rect* Crop, EColor* color) const {
 	return cropRect(rect, crop);
 }
 
-int TileBox::SelectedItem() const {
-	for (int i=0; i!=items.size(); i++)
+btsel TileBox::SelectedItem() const {
+	for (size_t i=0; i!=items.size(); i++)
 		if (items[i] == selectedItem)
 			return i;
-	return -1;
+	return btsel();
 }
 
 vec2t TileBox::VisibleItems() const {
@@ -408,7 +408,7 @@ vector<ButtonImage>& ReaderBox::PlayerButtons() {
 	return playerButtons;
 }
 
-Image ReaderBox::getImage(int i, SDL_Rect* Crop) const {
+Image ReaderBox::getImage(size_t i, SDL_Rect* Crop) const {
 	Image img = pics[i];
 	img.size = vec2i(pics[i].size.x*zoom, pics[i].size.y*zoom);
 	img.pos = vec2i(Pos().x + Size().x/2 - img.size.x/2 - listX, pics[i].pos.y*zoom - listY);

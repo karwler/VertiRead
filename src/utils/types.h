@@ -116,9 +116,32 @@ private:
 
 	void CheckCaret();
 	void CheckText();
+
+	void CleanIntString(string& str);
+	void CleanFloatString(string& str);
 };
 
 // some random types
+
+template <typename T>
+struct idsel {
+	idsel() : id(0), sl(false) {}
+	idsel(T ID) : id(ID), sl(true) {}
+
+	T id;
+	bool sl;
+
+	idsel& operator=(T ID) {
+		id = ID;
+		sl = true;
+		return *this;
+	}
+	idsel& operator=(bool SL) {
+		sl = SL;
+		return *this;
+	}
+};
+using btsel = idsel<size_t>;
 
 struct Controller {
 	Controller();
@@ -133,6 +156,7 @@ struct Controller {
 class Shortcut {
 public:
 	enum EAssgnment : uint8 {
+		ASG_NONE	= 0x0,
 		ASG_KEY     = 0x1,
 		ASG_JBUTTON = 0x2,
 		ASG_JHAT    = 0x4,
@@ -140,23 +164,21 @@ public:
 		ASG_JAXIS_N = 0x10,	// use only negative values
 		ASG_GBUTTON = 0x20,
 		ASG_GAXIS_P = 0x40,
-		ASG_GAXIS_N = 0x80
+		ASG_GAXIS_N = 0x80,
 	};
 
 	Shortcut();
-	Shortcut(SDL_Scancode KEY);
-	Shortcut(uint8 CTR, EAssgnment ASG);		// ASG can't be ASG_KEY or ASG_JHAT
-	Shortcut(uint8 HAT, uint8 VAL);
-	Shortcut(SDL_Scancode KEY, uint8 CTR, EAssgnment ASG);
-	Shortcut(SDL_Scancode KEY, uint8 HAT, uint8 VAL);
 	virtual ~Shortcut();
 
 	SDL_Scancode Key() const;
 	bool KeyAssigned() const;
-	void Key(SDL_Scancode KEY);
 	void ClearAsgKey();
+	void Key(SDL_Scancode KEY);
 
-	uint8 CtrID() const;
+	uint8 JctID() const;
+	bool JctAssigned() const;
+	void ClearAsgJct();
+
 	bool JButtonAssigned() const;
 	void JButton(uint8 BUT);
 
@@ -169,6 +191,10 @@ public:
 	bool JHatAssigned() const;
 	void JHat(uint8 HAT, uint8 VAL);
 
+	uint8 GctID() const;
+	bool GctAssigned() const;
+	void ClearAsgGct();
+
 	bool GButtonAssigned() const;
 	void GButton(uint8 BUT);
 
@@ -177,13 +203,13 @@ public:
 	bool GNegAxisAssigned() const;
 	void GAxis(uint8 AXIS, bool positive);
 
-	void ClearAsgCtr();
 
 private:
-	EAssgnment asg;						// stores data for checking whether key and/or button/axis are assigned
-	SDL_Scancode key;					// keybord key
-	uint8 ctrID;						// controller control ID
-	uint8 jHatVal;						// joystick hat value
+	EAssgnment asg;		// stores data for checking whether key and/or button/axis are assigned
+	SDL_Scancode key;	// keybord key
+	uint8 jctID;		// joystick control ID
+	uint8 jHatVal;		// joystick hat value
+	uint8 gctID;		// gamepad control ID
 };
 Shortcut::EAssgnment operator~(Shortcut::EAssgnment a);
 Shortcut::EAssgnment operator&(Shortcut::EAssgnment a, Shortcut::EAssgnment b);
@@ -196,11 +222,6 @@ Shortcut::EAssgnment operator|=(Shortcut::EAssgnment& a, Shortcut::EAssgnment b)
 class ShortcutKey : public Shortcut {	// keys are handled by the event system
 public:
 	ShortcutKey(void (Program::*CALL)()=nullptr);
-	ShortcutKey(SDL_Scancode KEY, void (Program::*CALL)()=nullptr);
-	ShortcutKey(uint8 CTR, EAssgnment ASG, void (Program::*CALL)()=nullptr);
-	ShortcutKey(uint8 HAT, uint8 VAL, void (Program::*CALL)()=nullptr);
-	ShortcutKey(SDL_Scancode KEY, uint8 CTR, EAssgnment ASG, void (Program::*CALL)()=nullptr);
-	ShortcutKey(SDL_Scancode KEY, uint8 HAT, uint8 VAL, void (Program::*CALL)()=nullptr);
 	virtual ~ShortcutKey();
 
 	void (Program::*call)();
@@ -209,11 +230,6 @@ public:
 class ShortcutAxis : public Shortcut {	// axes are handled in the scene's tick function
 public:
 	ShortcutAxis(void (Program::*CALL)(float)=nullptr);
-	ShortcutAxis(SDL_Scancode KEY, void (Program::*CALL)(float)=nullptr);
-	ShortcutAxis(uint8 CTR, EAssgnment ASG, void (Program::*CALL)(float)=nullptr);
-	ShortcutAxis(uint8 HAT, uint8 VAL, void (Program::*CALL)(float)=nullptr);
-	ShortcutAxis(SDL_Scancode KEY, uint8 CTR, EAssgnment ASG, void (Program::*CALL)(float)=nullptr);
-	ShortcutAxis(SDL_Scancode KEY, uint8 HAT, uint8 VAL, void (Program::*CALL)(float)=nullptr);
 	virtual ~ShortcutAxis();
 
 	void (Program::*call)(float);

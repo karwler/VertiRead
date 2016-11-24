@@ -19,7 +19,7 @@ string GeneralSettings::Lang() const {
 
 void GeneralSettings::Lang(const string& language) {
 	lang = language;
-	std::transform(lang.begin(), lang.end(), lang.begin(), std::tolower);
+	std::transform(lang.begin(), lang.end(), lang.begin(), tolower);
 
 	if (!Filer::Exists(Filer::dirLangs+lang+".ini"))
 		lang = "english";
@@ -78,8 +78,8 @@ void VideoSettings::SetDefaultTheme() {
 	colors = GetDefaultColors();
 }
 
-map<EColor, vec4b> VideoSettings::GetDefaultColors() {
-	map<EColor, vec4b> colors = {
+map<EColor, vec4c> VideoSettings::GetDefaultColors() {
+	map<EColor, vec4c> colors = {
 		make_pair(EColor::background, GetDefaultColor(EColor::background)),
 		make_pair(EColor::rectangle, GetDefaultColor(EColor::rectangle)),
 		make_pair(EColor::highlighted, GetDefaultColor(EColor::highlighted)),
@@ -89,7 +89,7 @@ map<EColor, vec4b> VideoSettings::GetDefaultColors() {
 	return colors;
 }
 
-vec4b VideoSettings::GetDefaultColor(EColor color) {
+vec4c VideoSettings::GetDefaultColor(EColor color) {
 	switch (color) {
 	case EColor::background:
 		return DEFAULT_COLOR_BACKGROUND;
@@ -135,57 +135,154 @@ void ControlsSettings::FillMissingBindings() {
 }
 
 Shortcut* ControlsSettings::GetDefaultShortcut(const string& name) {
-	if (name == SHORTCUT_OK)
-		return new ShortcutKey(DEFAULT_KEY_OK, DEFAULT_CBINDING_OK, DEFAULT_CTYPE_0, &Program::Event_Ok);
-	else if (name == SHORTCUT_BACK)
-		return new ShortcutKey(DEFAULT_KEY_BACK, DEFAULT_CBINDING_BACK, DEFAULT_CTYPE_0, &Program::Event_Back);
-	else if (name == SHORTCUT_ZOOM_IN)
-		return new ShortcutKey(DEFAULT_KEY_ZOOM_IN, DEFAULT_CBINDING_ZOOM_IN, DEFAULT_CTYPE_0, &Program::Event_ZoomIn);
-	else if (name == SHORTCUT_ZOOM_OUT)
-		return new ShortcutKey(DEFAULT_KEY_ZOOM_OUT, DEFAULT_CBINDING_ZOOM_OUT, DEFAULT_CTYPE_0, &Program::Event_ZoomOut);
-	else if (name == SHORTCUT_ZOOM_RESET)
-		return new ShortcutKey(DEFAULT_KEY_ZOOM_RESET, DEFAULT_CBINDING_ZOOM_RESET, DEFAULT_CTYPE_0, &Program::Event_ZoomReset);
-	else if (name == SHORTCUT_CENTER_VIEW)
-		return new ShortcutKey(DEFAULT_KEY_CENTER_VIEW, DEFAULT_CBINDING_CENTER_VIEW, DEFAULT_CTYPE_0, &Program::Event_CenterView);
-	else if (name == SHORTCUT_FAST)
-		return new ShortcutAxis(DEFAULT_KEY_FAST, DEFAULT_CBINDING_FAST, DEFAULT_CTYPE_0);
-	else if (name == SHORTCUT_SLOW)
-		return new ShortcutAxis(DEFAULT_KEY_SLOW, DEFAULT_CBINDING_SLOW, DEFAULT_CTYPE_0);
-	else if (name == SHORTCUT_PLAY_PAUSE)
-		return new ShortcutKey(DEFAULT_KEY_PLAY_PAUSE, DEFAULT_CBINDING_PLAY_PAUSE, DEFAULT_CTYPE_0, &Program::Event_PlayPause);
-	else if (name == SHORTCUT_FULLSCREEN)
-		return new ShortcutKey(DEFAULT_KEY_FULLSCREEN, DEFAULT_CBINDING_FULLSCREEN, DEFAULT_CTYPE_0, &Program::Event_ScreenMode);
-	else if (name == SHORTCUT_NEXT_DIR)
-		return new ShortcutKey(DEFAULT_KEY_NEXT_DIR, DEFAULT_CBINDING_NEXT_DIR, DEFAULT_CTYPE_1, &Program::Event_NextDir);
-	else if (name == SHORTCUT_PREV_DIR)
-		return new ShortcutKey(DEFAULT_KEY_PREV_DIR, DEFAULT_CBINDING_PREV_DIR, DEFAULT_CTYPE_1, &Program::Event_PrevDir);
-	else if (name == SHORTCUT_NEXT_SONG)
-		return new ShortcutKey(DEFAULT_KEY_NEXT_SONG, DEFAULT_CBINDING_DPAD_RIGHT, DEFAULT_CTYPE_2, &Program::Event_NextSong);
-	else if (name == SHORTCUT_PREV_SONG)
-		return new ShortcutKey(DEFAULT_KEY_PREV_SONG, DEFAULT_CBINDING_DPAD_LEFT, DEFAULT_CTYPE_3, &Program::Event_PrevSong);
-	else if (name == SHORTCUT_VOLUME_UP)
-		return new ShortcutKey(DEFAULT_KEY_VOLUME_UP, DEFAULT_CBINDING_DPAD_UP, DEFAULT_CTYPE_4, &Program::Event_VolumeUp);
-	else if (name == SHORTCUT_VOLUME_DOWN)
-		return new ShortcutKey(DEFAULT_KEY_VOLUME_DOWN, DEFAULT_CBINDING_DPAD_DOWN, DEFAULT_CTYPE_5, &Program::Event_VolumeDown);
-	else if (name == SHORTCUT_PAGE_UP)
-		return new ShortcutKey(DEFAULT_KEY_PAGE_UP, &Program::Event_PageUp);
-	else if (name == SHORTCUT_PAGE_DOWN)
-		return new ShortcutKey(DEFAULT_KEY_PAGE_DOWN, &Program::Event_PageDown);
-	else if (name == SHORTCUT_UP)
-		return new ShortcutAxis(DEFAULT_KEY_UP, DEFAULT_CBINDING_VERTICAL, DEFAULT_CTYPE_7, &Program::Event_Up);
-	else if (name == SHORTCUT_DOWN)
-		return new ShortcutAxis(DEFAULT_KEY_DOWN, DEFAULT_CBINDING_VERTICAL, DEFAULT_CTYPE_6, &Program::Event_Down);
-	else if (name == SHORTCUT_RIGHT)
-		return new ShortcutAxis(DEFAULT_KEY_RIGHT, DEFAULT_CBINDING_HORIZONTAL, DEFAULT_CTYPE_6, &Program::Event_Right);
-	else if (name == SHORTCUT_LEFT)
-		return new ShortcutAxis(DEFAULT_KEY_LEFT, DEFAULT_CBINDING_HORIZONTAL, DEFAULT_CTYPE_7, &Program::Event_Left);
-	else if (name == SHORTCUT_CURSOR_UP)
-		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_VERT, DEFAULT_CTYPE_7, &Program::Event_CursorUp);
-	else if (name == SHORTCUT_CURSOR_DOWN)
-		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_VERT, DEFAULT_CTYPE_6, &Program::Event_CursorDown);
-	else if (name == SHORTCUT_CURSOR_RIGHT)
-		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_HORI, DEFAULT_CTYPE_6, &Program::Event_CursorRight);
-	else if (name == SHORTCUT_CURSOR_LEFT)
-		return new ShortcutAxis(DEFAULT_CBINDING_CURSOR_HORI, DEFAULT_CTYPE_7, &Program::Event_CursorLeft);
-	return nullptr;
+	Shortcut* shortcut = nullptr;
+	if (name == SHORTCUT_OK) {
+		shortcut = new ShortcutKey(&Program::Event_Ok);
+		shortcut->Key(DEFAULT_KEY_OK);
+		shortcut->JButton(DEFAULT_JBUTTON_OK);
+		shortcut->GButton(DEFAULT_GBUTTON_OK);
+	}
+	else if (name == SHORTCUT_BACK) {
+		shortcut = new ShortcutKey(&Program::Event_Back);
+		shortcut->Key(DEFAULT_KEY_BACK);
+		shortcut->JButton(DEFAULT_JBUTTON_BACK);
+		shortcut->GButton(DEFAULT_GBUTTON_BACK);
+	}
+	else if (name == SHORTCUT_ZOOM_IN) {
+		shortcut = new ShortcutKey(&Program::Event_ZoomIn);
+		shortcut->Key(DEFAULT_KEY_ZOOM_IN);
+		shortcut->JButton(DEFAULT_JBUTTON_ZOOM_IN);
+		shortcut->GButton(DEFAULT_GBUTTON_ZOOM_IN);
+	}
+	else if (name == SHORTCUT_ZOOM_OUT) {
+		shortcut = new ShortcutKey(&Program::Event_ZoomOut);
+		shortcut->Key(DEFAULT_KEY_ZOOM_OUT);
+		shortcut->JButton(DEFAULT_JBUTTON_ZOOM_OUT);
+		shortcut->GButton(DEFAULT_GBUTTON_ZOOM_OUT);
+	}
+	else if (name == SHORTCUT_ZOOM_RESET) {
+		shortcut = new ShortcutKey(&Program::Event_ZoomReset);
+		shortcut->Key(DEFAULT_KEY_ZOOM_RESET);
+		shortcut->JButton(DEFAULT_JBUTTON_ZOOM_RESET);
+		shortcut->GButton(DEFAULT_GBUTTON_ZOOM_RESET);
+	}
+	else if (name == SHORTCUT_CENTER_VIEW) {
+		shortcut = new ShortcutKey(&Program::Event_CenterView);
+		shortcut->Key(DEFAULT_KEY_CENTER_VIEW);
+		shortcut->JButton(DEFAULT_JBUTTON_CENTER_VIEW);
+		shortcut->GButton(DEFAULT_GBUTTON_CENTER_VIEW);
+	}
+	else if (name == SHORTCUT_FAST) {
+		shortcut = new ShortcutAxis();
+		shortcut->Key(DEFAULT_KEY_FAST);
+		shortcut->JButton(DEFAULT_JBUTTON_FAST);
+		shortcut->GButton(DEFAULT_GBUTTON_FAST);
+	}
+	else if (name == SHORTCUT_SLOW) {
+		shortcut = new ShortcutAxis();
+		shortcut->Key(DEFAULT_KEY_SLOW);
+		shortcut->JButton(DEFAULT_JBUTTON_SLOW);
+		shortcut->GButton(DEFAULT_GBUTTON_SLOW);
+	}
+	else if (name == SHORTCUT_PLAY_PAUSE) {
+		shortcut = new ShortcutKey(&Program::Event_PlayPause);
+		shortcut->Key(DEFAULT_KEY_PLAY_PAUSE);
+		shortcut->JButton(DEFAULT_JBUTTON_PLAY_PAUSE);
+		shortcut->GButton(DEFAULT_GBUTTON_PLAY_PAUSE);
+	}
+	else if (name == SHORTCUT_FULLSCREEN) {
+		shortcut = new ShortcutKey(&Program::Event_ScreenMode);
+		shortcut->Key(DEFAULT_KEY_FULLSCREEN);
+		shortcut->JButton(DEFAULT_JBUTTON_FULLSCREEN);
+		shortcut->GButton(DEFAULT_GBUTTON_FULLSCREEN);
+	}
+	else if (name == SHORTCUT_NEXT_DIR) {
+		shortcut = new ShortcutKey(&Program::Event_NextDir);
+		shortcut->Key(DEFAULT_KEY_NEXT_DIR);
+		shortcut->JButton(DEFAULT_JBUTTON_NEXT_DIR);
+		shortcut->GAxis(DEFAULT_GAXIS_NEXT_DIR, true);
+	}
+	else if (name == SHORTCUT_PREV_DIR) {
+		shortcut = new ShortcutKey(&Program::Event_PrevDir);
+		shortcut->Key(DEFAULT_KEY_PREV_DIR);
+		shortcut->JButton(DEFAULT_JBUTTON_PREV_DIR);
+		shortcut->GAxis(DEFAULT_GAXIS_PREV_DIR, true);
+	}
+	else if (name == SHORTCUT_NEXT_SONG) {
+		shortcut = new ShortcutKey(&Program::Event_NextSong);
+		shortcut->Key(DEFAULT_KEY_NEXT_SONG);
+		shortcut->JHat(DEFAULT_JHAT_ID, DEFAULT_JHAT_DPAD_RIGHT);
+		shortcut->GButton(DEFAULT_GBUTTON_DPAD_RIGHT);
+	}
+	else if (name == SHORTCUT_PREV_SONG) {
+		shortcut = new ShortcutKey(&Program::Event_PrevSong);
+		shortcut->Key(DEFAULT_KEY_PREV_SONG);
+		shortcut->JHat(DEFAULT_JHAT_ID, DEFAULT_JHAT_DPAD_LEFT);
+		shortcut->GButton(DEFAULT_GBUTTON_DPAD_LEFT);
+	}
+	else if (name == SHORTCUT_VOLUME_UP) {
+		shortcut = new ShortcutKey(&Program::Event_VolumeUp);
+		shortcut->Key(DEFAULT_KEY_VOLUME_UP);
+		shortcut->JHat(DEFAULT_JHAT_ID, DEFAULT_JHAT_DPAD_UP);
+		shortcut->GButton(DEFAULT_GBUTTON_DPAD_UP);
+	}
+	else if (name == SHORTCUT_VOLUME_DOWN) {
+		shortcut = new ShortcutKey(&Program::Event_VolumeDown);
+		shortcut->Key(DEFAULT_KEY_VOLUME_DOWN);
+		shortcut->JHat(DEFAULT_JHAT_ID, DEFAULT_JHAT_DPAD_DOWN);
+		shortcut->GButton(DEFAULT_GBUTTON_DPAD_DOWN);
+	}
+	else if (name == SHORTCUT_PAGE_UP) {
+		shortcut = new ShortcutKey(&Program::Event_PageUp);
+		shortcut->Key(DEFAULT_KEY_PAGE_UP);
+	}
+	else if (name == SHORTCUT_PAGE_DOWN) {
+		shortcut = new ShortcutKey(&Program::Event_PageDown);
+		shortcut->Key(DEFAULT_KEY_PAGE_DOWN);
+	}
+	else if (name == SHORTCUT_UP) {
+		shortcut = new ShortcutAxis(&Program::Event_Up);
+		shortcut->Key(DEFAULT_KEY_UP);
+		shortcut->JAxis(DEFAULT_JAXIS_VERTICAL, DEFAULT_AXIS_DIR_UP);
+		shortcut->GAxis(DEFAULT_GAXIS_VERTICAL, DEFAULT_AXIS_DIR_UP);
+	}
+	else if (name == SHORTCUT_DOWN) {
+		shortcut = new ShortcutAxis(&Program::Event_Down);
+		shortcut->Key(DEFAULT_KEY_DOWN);
+		shortcut->JAxis(DEFAULT_JAXIS_VERTICAL, DEFAULT_AXIS_DIR_DOWN);
+		shortcut->GAxis(DEFAULT_GAXIS_VERTICAL, DEFAULT_AXIS_DIR_DOWN);
+	}
+	else if (name == SHORTCUT_RIGHT) {
+		shortcut = new ShortcutAxis(&Program::Event_Right);
+		shortcut->Key(DEFAULT_KEY_RIGHT);
+		shortcut->JAxis(DEFAULT_JAXIS_HORIZONTAL, DEFAULT_AXIS_DIR_RIGHT);
+		shortcut->GAxis(DEFAULT_GAXIS_HORIZONTAL, DEFAULT_AXIS_DIR_RIGHT);
+	}
+	else if (name == SHORTCUT_LEFT) {
+		shortcut = new ShortcutAxis(&Program::Event_Left);
+		shortcut->Key(DEFAULT_KEY_LEFT);
+		shortcut->JAxis(DEFAULT_JAXIS_HORIZONTAL, DEFAULT_AXIS_DIR_LEFT);
+		shortcut->GAxis(DEFAULT_GAXIS_HORIZONTAL, DEFAULT_AXIS_DIR_LEFT);
+	}
+	else if (name == SHORTCUT_CURSOR_UP) {
+		shortcut = new ShortcutAxis(&Program::Event_CursorUp);
+		shortcut->JAxis(DEFAULT_JAXIS_CURSOR_VERT, DEFAULT_AXIS_DIR_UP);
+		shortcut->GAxis(DEFAULT_GAXIS_CURSOR_VERT, DEFAULT_AXIS_DIR_UP);
+	}
+	else if (name == SHORTCUT_CURSOR_DOWN) {
+		shortcut = new ShortcutAxis(&Program::Event_CursorDown);
+		shortcut->JAxis(DEFAULT_JAXIS_CURSOR_VERT, DEFAULT_AXIS_DIR_DOWN);
+		shortcut->GAxis(DEFAULT_GAXIS_CURSOR_VERT, DEFAULT_AXIS_DIR_DOWN);
+	}
+	else if (name == SHORTCUT_CURSOR_RIGHT) {
+		shortcut = new ShortcutAxis(&Program::Event_CursorRight);
+		shortcut->JAxis(DEFAULT_JAXIS_CURSOR_HORI, DEFAULT_AXIS_DIR_RIGHT);
+		shortcut->GAxis(DEFAULT_GAXIS_CURSOR_HORI, DEFAULT_AXIS_DIR_RIGHT);
+	}
+	else if (name == SHORTCUT_CURSOR_LEFT) {
+		shortcut = new ShortcutAxis(&Program::Event_CursorLeft);
+		shortcut->JAxis(DEFAULT_JAXIS_CURSOR_HORI, DEFAULT_AXIS_DIR_LEFT);
+		shortcut->GAxis(DEFAULT_GAXIS_CURSOR_HORI, DEFAULT_AXIS_DIR_LEFT);
+	}
+	return shortcut;
 }

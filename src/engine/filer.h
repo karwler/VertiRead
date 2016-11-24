@@ -28,7 +28,7 @@ public:
 	static uint8 CheckDirectories(const GeneralSettings& sets);
 
 	static vector<string> GetAvailibleThemes();
-	static void GetColors(map<EColor, vec4b>& colors, const string& theme);
+	static void GetColors(map<EColor, vec4c>& colors, const string& theme);
 	static vector<string> GetAvailibleLanguages();
 	static map<string, string> GetLines(const string& language);
 	static map<string, Mix_Chunk*> GetSounds();

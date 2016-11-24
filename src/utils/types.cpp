@@ -195,33 +195,38 @@ void TextEdit::CheckCaret() {
 }
 
 void TextEdit::CheckText() {
-	if (type == ETextType::text)
+	switch (type) {
+	case ETextType::integer:
+		CleanIntString(text);
+		break;
+	case ETextType::floating:
+		CleanFloatString(text);
+		break;
+	default:
 		return;
-
-	bool foundDot = false;
-	for (size_t i=0; i!=text.length(); i++) {
-		if (type == ETextType::integer) {
-			if (text[i] < '0' || text[i] > '9') {
-				text.erase(i, 1);
-				i--;
-			}
-		}
-		else if (type == ETextType::floating) {
-			if (text[i] == '.') {
-				if (foundDot) {
-					text.erase(i, 1);
-					i--;
-				}
-				else
-					foundDot = true;
-			}
-			else if (text[i] < '0' || text[i] > '9') {
-				text.erase(i, 1);
-				i--;
-			}
-		}
 	}
 	CheckCaret();
+}
+
+void TextEdit::CleanIntString(string& str) {
+	for (size_t i=0; i!=str.length(); i++)
+		if (str[i] < '0' || str[i] > '9') {
+			str.erase(i, 1);
+			i--;
+		}
+}
+
+void TextEdit::CleanFloatString(string& str) {
+	bool foundDot = false;
+	for (size_t i=0; i!=str.length(); i++)
+		if (str[i] < '0' || str[i] > '9') {
+			if (str[i] == '.' && !foundDot)
+				foundDot = true;
+			else {
+				str.erase(i, 1);
+				i--;
+			}
+		}
 }
 
 // CONTROLLER
@@ -253,83 +258,9 @@ void Controller::Close() {
 
 // SHORTCUT
 
-Shortcut::Shortcut()
-{
-	ClearAsgKey();
-	ClearAsgCtr();
-}
-
-Shortcut::Shortcut(SDL_Scancode KEY)
-{
-	Key(KEY);
-	ClearAsgCtr();
-}
-
-Shortcut::Shortcut(uint8 CTR, EAssgnment ASG)
-{
-	ClearAsgKey();
-	switch (ASG) {
-	case ASG_JBUTTON:
-		JButton(CTR);
-		break;
-	case ASG_JAXIS_P:
-		JAxis(CTR, true);
-		break;
-	case ASG_JAXIS_N:
-		JAxis(CTR, false);
-		break;
-	case ASG_GBUTTON:
-		GButton(CTR);
-		break;
-	case ASG_GAXIS_P:
-		GAxis(CTR, true);
-		break;
-	case ASG_GAXIS_N:
-		GAxis(CTR, false);
-		break;
-	default:
-		ClearAsgCtr();
-	}
-}
-
-Shortcut::Shortcut(uint8 HAT, uint8 VAL)
-{
-	ClearAsgKey();
-	JHat(HAT, VAL);
-}
-
-Shortcut::Shortcut(SDL_Scancode KEY, uint8 CTR, EAssgnment ASG)
-{
-	Key(KEY);
-	switch (ASG) {
-	case ASG_JBUTTON:
-		JButton(CTR);
-		break;
-	case ASG_JAXIS_P:
-		JAxis(CTR, true);
-		break;
-	case ASG_JAXIS_N:
-		JAxis(CTR, false);
-		break;
-	case ASG_GBUTTON:
-		GButton(CTR);
-		break;
-	case ASG_GAXIS_P:
-		GAxis(CTR, true);
-		break;
-	case ASG_GAXIS_N:
-		GAxis(CTR, false);
-		break;
-	default:
-		ClearAsgCtr();
-	}
-}
-
-Shortcut::Shortcut(SDL_Scancode KEY, uint8 HAT, uint8 VAL)
-{
-	Key(KEY);
-	JHat(HAT, VAL);
-}
+Shortcut::Shortcut() :
+	asg(ASG_NONE)
+{}
 
 Shortcut::~Shortcut() {}
 
@@ -341,17 +272,25 @@ bool Shortcut::KeyAssigned() const {
 	return asg & ASG_KEY;
 }
 
+void Shortcut::ClearAsgKey() {
+	asg &= ~ASG_KEY;
+}
+
 void Shortcut::Key(SDL_Scancode KEY) {
 	key = KEY;
 	asg |= ASG_KEY;
 }
 
-void Shortcut::ClearAsgKey() {
-	asg ^= asg & ASG_KEY;
+uint8 Shortcut::JctID() const {
+	return jctID;
 }
 
-uint8 Shortcut::CtrID() const {
-	return ctrID;
+bool Shortcut::JctAssigned() const {
+	return asg & (ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N);
+}
+
+void Shortcut::ClearAsgJct() {
+	asg &= ~(ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N);
 }
 
 bool Shortcut::JButtonAssigned() const {
@@ -359,14 +298,14 @@ bool Shortcut::JButtonAssigned() const {
 }
 
 void Shortcut::JButton(uint8 BUT) {
-	ctrID = BUT;
+	jctID = BUT;
 
-	ClearAsgCtr();
+	ClearAsgJct();
 	asg |= ASG_JBUTTON;
 }
 
 bool Shortcut::JAxisAssigned() const {
-	return (asg & ASG_JAXIS_P) || (asg & ASG_JAXIS_N);
+	return asg & (ASG_JAXIS_P | ASG_JAXIS_N);
 }
 
 bool Shortcut::JPosAxisAssigned() const {
@@ -378,9 +317,9 @@ bool Shortcut::JNegAxisAssigned() const {
 }
 
 void Shortcut::JAxis(uint8 AXIS, bool positive) {
-	ctrID = AXIS;
+	jctID = AXIS;
 
-	ClearAsgCtr();
+	ClearAsgJct();
 	asg |= (positive) ? ASG_JAXIS_P : ASG_JAXIS_N;
 }
 
@@ -393,11 +332,23 @@ bool Shortcut::JHatAssigned() const {
 }
 
 void Shortcut::JHat(uint8 HAT, uint8 VAL) {
-	ctrID = HAT;
+	jctID = HAT;
 	jHatVal = VAL;
 
-	ClearAsgCtr();
+	ClearAsgJct();
 	asg |= ASG_JHAT;
+}
+
+uint8 Shortcut::GctID() const {
+	return gctID;
+}
+
+bool Shortcut::GctAssigned() const {
+	return asg & (ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N);
+}
+
+void Shortcut::ClearAsgGct() {
+	asg &= ~(ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N);
 }
 
 bool Shortcut::GButtonAssigned() const {
@@ -405,14 +356,14 @@ bool Shortcut::GButtonAssigned() const {
 }
 
 void Shortcut::GButton(uint8 BUT) {
-	ctrID = BUT;
+	gctID = BUT;
 
-	ClearAsgCtr();
-	asg = ASG_GBUTTON;
+	ClearAsgGct();
+	asg |= ASG_GBUTTON;
 }
 
 bool Shortcut::GAxisAssigned() const {
-	return (asg & ASG_GAXIS_P) || (asg & ASG_GAXIS_N);
+	return asg & (ASG_GAXIS_P | ASG_GAXIS_N);
 }
 
 bool Shortcut::GPosAxisAssigned() const {
@@ -424,14 +375,10 @@ bool Shortcut::GNegAxisAssigned() const {
 }
 
 void Shortcut::GAxis(uint8 AXIS, bool positive) {
-	ctrID = AXIS;
+	gctID = AXIS;
 
-	ClearAsgCtr();
+	ClearAsgGct();
 	asg |= (positive) ? ASG_GAXIS_P : ASG_GAXIS_N;
-}
-
-void Shortcut::ClearAsgCtr() {
-	asg &= ASG_KEY;
 }
 
 Shortcut::EAssgnment operator~(Shortcut::EAssgnment a) {
@@ -462,32 +409,6 @@ ShortcutKey::ShortcutKey(void (Program::*CALL)()) :
 	Shortcut(),
 	call(CALL)
 {}
-
-ShortcutKey::ShortcutKey(SDL_Scancode KEY, void (Program::*CALL)()) :
-	Shortcut(KEY),
-	call(CALL)
-{}
-
-ShortcutKey::ShortcutKey(uint8 CTR, EAssgnment ASG, void (Program::*CALL)()) :
-	Shortcut(CTR, ASG),
-	call(CALL)
-{}
-
-ShortcutKey::ShortcutKey(uint8 HAT, uint8 VAL, void (Program::*CALL)()) :
-	Shortcut(HAT, VAL),
-	call(CALL)
-{}
-
-ShortcutKey::ShortcutKey(SDL_Scancode KEY, uint8 CTR, EAssgnment ASG, void (Program::*CALL)()) :
-	Shortcut(KEY, CTR, ASG),
-	call(CALL)
-{}
-
-ShortcutKey::ShortcutKey(SDL_Scancode KEY, uint8 HAT, uint8 VAL, void (Program::*CALL)()) :
-	Shortcut(KEY, HAT, VAL),
-	call(CALL)
-{}
-
 ShortcutKey::~ShortcutKey() {}
 
 // SHORTCUT AXIS
@@ -496,32 +417,6 @@ ShortcutAxis::ShortcutAxis(void (Program::*CALL)(float)) :
 	Shortcut(),
 	call(CALL)
 {}
-
-ShortcutAxis::ShortcutAxis(SDL_Scancode KEY, void (Program::*CALL)(float)) :
-	Shortcut(KEY),
-	call(CALL)
-{}
-
-ShortcutAxis::ShortcutAxis(uint8 CTR, EAssgnment ASG, void (Program::*CALL)(float)) :
-	Shortcut(CTR, ASG),
-	call(CALL)
-{}
-
-ShortcutAxis::ShortcutAxis(uint8 HAT, uint8 VAL, void (Program::*CALL)(float)) :
-	Shortcut(HAT, VAL),
-	call(CALL)
-{}
-
-ShortcutAxis::ShortcutAxis(SDL_Scancode KEY, uint8 CTR, EAssgnment ASG, void (Program::*CALL)(float)) :
-	Shortcut(KEY, CTR, ASG),
-	call(CALL)
-{}
-
-ShortcutAxis::ShortcutAxis(SDL_Scancode KEY, uint8 HAT, uint8 VAL, void (Program::*CALL)(float)) :
-	Shortcut(KEY, HAT, VAL),
-	call(CALL)
-{}
-
 ShortcutAxis::~ShortcutAxis() {}
 
 // PLAYLIST

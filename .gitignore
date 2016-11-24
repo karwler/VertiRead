@@ -2,12 +2,11 @@
 bin
 build*
 CMakeFiles
-*.dir
-.vs
-.DS_Store
-*.tlog
 
-# files
+#hidden files and directories
+.*
+
+#files
 *.o
 *.obj
 *.out

@@ -33,14 +33,14 @@ public:
 	void SetFont(const string& newFont);
 	void SetDefaultTheme();
 	
-	static map<EColor, vec4b> GetDefaultColors();
-	static vec4b GetDefaultColor(EColor color);
+	static map<EColor, vec4c> GetDefaultColors();
+	static vec4c GetDefaultColor(EColor color);
 
 	bool maximized, fullscreen;
 	vec2i resolution;
 	string renderer;
 	string theme;
-	map<EColor, vec4b> colors;
+	map<EColor, vec4c> colors;
 
 private:
 	string font;

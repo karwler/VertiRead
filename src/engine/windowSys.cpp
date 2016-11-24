@@ -72,7 +72,7 @@ void WindowSys::MoveMouse(const vec2i& mPos) {
 }
 
 void WindowSys::DrawObjects(const vector<Object*>& objects) {
-	vec4b bgcolor = sets.colors[EColor::background];
+	vec4c bgcolor = sets.colors[EColor::background];
 	SDL_SetRenderDrawColor(renderer, bgcolor.x, bgcolor.y, bgcolor.z, bgcolor.a);
 	SDL_RenderClear(renderer);
 
@@ -317,7 +317,7 @@ void WindowSys::DrawItem(KeyGetter* item, ListBox* parent, const SDL_Rect& rect,
 }
 
 void WindowSys::DrawRect(const SDL_Rect& rect, EColor color) {
-	vec4b cclr = sets.colors[color];
+	vec4c cclr = sets.colors[color];
 	SDL_SetRenderDrawColor(renderer, cclr.x, cclr.y, cclr.z, cclr.a);
 	SDL_RenderFillRect(renderer, &rect);
 }

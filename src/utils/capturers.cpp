@@ -245,18 +245,22 @@ void KeyGetter::OnGAxis(uint8 gaxis, bool positive) {
 }
 
 string KeyGetter::Text() const {
-	string line = string((shortcut->KeyAssigned()) ? SDL_GetScancodeName(shortcut->Key()) : "-void-") +  "    |  ";
+	string line = string((shortcut->KeyAssigned()) ? SDL_GetScancodeName(shortcut->Key()) : "-void-") +  "  | ";
 
 	if (shortcut->JButtonAssigned())
-		line += "B " + to_string(shortcut->CtrID());
+		line += "B " + to_string(shortcut->JctID());
 	else if (shortcut->JHatAssigned())
-		line += "H " + to_string(shortcut->CtrID()) + " " + jtHatToStr(shortcut->JHatVal());
+		line += "H " + to_string(shortcut->JctID()) + " " + jtHatToStr(shortcut->JHatVal());
 	else if (shortcut->JAxisAssigned())
-		line += "A " + string((shortcut->JPosAxisAssigned()) ? "+" : "-") + to_string(shortcut->CtrID());
-	else if (shortcut->GButtonAssigned())
-		line += gpButtonToStr(shortcut->CtrID());
+		line += "A " + string((shortcut->JPosAxisAssigned()) ? "+" : "-") + to_string(shortcut->JctID());
+	else
+		line += " -void-";
+	line += "  | ";
+
+	if (shortcut->GButtonAssigned())
+		line += gpButtonToStr(shortcut->GctID());
 	else if (shortcut->GAxisAssigned())
-		line += ((shortcut->GPosAxisAssigned()) ? "+" : "-") + gpAxisToStr(shortcut->CtrID());
+		line += ((shortcut->GPosAxisAssigned()) ? "+" : "-") + gpAxisToStr(shortcut->GctID());
 	else
 		line += " -void-";
 	return line;

@@ -17,7 +17,7 @@ public:
 	void DelBook();
 
 	bool showSongs;
-	int selected;	// -1 means none selected
+	btsel selected;
 private:
 	Playlist pList;
 };

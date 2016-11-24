@@ -15,7 +15,7 @@ public:
 
 	SDL_Rect Bar() const;
 	SDL_Rect Slider() const;
-	virtual int SelectedItem() const;	// this class doesn't contain any items, therefore this function returns -1
+	virtual btsel SelectedItem() const;	// this class doesn't contain any items, therefore this function returns a false btsel
 
 	int BarW() const;					// returns 0 if slider isn't needed
 	int ListY() const;
@@ -46,7 +46,7 @@ public:
 
 	ListItem* Item(int id) const;
 	SDL_Rect ItemRect(int i, SDL_Rect* Crop=nullptr, EColor* color=nullptr) const;
-	virtual int SelectedItem() const;
+	virtual btsel SelectedItem() const;
 	vec2t VisibleItems() const;
 
 	const vector<ListItem*>& Items() const;
@@ -66,7 +66,7 @@ public:
 
 	virtual void SetValues();
 	SDL_Rect ItemRect(int id, SDL_Rect* Crop=nullptr, EColor* color=nullptr) const;
-	virtual int SelectedItem() const;
+	virtual btsel SelectedItem() const;
 	vec2t VisibleItems() const;
 
 	const vector<ListItem*>& Items() const;
@@ -99,7 +99,7 @@ public:
 	vector<ButtonImage>& ListButtons();
 	SDL_Rect Player() const;
 	vector<ButtonImage>& PlayerButtons();
-	Image getImage(int i, SDL_Rect* Crop=nullptr) const;
+	Image getImage(size_t i, SDL_Rect* Crop=nullptr) const;
 	vec2t VisiblePictures() const;
 
 	const vector<Image>& Pictures() const;
