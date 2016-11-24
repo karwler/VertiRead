@@ -30,7 +30,4 @@ Settings files are being saved in "~/Library/Application Support/VertiRead".
 
 ##Changing the default settings
 Most defaults and constants are defined in the "src/prog/defaults.h" file.  
-Just look around and see what you can find.  
-
-There are two sets of default controller key bindings. One is for X-Box controllers and the other one is made for the other controller I've been using to test the program.  
-By default the latter is enabled. In order to change to the X-Box controller defaults, uncomment the line "//#define USE_XGAMEPAD_DEFAULTS" or give the compiler a define with this name.
+Just look around and see what you can find.
