@@ -22,11 +22,9 @@ using int64 = int64_t;
 using uint64 = uint64_t;
 
 using char8 = char;
-using uchar8 = unsigned char;
 using char16 = char16_t;
 using char32 = char32_t;
 using wchar = wchar_t;
-using uwchar = unsigned wchar_t;
 
 namespace kk {
 

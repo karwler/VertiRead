@@ -2,34 +2,31 @@
 #include <algorithm>
 #include <cctype>
 
-ullong NSC_GetNextNum(const string& str, size_t start, size_t& length) {
-	size_t i = start;
-	while (i != str.size() && isdigit(str[i]))
-		i++;
+size_t ANSC_GetNumVals(const char*& str) {
+	while (*str == '0')
+		str++;
 
-	length = i - start;
-	return stoull(str.substr(start, length));
+	size_t i = 0;
+	while (isdigit(str[i++]));
+	return i;
 }
 
-bool numStrCompare(const string& sa, const string& sb) {
-	size_t ia = 0, ib = 0;
-	while (ia != sa.size() && ib != sb.size()) {
-		if (isdigit(sa[ia]) && isdigit(sb[ib])) {
-			size_t la, lb;
-			ullong na = NSC_GetNextNum(sa, ia, la);
-			ullong nb = NSC_GetNextNum(sb, ib, lb);
+bool alphanumStrCompare(const string& sa, const string& sb) {
+	for (const char *pa=sa.c_str(), *pb=sb.c_str(); *pa != '\0' && *pb != '\0'; pa++, pb++) {
+		if (isdigit(*pa) && isdigit(*pb)) {
+			size_t la = ANSC_GetNumVals(pa);
+			size_t lb = ANSC_GetNumVals(pb);
+			if (la != lb)
+				return la < lb;
 
-			if (na != nb)
-				return na < nb;
-			ia += la;
-			ib += lb;
+			for (size_t i=0; i!=la; i++)
+				if (pa[i] != pb[i])
+					return pa[i] < pb[i];
+			pa += la-1;
+			pb += lb-1;
 		}
-		else if (sa[ia] != sb[ib])
-			return sa[ia] <= sb[ib];
-		else {
-			ia++;
-			ib++;
-		}
+		else if (*pa != *pb)
+			return *pa < *pb;
 	}
 	return sa.size() <= sb.size();
 }
@@ -195,7 +192,7 @@ bool splitIniLine(const string& line, string* arg, string* val, string* key, boo
 }
 
 void sortStrVec(vector<string>& vec) {
-	std::sort(vec.begin(), vec.end(), numStrCompare);
+	std::sort(vec.begin(), vec.end(), alphanumStrCompare);
 }
 
 bool inRect(const SDL_Rect& rect, vec2i point) {

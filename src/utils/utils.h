@@ -56,7 +56,7 @@ class ListBox;
 class Capturer;
 
 // files and strings
-bool numStrCompare(const string& sa, const string& sb);
+bool alphanumStrCompare(const string& sa, const string& sb);
 bool strcmpCI(const string& strl, const string& strr);
 bool findChar(const string& str, char c, size_t* id=nullptr);
 bool findString(const string& str, const string& c, size_t* id=nullptr);
