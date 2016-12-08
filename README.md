@@ -1,7 +1,7 @@
 #VertiRead
 A simple manga reader and music player for Linux, Windows and OS X.  
 So far it's usable for reading, playing music and basic playlist editing.  
-It still has some bugs and unfinished/untested parts.  
+It still has some bugs and untested parts.  
 
 Used libraries are SDL2, SDL2_image, SDL2_ttf and SDL2_mixer.  
 The minimum required cmake version is 3.1.0 and your compiler needs to support at least c++11.  
@@ -16,10 +16,11 @@ There’s a pre-made launcher, which is copied to the build directory after comp
 If you want a menu entry for the program, just set the executable’s and icon’s path to the .desktop file and move it to either "/usr/share/applications" or "~/.local/share/applications".  
 
 Settings files are being saved in "~/.vertiread".  
-Note: It's possible that the mouse wheel won't work properly under Linux and I've got no idea why.  
+Note: It's possible that the mouse wheel won't work properly under Linux and I have no idea why.  
 
 ##Windows
 All necessary libraries are already included in the project, however they're built only for the MSVC 14 (2015).  
+  
 Settings files are being saved in "%AppData%\VertiRead".  
 
 ##OS X
