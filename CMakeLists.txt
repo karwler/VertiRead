@@ -23,6 +23,7 @@ set(SRC_FILES
 	"src/engine/world.cpp"
 	"src/engine/world.h"
 	"src/kklib/aliases.h"
+	"src/kklib/grid2.h"
 	"src/kklib/sptr.h"
 	"src/kklib/vec2.h"
 	"src/kklib/vec3.h"

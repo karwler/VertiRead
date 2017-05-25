@@ -6,8 +6,8 @@ class Browser {
 public:
 	Browser(const string& RD=string(), const string& CD=string());
 
-	vector<string> ListFiles();
-	vector<string> ListDirs();
+	vector<string> ListFiles() const;
+	vector<string> ListDirs() const;
 	bool GoTo(const string& dirname);
 	bool GoUp();
 	string GoNext();

@@ -1,5 +1,11 @@
 #include "engine.h"
 
+Engine::Engine() :
+	run(false),
+	redraw(false),
+	dSec(0.f)
+{}
+
 void Engine::Run() {
 	// initialize all components
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER))
@@ -11,8 +17,7 @@ void Engine::Run() {
 	winSys = new WindowSys(Filer::LoadVideoSettings());
 	inputSys = new InputSys(Filer::LoadControlsSettings());
 	audioSys = new AudioSys(Filer::LoadAudioSettings());
-	if (audioSys->Initialize() > 1)		// delete audio sys if it completely failed to initialize
-		audioSys.reset();
+	audioSys->Initialize();
 
 	winSys->CreateWindow();
 	scene = new Scene(Filer::LoadGeneralSettings());		// initializes program and library
@@ -21,7 +26,7 @@ void Engine::Run() {
 	// initialize values
 	scene->getProgram()->Event_OpenBookList();
 	run = true;
-	redraws = 32;	// linux sometimes can't keep up with the window, which is why there need's to be a few redraw calls at the start
+	redraw = true;
 	SDL_Event event;
 	uint32 oldTime = SDL_GetTicks();
 
@@ -32,16 +37,14 @@ void Engine::Run() {
 		oldTime = newTime;
 
 		// draw scene if requested
-		if (redraws != 0) {
-			redraws--;
+		if (redraw) {
+			redraw = false;
 			winSys->DrawObjects(scene->Objects());
 		}
 
 		// handle events
-        if (audioSys)
-            audioSys->Tick(dSec);
+		audioSys->Tick(dSec);
 		scene->Tick(dSec);
-		inputSys->Tick();
 
 		uint32 timeout = SDL_GetTicks() + 50;
 		while (SDL_PollEvent(&event) && timeout - SDL_GetTicks() > 0)
@@ -61,10 +64,10 @@ void Engine::Close() {
 }
 
 void Engine::Cleanup() {
-	scene.reset();
-	audioSys.reset();
-	inputSys.reset();
-	winSys.reset();
+	scene.clear();
+	audioSys.clear();
+	inputSys.clear();
+	winSys.clear();
 
 	TTF_Quit();
 	SDL_Quit();
@@ -90,6 +93,9 @@ void Engine::HandleEvent(const SDL_Event& event) {
 		break;
 	case SDL_CONTROLLERAXISMOTION:
 		inputSys->GamepadAxisEvent(event.caxis);
+		break;
+	case SDL_MOUSEMOTION:
+		inputSys->MouseMotionEvent(event.motion);
 		break;
 	case SDL_MOUSEBUTTONDOWN:
 		inputSys->MouseButtonDownEvent(event.button);
@@ -117,26 +123,26 @@ void Engine::HandleEvent(const SDL_Event& event) {
 	}
 }
 
-void Engine::SetRedrawNeeded(uint8 count) {
-	redraws = count;
+void Engine::SetRedrawNeeded() {
+	redraw = true;
 }
 
 float Engine::deltaSeconds() const {
 	return dSec;
 }
 
-AudioSys* Engine::getAudioSys() const {
+AudioSys* Engine::getAudioSys() {
 	return audioSys;
 }
 
-InputSys* Engine::getInputSys() const {
+InputSys* Engine::getInputSys() {
 	return inputSys;
 }
 
-WindowSys* Engine::getWindowSys() const {
+WindowSys* Engine::getWindowSys() {
 	return winSys;
 }
 
-Scene* Engine::getScene() const {
+Scene* Engine::getScene() {
 	return scene;
 }

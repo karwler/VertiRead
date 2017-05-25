@@ -19,6 +19,7 @@ void Library::Close() {
 	ClearPics();
 	ClearTextures();
 	ClearSounds();
+	fonts.Clear();
 }
 
 FontSet* Library::Fonts() {

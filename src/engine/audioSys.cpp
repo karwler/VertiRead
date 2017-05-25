@@ -3,6 +3,8 @@
 AudioSys::AudioSys(const AudioSettings& SETS) :
 	sets(SETS),
 	curMusic(nullptr),
+	muted(false),
+	played(false),
 	deltaDelay(0.f)
 {}
 
@@ -21,31 +23,29 @@ uint8 AudioSys::Initialize() {
 		return 2;
 	}
 	if (!(flags & MIX_INIT_FLAC)) {
-		cerr << "couldn't initialize flac" << endl;
+		cerr << "couldn't initialize flac" << endl << Mix_GetError() << endl;
 		retval = 1;
 	}
 	if (!(flags & MIX_INIT_FLUIDSYNTH)) {
-		cerr << "couldn't initialize fluidsynth" << endl;
+		cerr << "couldn't initialize fluidsynth" << endl << Mix_GetError() << endl;
 		retval = 1;
 	}
 	if (!(flags & MIX_INIT_MOD)) {
-		cerr << "couldn't initialize mod" << endl;
+		cerr << "couldn't initialize mod" << endl << Mix_GetError() << endl;
 		retval = 1;
 	}
 	if (!(flags & MIX_INIT_MODPLUG)) {
-		cerr << "couldn't initialize modplug" << endl;
+		cerr << "couldn't initialize modplug" << endl << Mix_GetError() << endl;
 		retval = 1;
 	}
 	if (!(flags & MIX_INIT_MP3)) {
-		cerr << "couldn't initialize mp3" << endl;
+		cerr << "couldn't initialize mp3" << endl << Mix_GetError() << endl;
 		retval = 1;
 	}
 	if (!(flags & MIX_INIT_OGG)) {
-		cerr << "couldn't initialize ogg"<< endl;
+		cerr << "couldn't initialize ogg" << endl << Mix_GetError() << endl;
 		retval = 1;
 	}
-	if (retval != 0)
-		cerr << Mix_GetError() << endl;
 
 	if (Mix_OpenAudio(44100, AUDIO_S16SYS, 2, 4096)) {
 		cerr << "couldn't open audio\n" << Mix_GetError() << endl;
@@ -83,39 +83,66 @@ void AudioSys::MusicFinishCallback() {
 }
 
 void AudioSys::PlayPauseMusic() {
-	if (!curMusic) {
-		curSong = 0;
-		SwitchSong(0);
-	}
+	if (!curMusic)
+		SwitchSong(true);
+	else if (!played)
+		PlayMusic();
 	else if (Mix_PausedMusic())
 		Mix_ResumeMusic();
 	else
 		Mix_PauseMusic();
 }
 
-void AudioSys::SwitchSong(int step) {
+void AudioSys::PlayMusic() {
+	played = true;
+	Mix_PlayMusic(curMusic, 0);
+}
+
+void AudioSys::SongMuteSwitch() {
+	muted = !muted;
+	Mix_VolumeMusic(muted ? 0 : sets.musicVolume);
+}
+
+void AudioSys::NextSong() {
+	if (curSong == playlist.size()-1)
+		curSong = 0;
+	else
+		curSong++;
+	SwitchSong(played && !Mix_PausedMusic());
+}
+
+void AudioSys::PrevSong() {
+	if (curSong == 0)
+		curSong = playlist.size()-1;
+	else
+		curSong--;
+	SwitchSong(played && !Mix_PausedMusic());
+}
+
+void AudioSys::SwitchSong(bool play) {
 	FreeMusic();
+	played = false;
 	deltaDelay = 0.f;
 	if (playlist.empty())
 		return;
 
-	curSong += step;
-	if (curSong >= playlist.size()) {
-		if (step < 0)
-			curSong = playlist.size() - 1;
-		else
-			curSong = 0;
-	}
-
 	curMusic = Mix_LoadMUS(playlist[curSong].c_str());
-	if (curMusic)
-		Mix_PlayMusic(curMusic, 0);
+	if (curMusic && play)
+		PlayMusic();
 }
 
 void AudioSys::PlaySound(const string& name) {
 	Mix_Chunk* sound = World::library()->getSound(name);
 	if (sound)
 		Mix_PlayChannel(0, sound, 0);
+}
+
+string AudioSys::curSongName() const {
+	return filename(playlist[curSong]);
+}
+
+bool AudioSys::PlaylistLoaded() const {
+	return playlist.size() != 0;
 }
 
 void AudioSys::LoadPlaylist(const Playlist& newList) {
@@ -129,9 +156,10 @@ void AudioSys::LoadPlaylist(const Playlist& newList) {
 void AudioSys::UnloadPlaylist() {
 	FreeMusic();
 	playlist.clear();
+	curSong = 0;
 }
 
-AudioSettings AudioSys::Settings() const {
+const AudioSettings& AudioSys::Settings() const {
 	return sets;
 }
 

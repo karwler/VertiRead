@@ -4,7 +4,7 @@
 
 class Capturer : public ListItem {
 public:
-	Capturer(ListBox* SA, const string& LBL="");
+	Capturer(ScrollAreaX1* SA, const string& LBL="");
 	virtual ~Capturer();
 
 	virtual void OnClick(EClick clickType);
@@ -15,12 +15,12 @@ public:
 	virtual void OnGButton(uint8 gbutton) = 0;
 	virtual void OnGAxis(uint8 gaxis, bool positive) = 0;
 
-	ListBox* Parent() const;
+	ScrollAreaX1* Parent() const;
 };
 
 class LineEdit : public Capturer {
 public:
-	LineEdit(ListBox* SA, const string& LBL="", const string& TXT="", ETextType TYPE=ETextType::text, void (Program::*KCALL)(const string&)=nullptr, void (Program::*CCALL)()=nullptr);
+	LineEdit(ScrollAreaX1* SA, const string& LBL="", const string& TXT="", ETextType TYPE=ETextType::text, void (Program::*KCALL)(const string&)=nullptr, void (Program::*CCALL)()=nullptr);
 	virtual ~LineEdit();
 
 	virtual void OnClick(EClick clickType);
@@ -52,7 +52,13 @@ private:
 
 class KeyGetter : public Capturer {
 public:
-	KeyGetter(ListBox* SA, const string& LBL="", Shortcut* SHC=nullptr);
+	enum class EAcceptType : uint8 {
+		keyboard,
+		joystick,
+		gamepad
+	};
+
+	KeyGetter(ScrollAreaX1* SA, EAcceptType ACT, Shortcut* SHC=nullptr);
 	virtual ~KeyGetter();
 
 	virtual void OnKeypress(SDL_Scancode key);
@@ -65,5 +71,6 @@ public:
 	string Text() const;
 
 private:
+	EAcceptType acceptType;
 	Shortcut* shortcut;
 };

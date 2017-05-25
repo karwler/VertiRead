@@ -7,84 +7,61 @@ namespace kk {
 
 template <typename T>
 struct vec3 {
-	vec3(T N=0) :
+	vec3(const T& N=0) :
 		x(N), y(N), z(N)
 	{}
-	vec3(T X, T Y, T Z) :
+	vec3(const T& X, const T& Y, const T& Z) :
 		x(X), y(Y), z(Z)
 	{}
 	template <typename A>
-	vec3(const vec3<A>& N) :
-		x(N.x), y(N.y), z(N.z)
+	vec3(const vec3<A>& V) :
+		x(V.x), y(V.y), z(V.z)
 	{}
 
 	T& operator[](char i) {
-		switch (i) {
-		case 0:
+		if (i == 0)
 			return x;
-		case 1:
+		if (i == 1)
 			return y;
-		}
 		return z;
 	}
 	const T& operator[](char i) const {
-		return *this[i];
+		if (i == 0)
+			return x;
+		if (i == 1)
+			return y;
+		return z;
 	}
 
-	template <typename A>
-	vec3& operator=(const vec3<A>& v) {
+	vec3& operator=(const vec3& v) {
 		x = v.x;
 		y = v.y;
 		z = v.z;
 		return *this;
 	}
-	template <typename A>
-	vec3& operator+=(const vec3<A>& v) {
+	vec3& operator+=(const vec3& v) {
 		x += v.x;
 		y += v.y;
 		z += v.z;
 		return *this;
 	}
-	template <typename A>
-	vec3& operator-=(const vec3<A>& v) {
+	vec3& operator-=(const vec3& v) {
 		x -= v.x;
 		y -= v.y;
 		z -= v.z;
 		return *this;
 	}
-	template <typename A>
-	vec3& operator*=(const vec3<A>& v) {
+	vec3& operator*=(const vec3& v) {
 		x *= v.x;
 		y *= v.y;
 		z *= v.z;
 		return *this;
 	}
-	template <typename A>
-	vec3& operator/=(const vec3<A>& v) {
+	vec3& operator/=(const vec3& v) {
 		x /= v.x;
 		y /= v.y;
 		z /= v.z;
 		return *this;
-	}
-
-	friend vec3 operator+(const vec3& a, const vec3& b) {
-		return vec3(a.x + b.x, a.y + b.y, a.z + b.z);
-	}
-	friend vec3 operator-(const vec3& a, const vec3& b) {
-		return vec3(a.x - b.x, a.y - b.y, a.z - b.z);
-	}
-	friend vec3 operator*(const vec3& a, const vec3& b) {
-		return vec3(a.x * b.x, a.y * b.y, a.z * b.z);
-	}
-	friend vec3 operator/(const vec3& a, const vec3& b) {
-		return vec3(a.x / b.x, a.y / b.y, a.z / b.z);
-	}
-
-	friend bool operator==(const vec3& a, const vec3& b) {
-		return a.x == b.x && a.y == b.y && a.z == b.z;
-	}
-	friend bool operator!=(const vec3& a, const vec3& b) {
-		return a.x != b.x || a.y != b.y || a.z != b.z;
 	}
 
 	bool isNull() const {
@@ -130,16 +107,51 @@ vec3<A> operator+(const vec3<A>& a, const vec3<B>& b) {
 	return vec3<A>(a.x + b.x, a.y + b.y, a.z + b.z);
 }
 template <typename A, typename B>
+vec3<A> operator+(const vec3<A>& a, const B& b) {
+	return vec3<A>(a.x + b, a.y + b, a.z + b);
+}
+template <typename A, typename B>
+vec3<A> operator+(const A& a, const vec3<B>& b) {
+	return vec3<A>(a + b.x, a + b.y, a + b.z);
+}
+
+template <typename A, typename B>
 vec3<A> operator-(const vec3<A>& a, const vec3<B>& b) {
 	return vec3<A>(a.x - b.x, a.y - b.y, a.z - b.z);
 }
+template <typename A, typename B>
+vec3<A> operator-(const vec3<A>& a, const B& b) {
+	return vec3<A>(a.x - b, a.y - b, a.z - b);
+}
+template <typename A, typename B>
+vec3<A> operator-(const A& a, const vec3<B>& b) {
+	return vec3<A>(a - b.x, a - b.y, a - b.z);
+}
+
 template <typename A, typename B>
 vec3<A> operator*(const vec3<A>& a, const vec3<B>& b) {
 	return vec3<A>(a.x * b.x, a.y * b.y, a.z * b.z);
 }
 template <typename A, typename B>
+vec3<A> operator*(const vec3<A>& a, const B& b) {
+	return vec3<A>(a.x * b, a.y * b, a.z * b);
+}
+template <typename A, typename B>
+vec3<A> operator*(const A& a, const vec3<B>& b) {
+	return vec3<A>(a * b.x, a * b.y, a * b.z);
+}
+
+template <typename A, typename B>
 vec3<A> operator/(const vec3<A>& a, const vec3<B>& b) {
 	return vec3<A>(a.x / b.x, a.y / b.y, a.z / b.z);
+}
+template <typename A, typename B>
+vec3<A> operator/(const vec3<A>& a, const B& b) {
+	return vec3<A>(a.x / b, a.y / b, a.z / b);
+}
+template <typename A, typename B>
+vec3<A> operator/(const A& a, const vec3<B>& b) {
+	return vec3<A>(a / b.x, a / b.y, a / b.z);
 }
 
 template <typename A, typename B>
@@ -147,8 +159,25 @@ bool operator==(const vec3<A>& a, const vec3<B>& b) {
 	return a.x == b.x && a.y == b.y && a.z == b.z;
 }
 template <typename A, typename B>
+bool operator==(const vec3<A>& a, const B& b) {
+	return a.x == b && a.y == b && a.z == b;
+}
+template <typename A, typename B>
+bool operator==(const A& a, const vec3<B>& b) {
+	return a == b.x && a == b.y && a == b.z;
+}
+
+template <typename A, typename B>
 bool operator!=(const vec3<A>& a, const vec3<B>& b) {
 	return a.x != b.x || a.y != b.y || a.z != b.z;
+}
+template <typename A, typename B>
+bool operator!=(const vec3<A>& a, const B& b) {
+	return a.x != b || a.y != b || a.z != b;
+}
+template <typename A, typename B>
+bool operator!=(const A& a, const vec3<B>& b) {
+	return a != b.x || a != b.y || a != b.z;
 }
 
 template <typename T>

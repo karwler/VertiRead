@@ -4,17 +4,13 @@ InputSys::InputSys(const ControlsSettings& SETS) :
 	sets(SETS),
 	captured(nullptr)
 {
-	SDL_GetMouseState(&lastMousePos.x, &lastMousePos.y);
+	SDL_GetMouseState(&mPos.x, &mPos.y);
 	UpdateControllers();
 	SetCapture(nullptr);
 }
 
 InputSys::~InputSys() {
 	ClearControllers();
-}
-
-void InputSys::Tick() {
-	lastMousePos = mousePos();
 }
 
 void InputSys::KeypressEvent(const SDL_KeyboardEvent& key) {
@@ -74,6 +70,11 @@ void InputSys::GamepadAxisEvent(const SDL_ControllerAxisEvent& gaxis) {
 		CheckShortcutsX(gaxis.axis, (value > 0));
 }
 
+void InputSys::MouseMotionEvent(const SDL_MouseMotionEvent& motion) {
+	mPos = vec2i(motion.x, motion.y);
+	World::scene()->OnMouseMove(mPos, vec2i(motion.xrel, motion.yrel));
+}
+
 void InputSys::MouseButtonDownEvent(const SDL_MouseButtonEvent& button) {
 	if (captured && !World::scene()->getPopup()) {	// mouse button cancels keyboard capture (except if popup is shown)
 		if (LineEdit* box = dynamic_cast<LineEdit*>(captured))	// confirm entered text if necessary
@@ -83,12 +84,12 @@ void InputSys::MouseButtonDownEvent(const SDL_MouseButtonEvent& button) {
 
 	if (button.clicks == 1) {
 		if (button.button == SDL_BUTTON_LEFT)		// single left click
-			World::scene()->OnMouseDown(EClick::left);
+			World::scene()->OnMouseDown(mPos, EClick::left);
 		else if (button.button == SDL_BUTTON_RIGHT)	// single right click
-			World::scene()->OnMouseDown(EClick::right);
+			World::scene()->OnMouseDown(mPos, EClick::right);
 	}
 	else if (button.button == SDL_BUTTON_LEFT)		// double left click
-		World::scene()->OnMouseDown(EClick::left_double);
+		World::scene()->OnMouseDown(mPos, EClick::left_double);
 }
 
 void InputSys::MouseButtonUpEvent(const SDL_MouseButtonEvent& button) {
@@ -97,7 +98,7 @@ void InputSys::MouseButtonUpEvent(const SDL_MouseButtonEvent& button) {
 }
 
 void InputSys::MouseWheelEvent(const SDL_MouseWheelEvent& wheel) {
-	World::scene()->OnMouseWheel(float(wheel.y) * sets.scrollSpeed.y);
+	World::scene()->OnMouseWheel(vec2i(float(wheel.x) * sets.scrollSpeed.x, float(wheel.y) * sets.scrollSpeed.y));
 }
 
 void InputSys::TextEvent(const SDL_TextInputEvent& text) {
@@ -266,17 +267,11 @@ float InputSys::getAxisG(uint8 gaxis) const {
 	return 0.f;
 }
 
-vec2i InputSys::mousePos() {
-	vec2i pos;
-	SDL_GetMouseState(&pos.x, &pos.y);
-	return pos;
+const vec2i& InputSys::mousePos() const {
+	return mPos;
 }
 
-vec2i InputSys::mouseMove() const {
-	return mousePos() - lastMousePos;
-}
-
-ControlsSettings InputSys::Settings() const {
+const ControlsSettings& InputSys::Settings() const {
 	return sets;
 }
 

@@ -7,15 +7,15 @@ namespace kk {
 
 template <typename T>
 struct vec2 {
-	vec2(T N=0) :
+	vec2(const T& N=0) :
 		x(N), y(N)
 	{}
-	vec2(T X, T Y) :
+	vec2(const T& X, const T& Y) :
 		x(X), y(Y)
 	{}
 	template <typename A>
-	vec2(const vec2<A>& N) :
-		x(N.x), y(N.y)
+	vec2(const vec2<A>& V) :
+		x(V.x), y(V.y)
 	{}
 
 	T& operator[](char i) {
@@ -24,58 +24,35 @@ struct vec2 {
 		return y;
 	}
 	const T& operator[](char i) const {
-		return *this[i];
+		if (i == 0)
+			return x;
+		return y;
 	}
 
-	template <typename A>
-	vec2& operator=(const vec2<A>& v) {
+	vec2& operator=(const vec2& v) {
 		x = v.x;
 		y = v.y;
 		return *this;
 	}
-	template <typename A>
-	vec2& operator+=(const vec2<A>& v) {
+	vec2& operator+=(const vec2& v) {
 		x += v.x;
 		y += v.y;
 		return *this;
 	}
-	template <typename A>
-	vec2& operator-=(const vec2<A>& v) {
+	vec2& operator-=(const vec2& v) {
 		x -= v.x;
 		y -= v.y;
 		return *this;
 	}
-	template <typename A>
-	vec2& operator*=(const vec2<A>& v) {
+	vec2& operator*=(const vec2& v) {
 		x *= v.x;
 		y *= v.y;
 		return *this;
 	}
-	template <typename A>
-	vec2& operator/=(const vec2<A>& v) {
+	vec2& operator/=(const vec2& v) {
 		x /= v.x;
 		y /= v.y;
 		return *this;
-	}
-
-	friend vec2 operator+(const vec2& a, const vec2& b) {
-		return vec2(a.x + b.x, a.y + b.y);
-	}
-	friend vec2 operator-(const vec2& a, const vec2& b) {
-		return vec2(a.x - b.x, a.y - b.y);
-	}
-	friend vec2 operator*(const vec2& a, const vec2& b) {
-		return vec2(a.x * b.x, a.y * b.y);
-	}
-	friend vec2 operator/(const vec2& a, const vec2& b) {
-		return vec2(a.x / b.x, a.y / b.y);
-	}
-
-	friend bool operator==(const vec2& a, const vec2& b) {
-		return a.x == b.x && a.y == b.y;
-	}
-	friend bool operator!=(const vec2& a, const vec2& b) {
-		return a.x != b.x || a.y != b.y;
 	}
 
 	bool isNull() const {
@@ -119,16 +96,51 @@ vec2<A> operator+(const vec2<A>& a, const vec2<B>& b) {
 	return vec2<A>(a.x + b.x, a.y + b.y);
 }
 template <typename A, typename B>
+vec2<A> operator+(const vec2<A>& a, const B& b) {
+	return vec2<A>(a.x + b, a.y + b);
+}
+template <typename A, typename B>
+vec2<A> operator+(const A& a, const vec2<B>& b) {
+	return vec2<A>(a + b.x, a + b.y);
+}
+
+template <typename A, typename B>
 vec2<A> operator-(const vec2<A>& a, const vec2<B>& b) {
 	return vec2<A>(a.x - b.x, a.y - b.y);
 }
+template <typename A, typename B>
+vec2<A> operator-(const vec2<A>& a, const B& b) {
+	return vec2<A>(a.x - b, a.y - b);
+}
+template <typename A, typename B>
+vec2<A> operator-(const A& a, const vec2<B>& b) {
+	return vec2<A>(a - b.x, a - b.y);
+}
+
 template <typename A, typename B>
 vec2<A> operator*(const vec2<A>& a, const vec2<B>& b) {
 	return vec2<A>(a.x * b.x, a.y * b.y);
 }
 template <typename A, typename B>
-vec2<A> operator/(const vec2<A>& a, const vec2<A>& b) {
+vec2<A> operator*(const vec2<A>& a, const B& b) {
+	return vec2<A>(a.x * b, a.y * b);
+}
+template <typename A, typename B>
+vec2<A> operator*(const A& a, const vec2<B>& b) {
+	return vec2<A>(a * b.x, a * b.y);
+}
+
+template <typename A, typename B>
+vec2<A> operator/(const vec2<A>& a, const vec2<B>& b) {
 	return vec2<A>(a.x / b.x, a.y / b.y);
+}
+template <typename A, typename B>
+vec2<A> operator/(const vec2<A>& a, const B& b) {
+	return vec2<A>(a.x / b, a.y / b);
+}
+template <typename A, typename B>
+vec2<A> operator/(const A& a, const vec2<B>& b) {
+	return vec2<A>(a / b.x, a / b.y);
 }
 
 template <typename A, typename B>
@@ -136,8 +148,25 @@ bool operator==(const vec2<A>& a, const vec2<B>& b) {
 	return a.x == b.x && a.y == b.y;
 }
 template <typename A, typename B>
+bool operator==(const vec2<A>& a, const B& b) {
+	return a.x == b && a.y == b;
+}
+template <typename A, typename B>
+bool operator==(const A& a, const vec2<B>& b) {
+	return a == b.x && a == b.y;
+}
+
+template <typename A, typename B>
 bool operator!=(const vec2<A>& a, const vec2<B>& b) {
 	return a.x != b.x || a.y != b.y;
+}
+template <typename A, typename B>
+bool operator!=(const vec2<A>& a, const B& b) {
+	return a.x != b || a.y != b;
+}
+template <typename A, typename B>
+bool operator!=(const A& a, const vec2<B>& b) {
+	return a != b.x || a != b.y;
 }
 
 template <typename A>
@@ -176,43 +205,6 @@ vec2<A> reflect(const vec2<A>& vec, vec2<B> nrm) {
 template <typename A>
 vec2<A> rotate(const vec2<A>& vec, A ang) {
 	return vec2<A>(vec.x*std::cos(ang) - vec.y*std::sin(ang), vec.x*std::sin(ang) + vec.y*std::cos(ang));
-}
-
-template <typename A>
-bool findIsct(const vec2<A>& p0, const vec2<A>& p1, const vec2<A>& v0, const vec2<A>& v1, vec2<A>& isct) {
-	A vCross = crossP(v0, v1);
-	if (vCross == 0)
-		return false;
-
-	A r = crossP(p1 - p0, v1) / vCross;
-	A s = crossP(p1 - p0, v0) / vCross;
-
-	if (r < 0 || r > 1 || s < 0 || s > 1)
-		return false;
-
-	isct = p0 + r*v0;
-	return true;
-}
-
-template <typename A>
-A distancePointLine(const vec2<A>& v, const vec2<A>& w, const vec2<A>& p) {
-	A l2 = pow(length(w-v), 2);
-	if (l2 == 0)
-		return length(v-p);
-
-	A t = std::max(A(0), std::min(A(1), dotP(p - v, w - v) / l2));
-	vec2<A> projection = v + t * (w - v);
-	return length(projection - p);
-}
-
-template <typename A>
-A findLookAtRotation(const vec2<A>& a, const vec2<A>& b) {
-	vec2<A> point = b - a;
-	if (point.isNull())
-		return 0;
-
-	A ang = acos(point.x / point.len());
-	return ang = (point.y < 0) ? 2*M_PI-ang : ang;
 }
 
 }

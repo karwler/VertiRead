@@ -11,48 +11,69 @@ public:
 	sptr(const T& v) :
 		ptr(new T(v))
 	{}
+	sptr(const sptr& b) :
+		ptr(new T(*b.ptr))
+	{}
 	~sptr() {
 		if (ptr)
 			delete ptr;
 	}
 
-	T* get() const {
+	T* get() {
 		return ptr;
 	}
-	T& val() const {
+	const T* get() const {
+		return ptr;
+	}
+	T& val() {
+		return *ptr;
+	}
+	const T& val() const {
 		return *ptr;
 	}
 
-	operator T*() const {
+	operator T*() {
 		return ptr;
 	}
-	operator T&() const {
+	operator const T*() const {
+		return ptr;
+	}
+	operator T&() {
+		return *ptr;
+	}
+	operator const T&() const {
 		return *ptr;
 	}
 
-	T* operator->() const {
+	T* operator->() {
 		return ptr;
 	}
-	T& operator*() const {
+	const T* operator->() const {
+		return ptr;
+	}
+	T& operator*() {
+		return *ptr;
+	}
+	const T& operator*() const {
 		return *ptr;
 	}
 
-	T* reset(T* p=nullptr) {
-		if (ptr)
-			delete ptr;
-		ptr = p;
-		return ptr;
-	}
-	T* operator=(sptr& b) {
-		if (ptr)
-			delete ptr;
-		ptr = b.p;
-		return ptr;
-	}
 	T* operator=(T* p) {
 		if (ptr)
 			delete ptr;
 		ptr = p;
+		return ptr;
+	}
+	T* operator=(const T& v) {
+		if (ptr)
+			delete ptr;
+		ptr = new T(v);
+		return ptr;
+	}
+	T* operator=(const sptr& b) {
+		if (ptr)
+			delete ptr;
+		ptr = new T(*b.ptr);
 		return ptr;
 	}
 
@@ -67,6 +88,12 @@ public:
 		ptr = tmp;
 	}
 
+	void clear() {
+		if (ptr) {
+			delete ptr;
+			ptr = nullptr;
+		}
+	}
 	T* release() {
 		T* t = ptr;
 		ptr = nullptr;

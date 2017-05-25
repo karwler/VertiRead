@@ -200,39 +200,36 @@ bool inRect(const SDL_Rect& rect, vec2i point) {
 }
 
 bool needsCrop(const SDL_Rect& crop) {
-	return crop.x != 0 || crop.y != 0 || crop.w != 0 || crop.h != 0;
+	return crop.x > 0 || crop.y > 0 || crop.w > 0 || crop.h > 0;
 }
 
 SDL_Rect getCrop(SDL_Rect item, SDL_Rect frame) {
+	vec2i siz(item.w, item.h);
 	item.w += item.x;
 	item.h += item.y;
 	frame.w += frame.x;
 	frame.h += frame.y;
-
-	vec2i outRet(item.w-item.x, item.h-item.y);	// return values in case that the item is outta frame
 	SDL_Rect crop = { 0, 0, 0, 0 };
 
-	if (item.w < frame.x)	// left
-		crop.w = -outRet.x;
-	else if (item.x < frame.x)
-		crop.x = frame.x - item.x;
-
-	if (item.x > frame.w)	// right
-		crop.w = outRet.x;
-	else if (item.w > frame.w)
-		crop.w = item.w - frame.w;
-
-	if (item.h < frame.y)	// top
-		crop.h = -outRet.y;
-	else if (item.y < frame.y)
-		crop.y = frame.y - item.y;
-
-	if (item.y > frame.h)	// bottom
-		crop.h = outRet.y;
-	else if (item.h > frame.h)
-		crop.h = item.h - frame.h;
-
+	if (item.w < frame.x || item.x > frame.w || item.h < frame.y || item.y > frame.h) {
+		crop.w = siz.x;
+		crop.h = siz.y;
+	}
+	else {
+		if (item.x < frame.x)
+			crop.x = frame.x - item.x;
+		if (item.w > frame.w)
+			crop.w = item.w - frame.w;
+		if (item.y < frame.y)
+			crop.y = frame.y - item.y;
+		if (item.h > frame.h)
+			crop.h = item.h - frame.h;
+	}
 	return crop;
+}
+
+void textCropRight(SDL_Rect& crop, int textLen, int rectWidth) {
+	crop.w = (textLen+5 > rectWidth) ? textLen - rectWidth +10 : 0;
 }
 
 SDL_Rect cropRect(const SDL_Rect& rect, const SDL_Rect& crop) {

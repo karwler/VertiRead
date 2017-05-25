@@ -58,7 +58,7 @@ void ItemButton::Data(const string& dat) {
 
 // CHECKBOX
 
-Checkbox::Checkbox(ListBox* SA, const string& LBL, bool ON, void (Program::*CALLB)(bool), int SPC) :
+Checkbox::Checkbox(ScrollAreaX1* SA, const string& LBL, bool ON, void (Program::*CALLB)(bool), int SPC) :
 	ListItem(LBL, SA),
 	spacing(SPC),
 	callback(CALLB),
@@ -74,8 +74,8 @@ void Checkbox::OnClick(EClick clickType) {
 	World::engine()->SetRedrawNeeded();
 }
 
-ListBox* Checkbox::Parent() const {
-	return static_cast<ListBox*>(parent);
+ScrollAreaX1* Checkbox::Parent() const {
+	return static_cast<ScrollAreaX1*>(parent);
 }
 
 bool Checkbox::On() const {
@@ -84,7 +84,7 @@ bool Checkbox::On() const {
 
 // SWITCHBOX
 
-Switchbox::Switchbox(ListBox* SA, const string& LBL, const vector<string>& OPT, const string& CUR_OPT, void (Program::*CALLB)(const string&)) :
+Switchbox::Switchbox(ScrollAreaX1* SA, const string& LBL, const vector<string>& OPT, const string& CUR_OPT, void (Program::*CALLB)(const string&)) :
 	ListItem(LBL, SA),
 	callback(CALLB),
 	curOpt(0),
@@ -111,8 +111,8 @@ void Switchbox::OnClick(EClick clickType) {
 		(World::program()->*callback)(options[curOpt]);
 }
 
-ListBox* Switchbox::Parent() const {
-	return static_cast<ListBox*>(parent);
+ScrollAreaX1* Switchbox::Parent() const {
+	return static_cast<ScrollAreaX1*>(parent);
 }
 
 string Switchbox::CurOption() const {

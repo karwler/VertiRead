@@ -101,5 +101,5 @@ private:
 	void SwitchScene(EMenu newMenu, void* dat=nullptr);
 	void SwitchScene(void* dat=nullptr) const;
 	float ModifySpeed(float value, float* axisFactor=nullptr, float normalFactor=1.f, float fastFactor=4.f, float slowFactor=0.5f);
-	string FindFittingPlaylist(const string& picPath);
+	Playlist FindFittingPlaylist(const string& picPath) const;
 };

@@ -74,8 +74,15 @@ void VideoSettings::SetFont(const string& newFont) {
 }
 
 void VideoSettings::SetDefaultTheme() {
-	theme.clear();
-	colors = GetDefaultColors();
+	vector<string> themes = Filer::GetAvailibleThemes();
+	if (themes.empty()) {
+		theme.clear();
+		colors = GetDefaultColors();
+	}
+	else {
+		theme = themes[0];
+		Filer::GetColors(colors, theme);
+	}
 }
 
 map<EColor, vec4c> VideoSettings::GetDefaultColors() {

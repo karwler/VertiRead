@@ -14,6 +14,7 @@
 
 // include other useful stuff
 #include "kklib/aliases.h"
+#include "kklib/grid2.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -30,10 +31,13 @@ using std::string;
 using std::to_string;
 
 using kk::vec2i;
+using kk::vec2u;
 using kk::vec2f;
 using kk::vec4c;
 
 using vec2t = kk::vec2<size_t>;
+
+using kk::grid2;
 
 #ifdef main
 #undef main
@@ -52,7 +56,7 @@ class Scene;
 class Program;
 
 class ScrollArea;
-class ListBox;
+class ScrollAreaX1;
 class Capturer;
 
 // files and strings
@@ -76,6 +80,7 @@ void sortStrVec(vector<string>& vec);
 bool inRect(const SDL_Rect& rect, vec2i point);
 bool needsCrop(const SDL_Rect& crop);
 SDL_Rect getCrop(SDL_Rect item, SDL_Rect frame);
+void textCropRight(SDL_Rect& crop, int textLen, int rectWidth);
 SDL_Rect cropRect(const SDL_Rect& rect, const SDL_Rect& crop);
 SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop);
 
@@ -140,4 +145,11 @@ void clear(map<A, B*>& mp) {
 	for (const pair<A, B*>& it : mp)
 		delete it.second;
 	mp.clear();
+}
+
+template <typename T>
+void clear(grid2<T>& gd) {
+	for (T& it : gd)
+		delete it;
+	gd.clear();
 }

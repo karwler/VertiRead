@@ -32,11 +32,11 @@ private:
 
 class Checkbox : public ListItem {
 public:
-	Checkbox(ListBox* SA, const string& LBL="", bool ON=false, void (Program::*CALLB)(bool)=nullptr, int SPC=5);
+	Checkbox(ScrollAreaX1* SA, const string& LBL="", bool ON=false, void (Program::*CALLB)(bool)=nullptr, int SPC=5);
 	virtual ~Checkbox();
 
 	virtual void OnClick(EClick clickType);
-	ListBox* Parent() const;
+	ScrollAreaX1* Parent() const;
 	bool On() const;
 
 	const int spacing;
@@ -47,11 +47,11 @@ private:
 
 class Switchbox : public ListItem {
 public:
-	Switchbox(ListBox* SA, const string& LBL="", const vector<string>& OPT={}, const string& CUR_OPT="", void (Program::*CALLB)(const string&)=nullptr);
+	Switchbox(ScrollAreaX1* SA, const string& LBL="", const vector<string>& OPT={}, const string& CUR_OPT="", void (Program::*CALLB)(const string&)=nullptr);
 	virtual ~Switchbox();
 
 	virtual void OnClick(EClick clickType);
-	ListBox* Parent() const;
+	ScrollAreaX1* Parent() const;
 	string CurOption() const;
 
 private:

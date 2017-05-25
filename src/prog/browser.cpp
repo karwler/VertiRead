@@ -7,7 +7,7 @@ Browser::Browser(const string& RD, const string& CD)
 	curDir = CD.empty() ? rootDir : appendDsep(CD);
 }
 
-vector<string> Browser::ListFiles() {
+vector<string> Browser::ListFiles() const {
 #ifdef _WIN32
 	if (curDir == "\\")
 		return {};
@@ -15,7 +15,7 @@ vector<string> Browser::ListFiles() {
 	return Filer::ListDir(curDir, FILTER_FILE);
 }
 
-vector<string> Browser::ListDirs() {
+vector<string> Browser::ListDirs() const {
 #ifdef _WIN32
 	if (curDir == "\\") {
 		vector<char> letters = Filer::ListDrives();
@@ -98,10 +98,10 @@ string Browser::GoNext() {
 	string parent = parentPath(curDir);
 	vector<string> dirs = Filer::ListDir(parent, FILTER_DIR);
 	for (vector<string>::const_iterator it=dirs.begin(); it!=dirs.end(); it++)
-		if (*it == curDir) {
-			curDir = (it == dirs.end()-1) ? parent + *dirs.begin() : parent + *++it;
+		if (parent+*it+dsep == curDir) {
+			curDir = (it == dirs.end()-1) ? parent + *dirs.begin() + dsep : parent + *++it + dsep;
 			break;
-	}
+		}
 #endif
 	return curDir;
 }
@@ -132,10 +132,10 @@ string Browser::GoPrev() {
 	string parent = parentPath(curDir);
 	vector<string> dirs = Filer::ListDir(parent, FILTER_DIR);
 	for (vector<string>::const_iterator it=dirs.begin(); it!=dirs.end(); it++)
-		if (*it == curDir) {
-			curDir = (it == dirs.begin()) ? parent + *(dirs.end()-1) : parent + *--it;
+		if (parent+*it+dsep == curDir) {
+			curDir = (it == dirs.begin()) ? parent + *(dirs.end()-1) + dsep : parent + *--it + dsep;
 			break;
-	}
+		}
 #endif
 	return curDir;
 }

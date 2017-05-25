@@ -30,8 +30,3 @@ Library*World::library() {
 Program* World::program() {
 	return base.getScene()->getProgram();
 }
-
-void World::PlaySound(const string& sound) {
-	if (base.getAudioSys())
-		base.getAudioSys()->PlaySound(sound);
-}

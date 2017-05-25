@@ -164,7 +164,7 @@ public:
 		ASG_JAXIS_N = 0x10,	// use only negative values
 		ASG_GBUTTON = 0x20,
 		ASG_GAXIS_P = 0x40,
-		ASG_GAXIS_N = 0x80,
+		ASG_GAXIS_N = 0x80
 	};
 
 	Shortcut();

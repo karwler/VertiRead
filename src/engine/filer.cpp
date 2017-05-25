@@ -103,7 +103,6 @@ vector<string> Filer::GetAvailibleThemes() {
 			if (!isTitle && !contains(themes, arg))
 				themes.push_back(arg);
 	}
-	sortStrVec(themes);
 	return themes;
 }
 
@@ -162,7 +161,7 @@ map<string, string> Filer::GetLines(const string& language) {
 map<string, Mix_Chunk*> Filer::GetSounds() {
 	map<string, Mix_Chunk*> sounds;
 	for (string& it : ListDir(dirSnds, FILTER_FILE))
-		if (Mix_Chunk* cue = Mix_LoadWAV(string(dirLangs+it).c_str()))				// add only valid sound files
+		if (Mix_Chunk* cue = Mix_LoadWAV(string(dirSnds+it).c_str()))				// add only valid sound files
 			sounds.insert(make_pair(delExt(it), cue));
 	return sounds;
 }
@@ -190,7 +189,7 @@ vector<string> Filer::GetPics(const string& dir) {
 
 Playlist Filer::LoadPlaylist(const string& name) {
 	vector<string> lines;
-	if (!ReadTextFile(World::scene()->Settings().PlaylistPath() + name, lines))
+	if (!ReadTextFile(World::scene()->Settings().PlaylistPath() + name + ".ini", lines))
 		return Playlist();
 
 	Playlist plist(name);
@@ -203,7 +202,7 @@ Playlist Filer::LoadPlaylist(const string& name) {
 		if (arg == "book")
 			plist.books.push_back(val);
 		else if (arg == "song")
-			plist.songs.push_back(line);
+			plist.songs.push_back(val);
 	}
 	return plist;
 }
@@ -215,7 +214,7 @@ void Filer::SavePlaylist(const Playlist& plist) {
 	for (const string& file : plist.songs)
 		lines.push_back("song=" + file);
 
-	WriteTextFile(World::scene()->Settings().PlaylistPath() + plist.name, lines);
+	WriteTextFile(World::scene()->Settings().PlaylistPath() + plist.name + ".ini", lines);
 }
 
 GeneralSettings Filer::LoadGeneralSettings() {

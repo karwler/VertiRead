@@ -34,8 +34,9 @@ void WindowSys::CreateRenderer() {
 	renderer = SDL_CreateRenderer(window, GetRenderDriverIndex(), SDL_RENDERER_ACCELERATED);
 	if (!renderer)
 		throw Exception("couldn't create renderer\n" + string(SDL_GetError()), 4);
-
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+	World::engine()->SetRedrawNeeded();
 }
 
 void WindowSys::DestroyRenderer() {
@@ -85,6 +86,9 @@ void WindowSys::DrawObjects(const vector<Object*>& objects) {
 
 void WindowSys::WindowEvent(const SDL_WindowEvent& winEvent) {
 	switch (winEvent.event) {
+	case SDL_WINDOWEVENT_EXPOSED:
+		World::engine()->SetRedrawNeeded();
+		break;
 	case SDL_WINDOWEVENT_RESIZED: {
 		// update settings if needed
 		uint32 flags = SDL_GetWindowFlags(window);
@@ -103,7 +107,7 @@ SDL_Renderer* WindowSys::Renderer() const {
 	return renderer;
 }
 
-VideoSettings WindowSys::Settings() const {
+const VideoSettings& WindowSys::Settings() const {
 	return sets;
 }
 
@@ -127,8 +131,6 @@ vec2i WindowSys::DesktopResolution() {
 void WindowSys::Fullscreen(bool on) {
 	sets.fullscreen = on;
 	CreateWindow();
-
-	World::engine()->SetRedrawNeeded(32);
 }
 
 void WindowSys::Font(const string& font) {
@@ -165,6 +167,8 @@ void WindowSys::PassDrawObject(Object* obj) {
 		DrawObject(edt);
 	else if (ListBox* box = dynamic_cast<ListBox*>(obj))
 		DrawObject(box);
+	else if (TableBox* box = dynamic_cast<TableBox*>(obj))
+		DrawObject(box);
 	else if (TileBox* box = dynamic_cast<TileBox*>(obj))
 		DrawObject(box);
 	else if (ReaderBox* box = dynamic_cast<ReaderBox*>(obj))
@@ -197,18 +201,41 @@ void WindowSys::DrawObject(LineEditor* obj) {
 }
 
 void WindowSys::DrawObject(ListBox* obj) {
-	vec2i interval = obj->VisibleItems();
+	vec2t interval = obj->VisibleItems();
 	if (interval.x > interval.y)
 		return;
 	
-	vector<ListItem*> items = obj->Items();
-	for (int i=interval.x; i<=interval.y; i++) {
+	const vector<ListItem*>& items = obj->Items();
+	for (size_t i=interval.x; i<=interval.y; i++) {
 		EColor color;
 		SDL_Rect crop;
-		SDL_Rect rect = obj->ItemRect(i, &crop, &color);
-
+		SDL_Rect rect = obj->ItemRect(i, crop, color);
 		DrawRect(rect, color);
-		DrawText(Text(items[i]->label, vec2i(rect.x+5, rect.y-crop.y), obj->ItemH()), crop);
+
+		Text txt(items[i]->label, vec2i(rect.x+5, rect.y-crop.y), obj->ItemH());
+		textCropRight(crop, txt.size().x, rect.w);
+		DrawText(txt, crop);
+
+		PassDrawItem(i, obj, rect, crop);
+	}
+	DrawRect(obj->Bar(), EColor::darkened);
+	DrawRect(obj->Slider(), EColor::highlighted);
+}
+
+void WindowSys::DrawObject(TableBox* obj) {
+	vec2t interval = obj->VisibleItems();
+	if (interval.x > interval.y)
+		return;
+
+	const grid2<ListItem*>& items = obj->Items();
+	for (size_t i=interval.x; i<=interval.y; i++) {
+		SDL_Rect crop;
+		SDL_Rect rect = obj->ItemRect(i, crop);
+		DrawRect(rect, EColor::rectangle);
+
+		Text txt(items[i]->label, vec2i(rect.x+5, rect.y-crop.y), obj->ItemH());
+		textCropRight(crop, txt.size().x, rect.w);
+		DrawText(txt, crop);
 
 		PassDrawItem(i, obj, rect, crop);
 	}
@@ -217,30 +244,30 @@ void WindowSys::DrawObject(ListBox* obj) {
 }
 
 void WindowSys::DrawObject(TileBox* obj) {
-	vec2i interval = obj->VisibleItems();
+	vec2t interval = obj->VisibleItems();
 	if (interval.x > interval.y)
 		return;
-	
+
 	const vector<ListItem*>& tiles = obj->Items();
-	for (int i=interval.x; i<=interval.y; i++) {
+	for (size_t i=interval.x; i<=interval.y; i++) {
 		EColor color;
 		SDL_Rect crop;
-		SDL_Rect rect = obj->ItemRect(i, &crop, &color);
+		SDL_Rect rect = obj->ItemRect(i, crop, color);
 		DrawRect(rect, color);
 
-		int len = Text(tiles[i]->label, 0, obj->TileSize().y).size().x;
-		crop.w = (len+5 > rect.w) ? len - rect.w +10 : 0;									// recalculate right side crop for text
-		DrawText(Text(tiles[i]->label, vec2i(rect.x+5, rect.y-crop.y), obj->TileSize().y), crop);	// left side crop can be ignored
+		Text txt(tiles[i]->label, vec2i(rect.x+5, rect.y-crop.y), obj->TileSize().y);
+		textCropRight(crop, txt.size().x, rect.w);
+		DrawText(txt, crop);
 	}
 	DrawRect(obj->Bar(), EColor::darkened);
 	DrawRect(obj->Slider(), EColor::highlighted);
 }
 
 void WindowSys::DrawObject(ReaderBox* obj) {
-	vec2i interval = obj->VisiblePictures();	
-	for (int i=interval.x; i<=interval.y; i++) {
+	vec2t interval = obj->VisibleItems();
+	for (size_t i=interval.x; i<=interval.y; i++) {
 		SDL_Rect crop;
-		Image img = obj->getImage(i, &crop);
+		Image img = obj->getImage(i, crop);
 		DrawImage(img, crop);
 	}
 	if (obj->showSlider()) {
@@ -249,13 +276,13 @@ void WindowSys::DrawObject(ReaderBox* obj) {
 	}
 	if (obj->showList()) {
 		DrawRect(obj->List(), EColor::darkened);
-		for (ButtonImage& but : obj->ListButtons())
-			DrawImage(but.CurTex());
+		for (Object* it : obj->ListObjects())
+			PassDrawObject(it);
 	}
 	if (obj->showPlayer()) {
 		DrawRect(obj->Player(), EColor::darkened);
-		for (ButtonImage& but : obj->PlayerButtons())
-			DrawImage(but.CurTex());
+		for (Object* it : obj->PlayerObjects())
+			PassDrawObject(it);
 	}
 }
 
@@ -265,7 +292,7 @@ void WindowSys::DrawObject(Popup* obj) {
 		PassDrawObject(it);
 }
 
-void WindowSys::PassDrawItem(int id, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
+void WindowSys::PassDrawItem(size_t id, ScrollAreaX1* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
 	if (Checkbox* obj = dynamic_cast<Checkbox*>(parent->Item(id)))
 		DrawItem(obj, parent, rect, crop);
 	else if (Switchbox* obj = dynamic_cast<Switchbox*>(parent->Item(id)))
@@ -276,22 +303,22 @@ void WindowSys::PassDrawItem(int id, ListBox* parent, const SDL_Rect& rect, cons
 		DrawItem(obj, parent, rect, crop);
 }
 
-void WindowSys::DrawItem(Checkbox* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
-	int offset = Text(item->label, 0, parent->ItemH()).size().x + 20;
+void WindowSys::DrawItem(Checkbox* item, ScrollAreaX1* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
+	int offset = item->label.empty() ? 5 : Text(item->label, 0, parent->ItemH()).size().x + 20;
 	int top = (crop.y < item->spacing) ? item->spacing - crop.y : crop.y;
 	int bot = (crop.h > item->spacing) ? crop.h - item->spacing : item->spacing;
 
 	DrawRect({ rect.x+offset+item->spacing, rect.y-crop.y+top, parent->ItemH()-item->spacing*2, rect.h+crop.h-top-bot }, item->On() ? EColor::highlighted : EColor::darkened);
 }
 
-void WindowSys::DrawItem(Switchbox* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
-	int offset = Text(item->label, 0, parent->ItemH()).size().x + 20;
+void WindowSys::DrawItem(Switchbox* item, ScrollAreaX1* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
+	int offset = item->label.empty() ? 5 : Text(item->label, 0, parent->ItemH()).size().x + 20;
 
 	DrawText(Text(item->CurOption(), vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH()), crop);
 }
 
-void WindowSys::DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, SDL_Rect crop) {
-	int offset = Text(item->label, 0, parent->ItemH()).size().x + 20;
+void WindowSys::DrawItem(LineEdit* item, ScrollAreaX1* parent, const SDL_Rect& rect, SDL_Rect crop) {
+	int offset = item->label.empty() ? 5 : Text(item->label, 0, parent->ItemH()).size().x + 20;
 	Text text(item->Editor()->Text(), vec2i(rect.x+offset-item->TextPos(), rect.y-crop.y), parent->ItemH());
 
 	// set text's left and right crop
@@ -308,9 +335,9 @@ void WindowSys::DrawItem(LineEdit* item, ListBox* parent, const SDL_Rect& rect, 
 	}
 }
 
-void WindowSys::DrawItem(KeyGetter* item, ListBox* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
-	int offset = Text(item->label, 0, parent->ItemH()).size().x + 20;
-	string text = (World::inputSys()->Captured() == item) ? "Gimme a key..." : item->Text();
+void WindowSys::DrawItem(KeyGetter* item, ScrollAreaX1* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
+	int offset = item->label.empty() ? 5 : Text(item->label, 0, parent->ItemH()).size().x + 20;
+	string text = (World::inputSys()->Captured() == item) ? "..." : item->Text();
 	EColor color = (World::inputSys()->Captured() == item) ? EColor::highlighted : EColor::text;
 
 	DrawText(Text(text, vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), color), crop);
@@ -324,7 +351,6 @@ void WindowSys::DrawRect(const SDL_Rect& rect, EColor color) {
 
 void WindowSys::DrawImage(const Image& img, const SDL_Rect& crop) {
 	SDL_Rect rect = img.getRect();	// the rect the image is gonna be projected on
-
 	SDL_Texture* tex;
 	if (needsCrop(crop)) {
 		SDL_Rect ori = { rect.x, rect.y, img.texture->surface->w, img.texture->surface->h };	// proportions of the original image
@@ -344,9 +370,11 @@ void WindowSys::DrawImage(const Image& img, const SDL_Rect& crop) {
 }
 
 void WindowSys::DrawText(const Text& txt, const SDL_Rect& crop) {
+	if (txt.text.empty())
+		return;
+
 	vec2i siz = txt.size();
 	SDL_Rect rect = {txt.pos.x, txt.pos.y, siz.x, siz.y};
-
 	SDL_Surface* surface = TTF_RenderUTF8_Blended(World::library()->Fonts()->Get(txt.height), txt.text.c_str(), { sets.colors[txt.color].x, sets.colors[txt.color].y, sets.colors[txt.color].z, sets.colors[txt.color].a });
 	SDL_Texture* tex;
 	if (needsCrop(crop)) {

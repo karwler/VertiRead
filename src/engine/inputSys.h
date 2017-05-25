@@ -7,13 +7,13 @@ public:
 	InputSys(const ControlsSettings& SETS=ControlsSettings());
 	~InputSys();
 
-	void Tick();
 	void KeypressEvent(const SDL_KeyboardEvent& key);
 	void JoystickButtonEvent(const SDL_JoyButtonEvent& jbutton);	// basically anything that isn't a hat or an axis
 	void JoystickHatEvent(const SDL_JoyHatEvent& jhat);				// hat is equivalent to dpad
 	void JoystickAxisEvent(const SDL_JoyAxisEvent& jaxis);			// one directionmight be mapped as multipe axes
 	void GamepadButtonEvent(const SDL_ControllerButtonEvent& gbutton);
 	void GamepadAxisEvent(const SDL_ControllerAxisEvent& gaxis);
+	void MouseMotionEvent(const SDL_MouseMotionEvent& motion);
 	void MouseButtonDownEvent(const SDL_MouseButtonEvent& button);
 	void MouseButtonUpEvent(const SDL_MouseButtonEvent& button);
 	void MouseWheelEvent(const SDL_MouseWheelEvent& wheel);
@@ -29,10 +29,9 @@ public:
 	bool isPressedH(uint8 jhat, uint8 val) const;	// check if any of the joysticks' hat is pressed
 	float getAxisJ(uint8 jaxis) const;				// check if any of the joysticks' axis value is greater than 0
 	float getAxisG(uint8 gaxis) const;				// check if any of the gamepads' axis value is greater than 0
-	static vec2i mousePos();						// get mouse poition
-	vec2i mouseMove() const;						// get how much the mouse has moved since the last tick
+	const vec2i& mousePos() const;					// get mouse poition
 
-	ControlsSettings Settings() const;
+	const ControlsSettings& Settings() const;
 	void ScrollSpeed(const vec2f& sspeed);
 	void Deadzone(int16 deadz);
 	Shortcut* GetShortcut(const string& name);
@@ -46,7 +45,7 @@ public:
 private:
 	ControlsSettings sets;
 	vector<Controller> controllers;
-	vec2i lastMousePos;
+	vec2i mPos;
 	Capturer* captured;
 
 	void CheckShortcutsK(SDL_Scancode key);

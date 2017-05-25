@@ -8,16 +8,18 @@
 
 class Engine {
 public:
+	Engine();
+
 	void Run();
 	void Close();
 	void Cleanup();
 
-	void SetRedrawNeeded(uint8 count=1);
+	void SetRedrawNeeded();
 	float deltaSeconds() const;
-	AudioSys* getAudioSys() const;
-	InputSys* getInputSys() const;
-	WindowSys* getWindowSys() const;
-	Scene* getScene() const;
+	AudioSys* getAudioSys();
+	InputSys* getInputSys();
+	WindowSys* getWindowSys();
+	Scene* getScene();
 
 private:
 	kk::sptr<AudioSys> audioSys;
@@ -26,7 +28,7 @@ private:
 	kk::sptr<Scene> scene;
 
 	bool run;
-	uint8 redraws;
+	bool redraw;
 	float dSec;
 
 	void HandleEvent(const SDL_Event& event);

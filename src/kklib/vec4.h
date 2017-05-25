@@ -7,91 +7,70 @@ namespace kk {
 
 template <typename T>
 struct vec4 {
-	vec4(T N=0) :
+	vec4(const T& N=0) :
 		x(N), y(N), z(N), a(N)
 	{}
-	vec4(T X, T Y, T Z, T A) :
+	vec4(const T& X, const T& Y, const T& Z, const T& A) :
 		x(X), y(Y), z(Z), a(A)
 	{}
 	template <typename A>
-	vec4(const vec4<A>& N) :
-		x(N.x), y(N.y), z(N.z), a(N.a)
+	vec4(const vec4<A>& V) :
+		x(V.x), y(V.y), z(V.z), a(V.a)
 	{}
 
 	T& operator[](char i) {
-		switch (i) {
-		case 0:
+		if (i == 0)
 			return x;
-		case 1:
+		if (i == 1)
 			return y;
-		case 2:
+		if (i ==2)
 			return z;
-		}
 		return a;
 	}
 	const T& operator[](char i) const {
-		return *this[i];
+		if (i == 0)
+			return x;
+		if (i == 1)
+			return y;
+		if (i ==2)
+			return z;
+		return a;
 	}
 
-	template <typename A>
-	vec4& operator=(const vec4<A>& v) {
+	vec4& operator=(const vec4& v) {
 		x = v.x;
 		y = v.y;
 		z = v.z;
 		a = v.a;
 		return *this;
 	}
-	template <typename A>
-	vec4& operator+=(const vec4<A>& v) {
+	vec4& operator+=(const vec4& v) {
 		x += v.x;
 		y += v.y;
 		z += v.z;
 		a += v.a;
 		return *this;
 	}
-	template <typename A>
-	vec4& operator-=(const vec4<A>& v) {
+	vec4& operator-=(const vec4& v) {
 		x -= v.x;
 		y -= v.y;
 		z -= v.z;
 		a -= v.a;
 		return *this;
 	}
-	template <typename A>
-	vec4& operator*=(const vec4<A>& v) {
+	vec4& operator*=(const vec4& v) {
 		x *= v.x;
 		y *= v.y;
 		z *= v.z;
 		a *= v.a;
 		return *this;
 	}
-	template <typename A>
-	vec4& operator/=(const vec4<A>& v) {
+	vec4& operator/=(const vec4& v) {
 		x /= v.x;
 		y /= v.y;
 		z /= v.z;
 		a /= v.a;
 		return *this;
-	}
-
-	friend vec4 operator+(const vec4& a, const vec4& b) {
-		return vec4(a.x + b.x, a.y + b.y, a.z + b.z, a.a + b.a);
-	}
-	friend vec4 operator-(const vec4& a, const vec4& b) {
-		return vec4(a.x - b.x, a.y - b.y, a.z - b.z, a.a - b.a);
-	}
-	friend vec4 operator*(const vec4& a, const vec4& b) {
-		return vec4(a.x * b.x, a.y * b.y, a.z * b.z, a.a * b.a);
-	}
-	friend vec4 operator/(const vec4& a, const vec4& b) {
-		return vec4(a.x / b.x, a.y / b.y, a.z / b.z, a.a / b.a);
-	}
-
-	friend bool operator==(const vec4& a, const vec4& b) {
-		return a.x == b.x && a.y == b.y && a.z == b.z && a.a == b.a;
-	}
-	friend bool operator!=(const vec4& a, const vec4& b) {
-		return a.x != b.x || a.y != b.y || a.z != b.z || a.a != b.a;
 	}
 
 	T len() const {
@@ -119,16 +98,51 @@ vec4<A> operator+(const vec4<A>& a, const vec4<B>& b) {
 	return vec4<A>(a.x + b.x, a.y + b.y, a.z + b.z, a.a + b.a);
 }
 template <typename A, typename B>
+vec4<A> operator+(const vec4<A>& a, const B& b) {
+	return vec4<A>(a.x + b, a.y + b, a.z + b, a.a + b);
+}
+template <typename A, typename B>
+vec4<A> operator+(const A& a, const vec4<B>& b) {
+	return vec4<A>(a + b.x, a + b.y, a + b.z, a + b.a);
+}
+
+template <typename A, typename B>
 vec4<A> operator-(const vec4<A>& a, const vec4<B>& b) {
 	return vec4<A>(a.x - b.x, a.y - b.y, a.z - b.z, a.a - b.a);
 }
+template <typename A, typename B>
+vec4<A> operator-(const vec4<A>& a, const B& b) {
+	return vec4<A>(a.x - b, a.y - b, a.z - b, a.a - b);
+}
+template <typename A, typename B>
+vec4<A> operator-(const A& a, const vec4<B>& b) {
+	return vec4<A>(a - b.x, a - b.y, a - b.z, a - b.a);
+}
+
 template <typename A, typename B>
 vec4<A> operator*(const vec4<A>& a, const vec4<B>& b) {
 	return vec4<A>(a.x * b.x, a.y * b.y, a.z * b.z, a.a * b.a);
 }
 template <typename A, typename B>
+vec4<A> operator*(const vec4<A>& a, const B& b) {
+	return vec4<A>(a.x * b, a.y * b, a.z * b, a.a * b);
+}
+template <typename A, typename B>
+vec4<A> operator*(const A& a, const vec4<B>& b) {
+	return vec4<A>(a * b.x, a * b.y, a * b.z, a * b.a);
+}
+
+template <typename A, typename B>
 vec4<A> operator/(const vec4<A>& a, const vec4<B>& b) {
 	return vec4<A>(a.x / b.x, a.y / b.y, a.z / b.z, a.a / b.a);
+}
+template <typename A, typename B>
+vec4<A> operator/(const vec4<A>& a, const B& b) {
+	return vec4<A>(a.x / b, a.y / b, a.z / b, a.a / b);
+}
+template <typename A, typename B>
+vec4<A> operator/(const A& a, const vec4<B>& b) {
+	return vec4<A>(a / b.x, a / b.y, a / b.z, a / b.a);
 }
 
 template <typename A, typename B>
@@ -136,8 +150,25 @@ bool operator==(const vec4<A>& a, const vec4<B>& b) {
 	return a.x == b.x && a.y == b.y && a.z == b.z && a.a == b.a;
 }
 template <typename A, typename B>
+bool operator==(const vec4<A>& a, const B& b) {
+	return a.x == b && a.y == b && a.z == b && a.a == b;
+}
+template <typename A, typename B>
+bool operator==(const A& a, const vec4<B>& b) {
+	return a == b.x && a == b.y && a == b.z && a == b.a;
+}
+
+template <typename A, typename B>
 bool operator!=(const vec4<A>& a, const vec4<B>& b) {
 	return a.x != b.x || a.y != b.y || a.z != b.z || a.a != b.a;
+}
+template <typename A, typename B>
+bool operator!=(const vec4<A>& a, const B& b) {
+	return a.x != b || a.y != b || a.z != b || a.a != b;
+}
+template <typename A, typename B>
+bool operator!=(const A& a, const vec4<B>& b) {
+	return a != b.x || a != b.y || a != b.z || a != b.a;
 }
 
 template <typename T>

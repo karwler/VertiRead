@@ -11,7 +11,7 @@ const char dsep = '/';
 #define DEFAULT_LANGUAGE "english"
 
 // video settings
-#define DEFAULT_RESOLUTION	vec2i(800, 600)
+#define DEFAULT_RESOLUTION	vec2i(900, 600)
 #define DEFAULT_FONT		"arial"
 
 // colors

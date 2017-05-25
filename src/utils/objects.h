@@ -46,7 +46,7 @@ public:
 protected:
 	EFix fix;
 	vec2f anchor;
-	vec2f pos, end;				// distance between boundries and anchor point
+	vec2f pos, end;		// distance between boundries and anchor point
 };
 
 class Label : public Object {

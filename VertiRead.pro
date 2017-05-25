@@ -111,7 +111,7 @@ HEADERS += src/engine/audioSys.h \
     src/utils/items.h \
     src/utils/objects.h \
     src/utils/types.h \
-	src/prog/defaults.h \
+    src/prog/defaults.h \
     src/utils/utils.h \
     src/prog/browser.h \
     src/prog/playlistEditor.h \
@@ -119,11 +119,12 @@ HEADERS += src/engine/audioSys.h \
     src/utils/popups.h \
     src/prog/library.h \
     src/utils/capturers.h \
-	src/kklib/aliases.h \
-	src/kklib/sptr.h \
-	src/kklib/vec2.h \
-	src/kklib/vec3.h \
-	src/kklib/vec4.h \
-	src/utils/settings.h
+    src/kklib/aliases.h \
+    src/kklib/grid2.h \
+    src/kklib/sptr.h \
+    src/kklib/vec2.h \
+    src/kklib/vec3.h \
+    src/kklib/vec4.h \
+    src/utils/settings.h
 
 win32: RC_FILE = rsc/resource.rc

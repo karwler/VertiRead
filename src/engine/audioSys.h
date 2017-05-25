@@ -14,13 +14,18 @@ public:
 	static void MusicFinishCallback();
 
 	void PlayPauseMusic();
-	void SwitchSong(int step=1);
+	void SongMuteSwitch();
+	void NextSong();
+	void PrevSong();
+	void SwitchSong(bool play);
 	void PlaySound(const string& name);
 
+	string curSongName() const;
+	bool PlaylistLoaded() const;
 	void LoadPlaylist(const Playlist& newList);
 	void UnloadPlaylist();
 
-	AudioSettings Settings() const;
+	const AudioSettings& Settings() const;
 	void MusicVolume(int vol);
 	void SoundVolume(int vol);
 	void SongDelay(float delay);
@@ -30,7 +35,9 @@ private:
 	vector<string> playlist;
 	size_t curSong;
 	Mix_Music* curMusic;
+	bool muted, played;
 	float deltaDelay;
 
+	void PlayMusic();
 	int CheckVolume(int value);
 };

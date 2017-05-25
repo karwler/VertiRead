@@ -2,7 +2,7 @@
 
 // CAPTURER
 
-Capturer::Capturer(ListBox* SA, const string& LBL) :
+Capturer::Capturer(ScrollAreaX1* SA, const string& LBL) :
 	ListItem(LBL, SA)
 {}
 Capturer::~Capturer() {}
@@ -11,13 +11,13 @@ void Capturer::OnClick(EClick clickType) {
 	World::inputSys()->SetCapture(this);
 }
 
-ListBox* Capturer::Parent() const {
+ScrollAreaX1* Capturer::Parent() const {
 	return static_cast<ListBox*>(parent);
 }
 
 // LINE EDIT
 
-LineEdit::LineEdit(ListBox* SA, const string& LBL, const string& TXT, ETextType TYPE, void (Program::*KCALL)(const string&), void (Program::*CCALL)()) :
+LineEdit::LineEdit(ScrollAreaX1* SA, const string& LBL, const string& TXT, ETextType TYPE, void (Program::*KCALL)(const string&), void (Program::*CCALL)()) :
 	Capturer(SA, LBL),
 	editor(TXT, TYPE),
 	cancelCall(CCALL),
@@ -29,7 +29,7 @@ LineEdit::~LineEdit() {}
 
 void LineEdit::OnClick(EClick clickType) {
 	World::inputSys()->SetCapture(this);
-	editor.SetCursor(0);
+	editor.SetCursor(editor.Text().length());
 }
 
 void LineEdit::OnKeypress(SDL_Scancode key) {
@@ -195,26 +195,27 @@ void LineEdit::CheckCaretLeft() {
 
 // KEY GETTER
 
-KeyGetter::KeyGetter(ListBox* SA, const string& LBL, Shortcut* SHC) :
-	Capturer(SA, LBL),
+KeyGetter::KeyGetter(ScrollAreaX1* SA, EAcceptType ACT, Shortcut* SHC) :
+	Capturer(SA),
+	acceptType(ACT),
 	shortcut(SHC)
 {}
 KeyGetter::~KeyGetter() {}
 
 void KeyGetter::OnKeypress(SDL_Scancode key) {
-	if (shortcut)
+	if (acceptType == EAcceptType::keyboard && shortcut)
 		shortcut->Key(key);
 	World::inputSys()->SetCapture(nullptr);
 }
 
 void KeyGetter::OnJButton(uint8 jbutton) {
-	if (shortcut)
+	if (acceptType == EAcceptType::joystick && shortcut)
 		shortcut->JButton(jbutton);
 	World::inputSys()->SetCapture(nullptr);
 }
 
 void KeyGetter::OnJHat(uint8 jhat, uint8 value) {
-	if (shortcut) {
+	if (acceptType == EAcceptType::joystick && shortcut) {
 		if (value != SDL_HAT_UP && value != SDL_HAT_RIGHT && value != SDL_HAT_DOWN && value != SDL_HAT_LEFT) {
 			if (value & SDL_HAT_RIGHT)
 				value = SDL_HAT_RIGHT;
@@ -227,41 +228,42 @@ void KeyGetter::OnJHat(uint8 jhat, uint8 value) {
 }
 
 void KeyGetter::OnJAxis(uint8 jaxis, bool positive) {
-	if (shortcut)
+	if (acceptType == EAcceptType::joystick && shortcut)
 		shortcut->JAxis(jaxis, positive);
 	World::inputSys()->SetCapture(nullptr);
 }
 
 void KeyGetter::OnGButton(uint8 gbutton) {
-	if (shortcut)
+	if (acceptType == EAcceptType::gamepad && shortcut)
 		shortcut->GButton(gbutton);
 	World::inputSys()->SetCapture(nullptr);
 }
 
 void KeyGetter::OnGAxis(uint8 gaxis, bool positive) {
-	if (shortcut)
+	if (acceptType == EAcceptType::gamepad && shortcut)
 		shortcut->GAxis(gaxis, positive);
 	World::inputSys()->SetCapture(nullptr);
 }
 
 string KeyGetter::Text() const {
-	string line = string((shortcut->KeyAssigned()) ? SDL_GetScancodeName(shortcut->Key()) : "-void-") +  "  | ";
-
-	if (shortcut->JButtonAssigned())
-		line += "B " + to_string(shortcut->JctID());
-	else if (shortcut->JHatAssigned())
-		line += "H " + to_string(shortcut->JctID()) + " " + jtHatToStr(shortcut->JHatVal());
-	else if (shortcut->JAxisAssigned())
-		line += "A " + string((shortcut->JPosAxisAssigned()) ? "+" : "-") + to_string(shortcut->JctID());
-	else
-		line += " -void-";
-	line += "  | ";
-
-	if (shortcut->GButtonAssigned())
-		line += gpButtonToStr(shortcut->GctID());
-	else if (shortcut->GAxisAssigned())
-		line += ((shortcut->GPosAxisAssigned()) ? "+" : "-") + gpAxisToStr(shortcut->GctID());
-	else
-		line += " -void-";
-	return line;
+	switch (acceptType) {
+	case EAcceptType::keyboard:
+		if (shortcut->KeyAssigned())
+			return SDL_GetScancodeName(shortcut->Key());
+		break;
+	case EAcceptType::joystick:
+		if (shortcut->JButtonAssigned())
+			return "B " + to_string(shortcut->JctID());
+		if (shortcut->JHatAssigned())
+			return "H " + to_string(shortcut->JctID()) + " " + jtHatToStr(shortcut->JHatVal());
+		if (shortcut->JAxisAssigned())
+			return "A " + string((shortcut->JPosAxisAssigned()) ? "+" : "-") + to_string(shortcut->JctID());
+		break;
+	case EAcceptType::gamepad:
+		if (shortcut->GButtonAssigned())
+			return gpButtonToStr(shortcut->GctID());
+		if (shortcut->GAxisAssigned())
+			return (shortcut->GPosAxisAssigned() ? "+" : "-") + gpAxisToStr(shortcut->GctID());
+	}
+	return "-void-";
 }
