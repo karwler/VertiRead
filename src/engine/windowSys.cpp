@@ -25,6 +25,12 @@ void WindowSys::CreateWindow() {
 	if (!window)
 		throw Exception("couldn't create window\n" + string(SDL_GetError()), 3);
 	
+	SDL_Surface* icon = IMG_Load(string(Filer::dirExec + "icon.ico").c_str());
+	if (icon) {
+		SDL_SetWindowIcon(window, icon);
+		SDL_FreeSurface(icon);
+	}
+
 	CreateRenderer();
 }
 
@@ -52,11 +58,6 @@ void WindowSys::DestroyWindow() {
 		SDL_DestroyWindow(window);
 		window = nullptr;
 	}
-}
-
-void WindowSys::SetIcon(SDL_Surface* icon) {
-	if (icon)
-		SDL_SetWindowIcon(window, icon);
 }
 
 bool WindowSys::ShowMouse() const {

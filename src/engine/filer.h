@@ -3,10 +3,9 @@
 #include "utils/settings.h"
 
 enum EFileType : uint8 {
-	reg,
+	file,
 	dir,
-	link,
-	other
+	link
 };
 
 enum EDirFilter : uint8 {
@@ -61,17 +60,11 @@ public:
 #ifdef _WIN32
 	static vector<char> ListDrives();
 #endif
-#ifdef __APPLE__
-	static string GetDirExec(bool raw=false);
-#else
 	static string GetDirExec();
-#endif
-
 	static vector<string> dirFonts();
 	static string FindFont(const string& font);	// on success returns absolute path to font file, otherwise returns empty path
 	
 	static const string dirExec;
-	static const string dirData;
 	static const string dirSets;
 	static const string dirLangs;
 	static const string dirSnds;

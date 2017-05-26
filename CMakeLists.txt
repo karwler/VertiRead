@@ -68,8 +68,6 @@ endif()
 # include directories
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-elseif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-	include_directories(/usr/local/include /Library/Frameworks)
 endif()
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
@@ -120,12 +118,6 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 			"zlib1.dll")
     endif()	
 	link_directories(${LIB_DIR})
-
-elseif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-	find_library(LIB_SDL2 SDL2)
-	find_library(LIB_SDL2_IMG SDL2_image)
-	find_library(LIB_SDL2_TTF SDL2_ttf)
-	find_library(LIB_SDL2_MIX SDL2_mixer)
 	
 endif()
 	
@@ -137,20 +129,13 @@ target_compile_features(VertiRead PUBLIC cxx_nullptr cxx_enum_forward_declaratio
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	target_link_libraries(VertiRead SDL2.lib SDL2_mixer.lib SDL2_image.lib SDL2_ttf.lib)
 	
-elseif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-	target_link_libraries(VertiRead ${LIB_SDL2} ${LIB_SDL2_IMG} ${LIB_SDL2_TTF} ${LIB_SDL2_MIX})
-
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 	target_link_libraries(VertiRead SDL2 SDL2_mixer SDL2_image SDL2_ttf)
 
 endif()
 
 # target path
-if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-	set(EXECUTABLE_OUTPUT_PATH "${CMAKE_BINARY_DIR}/VertiRead.app/Contents/MacOS")
-else()
-	set(EXECUTABLE_OUTPUT_PATH "${CMAKE_BINARY_DIR}/bin")
-endif()
+set(EXECUTABLE_OUTPUT_PATH "${CMAKE_BINARY_DIR}/bin")
 
 # target properties
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
@@ -175,21 +160,14 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 		add_custom_command(TARGET VertiRead POST_BUILD
 						COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LIB_DIR}/${dll_file} ${EXECUTABLE_OUTPUT_PATH})
 	endforeach()
-	add_custom_command(TARGET VertiRead POST_BUILD
-					COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/data ${EXECUTABLE_OUTPUT_PATH})
 	
-elseif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-	add_custom_command(TARGET VertiRead POST_BUILD
-					COMMAND ${CMAKE_COMMAND} -E make_directory ${EXECUTABLE_OUTPUT_PATH}/../Resources
-					COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/rsc/Info.plist ${EXECUTABLE_OUTPUT_PATH}/..
-					COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/rsc/icon.icns ${EXECUTABLE_OUTPUT_PATH}/../Resources
-					COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/data ${EXECUTABLE_OUTPUT_PATH}/../Resources)
-
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 	add_custom_command(TARGET VertiRead POST_BUILD
-					COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/rsc/vertiread.desktop ${EXECUTABLE_OUTPUT_PATH}
-					COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/data ${EXECUTABLE_OUTPUT_PATH})
+					COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/rsc/vertiread.desktop ${EXECUTABLE_OUTPUT_PATH})
 endif()
+add_custom_command(TARGET VertiRead POST_BUILD
+					COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/rsc/icon.ico ${EXECUTABLE_OUTPUT_PATH}
+					COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/data ${EXECUTABLE_OUTPUT_PATH})
 
 # filter file for ms visual studio
 foreach(source IN LISTS SRC_FILES)

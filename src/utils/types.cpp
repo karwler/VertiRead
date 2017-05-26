@@ -31,6 +31,11 @@ void Texture::LoadSurface(const string& path) {
 		cerr << "couldn't load surface " << file << endl;
 }
 
+void Texture::Clear() {
+	SDL_FreeSurface(surface);
+	file.clear();
+}
+
 // IMAGE
 
 Image::Image(const vec2i& POS, Texture* TEX, const vec2i& SIZ) :

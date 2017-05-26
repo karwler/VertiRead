@@ -3,7 +3,7 @@ TEMPLATE = app
 CONFIG += c++11
 CONFIG -= app_bundle qt
 
-win32:CONFIG(debug, debug|release) {
+win32: CONFIG(debug, debug|release) {
     CONFIG += console
 } else {
     CONFIG -= console
@@ -14,8 +14,7 @@ win32: TARGET = VertiRead
 else: TARGET = vertiread
 
 OBJECTS_DIR = $$OUT_PWD/bin
-macx: DESTDIR = $$OUT_PWD/VertiRead.app/Contents/MacOS
-else: DESTDIR = $$OUT_PWD/build
+DESTDIR = $$OUT_PWD/build
 
 # copy data dir and dependencies
 win32 {
@@ -31,19 +30,16 @@ win32 {
     }
     LIB_WIN ~= s,/,\\,g
 
-    postbuild.commands = $$quote(cmd /c copy $$LIB_WIN\\*.dll $${DEST_WIN}) && \
+    postbuild.commands = $$quote(cmd /c copy $$LIB_WIN\\*.dll $$DEST_WIN) && \
+                         $$quote(cmd /c copy $$PWD_WIN\\rsc\\icon.ico $$DEST_WIN) && \
                          $$quote(cmd /c xcopy /e/i/y $$PWD_WIN\\data\\* $$DEST_WIN)
-}
-macx {
-    postbuild.commands = mkdir -p $$DESTDIR/../Resources && \
-                         cp $$PWD/rsc/Info.plist $$DESTDIR/.. && \
-                         cp $$PWD/rsc/icon.icns $$DESTDIR/../Resources && \
-                         cp -r $$PWD/data/* $$DESTDIR/../Resources
 }
 linux {
     postbuild.commands = cp $$PWD/rsc/vertiread.desktop $$DESTDIR && \
+                         cp $$PWD/rsc/icon.ico $$DESTDIR && \
                          cp -r $$PWD/data/* $$DESTDIR
 }
+
 QMAKE_EXTRA_TARGETS += postbuild
 POST_TARGETDEPS += postbuild
 
@@ -52,31 +48,13 @@ INCLUDEPATH += $$PWD/src
 win32: INCLUDEPATH += $$PWD/include
 
 # dependencies' directories
-win32 {
-    LIBS += -L$$LIB_WIN
-}
-macx {
-    FRMWK = -F/Library/Frameworks
-
-    QMAKE_CFLAGS += $$FRMWK
-    QMAKE_CXXFLAGS += $$FRMWK
-
-    LIBS += $$FRMWK
-}
+win32: LIBS += -L$$LIB_WIN
 
 # linker flags
-macx {
-    LIBS += -framework SDL2 \
-            -framework SDL2_image \
-            -framework SDL2_ttf \
-            -framework SDL2_mixer
-}
-else {
-    LIBS += -lSDL2 \
-            -lSDL2_image \
-            -lSDL2_ttf \
-            -lSDL2_mixer
-}
+LIBS += -lSDL2 \
+        -lSDL2_image \
+        -lSDL2_ttf \
+        -lSDL2_mixer
 
 # set sources
 SOURCES += src/engine/audioSys.cpp \
@@ -98,7 +76,7 @@ SOURCES += src/engine/audioSys.cpp \
     src/utils/popups.cpp \
     src/prog/library.cpp \
     src/utils/capturers.cpp \
-	src/utils/settings.cpp
+    src/utils/settings.cpp
 
 HEADERS += src/engine/audioSys.h \
     src/engine/engine.h \

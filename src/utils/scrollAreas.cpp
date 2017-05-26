@@ -556,7 +556,7 @@ void ReaderBox::Pictures(const vector<Texture*>& pictures, const string& curPic)
 
 SDL_Rect ReaderBox::List() const {
 	vec2i pos = Pos();
-	return { pos.x, pos.y, blistW, listObjects.size()*blistW };
+	return { pos.x, pos.y, blistW, int(listObjects.size())*blistW };
 }
 
 vector<Object*>& ReaderBox::ListObjects() {

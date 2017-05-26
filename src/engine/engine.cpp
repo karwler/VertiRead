@@ -21,7 +21,6 @@ void Engine::Run() {
 
 	winSys->CreateWindow();
 	scene = new Scene(Filer::LoadGeneralSettings());		// initializes program and library
-	winSys->SetIcon(scene->getLibrary()->getTex("icon")->surface);
 
 	// initialize values
 	scene->getProgram()->Event_OpenBookList();

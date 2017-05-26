@@ -11,7 +11,6 @@ public:
 
 	void CreateWindow();
 	void DestroyWindow();
-	void SetIcon(SDL_Surface* icon);
 	bool ShowMouse() const;
 	void ShowMouse(bool on);
 	void MoveMouse(const vec2i& mPos);

@@ -50,6 +50,7 @@ public:
 	string File() const;
 	vec2i Res() const;
 	void LoadSurface(const string& path);
+	void Clear();
 
 	SDL_Surface* surface;
 private:

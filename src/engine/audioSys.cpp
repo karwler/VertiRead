@@ -2,6 +2,7 @@
 
 AudioSys::AudioSys(const AudioSettings& SETS) :
 	sets(SETS),
+	curSong(0),
 	curMusic(nullptr),
 	muted(false),
 	played(false),
@@ -148,9 +149,14 @@ bool AudioSys::PlaylistLoaded() const {
 void AudioSys::LoadPlaylist(const Playlist& newList) {
 	FreeMusic();
 
-	playlist.resize(newList.songs.size());
-	for (size_t i=0; i!=newList.songs.size(); i++)
-		playlist[i] = newList.songPath(i);
+	for (size_t i=0; i!=newList.songs.size(); i++) {
+		string path = newList.songPath(i);
+		Mix_Music* tmp = Mix_LoadMUS(path.c_str());
+		if (tmp) {
+			Mix_FreeMusic(tmp);
+			playlist.push_back(path);
+		}
+	}
 }
 
 void AudioSys::UnloadPlaylist() {

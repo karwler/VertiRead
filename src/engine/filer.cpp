@@ -1,17 +1,13 @@
 #include "world.h"
 #include <fstream>
 #include <streambuf>
-#include <cctype>
+#include <algorithm>
 #ifdef _WIN32
 #include <windows.h>
 #else
-	#ifdef __APPLE__
-	#include <mach-o/dyld.h>
-	#else
 	namespace uni {		// necessary to prevent conflicts
 	#include <unistd.h>
 	}
-	#endif
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -45,23 +41,15 @@ EDirFilter operator|=(EDirFilter& a, EDirFilter b) {
 
 const string Filer::dirExec = Filer::GetDirExec();
 
-#ifdef __APPLE__
-const string Filer::dirData = GetDirExec(true) + "../Resources/";
-#else
-const string Filer::dirData = dirExec;
-#endif
-
 #ifdef _WIN32
-const string Filer::dirSets = string(getenv("AppData")) + "\\VertiRead\\";
-#elif __APPLE__
-const string Filer::dirSets = string(getenv("HOME")) + "/Library/Application Support/VertiRead/";
+const string Filer::dirSets = string(std::getenv("AppData")) + "\\VertiRead\\";
 #else
-const string Filer::dirSets = string(getenv("HOME")) + "/.vertiread/";
+const string Filer::dirSets = string(std::getenv("HOME")) + "/.vertiread/";
 #endif
 
-const string Filer::dirLangs = Filer::dirData + "languages"+dsep;
-const string Filer::dirSnds = Filer::dirData + "sounds"+dsep;
-const string Filer::dirTexs = Filer::dirData + "textures"+dsep;
+const string Filer::dirLangs = Filer::dirExec + "languages"+dsep;
+const string Filer::dirSnds = Filer::dirExec + "sounds"+dsep;
+const string Filer::dirTexs = Filer::dirExec + "textures"+dsep;
 
 uint8 Filer::CheckDirectories(const GeneralSettings& sets) {
 	uint8 retval = 0;
@@ -71,7 +59,7 @@ uint8 Filer::CheckDirectories(const GeneralSettings& sets) {
 		MkDir(sets.LibraryPath());
 	if (!Exists(sets.PlaylistPath()))
 		MkDir(sets.PlaylistPath());
-	if (!Exists(dirData + "themes.ini")) {
+	if (!Exists(dirExec + "themes.ini")) {
 		cerr << "couldn't find themes.ini" << endl;
 		retval |= 1;
 	}
@@ -92,7 +80,7 @@ uint8 Filer::CheckDirectories(const GeneralSettings& sets) {
 
 vector<string> Filer::GetAvailibleThemes() {
 	vector<string> lines;
-	if (!ReadTextFile(dirData + "themes.ini", lines))
+	if (!ReadTextFile(dirExec + "themes.ini", lines))
 		return {};
 
 	vector<string> themes;
@@ -108,7 +96,7 @@ vector<string> Filer::GetAvailibleThemes() {
 
 void Filer::GetColors(map<EColor, vec4c>& colors, const string& theme) {
 	vector<string> lines;
-	if (!ReadTextFile(dirData + "themes.ini", lines), false)
+	if (!ReadTextFile(dirExec + "themes.ini", lines), false)
 		return;
 
 	for (string& line : lines) {
@@ -134,12 +122,10 @@ void Filer::GetColors(map<EColor, vec4c>& colors, const string& theme) {
 vector<string> Filer::GetAvailibleLanguages() {
 	vector<string> files = { "english" };
 	if (!Exists(dirLangs))
-		return files;
+		return {};
 
-	for (string& it : ListDir(dirLangs, FILTER_FILE, {"ini"}))
+	for (string& it : ListDir(dirLangs, FILTER_FILE, {".ini"}))
 		files.push_back(delExt(it));
-
-	sortStrVec(files);
 	return files;
 }
 
@@ -438,14 +424,14 @@ bool Filer::WriteTextFile(const string& file, const vector<string>& lines) {
 
 bool Filer::MkDir(const string& path) {
 #ifdef _WIN32
-	return CreateDirectoryA(path.c_str(), 0);
+	return CreateDirectoryW(stow(path).c_str(), 0);
 #else
 	return !mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 #endif
 }
 
 bool Filer::Remove(const string& path) {
-	return remove(path.c_str());
+	return std::remove(path.c_str());
 }
 
 bool Filer::Rename(const string& path, const string& newPath) {
@@ -455,27 +441,34 @@ bool Filer::Rename(const string& path, const string& newPath) {
 vector<string> Filer::ListDir(const string& dir, EDirFilter filter, const vector<string>& extFilter) {
 	vector<string> entries;
 #ifdef _WIN32
-	WIN32_FIND_DATAA data;
-	HANDLE hFile = FindFirstFileA(string(dir+"*").c_str(), &data);
-	if (hFile != INVALID_HANDLE_VALUE)
-		while (FindNextFileA(hFile, &data) != 0 || GetLastError() != ERROR_NO_MORE_FILES) {
-			if (data.cFileName == string(".") || data.cFileName == string(".."))
-				continue;
-			
-			if ((filter & FILTER_FILE) && ((data.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE) || data.dwFileAttributes == FILE_ATTRIBUTE_NORMAL)) {
-				if (extFilter.empty())
-					entries.push_back(data.cFileName);
-				else for (const string& ext : extFilter)
-					if (data.cFileName == ext) {
-						entries.push_back(data.cFileName);
-						break;
-					}
-			}
-			else if ((filter & FILTER_DIR) && (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-				entries.push_back(data.cFileName);
-			else if ((filter & FILTER_LINK) && (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
-				entries.push_back(data.cFileName);
+	WIN32_FIND_DATAW data;
+	HANDLE hFind = FindFirstFileW(stow(dir+"*").c_str(), &data);
+	if (hFind == INVALID_HANDLE_VALUE)
+		return {};
+	do {
+		if (data.cFileName == wstring(L".") || data.cFileName == wstring(L".."))
+			continue;
+		
+		string name = wtos(data.cFileName);
+		if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+			if (filter & FILTER_DIR)
+				entries.push_back(name);
 		}
+		else if (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
+			if (filter & FILTER_LINK)
+				entries.push_back(name);
+		}
+		else if (filter & FILTER_FILE) {
+			if (extFilter.empty())
+				entries.push_back(name);
+			else for (const string& ext : extFilter)
+				if (hasExt(name, ext)) {
+					entries.push_back(name);
+					break;
+				}
+		}
+	} while (FindNextFileW(hFind, &data) != 0);
+	FindClose(hFind);
 #else
 	DIR* directory = opendir(dir.c_str());
 	if (directory) {
@@ -485,26 +478,31 @@ vector<string> Filer::ListDir(const string& dir, EDirFilter filter, const vector
 				data = readdir(directory);
 				continue;
 			}
-			if ((filter & FILTER_FILE) && data->d_type == DT_REG) {
+
+			if (data->d_type == DT_DIR) {
+				if (filter & FILTER_DIR)
+					entries.push_back(data->d_name);
+			}
+			else if (data->d_type == DT_LNK) {
+				if (filter & FILTER_LINK)
+					entries.push_back(data->d_name);
+			}
+			else if (filter & FILTER_FILE) {
 				if (extFilter.empty())
 					entries.push_back(data->d_name);
 				else for (const string& ext : extFilter)
-					if (data->d_name == ext) {
+					if (hasExt(data.cFileName, ext)) {
 						entries.push_back(data->d_name);
 						break;
 					}
 			}
-			else if ((filter & FILTER_DIR) && data->d_type == DT_DIR)
-				entries.push_back(data->d_name);
-			else if ((filter & FILTER_LINK) && data->d_type == DT_LNK)
-				entries.push_back(data->d_name);
 
 			data = readdir(directory);
 		}
 		closedir(directory);
 	}
 #endif
-	sortStrVec(entries);
+	std::sort(entries.begin(), entries.end());
 	return entries;
 }
 
@@ -513,21 +511,24 @@ vector<string> Filer::ListDirRecursively(const string& dir, size_t offs) {
 		offs = dir.length();
 	vector<string> entries;
 #ifdef _WIN32
-	WIN32_FIND_DATAA data;
-	HANDLE hFile = FindFirstFileA(string(dir+"*").c_str(), &data);
-	if (hFile != INVALID_HANDLE_VALUE)
-		while (FindNextFileA(hFile, &data) != 0 || GetLastError() != ERROR_NO_MORE_FILES) {
-			if (data.cFileName == string(".") || data.cFileName == string(".."))
-				continue;
+	WIN32_FIND_DATAW data;
+	HANDLE hFind = FindFirstFileW(stow(dir+"*").c_str(), &data);
+	if (hFind == INVALID_HANDLE_VALUE)
+		return {};
+	do {
+		if (data.cFileName == wstring(L".") || data.cFileName == wstring(L".."))
+			continue;
 
-			if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-				vector<string> newEs = ListDirRecursively(dir+data.cFileName+dsep, offs);
-				sortStrVec(newEs);
-				entries.insert(entries.end(), newEs.begin(), newEs.end());
-			}
-			else
-				entries.push_back(dir.substr(offs) + data.cFileName);
+		string name = wtos(data.cFileName);
+		if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+			vector<string> newEs = ListDirRecursively(dir+name+dsep, offs);
+			std::sort(entries.begin(), entries.end());
+			entries.insert(entries.end(), newEs.begin(), newEs.end());
 		}
+		else
+			entries.push_back(dir.substr(offs) + name);
+	} while (FindNextFileW(hFind, &data) != 0);
+	FindClose(hFind);
 #else
 	DIR* directory = opendir(dir.c_str());
 	if (directory) {
@@ -537,9 +538,10 @@ vector<string> Filer::ListDirRecursively(const string& dir, size_t offs) {
 				data = readdir(directory);
 				continue;
 			}
+
 			if (data->d_type == DT_DIR) {
 				vector<string> newEs = ListDirRecursively(dir+data->d_name+dsep, offs);
-				sortStrVec(newEs);
+				std::sort(entries.begin(), entries.end());
 				entries.insert(entries.end(), newEs.begin(), newEs.end());
 			}
 			else
@@ -555,9 +557,7 @@ vector<string> Filer::ListDirRecursively(const string& dir, size_t offs) {
 
 EFileType Filer::FileType(const string& path) {
 #ifdef _WIN32
-	ulong attrib = GetFileAttributesA(path.c_str());
-	if ((attrib & FILE_ATTRIBUTE_ARCHIVE) || attrib == FILE_ATTRIBUTE_NORMAL)
-		return EFileType::reg;
+	ulong attrib = GetFileAttributesW(stow(path).c_str());
 	if (attrib & FILE_ATTRIBUTE_DIRECTORY)
 		return EFileType::dir;
 	if (attrib & FILE_ATTRIBUTE_SPARSE_FILE)
@@ -565,18 +565,16 @@ EFileType Filer::FileType(const string& path) {
 #else
 	struct stat ps;
 	stat(path.c_str(), &ps);
-	if (S_ISREG(ps.st_mode))
-		return EFileType::reg;
 	if (S_ISDIR(ps.st_mode))
 		return EFileType::dir;
 	if (S_ISLNK(ps.st_mode))
 		return EFileType::link;
 #endif
-	return EFileType::other;
+	return EFileType::file;
 }
 bool Filer::Exists(const string& path) {
 #ifdef _WIN32
-	return (GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES);
+	return (GetFileAttributesW(stow(path).c_str()) != INVALID_FILE_ATTRIBUTES);
 #else
 	struct stat ps;
 	return (stat(path.c_str(), &ps) == 0);
@@ -595,31 +593,14 @@ vector<char> Filer::ListDrives() {
 }
 #endif
 
-#ifdef __APPLE__
-string Filer::GetDirExec(bool raw) {
-#else
 string Filer::GetDirExec() {
-#endif
-	const int MAX_LEN = 4096;
+	const int MAX_LEN = 2048;
 	string path;
 	
 #ifdef _WIN32
-	char buffer[MAX_LEN];
-	GetModuleFileNameA(NULL, buffer, MAX_LEN);
-	path = buffer;
-#elif __APPLE__
-	char buffer[MAX_LEN];
-	uint size = sizeof(buffer);
-	_NSGetExecutablePath(buffer, &size);
-	path = buffer;
-
-    if (!raw) {
-		size_t pos = 0;
-        if (findString(path, ".app/", &pos))	// if running in a package
-			for (size_t i=pos; i!=0; i--)
-                if (path[i] == dsep)
-                    return path.substr(0, i+1);
-	}
+	wchar buffer[MAX_LEN];
+	GetModuleFileNameW(NULL, buffer, MAX_LEN);
+	path = wtos(buffer);
 #else
 	char buffer[MAX_LEN];
 	int len = uni::readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
@@ -631,9 +612,7 @@ string Filer::GetDirExec() {
 
 vector<string> Filer::dirFonts() {
 #ifdef _WIN32
-	return {string(getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
-#elif __APPLE__
-	return {string(getenv("HOME"))+"/Library/Fonts/", "/Library/Fonts/", "/System/Library/Fonts/", "/Network/Library/Fonts/"};
+	return {string(std::getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
 #else
 	return { "/usr/share/fonts/" };
 #endif
@@ -641,7 +620,7 @@ vector<string> Filer::dirFonts() {
 
 string Filer::FindFont(const string& font) {
 	if (isAbsolute(font)) {	// check fontpath first
-		if (FileType(font) == EFileType::reg)
+		if (FileType(font) == EFileType::file)
 			return font;
 		return CheckDirForFont(filename(font), parentPath(font));
 	}

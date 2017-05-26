@@ -65,8 +65,8 @@ void Library::LoadTextures() {
 }
 
 void Library::ClearTextures() {
-	for (const pair<string, Texture>& it : texes)
-		SDL_FreeSurface(it.second.surface);
+	for (map<string, Texture>::iterator it=texes.begin(); it!=texes.end(); it++)
+		it->second.Clear();
 	texes.clear();
 }
 
@@ -90,6 +90,6 @@ void Library::LoadPics(const vector<string>& files) {
 
 void Library::ClearPics() {
 	for (Texture& it : pics)
-		SDL_FreeSurface(it.surface);
+		it.Clear();
 	pics.clear();
 }

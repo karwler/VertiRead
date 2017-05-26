@@ -311,9 +311,9 @@ void Program::Event_OpenSongBrowser(const string& dir) {
 		browser->GoTo(dir); 
 	else {
 #ifdef _WIN32
-		browser = new Browser("\\", getenv("UserProfile"));
+		browser = new Browser("\\", std::getenv("UserProfile"));
 #else
-		browser = new Browser("/", getenv("HOME"));
+		browser = new Browser("/", std::getenv("HOME"));
 #endif
 	}
 	SwitchScene(EMenu::songSearch);
@@ -385,7 +385,7 @@ void Program::Event_Back() {
 
 void Program::Event_SwitchLanguage(const string& language) {
 	World::audioSys()->PlaySound("click");
-
+	
 	World::library()->LoadLanguage(language);
 	SwitchScene();
 }
@@ -585,7 +585,7 @@ void Program::SwitchScene(void* dat) const {
 		// playlist list
 		TileBox* box = new TileBox(Object(vec2i(0, 100), -1, vec2i(res.x, res.y-100), FIX_ANC | FIX_END), {}, vec2i(400, 30));
 		vector<ListItem*> tiles;
-		for (string& it : Filer::ListDir(World::scene()->Settings().PlaylistPath(), FILTER_FILE))
+		for (string& it : Filer::ListDir(World::scene()->Settings().PlaylistPath(), FILTER_FILE, {".ini"}))
 			tiles.push_back(new ListItem(delExt(it), box));
 		box->Items(tiles);
 		objects.push_back(box);

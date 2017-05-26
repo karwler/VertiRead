@@ -2,15 +2,9 @@
 
 // include SDL
 #include <SDL2/SDL.h>
-#ifdef __APPLE__
-#include <SDL2_image/SDL_image.h>
-#include <SDL2_ttf/SDL_ttf.h>
-#include <SDL2_mixer/SDL_mixer.h>
-#else
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_mixer.h>
-#endif
 
 // include other useful stuff
 #include "kklib/aliases.h"
@@ -28,6 +22,7 @@ using std::map;
 using std::pair;
 using std::make_pair;
 using std::string;
+using std::wstring;
 using std::to_string;
 
 using kk::vec2i;
@@ -60,7 +55,6 @@ class ScrollAreaX1;
 class Capturer;
 
 // files and strings
-bool alphanumStrCompare(const string& sa, const string& sb);
 bool strcmpCI(const string& strl, const string& strr);
 bool findChar(const string& str, char c, size_t* id=nullptr);
 bool findString(const string& str, const string& c, size_t* id=nullptr);
@@ -68,13 +62,13 @@ bool isAbsolute(const string& path);
 string parentPath(const string& path);
 string filename(const string& path);
 string getExt(const string& path);
+bool hasExt(const string& path, const string& ext);
 string delExt(const string& path);
 string appendDsep(const string& path);
 bool isDriveLetter(const string& path);
 string modifyCase(string str, ETextCase caseChange);
 vector<string> getWords(const string& line, char splitter, char spacer);
 bool splitIniLine(const string& line, string* arg, string* val, string* key=nullptr, bool* isTitle=nullptr, size_t* id=nullptr);
-void sortStrVec(vector<string>& vec);
 
 // graphics
 bool inRect(const SDL_Rect& rect, vec2i point);
@@ -90,6 +84,8 @@ string getRendererName(int id);
 vector<string> getAvailibleRenderers(bool trustedOnly=false);
 
 // convertions
+string wtos(const wstring& wstr);
+wstring stow(const string& str);
 bool stob(const string& str);
 string btos(bool b);
 string jtHatToStr(uint8 jhat);

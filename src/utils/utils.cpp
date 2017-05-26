@@ -1,35 +1,6 @@
 #include "engine/world.h"
 #include <algorithm>
-#include <cctype>
-
-size_t ANSC_GetNumVals(const char*& str) {
-	while (*str == '0')
-		str++;
-
-	size_t i = 0;
-	while (isdigit(str[i++]));
-	return i;
-}
-
-bool alphanumStrCompare(const string& sa, const string& sb) {
-	for (const char *pa=sa.c_str(), *pb=sb.c_str(); *pa != '\0' && *pb != '\0'; pa++, pb++) {
-		if (isdigit(*pa) && isdigit(*pb)) {
-			size_t la = ANSC_GetNumVals(pa);
-			size_t lb = ANSC_GetNumVals(pb);
-			if (la != lb)
-				return la < lb;
-
-			for (size_t i=0; i!=la; i++)
-				if (pa[i] != pb[i])
-					return pa[i] < pb[i];
-			pa += la-1;
-			pb += lb-1;
-		}
-		else if (*pa != *pb)
-			return *pa < *pb;
-	}
-	return sa.size() <= sb.size();
-}
+#include <codecvt>
 
 bool strcmpCI(const string& strl, const string& strr) {
 	if (strl.length() != strr.length())
@@ -93,6 +64,17 @@ string getExt(const string& path) {
 	return "";
 }
 
+bool hasExt(const string& path, const string& ext) {
+	if (path.length() < ext.length())
+		return false;
+	
+	size_t pos = path.length() - ext.length();
+	for (size_t i=0; i!=ext.length(); i++)
+		if (path[pos+i] != ext[i])
+			return false;
+	return true;
+}
+
 string delExt(const string& path) {
 	for (size_t i=path.length()-1; i!=SIZE_MAX; i--)
 		if (path[i] == '.')
@@ -124,7 +106,7 @@ string modifyCase(string str, ETextCase caseChange) {
 }
 
 vector<string> getWords(const string& line, char splitter, char spacer) {
-	vector<std::string> words;
+	vector<string> words;
 
 	size_t i = 0;
 	while (i != line.length() && line[i] == spacer)
@@ -189,10 +171,6 @@ bool splitIniLine(const string& line, string* arg, string* val, string* key, boo
 	if (id)
 		*id = i0;
 	return true;
-}
-
-void sortStrVec(vector<string>& vec) {
-	std::sort(vec.begin(), vec.end(), alphanumStrCompare);
 }
 
 bool inRect(const SDL_Rect& rect, vec2i point) {
@@ -283,6 +261,14 @@ vector<string> getAvailibleRenderers(bool trustedOnly) {
 			renderers.push_back(name);
 	}
 	return renderers;
+}
+
+string wtos(const wstring& wstr) {
+	return std::wstring_convert<std::codecvt_utf8<wchar>, wchar>().to_bytes(wstr);
+}
+
+wstring stow(const string& str) {
+	return std::wstring_convert<std::codecvt_utf8<wchar>, wchar>().from_bytes(str);
 }
 
 bool stob(const string& str) {
