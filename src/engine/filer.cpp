@@ -491,7 +491,7 @@ vector<string> Filer::ListDir(const string& dir, EDirFilter filter, const vector
 				if (extFilter.empty())
 					entries.push_back(data->d_name);
 				else for (const string& ext : extFilter)
-					if (hasExt(data.cFileName, ext)) {
+					if (hasExt(data->d_name, ext)) {
 						entries.push_back(data->d_name);
 						break;
 					}

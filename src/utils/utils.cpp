@@ -1,5 +1,6 @@
 #include "engine/world.h"
 #include <algorithm>
+#include <locale>
 #include <codecvt>
 
 bool strcmpCI(const string& strl, const string& strr) {
