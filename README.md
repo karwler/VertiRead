@@ -13,7 +13,7 @@ All dependencies need to be installed manually.
 Installing the packages "libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev" should do the trick. (Assuming that all necessary dependencies for those are installed automatically in the process.)  
   
 There’s a pre-made launcher, which is copied to the build directory after compilation.  
-If you want a menu entry for the program, just set the executable’s and icon’s path to the .desktop file and move it to either "/usr/share/applications" or "~/.local/share/applications".  
+If you want a menu entry for the program, just set the executable’s and icon’s path in the .desktop file and move it to either "/usr/share/applications" or "~/.local/share/applications".  
   
 Settings files are being saved in "~/.vertiread".  
 Note: It's possible that the mouse wheel won't work properly under Linux and I have no idea why.  
@@ -21,7 +21,7 @@ Note: It's possible that the mouse wheel won't work properly under Linux and I h
 ##Windows  
 All necessary libraries are already included in the project, however they're built only for the MSVC 14 (2015).  
 Settings files are being saved in "%AppData%\VertiRead".  
-
+  
 ##How to use it  
 The idea is that you have a library directory in which you have your manga. The location of this directory can be viewed and/or changed in the general settings menu.  
 It is advised (but not necessary) to sort the files and directories by things like chapters, volumes, etc.  
