@@ -58,13 +58,6 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	list(APPEND SRC_FILES "rsc/resource.rc")
 endif()
 
-# set macros
-if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-	if (MSVC)
-		add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-	endif()
-endif()
-
 # include directories
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -87,13 +80,11 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 			"libvorbis-0.dll"
 			"libvorbisfile-3.dll"
 			"libwebp-4.dll"
-			"msvcp140.dll"
 			"SDL2.dll"
 			"SDL2_image.dll"
 			"SDL2_mixer.dll"
 			"SDL2_ttf.dll"
 			"smpeg2.dll"
-			"vcruntime140.dll"
 			"zlib1.dll")
     else()
         set(LIB_DIR ${CMAKE_SOURCE_DIR}/lib/win32)
@@ -108,13 +99,11 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 			"libvorbis-0.dll"
 			"libvorbisfile-3.dll"
 			"libwebp-4.dll"
-			"msvcp140.dll"
 			"SDL2.dll"
 			"SDL2_image.dll"
 			"SDL2_mixer.dll"
 			"SDL2_ttf.dll"
 			"smpeg2.dll"
-			"vcruntime140.dll"
 			"zlib1.dll")
     endif()	
 	link_directories(${LIB_DIR})

@@ -1,12 +1,9 @@
 # config
 TEMPLATE = app
 CONFIG += c++11
-CONFIG -= app_bundle qt
 
-win32: CONFIG(debug, debug|release) {
+CONFIG(debug, debug|release) {
     CONFIG += console
-} else {
-    CONFIG -= console
 }
 
 # output
