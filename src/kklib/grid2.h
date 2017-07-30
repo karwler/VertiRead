@@ -9,6 +9,7 @@ class grid2 {
 private:
 	using uint = unsigned int;
 	using vec2u = vec2<uint>;
+
 public:
 	grid2(const vec2u& size=0) : ptr(nullptr) {
 		build(size);
@@ -38,10 +39,6 @@ public:
 		build(g.dim);
 		for (uint i=0; i!=length(); i++)
 			ptr[i] = g.ptr[i];
-		return *this;
-	}
-	grid2& operator=(const vec2u& s) {
-		build(s);
 		return *this;
 	}
 	grid2& operator=(const T& v) {
@@ -89,27 +86,6 @@ public:
 				id = i;
 				return true;
 			}
-		return false;
-	}
-
-	template <typename A>
-	bool operator==(const grid2<A>& g) {
-		if (dim != g.size())
-			return false;
-
-		for (uint i=0; i!=length(); i++)
-			if (ptr[i] != g[i])
-				return false;
-		return true;
-	}
-	template <typename A>
-	bool operator!=(const grid2<A>& g) {
-		if (dim != g.size())
-			return true;
-
-		for (uint i=0; i!=length(); i++)
-			if (ptr[i] != g[i])
-				return true;
 		return false;
 	}
 
@@ -498,9 +474,30 @@ public:
 			delete[] tpr;
 	}
 
-private:
+protected:
 	vec2u dim;
 	T* ptr;
 };
+
+template <typename A, typename B>
+bool operator==(const grid2<A>& a, const grid2<B>& b) {
+	if (a.size() != b.size())
+		return false;
+
+	for (uint i=0; i!=a.length(); i++)
+		if (a[i] != b[i])
+			return false;
+	return true;
+}
+template <typename A, typename B>
+bool operator!=(const grid2<A>& a, const grid2<B>& b) {
+	if (a.size() != b.size())
+		return true;
+
+	for (uint i=0; i!=a.length(); i++)
+		if (a[i] != b[i])
+			return true;
+	return false;
+}
 
 }

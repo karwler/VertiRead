@@ -110,7 +110,7 @@ void Filer::GetColors(map<EColor, vec4c>& colors, const string& theme) {
 			if (colors.count(clr) == 0)
 				colors.insert(make_pair(clr, VideoSettings::GetDefaultColor(clr)));
 
-			vector<string> elems = getWords(val, ' ', ',');
+			vector<string> elems = getWords(val, ' ');
 			if (elems.size() > 0) colors[clr].x = stoi(elems[0]);
 			if (elems.size() > 1) colors[clr].y = stoi(elems[1]);
 			if (elems.size() > 2) colors[clr].z = stoi(elems[2]);
@@ -255,7 +255,7 @@ VideoSettings Filer::LoadVideoSettings() {
 		else if (arg == "fullscreen")
 			sets.fullscreen = stob(val);
 		else if (arg == "resolution") {
-			vector<string> elems = getWords(val, ' ', ',');
+			vector<string> elems = getWords(val, ' ');
 			if (elems.size() > 0) sets.resolution.x = stoi(elems[0]);
 			if (elems.size() > 1) sets.resolution.y = stoi(elems[1]);
 		}
@@ -322,7 +322,7 @@ ControlsSettings Filer::LoadControlsSettings() {
 			continue;
 
 		if (arg == "scroll_speed") {
-			vector<string> elems = getWords(val, ' ', ',');
+			vector<string> elems = getWords(val, ' ');
 			if (elems.size() > 0)
 				sets.scrollSpeed.x = stof(elems[0]);
 			if (elems.size() > 1)
@@ -453,12 +453,10 @@ vector<string> Filer::ListDir(const string& dir, EDirFilter filter, const vector
 		if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 			if (filter & FILTER_DIR)
 				entries.push_back(name);
-		}
-		else if (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
+		} else if (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
 			if (filter & FILTER_LINK)
 				entries.push_back(name);
-		}
-		else if (filter & FILTER_FILE) {
+		} else if (filter & FILTER_FILE) {
 			if (extFilter.empty())
 				entries.push_back(name);
 			else for (const string& ext : extFilter)
@@ -482,12 +480,10 @@ vector<string> Filer::ListDir(const string& dir, EDirFilter filter, const vector
 			if (data->d_type == DT_DIR) {
 				if (filter & FILTER_DIR)
 					entries.push_back(data->d_name);
-			}
-			else if (data->d_type == DT_LNK) {
+			} else if (data->d_type == DT_LNK) {
 				if (filter & FILTER_LINK)
 					entries.push_back(data->d_name);
-			}
-			else if (filter & FILTER_FILE) {
+			} else if (filter & FILTER_FILE) {
 				if (extFilter.empty())
 					entries.push_back(data->d_name);
 				else for (const string& ext : extFilter)
@@ -496,7 +492,6 @@ vector<string> Filer::ListDir(const string& dir, EDirFilter filter, const vector
 						break;
 					}
 			}
-
 			data = readdir(directory);
 		}
 		closedir(directory);
@@ -524,8 +519,7 @@ vector<string> Filer::ListDirRecursively(const string& dir, size_t offs) {
 			vector<string> newEs = ListDirRecursively(dir+name+dsep, offs);
 			std::sort(entries.begin(), entries.end());
 			entries.insert(entries.end(), newEs.begin(), newEs.end());
-		}
-		else
+		} else
 			entries.push_back(dir.substr(offs) + name);
 	} while (FindNextFileW(hFind, &data) != 0);
 	FindClose(hFind);
@@ -543,8 +537,7 @@ vector<string> Filer::ListDirRecursively(const string& dir, size_t offs) {
 				vector<string> newEs = ListDirRecursively(dir+data->d_name+dsep, offs);
 				std::sort(entries.begin(), entries.end());
 				entries.insert(entries.end(), newEs.begin(), newEs.end());
-			}
-			else
+			} else
 				entries.push_back(dir.substr(offs) + data->d_name);
 
 			data = readdir(directory);

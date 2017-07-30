@@ -7,59 +7,34 @@ AudioSys::AudioSys(const AudioSettings& SETS) :
 	muted(false),
 	played(false),
 	deltaDelay(0.f)
-{}
+{
+	int flags = Mix_Init(MIX_INIT_FLAC | MIX_INIT_FLUIDSYNTH | MIX_INIT_MOD | MIX_INIT_MODPLUG | MIX_INIT_MP3 | MIX_INIT_OGG);
+	if (!(flags & MIX_INIT_FLAC))
+		cerr << "couldn't initialize flac" << endl << Mix_GetError() << endl;
+	if (!(flags & MIX_INIT_FLUIDSYNTH))
+		cerr << "couldn't initialize fluidsynth" << endl << Mix_GetError() << endl;
+	if (!(flags & MIX_INIT_MOD))
+		cerr << "couldn't initialize mod" << endl << Mix_GetError() << endl;
+	if (!(flags & MIX_INIT_MODPLUG))
+		cerr << "couldn't initialize modplug" << endl << Mix_GetError() << endl;
+	if (!(flags & MIX_INIT_MP3))
+		cerr << "couldn't initialize mp3" << endl << Mix_GetError() << endl;
+	if (!(flags & MIX_INIT_OGG))
+		cerr << "couldn't initialize ogg" << endl << Mix_GetError() << endl;
+
+	if (Mix_OpenAudio(44100, AUDIO_S16SYS, 2, 4096))
+		cerr << "couldn't open audio\n" << Mix_GetError() << endl;
+	Mix_AllocateChannels(1);
+	Mix_HookMusicFinished(MusicFinishCallback);
+
+	MusicVolume(sets.musicVolume);
+	SoundVolume(sets.soundVolume);
+}
 
 AudioSys::~AudioSys() {
 	FreeMusic();
 	Mix_CloseAudio();
 	Mix_Quit();
-}
-
-uint8 AudioSys::Initialize() {
-	uint8 retval = 0;
-
-	int flags = Mix_Init(MIX_INIT_FLAC | MIX_INIT_FLUIDSYNTH | MIX_INIT_MOD | MIX_INIT_MODPLUG | MIX_INIT_MP3 | MIX_INIT_OGG);
-	if (flags == 0) {
-		cerr << "couldn't initialize audio system\n" << Mix_GetError() << endl;
-		return 2;
-	}
-	if (!(flags & MIX_INIT_FLAC)) {
-		cerr << "couldn't initialize flac" << endl << Mix_GetError() << endl;
-		retval = 1;
-	}
-	if (!(flags & MIX_INIT_FLUIDSYNTH)) {
-		cerr << "couldn't initialize fluidsynth" << endl << Mix_GetError() << endl;
-		retval = 1;
-	}
-	if (!(flags & MIX_INIT_MOD)) {
-		cerr << "couldn't initialize mod" << endl << Mix_GetError() << endl;
-		retval = 1;
-	}
-	if (!(flags & MIX_INIT_MODPLUG)) {
-		cerr << "couldn't initialize modplug" << endl << Mix_GetError() << endl;
-		retval = 1;
-	}
-	if (!(flags & MIX_INIT_MP3)) {
-		cerr << "couldn't initialize mp3" << endl << Mix_GetError() << endl;
-		retval = 1;
-	}
-	if (!(flags & MIX_INIT_OGG)) {
-		cerr << "couldn't initialize ogg" << endl << Mix_GetError() << endl;
-		retval = 1;
-	}
-
-	if (Mix_OpenAudio(44100, AUDIO_S16SYS, 2, 4096)) {
-		cerr << "couldn't open audio\n" << Mix_GetError() << endl;
-		return 3;
-	}
-	Mix_AllocateChannels(1);
-
-	Mix_HookMusicFinished(MusicFinishCallback);
-
-	MusicVolume(sets.musicVolume);
-	SoundVolume(sets.soundVolume);
-
-	return retval;
 }
 
 void AudioSys::FreeMusic() {

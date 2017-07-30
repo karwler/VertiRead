@@ -29,7 +29,7 @@ public:
 	bool isPressedH(uint8 jhat, uint8 val) const;	// check if any of the joysticks' hat is pressed
 	float getAxisJ(uint8 jaxis) const;				// check if any of the joysticks' axis value is greater than 0
 	float getAxisG(uint8 gaxis) const;				// check if any of the gamepads' axis value is greater than 0
-	const vec2i& mousePos() const;					// get mouse poition
+	vec2i mousePos() const;							// get mouse poition
 
 	const ControlsSettings& Settings() const;
 	void ScrollSpeed(const vec2f& sspeed);
@@ -39,7 +39,7 @@ public:
 	bool HasControllers() const;
 	void UpdateControllers();
 
-	Capturer* Captured() const;
+	const Capturer* Captured() const;
 	void SetCapture(Capturer* cbox);
 
 private:

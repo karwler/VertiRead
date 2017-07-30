@@ -9,7 +9,7 @@ namespace kk {
 
 template <typename T>
 struct vec3 {
-	vec3(const T& N=0) :
+	vec3(const T& N=T(0)) :
 		x(N), y(N), z(N)
 	{}
 	vec3(const T& X, const T& Y, const T& Z) :
@@ -67,20 +67,21 @@ struct vec3 {
 	}
 
 	bool isNull() const {
-		return x == 0 && y == 0 && z == 0;
+		return x == T(0) && y == T(0) && z == T(0);
 	}
 	bool hasNull() const {
-		return x == 0 || y == 0 || z == 0;
+		return x == T(0) || y == T(0) || z == T(0);
 	}
 
 	T len() const {
-		return length(*this);
+		return std::sqrt(x*x + y*y + z*z);
 	}
 	vec3 norm() const {
-		return normalize(*this);
+		T l = len();
+		return vec3(x/l, y/l, z/l);
 	}
-	bool unit() const {
-		return isUnit(*this);
+	bool isUnit() const {
+		return len() == T(1);
 	}
 	template <typename A>
 	T dot(const vec3<A>& vec) const {
@@ -96,12 +97,23 @@ struct vec3 {
 	}
 	template <typename A>
 	vec3 rot(const vec3<A>& ang) const {
-		return rotate(*this, ang);
+		vec3 ret;
+
+		ret.y = y*std::cos(ang.x) - z*std::sin(ang.x);
+		ret.z = y*std::sin(ang.x) + z*std::cos(ang.x);
+
+		ret.x =  x*std::cos(ang.y) + z*std::sin(ang.y);
+		ret.z = -x*std::sin(ang.y) + z*std::cos(ang.y);
+
+		ret.x = x*std::cos(ang.z) - y*std::sin(ang.z);
+		ret.y = x*std::sin(ang.z) + y*std::cos(ang.z);
+
+		return ret;
 	}
 
-	union { T x, r; };
-	union { T y, g; };
-	union { T z, b; };
+	union { T x, w, r; };
+	union { T y, h, g; };
+	union { T z, d, b; };
 };
 
 template <typename A, typename B>
@@ -182,22 +194,6 @@ bool operator!=(const A& a, const vec3<B>& b) {
 	return a != b.x || a != b.y || a != b.z;
 }
 
-template <typename T>
-T length(const vec3<T>& vec) {
-	return std::sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
-}
-
-template <typename T>
-vec3<T> normalize(const vec3<T>& vec) {
-	T l = vec.len();
-	return vec3<T>(vec.x/l, vec.y/l, vec.z/l);
-}
-
-template <typename T>
-bool isUnit(const vec3<T>& vec) {
-	return vec.len() == 1;
-}
-
 template <typename A, typename B>
 A dotP(const vec3<A>& v0, const vec3<B>& v1) {
 	return v0.x*v1.x + v0.y*v1.y + v0.z*v1.z;
@@ -212,23 +208,7 @@ template <typename A, typename B>
 vec3<A> reflect(const vec3<A>& vec, vec3<B> nrm) {
 	if (!isUnit(nrm))
 		nrm = normalize(nrm);
-	return vec - 2 * dotP(vec, nrm) * nrm;
-}
-
-template <typename A, typename B>
-vec3<A> rotate(const vec3<A>& vec, vec3<B> ang) {
-	vec3<A> ret;
-
-	ret.y = vec.y*std::cos(ang.x) - vec.z*std::sin(ang.x);
-	ret.z = vec.y*std::sin(ang.x) + vec.z*std::cos(ang.x);
-
-	ret.x =  vec.x*std::cos(ang.y) + vec.z*std::sin(ang.y);
-	ret.z = -vec.x*std::sin(ang.y) + vec.z*std::cos(ang.y);
-
-	ret.x = vec.x*std::cos(ang.z) - vec.y*std::sin(ang.z);
-	ret.y = vec.x*std::sin(ang.z) + vec.y*std::cos(ang.z);
-
-	return ret;
+	return vec - A(2) * dotP(vec, nrm) * nrm;
 }
 
 }

@@ -2,8 +2,10 @@
 TEMPLATE = app
 CONFIG += c++11
 
-CONFIG(debug, debug|release) {
-    CONFIG += console
+win32 {
+    CONFIG(debug, debug|release) {
+        CONFIG += console
+    }
 }
 
 # output
@@ -53,6 +55,9 @@ LIBS += -lSDL2 \
         -lSDL2_ttf \
         -lSDL2_mixer
 
+# definitions
+win32: DEFINES += _UNICODE
+
 # set sources
 SOURCES += src/engine/audioSys.cpp \
     src/engine/engine.cpp \
@@ -60,46 +65,46 @@ SOURCES += src/engine/audioSys.cpp \
     src/engine/inputSys.cpp \
     src/engine/main.cpp \
     src/engine/scene.cpp \
+    src/engine/shaderSys.cpp \
     src/engine/windowSys.cpp \
     src/engine/world.cpp \
+    src/prog/browser.cpp \
+    src/prog/library.cpp \
+    src/prog/playlistEditor.cpp \
     src/prog/program.cpp \
+    src/utils/capturers.cpp \
     src/utils/items.cpp \
     src/utils/objects.cpp \
-    src/utils/types.cpp \
-    src/utils/utils.cpp \
-    src/prog/browser.cpp \
-    src/prog/playlistEditor.cpp \
     src/utils/scrollAreas.cpp \
-    src/utils/popups.cpp \
-    src/prog/library.cpp \
-    src/utils/capturers.cpp \
-    src/utils/settings.cpp
+    src/utils/settings.cpp \
+    src/utils/types.cpp \
+    src/utils/utils.cpp
 
 HEADERS += src/engine/audioSys.h \
     src/engine/engine.h \
     src/engine/filer.h \
     src/engine/inputSys.h \
     src/engine/scene.h \
+    src/engine/shaderSys.h \
     src/engine/windowSys.h \
     src/engine/world.h \
-    src/prog/program.h \
-    src/utils/items.h \
-    src/utils/objects.h \
-    src/utils/types.h \
-    src/prog/defaults.h \
-    src/utils/utils.h \
-    src/prog/browser.h \
-    src/prog/playlistEditor.h \
-    src/utils/scrollAreas.h \
-    src/utils/popups.h \
-    src/prog/library.h \
-    src/utils/capturers.h \
     src/kklib/aliases.h \
     src/kklib/grid2.h \
     src/kklib/sptr.h \
     src/kklib/vec2.h \
     src/kklib/vec3.h \
     src/kklib/vec4.h \
-    src/utils/settings.h
+    src/prog/browser.h \
+    src/prog/defaults.h \
+    src/prog/library.h \
+    src/prog/playlistEditor.h \
+    src/prog/program.h \
+    src/utils/capturers.h \
+    src/utils/items.h \
+    src/utils/objects.h \
+    src/utils/scrollAreas.h \
+    src/utils/settings.h \
+    src/utils/types.h \
+    src/utils/utils.h
 
 win32: RC_FILE = rsc/resource.rc

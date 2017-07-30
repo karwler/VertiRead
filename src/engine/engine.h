@@ -14,7 +14,6 @@ public:
 	void Close();
 	void Cleanup();
 
-	void SetRedrawNeeded();
 	float deltaSeconds() const;
 	AudioSys* getAudioSys();
 	InputSys* getInputSys();
@@ -28,7 +27,6 @@ private:
 	kk::sptr<Scene> scene;
 
 	bool run;
-	bool redraw;
 	float dSec;
 
 	void HandleEvent(const SDL_Event& event);

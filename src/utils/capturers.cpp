@@ -20,11 +20,10 @@ ScrollAreaX1* Capturer::Parent() const {
 LineEdit::LineEdit(ScrollAreaX1* SA, const string& LBL, const string& TXT, ETextType TYPE, void (Program::*KCALL)(const string&), void (Program::*CCALL)()) :
 	Capturer(SA, LBL),
 	editor(TXT, TYPE),
+	okCall(KCALL),
 	cancelCall(CCALL),
 	textPos(0)
-{
-	okCall = KCALL ? KCALL : &Program::Event_TextCaptureOk;
-}
+{}
 LineEdit::~LineEdit() {}
 
 void LineEdit::OnClick(EClick clickType) {
@@ -34,56 +33,44 @@ void LineEdit::OnClick(EClick clickType) {
 
 void LineEdit::OnKeypress(SDL_Scancode key) {
 	bool redraw = true;
-	switch (key) {
-	case SDL_SCANCODE_RIGHT:
+	if (key == SDL_SCANCODE_RIGHT) {
 		editor.MoveCursor(true);
 		CheckCaretRight();
-		break;
-	case SDL_SCANCODE_LEFT:
+	} else if (key == SDL_SCANCODE_LEFT) {
 		editor.MoveCursor(false);
 		CheckCaretLeft();
-		break;
-	case SDL_SCANCODE_BACKSPACE:
+	} else if (key == SDL_SCANCODE_BACKSPACE) {
 		editor.Delete(false);
 		CheckCaretLeft();
-		break;
-	case SDL_SCANCODE_DELETE:
+	} else if (key == SDL_SCANCODE_DELETE)
 		editor.Delete(true);
-		break;
-	case SDL_SCANCODE_RETURN:
+	else if (key == SDL_SCANCODE_RETURN)
 		Confirm();
-		break;
-	case SDL_SCANCODE_ESCAPE:
+	else if (key == SDL_SCANCODE_ESCAPE)
 		Cancel();
-		break;
-	default:
+	else
 		redraw = false;
-	}
+
 	if (redraw)
-		World::engine()->SetRedrawNeeded();
+		World::winSys()->SetRedrawNeeded();
 }
 
 void LineEdit::OnJButton(uint8 jbutton) {
 	bool redraw = true;
-	switch (jbutton) {
-	case 3:
+	if (jbutton == 3) {
 		editor.Delete(false);
 		CheckCaretLeft();
-		break;
-	case 0:
+	} else if (jbutton == 0)
 		editor.Delete(true);
-		break;
-	case 2:
+	else if (jbutton == 2)
 		Confirm();
-		break;
-	case 1:
+	else if (jbutton == 1)
 		Cancel();
-		break;
-	default:
+	else
 		redraw = false;
-	}
+
 	if (redraw)
-		World::engine()->SetRedrawNeeded();
+		World::winSys()->SetRedrawNeeded();
 }
 
 void LineEdit::OnJHat(uint8 jhat, uint8 value) {
@@ -91,55 +78,53 @@ void LineEdit::OnJHat(uint8 jhat, uint8 value) {
 	if (value & SDL_HAT_RIGHT) {
 		editor.MoveCursor(true);
 		CheckCaretRight();
-	}
-	else if (value & SDL_HAT_LEFT) {
+	} else if (value & SDL_HAT_LEFT) {
 		editor.MoveCursor(false);
 		CheckCaretLeft();
-	}
-	else
+	} else
 		redraw = false;
+
 	if (redraw)
-		World::engine()->SetRedrawNeeded();
+		World::winSys()->SetRedrawNeeded();
 }
 
 void LineEdit::OnJAxis(uint8 jaxis, bool positive) {}
 
 void LineEdit::OnGButton(uint8 gbutton) {
 	bool redraw = true;
-	switch (gbutton) {
-	case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+	if (gbutton == SDL_CONTROLLER_BUTTON_DPAD_RIGHT) {
 		editor.MoveCursor(true);
 		CheckCaretRight();
-		break;
-	case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+	} else if (gbutton == SDL_CONTROLLER_BUTTON_DPAD_LEFT) {
 		editor.MoveCursor(false);
 		CheckCaretLeft();
-		break;
-	case SDL_CONTROLLER_BUTTON_X:
+	} else if (gbutton == SDL_CONTROLLER_BUTTON_X) {
 		editor.Delete(false);
 		CheckCaretLeft();
-		break;
-	case SDL_CONTROLLER_BUTTON_Y:
+	} else if (gbutton ==  SDL_CONTROLLER_BUTTON_Y)
 		editor.Delete(true);
-		break;
-	case SDL_CONTROLLER_BUTTON_A:
+	else if (gbutton == SDL_CONTROLLER_BUTTON_A)
 		Confirm();
-		break;
-	case SDL_CONTROLLER_BUTTON_B:
+	else if (gbutton == SDL_CONTROLLER_BUTTON_B)
 		Cancel();
-		break;
-	default:
+	else
 		redraw = false;
-	}
+
 	if (redraw)
-		World::engine()->SetRedrawNeeded();
+		World::winSys()->SetRedrawNeeded();
 }
 
 void LineEdit::OnGAxis(uint8 gaxis, bool positive) {}
 
+void LineEdit::OnText(const char* text) {
+	editor.Add(text);
+	CheckCaretRight();
+}
+
 void LineEdit::Confirm() {
 	ResetTextPos();
-	(World::program()->*okCall)(editor.Text());
+	if (okCall)
+		(World::program()->*okCall)(editor.Text());
 	World::inputSys()->SetCapture(nullptr);
 }
 
@@ -158,8 +143,12 @@ void LineEdit::ResetTextPos() {
 	textPos = 0;
 }
 
-TextEdit* LineEdit::Editor() {
-	return &editor;
+TextEdit& LineEdit::Editor() {
+	return editor;
+}
+
+const TextEdit& LineEdit::Editor() const {
+	return editor;
 }
 
 Text LineEdit::getText() const {
@@ -246,20 +235,17 @@ void KeyGetter::OnGAxis(uint8 gaxis, bool positive) {
 }
 
 string KeyGetter::Text() const {
-	switch (acceptType) {
-	case EAcceptType::keyboard:
+	if (acceptType == EAcceptType::keyboard) {
 		if (shortcut->KeyAssigned())
 			return SDL_GetScancodeName(shortcut->Key());
-		break;
-	case EAcceptType::joystick:
+	} else if (acceptType == EAcceptType::joystick) {
 		if (shortcut->JButtonAssigned())
 			return "B " + to_string(shortcut->JctID());
 		if (shortcut->JHatAssigned())
 			return "H " + to_string(shortcut->JctID()) + " " + jtHatToStr(shortcut->JHatVal());
 		if (shortcut->JAxisAssigned())
 			return "A " + string((shortcut->JPosAxisAssigned()) ? "+" : "-") + to_string(shortcut->JctID());
-		break;
-	case EAcceptType::gamepad:
+	} else if (acceptType == EAcceptType::gamepad) {
 		if (shortcut->GButtonAssigned())
 			return gpButtonToStr(shortcut->GctID());
 		if (shortcut->GAxisAssigned())

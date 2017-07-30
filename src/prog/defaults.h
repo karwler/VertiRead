@@ -20,6 +20,7 @@ const char dsep = '/';
 #define DEFAULT_COLOR_HIGHLIGHTED	vec4c(120, 120, 120, 255)
 #define DEFAULT_COLOR_DARKENED		vec4c(60, 60, 60, 255)
 #define DEFAULT_COLOR_TEXT			vec4c(210, 210, 210, 255)
+#define POPUP_BGCOLOR_DIM			vec4c(2, 2, 2, 1)
 
 // audio settings
 #define DEFAULT_MUSIC_VOL  128

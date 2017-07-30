@@ -36,6 +36,8 @@ public:
 	static map<EColor, vec4c> GetDefaultColors();
 	static vec4c GetDefaultColor(EColor color);
 
+	int GetRenderDriverIndex();
+
 	bool maximized, fullscreen;
 	vec2i resolution;
 	string renderer;

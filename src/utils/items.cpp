@@ -14,7 +14,7 @@ void ListItem::OnClick(EClick clickType) {
 	if (clickType == EClick::left_double)
 		World::program()->Event_ItemDoubleclicked(this);
 
-	World::engine()->SetRedrawNeeded();
+	World::winSys()->SetRedrawNeeded();
 }
 
 const string& ListItem::getData() const {
@@ -71,7 +71,7 @@ void Checkbox::OnClick(EClick clickType) {
 	if (callback)
 		(World::program()->*callback)(on);
 
-	World::engine()->SetRedrawNeeded();
+	World::winSys()->SetRedrawNeeded();
 }
 
 ScrollAreaX1* Checkbox::Parent() const {

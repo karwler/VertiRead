@@ -34,7 +34,7 @@ void InputSys::JoystickButtonEvent(const SDL_JoyButtonEvent& jbutton) {
 void InputSys::JoystickHatEvent(const SDL_JoyHatEvent& jhat) {
 	if (jhat.value == SDL_HAT_CENTERED || SDL_GameControllerFromInstanceID(jhat.which))
 		return;
-	
+
 	if (captured)
 		captured->OnJHat(jhat.hat, jhat.value);
 	else
@@ -76,8 +76,8 @@ void InputSys::MouseMotionEvent(const SDL_MouseMotionEvent& motion) {
 }
 
 void InputSys::MouseButtonDownEvent(const SDL_MouseButtonEvent& button) {
-	if (captured && !World::scene()->getPopup()) {	// mouse button cancels keyboard capture (except if popup is shown)
-		if (LineEdit* box = dynamic_cast<LineEdit*>(captured))	// confirm entered text if necessary
+	if (captured && !World::scene()->getPopup()) {				// mouse button cancels keyboard capture if not in popup
+		if (LineEdit* box = dynamic_cast<LineEdit*>(captured))		// confirm entered text if necessary
 			box->Confirm();
 		SetCapture(nullptr);
 	}
@@ -87,8 +87,7 @@ void InputSys::MouseButtonDownEvent(const SDL_MouseButtonEvent& button) {
 			World::scene()->OnMouseDown(mPos, EClick::left);
 		else if (button.button == SDL_BUTTON_RIGHT)	// single right click
 			World::scene()->OnMouseDown(mPos, EClick::right);
-	}
-	else if (button.button == SDL_BUTTON_LEFT)		// double left click
+	} else if (button.button == SDL_BUTTON_LEFT)		// double left click
 		World::scene()->OnMouseDown(mPos, EClick::left_double);
 }
 
@@ -102,8 +101,8 @@ void InputSys::MouseWheelEvent(const SDL_MouseWheelEvent& wheel) {
 }
 
 void InputSys::TextEvent(const SDL_TextInputEvent& text) {
-	static_cast<LineEdit*>(captured)->Editor()->Add(text.text);	// text input should only run if line edit is being captured, therefore a cast check isn't necessary
-	World::engine()->SetRedrawNeeded();
+	static_cast<LineEdit*>(captured)->OnText(text.text);	// text input should only run if line edit is being captured, therefore a cast check isn't necessary
+	World::winSys()->SetRedrawNeeded();
 }
 
 void InputSys::CheckAxisShortcuts() {
@@ -187,12 +186,10 @@ bool InputSys::isPressed(const ShortcutAxis* sc, float* amt) const {
 	if (sc->JButtonAssigned()) {		// check controller buttons
 		if (isPressedB(sc->JctID()))
 			return true;
-	}
-	else if (sc->JHatAssigned()) {
+	} else if (sc->JHatAssigned()) {
 		if (isPressedH(sc->JctID(), sc->JHatVal()))
 			return true;
-	}
-	else if (sc->JAxisAssigned()) {		// check controller axes
+	} else if (sc->JAxisAssigned()) {		// check controller axes
 		float val = getAxisJ(sc->JctID());
 		if ((sc->JPosAxisAssigned() && val > 0.f) || (sc->JNegAxisAssigned() && val < 0.f)) {
 			if (amt)
@@ -204,8 +201,7 @@ bool InputSys::isPressed(const ShortcutAxis* sc, float* amt) const {
 	if (sc->GButtonAssigned()) {		// check controller buttons
 		if (isPressedG(sc->GctID()))
 			return true;
-	}
-	else if (sc->GAxisAssigned()) {		// check controller axes
+	} else if (sc->GAxisAssigned()) {		// check controller axes
 		float val = getAxisG(sc->GctID());
 		if ((sc->GPosAxisAssigned() && val > 0.f) || (sc->GNegAxisAssigned() && val < 0.f)) {
 			if (amt)
@@ -267,7 +263,7 @@ float InputSys::getAxisG(uint8 gaxis) const {
 	return 0.f;
 }
 
-const vec2i& InputSys::mousePos() const {
+vec2i InputSys::mousePos() const {
 	return mPos;
 }
 
@@ -306,7 +302,7 @@ void InputSys::ClearControllers() {
 	controllers.clear();
 }
 
-Capturer* InputSys::Captured() const {
+const Capturer* InputSys::Captured() const {
 	return captured;
 }
 
@@ -317,7 +313,7 @@ void InputSys::SetCapture(Capturer* cbox) {
 	else
 		SDL_StopTextInput();
 
-	World::engine()->SetRedrawNeeded();
+	World::winSys()->SetRedrawNeeded();
 }
 
 int16 InputSys::CheckAxisValue(int16 value) const {

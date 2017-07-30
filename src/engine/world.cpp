@@ -1,7 +1,7 @@
 #include "world.h"
 
-Engine World::base;
 vector<string> World::args;
+Engine World::base;
 
 Engine* World::engine() {
 	return &base;

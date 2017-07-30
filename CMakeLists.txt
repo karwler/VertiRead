@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.1.0)
 cmake_policy(SET CMP0015 NEW)
 cmake_policy(SET CMP0043 NEW)
 
-project(VertiRead CXX)
+project(VertiRead LANGUAGES CXX)
 set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
 
 # source files
@@ -18,6 +18,8 @@ set(SRC_FILES
 	"src/engine/main.cpp"
 	"src/engine/scene.cpp"
 	"src/engine/scene.h"
+	"src/engine/shaderSys.cpp"
+	"src/engine/shaderSys.h"
 	"src/engine/windowSys.cpp"
 	"src/engine/windowSys.h"
 	"src/engine/world.cpp"
@@ -43,8 +45,6 @@ set(SRC_FILES
 	"src/utils/items.h"
 	"src/utils/objects.cpp"
 	"src/utils/objects.h"
-	"src/utils/popups.cpp"
-	"src/utils/popups.h"
 	"src/utils/scrollAreas.cpp"
 	"src/utils/scrollAreas.h"
 	"src/utils/settings.cpp"
@@ -109,6 +109,11 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	link_directories(${LIB_DIR})
 	
 endif()
+
+# definitions
+if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+	add_definitions(-D_UNICODE)
+endif()
 	
 # set main target
 add_executable(VertiRead ${SRC_FILES})
@@ -142,6 +147,9 @@ else()
 									RUNTIME_OUTPUT_DIRECTORY_DEBUG "${EXECUTABLE_OUTPUT_PATH}"
 									RUNTIME_OUTPUT_DIRECTORY_RELEASE "${EXECUTABLE_OUTPUT_PATH}")
 endif()
+
+# uncomment the following line for 32 bit build (unless the compiler doesn't use the "-m32" option)
+# set_target_properties(VertiRead PROPERTIES COMPILE_FLAGS "-m32" LINK_FLAGS "-m32")
 
 # post buils commands
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")

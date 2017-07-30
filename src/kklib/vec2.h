@@ -9,7 +9,7 @@ namespace kk {
 
 template <typename T>
 struct vec2 {
-	vec2(const T& N=0) :
+	vec2(const T& N=T(0)) :
 		x(N), y(N)
 	{}
 	vec2(const T& X, const T& Y) :
@@ -58,20 +58,21 @@ struct vec2 {
 	}
 
 	bool isNull() const {
-		return x == 0 && y == 0;
+		return x == T(0) && y == T(0);
 	}
 	bool hasNull() const {
-		return x == 0 || y == 0;
+		return x == T(0) || y == T(0);
 	}
 
 	T len() const {
-		return length(*this);
+		return std::sqrt(x*x + y*y);
 	}
 	vec2 norm() const {
-		return normalize(*this);
+		T l = len();
+		return vec2(x/l, y/l);
 	}
-	bool unit() const {
-		return isUnit(*this);
+	bool isUnit() const {
+		return len() == T(1);
 	}
 	template <typename A>
 	T dot(const vec2<A>& vec) const {
@@ -86,7 +87,7 @@ struct vec2 {
 		return reflect(*this, nrm);
 	}
 	vec2 rot(T ang) const {
-		return rotate(*this, ang);
+		return vec2(x*std::cos(ang) - y*std::sin(ang), x*std::sin(ang) + y*std::cos(ang));
 	}
 
 	union { T x, w; };
@@ -171,22 +172,6 @@ bool operator!=(const A& a, const vec2<B>& b) {
 	return a != b.x || a != b.y;
 }
 
-template <typename A>
-A length(const vec2<A>& vec) {
-	return std::sqrt(vec.x*vec.x + vec.y*vec.y);
-}
-
-template <typename A>
-vec2<A> normalize(const vec2<A>& vec) {
-	A l = length(vec);
-	return vec2<A>(vec.x/l, vec.y/l);
-}
-
-template <typename A>
-bool isUnit(const vec2<A>& vec) {
-	return length(vec) == 1;
-}
-
 template <typename A, typename B>
 A dotP(const vec2<A>& v0, const vec2<B>& v1) {
 	return v0.x*v1.x + v0.y*v1.y;
@@ -201,12 +186,7 @@ template <typename A, typename B>
 vec2<A> reflect(const vec2<A>& vec, vec2<B> nrm) {
 	if (!isUnit(nrm))
 		nrm = normalize(nrm);
-	return vec - 2 * dotP(vec, nrm) * nrm;
-}
-
-template <typename A>
-vec2<A> rotate(const vec2<A>& vec, A ang) {
-	return vec2<A>(vec.x*std::cos(ang) - vec.y*std::sin(ang), vec.x*std::sin(ang) + vec.y*std::cos(ang));
+	return vec - A(2) * dotP(vec, nrm) * nrm;
 }
 
 }

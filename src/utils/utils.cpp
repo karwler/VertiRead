@@ -92,49 +92,32 @@ bool isDriveLetter(const string& path) {
 }
 
 string modifyCase(string str, ETextCase caseChange) {
-	switch (caseChange) {
-	case ETextCase::first_upper:
+	if (caseChange == ETextCase::first_upper) {
 		if (!str.empty())
 			str[0] = toupper(str[0]);
-		break;
-	case ETextCase::all_upper:
+	} else if (caseChange == ETextCase::all_upper)
 		std::transform(str.begin(), str.end(), str.begin(), toupper);
-		break;
-	case ETextCase::all_lower:
+	else if (caseChange == ETextCase::all_lower)
 		std::transform(str.begin(), str.end(), str.begin(), tolower);
-	}
 	return str;
 }
 
-vector<string> getWords(const string& line, char splitter, char spacer) {
+vector<string> getWords(const string& line, char splitter) {
 	vector<string> words;
 
 	size_t i = 0;
-	while (i != line.length() && line[i] == spacer)
+	while (i != line.length() && line[i] == splitter)
 		i++;
 	size_t start = i;
-	size_t end = line.length();
 
-	for (; i<=line.length(); i++) {
-		if (line[i] == splitter || i == line.length()) {
-			if (end > i)
-				end = i;
+	for (; i<=line.length(); i++)
+		if (line[i] == splitter) {
+			words.push_back(line.substr(start, i-start));
 
-			if (start < end)
-				words.push_back(line.substr(start, end-start));
-
-			while (i != line.length() && (line[i] == spacer || line[i] == splitter))
+			while (i != line.length() && line[i] == splitter)
 				i++;
 			start = i;
-			end = line.length();
 		}
-		else if (line[i] == spacer) {
-			if (end > i)
-				end = i;
-		}
-		else
-			end = line.length();
-	}
 	return words;
 }
 
@@ -163,8 +146,7 @@ bool splitIniLine(const string& line, string* arg, string* val, string* key, boo
 			*arg = line.substr(0, i1);
 		if (key)
 			*key = line.substr(i1+1, i2-i1-1);
-	}
-	else if (arg)
+	} else if (arg)
 		*arg = left;
 
 	if (isTitle)
@@ -193,8 +175,7 @@ SDL_Rect getCrop(SDL_Rect item, SDL_Rect frame) {
 	if (item.w < frame.x || item.x > frame.w || item.h < frame.y || item.y > frame.h) {
 		crop.w = siz.x;
 		crop.h = siz.y;
-	}
-	else {
+	} else {
 		if (item.x < frame.x)
 			crop.x = frame.x - item.x;
 		if (item.w > frame.w)
@@ -225,28 +206,6 @@ SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {
 	return sheet;
 }
 
-void PrintInfo() {
-	SDL_version ver;
-	SDL_GetVersion(&ver);
-	cout << "\nSDL version: min=" << to_string(ver.minor) << " max=" << to_string(ver.major) << " patch=" << to_string(ver.patch) << endl;
-	cout << "Platform: " << SDL_GetPlatform() << endl;
-	cout << "CPU count: " << SDL_GetCPUCount() << " - " << SDL_GetCPUCacheLineSize() << endl;
-	cout << "RAM: " << SDL_GetSystemRAM() << "MB" << endl;
-	cout << "\nVideo Drivers:" << endl;
-	for (int i=0; i!=SDL_GetNumVideoDrivers(); i++)
-		cout << SDL_GetVideoDriver(i) << endl;
-	cout << "\nRenderers:" << endl;
-	for (int i=0; i!=SDL_GetNumRenderDrivers(); i++)
-		cout << getRendererName(i) << endl;
-	cout << "\nAudio Devices:" << endl;
-	for (int i=0; i!=SDL_GetNumAudioDevices(0); i++)
-		cout << SDL_GetAudioDeviceName(i, 0) << endl;
-	cout << "\nAudio Drivers:" << endl;
-	for (int i=0; i!=SDL_GetNumAudioDrivers(); i++)
-		cout << SDL_GetAudioDriver(i) << endl;
-	cout << endl;
-}
-
 string getRendererName(int id) {
 	SDL_RendererInfo info;
 	if (!SDL_GetRenderDriverInfo(id, &info))
@@ -254,13 +213,10 @@ string getRendererName(int id) {
 	return info.name;
 }
 
-vector<string> getAvailibleRenderers(bool trustedOnly) {
+vector<string> getAvailibleRenderers() {
 	vector<string> renderers;
-	for (int i=0; i!=SDL_GetNumRenderDrivers(); i++) {
-		string name = getRendererName(i);
-		if (!trustedOnly || (trustedOnly && strcmpCI(name, "direct3d")) || (trustedOnly && strcmpCI(name, "opengl")) || (trustedOnly && strcmpCI(name, "software")))
-			renderers.push_back(name);
-	}
+	for (int i=0; i!=SDL_GetNumRenderDrivers(); i++)
+		renderers.push_back(getRendererName(i));
 	return renderers;
 }
 

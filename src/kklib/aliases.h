@@ -23,7 +23,6 @@ using uint32 = uint32_t;
 using int64 = int64_t;
 using uint64 = uint64_t;
 
-using char8 = char;
 using char16 = char16_t;
 using char32 = char32_t;
 using wchar = wchar_t;
@@ -59,13 +58,3 @@ using vec4d = vec4<double>;
 }
 
 #define PI M_PI
-
-template <typename T>
-T D2R(T deg) {
-	return deg / T(180) * T(PI);	// degrees to radians
-}
-
-template <typename T>
-T R2D(T rad) {
-	return rad * T(180) / T(PI);	// radians to degrees
-}

@@ -176,12 +176,15 @@ void ButtonImage::OnClick() {
 	curTex++;
 	if (curTex == texes.size())
 		curTex = 0;
-	World::engine()->SetRedrawNeeded();
+
+	World::winSys()->SetRedrawNeeded();
 }
 
 Image ButtonImage::CurTex() const {
 	return texes.empty() ? Image() : Image(Pos(), texes[curTex], Size());
 }
+
+// LINE EDITOR
 
 LineEditor::LineEditor(const Object& BASE, const string& TXT, ETextType TYPE, void (Program::*KCALL)(const string&), void (Program::*CCALL)()) :
 	Object(BASE),
@@ -216,4 +219,19 @@ void LineEditor::CheckCaretLeft() {
 	int diff = Pos().x - caret.x;
 	if (diff > 0)
 		textPos -= diff;
+}
+
+// POPUP
+
+Popup::Popup(const Object& BASE, const vector<Object*>& OBJS) :
+	Object(BASE),
+	objects(OBJS)
+{}
+
+Popup::~Popup() {
+	clear(objects);
+}
+
+Popup*Popup::Close() const {
+	return new Popup(*this);
 }

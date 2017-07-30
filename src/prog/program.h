@@ -36,11 +36,19 @@ public:
 	void Event_Mute();
 
 	// playlist editor events
+	void Event_AddPlaylistButtonClick();
+	void Event_DeletePlaylistButtonClick();
+	void Event_EditPlaylistButtonClick();
+	void Event_NewPlaylistOk();
+	void Event_NewPlaylistOk(const string& str);
 	void Event_SwitchButtonClick();
 	void Event_BrowseButtonClick();
-	void Event_AddButtonClick();
-	void Event_DeleteButtonClick();
-	void Event_EditButtonClick();
+	void Event_AddSongBookButtonClick();
+	void Event_AddSongFileDirButtonClick();
+	void Event_DeleteSongBookButtonClick();
+	void Event_EditSongBookButtonClick();
+	void Event_SongBookRenameOk();
+	void Event_SongBookRenameOk(const string& str);
 	void Event_ItemDoubleclicked(ListItem* item);
 	void Event_SaveButtonClick();
 	void Event_UpButtonClick();
@@ -76,7 +84,6 @@ public:
 	void Event_SetDeadzone(const string& deadz);
 
 	// other events
-	void Event_TextCaptureOk(const string& str);
 	void Event_SelectionSet(void* box);
 	void Event_ScreenMode();
 	void FileDropEvent(char* file);

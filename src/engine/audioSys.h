@@ -7,7 +7,6 @@ public:
 	AudioSys(const AudioSettings& SETS=AudioSettings());
 	~AudioSys();
 
-	uint8 Initialize();
 	void FreeMusic();
 
 	void Tick(float dSec);

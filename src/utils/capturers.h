@@ -30,12 +30,14 @@ public:
 	virtual void OnJAxis(uint8 jaxis, bool positive);
 	virtual void OnGButton(uint8 gbutton);
 	virtual void OnGAxis(uint8 gaxis, bool positive);
+	void OnText(const char* text);
 	
 	void Confirm();
 	void Cancel();
 	int TextPos() const;
 	void ResetTextPos();
-	TextEdit* Editor();
+	TextEdit& Editor();
+	const TextEdit& Editor() const;
 	virtual Text getText() const;		// warning: text doesn't have global positioning
 	virtual SDL_Rect getCaret() const;	// warning: caret doesn't have global positioning
 

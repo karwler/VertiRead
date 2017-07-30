@@ -9,7 +9,7 @@ namespace kk {
 
 template <typename T>
 struct vec4 {
-	vec4(const T& N=0) :
+	vec4(const T& N=T(0)) :
 		x(N), y(N), z(N), a(N)
 	{}
 	vec4(const T& X, const T& Y, const T& Z, const T& A) :
@@ -75,24 +75,32 @@ struct vec4 {
 		return *this;
 	}
 
+	bool isNull() const {
+		return x == T(0) && y == T(0) && z == T(0) && a == T(0);
+	}
+	bool hasNull() const {
+		return x == T(0) || y == T(0) || z == T(0) || a == T(0);
+	}
+	
 	T len() const {
-		return length(*this);
+		return std::sqrt(x*x + y*y + z*z + a*a);
 	}
 	vec4 norm() const {
-		return normalize(*this);
+		T l = len();
+		return vec4(x/l, y/l, z/l, a/l);
 	}
-	bool unit() const {
-		return isUnit(*this);
+	bool isUnit() const {
+		return len() == T(1);
 	}
 	template <typename A>
 	T dot(const vec4& vec) const {
 		return dotP(*this, vec);
 	}
 
-	union { T x, r; };
-	union { T y, g; };
-	union { T z, b, w; };
-	union { T a,    h; };
+	union { T x, w, r; };
+	union { T y, h, g; };
+	union { T z, d, b; };
+	union { T a; };
 };
 
 template <typename A, typename B>
@@ -171,22 +179,6 @@ bool operator!=(const vec4<A>& a, const B& b) {
 template <typename A, typename B>
 bool operator!=(const A& a, const vec4<B>& b) {
 	return a != b.x || a != b.y || a != b.z || a != b.a;
-}
-
-template <typename T>
-T length(const vec4<T>& vec) {
-	return std::sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z + vec.a*vec.a);
-}
-
-template <typename T>
-vec4<T> normalize(const vec4<T>& vec) {
-	T l = vec.len();
-	return vec4<T>(vec.x/l, vec.y/l, vec.z/l, vec.a/l);
-}
-
-template <typename T>
-bool isUnit(const vec4<T>& vec) {
-	return vec.len() == 1;
 }
 
 template <typename A, typename B>

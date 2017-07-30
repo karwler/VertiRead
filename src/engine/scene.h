@@ -1,7 +1,6 @@
 #pragma once
 
 #include "utils/scrollAreas.h"
-#include "utils/popups.h"
 #include "utils/capturers.h"
 #include "prog/library.h"
 #include "prog/program.h"
@@ -25,11 +24,15 @@ public:
 
 	Program* getProgram();
 	Library* getLibrary();
-	vector<Object*> Objects();
+	const vector<Object*>& Objects() const;
 	Object* FocusedObject();			// returns pointer to object focused by keyboard
 	ListItem* SelectedButton();	// find scroll area with selectable items and get the first selected one (returns nullptr if nothing found)
-	Popup* getPopup();
-	void SetPopup(Popup* box);			// use nullptr to close
+
+	const Popup* getPopup() const;
+	void SetPopupMessage(const string& msg);
+	void SetPopupChoice(const string& msg, void (Program::*callb)());
+	void SetPopupText(const string& msg, const string& text, void (Program::*callt)(const string&), void (Program::*callb)());
+	void DelPopup();
 
 private:
 	Program program;
@@ -38,17 +41,16 @@ private:
 
 	vector<Object*> objects;
 	kk::sptr<Popup> popup;
+	btsel focObject;			// id of object currently focused (should be object over which the cursor is poistioned)
+	ScrollArea* objectHold;		// pointer to object currently being dragged by mouse (nullptr if none is being held)
 
-	btsel focObject;		// id of object currently focused by keyboard/controller
-	ScrollArea* objectHold;	// pointer to object currently being dragged by mouse (nullptr if none is being held)
+	void ResizeObjects(vector<Object*>& objs);
+	void MouseMoveObjectOverCheck(vector<Object*>& objs, const vec2i& mPos);	// return true if found an object
 
-	void CheckObjectsClick(const vec2i& mPos, EClick clickType, bool handleHold);
 	void CheckPopupClick(const vec2i& mPos);
 	bool CheckSliderClick(const vec2i& mPos, ScrollArea* obj);
 	void CheckListBoxClick(const vec2i& mPos, ListBox* obj, EClick clickType);
 	void CheckTableBoxClick(const vec2i& mPos, TableBox* obj, EClick clickType);
 	void CheckTileBoxClick(const vec2i& mPos, TileBox* obj, EClick clickType);
 	void CheckReaderBoxClick(const vec2i& mPos, ReaderBox* obj, EClick clickType, bool handleHold);
-	void CheckPopupSimpleClick(const vec2i& mPos, PopupMessage* obj);
-	void CheckPopupChoiceClick(const vec2i& mPos, PopupChoice* obj);
 };

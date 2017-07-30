@@ -45,8 +45,7 @@ bool Browser::GoTo(const string& dirname) {
 		
 		if (!isOk || !isDriveLetter(dirname))
 			return false;
-	}
-	else {
+	} else {
 		newPath = curDir + appendDsep(dirname);
 		if (Filer::FileType(newPath) != EFileType::dir)
 			return false;
@@ -84,8 +83,7 @@ string Browser::GoNext() {
 				curDir[0] = (it == letters.end()-1) ? *letters.begin() : *++it;
 				break;
 			}
-	}
-	else {
+	} else {
 		string parent = parentPath(curDir);
 		vector<string> dirs = Filer::ListDir(parent, FILTER_DIR);
 		for (vector<string>::const_iterator it=dirs.begin(); it!=dirs.end(); it++)
@@ -118,8 +116,7 @@ string Browser::GoPrev() {
 				curDir[0] = (it == letters.begin()) ? *(letters.end()-1) : *--it;
 				break;
 			}
-	}
-	else {
+	} else {
 		string parent = parentPath(curDir);
 		vector<string> dirs = Filer::ListDir(parent, FILTER_DIR);
 		for (vector<string>::const_iterator it=dirs.begin(); it!=dirs.end(); it++)

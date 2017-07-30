@@ -2,7 +2,6 @@
 
 Engine::Engine() :
 	run(false),
-	redraw(false),
 	dSec(0.f)
 {}
 
@@ -12,12 +11,10 @@ void Engine::Run() {
 		throw Exception("couldn't initialize SDL\n" + string(SDL_GetError()), 1);
 	if (TTF_Init())
 		throw Exception("couldn't initialize fonts\n" + string(SDL_GetError()), 2);
-	PrintInfo();
 
 	winSys = new WindowSys(Filer::LoadVideoSettings());
 	inputSys = new InputSys(Filer::LoadControlsSettings());
 	audioSys = new AudioSys(Filer::LoadAudioSettings());
-	audioSys->Initialize();
 
 	winSys->CreateWindow();
 	scene = new Scene(Filer::LoadGeneralSettings());		// initializes program and library
@@ -25,7 +22,6 @@ void Engine::Run() {
 	// initialize values
 	scene->getProgram()->Event_OpenBookList();
 	run = true;
-	redraw = true;
 	SDL_Event event;
 	uint32 oldTime = SDL_GetTicks();
 
@@ -36,10 +32,7 @@ void Engine::Run() {
 		oldTime = newTime;
 
 		// draw scene if requested
-		if (redraw) {
-			redraw = false;
-			winSys->DrawObjects(scene->Objects());
-		}
+		winSys->DrawObjects(scene->Objects(), scene->getPopup());
 
 		// handle events
 		audioSys->Tick(dSec);
@@ -55,8 +48,7 @@ void Engine::Close() {
 	// save all settings before quitting
 	Filer::SaveSettings(scene->Settings());
 	Filer::SaveSettings(winSys->Settings());
-    if (audioSys)
-        Filer::SaveSettings(audioSys->Settings());
+	Filer::SaveSettings(audioSys->Settings());
 	Filer::SaveSettings(inputSys->Settings());
 	
 	run = false;
@@ -74,56 +66,36 @@ void Engine::Cleanup() {
 
 void Engine::HandleEvent(const SDL_Event& event) {
 	// pass event to a specific handler
-	switch (event.type) {
-	case SDL_KEYDOWN:
+	if (event.type == SDL_KEYDOWN)
 		inputSys->KeypressEvent(event.key);
-		break;
-	case SDL_JOYBUTTONDOWN:
+	else if (event.type == SDL_JOYBUTTONDOWN)
 		inputSys->JoystickButtonEvent(event.jbutton);
-		break;
-	case SDL_JOYHATMOTION:
+	else if (event.type == SDL_JOYHATMOTION)
 		inputSys->JoystickHatEvent(event.jhat);
-		break;
-	case SDL_JOYAXISMOTION:
+	else if (event.type == SDL_JOYAXISMOTION)
 		inputSys->JoystickAxisEvent(event.jaxis);
-		break;
-	case SDL_CONTROLLERBUTTONDOWN:
+	else if (event.type == SDL_CONTROLLERBUTTONDOWN)
 		inputSys->GamepadButtonEvent(event.cbutton);
-		break;
-	case SDL_CONTROLLERAXISMOTION:
+	else if (event.type == SDL_CONTROLLERAXISMOTION)
 		inputSys->GamepadAxisEvent(event.caxis);
-		break;
-	case SDL_MOUSEMOTION:
+	else if (event.type == SDL_MOUSEMOTION)
 		inputSys->MouseMotionEvent(event.motion);
-		break;
-	case SDL_MOUSEBUTTONDOWN:
+	else if (event.type == SDL_MOUSEBUTTONDOWN)
 		inputSys->MouseButtonDownEvent(event.button);
-		break;
-	case SDL_MOUSEBUTTONUP:
+	else if (event.type == SDL_MOUSEBUTTONUP)
 		inputSys->MouseButtonUpEvent(event.button);
-		break;
-	case SDL_MOUSEWHEEL:
+	else if (event.type == SDL_MOUSEWHEEL)
 		inputSys->MouseWheelEvent(event.wheel);
-		break;
-	case SDL_TEXTINPUT:
+	else if (event.type == SDL_TEXTINPUT)
 		inputSys->TextEvent(event.text);
-		break;
-	case SDL_WINDOWEVENT:
+	else if (event.type == SDL_WINDOWEVENT)
 		winSys->WindowEvent(event.window);
-		break;
-	case SDL_JOYDEVICEADDED: case SDL_JOYDEVICEREMOVED:
+	else if (event.type == SDL_JOYDEVICEADDED || event.type == SDL_JOYDEVICEREMOVED)
 		inputSys->UpdateControllers();
-		break;
-	case SDL_DROPFILE:
+	else if (event.type == SDL_DROPFILE)
 		scene->getProgram()->FileDropEvent(event.drop.file);
-		break;
-	case SDL_QUIT:
+	else if (event.type == SDL_QUIT)
 		Close();
-	}
-}
-
-void Engine::SetRedrawNeeded() {
-	redraw = true;
 }
 
 float Engine::deltaSeconds() const {

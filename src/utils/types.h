@@ -40,6 +40,12 @@ enum class EClick : uint8 {
 	right
 };
 
+enum class EPopupType : uint8 {
+	message,
+	choice,
+	text
+};
+
 // image related stuff
 
 class Texture {
@@ -122,27 +128,7 @@ private:
 	void CleanFloatString(string& str);
 };
 
-// some random types
-
-template <typename T>
-struct idsel {
-	idsel() : id(0), sl(false) {}
-	idsel(T ID) : id(ID), sl(true) {}
-
-	T id;
-	bool sl;
-
-	idsel& operator=(T ID) {
-		id = ID;
-		sl = true;
-		return *this;
-	}
-	idsel& operator=(bool SL) {
-		sl = SL;
-		return *this;
-	}
-};
-using btsel = idsel<size_t>;
+// input related stuff
 
 struct Controller {
 	Controller();
@@ -204,7 +190,6 @@ public:
 	bool GNegAxisAssigned() const;
 	void GAxis(uint8 AXIS, bool positive);
 
-
 private:
 	EAssgnment asg;		// stores data for checking whether key and/or button/axis are assigned
 	SDL_Scancode key;	// keybord key
@@ -236,6 +221,8 @@ public:
 	void (Program::*call)(float);
 };
 
+// some random types
+
 struct Playlist {
 	Playlist(const string& NAME="", const vector<string>& SGS={}, const vector<string>& BKS={});
 
@@ -262,3 +249,23 @@ struct Exception {
 
 	void Display();
 };
+
+template <typename T>
+struct idsel {
+	idsel() : id(0), sl(false) {}
+	idsel(T ID) : id(ID), sl(true) {}
+
+	T id;
+	bool sl;
+
+	idsel& operator=(T ID) {
+		id = ID;
+		sl = true;
+		return *this;
+	}
+	idsel& operator=(bool SL) {
+		sl = SL;
+		return *this;
+	}
+};
+using btsel = idsel<size_t>;

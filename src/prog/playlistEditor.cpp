@@ -21,8 +21,7 @@ void PlaylistEditor::AddSong(string path) {
 		path = appendDsep(path);
 		for (string& it : Filer::ListDirRecursively(path))
 			pList.songs.push_back(path+it);
-	}
-	else
+	} else
 		pList.songs.push_back(path);
 
 	selected = pList.songs.size()-1;

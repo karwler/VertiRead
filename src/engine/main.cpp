@@ -4,30 +4,27 @@
 #endif
 
 #if defined(_WIN32) && !defined(_DEBUG)
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow) {
-	World::args = getWords(pCmdLine, ' ', ' ');
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
+	World::args = getWords(wtos(pCmdLine), ' ');
 #else
 int main(int argc, char** argv) {
-	for (int i=0; i!=argc; i++)
-		World::args.push_back(argv[i]);
+	World::args.resize(argc-1);
+	for (int i=1; i!=argc; i++)
+		World::args[i-1] = argv[i];
 #endif
 	int retval = 0;
 	try {
 		World::engine()->Run();
-	}
-	catch (Exception exc) {
+	} catch (Exception exc) {
 		exc.Display();
 		retval = exc.retval;
-	}
-	catch (std::logic_error exc) {
+	} catch (std::logic_error exc) {
 		cerr << "ERROR: " << exc.what() << endl;
 		retval = -3;
-	}
-	catch (std::runtime_error exc) {
+	} catch (std::runtime_error exc) {
 		cerr << "ERROR: " << exc.what() << endl;
 		retval = -2;
-	}
-	catch (...) {
+	} catch (...) {
 		cerr << "unknown error" << endl;
 		retval = -1;
 	}

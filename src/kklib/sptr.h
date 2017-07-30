@@ -65,15 +65,15 @@ public:
 		return ptr;
 	}
 	T* operator=(const T& v) {
-		if (ptr)
-			delete ptr;
-		ptr = new T(v);
+		if (!ptr)
+			ptr = new T;
+		*ptr = v;
 		return ptr;
 	}
 	T* operator=(const sptr& b) {
-		if (ptr)
-			delete ptr;
-		ptr = new T(*b.ptr);
+		if (!ptr)
+			ptr = new T;
+		*ptr = *b.ptr;
 		return ptr;
 	}
 
@@ -99,7 +99,8 @@ public:
 		ptr = nullptr;
 		return t;
 	}
-private:
+	
+protected:
 	T* ptr;
 };
 

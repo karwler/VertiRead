@@ -28,7 +28,7 @@ void ScrollArea::DragSlider(int ypos) {
 void ScrollArea::DragList(int ypos) {
 	listY = ypos;
 	CheckListY();
-	World::engine()->SetRedrawNeeded();
+	World::winSys()->SetRedrawNeeded();
 }
 
 void ScrollArea::ScrollList(int ymov)  {
@@ -74,11 +74,13 @@ void ScrollArea::CheckListY() {
 }
 
 SDL_Rect ScrollArea::Bar() const {
-	return {End().x-barW, Pos().y, BarW(), Size().y};
+	int bw = BarW();
+	return {End().x-bw, Pos().y, bw, Size().y};
 }
 
 SDL_Rect ScrollArea::Slider() const {
-	return { End().x-barW, SliderY(), BarW(), sliderH };
+	int bw = BarW();
+	return {End().x-bw, SliderY(), bw, sliderH};
 }
 
 btsel ScrollArea::SelectedItem() const {
@@ -143,13 +145,13 @@ ListItem* ListBox::Item(size_t id) const {
 
 SDL_Rect ListBox::ItemRect(size_t id) const {
 	vec2i pos = Pos();
-	SDL_Rect rect = { pos.x, pos.y - listY + id * (itemH+spacing), Size().x-BarW(), itemH };
+	SDL_Rect rect = {pos.x, pos.y - listY + id * (itemH+spacing), Size().x-BarW(), itemH};
 	return cropRect(rect, getCrop(rect, getRect()));
 }
 
 SDL_Rect ListBox::ItemRect(size_t id, SDL_Rect& crop, EColor& color) const {
 	vec2i pos = Pos();
-	SDL_Rect rect = { pos.x, pos.y - listY + id * (itemH+spacing), Size().x-BarW(), itemH };
+	SDL_Rect rect = {pos.x, pos.y - listY + id * (itemH+spacing), Size().x-BarW(), itemH};
 
 	color = items[id] == selectedItem ? EColor::highlighted : EColor::rectangle;
 	crop = getCrop(rect, getRect());
@@ -219,7 +221,7 @@ SDL_Rect TableBox::ItemRect(size_t id, SDL_Rect& crop) const {
 	for (uint i=0; i!=loc.x; i++)
 		pref += itemW[i];
 
-	SDL_Rect rect = { pos.x + pref*float(siz.x) + spacing/2, pos.y - listY + loc.y * (itemH+spacing), itemW[loc.x]*float(siz.x) - spacing, itemH };
+	SDL_Rect rect = {pos.x + pref*float(siz.x) + spacing/2, pos.y - listY + loc.y * (itemH+spacing), itemW[loc.x]*float(siz.x) - spacing, itemH};
 	crop = getCrop(rect, getRect());
 	return cropRect(rect, crop);
 }
@@ -392,7 +394,7 @@ void ReaderBox::Tick(float dSec) {
 			sliderTimer -= World::engine()->deltaSeconds();
 			if (sliderTimer <= 0.f) {
 				sliderTimer = 0.f;
-				World::engine()->SetRedrawNeeded();
+				World::winSys()->SetRedrawNeeded();
 			}
 		}
 
@@ -401,7 +403,7 @@ void ReaderBox::Tick(float dSec) {
 			listTimer -= World::engine()->deltaSeconds();
 			if (listTimer <= 0.f) {
 				listTimer = 0.f;
-				World::engine()->SetRedrawNeeded();
+				World::winSys()->SetRedrawNeeded();
 			}
 		}
 
@@ -410,7 +412,7 @@ void ReaderBox::Tick(float dSec) {
 			playerTimer -= World::engine()->deltaSeconds();
 			if (playerTimer <= 0.f) {
 				playerTimer = 0.f;
-				World::engine()->SetRedrawNeeded();
+				World::winSys()->SetRedrawNeeded();
 			}
 		}
 	}
@@ -434,7 +436,7 @@ bool ReaderBox::CheckMouseOverSlider(const vec2i& mPos) {
 	if (inRect(Bar(), mPos)) {
 		if (sliderTimer != hideDelay) {
 			sliderTimer = hideDelay;
-			World::engine()->SetRedrawNeeded();
+			World::winSys()->SetRedrawNeeded();
 		}
 		mouseHideable = false;
 		return true;
@@ -447,7 +449,7 @@ bool ReaderBox::CheckMouseOverList(const vec2i& mPos) {
 	if ((showList() && inRect(rect, mPos)) || (!showList() && inRect({rect.x, rect.y, rect.w/3, rect.h}, mPos))) {
 		if (listTimer != hideDelay) {
 			listTimer = hideDelay;
-			World::engine()->SetRedrawNeeded();
+			World::winSys()->SetRedrawNeeded();
 		}
 		mouseHideable = false;
 		return true;
@@ -460,7 +462,7 @@ bool ReaderBox::CheckMouseOverPlayer(const vec2i& mPos) {
 	if (World::audioSys()->PlaylistLoaded() && ((showPlayer() && inRect(rect, mPos)) || (!showPlayer() && inRect({rect.x, rect.y+rect.h-rect.h/3, rect.w, rect.h/3}, mPos)))) {
 		if (playerTimer != hideDelay) {
 			playerTimer = hideDelay;
-			World::engine()->SetRedrawNeeded();
+			World::winSys()->SetRedrawNeeded();
 		}
 		mouseHideable = false;
 		return true;
@@ -471,7 +473,7 @@ bool ReaderBox::CheckMouseOverPlayer(const vec2i& mPos) {
 void ReaderBox::DragListX(int xpos) {
 	listX = xpos;
 	CheckListX();
-	World::engine()->SetRedrawNeeded();
+	World::winSys()->SetRedrawNeeded();
 }
 
 void ReaderBox::ScrollListX(int xmov) {
@@ -485,7 +487,7 @@ void ReaderBox::Zoom(float factor) {
 	zoom = factor;
 	SetValues();
 
-	World::engine()->SetRedrawNeeded();
+	World::winSys()->SetRedrawNeeded();
 }
 
 void ReaderBox::MultZoom(float zfactor) {
@@ -556,7 +558,7 @@ void ReaderBox::Pictures(const vector<Texture*>& pictures, const string& curPic)
 
 SDL_Rect ReaderBox::List() const {
 	vec2i pos = Pos();
-	return { pos.x, pos.y, blistW, int(listObjects.size())*blistW };
+	return {pos.x, pos.y, blistW, int(listObjects.size())*blistW};
 }
 
 vector<Object*>& ReaderBox::ListObjects() {
@@ -564,7 +566,7 @@ vector<Object*>& ReaderBox::ListObjects() {
 }
 
 SDL_Rect ReaderBox::Player() const {
-	return { Pos().x+Size().x/2-playerW/2, End().y-playerH, playerW, playerH };
+	return {Pos().x+Size().x/2-playerW/2, End().y-playerH, playerW, playerH};
 }
 
 vector<Object*>& ReaderBox::PlayerObjects() {

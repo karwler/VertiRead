@@ -41,6 +41,7 @@ using kk::grid2;
 // forward declaraions
 enum class EColor : uint8;
 enum class ETextCase : uint8;
+enum EWindow : uint8;
 
 class AudioSys;
 class Engine;
@@ -50,6 +51,7 @@ class WinSys;
 class Scene;
 class Program;
 
+class Object;
 class ScrollArea;
 class ScrollAreaX1;
 class Capturer;
@@ -67,7 +69,7 @@ string delExt(const string& path);
 string appendDsep(const string& path);
 bool isDriveLetter(const string& path);
 string modifyCase(string str, ETextCase caseChange);
-vector<string> getWords(const string& line, char splitter, char spacer);
+vector<string> getWords(const string& line, char splitter);
 bool splitIniLine(const string& line, string* arg, string* val, string* key=nullptr, bool* isTitle=nullptr, size_t* id=nullptr);
 
 // graphics
@@ -79,9 +81,8 @@ SDL_Rect cropRect(const SDL_Rect& rect, const SDL_Rect& crop);
 SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop);
 
 // other
-void PrintInfo();
 string getRendererName(int id);
-vector<string> getAvailibleRenderers(bool trustedOnly=false);
+vector<string> getAvailibleRenderers();
 
 // convertions
 string wtos(const wstring& wstr);

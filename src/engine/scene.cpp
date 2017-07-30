@@ -10,53 +10,52 @@ Scene::Scene(const GeneralSettings& SETS) :
 }
 
 Scene::~Scene() {
+	DelPopup();
 	clear(objects);
 }
 
 void Scene::SwitchMenu(const vector<Object*>& objs) {
-	// reset values
+	// reset and set objects
 	objectHold = nullptr;
-	World::inputSys()->SetCapture(nullptr);
-
-	// reset objects
-	popup.clear();
+	DelPopup();			// resets capture and focObject
 	clear(objects);
 	objects = objs;
 
+	// additional stuff
 	OnMouseMove(World::inputSys()->mousePos(), 0);
-	World::engine()->SetRedrawNeeded();
+	World::winSys()->SetRedrawNeeded();
 }
 
 void Scene::ResizeMenu() {
-	for (Object* obj : objects)
+	ResizeObjects(objects);
+	if (popup)
+		ResizeObjects(popup->objects);
+
+	World::winSys()->SetRedrawNeeded();
+}
+
+void Scene::ResizeObjects(vector<Object*>& objs) {
+	for (Object* obj : objs)
 		if (ScrollArea* box = dynamic_cast<ScrollArea*>(obj))
 			box->SetValues();
-
-	World::engine()->SetRedrawNeeded();
 }
 
 void Scene::Tick(float dSec) {
 	World::inputSys()->CheckAxisShortcuts();	// handle keyhold
 
 	// object ticks
-	for (Object* it : objects) {
+	for (Object* it : objects)
 		if (ReaderBox* box = dynamic_cast<ReaderBox*>(it))
 			box->Tick(dSec);
-		else if (Popup* box = dynamic_cast<Popup*>(it))
-			box->Tick(dSec);
-	}
 }
 
 void Scene::OnMouseMove(const vec2i& mPos, const vec2i& mMov) {
-	// set focused object and call mouse move events
+	// set focused object and call mouse move events;
 	focObject.sl = false;
-	for (size_t i=0; i!=objects.size(); i++) {
-		if (inRect(objects[i]->getRect(), mPos))
-			focObject = i;
-
-		if (ReaderBox* box = dynamic_cast<ReaderBox*>(objects[i]))
-			box->OnMouseMove(mPos);
-	}
+	if (popup)
+		MouseMoveObjectOverCheck(popup->objects, mPos);
+	else
+		MouseMoveObjectOverCheck(objects, mPos);
 
 	// handle scrolling
 	if (objectHold) {
@@ -65,32 +64,34 @@ void Scene::OnMouseMove(const vec2i& mPos, const vec2i& mMov) {
 			if (InputSys::isPressedK(SDL_SCANCODE_LSHIFT) || InputSys::isPressedM(SDL_BUTTON_RIGHT))
 				box->ScrollListX(-mMov.x);
 			objectHold->ScrollList(-mMov.y);
-		}
-		else
+		} else
 			objectHold->DragSlider(mPos.y);
 	}
 }
 
-void Scene::OnMouseDown(const vec2i& mPos, EClick clickType, bool handleHold) {
-	// first check if there's a popup window
-	if (popup)
-		CheckPopupClick(mPos);
-	else
-		CheckObjectsClick(mPos, clickType, handleHold);
+void Scene::MouseMoveObjectOverCheck(vector<Object*>& objs, const vec2i& mPos) {
+	for (size_t i=0; i!=objs.size(); i++) {
+		if (ReaderBox* box = dynamic_cast<ReaderBox*>(objs[i]))
+			box->OnMouseMove(mPos);
+
+		if (inRect(objs[i]->getRect(), mPos)) {
+			focObject = i;
+			break;
+		}
+	}
 }
 
-void Scene::CheckObjectsClick(const vec2i& mPos, EClick clickType, bool handleHold) {
+void Scene::OnMouseDown(const vec2i& mPos, EClick clickType, bool handleHold) {
 	Object* obj = FocusedObject();
 	if (Button* but = dynamic_cast<Button*>(obj)) {
 		if (clickType == EClick::left || clickType == EClick::left_double)
 			but->OnClick();
-	}
-	else if (LineEditor* edt = dynamic_cast<LineEditor*>(obj))
+	} else if (LineEditor* edt = dynamic_cast<LineEditor*>(obj))
 		edt->OnClick(clickType);
 	else if (ScrollArea* area = dynamic_cast<ScrollArea*>(obj)) {
 		if (clickType == EClick::left || clickType == EClick::left_double) {
 			area->selectedItem = nullptr;		// deselect all items
-			World::engine()->SetRedrawNeeded();
+			World::winSys()->SetRedrawNeeded();
 		}
 
 		if (handleHold && CheckSliderClick(mPos, area))	// first check if slider is clicked
@@ -104,16 +105,6 @@ void Scene::CheckObjectsClick(const vec2i& mPos, EClick clickType, bool handleHo
 		else if (ReaderBox* box = dynamic_cast<ReaderBox*>(area))
 			CheckReaderBoxClick(mPos, box, clickType, handleHold);
 	}
-}
-
-void Scene::CheckPopupClick(const vec2i& mPos) {
-	if (!inRect(popup->getRect(), mPos))
-		return;
-
-	if (PopupChoice* box = dynamic_cast<PopupChoice*>(popup.get()))
-		CheckPopupChoiceClick(mPos, box);
-	else if (PopupMessage* box = dynamic_cast<PopupMessage*>(popup.get()))
-		CheckPopupSimpleClick(mPos, box);
 }
 
 bool Scene::CheckSliderClick(const vec2i& mPos, ScrollArea* obj) {
@@ -161,23 +152,21 @@ void Scene::CheckTileBoxClick(const vec2i& mPos, TileBox* obj, EClick clickType)
 }
 
 void Scene::CheckReaderBoxClick(const vec2i& mPos, ReaderBox* obj, EClick clickType, bool handleHold) {
-	if (obj->showList()) {		// check list buttons
+	if (obj->showList()) {			// check list buttons
 		for (Object* it : obj->ListObjects())
 			if (Button* but = dynamic_cast<Button*>(it))
 				if (inRect(but->getRect(), mPos)) {
 					but->OnClick();
 					break;
 				}
-	}
-	else if (obj->showPlayer()) {	// check player buttons
+	} else if (obj->showPlayer()) {	// check player buttons
 		for (Object* it : obj->PlayerObjects())
 			if (Button* but = dynamic_cast<Button*>(it))
 				if (inRect(but->getRect(), mPos)) {
 					but->OnClick();
 					break;
 				}
-	}
-	else if (clickType == EClick::left_double) {
+	} else if (clickType == EClick::left_double) {
 		vec2t interval = obj->VisibleItems();
 		const vector<Image>& pics = obj->Pictures();
 		for (size_t i=interval.x; i<=interval.y; i++) {
@@ -189,28 +178,11 @@ void Scene::CheckReaderBoxClick(const vec2i& mPos, ReaderBox* obj, EClick clickT
 				break;
 			}
 		}
-	}
-	else if (handleHold) {
+	} else if (handleHold) {
 		vec2i pos = obj->Pos();
 		vec2i size = obj->Size();
 		if (inRect({pos.x, pos.y, size.x-obj->BarW(), size.y}, mPos))		// init list mouse drag
 			objectHold = obj;
-	}
-}
-
-void Scene::CheckPopupSimpleClick(const vec2i& mPos, PopupMessage* obj) {
-	if (inRect(obj->CancelButton(), mPos))
-		SetPopup(nullptr);
-}
-
-void Scene::CheckPopupChoiceClick(const vec2i& mPos, PopupChoice* obj) {
-	if (inRect(obj->OkButton(), mPos)) {
-		if (PopupText* poptext = dynamic_cast<PopupText*>(obj))
-			program.Event_TextCaptureOk(poptext->LEdit()->Editor()->Text());
-	}
-	else if (inRect(obj->CancelButton(), mPos)) {
-		World::audioSys()->PlaySound("back");
-		SetPopup(nullptr);
 	}
 }
 
@@ -253,17 +225,13 @@ Library* Scene::getLibrary() {
 	return &library;
 }
 
-vector<Object*> Scene::Objects() {
-	vector<Object*> objs = objects;	// return objects
-	objs.push_back(popup);			// append popup
-	return objs;
+const vector<Object*>& Scene::Objects() const {
+	return objects;
 }
 
 Object* Scene::FocusedObject() {
-	if (popup)
-		return popup;
 	if (focObject.sl)
-		return objects[focObject.id];
+		return popup ? popup->objects[focObject.id] : objects[focObject.id];
 	return nullptr;
 }
 
@@ -279,19 +247,63 @@ ListItem* Scene::SelectedButton() {
 			if (box->selectedItem && box->selectedItem->selectable())
 				return box->selectedItem;
 
+	// maybe popup :/
+	if (popup)
+		for (Object* obj : popup->objects)
+			if (ScrollArea* box = dynamic_cast<ScrollArea*>(obj))
+				if (box->selectedItem && box->selectedItem->selectable())
+					return box->selectedItem;
+
 	return nullptr;	// nothing found
 }
 
-Popup* Scene::getPopup() {
+const Popup* Scene::getPopup() const {
 	return popup;
 }
 
-void Scene::SetPopup(Popup* box) {
-	if (PopupText* poptext = dynamic_cast<PopupText*>(box))
-		World::inputSys()->SetCapture(poptext->LEdit());
-	else
-		World::inputSys()->SetCapture(nullptr);
-	popup = box;
+void Scene::SetPopupMessage(const string& msg) {
+	DelPopup();
+	vec2i res = World::winSys()->Resolution();
+	vec2i size = vec2i(library.Fonts()->TextSize(msg, 60).x, 120);
 
-	World::engine()->SetRedrawNeeded();
+	vector<Object*> objs = {
+		new Label(Object(res/2, res/2-size/2, vec2i(size.x, size.y/2), FIX_SIZ), msg),
+		new ButtonText(Object(res/2, vec2i(res.x/2-size.x/2, res.y/2), vec2i(size.x, size.y/2), FIX_SIZ), &Program::Event_Back, "Ok", ETextAlign::center)
+	};
+	popup = new Popup(Object(res/2, res/2-size/2, size, FIX_SIZ, EColor::background), objs);
+}
+
+void Scene::SetPopupChoice(const string& msg, void (Program::*callb)()) {
+	DelPopup();
+	vec2i res = World::winSys()->Resolution();
+	vec2i size = vec2i(library.Fonts()->TextSize(msg, 60).x, 120);
+
+	vector<Object*> objs = {
+		new Label(Object(res/2, res/2-size/2, vec2i(size.x, size.y/3), FIX_SIZ), msg),
+		new ButtonText(Object(res/2, vec2i(res.x/2-size.x/2, res.y/2-size.y/6), vec2i(size.x, size.y/3), FIX_SIZ), &Program::Event_Back, "Cancel", ETextAlign::center),
+		new ButtonText(Object(res/2, vec2i(res.x/2-size.x/2, res.y/2+size.y/6), vec2i(size.x, size.y/3), FIX_SIZ), callb, "Ok", ETextAlign::center)
+	};
+	popup = new Popup(Object(res/2, res/2-size/2, size, FIX_SIZ, EColor::background), objs);
+}
+
+void Scene::SetPopupText(const string& msg, const string& text, void (Program::*callt)(const string&), void (Program::*callb)()) {
+	DelPopup();
+	vec2i res = World::winSys()->Resolution();
+	vec2i size = vec2i(library.Fonts()->TextSize(msg, 60).x, 180);
+
+	LineEditor* editor = new LineEditor(Object(res/2, vec2i(res.x/2-size.x/2, res.y/2-size.y/6), vec2i(size.x, size.y/3), FIX_SIZ), text, ETextType::text, callt, &Program::Event_Back);
+	vector<Object*> objs = {
+		new Label(Object(res/2, res/2-size/2, vec2i(size.x, size.y/3), FIX_SIZ), msg),
+		editor,
+		new ButtonText(Object(res/2, vec2i(res.x/2-size.x/2, res.y/2+size.y/6), vec2i(size.x/2, size.y/3), FIX_SIZ), &Program::Event_Back, "Cancel", ETextAlign::center),
+		new ButtonText(Object(res/2, vec2i(res.x/2, res.y/2+size.y/6), vec2i(size.x/2, size.y/3), FIX_SIZ), callb, "Ok", ETextAlign::center)
+	};
+	popup = new Popup(Object(res/2, res/2-size/2, size, FIX_SIZ, EColor::background), objs);
+	World::inputSys()->SetCapture(editor);
+}
+
+void Scene::DelPopup() {
+	popup.clear();
+	World::inputSys()->SetCapture(nullptr);
+	OnMouseMove(World::inputSys()->mousePos(), 0);
 }

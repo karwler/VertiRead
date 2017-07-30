@@ -1,5 +1,29 @@
 #include "engine/world.h"
 
+// WINDOW
+
+EWindow operator~(EWindow a) {
+	return static_cast<EWindow>(~static_cast<uint8>(a));
+}
+EWindow operator&(EWindow a, EWindow b) {
+	return static_cast<EWindow>(static_cast<uint8>(a) & static_cast<uint8>(b));
+}
+EWindow operator&=(EWindow& a, EWindow b) {
+	return a = static_cast<EWindow>(static_cast<uint8>(a) & static_cast<uint8>(b));
+}
+EWindow operator^(EWindow a, EWindow b) {
+	return static_cast<EWindow>(static_cast<uint8>(a) ^ static_cast<uint8>(b));
+}
+EWindow operator^=(EWindow& a, EWindow b) {
+	return a = static_cast<EWindow>(static_cast<uint8>(a) ^ static_cast<uint8>(b));
+}
+EWindow operator|(EWindow a, EWindow b) {
+	return static_cast<EWindow>(static_cast<uint8>(a) | static_cast<uint8>(b));
+}
+EWindow operator|=(EWindow& a, EWindow b) {
+	return a = static_cast<EWindow>(static_cast<uint8>(a) | static_cast<uint8>(b));
+}
+
 // TEXTURE
 
 Texture::Texture(const string& FILE) :
@@ -114,16 +138,12 @@ Text::Text(const string& TXT, const vec2i& POS, int H, EColor CLR, int HSCAL) :
 void Text::SetPosToRect(const SDL_Rect& rect, ETextAlign align, int offset) {
 	int len = size().x;
 
-	switch (align) {
-	case ETextAlign::left:
+	if (align == ETextAlign::left)
 		pos.x = rect.x+offset;
-		break;
-	case ETextAlign::center:
+	else if (align == ETextAlign::center)
 		pos.x = rect.x + (rect.w-len)/2;
-		break;
-	case ETextAlign::right:
+	else if (align == ETextAlign::right)
 		pos.x = rect.x+rect.w-len-offset;
-	}
 	pos.y = rect.y;
 }
 
@@ -155,8 +175,7 @@ void TextEdit::MoveCursor(bool right, bool loop) {
 			cpos = (cpos == text.length()) ? 0 : cpos+1;
 		else
 			cpos = (cpos == 0) ? text.length() : cpos-1;
-	}
-	else {
+	} else {
 		if (right && cpos != text.length())
 			cpos++;
 		else if (!right && cpos != 0)
@@ -187,8 +206,7 @@ void TextEdit::Delete(bool current) {
 	if (current) {
 		if (cpos != text.length())
 			text.erase(cpos, 1);
-	}
-	else if (cpos != 0) {
+	} else if (cpos != 0) {
 		cpos--;
 		text.erase(cpos, 1);
 	}
@@ -200,16 +218,12 @@ void TextEdit::CheckCaret() {
 }
 
 void TextEdit::CheckText() {
-	switch (type) {
-	case ETextType::integer:
+	if (type == ETextType::integer)
 		CleanIntString(text);
-		break;
-	case ETextType::floating:
+	else if (type == ETextType::floating)
 		CleanFloatString(text);
-		break;
-	default:
+	else
 		return;
-	}
 	CheckCaret();
 }
 

@@ -46,7 +46,7 @@ public:
 protected:
 	EFix fix;
 	vec2f anchor;
-	vec2f pos, end;		// distance between boundries and anchor point
+	vec2f pos, end;	// distance between boundries and anchor point
 };
 
 class Label : public Object {
@@ -112,4 +112,13 @@ public:
 private:
 	virtual void CheckCaretRight();
 	virtual void CheckCaretLeft();
+};
+
+class Popup : public Object {
+public:
+	Popup(const Object& BASE=Object(), const vector<Object*>& OBJS={});
+	virtual ~Popup();
+	virtual Popup* Close() const;
+
+	vector<Object*> objects;
 };
