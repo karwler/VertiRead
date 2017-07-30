@@ -118,8 +118,8 @@ int VideoSettings::GetRenderDriverIndex() {
 		if (getRendererName(i) == renderer)
 			return i;
 
-	renderer = getRendererName(-1);
-	return GetRenderDriverIndex();
+	renderer = getRendererName(0);
+	return 0;
 }
 
 // AUDIO SETTINGS

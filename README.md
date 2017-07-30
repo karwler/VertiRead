@@ -19,7 +19,7 @@ Settings files are being saved in "~/.vertiread".
 Note: It's possible that the mouse wheel won't work properly under Linux and I have no idea why.  
 
 ## Windows
-All necessary libraries are already included in the project, however they're built only for the MSVC 14 (2015).  
+All necessary libraries are already included in the project. However they're built for the MSVC. If you're using a different compiler, you'll need to replace the existing library files or link the new ones.  
 Settings files are being saved in "%AppData%\VertiRead".  
 
 ## How to use it

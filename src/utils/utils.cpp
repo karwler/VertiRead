@@ -208,14 +208,13 @@ SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {
 
 string getRendererName(int id) {
 	SDL_RendererInfo info;
-	if (!SDL_GetRenderDriverInfo(id, &info))
-		SDL_GetRenderDriverInfo(-1, &info);
+	SDL_GetRenderDriverInfo(id, &info);
 	return info.name;
 }
 
 vector<string> getAvailibleRenderers() {
-	vector<string> renderers;
-	for (int i=0; i!=SDL_GetNumRenderDrivers(); i++)
+	vector<string> renderers(SDL_GetNumRenderDrivers());
+	for (int i=0; i!=renderers.size(); i++)
 		renderers.push_back(getRendererName(i));
 	return renderers;
 }
