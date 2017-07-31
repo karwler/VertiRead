@@ -59,10 +59,11 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 endif()
 
 # include directories
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
+
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 endif()
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # library/framework directories
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
@@ -107,12 +108,11 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 			"zlib1.dll")
     endif()	
 	link_directories(${LIB_DIR})
-	
 endif()
 
 # definitions
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-	add_definitions(-D_UNICODE)
+	add_definitions(-D_UNICODE -D_CRT_SECURE_NO_WARNINGS)
 endif()
 	
 # set main target
@@ -122,30 +122,27 @@ target_compile_features(VertiRead PUBLIC cxx_nullptr cxx_enum_forward_declaratio
 # linker flags
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	target_link_libraries(VertiRead SDL2.lib SDL2_mixer.lib SDL2_image.lib SDL2_ttf.lib)
-	
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 	target_link_libraries(VertiRead SDL2 SDL2_mixer SDL2_image SDL2_ttf)
-
 endif()
 
 # target path
 set(EXECUTABLE_OUTPUT_PATH "${CMAKE_BINARY_DIR}/bin")
 
 # target properties
+set_target_properties(VertiRead PROPERTIES
+								RUNTIME_OUTPUT_DIRECTORY "${EXECUTABLE_OUTPUT_PATH}"
+								RUNTIME_OUTPUT_DIRECTORY_DEBUG "${EXECUTABLE_OUTPUT_PATH}"
+								RUNTIME_OUTPUT_DIRECTORY_RELEASE "${EXECUTABLE_OUTPUT_PATH}")
+								
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	set_target_properties(VertiRead PROPERTIES
 									OUTPUT_NAME VertiRead
-									RUNTIME_OUTPUT_DIRECTORY "${EXECUTABLE_OUTPUT_PATH}"
-									RUNTIME_OUTPUT_DIRECTORY_DEBUG "${EXECUTABLE_OUTPUT_PATH}"
-									RUNTIME_OUTPUT_DIRECTORY_RELEASE "${EXECUTABLE_OUTPUT_PATH}"
 									LINK_FLAGS_DEBUG "/SUBSYSTEM:CONSOLE"
 									LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS")
 else()
 	set_target_properties(VertiRead PROPERTIES
-									OUTPUT_NAME vertiread
-									RUNTIME_OUTPUT_DIRECTORY "${EXECUTABLE_OUTPUT_PATH}"
-									RUNTIME_OUTPUT_DIRECTORY_DEBUG "${EXECUTABLE_OUTPUT_PATH}"
-									RUNTIME_OUTPUT_DIRECTORY_RELEASE "${EXECUTABLE_OUTPUT_PATH}")
+									OUTPUT_NAME vertiread)
 endif()
 
 # uncomment the following line for 32 bit build (unless the compiler doesn't use the "-m32" option)
@@ -157,7 +154,6 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 		add_custom_command(TARGET VertiRead POST_BUILD
 						COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LIB_DIR}/${dll_file} ${EXECUTABLE_OUTPUT_PATH})
 	endforeach()
-	
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 	add_custom_command(TARGET VertiRead POST_BUILD
 					COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/rsc/vertiread.desktop ${EXECUTABLE_OUTPUT_PATH})

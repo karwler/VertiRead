@@ -258,9 +258,9 @@ Controller::Controller() :
 bool Controller::Open(int id) {
 	if (SDL_IsGameController(id))
 		gamepad = SDL_GameControllerOpen(id);
-
+	
 	joystick = (gamepad) ? SDL_GameControllerGetJoystick(gamepad) : SDL_JoystickOpen(id);
-	return joystick != nullptr;
+	return joystick;
 }
 
 void Controller::Close() {

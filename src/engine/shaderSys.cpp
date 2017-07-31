@@ -86,7 +86,8 @@ void ShaderSys::DrawObject(LineEditor* obj) {
 	int right = (len-left > bg.w) ? len - left - bg.w : 0;
 	DrawText(text, { left, 0, right, 0 });
 
-	DrawRect(obj->getCaret(), EColor::highlighted);
+	if (World::inputSys()->Captured() == obj)
+		DrawRect(obj->getCaret(), EColor::highlighted);
 }
 
 void ShaderSys::DrawObject(ListBox* obj) {
@@ -191,7 +192,7 @@ void ShaderSys::DrawItem(Checkbox* item, ScrollAreaX1* parent, const SDL_Rect& r
 	int top = (crop.y < item->spacing) ? item->spacing - crop.y : crop.y;
 	int bot = (crop.h > item->spacing) ? crop.h - item->spacing : item->spacing;
 
-	DrawRect({ rect.x+offset+item->spacing, rect.y-crop.y+top, parent->ItemH()-item->spacing*2, rect.h+crop.h-top-bot }, item->On() ? EColor::highlighted : EColor::darkened);
+	DrawRect({rect.x+offset+item->spacing, rect.y-crop.y+top, parent->ItemH()-item->spacing*2, rect.h+crop.h-top-bot}, item->On() ? EColor::highlighted : EColor::darkened);
 }
 
 void ShaderSys::DrawItem(Switchbox* item, ScrollAreaX1* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
@@ -214,7 +215,7 @@ void ShaderSys::DrawItem(LineEdit* item, ScrollAreaX1* parent, const SDL_Rect& r
 	// draw caret if selected
 	if (World::inputSys()->Captured() == item) {
 		offset += Text(item->Editor().Text().substr(0, item->Editor().CursorPos()), 0, parent->ItemH()).size().x - item->TextPos();
-		DrawRect({ rect.x+offset, rect.y, 5, rect.h }, EColor::highlighted);
+		DrawRect({rect.x+offset, rect.y, 5, rect.h}, EColor::highlighted);
 	}
 }
 
@@ -258,7 +259,7 @@ void ShaderSys::DrawText(const Text& txt, const SDL_Rect& crop) {
 	vec4c tclr = World::winSys()->Settings().colors.at(txt.color) / colorDim;
 	vec2i siz = txt.size();
 	SDL_Rect rect = {txt.pos.x, txt.pos.y, siz.x, siz.y};
-	SDL_Surface* surface = TTF_RenderUTF8_Blended(World::library()->Fonts()->Get(txt.height), txt.text.c_str(), { tclr.r, tclr.g, tclr.b, tclr.a });
+	SDL_Surface* surface = TTF_RenderUTF8_Blended(World::library()->Fonts()->Get(txt.height), txt.text.c_str(), {tclr.r, tclr.g, tclr.b, tclr.a});
 	SDL_Texture* tex;
 	if (needsCrop(crop)) {
 		SDL_Surface* sheet = cropSurface(surface, rect, crop);

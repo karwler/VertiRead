@@ -565,6 +565,7 @@ EFileType Filer::FileType(const string& path) {
 #endif
 	return EFileType::file;
 }
+
 bool Filer::Exists(const string& path) {
 #ifdef _WIN32
 	return (GetFileAttributesW(stow(path).c_str()) != INVALID_FILE_ATTRIBUTES);

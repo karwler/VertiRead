@@ -16,8 +16,8 @@ void ScrollArea::SetValues() {
 	int sizY = Size().y;
 	int lstH = ListH();
 
-	listL = sizY < lstH ? lstH - sizY : 0;
-	sliderH = sizY < lstH ? sizY * sizY / lstH : sizY;
+	listL = (sizY < lstH) ? lstH - sizY : 0;
+	sliderH = (sizY < lstH) ? sizY * sizY / lstH : sizY;
 	CheckListY();
 }
 

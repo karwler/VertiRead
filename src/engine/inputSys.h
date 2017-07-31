@@ -45,7 +45,6 @@ public:
 private:
 	ControlsSettings sets;
 	vector<Controller> controllers;
-	vec2i mPos;
 	Capturer* captured;
 
 	void CheckShortcutsK(SDL_Scancode key);

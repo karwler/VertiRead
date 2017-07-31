@@ -4,7 +4,6 @@ InputSys::InputSys(const ControlsSettings& SETS) :
 	sets(SETS),
 	captured(nullptr)
 {
-	SDL_GetMouseState(&mPos.x, &mPos.y);
 	UpdateControllers();
 	SetCapture(nullptr);
 }
@@ -71,8 +70,7 @@ void InputSys::GamepadAxisEvent(const SDL_ControllerAxisEvent& gaxis) {
 }
 
 void InputSys::MouseMotionEvent(const SDL_MouseMotionEvent& motion) {
-	mPos = vec2i(motion.x, motion.y);
-	World::scene()->OnMouseMove(mPos, vec2i(motion.xrel, motion.yrel));
+	World::scene()->OnMouseMove(vec2i(motion.x, motion.y), vec2i(motion.xrel, motion.yrel));
 }
 
 void InputSys::MouseButtonDownEvent(const SDL_MouseButtonEvent& button) {
@@ -84,11 +82,11 @@ void InputSys::MouseButtonDownEvent(const SDL_MouseButtonEvent& button) {
 
 	if (button.clicks == 1) {
 		if (button.button == SDL_BUTTON_LEFT)		// single left click
-			World::scene()->OnMouseDown(mPos, EClick::left);
+			World::scene()->OnMouseDown(mousePos(), EClick::left);
 		else if (button.button == SDL_BUTTON_RIGHT)	// single right click
-			World::scene()->OnMouseDown(mPos, EClick::right);
+			World::scene()->OnMouseDown(mousePos(), EClick::right);
 	} else if (button.button == SDL_BUTTON_LEFT)		// double left click
-		World::scene()->OnMouseDown(mPos, EClick::left_double);
+		World::scene()->OnMouseDown(mousePos(), EClick::left_double);
 }
 
 void InputSys::MouseButtonUpEvent(const SDL_MouseButtonEvent& button) {
@@ -264,7 +262,9 @@ float InputSys::getAxisG(uint8 gaxis) const {
 }
 
 vec2i InputSys::mousePos() const {
-	return mPos;
+	vec2i pos;
+	SDL_GetMouseState(&pos.x, &pos.y);
+	return pos;
 }
 
 const ControlsSettings& InputSys::Settings() const {

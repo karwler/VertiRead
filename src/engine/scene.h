@@ -25,7 +25,7 @@ public:
 	Program* getProgram();
 	Library* getLibrary();
 	const vector<Object*>& Objects() const;
-	Object* FocusedObject();			// returns pointer to object focused by keyboard
+	Object* FocusedObject();
 	ListItem* SelectedButton();	// find scroll area with selectable items and get the first selected one (returns nullptr if nothing found)
 
 	const Popup* getPopup() const;
@@ -41,13 +41,12 @@ private:
 
 	vector<Object*> objects;
 	kk::sptr<Popup> popup;
-	btsel focObject;			// id of object currently focused (should be object over which the cursor is poistioned)
+	Object* focObject;			// currently focused object (should be object over which the cursor is poistioned)
 	ScrollArea* objectHold;		// pointer to object currently being dragged by mouse (nullptr if none is being held)
 
 	void ResizeObjects(vector<Object*>& objs);
 	void MouseMoveObjectOverCheck(vector<Object*>& objs, const vec2i& mPos);	// return true if found an object
 
-	void CheckPopupClick(const vec2i& mPos);
 	bool CheckSliderClick(const vec2i& mPos, ScrollArea* obj);
 	void CheckListBoxClick(const vec2i& mPos, ListBox* obj, EClick clickType);
 	void CheckTableBoxClick(const vec2i& mPos, TableBox* obj, EClick clickType);

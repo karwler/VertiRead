@@ -11,6 +11,8 @@ Note: When setting the output directory in Qt, don’t name it ‘build’, caus
 ## Linux
 All dependencies need to be installed manually.  
 Installing the packages "libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev" should do the trick. (Assuming that all necessary dependencies for those are installed automatically in the process.)  
+The default font is set to "Arial", so you probably need to install some kind of "ttf-ms-fonts" package.  
+If you don't want to install any new fonts, you can just change the default font in the "src/prog/defaults.h" file.  
 
 There’s a pre-made launcher, which is copied to the build directory after compilation.  
 If you want a menu entry for the program, just set the executable’s and icon’s path in the .desktop file and move it to either "/usr/share/applications" or "~/.local/share/applications".  

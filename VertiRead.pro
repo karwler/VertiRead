@@ -56,7 +56,8 @@ LIBS += -lSDL2 \
         -lSDL2_mixer
 
 # definitions
-win32: DEFINES += _UNICODE
+win32: DEFINES += _UNICODE \
+                  _CRT_SECURE_NO_WARNINGS
 
 # set sources
 SOURCES += src/engine/audioSys.cpp \

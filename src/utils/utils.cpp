@@ -13,23 +13,40 @@ bool strcmpCI(const string& strl, const string& strr) {
 	return true;
 }
 
-bool findChar(const string& str, char c, size_t* id) {
+bool findChar(const string& str, char c) {
+	for (size_t i=0; i!=str.length(); i++)
+		if (str[i] == c)
+			return true;
+	return false;
+}
+
+bool findChar(const string& str, char c, size_t& id) {
 	for (size_t i=0; i!=str.length(); i++)
 		if (str[i] == c) {
-			if (id)
-				*id = i;
+			id = i;
 			return true;
 		}
 	return false;
 }
 
-bool findString(const string& str, const string& c, size_t* id) {
+bool findString(const string& str, const string& c) {
+	size_t check = 0;
+	for (size_t i=0; i!=str.length(); i++) {
+		if (str[i] == c[check]) {
+			if (++check == c.length())
+				return true;
+		} else
+			check = 0;
+	}
+	return false;
+}
+
+bool findString(const string& str, const string& c, size_t& id) {
 	size_t check = 0;
 	for (size_t i=0; i!=str.length(); i++) {
 		if (str[i] == c[check]) {
 			if (++check == c.length()) {
-				if (id)
-					*id = i-c.length();
+				id = i-c.length();
 				return true;
 			}
 		}
@@ -131,7 +148,7 @@ bool splitIniLine(const string& line, string* arg, string* val, string* key, boo
 	}
 	
 	size_t i0;;
-	if (!findChar(line, '=', &i0))
+	if (!findChar(line, '=', i0))
 		return false;
 
 	if (val)
@@ -139,8 +156,8 @@ bool splitIniLine(const string& line, string* arg, string* val, string* key, boo
 	string left = line.substr(0, i0);
 
 	size_t i1 = 0, i2 = 0;
-	findChar(left, '[', &i1);
-	findChar(left, ']', &i2);
+	findChar(left, '[', i1);
+	findChar(left, ']', i2);
 	if (i1 < i2) {
 		if (arg)
 			*arg = line.substr(0, i1);
@@ -170,7 +187,7 @@ SDL_Rect getCrop(SDL_Rect item, SDL_Rect frame) {
 	item.h += item.y;
 	frame.w += frame.x;
 	frame.h += frame.y;
-	SDL_Rect crop = { 0, 0, 0, 0 };
+	SDL_Rect crop = {0, 0, 0, 0};
 
 	if (item.w < frame.x || item.x > frame.w || item.h < frame.y || item.y > frame.h) {
 		crop.w = siz.x;
@@ -193,13 +210,13 @@ void textCropRight(SDL_Rect& crop, int textLen, int rectWidth) {
 }
 
 SDL_Rect cropRect(const SDL_Rect& rect, const SDL_Rect& crop) {
-	return { rect.x+crop.x, rect.y+crop.y, rect.w-crop.x-crop.w, rect.h-crop.y-crop.h };
+	return {rect.x+crop.x, rect.y+crop.y, rect.w-crop.x-crop.w, rect.h-crop.y-crop.h};
 }
 
 SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {
 	vec2i temp(rect.w, rect.h);
 	rect = cropRect(rect, crop);
-	crop = { crop.x, crop.y, temp.x - crop.x - crop.w, temp.y - crop.y - crop.h };
+	crop = {crop.x, crop.y, temp.x - crop.x - crop.w, temp.y - crop.y - crop.h};
 
 	SDL_Surface* sheet = SDL_CreateRGBSurface(surface->flags, crop.w, crop.h, surface->format->BitsPerPixel, surface->format->Rmask, surface->format->Gmask, surface->format->Bmask, surface->format->Amask);
 	SDL_BlitSurface(surface, &crop, sheet, 0);

@@ -204,7 +204,7 @@ SDL_Rect LineEditor::getCaret() const {
 	vec2i pos = Pos();
 	int height = Size().y;
 
-	return { Text(editor.Text().substr(0, editor.CursorPos()), 0, height).size().x - textPos + pos.x, pos.y, 5, height };
+	return {Text(editor.Text().substr(0, editor.CursorPos()), 0, height).size().x - textPos + pos.x, pos.y, 5, height};
 }
 
 void LineEditor::CheckCaretRight() {

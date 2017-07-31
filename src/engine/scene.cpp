@@ -51,7 +51,7 @@ void Scene::Tick(float dSec) {
 
 void Scene::OnMouseMove(const vec2i& mPos, const vec2i& mMov) {
 	// set focused object and call mouse move events;
-	focObject.sl = false;
+	focObject = nullptr;
 	if (popup)
 		MouseMoveObjectOverCheck(popup->objects, mPos);
 	else
@@ -75,20 +75,19 @@ void Scene::MouseMoveObjectOverCheck(vector<Object*>& objs, const vec2i& mPos) {
 			box->OnMouseMove(mPos);
 
 		if (inRect(objs[i]->getRect(), mPos)) {
-			focObject = i;
+			focObject = objs[i];
 			break;
 		}
 	}
 }
 
 void Scene::OnMouseDown(const vec2i& mPos, EClick clickType, bool handleHold) {
-	Object* obj = FocusedObject();
-	if (Button* but = dynamic_cast<Button*>(obj)) {
+	if (Button* but = dynamic_cast<Button*>(focObject)) {
 		if (clickType == EClick::left || clickType == EClick::left_double)
 			but->OnClick();
-	} else if (LineEditor* edt = dynamic_cast<LineEditor*>(obj))
+	} else if (LineEditor* edt = dynamic_cast<LineEditor*>(focObject))
 		edt->OnClick(clickType);
-	else if (ScrollArea* area = dynamic_cast<ScrollArea*>(obj)) {
+	else if (ScrollArea* area = dynamic_cast<ScrollArea*>(focObject)) {
 		if (clickType == EClick::left || clickType == EClick::left_double) {
 			area->selectedItem = nullptr;		// deselect all items
 			World::winSys()->SetRedrawNeeded();
@@ -230,14 +229,12 @@ const vector<Object*>& Scene::Objects() const {
 }
 
 Object* Scene::FocusedObject() {
-	if (focObject.sl)
-		return popup ? popup->objects[focObject.id] : objects[focObject.id];
-	return nullptr;
+	return focObject;
 }
 
 ListItem* Scene::SelectedButton() {
 	// check focused object first
-	if (ScrollArea* box = dynamic_cast<ScrollArea*>(FocusedObject()))
+	if (ScrollArea* box = dynamic_cast<ScrollArea*>(focObject))
 		if (box->selectedItem && box->selectedItem->selectable())
 			return box->selectedItem;
 

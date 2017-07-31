@@ -50,9 +50,10 @@ void WindowSys::DestroyWindow() {
 }
 
 void WindowSys::DrawObjects(const vector<Object*>& objects, const Popup* popup) {
-	if (redraw)
+	if (redraw) {
+		redraw = false;
 		shaderSys.DrawObjects(objects, popup);
-	redraw = false;
+	}
 }
 
 bool WindowSys::ShowMouse() const {

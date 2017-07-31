@@ -58,8 +58,10 @@ class Capturer;
 
 // files and strings
 bool strcmpCI(const string& strl, const string& strr);
-bool findChar(const string& str, char c, size_t* id=nullptr);
-bool findString(const string& str, const string& c, size_t* id=nullptr);
+bool findChar(const string& str, char c);
+bool findChar(const string& str, char c, size_t& id);
+bool findString(const string& str, const string& c);
+bool findString(const string& str, const string& c, size_t& id);
 bool isAbsolute(const string& path);
 string parentPath(const string& path);
 string filename(const string& path);
@@ -108,7 +110,7 @@ int16 floatToAxis(float axisValue);
 
 // pointer container cleaners
 template <typename T>
-void erase(vector<T*>& vec, uint i) {
+void erase(vector<T*>& vec, size_t i) {
 	delete vec[i];
 	vec.erase(vec.begin() + i);
 }
@@ -121,11 +123,18 @@ void clear(vector<T*>& vec) {
 }
 
 template <typename T>
-bool contains(const vector<T>& vec, const T& elem, size_t* id=nullptr) {
+bool contains(const vector<T>& vec, const T& elem) {
+	for (size_t i=0; i!=vec.size(); i++)
+		if (vec[i] == elem)
+			return true;
+	return false;
+}
+
+template <typename T>
+bool contains(const vector<T>& vec, const T& elem, size_t& id) {
 	for (size_t i=0; i!=vec.size(); i++)
 		if (vec[i] == elem) {
-			if (id)
-				*id = i;
+			id = i;
 			return true;
 		}
 	return false;
@@ -145,8 +154,8 @@ void clear(map<A, B*>& mp) {
 }
 
 template <typename T>
-void clear(grid2<T>& gd) {
-	for (T& it : gd)
+void clear(grid2<T*>& gd) {
+	for (T* it : gd)
 		delete it;
 	gd.clear();
 }
