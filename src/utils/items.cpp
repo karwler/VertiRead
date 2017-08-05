@@ -8,10 +8,10 @@ ListItem::ListItem(const string& LBL, ScrollArea* SA) :
 {}
 ListItem::~ListItem() {}
 
-void ListItem::OnClick(EClick clickType) {
+void ListItem::OnClick(ClickType click) {
 	if (parent)
 		parent->selectedItem = this;
-	if (clickType == EClick::left_double)
+	if (click.button == SDL_BUTTON_LEFT && click.clicks == 2)
 		World::program()->Event_ItemDoubleclicked(this);
 
 	World::winSys()->SetRedrawNeeded();
@@ -34,8 +34,8 @@ ItemButton::ItemButton(const string& LBL, const string& DAT, void (Program::*CAL
 {}
 ItemButton::~ItemButton() {}
 
-void ItemButton::OnClick(EClick clickType) {
-	ListItem::OnClick(clickType);
+void ItemButton::OnClick(ClickType click) {
+	ListItem::OnClick(click);
 
 	// decide what to send
 	void* dat;
@@ -58,15 +58,14 @@ void ItemButton::Data(const string& dat) {
 
 // CHECKBOX
 
-Checkbox::Checkbox(ScrollAreaX1* SA, const string& LBL, bool ON, void (Program::*CALLB)(bool), int SPC) :
+Checkbox::Checkbox(ScrollAreaX1* SA, const string& LBL, bool ON, void (Program::*CALLB)(bool)) :
 	ListItem(LBL, SA),
-	spacing(SPC),
 	callback(CALLB),
 	on(ON)
 {}
 Checkbox::~Checkbox() {}
 
-void Checkbox::OnClick(EClick clickType) {
+void Checkbox::OnClick(ClickType click) {
 	on = !on;
 	if (callback)
 		(World::program()->*callback)(on);
@@ -101,8 +100,8 @@ Switchbox::Switchbox(ScrollAreaX1* SA, const string& LBL, const vector<string>& 
 }
 Switchbox::~Switchbox() {}
 
-void Switchbox::OnClick(EClick clickType) {
-	if (clickType == EClick::left || clickType == EClick::left_double)
+void Switchbox::OnClick(ClickType click) {
+	if (click.button == SDL_BUTTON_LEFT && click.clicks == 2)
 		curOpt = (curOpt == options.size()-1) ? 0 : curOpt + 1;
 	else
 		curOpt = (curOpt == 0) ? options.size()-1 : curOpt - 1;

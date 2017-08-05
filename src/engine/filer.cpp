@@ -42,14 +42,14 @@ EDirFilter operator|=(EDirFilter& a, EDirFilter b) {
 const string Filer::dirExec = Filer::GetDirExec();
 
 #ifdef _WIN32
-const string Filer::dirSets = string(std::getenv("AppData")) + "\\VertiRead\\";
+const string Filer::dirSets = string(std::getenv("AppData")) + "\\"+Default::titleDefault+"\\";
 #else
-const string Filer::dirSets = string(std::getenv("HOME")) + "/.vertiread/";
+const string Filer::dirSets = string(std::getenv("HOME")) + "/."+Default::titleExtra+"/";
 #endif
 
-const string Filer::dirLangs = Filer::dirExec + "languages"+dsep;
-const string Filer::dirSnds = Filer::dirExec + "sounds"+dsep;
-const string Filer::dirTexs = Filer::dirExec + "textures"+dsep;
+const string Filer::dirLangs = Filer::dirExec + Default::dirLanguages + dsep;
+const string Filer::dirSnds = Filer::dirExec + Default::dirSounds + dsep;
+const string Filer::dirTexs = Filer::dirExec + Default::dirTextures + dsep;
 
 uint8 Filer::CheckDirectories(const GeneralSettings& sets) {
 	uint8 retval = 0;
@@ -59,7 +59,7 @@ uint8 Filer::CheckDirectories(const GeneralSettings& sets) {
 		MkDir(sets.LibraryPath());
 	if (!Exists(sets.PlaylistPath()))
 		MkDir(sets.PlaylistPath());
-	if (!Exists(dirExec + "themes.ini")) {
+	if (!Exists(dirExec + Default::fileThemes)) {
 		cerr << "couldn't find themes.ini" << endl;
 		retval |= 1;
 	}
@@ -80,7 +80,7 @@ uint8 Filer::CheckDirectories(const GeneralSettings& sets) {
 
 vector<string> Filer::GetAvailibleThemes() {
 	vector<string> lines;
-	if (!ReadTextFile(dirExec + "themes.ini", lines))
+	if (!ReadTextFile(dirExec + Default::fileThemes, lines))
 		return {};
 
 	vector<string> themes;
@@ -96,7 +96,7 @@ vector<string> Filer::GetAvailibleThemes() {
 
 void Filer::GetColors(map<EColor, vec4c>& colors, const string& theme) {
 	vector<string> lines;
-	if (!ReadTextFile(dirExec + "themes.ini", lines), false)
+	if (!ReadTextFile(dirExec + Default::fileThemes, lines), false)
 		return;
 
 	for (string& line : lines) {
@@ -120,7 +120,7 @@ void Filer::GetColors(map<EColor, vec4c>& colors, const string& theme) {
 }
 
 vector<string> Filer::GetAvailibleLanguages() {
-	vector<string> files = { "english" };
+	vector<string> files = {Default::language};
 	if (!Exists(dirLangs))
 		return {};
 
@@ -185,9 +185,9 @@ Playlist Filer::LoadPlaylist(const string& name) {
 		if (!splitIniLine(line, &arg, &val, nullptr, &isTitle) || isTitle)
 			continue;
 
-		if (arg == "book")
+		if (arg == Default::iniKeywordBook)
 			plist.books.push_back(val);
-		else if (arg == "song")
+		else if (arg == Default::iniKeywordSong)
 			plist.songs.push_back(val);
 	}
 	return plist;
@@ -196,16 +196,16 @@ Playlist Filer::LoadPlaylist(const string& name) {
 void Filer::SavePlaylist(const Playlist& plist) {
 	vector<string> lines;
 	for (const string& name : plist.books)
-		lines.push_back("book=" + name);
+		lines.push_back(Default::iniKeywordSong + string("=") + name);
 	for (const string& file : plist.songs)
-		lines.push_back("song=" + file);
+		lines.push_back(Default::iniKeywordSong + string("=") + file);
 
 	WriteTextFile(World::scene()->Settings().PlaylistPath() + plist.name + ".ini", lines);
 }
 
 GeneralSettings Filer::LoadGeneralSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(dirSets + "general.ini", lines, false))
+	if (!ReadTextFile(dirSets + Default::fileGeneralSettings, lines, false))
 		return GeneralSettings();
 
 	GeneralSettings sets;
@@ -215,11 +215,11 @@ GeneralSettings Filer::LoadGeneralSettings() {
 		if (!splitIniLine(line, &arg, &val, nullptr, &isTitle) || isTitle)
 			continue;
 
-		if (arg == "language")
+		if (arg == Default::iniKeywordLanguage)
 			sets.Lang(val);
-		else if (arg == "library")
+		else if (arg == Default::iniKeywordLibrary)
 			sets.DirLib(val);
-		else if (arg == "playlists")
+		else if (arg == Default::iniKeywordPlaylists)
 			sets.DirPlist(val);
 	}
 	return sets;
@@ -227,16 +227,16 @@ GeneralSettings Filer::LoadGeneralSettings() {
 
 void Filer::SaveSettings(const GeneralSettings& sets) {
 	vector<string> lines = {
-		"language=" + sets.Lang(),
-		"library=" + sets.DirLib(),
-		"playlists=" + sets.DirPlist()
+		Default::iniKeywordLanguage + string("=") + sets.Lang(),
+		Default::iniKeywordLibrary + string("=") + sets.DirLib(),
+		Default::iniKeywordPlaylists + string("=") + sets.DirPlist()
 	};
-	WriteTextFile(dirSets + "general.ini", lines);
+	WriteTextFile(dirSets + Default::fileGeneralSettings, lines);
 }
 
 VideoSettings Filer::LoadVideoSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(dirSets + "video.ini", lines, false))
+	if (!ReadTextFile(dirSets + Default::fileVideoSettings, lines, false))
 		return VideoSettings();
 
 	VideoSettings sets;
@@ -246,20 +246,20 @@ VideoSettings Filer::LoadVideoSettings() {
 		if (!splitIniLine(line, &arg, &val, &key, &isTitle) || isTitle)
 			continue;
 
-		if (arg == "font")
+		if (arg == Default::iniKeywordFont)
 			sets.SetFont(val);
-		else if (arg == "renderer")
+		else if (arg == Default::iniKeywordRenderer)
 			sets.renderer = val;
-		else if (arg == "maximized")
+		else if (arg == Default::iniKeywordMaximized)
 			sets.maximized = stob(val);
-		else if (arg == "fullscreen")
+		else if (arg == Default::iniKeywordFullscreen)
 			sets.fullscreen = stob(val);
-		else if (arg == "resolution") {
+		else if (arg == Default::iniKeywordResolution) {
 			vector<string> elems = getWords(val, ' ');
 			if (elems.size() > 0) sets.resolution.x = stoi(elems[0]);
 			if (elems.size() > 1) sets.resolution.y = stoi(elems[1]);
 		}
-		else if (arg == "theme")
+		else if (arg == Default::iniKeywordTheme)
 			sets.theme = val;
 	}
 	GetColors(sets.colors, sets.theme);
@@ -268,19 +268,19 @@ VideoSettings Filer::LoadVideoSettings() {
 
 void Filer::SaveSettings(const VideoSettings& sets) {
 	vector<string> lines = {
-		"font=" + sets.Font(),
-		"renderer=" + sets.renderer,
-		"maximized=" + btos(sets.maximized),
-		"fullscreen=" + btos(sets.fullscreen),
-		"resolution=" + to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y),
-		"theme=" + sets.theme
+		Default::iniKeywordFont + string("=") + sets.Font(),
+		Default::iniKeywordRenderer + string("=") + sets.renderer,
+		Default::iniKeywordMaximized + string("=") + btos(sets.maximized),
+		Default::iniKeywordFullscreen + string("=") + btos(sets.fullscreen),
+		Default::iniKeywordResolution + string("=") + to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y),
+		Default::iniKeywordTheme + string("=") + sets.theme
 	};
-	WriteTextFile(dirSets + "video.ini", lines);
+	WriteTextFile(dirSets + Default::fileVideoSettings, lines);
 }
 
 AudioSettings Filer::LoadAudioSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(dirSets + "audio.ini", lines, false))
+	if (!ReadTextFile(dirSets + Default::fileAudioSettings, lines, false))
 		return AudioSettings();
 
 	AudioSettings sets;
@@ -290,11 +290,11 @@ AudioSettings Filer::LoadAudioSettings() {
 		if (!splitIniLine(line, &arg, &val, nullptr, &isTitle) || isTitle)
 			continue;
 
-		if (arg == "music_vol")
+		if (arg == Default::iniKeywordVolMusic)
 			sets.musicVolume = stoi(val);
-		else if (arg == "interface_vol")
+		else if (arg == Default::iniKeywordVolSound)
 			sets.soundVolume = stoi(val);
-		else if (arg == "song_delay")
+		else if (arg == Default::iniKeywordSongDelay)
 			sets.songDelay = stof(val);
 	}
 	return sets;
@@ -302,16 +302,16 @@ AudioSettings Filer::LoadAudioSettings() {
 
 void Filer::SaveSettings(const AudioSettings& sets) {
 	vector<string> lines = {
-		"music_vol=" + to_string(sets.musicVolume),
-		"interface_vol=" + to_string(sets.soundVolume),
-		"song_delay=" + to_string(sets.songDelay)
+		Default::iniKeywordVolMusic + string("=") + to_string(sets.musicVolume),
+		Default::iniKeywordVolSound + string("=") + to_string(sets.soundVolume),
+		Default::iniKeywordSongDelay + string("=") + to_string(sets.songDelay)
 	};
-	WriteTextFile(dirSets + "audio.ini", lines);
+	WriteTextFile(dirSets + Default::fileAudioSettings, lines);
 }
 
 ControlsSettings Filer::LoadControlsSettings() {
 	vector<string> lines;
-	if (!ReadTextFile(dirSets + "controls.ini", lines, false))
+	if (!ReadTextFile(dirSets + Default::fileControlsSettings, lines, false))
 		return ControlsSettings();
 
 	ControlsSettings sets;
@@ -321,16 +321,16 @@ ControlsSettings Filer::LoadControlsSettings() {
 		if (!splitIniLine(line, &arg, &val, &key, &isTitle) || isTitle)
 			continue;
 
-		if (arg == "scroll_speed") {
+		if (arg == Default::iniKeywordScrollSpeed) {
 			vector<string> elems = getWords(val, ' ');
 			if (elems.size() > 0)
 				sets.scrollSpeed.x = stof(elems[0]);
 			if (elems.size() > 1)
 				sets.scrollSpeed.y = stof(elems[1]);
 		}
-		else if (arg == "deadzone")
+		else if (arg == Default::iniKeywordDeadzone)
 			sets.deadzone = stoi(val);
-		else if (arg == "shortcut" && sets.shortcuts.count(key) != 0) {		// shortcuts have to already contain a variable for this key
+		else if (arg == Default::iniKeywordShortcut && sets.shortcuts.count(key) != 0) {		// shortcuts have to already contain a variable for this key
 			Shortcut* sc = sets.shortcuts[key];
 			switch (toupper(val[0])) {
 			case 'K':	// keyboard key
@@ -362,8 +362,8 @@ ControlsSettings Filer::LoadControlsSettings() {
 
 void Filer::SaveSettings(const ControlsSettings& sets) {
 	vector<string> lines = {
-		"scroll_speed=" + to_string(sets.scrollSpeed.x) + " " + to_string(sets.scrollSpeed.y),
-		"deadzone=" + to_string(sets.deadzone)
+		Default::iniKeywordShortcut + string("=") + to_string(sets.scrollSpeed.x) + " " + to_string(sets.scrollSpeed.y),
+		Default::iniKeywordDeadzone + string("=") + to_string(sets.deadzone)
 	};
 	for (const pair<string, Shortcut*>& it : sets.shortcuts) {
 		vector<string> values;
@@ -383,9 +383,9 @@ void Filer::SaveSettings(const ControlsSettings& sets) {
 			values.push_back(string(it.second->GPosAxisAssigned() ? "X_+" : "X_-") + gpAxisToStr(it.second->GctID()));
 
 		for (string& val : values)
-			lines.push_back("shortcut[" + it.first + "]=" + val);
+			lines.push_back(Default::iniKeywordShortcut + string("[") + it.first + "]=" + val);
 	}
-	WriteTextFile(dirSets + "controls.ini", lines);
+	WriteTextFile(dirSets + Default::fileControlsSettings, lines);
 }
 
 bool Filer::ReadTextFile(const string& file, string& data) {
@@ -459,11 +459,12 @@ vector<string> Filer::ListDir(const string& dir, EDirFilter filter, const vector
 		} else if (filter & FILTER_FILE) {
 			if (extFilter.empty())
 				entries.push_back(name);
-			else for (const string& ext : extFilter)
-				if (hasExt(name, ext)) {
-					entries.push_back(name);
-					break;
-				}
+			else
+				for (const string& ext : extFilter)
+					if (hasExt(name, ext)) {
+						entries.push_back(name);
+						break;
+					}
 		}
 	} while (FindNextFileW(hFind, &data) != 0);
 	FindClose(hFind);
@@ -486,11 +487,12 @@ vector<string> Filer::ListDir(const string& dir, EDirFilter filter, const vector
 			} else if (filter & FILTER_FILE) {
 				if (extFilter.empty())
 					entries.push_back(data->d_name);
-				else for (const string& ext : extFilter)
-					if (hasExt(data->d_name, ext)) {
-						entries.push_back(data->d_name);
-						break;
-					}
+				else
+					for (const string& ext : extFilter)
+						if (hasExt(data->d_name, ext)) {
+							entries.push_back(data->d_name);
+							break;
+						}
 			}
 			data = readdir(directory);
 		}
@@ -588,15 +590,13 @@ vector<char> Filer::ListDrives() {
 #endif
 
 string Filer::GetDirExec() {
-	const int MAX_LEN = 2048;
 	string path;
-	
 #ifdef _WIN32
-	wchar buffer[MAX_LEN];
-	GetModuleFileNameW(NULL, buffer, MAX_LEN);
+	wchar buffer[Default::dirExecMaxBufferLength];
+	GetModuleFileNameW(NULL, buffer, Default::dirExecMaxBufferLength);
 	path = wtos(buffer);
 #else
-	char buffer[MAX_LEN];
+	char buffer[Default::dirExecMaxBufferLength];
 	int len = uni::readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
 	buffer[len] = '\0';
 	path = buffer;
@@ -608,7 +608,7 @@ vector<string> Filer::dirFonts() {
 #ifdef _WIN32
 	return {string(std::getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
 #else
-	return { "/usr/share/fonts/" };
+	return {"/usr/share/fonts/"};
 #endif
 }
 

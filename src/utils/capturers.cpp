@@ -7,7 +7,7 @@ Capturer::Capturer(ScrollAreaX1* SA, const string& LBL) :
 {}
 Capturer::~Capturer() {}
 
-void Capturer::OnClick(EClick clickType) {
+void Capturer::OnClick(ClickType click) {
 	World::inputSys()->SetCapture(this);
 }
 
@@ -26,7 +26,7 @@ LineEdit::LineEdit(ScrollAreaX1* SA, const string& LBL, const string& TXT, EText
 {}
 LineEdit::~LineEdit() {}
 
-void LineEdit::OnClick(EClick clickType) {
+void LineEdit::OnClick(ClickType click) {
 	World::inputSys()->SetCapture(this);
 	editor.SetCursor(editor.Text().length());
 }
@@ -154,21 +154,21 @@ const TextEdit& LineEdit::Editor() const {
 Text LineEdit::getText() const {
 	ListBox* box = static_cast<ListBox*>(parent);
 
-	int offset = Text(label, 0, box->ItemH()).size().x + 20;
-	return Text(editor.Text(), vec2i(offset-textPos, 0), box->ItemH());
+	int offset = Text(label, 0, Default::itemHeight).size().x + Default::lineEditOffset;
+	return Text(editor.Text(), vec2i(offset-textPos, 0), Default::itemHeight);
 }
 
 SDL_Rect LineEdit::getCaret() const {
 	ListBox* box = static_cast<ListBox*>(parent);
 
-	int offset = Text(editor.Text().substr(0, editor.CursorPos()), 0, box->ItemH()).size().x - textPos;
-	return { offset, 0, 5, box->ItemH() };
+	int offset = Text(editor.Text().substr(0, editor.CursorPos()), 0, Default::itemHeight).size().x - textPos;
+	return {offset, 0, Default::caretWidth, Default::itemHeight};
 }
 
 void LineEdit::CheckCaretRight() {
 	if (ListBox* box = dynamic_cast<ListBox*>(parent)) {
 		SDL_Rect caret = getCaret();
-		int diff = caret.x + caret.w - parent->Size().x + parent->BarW() + Text(label, 0, box->ItemH()).size().x + 20;
+		int diff = caret.x + caret.w - parent->Size().x + parent->BarW() + Text(label, 0, Default::itemHeight).size().x + 20;
 		if (diff > 0)
 			textPos += diff;
 	}

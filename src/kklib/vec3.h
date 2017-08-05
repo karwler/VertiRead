@@ -86,7 +86,7 @@ struct vec3 {
 	template <typename A>
 	T dot(const vec3<A>& vec) const {
 		return dotP(*this, vec);
-	 }
+	}
 	template <typename A>
 	vec3 cross(const vec3<A>& vec) const {
 		return crossP(*this, vec);

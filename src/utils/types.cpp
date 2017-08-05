@@ -1,29 +1,5 @@
 #include "engine/world.h"
 
-// WINDOW
-
-EWindow operator~(EWindow a) {
-	return static_cast<EWindow>(~static_cast<uint8>(a));
-}
-EWindow operator&(EWindow a, EWindow b) {
-	return static_cast<EWindow>(static_cast<uint8>(a) & static_cast<uint8>(b));
-}
-EWindow operator&=(EWindow& a, EWindow b) {
-	return a = static_cast<EWindow>(static_cast<uint8>(a) & static_cast<uint8>(b));
-}
-EWindow operator^(EWindow a, EWindow b) {
-	return static_cast<EWindow>(static_cast<uint8>(a) ^ static_cast<uint8>(b));
-}
-EWindow operator^=(EWindow& a, EWindow b) {
-	return a = static_cast<EWindow>(static_cast<uint8>(a) ^ static_cast<uint8>(b));
-}
-EWindow operator|(EWindow a, EWindow b) {
-	return static_cast<EWindow>(static_cast<uint8>(a) | static_cast<uint8>(b));
-}
-EWindow operator|=(EWindow& a, EWindow b) {
-	return a = static_cast<EWindow>(static_cast<uint8>(a) | static_cast<uint8>(b));
-}
-
 // TEXTURE
 
 Texture::Texture(const string& FILE) :
@@ -77,7 +53,7 @@ Image::Image(const vec2i& POS, const string& TEX, const vec2i& SIZ) :
 }
 
 SDL_Rect Image::getRect() const {
-	return { pos.x, pos.y, size.x, size.y };
+	return {pos.x, pos.y, size.x, size.y};
 }
 
 // FONT
@@ -127,23 +103,22 @@ vec2i FontSet::TextSize(const string& text, int size) {
 
 // TEXT
 
-Text::Text(const string& TXT, const vec2i& POS, int H, EColor CLR, int HSCAL) :
+Text::Text(const string& TXT, const vec2i& POS, int H, EColor CLR) :
 	pos(POS),
+	height(float(H) * Default::textHeightScale),
 	color(CLR),
 	text(TXT)
-{
-	height = (HSCAL == 0) ? H : H - H/HSCAL;
-}
+{}
 
-void Text::SetPosToRect(const SDL_Rect& rect, ETextAlign align, int offset) {
+void Text::SetPosToRect(const SDL_Rect& rect, ETextAlign align) {
 	int len = size().x;
 
 	if (align == ETextAlign::left)
-		pos.x = rect.x+offset;
+		pos.x = rect.x + Default::textOffset;
 	else if (align == ETextAlign::center)
 		pos.x = rect.x + (rect.w-len)/2;
 	else if (align == ETextAlign::right)
-		pos.x = rect.x+rect.w-len-offset;
+		pos.x = rect.x + rect.w - len - Default::textOffset;
 	pos.y = rect.y;
 }
 
@@ -246,6 +221,26 @@ void TextEdit::CleanFloatString(string& str) {
 				i--;
 			}
 		}
+}
+
+// CLICK TYPE
+
+ClickType::ClickType(uint8 BTN, uint8 NUM) :
+	button(BTN),
+	clicks(NUM)
+{}
+
+// CLICK STAMP
+
+ClickStamp::ClickStamp(Object* OBJ, uint8 BUT, const vec2i& POS) :
+	object(OBJ),
+	button(BUT),
+	mPos(POS)
+{}
+
+void ClickStamp::Reset() {
+	object = nullptr;
+	button = 0;
 }
 
 // CONTROLLER

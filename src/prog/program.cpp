@@ -5,7 +5,7 @@
 void Program::Event_Up(float amt) {
 	if (ScrollArea* box = dynamic_cast<ScrollArea*>(World::scene()->FocusedObject())) {
 		float factor = 1.f;
-		amt = ModifySpeed(amt * box->Zoom() * World::inputSys()->Settings().scrollSpeed.y, &factor, normalScrollFactor, fastScrollFactor, slowScrollFactor);
+		amt = ModifySpeed(amt * box->Zoom() * World::inputSys()->Settings().scrollSpeed.y, &factor, Default::normalScrollFactor, Default::scrollFactorFast, Default::scrollFactorSlow);
 		box->ScrollList(-amt * factor);
 	}
 }
@@ -13,7 +13,7 @@ void Program::Event_Up(float amt) {
 void Program::Event_Down(float amt) {
 	if (ScrollArea* box = dynamic_cast<ScrollArea*>(World::scene()->FocusedObject())) {
 		float factor = 1.f;
-		amt = ModifySpeed(amt * box->Zoom() * World::inputSys()->Settings().scrollSpeed.y, &factor, normalScrollFactor, fastScrollFactor, slowScrollFactor);
+		amt = ModifySpeed(amt * box->Zoom() * World::inputSys()->Settings().scrollSpeed.y, &factor, Default::normalScrollFactor, Default::scrollFactorFast, Default::scrollFactorSlow);
 		box->ScrollList(amt * factor);
 	}
 }
@@ -21,7 +21,7 @@ void Program::Event_Down(float amt) {
 void Program::Event_Right(float amt) {
 	if (ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject())) {
 		float factor = 1.f;
-		amt = ModifySpeed(amt * box->Zoom() * World::inputSys()->Settings().scrollSpeed.x, &factor, normalScrollFactor, fastScrollFactor, slowScrollFactor);
+		amt = ModifySpeed(amt * box->Zoom() * World::inputSys()->Settings().scrollSpeed.x, &factor, Default::normalScrollFactor, Default::scrollFactorFast, Default::scrollFactorSlow);
 		box->ScrollListX(amt * factor);
 	}
 }
@@ -29,7 +29,7 @@ void Program::Event_Right(float amt) {
 void Program::Event_Left(float amt) {
 	if (ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject())) {
 		float factor = 1.f;
-		amt = ModifySpeed(amt * box->Zoom() * World::inputSys()->Settings().scrollSpeed.x, &factor, normalScrollFactor, fastScrollFactor, slowScrollFactor);
+		amt = ModifySpeed(amt * box->Zoom() * World::inputSys()->Settings().scrollSpeed.x, &factor, Default::normalScrollFactor, Default::scrollFactorFast, Default::scrollFactorSlow);
 		box->ScrollListX(-amt * factor);
 	}
 }
@@ -54,12 +54,12 @@ void Program::Event_PageDown() {
 
 void Program::Event_ZoomIn() {
 	if (ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject())) 
-		box->MultZoom(zoomFactor);
+		box->MultZoom(Default::zoomFactor);
 }
 
 void Program::Event_ZoomOut() {
 	if (ReaderBox* box = dynamic_cast<ReaderBox*>(World::scene()->FocusedObject()))
-		box->DivZoom(zoomFactor);
+		box->DivZoom(Default::zoomFactor);
 }
 
 void Program::Event_ZoomReset() {
@@ -80,30 +80,6 @@ void Program::Event_NextDir() {
 void Program::Event_PrevDir() {
 	if (curMenu == EMenu::reader)
 		Event_OpenReader((void*)browser->GoPrev().c_str());
-}
-
-void Program::Event_CursorUp(float amt) {
-	float factor = 1.f;
-	amt = ModifySpeed(amt, &factor, normalMDragFactor, fastMDragFactor, slowMDragFactor);
-	World::winSys()->MoveMouse(World::inputSys()->mousePos() - vec2i(0, std::ceil(amt * factor)));
-}
-
-void Program::Event_CursorDown(float amt) {
-	float factor = 1.f;
-	amt = ModifySpeed(amt, &factor, normalMDragFactor, fastMDragFactor, slowMDragFactor);
-	World::winSys()->MoveMouse(World::inputSys()->mousePos() + vec2i(0, std::ceil(amt * factor)));
-}
-
-void Program::Event_CursorRight(float amt) {
-	float factor = 1.f;
-	amt = ModifySpeed(amt, &factor, normalMDragFactor, fastMDragFactor, slowMDragFactor);
-	World::winSys()->MoveMouse(World::inputSys()->mousePos() + vec2i(std::ceil(amt * factor), 0));
-}
-
-void Program::Event_CursorLeft(float amt) {
-	float factor = 1.f;
-	amt = ModifySpeed(amt, &factor, normalMDragFactor, fastMDragFactor, slowMDragFactor);
-	World::winSys()->MoveMouse(World::inputSys()->mousePos() - vec2i(std::ceil(amt * factor), 0));
 }
 
 // PLAYER EVENTS
@@ -137,13 +113,14 @@ void Program::Event_Mute() {
 // PLAYLIST EDITOR EVENTS
 
 void Program::Event_AddPlaylistButtonClick() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
-	World::scene()->SetPopupText("New Playlist", "", &Program::Event_NewPlaylistOk, &Program::Event_NewPlaylistOk);
+	pair<Popup*, LineEditor*> pt = CreatePopupText("New Playlist", "", &Program::Event_NewPlaylistOk, &Program::Event_NewPlaylistOk);
+	World::scene()->SetPopup(pt.first, pt.second);
 }
 
 void Program::Event_DeletePlaylistButtonClick() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	if (ListItem* item = World::scene()->SelectedButton()) {
 		Filer::Remove(World::scene()->Settings().PlaylistPath() + item->label + ".ini");
@@ -152,7 +129,7 @@ void Program::Event_DeletePlaylistButtonClick() {
 }
 
 void Program::Event_EditPlaylistButtonClick() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	if (ListItem* item = World::scene()->SelectedButton())
 		Event_OpenPlaylistEditor((void*)item->label.c_str());
@@ -167,11 +144,11 @@ void Program::Event_NewPlaylistOk() {
 }
 
 void Program::Event_NewPlaylistOk(const string& str) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	if (Filer::Exists(World::scene()->Settings().PlaylistPath() + str)) {
-		World::audioSys()->PlaySound("error");
-		World::scene()->SetPopupMessage("File already exists.");
+		World::audioSys()->PlaySound(Default::cueNameError);
+		World::scene()->SetPopup(CreatePopupMessage("File already exists."));
 	} else {
 		Filer::SavePlaylist(Playlist(str));
 		Event_OpenPlaylistList();
@@ -179,14 +156,14 @@ void Program::Event_NewPlaylistOk(const string& str) {
 }
 
 void Program::Event_SwitchButtonClick() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	editor->showSongs = !editor->showSongs;
 	SwitchScene();
 }
 
 void Program::Event_BrowseButtonClick() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	if (editor->showSongs)
 		Event_OpenSongBrowser("");
@@ -195,7 +172,7 @@ void Program::Event_BrowseButtonClick() {
 }
 
 void Program::Event_AddSongBookButtonClick() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	if (editor->showSongs)
 		editor->AddSong("");
@@ -205,7 +182,7 @@ void Program::Event_AddSongBookButtonClick() {
 }
 
 void Program::Event_AddSongFileDirButtonClick() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	if (ListItem* item = World::scene()->SelectedButton()) {
 		if (browser->CurDir() == string(1, dsep))
@@ -219,7 +196,7 @@ void Program::Event_AddSongFileDirButtonClick() {
 }
 
 void Program::Event_DeleteSongBookButtonClick() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	if (editor->showSongs)
 		editor->DelSong();
@@ -229,10 +206,12 @@ void Program::Event_DeleteSongBookButtonClick() {
 }
 
 void Program::Event_EditSongBookButtonClick() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
-	if (ListItem* item = World::scene()->SelectedButton())
-		World::scene()->SetPopupText("Rename " + string(editor->showSongs ? "song" : "book"), item->getData(), &Program::Event_SongBookRenameOk, &Program::Event_SongBookRenameOk);
+	if (ListItem* item = World::scene()->SelectedButton()) {
+		pair<Popup*, LineEditor*> pt = CreatePopupText("Rename " + string(editor->showSongs ? "song" : "book"), item->getData(), &Program::Event_SongBookRenameOk, &Program::Event_SongBookRenameOk);
+		World::scene()->SetPopup(pt.first, pt.second);
+	}
 }
 
 void Program::Event_SongBookRenameOk() {
@@ -244,7 +223,7 @@ void Program::Event_SongBookRenameOk() {
 }
 
 void Program::Event_SongBookRenameOk(const string& str) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	if (editor->showSongs)
 		editor->RenameSong(str);
@@ -254,14 +233,15 @@ void Program::Event_SongBookRenameOk(const string& str) {
 }
 
 void Program::Event_ItemDoubleclicked(ListItem* item) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	// does the same as Event_EditButtonClicked
 	if (curMenu == EMenu::playlists)
 		Event_OpenPlaylistEditor((void*)item->label.c_str());
-	else if (curMenu == EMenu::plistEditor)
-		World::scene()->SetPopupText("Rename " + string(editor->showSongs ? "song" : "book"), item->getData(), &Program::Event_SongBookRenameOk, &Program::Event_SongBookRenameOk);
-	else if (curMenu == EMenu::songSearch) {
+	else if (curMenu == EMenu::plistEditor) {
+		pair<Popup*, LineEditor*> pt = CreatePopupText("Rename " + string(editor->showSongs ? "song" : "book"), item->getData(), &Program::Event_SongBookRenameOk, &Program::Event_SongBookRenameOk);
+		World::scene()->SetPopup(pt.first, pt.second);
+	} else if (curMenu == EMenu::songSearch) {
 #ifdef _WIN32
 		if (browser->CurDir() == "\\")
 			Event_OpenSongBrowser(item->label+dsep);
@@ -286,14 +266,14 @@ void Program::Event_ItemDoubleclicked(ListItem* item) {
 }
 
 void Program::Event_SaveButtonClick() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	if (editor)
 		Filer::SavePlaylist(editor->getPlaylist());
 }
 
 void Program::Event_UpButtonClick() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	if (browser->GoUp())
 		SwitchScene();
@@ -302,7 +282,7 @@ void Program::Event_UpButtonClick() {
 }
 
 void Program::Event_AddBook(void* name) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	editor->AddBook(static_cast<char*>(name));
 	SwitchScene(EMenu::plistEditor);
@@ -311,12 +291,12 @@ void Program::Event_AddBook(void* name) {
 // MENU EVENTS
 
 void Program::Event_OpenBookList() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	SwitchScene(EMenu::books);
 }
 
 void Program::Event_OpenBrowser(void* path) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	if (browser)
 		browser->GoTo(string(static_cast<char*>(path)));
@@ -326,7 +306,7 @@ void Program::Event_OpenBrowser(void* path) {
 }
 
 void Program::Event_OpenReader(void* file) {
-	World::audioSys()->PlaySound("open");
+	World::audioSys()->PlaySound(Default::cueNameOpen);
 
 	Playlist plist = FindFittingPlaylist(static_cast<char*>(file));
 	if (!plist.name.empty() && World::audioSys())
@@ -335,12 +315,12 @@ void Program::Event_OpenReader(void* file) {
 }
 
 void Program::Event_OpenPlaylistList() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	SwitchScene(EMenu::playlists);
 }
 
 void Program::Event_OpenPlaylistEditor(void* playlist) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	editor = new PlaylistEditor(static_cast<char*>(playlist));
 	SwitchScene(EMenu::plistEditor);
@@ -360,34 +340,34 @@ void Program::Event_OpenSongBrowser(const string& dir) {
 }
 
 void Program::Event_OpenGeneralSettings() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	SwitchScene(EMenu::generalSets);
 }
 
 void Program::Event_OpenVideoSettings() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	SwitchScene(EMenu::videoSets);
 }
 
 void Program::Event_OpenAudioSettings() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	SwitchScene(EMenu::audioSets);
 }
 
 void Program::Event_OpenControlsSettings() {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	SwitchScene(EMenu::controlsSets);
 }
 
 void Program::Event_Ok() {
-	World::scene()->OnMouseDown(World::inputSys()->mousePos(), EClick::left, false);	// simulate mouse single left click
+	// idk. someday there might be something here
 }
 
 void Program::Event_Back() {
-	World::audioSys()->PlaySound("back");
+	World::audioSys()->PlaySound(Default::cueNameBack);
 
 	if (World::scene()->getPopup())
-		World::scene()->DelPopup();
+		World::scene()->SetPopup(nullptr);
 	else if (curMenu == EMenu::reader) {
 		World::audioSys()->UnloadPlaylist();
 		SwitchScene(EMenu::browser);
@@ -415,77 +395,77 @@ void Program::Event_Back() {
 // SETTINGS EVENTS
 
 void Program::Event_SwitchLanguage(const string& language) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	
 	World::library()->LoadLanguage(language);
 	SwitchScene();
 }
 
 void Program::Event_SetLibraryPath(const string& dir) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	World::scene()->LibraryPath(dir);
 }
 
 void Program::Event_SetPlaylistsPath(const string& dir) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	World::scene()->PlaylistsPath(dir);
 }
 
 void Program::Event_SwitchFullscreen(bool on) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	World::winSys()->Fullscreen(on);
 }
 
 void Program::Event_SetTheme(const string& theme) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	World::winSys()->Theme(theme);
 }
 
 void Program::Event_SetFont(const string& font) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	World::winSys()->Font(font);
 	SwitchScene();
 }
 
 void Program::Event_SetRenderer(const string& renderer) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	World::winSys()->Renderer(renderer);
 	SwitchScene();
 }
 
 void Program::Event_SetMusicVolume(const string& mvol) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	World::audioSys()->MusicVolume(stoi(mvol));
 	SwitchScene();
 }
 
 void Program::Event_SetSoundVolume(const string& svol) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 
 	World::audioSys()->SoundVolume(stoi(svol));
 	SwitchScene();
 }
 
 void Program::Event_SetSongDelay(const string& sdelay) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	World::audioSys()->SongDelay(stof(sdelay));
 }
 
 void Program::Event_SetScrollX(const string& scrollx) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	World::inputSys()->ScrollSpeed(vec2f(stof(scrollx), World::inputSys()->Settings().scrollSpeed.y));
 }
 
 void Program::Event_SetScrollY(const string& scrolly) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	World::inputSys()->ScrollSpeed(vec2f(World::inputSys()->Settings().scrollSpeed.x, stof(scrolly)));
 }
 
 void Program::Event_SetDeadzone(const string& deadz) {
-	World::audioSys()->PlaySound("click");
+	World::audioSys()->PlaySound(Default::cueNameClick);
 	World::inputSys()->Deadzone(stoi(deadz));
 }
 
@@ -553,7 +533,7 @@ void Program::SwitchScene(void* dat) const {
 		objects.push_back(new TileBox(Object(vec2i(0, 60), -1, vec2i(res.x, res.y-60), FIX_ANC | FIX_END), tiles, vec2i(400, 30)));
 	} else if (curMenu == EMenu::browser) {
 		// back button
-		objects = { new ButtonText(Object(vec2i(0, 0), -1, vec2i(90, 40), FIX_ANC | FIX_SIZ), &Program::Event_Back, World::library()->getLine("back")) };
+		objects = {new ButtonText(Object(vec2i(0, 0), -1, vec2i(90, 40), FIX_ANC | FIX_SIZ), &Program::Event_Back, World::library()->getLine("back"))};
 
 		// list
 		vector<ListItem*> items;
@@ -572,7 +552,7 @@ void Program::SwitchScene(void* dat) const {
 		else 
 			World::library()->LoadPics(Filer::GetPics(parentPath(file)));
 
-		objects = { new ReaderBox(Object(0, 0, res, FIX_ANC | FIX_END, EColor::background), World::library()->Pictures(), file) };
+		objects = {new ReaderBox(Object(0, 0, res, FIX_ANC | FIX_END, EColor::background), World::library()->Pictures(), file)};
 	} else if (curMenu == EMenu::playlists) {
 		// top buttons
 		sizT = vec2i(80, 30);
@@ -712,7 +692,7 @@ void Program::SwitchScene(void* dat) const {
 		lbox->Items(litems);
 		objects.push_back(lbox);
 
-		TableBox* tbox = new TableBox(Object(vec2i(160, 110), -1, vec2i(res.x-160, res.y-110), FIX_ANC | FIX_END, EColor::background), {}, { 0.31f, 0.23f, 0.23f, 0.23f });
+		TableBox* tbox = new TableBox(Object(vec2i(160, 110), -1, vec2i(res.x-160, res.y-110), FIX_ANC | FIX_END, EColor::background), {}, {0.31f, 0.23f, 0.23f, 0.23f});
 		const map<string, Shortcut*>& smp = World::inputSys()->Settings().shortcuts;
 		grid2<ListItem*> titems(smp.size(), 4);
 		uint row = 0;
@@ -729,9 +709,9 @@ void Program::SwitchScene(void* dat) const {
 }
 
 float Program::ModifySpeed(float value, float* axisFactor, float normalFactor, float fastFactor, float slowFactor) {
-	if (World::inputSys()->isPressed(SHORTCUT_FAST, axisFactor))
+	if (World::inputSys()->isPressed(Default::shortcutFast, axisFactor))
 		value *= fastFactor;
-	else if (World::inputSys()->isPressed(SHORTCUT_SLOW, axisFactor))
+	else if (World::inputSys()->isPressed(Default::shortcutSlow, axisFactor))
 		value *= slowFactor;
 	else
 		value *= normalFactor;
@@ -760,4 +740,41 @@ Playlist Program::FindFittingPlaylist(const string& picPath) const {
 				return playlist;
 	}
 	return Playlist();
+}
+
+Popup* Program::CreatePopupMessage(const string& msg) {
+	vec2i res = World::winSys()->Resolution();
+	vec2i size = vec2i(World::library()->Fonts()->TextSize(msg, 60).x, 120);
+
+	vector<Object*> objs ={
+		new Label(Object(res/2, res/2-size/2, vec2i(size.x, size.y/2), FIX_SIZ), msg),
+		new ButtonText(Object(res/2, vec2i(res.x/2-size.x/2, res.y/2), vec2i(size.x, size.y/2), FIX_SIZ), &Program::Event_Back, "Ok", ETextAlign::center)
+	};
+	return new Popup(Object(res/2, res/2-size/2, size, FIX_SIZ, EColor::background), objs);
+}
+
+Popup* Program::CreatePopupChoice(const string& msg, void(Program::*callb)()) {
+	vec2i res = World::winSys()->Resolution();
+	vec2i size = vec2i(World::library()->Fonts()->TextSize(msg, 60).x, 120);
+
+	vector<Object*> objs ={
+		new Label(Object(res/2, res/2-size/2, vec2i(size.x, size.y/3), FIX_SIZ), msg),
+		new ButtonText(Object(res/2, vec2i(res.x/2-size.x/2, res.y/2-size.y/6), vec2i(size.x, size.y/3), FIX_SIZ), &Program::Event_Back, "Cancel", ETextAlign::center),
+		new ButtonText(Object(res/2, vec2i(res.x/2-size.x/2, res.y/2+size.y/6), vec2i(size.x, size.y/3), FIX_SIZ), callb, "Ok", ETextAlign::center)
+	};
+	return new Popup(Object(res/2, res/2-size/2, size, FIX_SIZ, EColor::background), objs);
+}
+
+pair<Popup*, LineEditor*> Program::CreatePopupText(const string& msg, const string& text, void(Program::*callt)(const string&), void(Program::*callb)()) {
+	vec2i res = World::winSys()->Resolution();
+	vec2i size = vec2i(World::library()->Fonts()->TextSize(msg, 60).x, 180);
+
+	LineEditor* editor = new LineEditor(Object(res/2, vec2i(res.x/2-size.x/2, res.y/2-size.y/6), vec2i(size.x, size.y/3), FIX_SIZ), text, ETextType::text, callt, &Program::Event_Back);
+	vector<Object*> objs ={
+		new Label(Object(res/2, res/2-size/2, vec2i(size.x, size.y/3), FIX_SIZ), msg),
+		editor,
+		new ButtonText(Object(res/2, vec2i(res.x/2-size.x/2, res.y/2+size.y/6), vec2i(size.x/2, size.y/3), FIX_SIZ), &Program::Event_Back, "Cancel", ETextAlign::center),
+		new ButtonText(Object(res/2, vec2i(res.x/2, res.y/2+size.y/6), vec2i(size.x/2, size.y/3), FIX_SIZ), callb, "Ok", ETextAlign::center)
+	};
+	return make_pair(new Popup(Object(res/2, res/2-size/2, size, FIX_SIZ, EColor::background), objs), editor);
 }

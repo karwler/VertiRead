@@ -1,60 +1,6 @@
 #pragma once
 
-// include SDL
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
-#include <SDL2/SDL_ttf.h>
-#include <SDL2/SDL_mixer.h>
-
-// include other useful stuff
-#include "kklib/aliases.h"
-#include "kklib/grid2.h"
-#include <iostream>
-#include <string>
-#include <vector>
-#include <map>
-
-using std::cout;
-using std::cerr;
-using std::endl;
-using std::vector;
-using std::map;
-using std::pair;
-using std::make_pair;
-using std::string;
-using std::wstring;
-using std::to_string;
-
-using kk::vec2i;
-using kk::vec2u;
-using kk::vec2f;
-using kk::vec4c;
-
-using vec2t = kk::vec2<size_t>;
-
-using kk::grid2;
-
-#ifdef main
-#undef main
-#endif
-
-// forward declaraions
-enum class EColor : uint8;
-enum class ETextCase : uint8;
-enum EWindow : uint8;
-
-class AudioSys;
-class Engine;
-class InputSys;
-class WinSys;
-
-class Scene;
-class Program;
-
-class Object;
-class ScrollArea;
-class ScrollAreaX1;
-class Capturer;
+#include "prog/defaults.h"
 
 // files and strings
 bool strcmpCI(const string& strl, const string& strr);
@@ -124,8 +70,8 @@ void clear(vector<T*>& vec) {
 
 template <typename T>
 bool contains(const vector<T>& vec, const T& elem) {
-	for (size_t i=0; i!=vec.size(); i++)
-		if (vec[i] == elem)
+	for (const T& it : vec)
+		if (it == elem)
 			return true;
 	return false;
 }

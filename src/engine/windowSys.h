@@ -9,12 +9,10 @@ public:
 	~WindowSys();
 
 	void CreateWindow();
-	void CreateWindow(const vec2i& pos, const vec2i& res);
 	void DestroyWindow();
 
 	bool ShowMouse() const;
 	void ShowMouse(bool on);
-	void MoveMouse(const vec2i& mPos);
 	void WindowEvent(const SDL_WindowEvent& window);
 
 	void SetRedrawNeeded();

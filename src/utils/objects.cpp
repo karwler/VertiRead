@@ -128,8 +128,8 @@ Button* Button::Clone() const {
 	return new Button(*this);
 }
 
-void Button::OnClick() {
-	if (callback)
+void Button::OnClick(ClickType click) {
+	if (callback && click.button == SDL_BUTTON_LEFT)
 		(World::program()->*callback)();
 }
 
@@ -171,13 +171,15 @@ ButtonImage* ButtonImage::Clone() const {
 	return new ButtonImage(*this);
 }
 
-void ButtonImage::OnClick() {
-	Button::OnClick();
-	curTex++;
-	if (curTex == texes.size())
-		curTex = 0;
+void ButtonImage::OnClick(ClickType click) {
+	Button::OnClick(click);
+	if (click.button == SDL_BUTTON_LEFT) {
+		curTex++;
+		if (curTex == texes.size())
+			curTex = 0;
 
-	World::winSys()->SetRedrawNeeded();
+		World::winSys()->SetRedrawNeeded();
+	}
 }
 
 Image ButtonImage::CurTex() const {

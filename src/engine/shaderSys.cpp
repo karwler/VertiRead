@@ -9,7 +9,7 @@ ShaderSys::~ShaderSys() {
 }
 
 void ShaderSys::CreateRenderer(SDL_Window* window, int driverIndex) {
-	renderer = SDL_CreateRenderer(window, driverIndex, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
+	renderer = SDL_CreateRenderer(window, driverIndex, Default::rendererFlags);
 	if (!renderer)
 		throw Exception("couldn't create renderer\n" + string(SDL_GetError()), 4);
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -24,7 +24,7 @@ void ShaderSys::DestroyRenderer() {
 
 void ShaderSys::DrawObjects(const vector<Object*>& objects, const Popup* popup) {
 	// clear screen
-	colorDim = popup ? POPUP_BGCOLOR_DIM : 1;
+	colorDim = popup ? Default::colorPopupDim : 1;
 	vec4c bgcolor = World::winSys()->Settings().colors.at(EColor::background);
 	SDL_SetRenderDrawColor(renderer, bgcolor.r/colorDim.r, bgcolor.g/colorDim.g, bgcolor.b/colorDim.b, bgcolor.a/colorDim.a);
 	SDL_RenderClear(renderer);
@@ -72,7 +72,7 @@ void ShaderSys::DrawObject(const SDL_Rect& bg, EColor bgColor, const Text& text)
 	int len = text.size().x;
 	int left = (text.pos.x < bg.x) ? bg.x-text.pos.x : 0;
 	int right = (text.pos.x+len > bg.x+bg.w) ? text.pos.x+len-bg.x-bg.w : 0;
-	DrawText(text, { left, 0, right, 0 });
+	DrawText(text, {left, 0, right, 0});
 }
 
 void ShaderSys::DrawObject(LineEditor* obj) {
@@ -84,7 +84,7 @@ void ShaderSys::DrawObject(LineEditor* obj) {
 	int len = text.size().x;
 	int left = (text.pos.x < bg.x) ? bg.x - text.pos.x : 0;
 	int right = (len-left > bg.w) ? len - left - bg.w : 0;
-	DrawText(text, { left, 0, right, 0 });
+	DrawText(text, {left, 0, right, 0});
 
 	if (World::inputSys()->Captured() == obj)
 		DrawRect(obj->getCaret(), EColor::highlighted);
@@ -102,7 +102,7 @@ void ShaderSys::DrawObject(ListBox* obj) {
 		SDL_Rect rect = obj->ItemRect(i, crop, color);
 		DrawRect(rect, color);
 
-		Text txt(items[i]->label, vec2i(rect.x+5, rect.y-crop.y), obj->ItemH());
+		Text txt(items[i]->label, vec2i(rect.x+Default::textOffset, rect.y-crop.y), Default::itemHeight);
 		textCropRight(crop, txt.size().x, rect.w);
 		DrawText(txt, crop);
 
@@ -123,7 +123,7 @@ void ShaderSys::DrawObject(TableBox* obj) {
 		SDL_Rect rect = obj->ItemRect(i, crop);
 		DrawRect(rect, EColor::rectangle);
 
-		Text txt(items[i]->label, vec2i(rect.x+5, rect.y-crop.y), obj->ItemH());
+		Text txt(items[i]->label, vec2i(rect.x+Default::textOffset, rect.y-crop.y), Default::itemHeight);
 		textCropRight(crop, txt.size().x, rect.w);
 		DrawText(txt, crop);
 
@@ -178,32 +178,32 @@ void ShaderSys::DrawObject(ReaderBox* obj) {
 
 void ShaderSys::PassDrawItem(size_t id, ScrollAreaX1* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
 	if (Checkbox* obj = dynamic_cast<Checkbox*>(parent->Item(id)))
-		DrawItem(obj, parent, rect, crop);
+		DrawItem(obj, rect, crop);
 	else if (Switchbox* obj = dynamic_cast<Switchbox*>(parent->Item(id)))
-		DrawItem(obj, parent, rect, crop);
+		DrawItem(obj, rect, crop);
 	else if (LineEdit* obj = dynamic_cast<LineEdit*>(parent->Item(id)))
 		DrawItem(obj, parent, rect, crop);
 	else if (KeyGetter* obj = dynamic_cast<KeyGetter*>(parent->Item(id)))
-		DrawItem(obj, parent, rect, crop);
+		DrawItem(obj, rect, crop);
 }
 
-void ShaderSys::DrawItem(Checkbox* item, ScrollAreaX1* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
-	int offset = item->label.empty() ? 5 : Text(item->label, 0, parent->ItemH()).size().x + 20;
-	int top = (crop.y < item->spacing) ? item->spacing - crop.y : crop.y;
-	int bot = (crop.h > item->spacing) ? crop.h - item->spacing : item->spacing;
+void ShaderSys::DrawItem(Checkbox* item, const SDL_Rect& rect, const SDL_Rect& crop) {
+	int offset = item->label.empty() ? Default::textOffset : Text(item->label, 0, Default::itemHeight).size().x + Default::lineEditOffset;
+	int top = (crop.y < Default::checkboxSpacing) ? Default::checkboxSpacing - crop.y : crop.y;
+	int bot = (crop.h > Default::checkboxSpacing) ? crop.h - Default::checkboxSpacing : Default::checkboxSpacing;
 
-	DrawRect({rect.x+offset+item->spacing, rect.y-crop.y+top, parent->ItemH()-item->spacing*2, rect.h+crop.h-top-bot}, item->On() ? EColor::highlighted : EColor::darkened);
+	DrawRect({rect.x+offset+Default::checkboxSpacing, rect.y-crop.y+top, Default::itemHeight-Default::checkboxSpacing*2, rect.h+crop.h-top-bot}, item->On() ? EColor::highlighted : EColor::darkened);
 }
 
-void ShaderSys::DrawItem(Switchbox* item, ScrollAreaX1* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
-	int offset = item->label.empty() ? 5 : Text(item->label, 0, parent->ItemH()).size().x + 20;
+void ShaderSys::DrawItem(Switchbox* item, const SDL_Rect& rect, const SDL_Rect& crop) {
+	int offset = item->label.empty() ? Default::textOffset : Text(item->label, 0, Default::itemHeight).size().x + Default::lineEditOffset;
 
-	DrawText(Text(item->CurOption(), vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH()), crop);
+	DrawText(Text(item->CurOption(), vec2i(rect.x+offset, rect.y-crop.y), Default::itemHeight), crop);
 }
 
 void ShaderSys::DrawItem(LineEdit* item, ScrollAreaX1* parent, const SDL_Rect& rect, SDL_Rect crop) {
-	int offset = item->label.empty() ? 5 : Text(item->label, 0, parent->ItemH()).size().x + 20;
-	Text text(item->Editor().Text(), vec2i(rect.x+offset-item->TextPos(), rect.y-crop.y), parent->ItemH());
+	int offset = item->label.empty() ? Default::textOffset : Text(item->label, 0, Default::itemHeight).size().x + Default::lineEditOffset;
+	Text text(item->Editor().Text(), vec2i(rect.x+offset-item->TextPos(), rect.y-crop.y), Default::itemHeight);
 
 	// set text's left and right crop
 	int end = parent->End().x;
@@ -214,17 +214,17 @@ void ShaderSys::DrawItem(LineEdit* item, ScrollAreaX1* parent, const SDL_Rect& r
 
 	// draw caret if selected
 	if (World::inputSys()->Captured() == item) {
-		offset += Text(item->Editor().Text().substr(0, item->Editor().CursorPos()), 0, parent->ItemH()).size().x - item->TextPos();
-		DrawRect({rect.x+offset, rect.y, 5, rect.h}, EColor::highlighted);
+		offset += Text(item->Editor().Text().substr(0, item->Editor().CursorPos()), 0, Default::itemHeight).size().x - item->TextPos();
+		DrawRect({rect.x+offset, rect.y, Default::textOffset, rect.h}, EColor::highlighted);
 	}
 }
 
-void ShaderSys::DrawItem(KeyGetter* item, ScrollAreaX1* parent, const SDL_Rect& rect, const SDL_Rect& crop) {
-	int offset = item->label.empty() ? 5 : Text(item->label, 0, parent->ItemH()).size().x + 20;
+void ShaderSys::DrawItem(KeyGetter* item, const SDL_Rect& rect, const SDL_Rect& crop) {
+	int offset = item->label.empty() ? Default::textOffset : Text(item->label, 0, Default::itemHeight).size().x + Default::lineEditOffset;
 	string text = (World::inputSys()->Captured() == item) ? "..." : item->Text();
 	EColor color = (World::inputSys()->Captured() == item) ? EColor::highlighted : EColor::text;
 
-	DrawText(Text(text, vec2i(rect.x+offset, rect.y-crop.y), parent->ItemH(), color), crop);
+	DrawText(Text(text, vec2i(rect.x+offset, rect.y-crop.y), Default::itemHeight, color), crop);
 }
 
 void ShaderSys::DrawRect(const SDL_Rect& rect, EColor color) {
@@ -237,12 +237,12 @@ void ShaderSys::DrawImage(const Image& img, const SDL_Rect& crop) {
 	SDL_Rect rect = img.getRect();	// the rect the image is gonna be projected on
 	SDL_Texture* tex;
 	if (needsCrop(crop)) {
-		SDL_Rect ori = { rect.x, rect.y, img.texture->surface->w, img.texture->surface->h };	// proportions of the original image
-		vec2f fac(float(ori.w) / float(rect.w), float(ori.h) / float(rect.h));					// scaling factor
-		rect = cropRect(rect, crop);															// adjust rect to crop
+		SDL_Rect ori = {rect.x, rect.y, img.texture->surface->w, img.texture->surface->h};	// proportions of the original image
+		vec2f fac(float(ori.w) / float(rect.w), float(ori.h) / float(rect.h));				// scaling factor
+		rect = cropRect(rect, crop);														// adjust rect to crop
 
 		// crop original image by factor
-		SDL_Surface* sheet = cropSurface(img.texture->surface, ori, { int(float(crop.x)*fac.x), int(float(crop.y)*fac.y), int(float(crop.w)*fac.x), int(float(crop.h)*fac.y) });
+		SDL_Surface* sheet = cropSurface(img.texture->surface, ori, {int(float(crop.x)*fac.x), int(float(crop.y)*fac.y), int(float(crop.w)*fac.x), int(float(crop.h)*fac.y)});
 		tex = SDL_CreateTextureFromSurface(renderer, sheet);
 		SDL_FreeSurface(sheet);
 	} else

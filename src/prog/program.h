@@ -3,6 +3,7 @@
 #include "browser.h"
 #include "playlistEditor.h"
 #include "utils/items.h"
+#include "utils/objects.h"
 #include "kklib/sptr.h"
 
 class Program {
@@ -20,12 +21,6 @@ public:
 	void Event_CenterView();
 	void Event_NextDir();
 	void Event_PrevDir();
-
-	// cursor events
-	void Event_CursorUp(float amt);
-	void Event_CursorDown(float amt);
-	void Event_CursorRight(float amt);
-	void Event_CursorLeft(float amt);
 
 	// player events
 	void Event_PlayPause();
@@ -109,4 +104,8 @@ private:
 	void SwitchScene(void* dat=nullptr) const;
 	float ModifySpeed(float value, float* axisFactor=nullptr, float normalFactor=1.f, float fastFactor=4.f, float slowFactor=0.5f);
 	Playlist FindFittingPlaylist(const string& picPath) const;
+
+	Popup* CreatePopupMessage(const string& msg);
+	Popup* CreatePopupChoice(const string& msg, void (Program::*callb)());
+	pair<Popup*, LineEditor*> CreatePopupText(const string& msg, const string& text, void (Program::*callt)(const string&), void (Program::*callb)());
 };

@@ -5,7 +5,7 @@
 
 class GeneralSettings {
 public:
-	GeneralSettings(const string& LANG=DEFAULT_LANGUAGE, const string& LIB="", const string& PST="");
+	GeneralSettings(const string& LANG=Default::language, const string& LIB="", const string& PST="");
 
 	string Lang() const;
 	void Lang(const string& language);
@@ -26,7 +26,7 @@ private:
 
 class VideoSettings {
 public:
-	VideoSettings(bool MAX=false, bool FSC=false, const vec2i& RES=DEFAULT_RESOLUTION, const string& FNT=DEFAULT_FONT, const string& RNDR="");
+	VideoSettings(bool MAX=false, bool FSC=false, const vec2i& RES=Default::resolution, const string& FNT=Default::font, const string& RNDR="");
 
 	string Font() const;
 	string Fontpath() const;
@@ -50,7 +50,7 @@ private:
 };
 
 struct AudioSettings {
-	AudioSettings(int MV=DEFAULT_MUSIC_VOL, int SV=DEFAULT_SOUND_VOL, float SD=DEFAULT_SONG_DELAY);
+	AudioSettings(int MV=Default::volumeMusic, int SV=Default::volumeSound, float SD=Default::songDelay);
 
 	int musicVolume;
 	int soundVolume;
@@ -58,7 +58,7 @@ struct AudioSettings {
 };
 
 struct ControlsSettings {
-	ControlsSettings(const vec2f& SSP=DEFAULT_SCROLL_SPEED, int16 DDZ=DEFAULT_DEADZONE, bool fillMissingBindings=true, const map<string, Shortcut*>& CTS=map<string, Shortcut*>());
+	ControlsSettings(const vec2f& SSP=Default::scrollSpeed, int16 DDZ=Default::controllerDeadzone, bool fillMissingBindings=true, const map<string, Shortcut*>& CTS=map<string, Shortcut*>());
 
 	vec2f scrollSpeed;
 	int16 deadzone;

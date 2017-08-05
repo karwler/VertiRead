@@ -38,7 +38,7 @@ void Engine::Run() {
 		audioSys->Tick(dSec);
 		scene->Tick(dSec);
 
-		uint32 timeout = SDL_GetTicks() + 50;
+		uint32 timeout = SDL_GetTicks() + Default::eventCheckTimeout;
 		while (SDL_PollEvent(&event) && timeout - SDL_GetTicks() > 0)
 			HandleEvent(event);
 	}

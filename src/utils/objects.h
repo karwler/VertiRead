@@ -67,7 +67,7 @@ public:
 	virtual ~Button();
 	virtual Button* Clone() const;
 
-	virtual void OnClick();
+	virtual void OnClick(ClickType click);
 	void Callback(void (Program::*func)());
 
 protected:
@@ -92,7 +92,7 @@ public:
 	virtual ~ButtonImage();
 	virtual ButtonImage* Clone() const;
 
-	virtual void OnClick();
+	virtual void OnClick(ClickType click);
 	Image CurTex() const;
 
 private:

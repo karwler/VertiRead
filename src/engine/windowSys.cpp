@@ -13,25 +13,21 @@ WindowSys::~WindowSys() {
 }
 
 void WindowSys::CreateWindow() {
-	CreateWindow(SDL_WINDOWPOS_UNDEFINED, sets.resolution);
-}
-
-void WindowSys::CreateWindow(const vec2i& pos, const vec2i& res) {
 	DestroyWindow();	// make sure old window (if exists) is destroyed
 
 	// create new window
-	uint32 flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN;
+	uint32 flags = Default::windowFlags;
 	if (sets.maximized)
 		flags |= SDL_WINDOW_MAXIMIZED;
 	if (sets.fullscreen)
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 
-	window = SDL_CreateWindow("VertiRead", pos.x, pos.y, res.x, res.y, flags);
+	window = SDL_CreateWindow(Default::titleDefault, Default::windowPos.x, Default::windowPos.y, sets.resolution.x, sets.resolution.y, flags);
 	if (!window)
 		throw Exception("couldn't create window\n" + string(SDL_GetError()), 3);
 
 	// set icon
-	SDL_Surface* icon = IMG_Load(string(Filer::dirExec + "icon.ico").c_str());
+	SDL_Surface* icon = IMG_Load(string(Filer::dirExec + Default::fileIcon).c_str());
 	if (icon) {
 		SDL_SetWindowIcon(window, icon);
 		SDL_FreeSurface(icon);
@@ -65,10 +61,6 @@ void WindowSys::ShowMouse(bool on) {
 	SDL_ShowCursor(showMouse ? SDL_ENABLE : SDL_DISABLE);
 }
 
-void WindowSys::MoveMouse(const vec2i& mPos) {
-	SDL_WarpMouseInWindow(window, mPos.x, mPos.y);
-}
-
 void WindowSys::WindowEvent(const SDL_WindowEvent& winEvent) {
 	if (winEvent.event == SDL_WINDOWEVENT_EXPOSED)
 		SetRedrawNeeded();
@@ -82,6 +74,8 @@ void WindowSys::WindowEvent(const SDL_WindowEvent& winEvent) {
 		}
 	} else if (winEvent.event == SDL_WINDOWEVENT_SIZE_CHANGED)
 		World::scene()->ResizeMenu();
+	else if (winEvent.event == SDL_WINDOWEVENT_LEAVE)
+		World::scene()->OnMouseLeave();
 }
 
 void WindowSys::SetRedrawNeeded() {
@@ -112,12 +106,12 @@ const VideoSettings& WindowSys::Settings() const {
 
 void WindowSys::Renderer(const string& name) {
 	sets.renderer = name;
-	CreateWindow(Position(), Resolution());
+	CreateWindow();
 }
 
 void WindowSys::Fullscreen(bool on) {
 	sets.fullscreen = on;
-	CreateWindow(Position(), Resolution());
+	CreateWindow();
 }
 
 void WindowSys::Font(const string& font) {

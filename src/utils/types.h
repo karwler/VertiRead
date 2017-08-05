@@ -1,9 +1,6 @@
 ﻿#pragma once
 
 #include "utils.h"
-#include "kklib/vec2.h"
-#include "kklib/vec3.h"
-#include "kklib/vec4.h"
 
 // enumerations
 
@@ -32,12 +29,6 @@ enum class ETextCase : uint8 {
 	first_upper,
 	all_upper,
 	all_lower
-};
-
-enum class EClick : uint8 {
-	left,
-	left_double,
-	right
 };
 
 enum class EPopupType : uint8 {
@@ -92,14 +83,14 @@ private:
 };
 
 struct Text {
-	Text(const string& TXT="", const vec2i& POS=0, int H=50, EColor CLR=EColor::text, int HSCAL=8);
+	Text(const string& TXT="", const vec2i& POS=0, int H=50, EColor CLR=EColor::text);
 
 	vec2i pos;
 	int height;
 	EColor color;
 	string text;
 
-	void SetPosToRect(const SDL_Rect& rect, ETextAlign align, int offset=5);
+	void SetPosToRect(const SDL_Rect& rect, ETextAlign align);
 	vec2i size() const;
 };
 
@@ -129,6 +120,23 @@ private:
 };
 
 // input related stuff
+
+struct ClickType {
+	ClickType(uint8 BTN=0, uint8 NUM=0);
+
+	uint8 button;
+	uint8 clicks;
+};
+
+struct ClickStamp {
+	ClickStamp(Object* OBJ=nullptr, uint8 BUT=0, const vec2i& POS=0);
+
+	void Reset();
+
+	Object* object;
+	uint8 button;
+	vec2i mPos;
+};
 
 struct Controller {
 	Controller();

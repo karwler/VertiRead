@@ -23,7 +23,7 @@ void InputSys::KeypressEvent(const SDL_KeyboardEvent& key) {
 void InputSys::JoystickButtonEvent(const SDL_JoyButtonEvent& jbutton) {
 	if (SDL_GameControllerFromInstanceID(jbutton.which))	// don't execute if there can be a gamecontroller event
 		return;
-
+	
 	if (captured)
 		captured->OnJButton(jbutton.button);
 	else
@@ -70,7 +70,8 @@ void InputSys::GamepadAxisEvent(const SDL_ControllerAxisEvent& gaxis) {
 }
 
 void InputSys::MouseMotionEvent(const SDL_MouseMotionEvent& motion) {
-	World::scene()->OnMouseMove(vec2i(motion.x, motion.y), vec2i(motion.xrel, motion.yrel));
+	mMov = vec2i(motion.xrel, motion.yrel);
+	World::scene()->OnMouseMove(vec2i(motion.x, motion.y), mMov);
 }
 
 void InputSys::MouseButtonDownEvent(const SDL_MouseButtonEvent& button) {
@@ -79,19 +80,11 @@ void InputSys::MouseButtonDownEvent(const SDL_MouseButtonEvent& button) {
 			box->Confirm();
 		SetCapture(nullptr);
 	}
-
-	if (button.clicks == 1) {
-		if (button.button == SDL_BUTTON_LEFT)		// single left click
-			World::scene()->OnMouseDown(mousePos(), EClick::left);
-		else if (button.button == SDL_BUTTON_RIGHT)	// single right click
-			World::scene()->OnMouseDown(mousePos(), EClick::right);
-	} else if (button.button == SDL_BUTTON_LEFT)		// double left click
-		World::scene()->OnMouseDown(mousePos(), EClick::left_double);
+	World::scene()->OnMouseDown(mousePos(), ClickType(button.button, button.clicks));
 }
 
 void InputSys::MouseButtonUpEvent(const SDL_MouseButtonEvent& button) {
-	if (button.clicks == 1 && (button.button == SDL_BUTTON_LEFT || button.button == SDL_BUTTON_RIGHT))
-		World::scene()->OnMouseUp();	// left/right up
+	World::scene()->OnMouseUp(vec2i(button.x, button.y), ClickType(button.button, button.clicks));
 }
 
 void InputSys::MouseWheelEvent(const SDL_MouseWheelEvent& wheel) {
@@ -113,7 +106,7 @@ void InputSys::CheckAxisShortcuts() {
 }
 
 void InputSys::CheckShortcutsK(SDL_Scancode key) {
-	for (const pair<string, Shortcut*>& it : sets.shortcuts)		// find first shortcut with this key assigned to it
+	for (const pair<string, Shortcut*>& it : sets.shortcuts)	// find first shortcut with this key assigned to it
 		if (ShortcutKey* sc = dynamic_cast<ShortcutKey*>(it.second))
 			if (sc->KeyAssigned() && sc->Key() == key && sc->call) {
 				(World::program()->*sc->call)();
@@ -176,18 +169,18 @@ bool InputSys::isPressed(const string& holder, float* amt) const {
 }
 
 bool InputSys::isPressed(const ShortcutAxis* sc, float* amt) const {
-	if (sc->KeyAssigned()) {			// check keyboard keys
+	if (sc->KeyAssigned()) {		// check keyboard keys
 		if (SDL_GetKeyboardState(nullptr)[sc->Key()])
 			return true;
 	}
 
-	if (sc->JButtonAssigned()) {		// check controller buttons
+	if (sc->JButtonAssigned()) {	// check controller buttons
 		if (isPressedB(sc->JctID()))
 			return true;
 	} else if (sc->JHatAssigned()) {
 		if (isPressedH(sc->JctID(), sc->JHatVal()))
 			return true;
-	} else if (sc->JAxisAssigned()) {		// check controller axes
+	} else if (sc->JAxisAssigned()) {	// check controller axes
 		float val = getAxisJ(sc->JctID());
 		if ((sc->JPosAxisAssigned() && val > 0.f) || (sc->JNegAxisAssigned() && val < 0.f)) {
 			if (amt)
@@ -196,10 +189,10 @@ bool InputSys::isPressed(const ShortcutAxis* sc, float* amt) const {
 		}
 	}
 
-	if (sc->GButtonAssigned()) {		// check controller buttons
+	if (sc->GButtonAssigned()) {	// check controller buttons
 		if (isPressedG(sc->GctID()))
 			return true;
-	} else if (sc->GAxisAssigned()) {		// check controller axes
+	} else if (sc->GAxisAssigned()) {	// check controller axes
 		float val = getAxisG(sc->GctID());
 		if ((sc->GPosAxisAssigned() && val > 0.f) || (sc->GNegAxisAssigned() && val < 0.f)) {
 			if (amt)
@@ -242,7 +235,7 @@ bool InputSys::isPressedH(uint8 jhat, uint8 val) const {
 }
 
 float InputSys::getAxisJ(uint8 jaxis) const {
-	for (const Controller& it : controllers)			// get first axis that isn't 0
+	for (const Controller& it : controllers)	// get first axis that isn't 0
 		if (!it.gamepad) {
 			int16 val = CheckAxisValue(SDL_JoystickGetAxis(it.joystick, jaxis));
 			if (val != 0)
@@ -252,7 +245,7 @@ float InputSys::getAxisJ(uint8 jaxis) const {
 }
 
 float InputSys::getAxisG(uint8 gaxis) const {
-	for (const Controller& it : controllers)			// get first axis that isn't 0
+	for (const Controller& it : controllers)	// get first axis that isn't 0
 		if (it.gamepad) {
 			int16 val = CheckAxisValue(SDL_GameControllerGetAxis(it.gamepad, static_cast<SDL_GameControllerAxis>(gaxis)));
 			if (val != 0)
@@ -261,10 +254,14 @@ float InputSys::getAxisG(uint8 gaxis) const {
 	return 0.f;
 }
 
-vec2i InputSys::mousePos() const {
+vec2i InputSys::mousePos() {
 	vec2i pos;
 	SDL_GetMouseState(&pos.x, &pos.y);
 	return pos;
+}
+
+vec2i InputSys::mosueMove() const {
+	return mMov;
 }
 
 const ControlsSettings& InputSys::Settings() const {

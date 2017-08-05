@@ -29,7 +29,8 @@ public:
 	bool isPressedH(uint8 jhat, uint8 val) const;	// check if any of the joysticks' hat is pressed
 	float getAxisJ(uint8 jaxis) const;				// check if any of the joysticks' axis value is greater than 0
 	float getAxisG(uint8 gaxis) const;				// check if any of the gamepads' axis value is greater than 0
-	vec2i mousePos() const;							// get mouse poition
+	static vec2i mousePos();						// get mouse poition
+	vec2i mosueMove() const;						// last mouse movement
 
 	const ControlsSettings& Settings() const;
 	void ScrollSpeed(const vec2f& sspeed);
@@ -46,6 +47,7 @@ private:
 	ControlsSettings sets;
 	vector<Controller> controllers;
 	Capturer* captured;
+	vec2i mMov;
 
 	void CheckShortcutsK(SDL_Scancode key);
 	void CheckShortcutsB(uint8 jbutton);

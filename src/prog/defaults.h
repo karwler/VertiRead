@@ -1,5 +1,63 @@
 #pragma once
 
+// include SDL
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
+#include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_mixer.h>
+
+// include kklib
+#include "kklib/aliases.h"
+#include "kklib/grid2.h"
+#include "kklib/vec2.h"
+#include "kklib/vec3.h"
+#include "kklib/vec4.h"
+
+// include other useful stuff
+#include <iostream>
+#include <string>
+#include <vector>
+#include <map>
+
+using std::cout;
+using std::cerr;
+using std::endl;
+using std::vector;
+using std::map;
+using std::pair;
+using std::make_pair;
+using std::string;
+using std::wstring;
+using std::to_string;
+
+using kk::vec2i;
+using kk::vec2u;
+using kk::vec2f;
+using kk::vec4c;
+using vec2t = kk::vec2<size_t>;
+using kk::grid2;
+
+#ifdef main
+#undef main
+#endif
+
+// forward declaraions
+enum class EColor : uint8;
+enum class ETextCase : uint8;
+
+class AudioSys;
+class Engine;
+class InputSys;
+class WinSys;
+
+class Scene;
+class Program;
+
+class Object;
+class ScrollArea;
+class ScrollAreaX1;
+class Capturer;
+
 // directory separator
 #ifdef _WIN32
 const char dsep = '\\';
@@ -7,147 +65,205 @@ const char dsep = '\\';
 const char dsep = '/';
 #endif
 
+namespace Default {
+
 // general settings
-#define DEFAULT_LANGUAGE "english"
+const char language[] = "english";
 
 // video settings
-#define DEFAULT_RESOLUTION	vec2i(900, 600)
-#define DEFAULT_FONT		"arial"
+const vec2i resolution = vec2i(900, 600);
+const char font[] = "arial";
+
+// window
+const vec2i windowPos(SDL_WINDOWPOS_UNDEFINED);
+const uint32 windowFlags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN;
+const uint32 rendererFlags = SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED;
 
 // colors
-#define DEFAULT_COLOR_BACKGROUND	vec4c(10, 10, 10, 255)
-#define DEFAULT_COLOR_RECTANGLE		vec4c(90, 90, 90, 255)
-#define DEFAULT_COLOR_HIGHLIGHTED	vec4c(120, 120, 120, 255)
-#define DEFAULT_COLOR_DARKENED		vec4c(60, 60, 60, 255)
-#define DEFAULT_COLOR_TEXT			vec4c(210, 210, 210, 255)
-#define POPUP_BGCOLOR_DIM			vec4c(2, 2, 2, 1)
+const vec4c colorBackground(10, 10, 10, 255);
+const vec4c colorRectangle(90, 90, 90, 255);
+const vec4c colorHighlighted(120, 120, 120, 255);
+const vec4c colorDarkened(60, 60, 60, 255);
+const vec4c colorText(210, 210, 210, 255);
+const vec4c colorPopupDim(2, 2, 2, 1);
 
 // audio settings
-#define DEFAULT_MUSIC_VOL  128
-#define DEFAULT_SOUND_VOL  0
-#define DEFAULT_SONG_DELAY 0.5f
+const int volumeMusic = 128;
+const int volumeSound = 0;
+const int songDelay = 0.5f;
 
 // controls settings
-#define DEFAULT_SCROLL_SPEED vec2f(4.f, 8.f)
-#define DEFAULT_DEADZONE	 256
+const vec2f scrollSpeed(4.f, 8.f);
+const int16 controllerDeadzone = 256;
 
 // shortcut names
-#define SHORTCUT_OK				"ok"
-#define SHORTCUT_BACK			"back"
-#define SHORTCUT_ZOOM_IN		"zoom_in"
-#define SHORTCUT_ZOOM_OUT		"zoom_out"
-#define SHORTCUT_ZOOM_RESET		"zoom_reset"
-#define SHORTCUT_CENTER_VIEW	"center_view"
-#define SHORTCUT_FAST			"fast"
-#define SHORTCUT_SLOW			"slow"
-#define SHORTCUT_PLAY_PAUSE		"play_pause"
-#define SHORTCUT_FULLSCREEN		"fullscreen"
-#define SHORTCUT_NEXT_DIR		"next_dir"
-#define SHORTCUT_PREV_DIR		"prev_dir"
-#define SHORTCUT_NEXT_SONG		"next_song"
-#define SHORTCUT_PREV_SONG		"prev_song"
-#define SHORTCUT_VOLUME_UP		"volume_up"
-#define SHORTCUT_VOLUME_DOWN	"volume_down"
-#define SHORTCUT_PAGE_UP		"page_up"
-#define SHORTCUT_PAGE_DOWN		"page_down"
-#define SHORTCUT_UP				"up"
-#define SHORTCUT_DOWN			"down"
-#define SHORTCUT_RIGHT			"right"
-#define SHORTCUT_LEFT			"left"
-#define SHORTCUT_CURSOR_UP		"cursor_up"
-#define SHORTCUT_CURSOR_DOWN	"cursor_down"
-#define SHORTCUT_CURSOR_RIGHT	"cursor_right"
-#define SHORTCUT_CURSOR_LEFT	"cursor_left"
+const char shortcutOk[] = "ok";
+const char shortcutBack[] = "back";
+const char shortcutZoomIn[] = "zoom_in";
+const char shortcutZoomOut[] = "zoom_out";
+const char shortcutZoomReset[] = "zoom_reset";
+const char shortcutCenterView[] = "center_view";
+const char shortcutFast[] = "fast";
+const char shortcutSlow[] = "slow";
+const char shortcutPlayPause[] = "play_pause";
+const char shortcutFullscreen[] = "fullscreen";
+const char shortcutNextDir[] = "next_dir";
+const char shortcutPrevDir[] = "prev_dir";
+const char shortcutNextSong[] = "next_song";
+const char shortcutPrevSong[] = "prev_song";
+const char shortcutVolumeUp[] = "volume_up";
+const char shortcutVolumeDown[] = "volume_down";
+const char shortcutPageUp[] = "page_up";
+const char shortcutPageDown[] = "page_down";
+const char shortcutUp[] = "up";
+const char shortcutDown[] = "down";
+const char shortcutRight[] = "right";
+const char shortcutLeft[] = "left";
 
 // key bindings
-#define DEFAULT_KEY_OK				SDL_SCANCODE_RETURN
-#define DEFAULT_KEY_BACK			SDL_SCANCODE_ESCAPE
-#define DEFAULT_KEY_ZOOM_IN			SDL_SCANCODE_E
-#define DEFAULT_KEY_ZOOM_OUT		SDL_SCANCODE_Q
-#define DEFAULT_KEY_ZOOM_RESET		SDL_SCANCODE_R
-#define DEFAULT_KEY_CENTER_VIEW		SDL_SCANCODE_C
-#define DEFAULT_KEY_FAST			SDL_SCANCODE_LSHIFT
-#define DEFAULT_KEY_SLOW			SDL_SCANCODE_LALT
-#define DEFAULT_KEY_PLAY_PAUSE		SDL_SCANCODE_SPACE
-#define DEFAULT_KEY_FULLSCREEN		SDL_SCANCODE_L
+const SDL_Scancode keyOk = SDL_SCANCODE_RETURN;
+const SDL_Scancode keyBack = SDL_SCANCODE_ESCAPE;
+const SDL_Scancode keyZoomIn = SDL_SCANCODE_E;
+const SDL_Scancode keyZoomOut = SDL_SCANCODE_Q;
+const SDL_Scancode keyZoomReset = SDL_SCANCODE_R;
+const SDL_Scancode keyCenterView = SDL_SCANCODE_C;
+const SDL_Scancode keyFast = SDL_SCANCODE_LSHIFT;
+const SDL_Scancode keySlow = SDL_SCANCODE_LALT;
+const SDL_Scancode keyPlayPause = SDL_SCANCODE_SPACE;
+const SDL_Scancode keyFullscreen = SDL_SCANCODE_L;
 
-#define DEFAULT_KEY_NEXT_DIR		SDL_SCANCODE_P
-#define DEFAULT_KEY_PREV_DIR		SDL_SCANCODE_O
+const SDL_Scancode keyNextDir = SDL_SCANCODE_P;
+const SDL_Scancode keyPrevDir = SDL_SCANCODE_O;
 
-#define DEFAULT_KEY_NEXT_SONG		SDL_SCANCODE_D
-#define DEFAULT_KEY_PREV_SONG		SDL_SCANCODE_A
-#define DEFAULT_KEY_VOLUME_UP		SDL_SCANCODE_W
-#define DEFAULT_KEY_VOLUME_DOWN		SDL_SCANCODE_S
+const SDL_Scancode keyNextSong = SDL_SCANCODE_D;
+const SDL_Scancode keyPrevSong = SDL_SCANCODE_A;
+const SDL_Scancode keyVolumeUp = SDL_SCANCODE_W;
+const SDL_Scancode keyVolumeDown = SDL_SCANCODE_S;
 
-#define DEFAULT_KEY_PAGE_UP			SDL_SCANCODE_PAGEUP
-#define DEFAULT_KEY_PAGE_DOWN		SDL_SCANCODE_PAGEDOWN
-#define DEFAULT_KEY_UP				SDL_SCANCODE_UP
-#define DEFAULT_KEY_DOWN			SDL_SCANCODE_DOWN
-#define DEFAULT_KEY_RIGHT			SDL_SCANCODE_RIGHT
-#define DEFAULT_KEY_LEFT			SDL_SCANCODE_LEFT
+const SDL_Scancode keyPageUp = SDL_SCANCODE_PAGEUP;
+const SDL_Scancode keyPageDown = SDL_SCANCODE_PAGEDOWN;
+const SDL_Scancode keyUp = SDL_SCANCODE_UP;
+const SDL_Scancode keyDown = SDL_SCANCODE_DOWN;
+const SDL_Scancode keyRight = SDL_SCANCODE_RIGHT;
+const SDL_Scancode keyLeft = SDL_SCANCODE_LEFT;
 
 // joystick bindings
-#define DEFAULT_JBUTTON_OK			2
-#define DEFAULT_JBUTTON_BACK		1
-#define DEFAULT_JBUTTON_ZOOM_IN		5
-#define DEFAULT_JBUTTON_ZOOM_OUT	4
-#define DEFAULT_JBUTTON_ZOOM_RESET	11
-#define DEFAULT_JBUTTON_CENTER_VIEW	10
-#define DEFAULT_JBUTTON_FAST		0
-#define DEFAULT_JBUTTON_SLOW		3
-#define DEFAULT_JBUTTON_PLAY_PAUSE	9
-#define DEFAULT_JBUTTON_FULLSCREEN	8
+const uint8 jbuttonOk = 2;
+const uint8 jbuttonBack = 1;
+const uint8 jbuttonZoomIn = 5;
+const uint8 jbuttonZoomOut = 4;
+const uint8 jbuttonZoomReset = 11;
+const uint8 jbuttonCenterView = 10;
+const uint8 jbuttonFast = 0;
+const uint8 jbuttonSlow = 3;
+const uint8 jbuttonPlayPause = 9;
+const uint8 jbuttonFullscreen = 8;
 
-#define DEFAULT_JBUTTON_NEXT_DIR	7
-#define DEFAULT_JBUTTON_PREV_DIR	6
+const uint8 jbuttonNextDir = 7;
+const uint8 jbuttonPrevDir = 6;
 
-#define DEFAULT_JHAT_DPAD_RIGHT		SDL_HAT_RIGHT
-#define DEFAULT_JHAT_DPAD_LEFT		SDL_HAT_LEFT
-#define DEFAULT_JHAT_DPAD_UP		SDL_HAT_UP
-#define DEFAULT_JHAT_DPAD_DOWN		SDL_HAT_DOWN
+const uint8 jhatDpadRight = SDL_HAT_RIGHT;
+const uint8 jhatDpadLeft = SDL_HAT_LEFT;
+const uint8 jhatDpadUp = SDL_HAT_UP;
+const uint8 jhatDpadDown = SDL_HAT_DOWN;
 
-#define DEFAULT_JAXIS_VERTICAL		1
-#define DEFAULT_JAXIS_HORIZONTAL	0
-#define DEFAULT_JAXIS_CURSOR_VERT	3
-#define DEFAULT_JAXIS_CURSOR_HORI	2
+const uint8 jaxisVertical = 1;
+const uint8 jaxisHorizontal = 0;
 
 // gamepad bindings
-#define DEFAULT_GBUTTON_OK			SDL_CONTROLLER_BUTTON_A
-#define DEFAULT_GBUTTON_BACK		SDL_CONTROLLER_BUTTON_B
-#define DEFAULT_GBUTTON_ZOOM_IN		SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
-#define DEFAULT_GBUTTON_ZOOM_OUT	SDL_CONTROLLER_BUTTON_LEFTSHOULDER
-#define DEFAULT_GBUTTON_ZOOM_RESET	SDL_CONTROLLER_BUTTON_RIGHTSTICK
-#define DEFAULT_GBUTTON_CENTER_VIEW	SDL_CONTROLLER_BUTTON_LEFTSTICK
-#define DEFAULT_GBUTTON_FAST		SDL_CONTROLLER_BUTTON_Y
-#define DEFAULT_GBUTTON_SLOW		SDL_CONTROLLER_BUTTON_X
-#define DEFAULT_GBUTTON_PLAY_PAUSE	SDL_CONTROLLER_BUTTON_START
-#define DEFAULT_GBUTTON_FULLSCREEN	SDL_CONTROLLER_BUTTON_BACK
+const SDL_GameControllerButton gbuttonOk = SDL_CONTROLLER_BUTTON_A;
+const SDL_GameControllerButton gbuttonBack = SDL_CONTROLLER_BUTTON_B;
+const SDL_GameControllerButton gbuttonZoomIn = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
+const SDL_GameControllerButton gbuttonZoomOut = SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
+const SDL_GameControllerButton gbuttonZoomReset = SDL_CONTROLLER_BUTTON_RIGHTSTICK;
+const SDL_GameControllerButton gbuttonCenterView = SDL_CONTROLLER_BUTTON_LEFTSTICK;
+const SDL_GameControllerButton gbuttonFast = SDL_CONTROLLER_BUTTON_Y;
+const SDL_GameControllerButton gbuttonSlow = SDL_CONTROLLER_BUTTON_X;
+const SDL_GameControllerButton gbuttonPlayPause = SDL_CONTROLLER_BUTTON_START;
+const SDL_GameControllerButton gbuttonFullscreen = SDL_CONTROLLER_BUTTON_BACK;
 
-#define DEFAULT_GAXIS_NEXT_DIR		SDL_CONTROLLER_AXIS_TRIGGERRIGHT
-#define DEFAULT_GAXIS_PREV_DIR		SDL_CONTROLLER_AXIS_TRIGGERLEFT
+const SDL_GameControllerAxis gaxisNextDir = SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
+const SDL_GameControllerAxis gaxisPrevDir = SDL_CONTROLLER_AXIS_TRIGGERLEFT;
 
-#define DEFAULT_GBUTTON_DPAD_RIGHT	SDL_CONTROLLER_BUTTON_DPAD_RIGHT
-#define DEFAULT_GBUTTON_DPAD_LEFT	SDL_CONTROLLER_BUTTON_DPAD_LEFT
-#define DEFAULT_GBUTTON_DPAD_UP		SDL_CONTROLLER_BUTTON_DPAD_UP
-#define DEFAULT_GBUTTON_DPAD_DOWN	SDL_CONTROLLER_BUTTON_DPAD_DOWN
+const SDL_GameControllerButton gbuttonDpadRight = SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
+const SDL_GameControllerButton gbuttonDpadLeft = SDL_CONTROLLER_BUTTON_DPAD_LEFT;
+const SDL_GameControllerButton gbuttonDpadUp = SDL_CONTROLLER_BUTTON_DPAD_UP;
+const SDL_GameControllerButton gbuttonDpadDown = SDL_CONTROLLER_BUTTON_DPAD_DOWN;
 
-#define DEFAULT_GAXIS_VERTICAL		SDL_CONTROLLER_AXIS_LEFTY
-#define DEFAULT_GAXIS_HORIZONTAL	SDL_CONTROLLER_AXIS_LEFTX
-#define DEFAULT_GAXIS_CURSOR_VERT	SDL_CONTROLLER_AXIS_RIGHTY
-#define DEFAULT_GAXIS_CURSOR_HORI	SDL_CONTROLLER_AXIS_RIGHTX
+const SDL_GameControllerAxis gaxisVertical = SDL_CONTROLLER_AXIS_LEFTY;
+const SDL_GameControllerAxis gaxisHorizontal = SDL_CONTROLLER_AXIS_LEFTX;
 
 // other controller bindings related stuff
-#define DEFAULT_JHAT_ID			0
-#define DEFAULT_AXIS_DIR_UP		false
-#define DEFAULT_AXIS_DIR_DOWN	true
-#define DEFAULT_AXIS_DIR_RIGHT	true
-#define DEFAULT_AXIS_DIR_LEFT	false
+const uint8 jhatID = 0;
+const bool axisDirUp = false;
+const bool axisDirDown = true;
+const bool axisDirRight = true;
+const bool axisDirLeft = false;
 
-// program constants
+// objects' properties
+const int itemSpacing = 5;
+const int itemHeight = 30;
+const int scrollBarWidth = 10;
+const float rbMenuHideTimeout = 1.f;
+const int checkboxSpacing = 5;
+const int caretWidth = 4;
+
+// scroll area related constants
+const int scrollFactorWheel = 10;
 const float normalScrollFactor = 100.f;
-const float fastScrollFactor = normalScrollFactor * 4.f;
-const float slowScrollFactor = normalScrollFactor / 2.f;
-const float normalMDragFactor = 300.f;
-const float fastMDragFactor = normalMDragFactor * 4.f;
-const float slowMDragFactor = normalMDragFactor / 4.f;
+const float scrollFactorFast = normalScrollFactor * 4.f;
+const float scrollFactorSlow = normalScrollFactor / 2.f;
+const float scrollThrottle = 10.f;
 const float zoomFactor = 1.2f;
+
+// files and directories
+const char cueNameBack[] = "back";
+const char cueNameClick[] = "click";
+const char cueNameError[] = "error";
+const char cueNameOpen[] = "open";
+const char fileIcon[] = "icon.ico";
+const char fileThemes[] = "themes.ini";
+const char fileGeneralSettings[] = "general.ini";
+const char fileVideoSettings[] = "video.ini";
+const char fileAudioSettings[] = "audio.ini";
+const char fileControlsSettings[] = "controls.ini";
+const char dirLibrary[] = "library";
+const char dirPlaylists[] = "playlists";
+const char dirLanguages[] = "languages";
+const char dirSounds[] = "sounds";
+const char dirTextures[] = "textures";
+const int dirExecMaxBufferLength = 2048;
+
+// INI keywords
+const char iniKeywordBook[] = "book";
+const char iniKeywordSong[] = "song";
+
+const char iniKeywordLanguage[] = "language";
+const char iniKeywordLibrary[] = "library";
+const char iniKeywordPlaylists[] = "playlists";
+
+const char iniKeywordFont[] = "font";
+const char iniKeywordRenderer[] = "renderer";
+const char iniKeywordMaximized[] = "maximized";
+const char iniKeywordFullscreen[] = "fullscreen";
+const char iniKeywordResolution[] = "resolution";
+const char iniKeywordTheme[] = "theme";
+
+const char iniKeywordVolMusic[] = "vol_music";
+const char iniKeywordVolSound[] = "vol_sound";
+const char iniKeywordSongDelay[] = "song_delay";
+
+const char iniKeywordScrollSpeed[] = "scroll_speed";
+const char iniKeywordDeadzone[] = "deadzone";
+const char iniKeywordShortcut[] = "shortcut";
+
+// other random crap
+const char titleDefault[] = "VertiRead";
+const char titleExtra[] = "vertiread";
+const float clickThreshold = 8.f;
+const float textHeightScale = 0.85f;
+const int textOffset = 5;
+const int lineEditOffset = 20;
+const uint32 eventCheckTimeout = 50;
+
+}

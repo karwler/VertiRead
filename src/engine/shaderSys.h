@@ -21,11 +21,11 @@ private:
 	void DrawObject(TileBox* obj);
 	void DrawObject(ReaderBox* obj);
 
-	void PassDrawItem(size_t id, ScrollAreaX1* parent, const SDL_Rect& rect, const SDL_Rect& crop={ 0, 0, 0, 0 });
-	void DrawItem(Checkbox* item, ScrollAreaX1* parent, const SDL_Rect& rect, const SDL_Rect& crop);
-	void DrawItem(Switchbox* item, ScrollAreaX1* parent, const SDL_Rect& rect, const SDL_Rect& crop);
+	void PassDrawItem(size_t id, ScrollAreaX1* parent, const SDL_Rect& rect, const SDL_Rect& crop={0, 0, 0, 0});
+	void DrawItem(Checkbox* item, const SDL_Rect& rect, const SDL_Rect& crop);
+	void DrawItem(Switchbox* item, const SDL_Rect& rect, const SDL_Rect& crop);
 	void DrawItem(LineEdit* item, ScrollAreaX1* parent, const SDL_Rect& rect, SDL_Rect crop);
-	void DrawItem(KeyGetter* item, ScrollAreaX1* parent, const SDL_Rect& rect, const SDL_Rect& crop);
+	void DrawItem(KeyGetter* item, const SDL_Rect& rect, const SDL_Rect& crop);
 
 	void DrawRect(const SDL_Rect& rect, EColor color);
 	void DrawImage(const Image& img, const SDL_Rect& crop={0, 0, 0, 0});

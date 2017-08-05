@@ -4,12 +4,11 @@
 #include <codecvt>
 
 bool strcmpCI(const string& strl, const string& strr) {
-	if (strl.length() != strr.length())
-		return false;
-
-	for (size_t i=0; i!=strl.length(); i++)
+	size_t i = 0;
+	do {
 		if (tolower(strl[i]) != tolower(strr[i]))
 			return false;
+	} while (strl[i++] != '\0');
 	return true;
 }
 
@@ -206,7 +205,7 @@ SDL_Rect getCrop(SDL_Rect item, SDL_Rect frame) {
 }
 
 void textCropRight(SDL_Rect& crop, int textLen, int rectWidth) {
-	crop.w = (textLen+5 > rectWidth) ? textLen - rectWidth +10 : 0;
+	crop.w = (textLen + Default::textOffset > rectWidth) ? textLen - rectWidth + Default::textOffset*2 : 0;
 }
 
 SDL_Rect cropRect(const SDL_Rect& rect, const SDL_Rect& crop) {
@@ -232,7 +231,7 @@ string getRendererName(int id) {
 vector<string> getAvailibleRenderers() {
 	vector<string> renderers(SDL_GetNumRenderDrivers());
 	for (int i=0; i!=renderers.size(); i++)
-		renderers.push_back(getRendererName(i));
+		renderers[i] = getRendererName(i);
 	return renderers;
 }
 

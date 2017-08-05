@@ -4,7 +4,7 @@
 
 class ScrollArea : public Object {
 public:
-	ScrollArea(const Object& BASE=Object(), int SPC=5, int BARW=10);
+	ScrollArea(const Object& BASE=Object());
 	virtual ~ScrollArea();
 	virtual ScrollArea* Clone() const = 0;
 
@@ -12,8 +12,10 @@ public:
 	void DragList(int ypos);
 	void ScrollList(int ymov);
 
-	virtual void SetValues();	// requires listH to be set
-	int BarW() const;			// returns 0 if slider isn't needed
+	virtual void Tick(float dSec);
+	virtual void SetValues();		// requires listH to be set
+	void SetMotion(float val);
+	int BarW() const;				// returns 0 if slider isn't needed
 	int ListY() const;
 	virtual int ListH() const;
 	virtual float Zoom() const;
@@ -25,45 +27,38 @@ public:
 	SDL_Rect Slider() const;
 	virtual btsel SelectedItem() const;	// this class doesn't contain any items, therefore this function returns a false btsel
 	virtual vec2t VisibleItems() const;	// this class doesn't contain any items, therefore this function returns a false interval ([1, 0])
-
-	ListItem* selectedItem;
 	
-	const int spacing;
-	int diffSliderMouseY;
+	ListItem* selectedItem;
+	int diffSliderMouseY;	// space between slider and mouse position
 protected:
-	const int barW;
-	int listY;
-	int sliderH;
-	int listH, listL;
+	int listY;				// position of the list
+	int sliderH;			// slider height
+	int listH, listL;		// list height, max list position
+	float motion;			// how much the list scrolls over time ()
 
-	void CheckListY();			// check if listY is out of limits and correct if so
+	void CheckListY();	// check if listY is out of limits and correct if so
 };
 
 class ScrollAreaX1 : public ScrollArea {
 public:
-	ScrollAreaX1(const Object& BASE=Object(), int IH=30, int BARW=10);
+	ScrollAreaX1(const Object& BASE=Object());
 	virtual ~ScrollAreaX1();
 	virtual ScrollAreaX1* Clone() const = 0;
-
-	int ItemH() const;
 
 	virtual ListItem* Item(size_t id) const = 0;
 	virtual SDL_Rect ItemRect(size_t id) const = 0;
 
 protected:
-	int itemH;
-
 	void SetValuesX1(size_t numRows);
 };
 
 class ListBox : public ScrollAreaX1 {
 public:
-	ListBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS={}, int IH=30, int BARW=10);
+	ListBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS={});
 	virtual ~ListBox();
 	virtual ListBox* Clone() const;
 
 	virtual void SetValues();
-
 	const vector<ListItem*>& Items() const;
 	void Items(const vector<ListItem*>& objects);
 	virtual ListItem* Item(size_t id) const;
@@ -78,12 +73,11 @@ private:
 
 class TableBox : public ScrollAreaX1 {
 public:
-	TableBox(const Object& BASE=Object(), const grid2<ListItem*>& ITMS=grid2<ListItem*>(), const vector<float>& IWS={}, int IH=30, int BARW=10);
+	TableBox(const Object& BASE=Object(), const grid2<ListItem*>& ITMS=grid2<ListItem*>(), const vector<float>& IWS={});
 	virtual ~TableBox();
 	virtual TableBox* Clone() const;
 
 	virtual void SetValues();
-
 	const grid2<ListItem*>& Items() const;
 	void Items(const grid2<ListItem*>& objects);
 	virtual ListItem* Item(size_t id) const;
@@ -99,7 +93,7 @@ private:
 
 class TileBox : public ScrollArea {
 public:
-	TileBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS={}, const vec2i& TS=vec2i(50, 50), int BARW=10);
+	TileBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS={}, const vec2i& TS=vec2i(50, 50));
 	virtual ~TileBox();
 	virtual TileBox* Clone() const;
 
@@ -123,12 +117,11 @@ private:
 
 class ReaderBox : public ScrollArea {
 public:
-	ReaderBox(const Object& BASE=Object(0, 0, 100, FIX_ANC | FIX_END, EColor::background), const vector<Texture*>& PICS={}, const string& CURPIC="", float ZOOM=1.f);
+	ReaderBox(const Object& BASE=Object(), const vector<Texture*>& PICS={}, const string& CURPIC="", float ZOOM=1.f);
 	virtual ~ReaderBox();
 	virtual ReaderBox* Clone() const;
 
-	virtual void SetValues();
-	void Tick(float dSec);
+	virtual void Tick(float dSec);
 	void OnMouseMove(const vec2i& mPos);
 
 	void DragListX(int xpos);
@@ -137,6 +130,7 @@ public:
 	void MultZoom(float zfactor);
 	void DivZoom(float zfactor);
 
+	virtual void SetValues();
 	int ListX() const;
 	int ListW() const;
 	virtual int ListH() const;
@@ -156,9 +150,7 @@ public:
 	Image getImage(size_t id, SDL_Rect& crop) const;
 	virtual vec2t VisibleItems() const;
 
-	bool sliderFocused;
 private:
-	const float hideDelay;
 	bool mouseHideable;		// aka mouse not over slider, list or player
 	float mouseTimer, sliderTimer, listTimer, playerTimer;
 	float zoom;

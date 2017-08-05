@@ -7,7 +7,7 @@ public:
 	Capturer(ScrollAreaX1* SA, const string& LBL="");
 	virtual ~Capturer();
 
-	virtual void OnClick(EClick clickType);
+	virtual void OnClick(ClickType click);
 	virtual void OnKeypress(SDL_Scancode key) = 0;
 	virtual void OnJButton(uint8 jbutton) = 0;
 	virtual void OnJHat(uint8 jhat, uint8 value) = 0;
@@ -23,7 +23,7 @@ public:
 	LineEdit(ScrollAreaX1* SA, const string& LBL="", const string& TXT="", ETextType TYPE=ETextType::text, void (Program::*KCALL)(const string&)=nullptr, void (Program::*CCALL)()=nullptr);
 	virtual ~LineEdit();
 
-	virtual void OnClick(EClick clickType);
+	virtual void OnClick(ClickType click);
 	virtual void OnKeypress(SDL_Scancode key);
 	virtual void OnJButton(uint8 jbutton);
 	virtual void OnJHat(uint8 jhat, uint8 value);
