@@ -96,9 +96,9 @@ string Browser::goNext() {
 #else
 	string parent = parentPath(curDir);
 	vector<string> dirs = Filer::listDir(parent, FTYPE_DIR);
-	for (vector<string>::const_iterator it=dirs.begin(); it!=dirs.vend(); it++)
+	for (vector<string>::const_iterator it=dirs.begin(); it!=dirs.end(); it++)
 		if (parent+*it+dsep == curDir) {
-			curDir = (it == dirs.vend()-1) ? parent + *dirs.begin() + dsep : parent + *++it + dsep;
+			curDir = (it == dirs.end()-1) ? parent + *dirs.begin() + dsep : parent + *++it + dsep;
 			break;
 		}
 #endif
@@ -129,9 +129,9 @@ string Browser::goPrev() {
 #else
 	string parent = parentPath(curDir);
 	vector<string> dirs = Filer::listDir(parent, FTYPE_DIR);
-	for (vector<string>::const_iterator it=dirs.begin(); it!=dirs.vend(); it++)
+	for (vector<string>::const_iterator it=dirs.begin(); it!=dirs.end(); it++)
 		if (parent+*it+dsep == curDir) {
-			curDir = (it == dirs.begin()) ? parent + *(dirs.vend()-1) + dsep : parent + *--it + dsep;
+			curDir = (it == dirs.begin()) ? parent + *(dirs.end()-1) + dsep : parent + *--it + dsep;
 			break;
 		}
 #endif

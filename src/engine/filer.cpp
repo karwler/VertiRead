@@ -533,8 +533,8 @@ vector<string> Filer::listDirRecursively(const string& dir, size_t offs) {
 
 			if (data->d_type == DT_DIR) {
 				vector<string> newEs = listDirRecursively(dir+data->d_name+dsep, offs);
-				std::sort(entries.begin(), entries.vend());
-				entries.insert(entries.vend(), newEs.begin(), newEs.vend());
+				std::sort(entries.begin(), entries.end());
+				entries.insert(entries.end(), newEs.begin(), newEs.end());
 			} else
 				entries.push_back(dir.substr(offs) + data->d_name);
 

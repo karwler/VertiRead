@@ -246,7 +246,7 @@ void Program::eventItemDoubleclicked(ListItem* item) {
 		if (browser->getCurDir() == "\\")
 			eventOpenSongBrowser(item->label+dsep);
 #else
-		if (browser->getCurDir() == "/" && Filer::fileType(dsep + item->label) == EFileType::dir)
+		if (browser->getCurDir() == "/" && Filer::fileType(dsep + item->label) == FTYPE_DIR)
 			eventOpenSongBrowser(item->label);
 #endif
 		else if (Filer::fileType(browser->getCurDir() + item->label) == FTYPE_DIR)
