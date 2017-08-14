@@ -39,26 +39,29 @@ enum class EPopupType : uint8 {
 
 // image related stuff
 
+// texture surface data with path to the initial file
 class Texture {
 public:
 	Texture(const string& FILE="");
 	Texture(const string& FILE, SDL_Surface* SURF);
 
-	string File() const;
-	vec2i Res() const;
-	void LoadSurface(const string& path);
-	void Clear();
+	void loadSurface(const string& path);
+	void clear();
+
+	string getFile() const;
+	vec2i resolution() const;
 
 	SDL_Surface* surface;
 private:
 	string file;
 };
 
+// texture with position and custom size
 struct Image {
 	Image(const vec2i& POS=0, Texture* TEX=nullptr, const vec2i& SIZ=0);
 	Image(const vec2i& POS, const string& TEX, const vec2i& SIZ=0);
 
-	SDL_Rect getRect() const;
+	SDL_Rect rect() const;
 
 	vec2i pos, size;
 	Texture* texture;
@@ -66,22 +69,24 @@ struct Image {
 
 // text related stuff
 
+// loads different font sizes from one family
 class FontSet {
 public:
 	bool Initialize(const string& FILE="");
-	void Clear();
+	void clear();
 
-	bool CanRun() const;
-	TTF_Font* Get(int size);
-	vec2i TextSize(const string& text, int size);
+	bool canRun() const;
+	TTF_Font* get(int size);
+	vec2i textSize(const string& text, int size);
 
 private:
 	string file;
 	map<int, TTF_Font*> fonts;
 
-	TTF_Font* AddSize(int size);
+	TTF_Font* addSize(int size);
 };
 
+// a string with position, size and color
 struct Text {
 	Text(const string& TXT="", const vec2i& POS=0, int H=50, EColor CLR=EColor::text);
 
@@ -90,33 +95,34 @@ struct Text {
 	EColor color;
 	string text;
 
-	void SetPosToRect(const SDL_Rect& rect, ETextAlign align);
+	void setPosToRect(const SDL_Rect& rect, ETextAlign align);
 	vec2i size() const;
 };
 
+// for editing text with caret
 class TextEdit {
 public:
 	TextEdit(const string& TXT="", ETextType TYPE=ETextType::text, size_t CPOS=0);
 
-	size_t CursorPos() const;
-	void SetCursor(size_t pos);
-	void MoveCursor(bool right, bool loop=false);
+	size_t getCaretPos() const;
+	void setCaretPos(size_t pos);
+	void moveCaret(bool right, bool loop=false);
 
-	string Text() const;
-	void Text(const string& str, bool resetCpos=true);
-	void Add(const string& str);
-	void Delete(bool current);
+	string getText() const;
+	void setText(const string& str, bool resetCpos=true);
+	void addText(const string& str);
+	void delChar(bool current);
 
 private:
-	size_t cpos;
+	size_t cpos;	// caret position
 	ETextType type;
 	string text;
 
-	void CheckCaret();
-	void CheckText();
+	void checkCaret();	// if caret is out of range, set it to max position
+	void checkText();	// check if text is of the type specified. if not, remove not needed chars
 
-	void CleanIntString(string& str);
-	void CleanFloatString(string& str);
+	void cleanIntString(string& str);
+	void cleanFloatString(string& str);
 };
 
 // input related stuff
@@ -131,7 +137,7 @@ struct ClickType {
 struct ClickStamp {
 	ClickStamp(Object* OBJ=nullptr, uint8 BUT=0, const vec2i& POS=0);
 
-	void Reset();
+	void reset();
 
 	Object* object;
 	uint8 button;
@@ -141,11 +147,11 @@ struct ClickStamp {
 struct Controller {
 	Controller();
 
-	SDL_Joystick* joystick;
-	SDL_GameController* gamepad;
+	SDL_Joystick* joystick;			// for direct input
+	SDL_GameController* gamepad;	// for xinput
 
-	bool Open(int id);
-	void Close();
+	bool open(int id);
+	void close();
 };
 
 class Shortcut {
@@ -165,38 +171,38 @@ public:
 	Shortcut();
 	virtual ~Shortcut();
 
-	SDL_Scancode Key() const;
-	bool KeyAssigned() const;
-	void ClearAsgKey();
-	void Key(SDL_Scancode KEY);
+	SDL_Scancode getKey() const;
+	bool keyAssigned() const;
+	void clearAsgKey();
+	void setKey(SDL_Scancode KEY);
 
-	uint8 JctID() const;
-	bool JctAssigned() const;
-	void ClearAsgJct();
+	uint8 getJctID() const;
+	bool jctAssigned() const;
+	void clearAsgJct();
 
-	bool JButtonAssigned() const;
-	void JButton(uint8 BUT);
+	bool jbuttonAssigned() const;
+	void setJbutton(uint8 BUT);
 
-	bool JAxisAssigned() const;
-	bool JPosAxisAssigned() const;
-	bool JNegAxisAssigned() const;
-	void JAxis(uint8 AXIS, bool positive);
+	bool jaxisAssigned() const;
+	bool jposAxisAssigned() const;
+	bool jnegAxisAssigned() const;
+	void setJaxis(uint8 AXIS, bool positive);
 
-	uint8 JHatVal() const;
-	bool JHatAssigned() const;
-	void JHat(uint8 HAT, uint8 VAL);
+	uint8 getJhatVal() const;
+	bool jhatAssigned() const;
+	void setJhat(uint8 HAT, uint8 VAL);
 
-	uint8 GctID() const;
-	bool GctAssigned() const;
-	void ClearAsgGct();
+	uint8 getGctID() const;
+	bool gctAssigned() const;
+	void clearAsgGct();
 
-	bool GButtonAssigned() const;
-	void GButton(uint8 BUT);
+	bool gbuttonAssigned() const;
+	void gbutton(uint8 BUT);
 
-	bool GAxisAssigned() const;
-	bool GPosAxisAssigned() const;
-	bool GNegAxisAssigned() const;
-	void GAxis(uint8 AXIS, bool positive);
+	bool gaxisAssigned() const;
+	bool gposAxisAssigned() const;
+	bool gnegAxisAssigned() const;
+	void setGaxis(uint8 AXIS, bool positive);
 
 private:
 	EAssgnment asg;		// stores data for checking whether key and/or button/axis are assigned
@@ -255,7 +261,7 @@ struct Exception {
 	string message;
 	int retval;
 
-	void Display();
+	void printMessage();
 };
 
 template <typename T>

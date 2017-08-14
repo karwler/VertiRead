@@ -7,36 +7,36 @@ class GeneralSettings {
 public:
 	GeneralSettings(const string& LANG=Default::language, const string& LIB="", const string& PST="");
 
-	string Lang() const;
-	void Lang(const string& language);
+	string getLang() const;
+	void setLang(const string& language);
 
-	string DirLib() const;
-	string LibraryPath() const;		// returns full path to dirLib
-	void DirLib(const string& dir);
+	string getDirLib() const;
+	string libraryPath() const;		// returns full path to dirLib
+	void setDirLib(const string& dir);
 
-	string DirPlist() const;
-	string PlaylistPath() const;	// same as above
-	void DirPlist(const string& dir);
+	string getDirPlist() const;
+	string playlistPath() const;	// same as above
+	void setDirPlist(const string& dir);
 
 private:
-	string lang;					// this one has to be all lower case
+	string lang;	// this one has to be all lower case
 	string dirLib;
 	string dirPlist;
 };
 
 class VideoSettings {
 public:
-	VideoSettings(bool MAX=false, bool FSC=false, const vec2i& RES=Default::resolution, const string& FNT=Default::font, const string& RNDR="");
+	VideoSettings(bool MAX=Default::maximized, bool FSC=Default::fullscreen, const vec2i& RES=Default::resolution, const string& FNT=Default::font, const string& RNDR="");
 
-	string Font() const;
-	string Fontpath() const;
-	void SetFont(const string& newFont);
-	void SetDefaultTheme();
+	string getFont() const;
+	string getFontpath() const;
+	void setFont(const string& newFont);
 	
-	static map<EColor, vec4c> GetDefaultColors();
-	static vec4c GetDefaultColor(EColor color);
+	void setDefaultTheme();
+	static map<EColor, vec4c> getDefaultColors();
+	static vec4c getDefaultColor(EColor color);
 
-	int GetRenderDriverIndex();
+	int getRenderDriverIndex();
 
 	bool maximized, fullscreen;
 	vec2i resolution;
@@ -58,12 +58,12 @@ struct AudioSettings {
 };
 
 struct ControlsSettings {
-	ControlsSettings(const vec2f& SSP=Default::scrollSpeed, int16 DDZ=Default::controllerDeadzone, bool fillMissingBindings=true, const map<string, Shortcut*>& CTS=map<string, Shortcut*>());
+	ControlsSettings(const vec2f& SSP=Default::scrollSpeed, int16 DDZ=Default::controllerDeadzone, bool fillMissing=true, const map<string, Shortcut*>& CTS=map<string, Shortcut*>());
 
 	vec2f scrollSpeed;
 	int16 deadzone;
 	map<string, Shortcut*> shortcuts;
 
-	void FillMissingBindings();
-	static Shortcut* GetDefaultShortcut(const string& name);	// returns nullptr if none found
+	void fillMissingBindings();
+	static Shortcut* getDefaultShortcut(const string& name);	// returns nullptr if none found
 };

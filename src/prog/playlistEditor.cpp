@@ -4,22 +4,22 @@
 PlaylistEditor::PlaylistEditor(const string& PLIST, bool SS) :
 	showSongs(SS)
 {
-	LoadPlaylist(PLIST);	// if playlist couldn't be loaded, a blank playlist will be set up
+	loadPlaylist(PLIST);	// if playlist couldn't be loaded, a blank playlist will be set up
 }
 
-Playlist PlaylistEditor::getPlaylist() const {
+const Playlist& PlaylistEditor::getPlaylist() const {
 	return pList;
 }
 
-void PlaylistEditor::LoadPlaylist(const string& playlist) {
-	pList = Filer::LoadPlaylist(playlist);
+void PlaylistEditor::loadPlaylist(const string& playlist) {
+	pList = Filer::getPlaylist(playlist);
 	selected = false;
 }
 
-void PlaylistEditor::AddSong(string path) {
-	if (Filer::FileType(path) == EFileType::dir) {
+void PlaylistEditor::addSong(string path) {
+	if (Filer::fileType(path) == FTYPE_DIR) {
 		path = appendDsep(path);
-		for (string& it : Filer::ListDirRecursively(path))
+		for (string& it : Filer::listDirRecursively(path))
 			pList.songs.push_back(path+it);
 	} else
 		pList.songs.push_back(path);
@@ -27,27 +27,27 @@ void PlaylistEditor::AddSong(string path) {
 	selected = pList.songs.size()-1;
 }
 
-void PlaylistEditor::RenameSong(const string& path) {
+void PlaylistEditor::renameSong(const string& path) {
 	pList.songs[selected.id] = path;
 }
 
-void PlaylistEditor::DelSong() {
+void PlaylistEditor::delSong() {
 	if (selected.sl) {
 		pList.songs.erase(pList.songs.begin()+selected.id);
 		selected = false;
 	}
 }
 
-void PlaylistEditor::AddBook(const string& name) {
+void PlaylistEditor::addBook(const string& name) {
 	pList.books.push_back(name);
 	selected = pList.books.size()-1;
 }
 
-void PlaylistEditor::RenameBook(const string& name) {
+void PlaylistEditor::renameBook(const string& name) {
 	pList.books[selected.id] = name;
 }
 
-void PlaylistEditor::DelBook() {
+void PlaylistEditor::delBook() {
 	if (selected.sl) {
 		pList.books.erase(pList.books.begin()+selected.id);
 		selected = false;

@@ -2,36 +2,42 @@
 
 #include "utils/settings.h"
 
+// handles the assets' data and contains general settings
 class Library {
 public:
-	Library(GeneralSettings& GSET);
+	Library(const GeneralSettings& SETS=GeneralSettings());
 
-	void Initialize(string FONT);
-	void Close();
+	void init(string FONT);
+	void close();
 
-	FontSet* Fonts();
-	void LoadFont(const string& font);
+	FontSet& getFonts();
+	void loadFont(const string& font);
 
-	string getLine(const string& line, ETextCase caseChange=ETextCase::first_upper) const;
-	void LoadLanguage(const string& language);
+	string line(const string& line, ETextCase caseChange=ETextCase::first_upper) const;
+	void loadLanguage(const string& language);
 
-	Mix_Chunk* getSound(const string& name);
-	void LoadSounds();
-	void ClearSounds();
+	Mix_Chunk* sound(const string& name);
+	void loadSounds();
+	void clearSounds();
 
-	Texture* getTex(const string& name);
-	void LoadTextures();
-	void ClearTextures();
+	Texture* texture(const string& name);
+	void loadTextures();
+	void clearTextures();
 
-	vector<Texture*> Pictures();
-	void LoadPics(const vector<string>& files);
-	void ClearPics();
+	vector<Texture*> getPictures();
+	void loadPics(const vector<string>& files);
+	void clearPics();
+
+	const GeneralSettings& getSettings() const;
+	void setLibraryPath(const string& dir);
+	void setPlaylistsPath(const string& dir);
 
 private:
-	GeneralSettings& curGSets;
-	FontSet fonts;
+	GeneralSettings sets;
+
+	FontSet fonts;					// current font data)
 	map<string, string> lines;		// english, translated
-	map<string, Mix_Chunk*> sounds;	// name, path
+	map<string, Mix_Chunk*> sounds;	// name, sound data
 	map<string, Texture> texes;		// name, texture data
-	vector<Texture> pics;
+	vector<Texture> pics;			// pictures for ReaderBox
 };

@@ -5,51 +5,45 @@
 #include "prog/library.h"
 #include "prog/program.h"
 
+// handles more backend UI interactions, works with Objects (UI elements), and contains Program and Library
 class Scene {
 public:
 	Scene(const GeneralSettings& SETS=GeneralSettings());
 	~Scene();
 	
-	void SwitchMenu(const vector<Object*>& objs);
-	void ResizeMenu();
-	void Tick(float dSec);
-	void OnMouseMove(const vec2i& mPos, const vec2i& mMov);
-	void OnMouseDown(const vec2i& mPos, ClickType click);
-	void OnMouseUp(const vec2i& mPos, ClickType click);
-	void OnMouseWheel(const vec2i& wMov);
-	void OnMouseLeave();
+	void switchMenu(const vector<Object*>& objs);
+	void resizeMenu();
+	void tick(float dSec);
+	void onMouseMove(const vec2i& mPos, const vec2i& mMov);
+	void onMouseDown(const vec2i& mPos, ClickType click);
+	void onMouseUp(const vec2i& mPos, ClickType click);
+	void onMouseWheel(const vec2i& wMov);
+	void onMouseLeave();
 
-	const GeneralSettings& Settings() const;
-	void LibraryPath(const string& dir);
-	void PlaylistsPath(const string& dir);
-
-	Program* getProgram();
-	Library* getLibrary();
-	const vector<Object*>& Objects() const;
-	Object* FocusedObject();
+	Program& getProgram();
+	Library& getLibrary();
+	const vector<Object*>& getObjects() const;
+	Object* getFocObject();
 	bool isDraggingSlider(ScrollArea* obj) const;	// whether obj's slider is currently being dragged
-	ListItem* SelectedButton();						// find scroll area with selectable items and get the first selected one (returns nullptr if nothing found)
+	ListItem* selectedButton();		// find scroll area with selectable items and get the first selected one (returns nullptr if nothing found)
 
 	Popup* getPopup();
-	void SetPopup(Popup* newPopup, Capturer* capture=nullptr);
+	void setPopup(Popup* newPopup, Capturer* capture=nullptr);
 
 private:
 	Program program;
 	Library library;
-	GeneralSettings sets;
 
-	vector<Object*> objects;
-	kk::sptr<Popup> popup;
+	vector<Object*> objects;	// main objects
+	kk::sptr<Popup> popup;		// placeholder for popup and it's objects
 
-	Object* focObject;		// currently focused object (should be object over which the cursor is poistioned)
-	ClickStamp stamp;
-	bool dragSlider;		// whether a slider is currently being dragged
+	Object* focObject;	// currently focused object (should be object over which the cursor is poistioned)
+	ClickStamp stamp;	// data about last mouse click
+	bool dragSlider;	// whether a slider is currently being dragged
 
-	void ResizeObjects(vector<Object*>& objs);
+	void resizeObjects(vector<Object*>& objs);
 
-	void CheckListBoxClick(const vec2i& mPos, ListBox* obj, ClickType click);
-	void CheckTableBoxClick(const vec2i& mPos, TableBox* obj, ClickType click);
-	void CheckTileBoxClick(const vec2i& mPos, TileBox* obj, ClickType click);
-	void CheckReaderBoxClick(const vec2i& mPos, ReaderBox* obj, ClickType click);
-	void CheckReaderBoxDoubleClick(const vec2i& mPos, ReaderBox* obj);
+	void checkScrollAreaItemsClick(const vec2i& mPos, ScrollAreaItems* obj, ClickType click);
+	void checkReaderBoxClick(const vec2i& mPos, ReaderBox* obj, ClickType click);
+	void checkReaderBoxDoubleClick(const vec2i& mPos, ReaderBox* obj);
 };

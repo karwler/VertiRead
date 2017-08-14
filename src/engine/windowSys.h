@@ -1,36 +1,38 @@
 #pragma once
 
-#include "shaderSys.h"
+#include "drawSys.h"
 #include "utils/settings.h"
 
+// handles window events and contains video settings
 class WindowSys {
 public:
 	WindowSys(const VideoSettings& SETS=VideoSettings());
 	~WindowSys();
 
-	void CreateWindow();
-	void DestroyWindow();
+	void createWindow();
+	void destroyWindow();
 
-	bool ShowMouse() const;
-	void ShowMouse(bool on);
-	void WindowEvent(const SDL_WindowEvent& window);
+	bool getShowMouse() const;
+	void setShowMouse(bool on);
+	void eventWindow(const SDL_WindowEvent& window);
 
-	void SetRedrawNeeded();
-	void DrawObjects(const vector<Object*>& objects, const Popup* popup);
-	static vec2i DesktopResolution();
-	vec2i Resolution() const;
-	vec2i Position() const;
+	void setRedrawNeeded();
+	void drawObjects(const vector<Object*>& objects, const Popup* popup);
+	static vec2i displayResolution();
+	vec2i resolution() const;
+	vec2i position() const;
 
-	const VideoSettings& Settings() const;
-	void Renderer(const string& name);
-	void Fullscreen(bool on);
-	void Font(const string& font);
-	void Theme(const string& theme);
+	const VideoSettings& getSettings() const;
+	void setRenderer(const string& name);
+	void setFullscreen(bool on);
+	void setFont(const string& font);
+	void setTheme(const string& theme);
 
 private:
-	ShaderSys shaderSys;
+	DrawSys shaderSys;
 	SDL_Window* window;
-	bool redraw;
-	bool showMouse;
+
 	VideoSettings sets;
+	bool redraw;		// whether window contents need to be redrawn
+	bool showMouse;
 };

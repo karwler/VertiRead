@@ -2,59 +2,62 @@
 
 #include "types.h"
 
+// item/element for ScrollAreas
 class ListItem {
 public:
-	ListItem(const string& LBL="", ScrollArea* SA=nullptr);
+	ListItem(const string& LBL="", ScrollAreaItems* SA=nullptr);
 	virtual ~ListItem();
 	
-	virtual void OnClick(ClickType click);
+	virtual void onClick(ClickType click);
 	virtual const string& getData() const;
 	bool selectable() const;
 
 	string label;
 protected:
-	ScrollArea* parent;	// nullptr means "not selectable" (Only for this and ItemButton. Other classes derived from this one need to have a parent which has to be a ListBox.)
+	ScrollAreaItems* parent;	// nullptr means "not selectable" (Only for this and ItemButton. Other classes derived from this one need to have a parent which has to be a ListBox.)
 };
 
+// clickable item with additional optional data
 class ItemButton : public ListItem {
 public:
-	ItemButton(const string& LBL="", const string& DAT="", void (Program::*CALLB)(void*)=nullptr, ScrollArea* SA=nullptr);
+	ItemButton(const string& LBL="", const string& DAT="", void (Program::*CALL)(void*)=nullptr, ScrollAreaItems* SA=nullptr);
 	virtual ~ItemButton();
 
-	virtual void OnClick(ClickType click);
+	virtual void onClick(ClickType click);
 	virtual const string& getData() const;		// returns either label or data
-	void Data(const string& dat);
+	void setData(const string& dat);
 
 private:
-	void (Program::*callback)(void*);
-	string data;
+	void (Program::*call)(void*);
+	string data;	// additional text data that might be needed for other operations when the button is pressed (in case label isn't enough)
 };
 
+// the most basic checkbox
 class Checkbox : public ListItem {
 public:
-	Checkbox(ScrollAreaX1* SA, const string& LBL="", bool ON=false, void (Program::*CALLB)(bool)=nullptr);
+	Checkbox(ScrollAreaItems* SA, const string& LBL="", bool ON=false, void (Program::*CALL)(bool)=nullptr);
 	virtual ~Checkbox();
 
-	virtual void OnClick(ClickType click);
-	ScrollAreaX1* Parent() const;
-	bool On() const;
+	virtual void onClick(ClickType click);
+	bool getOn() const;
+	void setOn(bool ON);
 
 private:
-	void (Program::*callback)(bool);
+	void (Program::*call)(bool);
 	bool on;
 };
 
+// for switching between multiple options (kinda like a dropdown menu except I was too lazy to make an actual one)
 class Switchbox : public ListItem {
 public:
-	Switchbox(ScrollAreaX1* SA, const string& LBL="", const vector<string>& OPT={}, const string& CUR_OPT="", void (Program::*CALLB)(const string&)=nullptr);
+	Switchbox(ScrollAreaItems* SA, const string& LBL="", const vector<string>& OPT={}, const string& CUR_OPT="", void (Program::*CALL)(const string&)=nullptr);
 	virtual ~Switchbox();
 
-	virtual void OnClick(ClickType click);
-	ScrollAreaX1* Parent() const;
-	string CurOption() const;
+	virtual void onClick(ClickType click);
+	string getCurOption() const;
 
 private:
-	void (Program::*callback)(const string&);
-	size_t curOpt;
-	vector<string> options;
+	void (Program::*call)(const string&);
+	size_t curOpt;			// index of the currently selected/displayed option
+	vector<string> options;	// all the possible things one can choose
 };

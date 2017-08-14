@@ -1,95 +1,109 @@
 #include "library.h"
 #include "engine/filer.h"
 
-Library::Library(GeneralSettings& GSET) :
-	curGSets(GSET)
-{}
-
-void Library::Initialize(string FONT) {
-	if (!Filer::Exists(FONT))
-		FONT = VideoSettings().Fontpath();	// should give the default font
-
-	LoadFont(FONT);
-	LoadLanguage(curGSets.Lang());
-	LoadSounds();
-	LoadTextures();
+Library::Library(const GeneralSettings& SETS) :
+	sets(SETS)
+{
+	Filer::checkDirectories(sets);
 }
 
-void Library::Close() {
-	ClearPics();
-	ClearTextures();
-	ClearSounds();
-	fonts.Clear();
+void Library::init(string FONT) {
+	if (!Filer::fileExists(FONT))
+		FONT = VideoSettings().getFontpath();	// should give the default font
+
+	loadFont(FONT);
+	loadLanguage(sets.getLang());
+	loadSounds();
+	loadTextures();
 }
 
-FontSet* Library::Fonts() {
-	return &fonts;
+void Library::close() {
+	clearPics();
+	clearTextures();
+	clearSounds();
+	fonts.clear();
 }
 
-void Library::LoadFont(const string& font) {
-	fonts.Clear();
+FontSet& Library::getFonts() {
+	return fonts;
+}
+
+void Library::loadFont(const string& font) {
+	fonts.clear();
 	fonts.Initialize(font);
 }
 
-string Library::getLine(const string& line, ETextCase caseChange) const {
+string Library::line(const string& line, ETextCase caseChange) const {
 	return modifyCase((lines.count(line) == 0) ? line : lines.at(line), caseChange);
 }
 
-void Library::LoadLanguage(const string& language) {
-	curGSets.Lang(language);
-	lines = Filer::GetLines(language);
+void Library::loadLanguage(const string& language) {
+	sets.setLang(language);
+	lines = Filer::getLines(language);
 }
 
-Mix_Chunk* Library::getSound(const string& name) {
+Mix_Chunk* Library::sound(const string& name) {
 	return (sounds.count(name) == 0) ? nullptr : sounds[name];
 }
 
-void Library::LoadSounds() {
-	ClearSounds();
-	sounds = Filer::GetSounds();
+void Library::loadSounds() {
+	clearSounds();
+	sounds = Filer::getSounds();
 }
 
-void Library::ClearSounds() {
+void Library::clearSounds() {
 	for (const pair<string, Mix_Chunk*>& it : sounds)
 		Mix_FreeChunk(it.second);
 	sounds.clear();
 }
 
-Texture* Library::getTex(const string& name) {
+Texture* Library::texture(const string& name) {
 	return (texes.count(name) == 0) ? nullptr : &texes[name];
 }
 
-void Library::LoadTextures() {
-	ClearTextures();
-	texes = Filer::GetTextures();
+void Library::loadTextures() {
+	clearTextures();
+	texes = Filer::getTextures();
 }
 
-void Library::ClearTextures() {
+void Library::clearTextures() {
 	for (map<string, Texture>::iterator it=texes.begin(); it!=texes.end(); it++)
-		it->second.Clear();
+		it->second.clear();
 	texes.clear();
 }
 
-vector<Texture*> Library::Pictures() {
+vector<Texture*> Library::getPictures() {
 	vector<Texture*> txs(pics.size());
 	for (size_t i=0; i!=pics.size(); i++)
 		txs[i] = &pics[i];
 	return txs;
 }
 
-void Library::LoadPics(const vector<string>& files) {
-	ClearPics();
+void Library::loadPics(const vector<string>& files) {
+	clearPics();
 	for (const string& it : files) {
 		Texture tx(it);
-		if (!tx.Res().hasNull())
+		if (!tx.resolution().hasNull())
 			pics.push_back(tx);
 		else if (tx.surface)
 			SDL_FreeSurface(tx.surface);
 	}
 }
 
-void Library::ClearPics() {
+void Library::clearPics() {
 	for (Texture& it : pics)
-		it.Clear();
+		it.clear();
 	pics.clear();
+}
+
+const GeneralSettings& Library::getSettings() const {
+	return sets;
+}
+
+void Library::setLibraryPath(const string& dir) {
+	sets.setDirLib(dir);
+}
+
+void Library::setPlaylistsPath(const string& dir) {
+	sets.setDirPlist(dir);
 }

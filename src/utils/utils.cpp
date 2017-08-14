@@ -119,56 +119,52 @@ string modifyCase(string str, ETextCase caseChange) {
 }
 
 vector<string> getWords(const string& line, char splitter) {
-	vector<string> words;
-
+	// skip first splitter chars
 	size_t i = 0;
 	while (i != line.length() && line[i] == splitter)
 		i++;
 	size_t start = i;
 
+	vector<string> words;
 	for (; i<=line.length(); i++)
-		if (line[i] == splitter) {
+		if (line[i] == splitter) {	// end of word
 			words.push_back(line.substr(start, i-start));
 
+			// skip first splitter chars
 			while (i != line.length() && line[i] == splitter)
 				i++;
-			start = i;
+			start = i;	// new starting point for next word
 		}
 	return words;
 }
 
-bool splitIniLine(const string& line, string* arg, string* val, string* key, bool* isTitle, size_t* id) {
+bool splitIniLine(const string& line, string& arg, string& val, string& key, bool& isTitle) {
+	// check if title
 	if (line[0] == '[' && line[line.length()-1] == ']') {
-		if (arg)
-			*arg = line.substr(1, line.length()-2);
-		if (isTitle)
-			*isTitle = true;
+		arg = line.substr(1, line.length()-2);
+		isTitle = true;
 		return true;
 	}
 	
+	// find position of the = to split line into argument and value
 	size_t i0;;
 	if (!findChar(line, '=', i0))
 		return false;
 
-	if (val)
-		*val = line.substr(i0 + 1);
+	val = line.substr(i0 + 1);
 	string left = line.substr(0, i0);
 
+	// get key if availible
 	size_t i1 = 0, i2 = 0;
 	findChar(left, '[', i1);
 	findChar(left, ']', i2);
 	if (i1 < i2) {
-		if (arg)
-			*arg = line.substr(0, i1);
-		if (key)
-			*key = line.substr(i1+1, i2-i1-1);
-	} else if (arg)
-		*arg = left;
+		arg = line.substr(0, i1);
+		key = line.substr(i1+1, i2-i1-1);
+	} else
+		arg = left;
 
-	if (isTitle)
-		*isTitle = false;
-	if (id)
-		*id = i0;
+	isTitle = false;
 	return true;
 }
 
@@ -405,29 +401,29 @@ uint8 gpStrToAxis(string str) {
 }
 
 vec2i pix(const vec2f& p) {
-	vec2i res = World::winSys()->Resolution();
+	vec2i res = World::winSys()->resolution();
 	return vec2i(p.x * res.x, p.y *res.y);
 }
 
 int pixX(float p) {
-	return p * World::winSys()->Resolution().x;
+	return p * World::winSys()->resolution().x;
 }
 
 int pixY(float p) {
-	return p * World::winSys()->Resolution().y;
+	return p * World::winSys()->resolution().y;
 }
 
 vec2f prc(const vec2i& p) {
-	vec2i res = World::winSys()->Resolution();
+	vec2i res = World::winSys()->resolution();
 	return vec2f(float(p.x) / float(res.x), float(p.y) / float(res.y));
 }
 
 float prcX(int p) {
-	return float(p) / float(World::winSys()->Resolution().x);
+	return float(p) / float(World::winSys()->resolution().x);
 }
 
 float prcY(int p) {
-	return float(p) / float(World::winSys()->Resolution().y);
+	return float(p) / float(World::winSys()->resolution().y);
 }
 
 float axisToFloat(int16 axisValue) {

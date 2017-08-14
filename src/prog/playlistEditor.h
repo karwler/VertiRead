@@ -2,22 +2,23 @@
 
 #include "utils/types.h"
 
+// logic for editing playlists
 class PlaylistEditor {
 public:
 	PlaylistEditor(const string& PLIST="", bool SS=true);
 
-	Playlist getPlaylist() const;
-	void LoadPlaylist(const string& playlist);
+	const Playlist& getPlaylist() const;
+	void loadPlaylist(const string& playlist);
 
-	void AddSong(string path);
-	void RenameSong(const string& path);
-	void DelSong();
-	void AddBook(const string& name);
-	void RenameBook(const string& name);
-	void DelBook();
+	void addSong(string path);
+	void renameSong(const string& path);
+	void delSong();
+	void addBook(const string& name);
+	void renameBook(const string& name);
+	void delBook();
 
-	bool showSongs;
-	btsel selected;
+	bool showSongs;	// show song list or book list
+	btsel selected;	// currently selected item
 private:
-	Playlist pList;
+	Playlist pList;	// the thing we're working on
 };

@@ -30,71 +30,75 @@ Object::Object(const vec2i& ANC, vec2i POS, const vec2i& SIZ, EFix FIX, EColor C
 	color(CLR),
 	fix(FIX)
 {
-	// set positin to anchor if set to -1
-	if (POS.x == -1)
+	// set pos to anchor if less than 0
+	if (POS.x < 0)
 		POS.x = ANC.x;
-	if (POS.y == -1)
+	if (POS.y < 0)
 		POS.y = ANC.y;
-	Anchor(ANC);
-	Pos(POS);
-	Size(SIZ);
+
+	// set values according to fix
+	setAnchor(ANC);
+	setPos(POS);
+	setSize(SIZ);
 }
 Object::~Object() {}
 
-Object* Object::Clone() const {
+Object* Object::clone() const {
 	return new Object(*this);
 }
 
-SDL_Rect Object::getRect() const {
-	return {Pos().x, Pos().y, Size().x, Size().y};
+SDL_Rect Object::rect() const {
+	vec2i ps = pos();
+	vec2i sz = size();
+	return {ps.x, ps.y, sz.x, sz.y};
 }
 
-vec2i Object::Anchor() const {
+vec2i Object::anchor() const {
 	vec2i ret;
-	ret.x = (fix & FIX_X) ? anchor.x : pixX(anchor.x);
-	ret.y = (fix & FIX_Y) ? anchor.y : pixY(anchor.y);
+	ret.x = (fix & FIX_X) ? vanc.x : pixX(vanc.x);
+	ret.y = (fix & FIX_Y) ? vanc.y : pixY(vanc.y);
 	return ret;
 }
 
-void Object::Anchor(const vec2i& newPos) {
-	anchor.x = (fix & FIX_X) ? newPos.x : prcX(newPos.x);
-	anchor.y = (fix & FIX_Y) ? newPos.y : prcY(newPos.y);
+void Object::setAnchor(const vec2i& newPos) {
+	vanc.x = (fix & FIX_X) ? newPos.x : prcX(newPos.x);
+	vanc.y = (fix & FIX_Y) ? newPos.y : prcY(newPos.y);
 }
 
-vec2i Object::Pos() const {
-	vec2i ret = Anchor();
-	ret.x = (fix & FIX_PX) ? pixX(pos.x) : (fix & FIX_W) ? ret.x + pos.x : ret.x + pixX(pos.x);
-	ret.y = (fix & FIX_PY) ? pixY(pos.y) : (fix & FIX_H) ? ret.y + pos.y : ret.y + pixY(pos.y);
+vec2i Object::pos() const {
+	vec2i ret = anchor();
+	ret.x = (fix & FIX_PX) ? pixX(vpos.x) : (fix & FIX_W) ? ret.x + vpos.x : ret.x + pixX(vpos.x);
+	ret.y = (fix & FIX_PY) ? pixY(vpos.y) : (fix & FIX_H) ? ret.y + vpos.y : ret.y + pixY(vpos.y);
 	return ret;
 }
 
-void Object::Pos(const vec2i& newPos) {
-	vec2i dist = newPos - Anchor();
-	pos.x = (fix & FIX_PX) ? prcX(newPos.x) : (fix & FIX_W) ? dist.x : prcX(dist.x);
-	pos.y = (fix & FIX_PY) ? prcY(newPos.y) : (fix & FIX_H) ? dist.y : prcY(dist.y);
+void Object::setPos(const vec2i& newPos) {
+	vec2i dist = newPos - anchor();
+	vpos.x = (fix & FIX_PX) ? prcX(newPos.x) : (fix & FIX_W) ? dist.x : prcX(dist.x);
+	vpos.y = (fix & FIX_PY) ? prcY(newPos.y) : (fix & FIX_H) ? dist.y : prcY(dist.y);
 }
 
-vec2i Object::End() const {
-	vec2i ret = Anchor();
-	ret.x = (fix & FIX_EX) ? pixX(end.x) : (fix & FIX_W) ? ret.x + end.x : ret.x + pixX(end.x);
-	ret.y = (fix & FIX_EY) ? pixY(end.y) : (fix & FIX_H) ? ret.y + end.y : ret.y + pixY(end.y);
+vec2i Object::end() const {
+	vec2i ret = anchor();
+	ret.x = (fix & FIX_EX) ? pixX(vend.x) : (fix & FIX_W) ? ret.x + vend.x : ret.x + pixX(vend.x);
+	ret.y = (fix & FIX_EY) ? pixY(vend.y) : (fix & FIX_H) ? ret.y + vend.y : ret.y + pixY(vend.y);
 	return ret;
 }
 
-void Object::End(const vec2i& newPos) {
-	vec2i dist = newPos - Anchor();
-	end.x = (fix & FIX_EX) ? prcX(newPos.x) : (fix & FIX_W) ? dist.x : prcX(dist.x);
-	end.y = (fix & FIX_EY) ? prcY(newPos.y) : (fix & FIX_H) ? dist.y : prcY(dist.y);
+void Object::setEnd(const vec2i& newPos) {
+	vec2i dist = newPos - anchor();
+	vend.x = (fix & FIX_EX) ? prcX(newPos.x) : (fix & FIX_W) ? dist.x : prcX(dist.x);
+	vend.y = (fix & FIX_EY) ? prcY(newPos.y) : (fix & FIX_H) ? dist.y : prcY(dist.y);
 }
 
-vec2i Object::Size() const {
-	return End() - Pos();
+vec2i Object::size() const {
+	return end() - pos();
 }
 
-void Object::Size(const vec2i& newSize) {
-	vec2i dist = Pos() + newSize - Anchor();
-	end.x = (fix & FIX_EX) ? prcX(Pos().x + newSize.x) : (fix & FIX_W) ? dist.x : prcX(dist.x);
-	end.y = (fix & FIX_EY) ? prcY(Pos().y + newSize.y) : (fix & FIX_H) ? dist.y : prcY(dist.y);
+void Object::setSize(const vec2i& newSize) {
+	vec2i dist = pos() + newSize - anchor();
+	vend.x = (fix & FIX_EX) ? prcX(pos().x + newSize.x) : (fix & FIX_W) ? dist.x : prcX(dist.x);
+	vend.y = (fix & FIX_EY) ? prcY(pos().y + newSize.y) : (fix & FIX_H) ? dist.y : prcY(dist.y);
 }
 
 // LABEL
@@ -106,13 +110,13 @@ Label::Label(const Object& BASE, const string& TXT, ETextAlign ALG) :
 {}
 Label::~Label() {}
 
-Label* Label::Clone() const {
+Label* Label::clone() const {
 	return new Label(*this);
 }
 
 Text Label::getText() const {
-	Text txt(text, 0, Size().y);
-	txt.SetPosToRect(getRect(), align);
+	Text txt(text, 0, size().y);
+	txt.setPosToRect(rect(), align);
 	return txt;
 }
 
@@ -120,21 +124,21 @@ Text Label::getText() const {
 
 Button::Button(const Object& BASE, void (Program::*CALLB)()) :
 	Object(BASE),
-	callback(CALLB)
+	call(CALLB)
 {}
 Button::~Button() {}
 
-Button* Button::Clone() const {
+Button* Button::clone() const {
 	return new Button(*this);
 }
 
-void Button::OnClick(ClickType click) {
-	if (callback && click.button == SDL_BUTTON_LEFT)
-		(World::program()->*callback)();
+void Button::onClick(ClickType click) {
+	if (call && click.button == SDL_BUTTON_LEFT)
+		(World::program()->*call)();
 }
 
-void Button::Callback(void (Program::*func)()) {
-	callback = func;
+void Button::setCall(void (Program::*func)()) {
+	call = func;
 }
 
 // BUTTON TEXT
@@ -142,17 +146,17 @@ void Button::Callback(void (Program::*func)()) {
 ButtonText::ButtonText(const Object& BASE, void (Program::*CALLB)(), const string& TXT, ETextAlign ALG) :
 	Button(BASE, CALLB),
 	align(ALG),
-	text(TXT)
+	label(TXT)
 {}
 ButtonText::~ButtonText() {}
 
-ButtonText* ButtonText::Clone() const {
+ButtonText* ButtonText::clone() const {
 	return new ButtonText(*this);
 }
 
-Text ButtonText::getText() const {
-	Text txt(text, 0, Size().y);
-	txt.SetPosToRect(getRect(), align);
+Text ButtonText::text() const {
+	Text txt(label, 0, size().y);
+	txt.setPosToRect(rect(), align);
 	return txt;
 }
 
@@ -162,28 +166,29 @@ ButtonImage::ButtonImage(const Object& BASE, void (Program::*CALLB)(), const vec
 	Button(BASE, CALLB),
 	curTex(0)
 {
-	for (const string& it : TEXS)
-		texes.push_back(World::library()->getTex(it));
+	texes.resize(TEXS.size());
+	for (size_t i=0; i!=TEXS.size(); i++)
+		texes[i] = World::library()->texture(TEXS[i]);
 }
 ButtonImage::~ButtonImage() {}
 
-ButtonImage* ButtonImage::Clone() const {
+ButtonImage* ButtonImage::clone() const {
 	return new ButtonImage(*this);
 }
 
-void ButtonImage::OnClick(ClickType click) {
-	Button::OnClick(click);
+void ButtonImage::onClick(ClickType click) {
+	Button::onClick(click);
 	if (click.button == SDL_BUTTON_LEFT) {
 		curTex++;
 		if (curTex == texes.size())
 			curTex = 0;
 
-		World::winSys()->SetRedrawNeeded();
+		World::winSys()->setRedrawNeeded();
 	}
 }
 
-Image ButtonImage::CurTex() const {
-	return texes.empty() ? Image() : Image(Pos(), texes[curTex], Size());
+Image ButtonImage::getCurTex() const {
+	return texes.empty() ? Image() : Image(pos(), texes[curTex], size());
 }
 
 // LINE EDITOR
@@ -194,31 +199,31 @@ LineEditor::LineEditor(const Object& BASE, const string& TXT, ETextType TYPE, vo
 {}
 LineEditor::~LineEditor() {}
 
-LineEditor*LineEditor::Clone() const {
+LineEditor*LineEditor::clone() const {
 	return new LineEditor(*this);
 }
 
-Text LineEditor::getText() const {
-	return Text(editor.Text(), Pos()-vec2i(textPos, 0), Size().y);
+Text LineEditor::text() const {
+	return Text(editor.getText(), pos()-vec2i(textPos, 0), size().y);
 }
 
-SDL_Rect LineEditor::getCaret() const {
-	vec2i pos = Pos();
-	int height = Size().y;
+SDL_Rect LineEditor::caretRect() const {
+	vec2i ps = pos();
+	int height = size().y;
 
-	return {Text(editor.Text().substr(0, editor.CursorPos()), 0, height).size().x - textPos + pos.x, pos.y, 5, height};
+	return {Text(editor.getText().substr(0, editor.getCaretPos()), 0, height).size().x - textPos + ps.x, ps.y, 5, height};
 }
 
-void LineEditor::CheckCaretRight() {
-	SDL_Rect caret = getCaret();
-	int diff = caret.x + caret.w - End().x;
+void LineEditor::checkCaretRight() {
+	SDL_Rect caret = caretRect();
+	int diff = caret.x + caret.w - end().x;
 	if (diff > 0)
 		textPos += diff;
 }
 
-void LineEditor::CheckCaretLeft() {
-	SDL_Rect caret = getCaret();
-	int diff = Pos().x - caret.x;
+void LineEditor::checkCaretLeft() {
+	SDL_Rect caret = caretRect();
+	int diff = pos().x - caret.x;
 	if (diff > 0)
 		textPos -= diff;
 }
@@ -234,6 +239,6 @@ Popup::~Popup() {
 	clear(objects);
 }
 
-Popup*Popup::Close() const {
+Popup*Popup::clone() const {
 	return new Popup(*this);
 }

@@ -1,71 +1,69 @@
 #include "world.h"
 
 Scene::Scene(const GeneralSettings& SETS) :
-	sets(SETS),
-	library(sets),
+	library(Filer::getGeneralSettings()),
 	focObject(nullptr),
 	dragSlider(false)
 {
-	Filer::CheckDirectories(sets);
-	library.Initialize(World::winSys()->Settings().Fontpath());
+	library.init(World::winSys()->getSettings().getFontpath());
 }
 
 Scene::~Scene() {
-	SetPopup(nullptr);
+	setPopup(nullptr);
 	clear(objects);
 }
 
-void Scene::SwitchMenu(const vector<Object*>& objs) {
+void Scene::switchMenu(const vector<Object*>& objs) {
 	// reset values and set objects
 	focObject = nullptr;
-	stamp.Reset();
+	stamp.reset();
 	dragSlider = false;
 
-	SetPopup(nullptr);	// resets capture and focObject
+	setPopup(nullptr);	// resets capture and focObject
 	clear(objects);
 	objects = objs;
 
 	// additional stuff
-	OnMouseMove(InputSys::mousePos(), 0);
-	World::winSys()->SetRedrawNeeded();
+	onMouseMove(InputSys::mousePos(), 0);
+	World::winSys()->setRedrawNeeded();
 }
 
-void Scene::ResizeMenu() {
-	ResizeObjects(objects);
+void Scene::resizeMenu() {
+	resizeObjects(objects);
 	if (popup)
-		ResizeObjects(popup->objects);
+		resizeObjects(popup->objects);
 
-	World::winSys()->SetRedrawNeeded();
+	World::winSys()->setRedrawNeeded();
 }
 
-void Scene::ResizeObjects(vector<Object*>& objs) {
+void Scene::resizeObjects(vector<Object*>& objs) {
 	for (Object* obj : objs)
 		if (ScrollArea* box = dynamic_cast<ScrollArea*>(obj))
-			box->SetValues();
+			box->setValues();
 }
 
-void Scene::Tick(float dSec) {
-	World::inputSys()->CheckAxisShortcuts();	// handle keyhold
+void Scene::tick(float dSec) {
+	World::inputSys()->checkAxisShortcuts();	// handle keyhold
 
 	// object ticks
 	for (Object* obj : objects)
 		if (ScrollArea* box = dynamic_cast<ScrollArea*>(obj))
-			box->Tick(dSec);
+			box->tick(dSec);
 
 	if (popup)
 		for (Object* obj : popup->objects)
 			if (ScrollArea* box = dynamic_cast<ScrollArea*>(obj))
-				box->Tick(dSec);
+				box->tick(dSec);
 }
 
-void Scene::OnMouseMove(const vec2i& mPos, const vec2i& mMov) {
+void Scene::onMouseMove(const vec2i& mPos, const vec2i& mMov) {
 	// set focused object and call mouse move events
 	focObject = nullptr;
 	for (Object* obj : popup ? popup->objects : objects) {
 		if (ReaderBox* box = dynamic_cast<ReaderBox*>(obj))
-			box->OnMouseMove(mPos);
+			box->onMouseMove(mPos);
 
-		if (inRect(obj->getRect(), mPos)) {
+		if (inRect(obj->rect(), mPos)) {
 			focObject = obj;
 			break;
 		}
@@ -74,174 +72,138 @@ void Scene::OnMouseMove(const vec2i& mPos, const vec2i& mMov) {
 	// handle scrolling
 	if (ScrollArea* obj = dynamic_cast<ScrollArea*>(stamp.object)) {
 		if (dragSlider)
-			obj->DragSlider(mPos.y);
+			obj->dragSlider(mPos.y);
 		else {
 			ReaderBox* box = dynamic_cast<ReaderBox*>(obj);
 			if (box && (InputSys::isPressedK(SDL_SCANCODE_LSHIFT) || InputSys::isPressedM(SDL_BUTTON_RIGHT)))
-				box->ScrollListX(-mMov.x);
-			obj->ScrollList(-mMov.y);
+				box->scrollListX(-mMov.x);
+			obj->scrollList(-mMov.y);
 		}
 	}
 }
 
-void Scene::OnMouseDown(const vec2i& mPos, ClickType click) {
+void Scene::onMouseDown(const vec2i& mPos, ClickType click) {
 	if (ScrollArea* area = dynamic_cast<ScrollArea*>(focObject))
 		if (click.button == SDL_BUTTON_LEFT) {
 			// get rid of scroll motion and deselect all items
-			area->SetMotion(0.f);
+			area->setMotion(0.f);
 			area->selectedItem = nullptr;
-			World::winSys()->SetRedrawNeeded();
+			World::winSys()->setRedrawNeeded();
 
 			// check slider click
-			if (inRect(area->Bar(), mPos)) {
+			if (inRect(area->barRect(), mPos)) {
 				dragSlider = true;
-				if (mPos.y < area->SliderY() || mPos.y > area->SliderY() + area->SliderH())	// if mouse outside of slider but inside bar
-					area->DragSlider(mPos.y - area->SliderH() /2);
-				area->diffSliderMouseY = mPos.y - area->SliderY();	// get difference between mouse y and slider y
+				if (mPos.y < area->sliderY() || mPos.y > area->sliderY() + area->getSliderH())	// if mouse outside of slider but inside bar
+					area->dragSlider(mPos.y - area->getSliderH() /2);
+				area->diffSliderMouseY = mPos.y - area->sliderY();	// get difference between mouse y and slider y
 			}
 
 			// hangle double click
 			if (click.clicks == 2 && focObject == stamp.object)
 				if (ReaderBox* box = dynamic_cast<ReaderBox*>(area))
-					CheckReaderBoxDoubleClick(mPos, box);
+					checkReaderBoxDoubleClick(mPos, box);
 		}
 
 	// set click stamp
 	if (stamp.button == 0)
 		stamp = ClickStamp(focObject, click.button, mPos);
 	else {
-		stamp.Reset();
+		stamp.reset();
 		dragSlider = false;
 	}
 }
 
-void Scene::OnMouseUp(const vec2i& mPos, ClickType click) {
+void Scene::onMouseUp(const vec2i& mPos, ClickType click) {
 	if (dragSlider) {
 		// reset values
 		static_cast<ScrollArea*>(stamp.object)->diffSliderMouseY = 0;
 		dragSlider = false;
 	} else if (vec2f(mPos - stamp.mPos).len() > Default::clickThreshold) {
-		if (ScrollArea* box = dynamic_cast<ScrollArea*>(stamp.object))
-			box->SetMotion(-World::inputSys()->mosueMove().y);
+		if (ScrollArea* box = dynamic_cast<ScrollArea*>(stamp.object))	// if clicked object is a scroll area, give it some scrolling motion
+			box->setMotion(-World::inputSys()->mosueMove().y);
 	} else if (focObject == stamp.object) {	// if cursor hasn't moved too far check for item click 
 		if (Button* but = dynamic_cast<Button*>(focObject))
-			but->OnClick(click);
+			but->onClick(click);
 		else if (LineEditor* edt = dynamic_cast<LineEditor*>(focObject))
-			edt->OnClick(click);
-		else if (ListBox* box = dynamic_cast<ListBox*>(focObject))
-			CheckListBoxClick(mPos, box, click);
-		else if (TableBox* box = dynamic_cast<TableBox*>(focObject))
-			CheckTableBoxClick(mPos, box, click);
-		else if (TileBox* box = dynamic_cast<TileBox*>(focObject))
-			CheckTileBoxClick(mPos, box, click);
+			edt->onClick(click);
+		else if (ScrollAreaItems* box = dynamic_cast<ScrollAreaItems*>(focObject))
+			checkScrollAreaItemsClick(mPos, box, click);
 		else if (ReaderBox* box = dynamic_cast<ReaderBox*>(focObject))
-			CheckReaderBoxClick(mPos, box, click);
+			checkReaderBoxClick(mPos, box, click);
 	}
-	stamp.Reset();
+	stamp.reset();
 }
 
-void Scene::CheckListBoxClick(const vec2i& mPos, ListBox* obj, ClickType click) {
-	vec2t interval = obj->VisibleItems();
-	vector<ListItem*> items = obj->Items();
+void Scene::checkScrollAreaItemsClick(const vec2i& mPos, ScrollAreaItems* obj, ClickType click) {
+	vec2t interval = obj->visibleItems();
+	vector<ListItem*> items = obj->getItems();
 	for (size_t i=interval.x; i<=interval.y; i++)
-		if (inRect(obj->ItemRect(i), mPos)) {
-			items[i]->OnClick(click);
+		if (inRect(obj->itemRect(i), mPos)) {
+			items[i]->onClick(click);
 			break;
 		}
 }
 
-void Scene::CheckTableBoxClick(const vec2i& mPos, TableBox* obj, ClickType click) {
-	vec2t interval = obj->VisibleItems();
-	const grid2<ListItem*>& items = obj->Items();
-	for (size_t i=interval.x; i<=interval.y; i++)
-		if (inRect(obj->ItemRect(i), mPos)) {
-			items[i]->OnClick(click);
-			break;
-		}
-}
-
-void Scene::CheckTileBoxClick(const vec2i& mPos, TileBox* obj, ClickType click) {
-	vec2t interval = obj->VisibleItems();
-	const vector<ListItem*>& items = obj->Items();
-	for (size_t i=interval.x; i<=interval.y; i++)
-		if (inRect(obj->ItemRect(i), mPos)) {
-			items[i]->OnClick(click);
-			break;
-		}
-}
-
-void Scene::CheckReaderBoxClick(const vec2i& mPos, ReaderBox* obj, ClickType click) {
-	if (obj->showList()) {			// check list buttons
-		for (Object* it : obj->ListObjects())
+void Scene::checkReaderBoxClick(const vec2i& mPos, ReaderBox* obj, ClickType click) {
+	if (obj->showList()) {	// check list buttons
+		for (Object* it : obj->getListObjects())
 			if (Button* but = dynamic_cast<Button*>(it))
-				if (inRect(but->getRect(), mPos)) {
-					but->OnClick(click);
+				if (inRect(but->rect(), mPos)) {
+					but->onClick(click);
 					break;
 				}
 	} else if (obj->showPlayer()) {	// check player buttons
-		for (Object* it : obj->PlayerObjects())
+		for (Object* it : obj->getPlayerObjects())
 			if (Button* but = dynamic_cast<Button*>(it))
-				if (inRect(but->getRect(), mPos)) {
-					but->OnClick(click);
+				if (inRect(but->rect(), mPos)) {
+					but->onClick(click);
 					break;
 				}
 	}
 }
 
-void Scene::CheckReaderBoxDoubleClick(const vec2i& mPos, ReaderBox* obj) {
-	vec2t interval = obj->VisibleItems();
-	const vector<Image>& pics = obj->Pictures();
+void Scene::checkReaderBoxDoubleClick(const vec2i& mPos, ReaderBox* obj) {
+	vec2t interval = obj->visibleItems();
+	const vector<Image>& pics = obj->getPictures();
 	for (size_t i=interval.x; i<=interval.y; i++) {
 		SDL_Rect crop;
-		SDL_Rect rect = obj->getImage(i, crop).getRect();
+		SDL_Rect rect = obj->image(i, crop).rect();
 
 		if (inRect(cropRect(rect, crop), mPos)) {
-			obj->Zoom(float(obj->Size().x) / float(pics[i].size.x));
+			obj->setZoom(float(obj->size().x) / float(pics[i].size.x));
 			break;
 		}
 	}
 }
 
-void Scene::OnMouseWheel(const vec2i& wMov) {
-	if (ScrollArea* box = dynamic_cast<ScrollArea*>(FocusedObject())) {
-		box->ScrollList(wMov.y*-Default::scrollFactorWheel);
+void Scene::onMouseWheel(const vec2i& wMov) {
+	if (ScrollArea* box = dynamic_cast<ScrollArea*>(getFocObject())) {
+		box->scrollList(wMov.y*-Default::scrollFactorWheel);
 		if (ReaderBox* rdr = dynamic_cast<ReaderBox*>(box))
-			rdr->ScrollListX(wMov.x*-Default::scrollFactorWheel);
+			rdr->scrollListX(wMov.x*-Default::scrollFactorWheel);
 	}
 }
 
-void Scene::OnMouseLeave() {
-	if (ScrollArea* box = dynamic_cast<ScrollArea*>(stamp.object))
-		box->SetMotion(0.f);
-	stamp.Reset();
+void Scene::onMouseLeave() {
+	if (ScrollArea* box = dynamic_cast<ScrollArea*>(stamp.object))	// if it's a scroll area, get rid of scrolling motion
+		box->setMotion(0.f);
+	stamp.reset();
 	dragSlider = false;
 }
 
-const GeneralSettings& Scene::Settings() const {
-	return sets;
+Program& Scene::getProgram() {
+	return program;
 }
 
-void Scene::LibraryPath(const string& dir) {
-	sets.DirLib(dir);
+Library& Scene::getLibrary() {
+	return library;
 }
 
-void Scene::PlaylistsPath(const string& dir) {
-	sets.DirPlist(dir);
-}
-
-Program* Scene::getProgram() {
-	return &program;
-}
-
-Library* Scene::getLibrary() {
-	return &library;
-}
-
-const vector<Object*>& Scene::Objects() const {
+const vector<Object*>& Scene::getObjects() const {
 	return objects;
 }
 
-Object* Scene::FocusedObject() {
+Object* Scene::getFocObject() {
 	return focObject;
 }
 
@@ -249,7 +211,7 @@ bool Scene::isDraggingSlider(ScrollArea* obj) const {
 	return stamp.object == obj && dragSlider;
 }
 
-ListItem* Scene::SelectedButton() {
+ListItem* Scene::selectedButton() {
 	// check focused object first
 	if (ScrollArea* box = dynamic_cast<ScrollArea*>(focObject))
 		if (box->selectedItem && box->selectedItem->selectable())
@@ -275,8 +237,8 @@ Popup* Scene::getPopup() {
 	return popup;
 }
 
-void Scene::SetPopup(Popup* newPopup, Capturer* capture) {
+void Scene::setPopup(Popup* newPopup, Capturer* capture) {
 	popup = newPopup;
-	World::inputSys()->SetCapture(capture);
-	OnMouseMove(InputSys::mousePos(), 0);
+	World::inputSys()->setCaptured(capture);
+	onMouseMove(InputSys::mousePos(), 0);
 }

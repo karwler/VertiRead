@@ -2,56 +2,57 @@
 
 #include "items.h"
 
+// abstract class for an item that can hog all input to itself
 class Capturer : public ListItem {
 public:
-	Capturer(ScrollAreaX1* SA, const string& LBL="");
+	Capturer(ScrollAreaItems* SA, const string& LBL="");
 	virtual ~Capturer();
 
-	virtual void OnClick(ClickType click);
-	virtual void OnKeypress(SDL_Scancode key) = 0;
-	virtual void OnJButton(uint8 jbutton) = 0;
-	virtual void OnJHat(uint8 jhat, uint8 value) = 0;
-	virtual void OnJAxis(uint8 jaxis, bool positive) = 0;
-	virtual void OnGButton(uint8 gbutton) = 0;
-	virtual void OnGAxis(uint8 gaxis, bool positive) = 0;
-
-	ScrollAreaX1* Parent() const;
+	virtual void onClick(ClickType click);
+	virtual void onKeypress(SDL_Scancode key) = 0;
+	virtual void onJButton(uint8 jbutton) = 0;
+	virtual void onJHat(uint8 jhat, uint8 value) = 0;
+	virtual void onJAxis(uint8 jaxis, bool positive) = 0;
+	virtual void onGButton(uint8 gbutton) = 0;
+	virtual void onGAxis(uint8 gaxis, bool positive) = 0;
 };
 
+// for editing text
 class LineEdit : public Capturer {
 public:
-	LineEdit(ScrollAreaX1* SA, const string& LBL="", const string& TXT="", ETextType TYPE=ETextType::text, void (Program::*KCALL)(const string&)=nullptr, void (Program::*CCALL)()=nullptr);
+	LineEdit(ScrollAreaItems* SA, const string& LBL="", const string& TXT="", ETextType TYPE=ETextType::text, void (Program::*KCALL)(const string&)=nullptr, void (Program::*CCALL)()=nullptr);
 	virtual ~LineEdit();
 
-	virtual void OnClick(ClickType click);
-	virtual void OnKeypress(SDL_Scancode key);
-	virtual void OnJButton(uint8 jbutton);
-	virtual void OnJHat(uint8 jhat, uint8 value);
-	virtual void OnJAxis(uint8 jaxis, bool positive);
-	virtual void OnGButton(uint8 gbutton);
-	virtual void OnGAxis(uint8 gaxis, bool positive);
-	void OnText(const char* text);
+	virtual void onClick(ClickType click);
+	virtual void onKeypress(SDL_Scancode key);
+	virtual void onJButton(uint8 jbutton);
+	virtual void onJHat(uint8 jhat, uint8 value);
+	virtual void onJAxis(uint8 jaxis, bool positive);
+	virtual void onGButton(uint8 gbutton);
+	virtual void onGAxis(uint8 gaxis, bool positive);
+	void onText(const char* text);
 	
-	void Confirm();
-	void Cancel();
-	int TextPos() const;
-	void ResetTextPos();
-	TextEdit& Editor();
-	const TextEdit& Editor() const;
-	virtual Text getText() const;		// warning: text doesn't have global positioning
-	virtual SDL_Rect getCaret() const;	// warning: caret doesn't have global positioning
+	void confirm();
+	void cancel();
+	int getTextPos() const;
+	void resetTextPos();
+	TextEdit& getEditor();
+	virtual Text text() const;		// warning: text doesn't have global positioning
+	virtual SDL_Rect caretRect() const;	// warning: caret doesn't have global positioning
 
 protected:
-	int textPos;
-	TextEdit editor;
+	int textPos;		// text's horizontal offset
+	TextEdit editor;	// handles the actual text editing
+
 private:
 	void (Program::*okCall)(const string&);
 	void (Program::*cancelCall)();
 
-	virtual void CheckCaretRight();
-	virtual void CheckCaretLeft();
+	virtual void checkCaretRight();
+	virtual void checkCaretLeft();
 };
 
+// for getting a key/button/axis
 class KeyGetter : public Capturer {
 public:
 	enum class EAcceptType : uint8 {
@@ -60,19 +61,19 @@ public:
 		gamepad
 	};
 
-	KeyGetter(ScrollAreaX1* SA, EAcceptType ACT, Shortcut* SHC=nullptr);
+	KeyGetter(ScrollAreaItems* SA, EAcceptType ACT, Shortcut* SHC=nullptr);
 	virtual ~KeyGetter();
 
-	virtual void OnKeypress(SDL_Scancode key);
-	virtual void OnJButton(uint8 jbutton);
-	virtual void OnJHat(uint8 jhat, uint8 value);
-	virtual void OnJAxis(uint8 jaxis, bool positive);
-	virtual void OnGButton(uint8 gbutton);
-	virtual void OnGAxis(uint8 gaxis, bool positive);
+	virtual void onKeypress(SDL_Scancode key);
+	virtual void onJButton(uint8 jbutton);
+	virtual void onJHat(uint8 jhat, uint8 value);
+	virtual void onJAxis(uint8 jaxis, bool positive);
+	virtual void onGButton(uint8 gbutton);
+	virtual void onGAxis(uint8 gaxis, bool positive);
 	
-	string Text() const;
+	string text() const;
 
 private:
-	EAcceptType acceptType;
-	Shortcut* shortcut;
+	EAcceptType acceptType;	// what kind of shortcut is being accepted
+	Shortcut* shortcut;		// pointer to the shortcut that is currently being edited
 };

@@ -9,6 +9,8 @@ set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
 set(SRC_FILES
 	"src/engine/audioSys.cpp"
 	"src/engine/audioSys.h"
+	"src/engine/drawSys.cpp"
+	"src/engine/drawSys.h"
 	"src/engine/engine.cpp"
 	"src/engine/engine.h"
 	"src/engine/filer.cpp"
@@ -18,8 +20,6 @@ set(SRC_FILES
 	"src/engine/main.cpp"
 	"src/engine/scene.cpp"
 	"src/engine/scene.h"
-	"src/engine/shaderSys.cpp"
-	"src/engine/shaderSys.h"
 	"src/engine/windowSys.cpp"
 	"src/engine/windowSys.h"
 	"src/engine/world.cpp"

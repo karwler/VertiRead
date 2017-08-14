@@ -2,31 +2,32 @@
 
 #include "objects.h"
 
+// an abstact class for an area where you can scroll through stuff (usually Items)
 class ScrollArea : public Object {
 public:
 	ScrollArea(const Object& BASE=Object());
 	virtual ~ScrollArea();
-	virtual ScrollArea* Clone() const = 0;
+	virtual ScrollArea* clone() const = 0;
 
-	void DragSlider(int ypos);
-	void DragList(int ypos);
-	void ScrollList(int ymov);
+	void dragSlider(int ypos);
+	void dragList(int ypos);
+	void scrollList(int ymov);
 
-	virtual void Tick(float dSec);
-	virtual void SetValues();		// requires listH to be set
-	void SetMotion(float val);
-	int BarW() const;				// returns 0 if slider isn't needed
-	int ListY() const;
-	virtual int ListH() const;
-	virtual float Zoom() const;
-	int ListL() const;
-	int SliderY() const;
-	int SliderH() const;
+	virtual void tick(float dSec);
+	virtual void setValues();		// requires listH to be set
+	void setMotion(float val);
+	int barW() const;				// returns 0 if slider isn't needed
+	int getListY() const;
+	virtual int getListH() const;
+	virtual float getZoom() const;
+	int getListL() const;
+	int sliderY() const;
+	int getSliderH() const;
 
-	SDL_Rect Bar() const;
-	SDL_Rect Slider() const;
-	virtual btsel SelectedItem() const;	// this class doesn't contain any items, therefore this function returns a false btsel
-	virtual vec2t VisibleItems() const;	// this class doesn't contain any items, therefore this function returns a false interval ([1, 0])
+	SDL_Rect barRect() const;
+	SDL_Rect sliderRect() const;
+	virtual btsel getSelectedItem() const;	// this class doesn't contain any items, therefore this function returns a false btsel
+	virtual vec2t visibleItems() const;	// this class doesn't contain any items, therefore this function returns a false interval ([1, 0])
 	
 	ListItem* selectedItem;
 	int diffSliderMouseY;	// space between slider and mouse position
@@ -36,132 +37,144 @@ protected:
 	int listH, listL;		// list height, max list position
 	float motion;			// how much the list scrolls over time ()
 
-	void CheckListY();	// check if listY is out of limits and correct if so
+	void checkListY();	// check if listY is out of limits and correct if so
 };
 
-class ScrollAreaX1 : public ScrollArea {
+// abstract class as base for working with items and placing them only on top of each other
+class ScrollAreaItems : public ScrollArea {
 public:
-	ScrollAreaX1(const Object& BASE=Object());
-	virtual ~ScrollAreaX1();
-	virtual ScrollAreaX1* Clone() const = 0;
+	ScrollAreaItems(const Object& BASE=Object());
+	virtual ~ScrollAreaItems();
+	virtual ScrollAreaItems* clone() const = 0;
 
-	virtual ListItem* Item(size_t id) const = 0;
-	virtual SDL_Rect ItemRect(size_t id) const = 0;
+	void setValues(size_t numRows);
+	virtual vector<ListItem*> getItems() const = 0;
 
-protected:
-	void SetValuesX1(size_t numRows);
+	virtual ListItem* item(size_t id) const = 0;
+	virtual SDL_Rect itemRect(size_t id) const = 0;
+	virtual SDL_Rect itemRect(size_t id, SDL_Rect& crop, EColor& color) const = 0;
+
+	virtual btsel getSelectedItem() const = 0;
+	virtual vec2t visibleItems() const = 0;
 };
 
-class ListBox : public ScrollAreaX1 {
+// places items on top of each other
+class ListBox : public ScrollAreaItems {
 public:
 	ListBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS={});
 	virtual ~ListBox();
-	virtual ListBox* Clone() const;
+	virtual ListBox* clone() const;
 
-	virtual void SetValues();
-	const vector<ListItem*>& Items() const;
-	void Items(const vector<ListItem*>& objects);
-	virtual ListItem* Item(size_t id) const;
-	virtual SDL_Rect ItemRect(size_t id) const;
-	SDL_Rect ItemRect(size_t id, SDL_Rect& crop, EColor& color) const;
-	virtual btsel SelectedItem() const;
-	virtual vec2t VisibleItems() const;
+	virtual void setValues();
+	virtual vector<ListItem*> getItems() const;
+	void setItems(const vector<ListItem*>& objects);
+	virtual ListItem* item(size_t id) const;
+	virtual SDL_Rect itemRect(size_t id) const;
+	virtual SDL_Rect itemRect(size_t id, SDL_Rect& crop, EColor& color) const;
+	virtual btsel getSelectedItem() const;
+	virtual vec2t visibleItems() const;
 
 private:
 	vector<ListItem*> items;
 };
 
-class TableBox : public ScrollAreaX1 {
+// places items in a table
+class TableBox : public ScrollAreaItems {
 public:
 	TableBox(const Object& BASE=Object(), const grid2<ListItem*>& ITMS=grid2<ListItem*>(), const vector<float>& IWS={});
 	virtual ~TableBox();
-	virtual TableBox* Clone() const;
+	virtual TableBox* clone() const;
 
-	virtual void SetValues();
-	const grid2<ListItem*>& Items() const;
-	void Items(const grid2<ListItem*>& objects);
-	virtual ListItem* Item(size_t id) const;
-	virtual SDL_Rect ItemRect(size_t id) const;
-	SDL_Rect ItemRect(size_t id, SDL_Rect& crop) const;
-	virtual btsel SelectedItem() const;
-	virtual vec2t VisibleItems() const;
+	virtual void setValues();
+	virtual vector<ListItem*> getItems() const;
+	const grid2<ListItem*>& getItemsGrid() const;
+	void setItems(const grid2<ListItem*>& objects);
+
+	virtual ListItem* item(size_t id) const;
+	virtual SDL_Rect itemRect(size_t id) const;
+	virtual SDL_Rect itemRect(size_t id, SDL_Rect& crop, EColor& color) const;
+
+	virtual btsel getSelectedItem() const;
+	virtual vec2t visibleItems() const;
 
 private:
-	vector<float> itemW;
+	vector<float> itemW;	// width of each coloumn. all elements should add up to 1
 	grid2<ListItem*> items;
 };
 
-class TileBox : public ScrollArea {
+// places items as tiles one after another
+class TileBox : public ScrollAreaItems {
 public:
 	TileBox(const Object& BASE=Object(), const vector<ListItem*>& ITMS={}, const vec2i& TS=vec2i(50, 50));
 	virtual ~TileBox();
-	virtual TileBox* Clone() const;
+	virtual TileBox* clone() const;
 
-	vec2i TileSize() const;
-	vec2i Dim() const;
+	vec2i getTileSize() const;
+	vec2i getDim() const;
+	virtual void setValues();
+	virtual vector<ListItem*> getItems() const;
+	void setItems(const vector<ListItem*>& objects);
 
-	const vector<ListItem*>& Items() const;
-	void Items(const vector<ListItem*>& objects);
-	SDL_Rect ItemRect(size_t id) const;
-	SDL_Rect ItemRect(size_t id, SDL_Rect& crop, EColor& color) const;
-	virtual btsel SelectedItem() const;
-	virtual vec2t VisibleItems() const;
+	virtual ListItem* item(size_t id) const;
+	virtual SDL_Rect itemRect(size_t id) const;
+	virtual SDL_Rect itemRect(size_t id, SDL_Rect& crop, EColor& color) const;
+	virtual btsel getSelectedItem() const;
+	virtual vec2t visibleItems() const;
 
 private:
 	vec2i tileSize;
-	vec2i dim;
+	vec2i dim;		// amount of tiles per column/row
 	vector<ListItem*> items;
-
-	virtual void SetValues();
 };
 
+// for scrolling through pictures
 class ReaderBox : public ScrollArea {
 public:
 	ReaderBox(const Object& BASE=Object(), const vector<Texture*>& PICS={}, const string& CURPIC="", float ZOOM=1.f);
 	virtual ~ReaderBox();
-	virtual ReaderBox* Clone() const;
+	virtual ReaderBox* clone() const;
 
-	virtual void Tick(float dSec);
-	void OnMouseMove(const vec2i& mPos);
+	virtual void tick(float dSec);
+	void onMouseMove(const vec2i& mPos);
 
-	void DragListX(int xpos);
-	void ScrollListX(int xmov);
-	void Zoom(float factor);
-	void MultZoom(float zfactor);
-	void DivZoom(float zfactor);
+	void dragListX(int xpos);
+	void scrollListX(int xmov);
+	void setZoom(float factor);
+	void multZoom(float zfactor);
+	void divZoom(float zfactor);
 
-	virtual void SetValues();
-	int ListX() const;
-	int ListW() const;
-	virtual int ListH() const;
-	virtual float Zoom() const;
+	virtual void setValues();
+	int getListX() const;
+	int getListW() const;
+	virtual int getListH() const;
+	virtual float getZoom() const;
 	bool showMouse() const;
 	bool showSlider() const;
 	bool showList() const;
 	bool showPlayer() const;
 
-	const vector<Image>& Pictures() const;
-	void Pictures(const vector<Texture*>& pictures, const string& curPic="");
-	SDL_Rect List() const;		// return value is the background rect
-	vector<Object*>& ListObjects();
-	SDL_Rect Player() const;
-	vector<Object*>& PlayerObjects();
-	Image getImage(size_t id) const;
-	Image getImage(size_t id, SDL_Rect& crop) const;
-	virtual vec2t VisibleItems() const;
+	const vector<Image>& getPictures() const;
+	void setPictures(const vector<Texture*>& pictures, const string& curPic="");
+	SDL_Rect listRect() const;
+	const vector<Object*>& getListObjects() const;
+	SDL_Rect playerRect() const;
+	const vector<Object*>& getPlayerObjects();
+	Image image(size_t id) const;
+	Image image(size_t id, SDL_Rect& crop) const;
+	virtual vec2t visibleItems() const;
 
 private:
-	bool mouseHideable;		// aka mouse not over slider, list or player
-	float mouseTimer, sliderTimer, listTimer, playerTimer;
-	float zoom;
-	int listX, listW, listXL;
-	const int blistW, playerW, playerH;
+	bool mouseHideable;			// aka mouse not over slider, list or player
+	float mouseTimer;			// time left until mouse disappeares
+	float sliderTimer, listTimer, playerTimer;	// time until slider, button list or player disappear
+	float zoom;					// current zoom factor
+	int listX, listW, listXL;	// like listY, listH and listL except for horizontal value
 
 	vector<Image> pics;
 	vector<Object*> listObjects, playerObjects;
 
-	void CheckListX();			// same as CheckListY
-	bool CheckMouseOverSlider(const vec2i& mPos);
-	bool CheckMouseOverList(const vec2i& mPos);
-	bool CheckMouseOverPlayer(const vec2i& mPos);
+	void checkListX();		// same as CheckListY except for x
+	bool checkMouseOverSlider(const vec2i& mPos);
+	bool checkMouseOverList(const vec2i& mPos);
+	bool checkMouseOverPlayer(const vec2i& mPos);
 };

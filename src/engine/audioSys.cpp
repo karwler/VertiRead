@@ -2,12 +2,12 @@
 
 AudioSys::AudioSys(const AudioSettings& SETS) :
 	sets(SETS),
-	curSong(0),
 	curMusic(nullptr),
 	muted(false),
 	played(false),
 	deltaDelay(0.f)
 {
+	// initialize and set up Mix
 	int flags = Mix_Init(MIX_INIT_FLAC | MIX_INIT_FLUIDSYNTH | MIX_INIT_MOD | MIX_INIT_MODPLUG | MIX_INIT_MP3 | MIX_INIT_OGG);
 	if (!(flags & MIX_INIT_FLAC))
 		cerr << "couldn't initialize flac" << endl << Mix_GetError() << endl;
@@ -25,90 +25,88 @@ AudioSys::AudioSys(const AudioSettings& SETS) :
 	if (Mix_OpenAudio(44100, AUDIO_S16SYS, 2, 4096))
 		cerr << "couldn't open audio\n" << Mix_GetError() << endl;
 	Mix_AllocateChannels(1);
-	Mix_HookMusicFinished(MusicFinishCallback);
+	Mix_HookMusicFinished(musicFinishCallback);
 
-	MusicVolume(sets.musicVolume);
-	SoundVolume(sets.soundVolume);
+	// set volume levels
+	setMusicVolume(sets.musicVolume);
+	setSoundVolume(sets.soundVolume);
 }
 
 AudioSys::~AudioSys() {
-	FreeMusic();
+	freeMusic();
 	Mix_CloseAudio();
 	Mix_Quit();
 }
 
-void AudioSys::FreeMusic() {
+void AudioSys::freeMusic() {
 	if (curMusic) {
 		Mix_FreeMusic(curMusic);
 		curMusic = nullptr;
 	}
 }
 
-void AudioSys::Tick(float dSec) {
+void AudioSys::tick(float dSec) {
+	// check if it's time yet to switch between songs. if so, do so
 	if (deltaDelay != 0.f) {
 		deltaDelay -= dSec;
 		if (deltaDelay <= 0.f) {
 			deltaDelay = 0.f;
-			SwitchSong(1);
+			switchSong(1);
 		}
 	}
 }
 
-void AudioSys::MusicFinishCallback() {
-	World::audioSys()->deltaDelay = World::audioSys()->sets.songDelay;
+void AudioSys::musicFinishCallback() {
+	World::audioSys()->deltaDelay = World::audioSys()->sets.songDelay;	// song has finished so reset timer for next song
 }
 
-void AudioSys::PlayPauseMusic() {
+void AudioSys::playPauseMusic() {
 	if (!curMusic)
-		SwitchSong(true);
+		switchSong(true);	// load music if there's none
 	else if (!played)
-		PlayMusic();
+		playMusic();		// call play if song hasn't been played since load
 	else if (Mix_PausedMusic())
-		Mix_ResumeMusic();
+		Mix_ResumeMusic();	// if it's paused, resume playback
 	else
-		Mix_PauseMusic();
+		Mix_PauseMusic();	// if it's playing, pause playback
 }
 
-void AudioSys::PlayMusic() {
+void AudioSys::playMusic() {
 	played = true;
 	Mix_PlayMusic(curMusic, 0);
 }
 
-void AudioSys::SongMuteSwitch() {
+void AudioSys::songMuteSwitch() {
 	muted = !muted;
 	Mix_VolumeMusic(muted ? 0 : sets.musicVolume);
 }
 
-void AudioSys::NextSong() {
-	if (curSong == playlist.size()-1)
-		curSong = 0;
-	else
-		curSong++;
-	SwitchSong(played && !Mix_PausedMusic());
+void AudioSys::nextSong() {
+	curSong = (curSong == playlist.size()-1) ? 0 : curSong + 1;
+	switchSong(played && !Mix_PausedMusic());
 }
 
-void AudioSys::PrevSong() {
-	if (curSong == 0)
-		curSong = playlist.size()-1;
-	else
-		curSong--;
-	SwitchSong(played && !Mix_PausedMusic());
+void AudioSys::prevSong() {
+	curSong = (curSong == 0) ? playlist.size()-1 : curSong - 1;
+	switchSong(played && !Mix_PausedMusic());
 }
 
-void AudioSys::SwitchSong(bool play) {
-	FreeMusic();
+void AudioSys::switchSong(bool play) {
+	// reset values
+	freeMusic();
 	played = false;
 	deltaDelay = 0.f;
 	if (playlist.empty())
 		return;
 
+	// load song data (aka music)
 	curMusic = Mix_LoadMUS(playlist[curSong].c_str());
 	if (curMusic && play)
-		PlayMusic();
+		playMusic();	// play if not paused
 }
 
-void AudioSys::PlaySound(const string& name) {
-	Mix_Chunk* sound = World::library()->getSound(name);
+void AudioSys::playSound(const string& name) {
+	Mix_Chunk* sound = World::library()->sound(name);
 	if (sound)
 		Mix_PlayChannel(0, sound, 0);
 }
@@ -117,48 +115,45 @@ string AudioSys::curSongName() const {
 	return filename(playlist[curSong]);
 }
 
-bool AudioSys::PlaylistLoaded() const {
+bool AudioSys::playlistLoaded() const {
 	return playlist.size() != 0;
 }
 
-void AudioSys::LoadPlaylist(const Playlist& newList) {
-	FreeMusic();
+void AudioSys::setPlaylist(const vector<string>& songs) {
+	unloadPlaylist();
 
-	for (size_t i=0; i!=newList.songs.size(); i++) {
-		string path = newList.songPath(i);
-		Mix_Music* tmp = Mix_LoadMUS(path.c_str());
-		if (tmp) {
-			Mix_FreeMusic(tmp);
-			playlist.push_back(path);
+	for (const string& it : songs)
+		if (Mix_Music* snd = Mix_LoadMUS(it.c_str())) {	// add only valid sound files
+			Mix_FreeMusic(snd);
+			playlist.push_back(it);
 		}
-	}
 }
 
-void AudioSys::UnloadPlaylist() {
-	FreeMusic();
+void AudioSys::unloadPlaylist() {
+	freeMusic();
 	playlist.clear();
 	curSong = 0;
 }
 
-const AudioSettings& AudioSys::Settings() const {
+const AudioSettings& AudioSys::getSettings() const {
 	return sets;
 }
 
-void AudioSys::MusicVolume(int vol) {
-	sets.musicVolume = CheckVolume(vol);
+void AudioSys::setMusicVolume(int vol) {
+	sets.musicVolume = checkVolume(vol);
 	Mix_VolumeMusic(sets.musicVolume);
 }
 
-void AudioSys::SoundVolume(int vol) {
-	sets.soundVolume = CheckVolume(vol);
+void AudioSys::setSoundVolume(int vol) {
+	sets.soundVolume = checkVolume(vol);
 	Mix_Volume(0, sets.soundVolume);
 }
 
-void AudioSys::SongDelay(float delay) {
+void AudioSys::setSongDelay(float delay) {
 	sets.songDelay = delay;
 }
 
-int AudioSys::CheckVolume(int value) {
+int AudioSys::checkVolume(int value) {
 	if (value >= MIX_MAX_VOLUME)
 		return MIX_MAX_VOLUME;
 	else if (value <= 0)

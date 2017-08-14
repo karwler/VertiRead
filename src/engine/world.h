@@ -2,6 +2,7 @@
 
 #include "engine.h"
 
+// class that makes accessing stuff easier
 class World {
 public:
 	static Engine* engine();
@@ -12,7 +13,7 @@ public:
 	static Library* library();
 	static Program* program();
 
-	static vector<string> args;
+	static vector<string> args;	// arguments from main()
 private:
-	static Engine base;
+	static Engine base;			// the thing on which everything runs
 };

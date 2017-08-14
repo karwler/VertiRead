@@ -5,7 +5,7 @@
 Texture::Texture(const string& FILE) :
 	surface(nullptr)
 {
-	LoadSurface(FILE);
+	loadSurface(FILE);
 }
 
 Texture::Texture(const string& FILE, SDL_Surface* SURF) :
@@ -13,15 +13,7 @@ Texture::Texture(const string& FILE, SDL_Surface* SURF) :
 	file(FILE)
 {}
 
-string Texture::File() const {
-	return file;
-}
-
-vec2i Texture::Res() const {
-	return surface ? vec2i(surface->w, surface->h) : 0;
-}
-
-void Texture::LoadSurface(const string& path) {
+void Texture::loadSurface(const string& path) {
 	file = path;
 	if (surface)
 		SDL_FreeSurface(surface);
@@ -31,9 +23,17 @@ void Texture::LoadSurface(const string& path) {
 		cerr << "couldn't load surface " << file << endl;
 }
 
-void Texture::Clear() {
+void Texture::clear() {
 	SDL_FreeSurface(surface);
 	file.clear();
+}
+
+string Texture::getFile() const {
+	return file;
+}
+
+vec2i Texture::resolution() const {
+	return surface ? vec2i(surface->w, surface->h) : 0;
 }
 
 // IMAGE
@@ -42,17 +42,17 @@ Image::Image(const vec2i& POS, Texture* TEX, const vec2i& SIZ) :
 	pos(POS),
 	texture(TEX)
 {
-	size = SIZ.hasNull() ? texture->Res() : SIZ;
+	size = SIZ.hasNull() ? texture->resolution() : SIZ;
 }
 
 Image::Image(const vec2i& POS, const string& TEX, const vec2i& SIZ) :
 	pos(POS)
 {
-	texture = World::library()->getTex(TEX);
-	size = SIZ.hasNull() ? texture->Res() : SIZ;
+	texture = World::library()->texture(TEX);
+	size = SIZ.hasNull() ? texture->resolution() : SIZ;
 }
 
-SDL_Rect Image::getRect() const {
+SDL_Rect Image::rect() const {
 	return {pos.x, pos.y, size.x, size.y};
 }
 
@@ -70,21 +70,21 @@ bool FontSet::Initialize(const string& FILE) {
 	return true;
 }
 
-void FontSet::Clear() {
+void FontSet::clear() {
 	for (const pair<int, TTF_Font*>& it : fonts)
 		TTF_CloseFont(it.second);
 	fonts.clear();
 }
 
-bool FontSet::CanRun() const {
+bool FontSet::canRun() const {
 	return !file.empty();
 }
 
-TTF_Font* FontSet::Get(int size) {
-	return (CanRun() && fonts.count(size) == 0) ? AddSize(size) : fonts.at(size);
+TTF_Font* FontSet::get(int size) {
+	return (canRun() && fonts.count(size) == 0) ? addSize(size) : fonts.at(size);
 }
 
-TTF_Font* FontSet::AddSize(int size) {
+TTF_Font* FontSet::addSize(int size) {
 	TTF_Font* font = TTF_OpenFont(file.c_str(), size);
 	if (font)
 		fonts.insert(make_pair(size, font));
@@ -93,9 +93,9 @@ TTF_Font* FontSet::AddSize(int size) {
 	return font;
 }
 
-vec2i FontSet::TextSize(const string& text, int size) {
+vec2i FontSet::textSize(const string& text, int size) {
 	vec2i siz;
-	TTF_Font* font = Get(size);
+	TTF_Font* font = get(size);
 	if (font)
 		TTF_SizeUTF8(font, text.c_str(), &siz.x, &siz.y);
 	return siz;
@@ -110,7 +110,7 @@ Text::Text(const string& TXT, const vec2i& POS, int H, EColor CLR) :
 	text(TXT)
 {}
 
-void Text::SetPosToRect(const SDL_Rect& rect, ETextAlign align) {
+void Text::setPosToRect(const SDL_Rect& rect, ETextAlign align) {
 	int len = size().x;
 
 	if (align == ETextAlign::left)
@@ -123,7 +123,7 @@ void Text::SetPosToRect(const SDL_Rect& rect, ETextAlign align) {
 }
 
 vec2i Text::size() const {
-	return World::library()->Fonts()->TextSize(text, height);
+	return World::library()->getFonts().textSize(text, height);
 }
 
 // TEXT EDIT
@@ -132,19 +132,19 @@ TextEdit::TextEdit(const string& TXT, ETextType TYPE, size_t CPOS) :
 	type(TYPE),
 	text(TXT)
 {
-	SetCursor(CPOS);
-	CheckText();
+	setCaretPos(CPOS);
+	checkText();
 }
 
-size_t TextEdit::CursorPos() const {
+size_t TextEdit::getCaretPos() const {
 	return cpos;
 }
 
-void TextEdit::SetCursor(size_t pos) {
+void TextEdit::setCaretPos(size_t pos) {
 	cpos = (pos > text.length()) ? text.length() : pos;
 }
 
-void TextEdit::MoveCursor(bool right, bool loop) {
+void TextEdit::moveCaret(bool right, bool loop) {
 	if (loop) {
 		if (right)
 			cpos = (cpos == text.length()) ? 0 : cpos+1;
@@ -158,26 +158,26 @@ void TextEdit::MoveCursor(bool right, bool loop) {
 	}
 }
 
-string TextEdit::Text() const {
+string TextEdit::getText() const {
 	return text;
 }
 
-void TextEdit::Text(const string& str, bool resetCpos) {
+void TextEdit::setText(const string& str, bool resetCpos) {
 	text = str;
 	
 	if (resetCpos)
 		cpos = 0;
 	else
-		CheckCaret();
+		checkCaret();
 }
 
-void TextEdit::Add(const string& str) {
+void TextEdit::addText(const string& str) {
 	text.insert(cpos, str);
 	cpos += str.length();
-	CheckText();
+	checkText();
 }
 
-void TextEdit::Delete(bool current) {
+void TextEdit::delChar(bool current) {
 	if (current) {
 		if (cpos != text.length())
 			text.erase(cpos, 1);
@@ -187,22 +187,22 @@ void TextEdit::Delete(bool current) {
 	}
 }
 
-void TextEdit::CheckCaret() {
+void TextEdit::checkCaret() {
 	if (cpos > text.length())
 		cpos = text.length();
 }
 
-void TextEdit::CheckText() {
+void TextEdit::checkText() {
 	if (type == ETextType::integer)
-		CleanIntString(text);
+		cleanIntString(text);
 	else if (type == ETextType::floating)
-		CleanFloatString(text);
+		cleanFloatString(text);
 	else
 		return;
-	CheckCaret();
+	checkCaret();
 }
 
-void TextEdit::CleanIntString(string& str) {
+void TextEdit::cleanIntString(string& str) {
 	for (size_t i=0; i!=str.length(); i++)
 		if (str[i] < '0' || str[i] > '9') {
 			str.erase(i, 1);
@@ -210,7 +210,7 @@ void TextEdit::CleanIntString(string& str) {
 		}
 }
 
-void TextEdit::CleanFloatString(string& str) {
+void TextEdit::cleanFloatString(string& str) {
 	bool foundDot = false;
 	for (size_t i=0; i!=str.length(); i++)
 		if (str[i] < '0' || str[i] > '9') {
@@ -238,7 +238,7 @@ ClickStamp::ClickStamp(Object* OBJ, uint8 BUT, const vec2i& POS) :
 	mPos(POS)
 {}
 
-void ClickStamp::Reset() {
+void ClickStamp::reset() {
 	object = nullptr;
 	button = 0;
 }
@@ -250,7 +250,7 @@ Controller::Controller() :
 	gamepad(nullptr)
 {}
 
-bool Controller::Open(int id) {
+bool Controller::open(int id) {
 	if (SDL_IsGameController(id))
 		gamepad = SDL_GameControllerOpen(id);
 	
@@ -258,7 +258,7 @@ bool Controller::Open(int id) {
 	return joystick;
 }
 
-void Controller::Close() {
+void Controller::close() {
 	if (gamepad) {
 		SDL_GameControllerClose(gamepad);
 		gamepad = nullptr;
@@ -278,120 +278,120 @@ Shortcut::Shortcut() :
 
 Shortcut::~Shortcut() {}
 
-SDL_Scancode Shortcut::Key() const {
+SDL_Scancode Shortcut::getKey() const {
 	return key;
 }
 
-bool Shortcut::KeyAssigned() const {
+bool Shortcut::keyAssigned() const {
 	return asg & ASG_KEY;
 }
 
-void Shortcut::ClearAsgKey() {
+void Shortcut::clearAsgKey() {
 	asg &= ~ASG_KEY;
 }
 
-void Shortcut::Key(SDL_Scancode KEY) {
+void Shortcut::setKey(SDL_Scancode KEY) {
 	key = KEY;
 	asg |= ASG_KEY;
 }
 
-uint8 Shortcut::JctID() const {
+uint8 Shortcut::getJctID() const {
 	return jctID;
 }
 
-bool Shortcut::JctAssigned() const {
+bool Shortcut::jctAssigned() const {
 	return asg & (ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N);
 }
 
-void Shortcut::ClearAsgJct() {
+void Shortcut::clearAsgJct() {
 	asg &= ~(ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N);
 }
 
-bool Shortcut::JButtonAssigned() const {
+bool Shortcut::jbuttonAssigned() const {
 	return asg & ASG_JBUTTON;
 }
 
-void Shortcut::JButton(uint8 BUT) {
+void Shortcut::setJbutton(uint8 BUT) {
 	jctID = BUT;
 
-	ClearAsgJct();
+	clearAsgJct();
 	asg |= ASG_JBUTTON;
 }
 
-bool Shortcut::JAxisAssigned() const {
+bool Shortcut::jaxisAssigned() const {
 	return asg & (ASG_JAXIS_P | ASG_JAXIS_N);
 }
 
-bool Shortcut::JPosAxisAssigned() const {
+bool Shortcut::jposAxisAssigned() const {
 	return asg & ASG_JAXIS_P;
 }
 
-bool Shortcut::JNegAxisAssigned() const {
+bool Shortcut::jnegAxisAssigned() const {
 	return asg & ASG_JAXIS_N;
 }
 
-void Shortcut::JAxis(uint8 AXIS, bool positive) {
+void Shortcut::setJaxis(uint8 AXIS, bool positive) {
 	jctID = AXIS;
 
-	ClearAsgJct();
+	clearAsgJct();
 	asg |= (positive) ? ASG_JAXIS_P : ASG_JAXIS_N;
 }
 
-uint8 Shortcut::JHatVal() const {
+uint8 Shortcut::getJhatVal() const {
 	return jHatVal;
 }
 
-bool Shortcut::JHatAssigned() const {
+bool Shortcut::jhatAssigned() const {
 	return asg & ASG_JHAT;
 }
 
-void Shortcut::JHat(uint8 HAT, uint8 VAL) {
+void Shortcut::setJhat(uint8 HAT, uint8 VAL) {
 	jctID = HAT;
 	jHatVal = VAL;
 
-	ClearAsgJct();
+	clearAsgJct();
 	asg |= ASG_JHAT;
 }
 
-uint8 Shortcut::GctID() const {
+uint8 Shortcut::getGctID() const {
 	return gctID;
 }
 
-bool Shortcut::GctAssigned() const {
+bool Shortcut::gctAssigned() const {
 	return asg & (ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N);
 }
 
-void Shortcut::ClearAsgGct() {
+void Shortcut::clearAsgGct() {
 	asg &= ~(ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N);
 }
 
-bool Shortcut::GButtonAssigned() const {
+bool Shortcut::gbuttonAssigned() const {
 	return asg & ASG_GBUTTON;
 }
 
-void Shortcut::GButton(uint8 BUT) {
+void Shortcut::gbutton(uint8 BUT) {
 	gctID = BUT;
 
-	ClearAsgGct();
+	clearAsgGct();
 	asg |= ASG_GBUTTON;
 }
 
-bool Shortcut::GAxisAssigned() const {
+bool Shortcut::gaxisAssigned() const {
 	return asg & (ASG_GAXIS_P | ASG_GAXIS_N);
 }
 
-bool Shortcut::GPosAxisAssigned() const {
+bool Shortcut::gposAxisAssigned() const {
 	return asg & ASG_GAXIS_P;
 }
 
-bool Shortcut::GNegAxisAssigned() const {
+bool Shortcut::gnegAxisAssigned() const {
 	return asg & ASG_GAXIS_N;
 }
 
-void Shortcut::GAxis(uint8 AXIS, bool positive) {
+void Shortcut::setGaxis(uint8 AXIS, bool positive) {
 	gctID = AXIS;
 
-	ClearAsgGct();
+	clearAsgGct();
 	asg |= (positive) ? ASG_GAXIS_P : ASG_GAXIS_N;
 }
 
@@ -442,7 +442,7 @@ Playlist::Playlist(const string& NAME, const vector<string>& SGS, const vector<s
 {}
 
 string Playlist::songPath(size_t id) const {
-	return isAbsolute(songs[id]) ? songs[id] : parentPath(World::scene()->Settings().PlaylistPath() + name) + songs[id];
+	return isAbsolute(songs[id]) ? songs[id] : parentPath(World::library()->getSettings().playlistPath() + name) + songs[id];
 }
 
 Directory::Directory(const string& NAME, const vector<string>& DIRS, const vector<string>& FILS) :
@@ -458,6 +458,6 @@ Exception::Exception(const string& MSG, int RV) :
 	retval(RV)
 {}
 
-void Exception::Display() {
+void Exception::printMessage() {
 	cerr << "ERROR: " << message << " (code " << retval << ")" << endl;
 }

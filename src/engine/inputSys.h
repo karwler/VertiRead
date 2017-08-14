@@ -2,24 +2,25 @@
 
 #include "utils/settings.h"
 
+// handles input events and contains controls settings
 class InputSys {
 public:
 	InputSys(const ControlsSettings& SETS=ControlsSettings());
 	~InputSys();
 
-	void KeypressEvent(const SDL_KeyboardEvent& key);
-	void JoystickButtonEvent(const SDL_JoyButtonEvent& jbutton);	// basically anything that isn't a hat or an axis
-	void JoystickHatEvent(const SDL_JoyHatEvent& jhat);				// hat is equivalent to dpad
-	void JoystickAxisEvent(const SDL_JoyAxisEvent& jaxis);			// one directionmight be mapped as multipe axes
-	void GamepadButtonEvent(const SDL_ControllerButtonEvent& gbutton);
-	void GamepadAxisEvent(const SDL_ControllerAxisEvent& gaxis);
-	void MouseMotionEvent(const SDL_MouseMotionEvent& motion);
-	void MouseButtonDownEvent(const SDL_MouseButtonEvent& button);
-	void MouseButtonUpEvent(const SDL_MouseButtonEvent& button);
-	void MouseWheelEvent(const SDL_MouseWheelEvent& wheel);
-	void TextEvent(const SDL_TextInputEvent& text);
+	void eventKeypress(const SDL_KeyboardEvent& key);
+	void eventJoystickButton(const SDL_JoyButtonEvent& jbutton);
+	void eventJoystickHat(const SDL_JoyHatEvent& jhat);
+	void eventJoystickAxis(const SDL_JoyAxisEvent& jaxis);
+	void eventGamepadButton(const SDL_ControllerButtonEvent& gbutton);
+	void eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis);
+	void eventMouseMotion(const SDL_MouseMotionEvent& motion);
+	void eventMouseButtonDown(const SDL_MouseButtonEvent& button);
+	void eventMouseButtonUp(const SDL_MouseButtonEvent& button);
+	void eventMouseWheel(const SDL_MouseWheelEvent& wheel);
+	void eventText(const SDL_TextInputEvent& text);
 
-	void CheckAxisShortcuts();
+	void checkAxisShortcuts();
 	bool isPressed(const string& holder, float* amt=nullptr) const;	// looks through axis shortcuts (aka holders) in controls settings (amt will only be changed if the shortcut is an active axis)
 	bool isPressed(const ShortcutAxis* sc, float* amt=nullptr) const;
 	static bool isPressedK(SDL_Scancode key);		// check if keyboard key is pressed
@@ -29,34 +30,34 @@ public:
 	bool isPressedH(uint8 jhat, uint8 val) const;	// check if any of the joysticks' hat is pressed
 	float getAxisJ(uint8 jaxis) const;				// check if any of the joysticks' axis value is greater than 0
 	float getAxisG(uint8 gaxis) const;				// check if any of the gamepads' axis value is greater than 0
-	static vec2i mousePos();						// get mouse poition
-	vec2i mosueMove() const;						// last mouse movement
+	static vec2i mousePos();
+	vec2i mosueMove() const;
 
-	const ControlsSettings& Settings() const;
-	void ScrollSpeed(const vec2f& sspeed);
-	void Deadzone(int16 deadz);
-	Shortcut* GetShortcut(const string& name);
+	const ControlsSettings& getSettings() const;
+	void setScrollSpeed(const vec2f& sspeed);
+	void setDeadzone(int16 deadz);
+	Shortcut* getShortcut(const string& name);
 
-	bool HasControllers() const;
-	void UpdateControllers();
+	bool hasControllers() const;
+	void updateControllers();
 
-	const Capturer* Captured() const;
-	void SetCapture(Capturer* cbox);
+	const Capturer* getCaptured() const;
+	void setCaptured(Capturer* cbox);
 
 private:
 	ControlsSettings sets;
-	vector<Controller> controllers;
-	Capturer* captured;
-	vec2i mMov;
+	vector<Controller> controllers;	// currently connected game controllers
+	Capturer* captured;				// pointer to object currently hogging all keyboard input
+	vec2i mMov;						// how much mouse has moved since last check
 
-	void CheckShortcutsK(SDL_Scancode key);
-	void CheckShortcutsB(uint8 jbutton);
-	void CheckShortcutsH(uint8 jhat, uint8 val);
-	void CheckShortcutsA(uint8 jaxis, bool positive);
-	void CheckShortcutsG(uint8 gbutton);
-	void CheckShortcutsX(uint8 gaxis, bool positive);
+	void checkShortcutsK(SDL_Scancode key);
+	void checkShortcutsB(uint8 jbutton);
+	void checkShortcutsH(uint8 jhat, uint8 val);
+	void checkShortcutsA(uint8 jaxis, bool positive);
+	void checkShortcutsG(uint8 gbutton);
+	void checkShortcutsX(uint8 gaxis, bool positive);
 
-	void ClearControllers();
+	void clearControllers();
 
-	int16 CheckAxisValue(int16 value) const;	// check deadzone in axis value
+	int16 checkAxisValue(int16 value) const;	// check deadzone in axis value
 };

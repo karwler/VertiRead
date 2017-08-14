@@ -2,22 +2,18 @@
 
 // CAPTURER
 
-Capturer::Capturer(ScrollAreaX1* SA, const string& LBL) :
+Capturer::Capturer(ScrollAreaItems* SA, const string& LBL) :
 	ListItem(LBL, SA)
 {}
 Capturer::~Capturer() {}
 
-void Capturer::OnClick(ClickType click) {
-	World::inputSys()->SetCapture(this);
-}
-
-ScrollAreaX1* Capturer::Parent() const {
-	return static_cast<ListBox*>(parent);
+void Capturer::onClick(ClickType click) {
+	World::inputSys()->setCaptured(this);
 }
 
 // LINE EDIT
 
-LineEdit::LineEdit(ScrollAreaX1* SA, const string& LBL, const string& TXT, ETextType TYPE, void (Program::*KCALL)(const string&), void (Program::*CCALL)()) :
+LineEdit::LineEdit(ScrollAreaItems* SA, const string& LBL, const string& TXT, ETextType TYPE, void (Program::*KCALL)(const string&), void (Program::*CCALL)()) :
 	Capturer(SA, LBL),
 	editor(TXT, TYPE),
 	okCall(KCALL),
@@ -26,157 +22,153 @@ LineEdit::LineEdit(ScrollAreaX1* SA, const string& LBL, const string& TXT, EText
 {}
 LineEdit::~LineEdit() {}
 
-void LineEdit::OnClick(ClickType click) {
-	World::inputSys()->SetCapture(this);
-	editor.SetCursor(editor.Text().length());
+void LineEdit::onClick(ClickType click) {
+	World::inputSys()->setCaptured(this);
+	editor.setCaretPos(editor.getText().length());
 }
 
-void LineEdit::OnKeypress(SDL_Scancode key) {
+void LineEdit::onKeypress(SDL_Scancode key) {
 	bool redraw = true;
 	if (key == SDL_SCANCODE_RIGHT) {
-		editor.MoveCursor(true);
-		CheckCaretRight();
+		editor.moveCaret(true);
+		checkCaretRight();
 	} else if (key == SDL_SCANCODE_LEFT) {
-		editor.MoveCursor(false);
-		CheckCaretLeft();
+		editor.moveCaret(false);
+		checkCaretLeft();
 	} else if (key == SDL_SCANCODE_BACKSPACE) {
-		editor.Delete(false);
-		CheckCaretLeft();
+		editor.delChar(false);
+		checkCaretLeft();
 	} else if (key == SDL_SCANCODE_DELETE)
-		editor.Delete(true);
+		editor.delChar(true);
 	else if (key == SDL_SCANCODE_RETURN)
-		Confirm();
+		confirm();
 	else if (key == SDL_SCANCODE_ESCAPE)
-		Cancel();
+		cancel();
 	else
 		redraw = false;
 
 	if (redraw)
-		World::winSys()->SetRedrawNeeded();
+		World::winSys()->setRedrawNeeded();
 }
 
-void LineEdit::OnJButton(uint8 jbutton) {
+void LineEdit::onJButton(uint8 jbutton) {
 	bool redraw = true;
 	if (jbutton == 3) {
-		editor.Delete(false);
-		CheckCaretLeft();
+		editor.delChar(false);
+		checkCaretLeft();
 	} else if (jbutton == 0)
-		editor.Delete(true);
+		editor.delChar(true);
 	else if (jbutton == 2)
-		Confirm();
+		confirm();
 	else if (jbutton == 1)
-		Cancel();
+		cancel();
 	else
 		redraw = false;
 
 	if (redraw)
-		World::winSys()->SetRedrawNeeded();
+		World::winSys()->setRedrawNeeded();
 }
 
-void LineEdit::OnJHat(uint8 jhat, uint8 value) {
+void LineEdit::onJHat(uint8 jhat, uint8 value) {
 	bool redraw = true;
 	if (value & SDL_HAT_RIGHT) {
-		editor.MoveCursor(true);
-		CheckCaretRight();
+		editor.moveCaret(true);
+		checkCaretRight();
 	} else if (value & SDL_HAT_LEFT) {
-		editor.MoveCursor(false);
-		CheckCaretLeft();
+		editor.moveCaret(false);
+		checkCaretLeft();
 	} else
 		redraw = false;
 
 	if (redraw)
-		World::winSys()->SetRedrawNeeded();
+		World::winSys()->setRedrawNeeded();
 }
 
-void LineEdit::OnJAxis(uint8 jaxis, bool positive) {}
+void LineEdit::onJAxis(uint8 jaxis, bool positive) {}
 
-void LineEdit::OnGButton(uint8 gbutton) {
+void LineEdit::onGButton(uint8 gbutton) {
 	bool redraw = true;
 	if (gbutton == SDL_CONTROLLER_BUTTON_DPAD_RIGHT) {
-		editor.MoveCursor(true);
-		CheckCaretRight();
+		editor.moveCaret(true);
+		checkCaretRight();
 	} else if (gbutton == SDL_CONTROLLER_BUTTON_DPAD_LEFT) {
-		editor.MoveCursor(false);
-		CheckCaretLeft();
+		editor.moveCaret(false);
+		checkCaretLeft();
 	} else if (gbutton == SDL_CONTROLLER_BUTTON_X) {
-		editor.Delete(false);
-		CheckCaretLeft();
+		editor.delChar(false);
+		checkCaretLeft();
 	} else if (gbutton ==  SDL_CONTROLLER_BUTTON_Y)
-		editor.Delete(true);
+		editor.delChar(true);
 	else if (gbutton == SDL_CONTROLLER_BUTTON_A)
-		Confirm();
+		confirm();
 	else if (gbutton == SDL_CONTROLLER_BUTTON_B)
-		Cancel();
+		cancel();
 	else
 		redraw = false;
 
 	if (redraw)
-		World::winSys()->SetRedrawNeeded();
+		World::winSys()->setRedrawNeeded();
 }
 
-void LineEdit::OnGAxis(uint8 gaxis, bool positive) {}
+void LineEdit::onGAxis(uint8 gaxis, bool positive) {}
 
-void LineEdit::OnText(const char* text) {
-	editor.Add(text);
-	CheckCaretRight();
+void LineEdit::onText(const char* text) {
+	editor.addText(text);
+	checkCaretRight();
 }
 
-void LineEdit::Confirm() {
-	ResetTextPos();
+void LineEdit::confirm() {
+	resetTextPos();
 	if (okCall)
-		(World::program()->*okCall)(editor.Text());
-	World::inputSys()->SetCapture(nullptr);
+		(World::program()->*okCall)(editor.getText());
+	World::inputSys()->setCaptured(nullptr);
 }
 
-void LineEdit::Cancel() {
-	ResetTextPos();
+void LineEdit::cancel() {
+	resetTextPos();
 	if (cancelCall)
 		(World::program()->*cancelCall)();
-	World::inputSys()->SetCapture(nullptr);
+	World::inputSys()->setCaptured(nullptr);
 }
 
-int LineEdit::TextPos() const {
+int LineEdit::getTextPos() const {
 	return textPos;
 }
 
-void LineEdit::ResetTextPos() {
+void LineEdit::resetTextPos() {
 	textPos = 0;
 }
 
-TextEdit& LineEdit::Editor() {
+TextEdit& LineEdit::getEditor() {
 	return editor;
 }
 
-const TextEdit& LineEdit::Editor() const {
-	return editor;
-}
-
-Text LineEdit::getText() const {
+Text LineEdit::text() const {
 	ListBox* box = static_cast<ListBox*>(parent);
 
 	int offset = Text(label, 0, Default::itemHeight).size().x + Default::lineEditOffset;
-	return Text(editor.Text(), vec2i(offset-textPos, 0), Default::itemHeight);
+	return Text(editor.getText(), vec2i(offset-textPos, 0), Default::itemHeight);
 }
 
-SDL_Rect LineEdit::getCaret() const {
+SDL_Rect LineEdit::caretRect() const {
 	ListBox* box = static_cast<ListBox*>(parent);
 
-	int offset = Text(editor.Text().substr(0, editor.CursorPos()), 0, Default::itemHeight).size().x - textPos;
+	int offset = Text(editor.getText().substr(0, editor.getCaretPos()), 0, Default::itemHeight).size().x - textPos;
 	return {offset, 0, Default::caretWidth, Default::itemHeight};
 }
 
-void LineEdit::CheckCaretRight() {
+void LineEdit::checkCaretRight() {
 	if (ListBox* box = dynamic_cast<ListBox*>(parent)) {
-		SDL_Rect caret = getCaret();
-		int diff = caret.x + caret.w - parent->Size().x + parent->BarW() + Text(label, 0, Default::itemHeight).size().x + 20;
+		SDL_Rect caret = caretRect();
+		int diff = caret.x + caret.w - parent->size().x + parent->barW() + Text(label, 0, Default::itemHeight).size().x + Default::lineEditOffset;
 		if (diff > 0)
 			textPos += diff;
 	}
 }
 
-void LineEdit::CheckCaretLeft() {
+void LineEdit::checkCaretLeft() {
 	if (parent) {
-		SDL_Rect caret = getCaret();
+		SDL_Rect caret = caretRect();
 		if (caret.x < 0)
 			textPos += caret.x;
 	}
@@ -184,26 +176,26 @@ void LineEdit::CheckCaretLeft() {
 
 // KEY GETTER
 
-KeyGetter::KeyGetter(ScrollAreaX1* SA, EAcceptType ACT, Shortcut* SHC) :
+KeyGetter::KeyGetter(ScrollAreaItems* SA, EAcceptType ACT, Shortcut* SHC) :
 	Capturer(SA),
 	acceptType(ACT),
 	shortcut(SHC)
 {}
 KeyGetter::~KeyGetter() {}
 
-void KeyGetter::OnKeypress(SDL_Scancode key) {
+void KeyGetter::onKeypress(SDL_Scancode key) {
 	if (acceptType == EAcceptType::keyboard && shortcut)
-		shortcut->Key(key);
-	World::inputSys()->SetCapture(nullptr);
+		shortcut->setKey(key);
+	World::inputSys()->setCaptured(nullptr);
 }
 
-void KeyGetter::OnJButton(uint8 jbutton) {
+void KeyGetter::onJButton(uint8 jbutton) {
 	if (acceptType == EAcceptType::joystick && shortcut)
-		shortcut->JButton(jbutton);
-	World::inputSys()->SetCapture(nullptr);
+		shortcut->setJbutton(jbutton);
+	World::inputSys()->setCaptured(nullptr);
 }
 
-void KeyGetter::OnJHat(uint8 jhat, uint8 value) {
+void KeyGetter::onJHat(uint8 jhat, uint8 value) {
 	if (acceptType == EAcceptType::joystick && shortcut) {
 		if (value != SDL_HAT_UP && value != SDL_HAT_RIGHT && value != SDL_HAT_DOWN && value != SDL_HAT_LEFT) {
 			if (value & SDL_HAT_RIGHT)
@@ -211,45 +203,45 @@ void KeyGetter::OnJHat(uint8 jhat, uint8 value) {
 			else if (value & SDL_HAT_LEFT)
 				value = SDL_HAT_LEFT;
 		}
-		shortcut->JHat(jhat, value);
+		shortcut->setJhat(jhat, value);
 	}
-	World::inputSys()->SetCapture(nullptr);
+	World::inputSys()->setCaptured(nullptr);
 }
 
-void KeyGetter::OnJAxis(uint8 jaxis, bool positive) {
+void KeyGetter::onJAxis(uint8 jaxis, bool positive) {
 	if (acceptType == EAcceptType::joystick && shortcut)
-		shortcut->JAxis(jaxis, positive);
-	World::inputSys()->SetCapture(nullptr);
+		shortcut->setJaxis(jaxis, positive);
+	World::inputSys()->setCaptured(nullptr);
 }
 
-void KeyGetter::OnGButton(uint8 gbutton) {
+void KeyGetter::onGButton(uint8 gbutton) {
 	if (acceptType == EAcceptType::gamepad && shortcut)
-		shortcut->GButton(gbutton);
-	World::inputSys()->SetCapture(nullptr);
+		shortcut->gbutton(gbutton);
+	World::inputSys()->setCaptured(nullptr);
 }
 
-void KeyGetter::OnGAxis(uint8 gaxis, bool positive) {
+void KeyGetter::onGAxis(uint8 gaxis, bool positive) {
 	if (acceptType == EAcceptType::gamepad && shortcut)
-		shortcut->GAxis(gaxis, positive);
-	World::inputSys()->SetCapture(nullptr);
+		shortcut->setGaxis(gaxis, positive);
+	World::inputSys()->setCaptured(nullptr);
 }
 
-string KeyGetter::Text() const {
+string KeyGetter::text() const {
 	if (acceptType == EAcceptType::keyboard) {
-		if (shortcut->KeyAssigned())
-			return SDL_GetScancodeName(shortcut->Key());
+		if (shortcut->keyAssigned())
+			return SDL_GetScancodeName(shortcut->getKey());
 	} else if (acceptType == EAcceptType::joystick) {
-		if (shortcut->JButtonAssigned())
-			return "B " + to_string(shortcut->JctID());
-		if (shortcut->JHatAssigned())
-			return "H " + to_string(shortcut->JctID()) + " " + jtHatToStr(shortcut->JHatVal());
-		if (shortcut->JAxisAssigned())
-			return "A " + string((shortcut->JPosAxisAssigned()) ? "+" : "-") + to_string(shortcut->JctID());
+		if (shortcut->jbuttonAssigned())
+			return "B " + to_string(shortcut->getJctID());
+		if (shortcut->jhatAssigned())
+			return "H " + to_string(shortcut->getJctID()) + " " + jtHatToStr(shortcut->getJhatVal());
+		if (shortcut->jaxisAssigned())
+			return "A " + string((shortcut->jposAxisAssigned()) ? "+" : "-") + to_string(shortcut->getJctID());
 	} else if (acceptType == EAcceptType::gamepad) {
-		if (shortcut->GButtonAssigned())
-			return gpButtonToStr(shortcut->GctID());
-		if (shortcut->GAxisAssigned())
-			return (shortcut->GPosAxisAssigned() ? "+" : "-") + gpAxisToStr(shortcut->GctID());
+		if (shortcut->gbuttonAssigned())
+			return gpButtonToStr(shortcut->getGctID());
+		if (shortcut->gaxisAssigned())
+			return (shortcut->gposAxisAssigned() ? "+" : "-") + gpAxisToStr(shortcut->getGctID());
 	}
 	return "-void-";
 }

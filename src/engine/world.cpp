@@ -23,10 +23,10 @@ Scene* World::scene() {
 	return base.getScene();
 }
 
-Library*World::library() {
-	return base.getScene()->getLibrary();
+Library* World::library() {
+	return &base.getScene()->getLibrary();
 }
 
 Program* World::program() {
-	return base.getScene()->getProgram();
+	return &base.getScene()->getProgram();
 }

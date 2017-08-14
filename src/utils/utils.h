@@ -3,22 +3,22 @@
 #include "prog/defaults.h"
 
 // files and strings
-bool strcmpCI(const string& strl, const string& strr);
-bool findChar(const string& str, char c);
-bool findChar(const string& str, char c, size_t& id);
-bool findString(const string& str, const string& c);
+bool strcmpCI(const string& strl, const string& strr);	// case insensitive check if strings are equal
+bool findChar(const string& str, char c);				// whether chacater is in string
+bool findChar(const string& str, char c, size_t& id);	// same as above except it sets id to first found character's index
+bool findString(const string& str, const string& c);	// whether string contains another string
 bool findString(const string& str, const string& c, size_t& id);
 bool isAbsolute(const string& path);
 string parentPath(const string& path);
-string filename(const string& path);
-string getExt(const string& path);
-bool hasExt(const string& path, const string& ext);
-string delExt(const string& path);
-string appendDsep(const string& path);
-bool isDriveLetter(const string& path);
+string filename(const string& path);	// get filename from path
+string getExt(const string& path);		// get file extension
+bool hasExt(const string& path, const string& ext);	// whether file has an extension
+string delExt(const string& path);		// returns filepath without extension
+string appendDsep(const string& path);	// append directory separator if necessary
+bool isDriveLetter(const string& path);	// check if path is a drive letter (plus colon and optionally dsep). only for windows
 string modifyCase(string str, ETextCase caseChange);
 vector<string> getWords(const string& line, char splitter);
-bool splitIniLine(const string& line, string* arg, string* val, string* key=nullptr, bool* isTitle=nullptr, size_t* id=nullptr);
+bool splitIniLine(const string& line, string& arg, string& val, string& key, bool& isTitle);	// split line from ini file into multiple arguments. if line is a title, arg will be set to the title string. returns false if interpreting failed
 
 // graphics
 bool inRect(const SDL_Rect& rect, vec2i point);
@@ -44,15 +44,15 @@ uint8 gpStrToButton(string str);
 string gpAxisToStr(uint8 gaxis);
 uint8 gpStrToAxis(string str);
 
-vec2i pix(const vec2f& p);
+vec2i pix(const vec2f& p);	// pixel value to "percentage" from 0 - 1
 int pixX(float p);
 int pixY(float p);
-vec2f prc(const vec2i& p);
+vec2f prc(const vec2i& p);	// "percentage" from 0 - 1 to pixel value
 float prcX(int p);
 float prcY(int p);
 
-float axisToFloat(int16 axisValue);
-int16 floatToAxis(float axisValue);
+float axisToFloat(int16 axisValue);	// input axis value to float from -1 to 1
+int16 floatToAxis(float axisValue);	// same as above except the other way around
 
 // pointer container cleaners
 template <typename T>

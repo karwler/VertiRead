@@ -14,9 +14,9 @@ int main(int argc, char** argv) {
 #endif
 	int retval = 0;
 	try {
-		World::engine()->Run();
+		World::engine()->start();
 	} catch (Exception exc) {
-		exc.Display();
+		exc.printMessage();
 		retval = exc.retval;
 	} catch (std::logic_error exc) {
 		cerr << "ERROR: " << exc.what() << endl;
@@ -28,6 +28,6 @@ int main(int argc, char** argv) {
 		cerr << "unknown error" << endl;
 		retval = -1;
 	}
-	World::engine()->Cleanup();
+	World::engine()->cleanup();
 	return retval;
 }

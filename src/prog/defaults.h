@@ -1,24 +1,23 @@
 #pragma once
 
-// include SDL
+// stuff that'll be used pretty much everywhere
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_mixer.h>
 
-// include kklib
 #include "kklib/aliases.h"
 #include "kklib/grid2.h"
 #include "kklib/vec2.h"
 #include "kklib/vec3.h"
 #include "kklib/vec4.h"
 
-// include other useful stuff
 #include <iostream>
 #include <string>
 #include <vector>
 #include <map>
 
+// to make life easier
 using std::cout;
 using std::cerr;
 using std::endl;
@@ -37,6 +36,7 @@ using kk::vec4c;
 using vec2t = kk::vec2<size_t>;
 using kk::grid2;
 
+// get rid of SDL's main
 #ifdef main
 #undef main
 #endif
@@ -55,7 +55,7 @@ class Program;
 
 class Object;
 class ScrollArea;
-class ScrollAreaX1;
+class ScrollAreaItems;
 class Capturer;
 
 // directory separator
@@ -71,7 +71,9 @@ namespace Default {
 const char language[] = "english";
 
 // video settings
-const vec2i resolution = vec2i(900, 600);
+const bool maximized = false;
+const bool fullscreen = false;
+const vec2i resolution = vec2i(800, 600);
 const char font[] = "arial";
 
 // window
@@ -205,6 +207,9 @@ const int itemSpacing = 5;
 const int itemHeight = 30;
 const int scrollBarWidth = 10;
 const float rbMenuHideTimeout = 1.f;
+const int rbBlistW = 48;
+const int rbPlayerW = 400;
+const int rbPlayerH = 72;
 const int checkboxSpacing = 5;
 const int caretWidth = 4;
 

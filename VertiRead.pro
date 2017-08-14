@@ -61,12 +61,12 @@ win32: DEFINES += _UNICODE \
 
 # set sources
 SOURCES += src/engine/audioSys.cpp \
+    src/engine/drawSys.cpp \
     src/engine/engine.cpp \
     src/engine/filer.cpp \
     src/engine/inputSys.cpp \
     src/engine/main.cpp \
     src/engine/scene.cpp \
-    src/engine/shaderSys.cpp \
     src/engine/windowSys.cpp \
     src/engine/world.cpp \
     src/prog/browser.cpp \
@@ -82,11 +82,11 @@ SOURCES += src/engine/audioSys.cpp \
     src/utils/utils.cpp
 
 HEADERS += src/engine/audioSys.h \
+    src/engine/drawSys.h \
     src/engine/engine.h \
     src/engine/filer.h \
     src/engine/inputSys.h \
     src/engine/scene.h \
-    src/engine/shaderSys.h \
     src/engine/windowSys.h \
     src/engine/world.h \
     src/kklib/aliases.h \

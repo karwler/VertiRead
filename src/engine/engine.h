@@ -6,15 +6,16 @@
 #include "windowSys.h"
 #include "scene.h"
 
+// the thing that runs and kills everything
 class Engine {
 public:
 	Engine();
 
-	void Run();
-	void Close();
-	void Cleanup();
+	void start();
+	void close();
+	void cleanup();
 
-	float deltaSeconds() const;
+	float getDSec() const;
 	AudioSys* getAudioSys();
 	InputSys* getInputSys();
 	WindowSys* getWindowSys();
@@ -26,8 +27,8 @@ private:
 	kk::sptr<WindowSys> winSys;
 	kk::sptr<Scene> scene;
 
-	bool run;
-	float dSec;
+	bool run;	// whether the loop in which the program runs should continue
+	float dSec;	// delta seconds, aka the time between each iteration of the above mentioned loop
 
-	void HandleEvent(const SDL_Event& event);
+	void handleEvent(const SDL_Event& event);	// pass events to their specific handlers
 };

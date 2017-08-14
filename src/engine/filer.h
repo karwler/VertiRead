@@ -3,74 +3,68 @@
 #include "utils/settings.h"
 
 enum EFileType : uint8 {
-	file,
-	dir,
-	link
+	FTYPE_FILE = 0x1,
+	FTYPE_DIR  = 0x2,
+	FTYPE_LINK = 0x4
 };
+EFileType operator~(EFileType a);
+EFileType operator&(EFileType a, EFileType b);
+EFileType operator&=(EFileType& a, EFileType b);
+EFileType operator^(EFileType a, EFileType b);
+EFileType operator^=(EFileType& a, EFileType b);
+EFileType operator|(EFileType a, EFileType b);
+EFileType operator|=(EFileType& a, EFileType b);
 
-enum EDirFilter : uint8 {
-	FILTER_FILE = 0x1,
-	FILTER_DIR  = 0x2,
-	FILTER_LINK = 0x4,
-	FILTER_ALL  = 0xFF
-};
-EDirFilter operator~(EDirFilter a);
-EDirFilter operator&(EDirFilter a, EDirFilter b);
-EDirFilter operator&=(EDirFilter& a, EDirFilter b);
-EDirFilter operator^(EDirFilter a, EDirFilter b);
-EDirFilter operator^=(EDirFilter& a, EDirFilter b);
-EDirFilter operator|(EDirFilter a, EDirFilter b);
-EDirFilter operator|=(EDirFilter& a, EDirFilter b);
-
+// handles all filesystem interactions
 class Filer {
 public:
-	static uint8 CheckDirectories(const GeneralSettings& sets);
+	static void checkDirectories(const GeneralSettings& sets);	// check if all (more or less) necessary files and directories exist
 
-	static vector<string> GetAvailibleThemes();
-	static void GetColors(map<EColor, vec4c>& colors, const string& theme);
-	static vector<string> GetAvailibleLanguages();
-	static map<string, string> GetLines(const string& language);
-	static map<string, Mix_Chunk*> GetSounds();
-	static map<string, Texture> GetTextures();
-	static vector<string> GetPics(const string& dir);
+	static vector<string> getAvailibleThemes();
+	static void getColors(map<EColor, vec4c>& colors, const string& theme);	// get theme's colors
+	static vector<string> getAvailibleLanguages();
+	static map<string, string> getLines(const string& language);	// get translations from language (-file)
+	static map<string, Mix_Chunk*> getSounds();
+	static map<string, Texture> getTextures();
+	static vector<string> getPics(const string& dir);	// get pictures for ReaderBox instance
 
-	static Playlist LoadPlaylist(const string& name);
-	static void SavePlaylist(const Playlist& plist);
+	static Playlist getPlaylist(const string& name);
+	static void savePlaylist(const Playlist& plist);
 
-	static GeneralSettings LoadGeneralSettings();
-	static void SaveSettings(const GeneralSettings& sets);
-	static VideoSettings LoadVideoSettings();
-	static void SaveSettings(const VideoSettings& sets);
-	static AudioSettings LoadAudioSettings();
-	static void SaveSettings(const AudioSettings& sets);
-	static ControlsSettings LoadControlsSettings();
-	static void SaveSettings(const ControlsSettings& sets);
+	static GeneralSettings getGeneralSettings();
+	static void saveSettings(const GeneralSettings& sets);
+	static VideoSettings getVideoSettings();
+	static void saveSettings(const VideoSettings& sets);
+	static AudioSettings getAudioSettings();
+	static void saveSettings(const AudioSettings& sets);
+	static ControlsSettings getControlsSettings();
+	static void saveSettings(const ControlsSettings& sets);
 
-	static bool ReadTextFile(const string& file, string& data);
-	static bool ReadTextFile(const string& file, vector<string>& lines, bool printMessage=true);
-	static bool WriteTextFile(const string& file, const vector<string>& lines);
-	static bool MkDir(const string& path);
-	static bool Remove(const string& path);
-	static bool Rename(const string& path, const string& newPath);
-	static vector<string> ListDir(const string& dir, EDirFilter filter=FILTER_ALL, const vector<string>& extFilter={});
-	static vector<string> ListDirRecursively(const string& dir, size_t offs=0);
-	static EFileType FileType(const string& path);
-	static bool Exists(const string& path);
+	static bool readTextFile(const string& file, string& data);
+	static bool readTextFile(const string& file, vector<string>& lines, bool printMessage=true);
+	static bool writeTextFile(const string& file, const vector<string>& lines);
+	static bool mkDir(const string& path);
+	static bool remove(const string& path);
+	static bool rename(const string& path, const string& newPath);
+	static vector<string> listDir(const string& dir, EFileType filter=FTYPE_FILE | FTYPE_DIR | FTYPE_LINK, const vector<string>& extFilter={});
+	static vector<string> listDirRecursively(const string& dir, size_t offs=0);
+	static EFileType fileType(const string& path);
+	static bool fileExists(const string& path);		// can be used for directories
 
 #ifdef _WIN32
-	static vector<char> ListDrives();
+	static vector<char> listDrives();	// get list of driver letters under windows
 #endif
-	static string GetDirExec();
-	static vector<string> dirFonts();
-	static string FindFont(const string& font);	// on success returns absolute path to font file, otherwise returns empty path
+	static string getDirExec();		// set dirExec
+	static string findFont(const string& font);	// on success returns absolute path to font file, otherwise returns empty path
 	
-	static const string dirExec;
-	static const string dirSets;
-	static const string dirLangs;
-	static const string dirSnds;
-	static const string dirTexs;
+	static const string dirExec;	// directory in which the executable should currently be
+	static const string dirSets;	// settings directory
+	static const string dirLangs;	// language files directory
+	static const string dirSnds;	// sounds directory
+	static const string dirTexs;	// textures directory
+	static const vector<string> dirFonts;	// os's font directories
 
 private:
-	static string CheckDirForFont(const string& font, const string& dir);	// returns same as FindFont
-	static std::istream& ReadLine(std::istream& ifs, string& str);
+	static string checkDirForFont(const string& font, const string& dir);	// necessary for FindFont()
+	static std::istream& readLine(std::istream& ifs, string& str);
 };

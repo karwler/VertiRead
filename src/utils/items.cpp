@@ -2,19 +2,20 @@
 
 // LIST ITEM
 
-ListItem::ListItem(const string& LBL, ScrollArea* SA) :
+ListItem::ListItem(const string& LBL, ScrollAreaItems* SA) :
 	label(LBL),
 	parent(SA)
 {}
 ListItem::~ListItem() {}
 
-void ListItem::OnClick(ClickType click) {
-	if (parent)
-		parent->selectedItem = this;
-	if (click.button == SDL_BUTTON_LEFT && click.clicks == 2)
-		World::program()->Event_ItemDoubleclicked(this);
-
-	World::winSys()->SetRedrawNeeded();
+void ListItem::onClick(ClickType click) {
+	if (click.button == SDL_BUTTON_LEFT) {
+		if (parent)		// if item is selectable, select it
+			parent->selectedItem = this;
+		if (click.clicks == 2)	// double click event
+			World::program()->eventItemDoubleclicked(this);
+	}
+	World::winSys()->setRedrawNeeded();
 }
 
 const string& ListItem::getData() const {
@@ -27,15 +28,15 @@ bool ListItem::selectable() const {
 
 // ITEM BUTTON
 
-ItemButton::ItemButton(const string& LBL, const string& DAT, void (Program::*CALLB)(void*), ScrollArea* SA) :
+ItemButton::ItemButton(const string& LBL, const string& DAT, void (Program::*CALLB)(void*), ScrollAreaItems* SA) :
 	ListItem(LBL, SA),
-	callback(CALLB),
+	call(CALLB),
 	data(DAT)
 {}
 ItemButton::~ItemButton() {}
 
-void ItemButton::OnClick(ClickType click) {
-	ListItem::OnClick(click);
+void ItemButton::onClick(ClickType click) {
+	ListItem::onClick(click);
 
 	// decide what to send
 	void* dat;
@@ -44,54 +45,56 @@ void ItemButton::OnClick(ClickType click) {
 	else
 		dat = (void*)getData().c_str();
 	
-	if (callback)
-		(World::program()->*callback)(dat);
+	if (call)
+		(World::program()->*call)(dat);
 }
 
 const string& ItemButton::getData() const {
 	return data.empty() ? label : data;
 }
 
-void ItemButton::Data(const string& dat) {
+void ItemButton::setData(const string& dat) {
 	data = dat;
 }
 
 // CHECKBOX
 
-Checkbox::Checkbox(ScrollAreaX1* SA, const string& LBL, bool ON, void (Program::*CALLB)(bool)) :
+Checkbox::Checkbox(ScrollAreaItems* SA, const string& LBL, bool ON, void (Program::*CALLB)(bool)) :
 	ListItem(LBL, SA),
-	callback(CALLB),
+	call(CALLB),
 	on(ON)
 {}
 Checkbox::~Checkbox() {}
 
-void Checkbox::OnClick(ClickType click) {
+void Checkbox::onClick(ClickType click) {
 	on = !on;
-	if (callback)
-		(World::program()->*callback)(on);
+	if (call)
+		(World::program()->*call)(on);
 
-	World::winSys()->SetRedrawNeeded();
+	World::winSys()->setRedrawNeeded();
 }
 
-ScrollAreaX1* Checkbox::Parent() const {
-	return static_cast<ScrollAreaX1*>(parent);
-}
-
-bool Checkbox::On() const {
+bool Checkbox::getOn() const {
 	return on;
+}
+
+void Checkbox::setOn(bool ON) {
+	on = ON;
+	World::winSys()->setRedrawNeeded();
 }
 
 // SWITCHBOX
 
-Switchbox::Switchbox(ScrollAreaX1* SA, const string& LBL, const vector<string>& OPT, const string& CUR_OPT, void (Program::*CALLB)(const string&)) :
+Switchbox::Switchbox(ScrollAreaItems* SA, const string& LBL, const vector<string>& OPT, const string& CUR_OPT, void (Program::*CALLB)(const string&)) :
 	ListItem(LBL, SA),
-	callback(CALLB),
+	call(CALLB),
 	curOpt(0),
 	options(OPT)
 {
 	if (options.empty())		// there needs to be at least one element
 		options.push_back("");
 
+	// set current option (remains 0 if nothing found)
 	for (size_t i=0; i!=options.size(); i++)
 		if (options[i] == CUR_OPT) {
 			curOpt = i;
@@ -100,20 +103,17 @@ Switchbox::Switchbox(ScrollAreaX1* SA, const string& LBL, const vector<string>& 
 }
 Switchbox::~Switchbox() {}
 
-void Switchbox::OnClick(ClickType click) {
-	if (click.button == SDL_BUTTON_LEFT && click.clicks == 2)
+void Switchbox::onClick(ClickType click) {
+	// left click cycles forward and right click cycles backward
+	if (click.button == SDL_BUTTON_LEFT)
 		curOpt = (curOpt == options.size()-1) ? 0 : curOpt + 1;
-	else
+	else if (click.button == SDL_BUTTON_RIGHT)
 		curOpt = (curOpt == 0) ? options.size()-1 : curOpt - 1;
 	
-	if (callback)
-		(World::program()->*callback)(options[curOpt]);
+	if (call)
+		(World::program()->*call)(options[curOpt]);
 }
 
-ScrollAreaX1* Switchbox::Parent() const {
-	return static_cast<ScrollAreaX1*>(parent);
-}
-
-string Switchbox::CurOption() const {
+string Switchbox::getCurOption() const {
 	return options[curOpt];
 }

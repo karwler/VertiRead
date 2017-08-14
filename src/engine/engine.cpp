@@ -5,26 +5,27 @@ Engine::Engine() :
 	dSec(0.f)
 {}
 
-void Engine::Run() {
+void Engine::start() {
 	// initialize all components
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER))
 		throw Exception("couldn't initialize SDL\n" + string(SDL_GetError()), 1);
 	if (TTF_Init())
 		throw Exception("couldn't initialize fonts\n" + string(SDL_GetError()), 2);
+	
+	winSys = new WindowSys(Filer::getVideoSettings());
+	inputSys = new InputSys(Filer::getControlsSettings());
+	audioSys = new AudioSys(Filer::getAudioSettings());
 
-	winSys = new WindowSys(Filer::LoadVideoSettings());
-	inputSys = new InputSys(Filer::LoadControlsSettings());
-	audioSys = new AudioSys(Filer::LoadAudioSettings());
-
-	winSys->CreateWindow();
-	scene = new Scene(Filer::LoadGeneralSettings());		// initializes program and library
+	winSys->createWindow();
+	scene = new Scene();	// initializes program and library
 
 	// initialize values
-	scene->getProgram()->Event_OpenBookList();
+	scene->getProgram().eventOpenBookList();
 	run = true;
 	SDL_Event event;
 	uint32 oldTime = SDL_GetTicks();
 
+	// the loop :o
 	while (run) {
 		// get delta seconds
 		uint32 newTime = SDL_GetTicks();
@@ -32,29 +33,29 @@ void Engine::Run() {
 		oldTime = newTime;
 
 		// draw scene if requested
-		winSys->DrawObjects(scene->Objects(), scene->getPopup());
+		winSys->drawObjects(scene->getObjects(), scene->getPopup());
 
 		// handle events
-		audioSys->Tick(dSec);
-		scene->Tick(dSec);
+		audioSys->tick(dSec);
+		scene->tick(dSec);
 
 		uint32 timeout = SDL_GetTicks() + Default::eventCheckTimeout;
 		while (SDL_PollEvent(&event) && timeout - SDL_GetTicks() > 0)
-			HandleEvent(event);
+			handleEvent(event);
 	}
 }
 
-void Engine::Close() {
+void Engine::close() {
 	// save all settings before quitting
-	Filer::SaveSettings(scene->Settings());
-	Filer::SaveSettings(winSys->Settings());
-	Filer::SaveSettings(audioSys->Settings());
-	Filer::SaveSettings(inputSys->Settings());
+	Filer::saveSettings(scene->getLibrary().getSettings());
+	Filer::saveSettings(winSys->getSettings());
+	Filer::saveSettings(audioSys->getSettings());
+	Filer::saveSettings(inputSys->getSettings());
 	
 	run = false;
 }
 
-void Engine::Cleanup() {
+void Engine::cleanup() {
 	scene.clear();
 	audioSys.clear();
 	inputSys.clear();
@@ -64,41 +65,40 @@ void Engine::Cleanup() {
 	SDL_Quit();
 }
 
-void Engine::HandleEvent(const SDL_Event& event) {
-	// pass event to a specific handler
+void Engine::handleEvent(const SDL_Event& event) {
 	if (event.type == SDL_KEYDOWN)
-		inputSys->KeypressEvent(event.key);
+		inputSys->eventKeypress(event.key);
 	else if (event.type == SDL_JOYBUTTONDOWN)
-		inputSys->JoystickButtonEvent(event.jbutton);
+		inputSys->eventJoystickButton(event.jbutton);
 	else if (event.type == SDL_JOYHATMOTION)
-		inputSys->JoystickHatEvent(event.jhat);
+		inputSys->eventJoystickHat(event.jhat);
 	else if (event.type == SDL_JOYAXISMOTION)
-		inputSys->JoystickAxisEvent(event.jaxis);
+		inputSys->eventJoystickAxis(event.jaxis);
 	else if (event.type == SDL_CONTROLLERBUTTONDOWN)
-		inputSys->GamepadButtonEvent(event.cbutton);
+		inputSys->eventGamepadButton(event.cbutton);
 	else if (event.type == SDL_CONTROLLERAXISMOTION)
-		inputSys->GamepadAxisEvent(event.caxis);
+		inputSys->eventGamepadAxis(event.caxis);
 	else if (event.type == SDL_MOUSEMOTION)
-		inputSys->MouseMotionEvent(event.motion);
+		inputSys->eventMouseMotion(event.motion);
 	else if (event.type == SDL_MOUSEBUTTONDOWN)
-		inputSys->MouseButtonDownEvent(event.button);
+		inputSys->eventMouseButtonDown(event.button);
 	else if (event.type == SDL_MOUSEBUTTONUP)
-		inputSys->MouseButtonUpEvent(event.button);
+		inputSys->eventMouseButtonUp(event.button);
 	else if (event.type == SDL_MOUSEWHEEL)
-		inputSys->MouseWheelEvent(event.wheel);
+		inputSys->eventMouseWheel(event.wheel);
 	else if (event.type == SDL_TEXTINPUT)
-		inputSys->TextEvent(event.text);
+		inputSys->eventText(event.text);
 	else if (event.type == SDL_WINDOWEVENT)
-		winSys->WindowEvent(event.window);
+		winSys->eventWindow(event.window);
 	else if (event.type == SDL_JOYDEVICEADDED || event.type == SDL_JOYDEVICEREMOVED)
-		inputSys->UpdateControllers();
+		inputSys->updateControllers();
 	else if (event.type == SDL_DROPFILE)
-		scene->getProgram()->FileDropEvent(event.drop.file);
+		scene->getProgram().eventFileDrop(event.drop.file);
 	else if (event.type == SDL_QUIT)
-		Close();
+		close();
 }
 
-float Engine::deltaSeconds() const {
+float Engine::getDSec() const {
 	return dSec;
 }
 

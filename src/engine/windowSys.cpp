@@ -5,15 +5,15 @@ WindowSys::WindowSys(const VideoSettings& SETS) :
 	redraw(false),
 	sets(SETS)
 {
-	ShowMouse(true);
+	setShowMouse(true);
 }
 
 WindowSys::~WindowSys() {
-	DestroyWindow();	// scene cleans up popup window
+	destroyWindow();
 }
 
-void WindowSys::CreateWindow() {
-	DestroyWindow();	// make sure old window (if exists) is destroyed
+void WindowSys::createWindow() {
+	destroyWindow();	// make sure old window (if exists) is destroyed
 
 	// create new window
 	uint32 flags = Default::windowFlags;
@@ -33,98 +33,99 @@ void WindowSys::CreateWindow() {
 		SDL_FreeSurface(icon);
 	}
 
-	shaderSys.CreateRenderer(window, sets.GetRenderDriverIndex());
-	SetRedrawNeeded();
+	// set up renderer
+	shaderSys.createRenderer(window, sets.getRenderDriverIndex());
+	setRedrawNeeded();
 }
 
-void WindowSys::DestroyWindow() {
-	shaderSys.DestroyRenderer();
+void WindowSys::destroyWindow() {
+	shaderSys.destroyRenderer();
 	if (window) {
 		SDL_DestroyWindow(window);
 		window = nullptr;
 	}
 }
 
-void WindowSys::DrawObjects(const vector<Object*>& objects, const Popup* popup) {
+void WindowSys::drawObjects(const vector<Object*>& objects, const Popup* popup) {
 	if (redraw) {
 		redraw = false;
-		shaderSys.DrawObjects(objects, popup);
+		shaderSys.drawObjects(objects, popup);
 	}
 }
 
-bool WindowSys::ShowMouse() const {
+bool WindowSys::getShowMouse() const {
 	return showMouse;
 }
 
-void WindowSys::ShowMouse(bool on) {
+void WindowSys::setShowMouse(bool on) {
 	showMouse = on;
 	SDL_ShowCursor(showMouse ? SDL_ENABLE : SDL_DISABLE);
 }
 
-void WindowSys::WindowEvent(const SDL_WindowEvent& winEvent) {
+void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 	if (winEvent.event == SDL_WINDOWEVENT_EXPOSED)
-		SetRedrawNeeded();
+		setRedrawNeeded();
 	else if (winEvent.event == SDL_WINDOWEVENT_RESIZED) {
 		// update settings if needed
 		uint32 flags = SDL_GetWindowFlags(window);
 		if (!(flags & SDL_WINDOW_FULLSCREEN_DESKTOP)) {
 			sets.maximized = flags & SDL_WINDOW_MAXIMIZED;
 			if (!sets.maximized)
-				sets.resolution = Resolution();
+				sets.resolution = resolution();
 		}
 	} else if (winEvent.event == SDL_WINDOWEVENT_SIZE_CHANGED)
-		World::scene()->ResizeMenu();
+		World::scene()->resizeMenu();
 	else if (winEvent.event == SDL_WINDOWEVENT_LEAVE)
-		World::scene()->OnMouseLeave();
+		World::scene()->onMouseLeave();
 }
 
-void WindowSys::SetRedrawNeeded() {
+void WindowSys::setRedrawNeeded() {
 	redraw = true;
 }
 
-vec2i WindowSys::DesktopResolution() {
+vec2i WindowSys::displayResolution() {
 	SDL_DisplayMode mode;
 	SDL_GetDesktopDisplayMode(0, &mode);
 	return vec2i(mode.w, mode.h);
 }
 
-vec2i WindowSys::Resolution() const {
+vec2i WindowSys::resolution() const {
 	vec2i res;
 	SDL_GetWindowSize(window, &res.x, &res.y);
 	return res;
 }
 
-vec2i WindowSys::Position() const {
+vec2i WindowSys::position() const {
 	vec2i pos;
 	SDL_GetWindowPosition(window, &pos.x, &pos.y);
 	return pos;
 }
 
-const VideoSettings& WindowSys::Settings() const {
+const VideoSettings& WindowSys::getSettings() const {
 	return sets;
 }
 
-void WindowSys::Renderer(const string& name) {
+void WindowSys::setRenderer(const string& name) {
 	sets.renderer = name;
-	CreateWindow();
+	createWindow();
 }
 
-void WindowSys::Fullscreen(bool on) {
+void WindowSys::setFullscreen(bool on) {
 	sets.fullscreen = on;
-	CreateWindow();
+	createWindow();
 }
 
-void WindowSys::Font(const string& font) {
-	sets.SetFont(font);
-	World::library()->LoadFont(sets.Fontpath());
+void WindowSys::setFont(const string& font) {
+	sets.setFont(font);
+	World::library()->loadFont(sets.getFontpath());
 
-	SetRedrawNeeded();
+	setRedrawNeeded();
 }
 
-void WindowSys::Theme(const string& theme) {
-	sets.SetDefaultTheme();
+void WindowSys::setTheme(const string& theme) {
+	sets.setDefaultTheme();
 	sets.theme = theme;
-	Filer::GetColors(sets.colors, sets.theme);
+	Filer::getColors(sets.colors, sets.theme);
 
-	SetRedrawNeeded();
+	setRedrawNeeded();
 }
