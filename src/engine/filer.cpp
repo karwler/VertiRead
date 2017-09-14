@@ -1,15 +1,12 @@
+#include "filer.h"
 #include "world.h"
 #include <fstream>
-#include <streambuf>
 #include <algorithm>
 #ifdef _WIN32
 #include <windows.h>
 #else
-	namespace uni {		// necessary to prevent conflicts
-	#include <unistd.h>
-	}
+#include <unistd.h>
 #include <dirent.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #endif
 
@@ -81,36 +78,34 @@ vector<string> Filer::getAvailibleThemes() {
 
 	vector<string> themes;
 	for (string& line : lines) {
-		bool isTitle;
-		string arg, val, key;
-		if (splitIniLine(line, arg, val, key, isTitle))
-			if (!isTitle && !contains(themes, arg))
-				themes.push_back(arg);
+		IniLine il;
+		if (il.setLine(line) && il.type != IniLine::Type::title && !contains(themes, il.arg))
+			themes.push_back(il.arg);
 	}
 	return themes;
 }
 
-void Filer::getColors(map<EColor, vec4c>& colors, const string& theme) {
+void Filer::getColors(map<EColor, SDL_Color>& colors, const string& theme) {
 	vector<string> lines;
 	if (!readTextFile(dirExec + Default::fileThemes, lines), false)
 		return;
 
 	for (string& line : lines) {
-		bool isTitle;
-		string arg, val, key;
-		if (!splitIniLine(line, arg, val, key, isTitle) || isTitle)
+		IniLine il;
+		if (!il.setLine(line) || il.type == IniLine::Type::title)
 			continue;
 
-		if (arg == theme) {
-			EColor clr = EColor(stoi(key));
+		if (il.arg == theme) {
+			EColor clr = EColor(stoi(il.key));
 			if (colors.count(clr) == 0)
 				colors.insert(make_pair(clr, VideoSettings::getDefaultColor(clr)));
+			SDL_Color& color = colors[clr];
 
-			vector<string> elems = getWords(val, ' ');
-			if (elems.size() > 0) colors[clr].x = stoi(elems[0]);
-			if (elems.size() > 1) colors[clr].y = stoi(elems[1]);
-			if (elems.size() > 2) colors[clr].z = stoi(elems[2]);
-			if (elems.size() > 3) colors[clr].a = stoi(elems[3]);
+			vector<string> elems = getWords(il.val, ' ');
+			if (elems.size() > 0) color.r = stoi(elems[0]);
+			if (elems.size() > 1) color.g = stoi(elems[1]);
+			if (elems.size() > 2) color.b = stoi(elems[2]);
+			if (elems.size() > 3) color.a = stoi(elems[3]);
 		}
 	}
 }
@@ -132,10 +127,9 @@ map<string, string> Filer::getLines(const string& language) {
 
 	map<string, string> translation;
 	for (string& line : lines) {
-		bool isTitle;
-		string arg, val, key;
-		if (splitIniLine(line, arg, val, key, isTitle) && !isTitle)
-			translation.insert(make_pair(arg, val));
+		IniLine il;
+		if (il.setLine(line) && il.type != IniLine::Type::title)
+			translation.insert(make_pair(il.arg, il.val));
 	}
 	return translation;
 }
@@ -148,26 +142,6 @@ map<string, Mix_Chunk*> Filer::getSounds() {
 	return sounds;
 }
 
-map<string, Texture> Filer::getTextures() {
-	map<string, Texture> texes;
-	for (string& it : listDir(dirTexs, FTYPE_FILE)) {
-		string path = dirTexs + it;
-		if (SDL_Surface* surf = IMG_Load(path.c_str()))	// add only valid textures
-			texes.insert(make_pair(delExt(it), Texture(path, surf)));
-	}
-	return texes;
-}
-
-vector<string> Filer::getPics(const string& dir) {
-	if (fileType(dir) != FTYPE_DIR)
-		return {};
-
-	vector<string> pics = listDir(dir, FTYPE_FILE);
-	for (string& it : pics)
-		it = dir + it;
-	return pics;
-}
-
 Playlist Filer::getPlaylist(const string& name) {
 	vector<string> lines;
 	if (!readTextFile(World::library()->getSettings().playlistPath() + name + ".ini", lines))
@@ -175,15 +149,14 @@ Playlist Filer::getPlaylist(const string& name) {
 
 	Playlist plist(name);
 	for (string& line : lines) {
-		bool isTitle;
-		string arg, val, key;
-		if (!splitIniLine(line, arg, val, key, isTitle) || isTitle)
+		IniLine il;
+		if (!il.setLine(line) || il.type == IniLine::Type::title)
 			continue;
 
-		if (arg == Default::iniKeywordBook)
-			plist.books.push_back(val);
-		else if (arg == Default::iniKeywordSong)
-			plist.songs.push_back(val);	// AudioSys will check if the song is playable cause we want all lines for the playlist editor
+		if (il.arg == Default::iniKeywordBook)
+			plist.books.push_back(il.val);
+		else if (il.arg == Default::iniKeywordSong)
+			plist.songs.push_back(il.val);	// AudioSys will check if the song is playable cause we want all lines for the playlist editor
 	}
 	return plist;
 }
@@ -191,11 +164,46 @@ Playlist Filer::getPlaylist(const string& name) {
 void Filer::savePlaylist(const Playlist& plist) {
 	vector<string> lines;
 	for (const string& name : plist.books)
-		lines.push_back(Default::iniKeywordSong + string("=") + name);
+		lines.push_back(IniLine(Default::iniKeywordSong, name).line());
 	for (const string& file : plist.songs)
-		lines.push_back(Default::iniKeywordSong + string("=") + file);
+		lines.push_back(IniLine(Default::iniKeywordSong, file).line());
 
 	writeTextFile(World::library()->getSettings().playlistPath() + plist.name + ".ini", lines);
+}
+
+string Filer::getLastPage(const string& book) {
+	vector<string> lines;
+	if (!readTextFile(dirSets + Default::fileLastPages, lines, false))
+		return "";
+
+	for (string& line : lines) {
+		IniLine il;
+		if (il.setLine(line) && il.type != IniLine::Type::title && il.arg == book)
+			return il.val;
+	}
+	return "";
+}
+
+void Filer::saveLastPage(const string& file) {
+	vector<string> lines;
+	readTextFile(dirSets + Default::fileLastPages, lines, false);
+
+	// find line to replace or push back
+	size_t id = lines.size();
+	string book = getBook(file);
+	for (size_t i=0; i!=lines.size(); i++) {
+		IniLine il;
+		if (il.setLine(lines[i]) && il.type != IniLine::Type::title && il.arg == book) {
+			id = i;
+			break;
+		}
+	}
+	if (id == lines.size())
+		lines.push_back(IniLine(book, file).line());
+	else
+		lines[id] = IniLine(book, file).line();
+
+	writeTextFile(dirSets + Default::fileLastPages, lines);
 }
 
 GeneralSettings Filer::getGeneralSettings() {
@@ -205,26 +213,25 @@ GeneralSettings Filer::getGeneralSettings() {
 
 	GeneralSettings sets;
 	for (string& line : lines) {
-		bool isTitle;
-		string arg, val, key;
-		if (!splitIniLine(line, arg, val, key, isTitle) || isTitle)
+		IniLine il;
+		if (!il.setLine(line) || il.type == IniLine::Type::title)
 			continue;
 
-		if (arg == Default::iniKeywordLanguage)
-			sets.setLang(val);
-		else if (arg == Default::iniKeywordLibrary)
-			sets.setDirLib(val);
-		else if (arg == Default::iniKeywordPlaylists)
-			sets.setDirPlist(val);
+		if (il.arg == Default::iniKeywordLanguage)
+			sets.setLang(il.val);
+		else if (il.arg == Default::iniKeywordLibrary)
+			sets.setDirLib(il.val);
+		else if (il.arg == Default::iniKeywordPlaylists)
+			sets.setDirPlist(il.val);
 	}
 	return sets;
 }
 
 void Filer::saveSettings(const GeneralSettings& sets) {
 	vector<string> lines = {
-		Default::iniKeywordLanguage + string("=") + sets.getLang(),
-		Default::iniKeywordLibrary + string("=") + sets.getDirLib(),
-		Default::iniKeywordPlaylists + string("=") + sets.getDirPlist()
+		IniLine(Default::iniKeywordLanguage, sets.getLang()).line(),
+		IniLine(Default::iniKeywordLibrary, sets.getDirLib()).line(),
+		IniLine(Default::iniKeywordPlaylists, sets.getDirPlist()).line()
 	};
 	writeTextFile(dirSets + Default::fileGeneralSettings, lines);
 }
@@ -236,26 +243,24 @@ VideoSettings Filer::getVideoSettings() {
 
 	VideoSettings sets;
 	for (string& line : lines) {
-		bool isTitle;
-		string arg, val, key;
-		if (!splitIniLine(line, arg, val, key, isTitle) || isTitle)
+		IniLine il;
+		if (!il.setLine(line) || il.type == IniLine::Type::title)
 			continue;
 
-		if (arg == Default::iniKeywordFont)
-			sets.setFont(val);
-		else if (arg == Default::iniKeywordRenderer)
-			sets.renderer = val;
-		else if (arg == Default::iniKeywordMaximized)
-			sets.maximized = stob(val);
-		else if (arg == Default::iniKeywordFullscreen)
-			sets.fullscreen = stob(val);
-		else if (arg == Default::iniKeywordResolution) {
-			vector<string> elems = getWords(val, ' ');
+		if (il.arg == Default::iniKeywordFont)
+			sets.setFont(il.val);
+		else if (il.arg == Default::iniKeywordRenderer)
+			sets.renderer = il.val;
+		else if (il.arg == Default::iniKeywordMaximized)
+			sets.maximized = stob(il.val);
+		else if (il.arg == Default::iniKeywordFullscreen)
+			sets.fullscreen = stob(il.val);
+		else if (il.arg == Default::iniKeywordResolution) {
+			vector<string> elems = getWords(il.val, ' ');
 			if (elems.size() > 0) sets.resolution.x = stoi(elems[0]);
 			if (elems.size() > 1) sets.resolution.y = stoi(elems[1]);
-		}
-		else if (arg == Default::iniKeywordTheme)
-			sets.theme = val;
+		} else if (il.arg == Default::iniKeywordTheme)
+			sets.theme = il.val;
 	}
 	getColors(sets.colors, sets.theme);
 	return sets;
@@ -263,12 +268,12 @@ VideoSettings Filer::getVideoSettings() {
 
 void Filer::saveSettings(const VideoSettings& sets) {
 	vector<string> lines = {
-		Default::iniKeywordFont + string("=") + sets.getFont(),
-		Default::iniKeywordRenderer + string("=") + sets.renderer,
-		Default::iniKeywordMaximized + string("=") + btos(sets.maximized),
-		Default::iniKeywordFullscreen + string("=") + btos(sets.fullscreen),
-		Default::iniKeywordResolution + string("=") + to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y),
-		Default::iniKeywordTheme + string("=") + sets.theme
+		IniLine(Default::iniKeywordFont, sets.getFont()).line(),
+		IniLine(Default::iniKeywordRenderer, sets.renderer).line(),
+		IniLine(Default::iniKeywordMaximized, btos(sets.maximized)).line(),
+		IniLine(Default::iniKeywordFullscreen, btos(sets.fullscreen)).line(),
+		IniLine(Default::iniKeywordResolution, to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y)).line(),
+		IniLine(Default::iniKeywordTheme, sets.theme).line()
 	};
 	writeTextFile(dirSets + Default::fileVideoSettings, lines);
 }
@@ -280,26 +285,25 @@ AudioSettings Filer::getAudioSettings() {
 
 	AudioSettings sets;
 	for (string& line : lines) {
-		bool isTitle;
-		string arg, val, key;
-		if (!splitIniLine(line, arg, val, key, isTitle) || isTitle)
+		IniLine il;
+		if (!il.setLine(line) || il.type == IniLine::Type::title)
 			continue;
 
-		if (arg == Default::iniKeywordVolMusic)
-			sets.musicVolume = stoi(val);
-		else if (arg == Default::iniKeywordVolSound)
-			sets.soundVolume = stoi(val);
-		else if (arg == Default::iniKeywordSongDelay)
-			sets.songDelay = stof(val);
+		if (il.arg == Default::iniKeywordVolMusic)
+			sets.musicVolume = stoi(il.val);
+		else if (il.arg == Default::iniKeywordVolSound)
+			sets.soundVolume = stoi(il.val);
+		else if (il.arg == Default::iniKeywordSongDelay)
+			sets.songDelay = stof(il.val);
 	}
 	return sets;
 }
 
 void Filer::saveSettings(const AudioSettings& sets) {
 	vector<string> lines = {
-		Default::iniKeywordVolMusic + string("=") + to_string(sets.musicVolume),
-		Default::iniKeywordVolSound + string("=") + to_string(sets.soundVolume),
-		Default::iniKeywordSongDelay + string("=") + to_string(sets.songDelay)
+		IniLine(Default::iniKeywordVolMusic, to_string(sets.musicVolume)).line(),
+		IniLine(Default::iniKeywordVolSound, to_string(sets.soundVolume)).line(),
+		IniLine(Default::iniKeywordSongDelay, to_string(sets.songDelay)).line()
 	};
 	writeTextFile(dirSets + Default::fileAudioSettings, lines);
 }
@@ -311,44 +315,42 @@ ControlsSettings Filer::getControlsSettings() {
 
 	ControlsSettings sets;
 	for (string& line : lines) {
-		bool isTitle;
-		string arg, val, key;
-		if (!splitIniLine(line, arg, val, key, isTitle) || isTitle)
+		IniLine il;
+		if (!il.setLine(line) || il.type == IniLine::Type::title)
 			continue;
 
-		if (arg == Default::iniKeywordScrollSpeed) {
-			vector<string> elems = getWords(val, ' ');
+		if (il.arg == Default::iniKeywordScrollSpeed) {
+			vector<string> elems = getWords(il.val, ' ');
 			if (elems.size() > 0)
 				sets.scrollSpeed.x = stof(elems[0]);
 			if (elems.size() > 1)
 				sets.scrollSpeed.y = stof(elems[1]);
-		}
-		else if (arg == Default::iniKeywordDeadzone)
-			sets.deadzone = stoi(val);
-		else if (arg == Default::iniKeywordShortcut && sets.shortcuts.count(key) != 0) {		// shortcuts have to already contain a variable for this key
-			Shortcut* sc = sets.shortcuts[key];
-			switch (toupper(val[0])) {
+		} else if (il.arg == Default::iniKeywordDeadzone)
+			sets.deadzone = stoi(il.val);
+		else if (il.arg == Default::iniKeywordShortcut && sets.shortcuts.count(il.key) != 0) {		// shortcuts have to already contain a variable for this key
+			Shortcut* sc = sets.shortcuts[il.key];
+			switch (toupper(il.val[0])) {
 			case 'K':	// keyboard key
-				sc->setKey(SDL_GetScancodeFromName(val.substr(2).c_str()));
+				sc->setKey(SDL_GetScancodeFromName(il.val.substr(2).c_str()));
 				break;
 			case 'B':	// joystick button
-				sc->setJbutton(stoi(val.substr(2)));
+				sc->setJbutton(stoi(il.val.substr(2)));
 				break;
 			case 'H':	// joystick hat
-				for (size_t i=2; i<val.size(); i++)
-					if (val[i] < '0' || val[i] > '9') {
-						sc->setJhat(stoi(val.substr(2, i-2)), jtStrToHat(val.substr(i+1)));
+				for (size_t i=2; i<il.val.size(); i++)
+					if (il.val[i] < '0' || il.val[i] > '9') {
+						sc->setJhat(stoi(il.val.substr(2, i-2)), jtStrToHat(il.val.substr(i+1)));
 						break;
 					}
 				break;
 			case 'A':	// joystick axis
-				sc->setJaxis(stoi(val.substr(3)), (val[2] != '-'));
+				sc->setJaxis(stoi(il.val.substr(3)), (il.val[2] != '-'));
 				break;
 			case 'G':	// gamepad button
-				sc->gbutton(gpStrToButton(val.substr(2)));
+				sc->gbutton(gpStrToButton(il.val.substr(2)));
 				break;
 			case 'X':	// gamepad axis
-				sc->setGaxis(gpStrToAxis(val.substr(3)), (val[2] != '-'));
+				sc->setGaxis(gpStrToAxis(il.val.substr(3)), (il.val[2] != '-'));
 			}
 		}
 	}
@@ -357,8 +359,8 @@ ControlsSettings Filer::getControlsSettings() {
 
 void Filer::saveSettings(const ControlsSettings& sets) {
 	vector<string> lines = {
-		Default::iniKeywordShortcut + string("=") + to_string(sets.scrollSpeed.x) + " " + to_string(sets.scrollSpeed.y),
-		Default::iniKeywordDeadzone + string("=") + to_string(sets.deadzone)
+		IniLine(Default::iniKeywordShortcut, to_string(sets.scrollSpeed.x) + " " + to_string(sets.scrollSpeed.y)).line(),
+		IniLine(Default::iniKeywordDeadzone, to_string(sets.deadzone)).line()
 	};
 	for (const pair<string, Shortcut*>& it : sets.shortcuts) {
 		vector<string> values;
@@ -378,7 +380,7 @@ void Filer::saveSettings(const ControlsSettings& sets) {
 			values.push_back(string(it.second->gposAxisAssigned() ? "X_+" : "X_-") + gpAxisToStr(it.second->getGctID()));
 
 		for (string& val : values)
-			lines.push_back(Default::iniKeywordShortcut + string("[") + it.first + "]=" + val);
+			lines.push_back(IniLine(Default::iniKeywordShortcut, it.first, val).line());
 	}
 	writeTextFile(dirSets + Default::fileControlsSettings, lines);
 }
@@ -403,7 +405,8 @@ bool Filer::readTextFile(const string& file, vector<string>& lines, bool printMe
 	lines.clear();
 
 	for (string line; readLine(ifs, line);)
-		lines.push_back(line);
+		if (!line.empty())		// skip empty lines
+			lines.push_back(line);
 	return true;
 }
 
@@ -427,11 +430,11 @@ bool Filer::mkDir(const string& path) {
 }
 
 bool Filer::remove(const string& path) {
-	return std::remove(path.c_str());
+	return remove(path.c_str());
 }
 
 bool Filer::rename(const string& path, const string& newPath) {
-	return std::rename(path.c_str(), newPath.c_str());
+	return rename(path.c_str(), newPath.c_str());
 }
 
 vector<string> Filer::listDir(const string& dir, EFileType filter, const vector<string>& extFilter) {
@@ -548,7 +551,7 @@ vector<string> Filer::listDirRecursively(const string& dir, size_t offs) {
 
 EFileType Filer::fileType(const string& path) {
 #ifdef _WIN32
-	ulong attrib = GetFileAttributesW(stow(path).c_str());
+	DWORD attrib = GetFileAttributesW(stow(path).c_str());
 	if (attrib & FILE_ATTRIBUTE_DIRECTORY)
 		return FTYPE_DIR;
 	if (attrib & FILE_ATTRIBUTE_SPARSE_FILE)
@@ -593,7 +596,7 @@ string Filer::getDirExec() {
 	path = wtos(buffer);
 #else
 	char buffer[Default::dirExecMaxBufferLength];
-	int len = uni::readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
+	int len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
 	buffer[len] = '\0';
 	path = buffer;
 #endif

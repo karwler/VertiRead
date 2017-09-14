@@ -8,28 +8,29 @@ public:
 	DrawSys();
 	~DrawSys();
 
+	SDL_Renderer* getRenderer();
 	void createRenderer(SDL_Window* window, int driverIndex);
 	void destroyRenderer();
 
-	void drawObjects(const vector<Object*>& objects, const Popup* popup);
+	void drawWidgets(const vector<Widget*>& widgets, const Popup* popup);
 
 private:
-	void passDrawObject(Object* obj);
-	void drawObject(const SDL_Rect& bg, EColor bgColor, const Text& text);
-	void drawObject(LineEditor* obj);
-	void drawObject(ScrollAreaItems* obj);
-	void drawObject(ReaderBox* obj);
+	void passDrawWidget(Widget* wgt);
+	void drawWidget(const SDL_Rect& bg, EColor bgColor, const Text& text);
+	void drawWidget(LineEditor* wgt);
+	void drawWidget(ScrollAreaItems* wgt);
+	void drawWidget(ReaderBox* wgt);
 
-	void passDrawItem(ListItem* item, const SDL_Rect& rect, const SDL_Rect& crop={0, 0, 0, 0});
-	void drawItem(Checkbox* item, const SDL_Rect& rect, const SDL_Rect& crop);
-	void drawItem(Switchbox* item, const SDL_Rect& rect, const SDL_Rect& crop);
-	void drawItem(LineEdit* item, const SDL_Rect& rect, SDL_Rect crop);
-	void drawItem(KeyGetter* item, const SDL_Rect& rect, SDL_Rect crop);
+	void passDrawItem(ListItem* item, const SDL_Rect& rect, const vec2i& textPos);
+	void drawItem(Checkbox* item, const SDL_Rect& rect, const vec2i& textPos);
+	void drawItem(Switchbox* item, const SDL_Rect& rect, const vec2i& textPos);
+	void drawItem(LineEdit* item, const SDL_Rect& rect, const vec2i& textPos);
+	void drawItem(KeyGetter* item, const SDL_Rect& rect, const vec2i& textPos);
 
 	void drawRect(const SDL_Rect& rect, EColor color);
-	void drawImage(const Image& img, const SDL_Rect& crop={0, 0, 0, 0});
-	void drawText(const Text& txt, const SDL_Rect& crop={0, 0, 0, 0});
+	void drawImage(const Image& img, const SDL_Rect& frame);
+	void drawText(const Text& txt, const SDL_Rect& frame);
 
 	SDL_Renderer* renderer;
-	vec4c colorDim;		// currenly used for dimming background objects when popup is displayed (dimming is achieved through division)
+	SDL_Color colorDim;		// currenly used for dimming background widgets when popup is displayed (dimming is achieved through division)
 };

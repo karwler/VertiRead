@@ -2,54 +2,53 @@
 
 // TEXTURE
 
-Texture::Texture(const string& FILE) :
-	surface(nullptr)
-{
-	loadSurface(FILE);
-}
-
-Texture::Texture(const string& FILE, SDL_Surface* SURF) :
-	surface(SURF),
-	file(FILE)
+Texture::Texture() :
+	tex(nullptr)
 {}
 
-void Texture::loadSurface(const string& path) {
+Texture::Texture(const string& FILE) :
+	tex(nullptr)
+{
+	load(FILE);
+}
+
+void Texture::load(const string& path) {
+	if (tex)
+		SDL_DestroyTexture(tex);
+
 	file = path;
-	if (surface)
-		SDL_FreeSurface(surface);
-	
-	surface = IMG_Load(file.c_str());
-	if (!surface)
-		cerr << "couldn't load surface " << file << endl;
+	tex = IMG_LoadTexture(World::drawSys()->getRenderer(), file.c_str());
+	if (tex)
+		SDL_QueryTexture(tex, nullptr, nullptr, &res.x, &res.y);
+	else {
+		cerr << "couldn't load texture " << file << endl << IMG_GetError << endl;
+		res = 0;
+		file.clear();
+	}
 }
 
 void Texture::clear() {
-	SDL_FreeSurface(surface);
+	if (tex)
+		SDL_DestroyTexture(tex);
+	res = 0;
 	file.clear();
+}
+
+vec2i Texture::getRes() const {
+	return res;
 }
 
 string Texture::getFile() const {
 	return file;
 }
 
-vec2i Texture::resolution() const {
-	return surface ? vec2i(surface->w, surface->h) : 0;
-}
-
 // IMAGE
 
 Image::Image(const vec2i& POS, Texture* TEX, const vec2i& SIZ) :
 	pos(POS),
-	texture(TEX)
+	tex(TEX)
 {
-	size = SIZ.hasNull() ? texture->resolution() : SIZ;
-}
-
-Image::Image(const vec2i& POS, const string& TEX, const vec2i& SIZ) :
-	pos(POS)
-{
-	texture = World::library()->texture(TEX);
-	size = SIZ.hasNull() ? texture->resolution() : SIZ;
+	size = SIZ.hasNull() ? tex->getRes() : SIZ;
 }
 
 SDL_Rect Image::rect() const {
@@ -58,7 +57,9 @@ SDL_Rect Image::rect() const {
 
 // FONT
 
-bool FontSet::Initialize(const string& FILE) {
+bool FontSet::init(const string& FILE) {
+	clear();
+
 	TTF_Font* tmp = TTF_OpenFont(FILE.c_str(), 72);
 	if (!tmp) {
 		cerr << "couldn't open font " << file << endl << TTF_GetError() << endl;
@@ -80,7 +81,7 @@ bool FontSet::canRun() const {
 	return !file.empty();
 }
 
-TTF_Font* FontSet::get(int size) {
+TTF_Font* FontSet::getFont(int size) {
 	return (canRun() && fonts.count(size) == 0) ? addSize(size) : fonts.at(size);
 }
 
@@ -95,7 +96,7 @@ TTF_Font* FontSet::addSize(int size) {
 
 vec2i FontSet::textSize(const string& text, int size) {
 	vec2i siz;
-	TTF_Font* font = get(size);
+	TTF_Font* font = getFont(size);
 	if (font)
 		TTF_SizeUTF8(font, text.c_str(), &siz.x, &siz.y);
 	return siz;
@@ -103,9 +104,9 @@ vec2i FontSet::textSize(const string& text, int size) {
 
 // TEXT
 
-Text::Text(const string& TXT, const vec2i& POS, int H, EColor CLR) :
+Text::Text(const string& TXT, const vec2i& POS, int HEI, EColor CLR) :
 	pos(POS),
-	height(float(H) * Default::textHeightScale),
+	height(float(HEI) * Default::textHeightScale),
 	color(CLR),
 	text(TXT)
 {}
@@ -232,14 +233,14 @@ ClickType::ClickType(uint8 BTN, uint8 NUM) :
 
 // CLICK STAMP
 
-ClickStamp::ClickStamp(Object* OBJ, uint8 BUT, const vec2i& POS) :
-	object(OBJ),
+ClickStamp::ClickStamp(Widget* wgt, uint8 BUT, const vec2i& POS) :
+	widget(wgt),
 	button(BUT),
 	mPos(POS)
 {}
 
 void ClickStamp::reset() {
-	object = nullptr;
+	widget = nullptr;
 	button = 0;
 }
 
@@ -263,8 +264,7 @@ void Controller::close() {
 		SDL_GameControllerClose(gamepad);
 		gamepad = nullptr;
 		joystick = nullptr;
-	}
-	else if (joystick) {
+	} else if (joystick) {
 		SDL_JoystickClose(joystick);
 		joystick = nullptr;
 	}
@@ -450,6 +450,93 @@ Directory::Directory(const string& NAME, const vector<string>& DIRS, const vecto
 	dirs(DIRS),
 	files(FILS)
 {}
+
+// INI LINE
+
+IniLine::IniLine() :
+	type(Type::av)
+{}
+
+IniLine::IniLine(const string& ARG, const string& VAL) :
+	type(Type::av),
+	arg(ARG),
+	val(VAL)
+{}
+
+IniLine::IniLine(const string& ARG, const string& KEY, const string& VAL) :
+	type(Type::akv),
+	arg(ARG),
+	key(KEY),
+	val(VAL)
+{}
+
+IniLine::IniLine(const string& TIT) :
+	type(Type::title),
+	arg(TIT)
+{}
+
+string IniLine::line() const {
+	if (type == Type::av)
+		return arg + '=' + val;
+	if (type == Type::akv)
+		return arg + '[' + key + "]=" + val;
+	return '[' + arg + ']';
+}
+
+void IniLine::setVal(const string& ARG, const string& VAL) {
+	type = Type::av;
+	arg = ARG;
+	key.clear();
+	val = VAL;
+}
+
+void IniLine::setVal(const std::string& ARG, const std::string& KEY, const std::string& VAL) {
+	type = Type::akv;
+	arg = ARG;
+	key = KEY;
+	val = VAL;
+}
+
+void IniLine::setTitle(const string& TIT) {
+	type == Type::title;
+	arg = TIT;
+	key.clear();
+	val.clear();
+}
+
+bool IniLine::setLine(const string& lin) {
+	// check if title
+	if (lin[0] == '[' && lin[lin.length()-1] == ']') {
+		arg = lin.substr(1, lin.length()-2);
+		type == Type::title;
+		return true;
+	}
+
+	// find position of the = to split line into argument and value
+	size_t i0;;
+	if (!findChar(lin, '=', i0))
+		return false;
+
+	val = lin.substr(i0 + 1);
+	string left = lin.substr(0, i0);
+
+	// get key if availible
+	size_t i1 = 0, i2 = 0;
+	type = (findChar(left, '[', i1) && findChar(left, ']', i2)) ? Type::akv : Type::av;
+	if (type == Type::akv && i1 < i2) {
+		arg = lin.substr(0, i1);
+		key = lin.substr(i1+1, i2-i1-1);
+	} else
+		arg = left;
+	return true;
+}
+
+void IniLine::clear() {
+	type = Type::av;
+	arg.clear();
+	val.clear();
+	key.clear();
+}
 
 // EXCEPTION
 

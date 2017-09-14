@@ -1,32 +1,36 @@
 #include "world.h"
 
 vector<string> World::args;
-Engine World::base;
+Base World::engine;
 
-Engine* World::engine() {
-	return &base;
+Base* World::base() {
+	return &engine;
 }
 
 AudioSys* World::audioSys() {
-	return base.getAudioSys();
+	return engine.getAudioSys();
+}
+
+DrawSys* World::drawSys() {
+	return engine.getWindowSys()->getDrawSys();
 }
 
 InputSys* World::inputSys() {
-	return base.getInputSys();
+	return engine.getInputSys();
 }
 
 WindowSys* World::winSys() {
-	return base.getWindowSys();
+	return engine.getWindowSys();
 }
 
 Scene* World::scene() {
-	return base.getScene();
+	return engine.getScene();
 }
 
 Library* World::library() {
-	return &base.getScene()->getLibrary();
+	return &engine.getScene()->getLibrary();
 }
 
 Program* World::program() {
-	return &base.getScene()->getProgram();
+	return &engine.getScene()->getProgram();
 }

@@ -138,84 +138,49 @@ vector<string> getWords(const string& line, char splitter) {
 	return words;
 }
 
-bool splitIniLine(const string& line, string& arg, string& val, string& key, bool& isTitle) {
-	// check if title
-	if (line[0] == '[' && line[line.length()-1] == ']') {
-		arg = line.substr(1, line.length()-2);
-		isTitle = true;
-		return true;
-	}
-	
-	// find position of the = to split line into argument and value
-	size_t i0;;
-	if (!findChar(line, '=', i0))
-		return false;
-
-	val = line.substr(i0 + 1);
-	string left = line.substr(0, i0);
-
-	// get key if availible
-	size_t i1 = 0, i2 = 0;
-	findChar(left, '[', i1);
-	findChar(left, ']', i2);
-	if (i1 < i2) {
-		arg = line.substr(0, i1);
-		key = line.substr(i1+1, i2-i1-1);
-	} else
-		arg = left;
-
-	isTitle = false;
-	return true;
+string getBook(const string& picPath) {
+	size_t start = World::library()->getSettings().libraryPath().length();
+	for (size_t i=start; i!=picPath.length(); i++)
+		if (picPath[i] == dsep)
+			return picPath.substr(start, i-start);
+	return "";
 }
 
-bool inRect(const SDL_Rect& rect, vec2i point) {
+bool inRect(const SDL_Rect& rect, const vec2i& point) {
 	return rect.w != 0 && rect.h != 0 && point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
 }
 
-bool needsCrop(const SDL_Rect& crop) {
-	return crop.x > 0 || crop.y > 0 || crop.w > 0 || crop.h > 0;
-}
+SDL_Rect cropRect(SDL_Rect& rect, const SDL_Rect& frame) {
+	// ends of each rect and frame
+	vec2i rend(rect.x + rect.w, rect.y + rect.h);
+	vec2i fend(frame.x + frame.w, frame.y + frame.h);
 
-SDL_Rect getCrop(SDL_Rect item, SDL_Rect frame) {
-	vec2i siz(item.w, item.h);
-	item.w += item.x;
-	item.h += item.y;
-	frame.w += frame.x;
-	frame.h += frame.y;
+	// crop rect if it's boundaries are out of frame
 	SDL_Rect crop = {0, 0, 0, 0};
+	if (rect.x < frame.x) {	// left
+		crop.x = frame.x - rect.x;
 
-	if (item.w < frame.x || item.x > frame.w || item.h < frame.y || item.y > frame.h) {
-		crop.w = siz.x;
-		crop.h = siz.y;
-	} else {
-		if (item.x < frame.x)
-			crop.x = frame.x - item.x;
-		if (item.w > frame.w)
-			crop.w = item.w - frame.w;
-		if (item.y < frame.y)
-			crop.y = frame.y - item.y;
-		if (item.h > frame.h)
-			crop.h = item.h - frame.h;
+		rect.x = frame.x;
+		rect.w -= crop.x;
 	}
+	if (rend.x > fend.x) {	// right
+		crop.w = rend.x - fend.x;
+		rect.w -= crop.w;
+	}
+	if (rect.y < frame.y) {	// top
+		crop.y = frame.y - rect.y;
+
+		rect.y = frame.y;
+		rect.h -= crop.y;
+	}
+	if (rend.y > fend.y) {	// bottom
+		crop.h = rend.y - fend.y;
+		rect.h -= crop.h;
+	}
+	// get full width and height of crop
+	crop.w += crop.x;
+	crop.h += crop.y;
 	return crop;
-}
-
-void textCropRight(SDL_Rect& crop, int textLen, int rectWidth) {
-	crop.w = (textLen + Default::textOffset > rectWidth) ? textLen - rectWidth + Default::textOffset*2 : 0;
-}
-
-SDL_Rect cropRect(const SDL_Rect& rect, const SDL_Rect& crop) {
-	return {rect.x+crop.x, rect.y+crop.y, rect.w-crop.x-crop.w, rect.h-crop.y-crop.h};
-}
-
-SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop) {
-	vec2i temp(rect.w, rect.h);
-	rect = cropRect(rect, crop);
-	crop = {crop.x, crop.y, temp.x - crop.x - crop.w, temp.y - crop.y - crop.h};
-
-	SDL_Surface* sheet = SDL_CreateRGBSurface(surface->flags, crop.w, crop.h, surface->format->BitsPerPixel, surface->format->Rmask, surface->format->Gmask, surface->format->Bmask, surface->format->Amask);
-	SDL_BlitSurface(surface, &crop, sheet, 0);
-	return sheet;
 }
 
 string getRendererName(int id) {

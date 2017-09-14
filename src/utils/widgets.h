@@ -27,12 +27,12 @@ EFix operator^=(EFix& a, EFix b);
 EFix operator|(EFix a, EFix b);
 EFix operator|=(EFix& a, EFix b);
 
-// basic UI element. an Object on it's own is displayed as a plain rectangle
-class Object {
+// basic UI element. an widget on it's own is displayed as a plain rectangle
+class Widget {
 public:
-	Object(const vec2i& ANC=0, vec2i POS=-1, const vec2i& SIZ=0, EFix FIX=FIX_NONE, EColor CLR=EColor::rectangle);
-	virtual ~Object();
-	virtual Object* clone() const;
+	Widget(const vec2i& ANC=0, vec2i POS=-1, const vec2i& SIZ=0, EFix FIX=FIX_NONE, EColor CLR=EColor::rectangle);
+	virtual ~Widget();
+	virtual Widget* clone() const;
 	
 	SDL_Rect rect() const;
 	vec2i anchor() const;
@@ -51,23 +51,23 @@ protected:
 	vec2f vpos, vend;	// distance between boundaries and anchor point
 };
 
-// Object with text
-class Label : public Object {
+// widget with text
+class Label : public Widget {
 public:
-	Label(const Object& BASE=Object(), const string& TXT="", ETextAlign ALG=ETextAlign::left);
+	Label(const Widget& BASE=Widget(), const string& LBL="", ETextAlign ALG=ETextAlign::left);
 	virtual ~Label();
 	virtual Label* clone() const;
 
-	Text getText() const;
+	Text text() const;
 
 	ETextAlign align;
-	string text;
+	string label;
 };
 
 // this class isn't supposed to be used on it's own since it's only a plain rectangle
-class Button : public Object {
+class Button : public Widget {
 public:
-	Button(const Object& BASE=Object(), void (Program::*CALL)()=nullptr);
+	Button(const Widget& BASE=Widget(), void (Program::*CALL)()=nullptr);
 	virtual ~Button();
 	virtual Button* clone() const;
 
@@ -81,7 +81,7 @@ protected:
 // a button with one line of text with text alignment
 class ButtonText : public Button {
 public:
-	ButtonText(const Object& BASE=Object(), void (Program::*CALL)()=nullptr, const string& LBL="", ETextAlign ALG=ETextAlign::left);
+	ButtonText(const Widget& BASE=Widget(), void (Program::*CALL)()=nullptr, const string& LBL="", ETextAlign ALG=ETextAlign::left);
 	virtual ~ButtonText();
 	virtual ButtonText* clone() const;
 
@@ -94,7 +94,7 @@ public:
 // can have multiple images through which it cycles when presed
 class ButtonImage : public Button {
 public:
-	ButtonImage(const Object& BASE=Object(), void (Program::*CALL)()=nullptr, const vector<string>& TEXS={});
+	ButtonImage(const Widget& BASE=Widget(), void (Program::*CALL)()=nullptr, const vector<string>& TEXS={});
 	virtual ~ButtonImage();
 	virtual ButtonImage* clone() const;
 
@@ -106,10 +106,10 @@ private:
 	size_t curTex;			// currently displayed texture
 };
 
-// like LineEdit except it's an Object on it's own rather than part of a ScrollArea
-class LineEditor : public Object, public LineEdit {
+// like LineEdit except it's an widget on it's own rather than part of a ScrollArea
+class LineEditor : public Widget, public LineEdit {
 public:
-	LineEditor(const Object& BASE=Object(), const string& TXT="", ETextType TYPE=ETextType::text, void (Program::*KCALL)(const string&)=nullptr, void (Program::*CCALL)()=nullptr);
+	LineEditor(const Widget& BASE=Widget(), const string& TXT="", ETextType TYPE=ETextType::text, void (Program::*KCALL)(const string&)=nullptr, void (Program::*CCALL)()=nullptr);
 	virtual ~LineEditor();
 	virtual LineEditor* clone() const;
 
@@ -122,11 +122,11 @@ private:
 };
 
 // a popup window. should be handeled separately by Scene
-class Popup : public Object {
+class Popup : public Widget {
 public:
-	Popup(const Object& BASE=Object(), const vector<Object*>& OBJS={});
+	Popup(const Widget& BASE=Widget(), const vector<Widget*>& wgtS={});
 	virtual ~Popup();
 	virtual Popup* clone() const;
 
-	vector<Object*> objects;
+	vector<Widget*> widgets;
 };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "utils/capturers.h"
 #include "utils/settings.h"
 
 // handles input events and contains controls settings
@@ -20,7 +21,7 @@ public:
 	void eventMouseWheel(const SDL_MouseWheelEvent& wheel);
 	void eventText(const SDL_TextInputEvent& text);
 
-	void checkAxisShortcuts();
+	void tick(float dSec);
 	bool isPressed(const string& holder, float* amt=nullptr) const;	// looks through axis shortcuts (aka holders) in controls settings (amt will only be changed if the shortcut is an active axis)
 	bool isPressed(const ShortcutAxis* sc, float* amt=nullptr) const;
 	static bool isPressedK(SDL_Scancode key);		// check if keyboard key is pressed
@@ -31,7 +32,7 @@ public:
 	float getAxisJ(uint8 jaxis) const;				// check if any of the joysticks' axis value is greater than 0
 	float getAxisG(uint8 gaxis) const;				// check if any of the gamepads' axis value is greater than 0
 	static vec2i mousePos();
-	vec2i mosueMove() const;
+	vec2i getMouseMove() const;
 
 	const ControlsSettings& getSettings() const;
 	void setScrollSpeed(const vec2f& sspeed);
@@ -47,8 +48,8 @@ public:
 private:
 	ControlsSettings sets;
 	vector<Controller> controllers;	// currently connected game controllers
-	Capturer* captured;				// pointer to object currently hogging all keyboard input
-	vec2i mMov;						// how much mouse has moved since last check
+	Capturer* captured;				// pointer to widget currently hogging all keyboard input
+	vec2i mouseMove;				// how much mouse has moved since last check
 
 	void checkShortcutsK(SDL_Scancode key);
 	void checkShortcutsB(uint8 jbutton);

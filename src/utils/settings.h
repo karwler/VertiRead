@@ -1,7 +1,6 @@
 ﻿#pragma once
 
 #include "types.h"
-#include "prog/defaults.h"
 
 class GeneralSettings {
 public:
@@ -33,8 +32,8 @@ public:
 	void setFont(const string& newFont);
 	
 	void setDefaultTheme();
-	static map<EColor, vec4c> getDefaultColors();
-	static vec4c getDefaultColor(EColor color);
+	static map<EColor, SDL_Color> getDefaultColors();
+	static SDL_Color getDefaultColor(EColor color);
 
 	int getRenderDriverIndex();
 
@@ -42,7 +41,7 @@ public:
 	vec2i resolution;
 	string renderer;
 	string theme;
-	map<EColor, vec4c> colors;
+	map<EColor, SDL_Color> colors;
 
 private:
 	string font;

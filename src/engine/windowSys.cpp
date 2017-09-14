@@ -1,4 +1,5 @@
 #include "world.h"
+#include "filer.h"
 
 WindowSys::WindowSys(const VideoSettings& SETS) :
 	window(nullptr),
@@ -34,22 +35,22 @@ void WindowSys::createWindow() {
 	}
 
 	// set up renderer
-	shaderSys.createRenderer(window, sets.getRenderDriverIndex());
+	drawSys.createRenderer(window, sets.getRenderDriverIndex());
 	setRedrawNeeded();
 }
 
 void WindowSys::destroyWindow() {
-	shaderSys.destroyRenderer();
+	drawSys.destroyRenderer();
 	if (window) {
 		SDL_DestroyWindow(window);
 		window = nullptr;
 	}
 }
 
-void WindowSys::drawObjects(const vector<Object*>& objects, const Popup* popup) {
+void WindowSys::drawWidgets(const vector<Widget*>& widgets, const Popup* popup) {
 	if (redraw) {
 		redraw = false;
-		shaderSys.drawObjects(objects, popup);
+		drawSys.drawWidgets(widgets, popup);
 	}
 }
 
@@ -77,6 +78,8 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 		World::scene()->resizeMenu();
 	else if (winEvent.event == SDL_WINDOWEVENT_LEAVE)
 		World::scene()->onMouseLeave();
+	else if (winEvent.event == SDL_WINDOWEVENT_CLOSE)
+		World::base()->close();
 }
 
 void WindowSys::setRedrawNeeded() {
@@ -101,6 +104,10 @@ vec2i WindowSys::position() const {
 	return pos;
 }
 
+DrawSys* WindowSys::getDrawSys() {
+	return &drawSys;
+}
+
 const VideoSettings& WindowSys::getSettings() const {
 	return sets;
 }
@@ -117,7 +124,7 @@ void WindowSys::setFullscreen(bool on) {
 
 void WindowSys::setFont(const string& font) {
 	sets.setFont(font);
-	World::library()->loadFont(sets.getFontpath());
+	World::library()->getFonts().init(sets.getFontpath());
 
 	setRedrawNeeded();
 }

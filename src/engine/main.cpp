@@ -14,7 +14,7 @@ int main(int argc, char** argv) {
 #endif
 	int retval = 0;
 	try {
-		World::engine()->start();
+		World::base()->start();
 	} catch (Exception exc) {
 		exc.printMessage();
 		retval = exc.retval;
@@ -28,6 +28,6 @@ int main(int argc, char** argv) {
 		cerr << "unknown error" << endl;
 		retval = -1;
 	}
-	World::engine()->cleanup();
+	World::base()->cleanup();
 	return retval;
 }

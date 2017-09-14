@@ -1,8 +1,7 @@
 #include "world.h"
 
 InputSys::InputSys(const ControlsSettings& SETS) :
-	sets(SETS),
-	captured(nullptr)
+	sets(SETS)
 {
 	updateControllers();
 	setCaptured(nullptr);
@@ -70,8 +69,8 @@ void InputSys::eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis) {
 }
 
 void InputSys::eventMouseMotion(const SDL_MouseMotionEvent& motion) {
-	mMov = vec2i(motion.xrel, motion.yrel);
-	World::scene()->onMouseMove(vec2i(motion.x, motion.y), mMov);
+	mouseMove = vec2i(motion.xrel, motion.yrel);
+	World::scene()->onMouseMove(vec2i(motion.x, motion.y), mouseMove);
 }
 
 void InputSys::eventMouseButtonDown(const SDL_MouseButtonEvent& button) {
@@ -96,7 +95,8 @@ void InputSys::eventText(const SDL_TextInputEvent& text) {
 	World::winSys()->setRedrawNeeded();
 }
 
-void InputSys::checkAxisShortcuts() {
+void InputSys::tick(float dSec) {
+	// handle keyhold
 	for (const pair<string, Shortcut*>& it : sets.shortcuts)
 		if (ShortcutAxis* sc = dynamic_cast<ShortcutAxis*>(it.second)) {
 			float amt = 1.f;
@@ -260,8 +260,8 @@ vec2i InputSys::mousePos() {
 	return pos;
 }
 
-vec2i InputSys::mosueMove() const {
-	return mMov;
+vec2i InputSys::getMouseMove() const {
+	return mouseMove;
 }
 
 const ControlsSettings& InputSys::getSettings() const {

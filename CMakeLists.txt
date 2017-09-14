@@ -9,14 +9,16 @@ set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
 set(SRC_FILES
 	"src/engine/audioSys.cpp"
 	"src/engine/audioSys.h"
+	"src/engine/base.cpp"
+	"src/engine/base.h"
 	"src/engine/drawSys.cpp"
 	"src/engine/drawSys.h"
-	"src/engine/engine.cpp"
-	"src/engine/engine.h"
 	"src/engine/filer.cpp"
 	"src/engine/filer.h"
 	"src/engine/inputSys.cpp"
 	"src/engine/inputSys.h"
+	"src/engine/library.cpp"
+	"src/engine/library.h"
 	"src/engine/main.cpp"
 	"src/engine/scene.cpp"
 	"src/engine/scene.h"
@@ -33,8 +35,6 @@ set(SRC_FILES
 	"src/prog/browser.cpp"
 	"src/prog/browser.h"
 	"src/prog/defaults.h"
-	"src/prog/library.cpp"
-	"src/prog/library.h"
 	"src/prog/playlistEditor.cpp"
 	"src/prog/playlistEditor.h"
 	"src/prog/program.cpp"
@@ -43,8 +43,6 @@ set(SRC_FILES
 	"src/utils/capturers.h"
 	"src/utils/items.cpp"
 	"src/utils/items.h"
-	"src/utils/objects.cpp"
-	"src/utils/objects.h"
 	"src/utils/scrollAreas.cpp"
 	"src/utils/scrollAreas.h"
 	"src/utils/settings.cpp"
@@ -52,7 +50,9 @@ set(SRC_FILES
 	"src/utils/types.cpp"
 	"src/utils/types.h"
 	"src/utils/utils.cpp"
-	"src/utils/utils.h")
+	"src/utils/utils.h"
+	"src/utils/widgets.cpp"
+	"src/utils/widgets.h")
 	
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	list(APPEND SRC_FILES "rsc/resource.rc")

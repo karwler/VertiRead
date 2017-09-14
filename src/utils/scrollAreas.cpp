@@ -1,10 +1,10 @@
 #include "engine/world.h"
+#include "engine/filer.h"
 
 // SCROLL AREA
 
-ScrollArea::ScrollArea(const Object& BASE) :
-	Object(BASE),
-	selectedItem(nullptr),
+ScrollArea::ScrollArea(const Widget& BASE) :
+	Widget(BASE),
 	diffSliderMouseY(0),
 	listY(0),
 	motion(0.f)
@@ -72,7 +72,7 @@ int ScrollArea::sliderY() const {
 	int sizY = size().y;
 	int lstH = getListH();
 
-	return lstH <= sizY ? pos().y : pos().y + listY * sizY / lstH;
+	return (lstH <= sizY) ? pos().y : pos().y + listY * sizY / lstH;
 }
 
 int ScrollArea::getSliderH() const {
@@ -96,18 +96,11 @@ SDL_Rect ScrollArea::sliderRect() const {
 	return {end().x-bw, sliderY(), bw, sliderH};
 }
 
-btsel ScrollArea::getSelectedItem() const {
-	return btsel();
-}
+// SCROLL AREA ITEMS
 
-vec2t ScrollArea::visibleItems() const {
-	return vec2t(1, 0);
-}
-
-// SCROLL AREA X1
-
-ScrollAreaItems::ScrollAreaItems(const Object& BASE) :
-	ScrollArea(BASE)
+ScrollAreaItems::ScrollAreaItems(const Widget& BASE) :
+	ScrollArea(BASE),
+	selectedItem(nullptr)
 {}
 ScrollAreaItems::~ScrollAreaItems() {}
 
@@ -118,7 +111,7 @@ void ScrollAreaItems::setValues(size_t numRows) {
 
 // LIST BOX
 
-ListBox::ListBox(const Object& BASE, const vector<ListItem*>& ITMS) :
+ListBox::ListBox(const Widget& BASE, const vector<ListItem*>& ITMS) :
 	ScrollAreaItems(BASE)
 {
 	if (!ITMS.empty())
@@ -141,9 +134,9 @@ vector<ListItem*> ListBox::getItems() const {
 	return items;
 }
 
-void ListBox::setItems(const vector<ListItem*>& objects) {
+void ListBox::setItems(const vector<ListItem*>& widgets) {
 	clear(items);
-	items = objects;
+	items = widgets;
 	setValues();
 }
 
@@ -153,17 +146,7 @@ ListItem* ListBox::item(size_t id) const {
 
 SDL_Rect ListBox::itemRect(size_t id) const {
 	vec2i ps = pos();
-	SDL_Rect rct = {ps.x, ps.y - listY + id * (Default::itemHeight + Default::itemSpacing), size().x-barW(), Default::itemHeight};
-	return cropRect(rct, getCrop(rct, rect()));
-}
-
-SDL_Rect ListBox::itemRect(size_t id, SDL_Rect& crop, EColor& color) const {
-	vec2i ps = pos();
-	SDL_Rect rct = {ps.x, ps.y - listY + id * (Default::itemHeight + Default::itemSpacing), size().x-barW(), Default::itemHeight};
-
-	color = items[id] == selectedItem ? EColor::highlighted : EColor::rectangle;
-	crop = getCrop(rct, rect());
-	return cropRect(rct, crop);
+	return {ps.x, ps.y - listY + id * (Default::itemHeight + Default::itemSpacing), size().x-barW(), Default::itemHeight};
 }
 
 btsel ListBox::getSelectedItem() const {
@@ -182,7 +165,7 @@ vec2t ListBox::visibleItems() const {
 
 // TABLE BOX
 
-TableBox::TableBox(const Object& BASE, const grid2<ListItem*>& ITMS, const vector<float>& IWS) :
+TableBox::TableBox(const Widget& BASE, const grid2<ListItem*>& ITMS, const vector<float>& IWS) :
 	ScrollAreaItems(BASE),
 	itemW(IWS)
 {
@@ -210,9 +193,9 @@ const grid2<ListItem*>& TableBox::getItemsGrid() const {
 	return items;
 }
 
-void TableBox::setItems(const grid2<ListItem*>& objects) {
+void TableBox::setItems(const grid2<ListItem*>& widgets) {
 	clear(items);
-	items = objects;
+	items = widgets;
 	setValues();
 }
 
@@ -227,23 +210,7 @@ SDL_Rect TableBox::itemRect(size_t id) const {
 	float pref = 0.f;
 	for (uint i=0; i!=loc.x; i++)
 		pref += itemW[i];
-
-	SDL_Rect rct = {ps.x + pref*float(siz.x) + Default::itemSpacing/2, ps.y - listY + loc.y * (Default::itemHeight + Default::itemSpacing), itemW[loc.x]*float(siz.x) - Default::itemSpacing, Default::itemHeight};
-	return cropRect(rct, getCrop(rct, rect()));
-}
-
-SDL_Rect TableBox::itemRect(size_t id, SDL_Rect& crop, EColor& color) const {
-	vec2i ps = pos();
-	vec2i siz = size();
-	vec2u loc = items.loc(id);
-	float pref = 0.f;
-	for (uint i=0; i!=loc.x; i++)
-		pref += itemW[i];
-
-	SDL_Rect rct = {ps.x + pref*float(siz.x) + Default::itemSpacing/2, ps.y - listY + loc.y * (Default::itemHeight + Default::itemSpacing), itemW[loc.x]*float(siz.x) - Default::itemSpacing, Default::itemHeight};
-	color = EColor::rectangle;
-	crop = getCrop(rct, rect());
-	return cropRect(rct, crop);
+	return {ps.x + pref*float(siz.x) + Default::itemSpacing/2, ps.y - listY + loc.y * (Default::itemHeight + Default::itemSpacing), itemW[loc.x]*float(siz.x) - Default::itemSpacing, Default::itemHeight};
 }
 
 btsel TableBox::getSelectedItem() const {
@@ -262,7 +229,7 @@ vec2t TableBox::visibleItems() const {
 
 // TILE BOX
 
-TileBox::TileBox(const Object& BASE, const vector<ListItem*>& ITMS, const vec2i& TS) :
+TileBox::TileBox(const Widget& BASE, const vector<ListItem*>& ITMS, const vec2i& TS) :
 	ScrollAreaItems(BASE),
 	tileSize(TS)
 {
@@ -298,9 +265,9 @@ vector<ListItem*> TileBox::getItems() const {
 	return items;
 }
 
-void TileBox::setItems(const vector<ListItem*>& objects) {
+void TileBox::setItems(const vector<ListItem*>& widgets) {
 	clear(items);
-	items = objects;
+	items = widgets;
 	setValues();
 }
 
@@ -310,17 +277,7 @@ ListItem* TileBox::item(size_t id) const {
 
 SDL_Rect TileBox::itemRect(size_t id) const {
 	vec2i ps = pos();
-	SDL_Rect rct = {(id - (id/dim.x) * dim.x) * (tileSize.x+Default::itemSpacing) + ps.x, (id/dim.x) * (tileSize.y+Default::itemSpacing) + ps.y - listY, tileSize.x, tileSize.y};
-	return cropRect(rct, getCrop(rct, rect()));
-}
-
-SDL_Rect TileBox::itemRect(size_t id, SDL_Rect& crop, EColor& color) const {
-	vec2i ps = pos();
-	SDL_Rect rct = {(id - (id/dim.x) * dim.x) * (tileSize.x+Default::itemSpacing) + ps.x, (id/dim.x) * (tileSize.y+Default::itemSpacing) + ps.y - listY, tileSize.x, tileSize.y};
-
-	color = (items[id] == selectedItem) ? EColor::highlighted : EColor::rectangle;
-	crop = getCrop(rct, rect());
-	return cropRect(rct, crop);
+	return {(id - (id/dim.x) * dim.x) * (tileSize.x+Default::itemSpacing) + ps.x, (id/dim.x) * (tileSize.y+Default::itemSpacing) + ps.y - listY, tileSize.x, tileSize.y};
 }
 
 btsel TileBox::getSelectedItem() const {
@@ -339,27 +296,25 @@ vec2t TileBox::visibleItems() const {
 
 // READER BOX
 
-ReaderBox::ReaderBox(const Object& BASE, const vector<Texture*>& PICS, const string& CURPIC, float ZOOM) :
+ReaderBox::ReaderBox(const Widget& BASE, const string& DIR, const string& CPIC, float ZOOM) :
 	ScrollArea(BASE),
 	mouseHideable(true),
 	mouseTimer(Default::rbMenuHideTimeout), sliderTimer(0.f), listTimer(0.f), playerTimer(0.f),
-	zoom(ZOOM),
-	listX(0)
+	zoom(ZOOM)
 {
-	if (!PICS.empty())
-		setPictures(PICS, CURPIC);
+	setPictures(DIR, CPIC);
 
 	vec2i arcT(pos());
 	vec2i posT(-1);
 	vec2i sizT(Default::rbBlistW);
-	listObjects = {
-		new ButtonImage(Object(arcT,                    posT, sizT, FIX_ANC | FIX_SIZ), &Program::eventNextDir, {"next_dir"}),
-		new ButtonImage(Object(arcT+vec2i(0, sizT.x),   posT, sizT, FIX_ANC | FIX_SIZ), &Program::eventPrevDir, {"prev_dir"}),
-		new ButtonImage(Object(arcT+vec2i(0, sizT.x*2), posT, sizT, FIX_ANC | FIX_SIZ), &Program::eventZoomIn, {"zoom_in"}),
-		new ButtonImage(Object(arcT+vec2i(0, sizT.x*3), posT, sizT, FIX_ANC | FIX_SIZ), &Program::eventZoomOut, {"zoom_out"}),
-		new ButtonImage(Object(arcT+vec2i(0, sizT.x*4), posT, sizT, FIX_ANC | FIX_SIZ), &Program::eventZoomReset, {"zoom_r"}),
-		new ButtonImage(Object(arcT+vec2i(0, sizT.x*5), posT, sizT, FIX_ANC | FIX_SIZ), &Program::eventCenterView, {"center"}),
-		new ButtonImage(Object(arcT+vec2i(0, sizT.x*6), posT, sizT, FIX_ANC | FIX_SIZ), &Program::eventBack, {"back"})
+	listWidgets = {
+		new ButtonImage(Widget(arcT,                    posT, sizT, FIX_ANC | FIX_SIZ), &Program::eventNextDir, {"next_dir.png"}),
+		new ButtonImage(Widget(arcT+vec2i(0, sizT.x),   posT, sizT, FIX_ANC | FIX_SIZ), &Program::eventPrevDir, {"prev_dir.png"}),
+		new ButtonImage(Widget(arcT+vec2i(0, sizT.x*2), posT, sizT, FIX_ANC | FIX_SIZ), &Program::eventZoomIn, {"zoom_in.png"}),
+		new ButtonImage(Widget(arcT+vec2i(0, sizT.x*3), posT, sizT, FIX_ANC | FIX_SIZ), &Program::eventZoomOut, {"zoom_out.png"}),
+		new ButtonImage(Widget(arcT+vec2i(0, sizT.x*4), posT, sizT, FIX_ANC | FIX_SIZ), &Program::eventZoomReset, {"zoom_r.png"}),
+		new ButtonImage(Widget(arcT+vec2i(0, sizT.x*5), posT, sizT, FIX_ANC | FIX_SIZ), &Program::eventCenterView, {"center.png"}),
+		new ButtonImage(Widget(arcT+vec2i(0, sizT.x*6), posT, sizT, FIX_ANC | FIX_SIZ), &Program::eventBack, {"back.png"})
 	};
 
 	SDL_Rect player = playerRect();
@@ -367,21 +322,29 @@ ReaderBox::ReaderBox(const Object& BASE, const vector<Texture*>& PICS, const str
 	posT = vec2i(arcT.x-sizT.x/2, arcT.y-sizT.y);
 	vec2i ssizT(32);
 	vec2i sposT(posT.x, arcT.y-Default::rbBlistW/2-ssizT.y/2);
-	playerObjects = {
-		new Label(Object(arcT, vec2i(player.x, player.y), vec2i(player.w, 20), FIX_Y | FIX_SIZ, EColor::darkened), "", ETextAlign::center),
-		new ButtonImage(Object(arcT, posT,                    sizT, FIX_Y | FIX_SIZ), &Program::eventPlayPause, {"play", "pause"}),
-		new ButtonImage(Object(arcT, posT-vec2i(sizT.x, 0),   sizT, FIX_Y | FIX_SIZ), &Program::eventPrevSong, {"prev_song"}),
-		new ButtonImage(Object(arcT, posT+vec2i(sizT.x, 0),   sizT, FIX_Y | FIX_SIZ), &Program::eventNextSong, {"next_song"}),
-		new ButtonImage(Object(arcT, sposT+vec2i(sizT.x*2+20,           0), ssizT, FIX_Y | FIX_SIZ), &Program::eventMute, {"mute"}),
-		new ButtonImage(Object(arcT, sposT+vec2i(sizT.x*2+20+ssizT.x,   0), ssizT, FIX_Y | FIX_SIZ), &Program::eventVolumeDown, {"vol_down"}),
-		new ButtonImage(Object(arcT, sposT+vec2i(sizT.x*2+20+ssizT.x*2, 0), ssizT, FIX_Y | FIX_SIZ), &Program::eventVolumeUp, {"vol_up"})
+	playerWidgets = {
+		new Label(Widget(arcT, vec2i(player.x, player.y), vec2i(player.w, 20), FIX_Y | FIX_SIZ, EColor::darkened), "", ETextAlign::center),
+		new ButtonImage(Widget(arcT, posT,                    sizT, FIX_Y | FIX_SIZ), &Program::eventPlayPause, {"play.png", "pause.png"}),
+		new ButtonImage(Widget(arcT, posT-vec2i(sizT.x, 0),   sizT, FIX_Y | FIX_SIZ), &Program::eventPrevSong, {"prev_song.png"}),
+		new ButtonImage(Widget(arcT, posT+vec2i(sizT.x, 0),   sizT, FIX_Y | FIX_SIZ), &Program::eventNextSong, {"next_song.png"}),
+		new ButtonImage(Widget(arcT, sposT+vec2i(sizT.x*2+20,           0), ssizT, FIX_Y | FIX_SIZ), &Program::eventMute, {"mute.png"}),
+		new ButtonImage(Widget(arcT, sposT+vec2i(sizT.x*2+20+ssizT.x,   0), ssizT, FIX_Y | FIX_SIZ), &Program::eventVolumeDown, {"vol_down.png"}),
+		new ButtonImage(Widget(arcT, sposT+vec2i(sizT.x*2+20+ssizT.x*2, 0), ssizT, FIX_Y | FIX_SIZ), &Program::eventVolumeUp, {"vol_up.png"})
 	};
 }
 
 ReaderBox::~ReaderBox() {
-	clear(playerObjects);
-	clear(listObjects);
+	// save last page
+	vec2t interval = visiblePictures();
+	if (interval.x <= interval.y)
+		Filer::saveLastPage(pics[interval.x].tex.getFile());
 
+	// free up memory
+	clearPictures();
+	clear(playerWidgets);
+	clear(listWidgets);
+
+	// make cursor visible again
 	if (!World::winSys()->getShowMouse())
 		World::winSys()->setShowMouse(true);
 }
@@ -395,7 +358,7 @@ void ReaderBox::tick(float dSec) {
 
 	if (mouseHideable) {
 		// handle mouse hide timeout
-		if (World::scene()->getFocObject() == this)
+		if (World::scene()->getFocWidget() == this)
 			if (mouseTimer != 0.f) {
 				mouseTimer -= dSec;
 				if (mouseTimer <= 0.f) {
@@ -406,7 +369,7 @@ void ReaderBox::tick(float dSec) {
 
 		// handle slider hide timeout
 		if (sliderTimer != 0.f && World::scene()->isDraggingSlider(this)) {
-			sliderTimer -= World::engine()->getDSec();
+			sliderTimer -= World::base()->getDSec();
 			if (sliderTimer <= 0.f) {
 				sliderTimer = 0.f;
 				World::winSys()->setRedrawNeeded();
@@ -415,7 +378,7 @@ void ReaderBox::tick(float dSec) {
 
 		// handle list hide timeout
 		if (listTimer != 0.f) {
-			listTimer -= World::engine()->getDSec();
+			listTimer -= World::base()->getDSec();
 			if (listTimer <= 0.f) {
 				listTimer = 0.f;
 				World::winSys()->setRedrawNeeded();
@@ -424,7 +387,7 @@ void ReaderBox::tick(float dSec) {
 
 		// handle player hide timeout
 		if (playerTimer != 0.f) {
-			playerTimer -= World::engine()->getDSec();
+			playerTimer -= World::base()->getDSec();
 			if (playerTimer <= 0.f) {
 				playerTimer = 0.f;
 				World::winSys()->setRedrawNeeded();
@@ -551,6 +514,10 @@ bool ReaderBox::showPlayer() const {
 	return playerTimer != 0.f;
 }
 
+size_t ReaderBox::numPics() const {
+	return pics.size();
+}
+
 void ReaderBox::checkListX() {
 	if (listX < -listXL)
 		listX = -listXL;
@@ -558,72 +525,89 @@ void ReaderBox::checkListX() {
 		listX = listXL;
 }
 
-const vector<Image>& ReaderBox::getPictures() const {
-	return pics;
-}
+void ReaderBox::setPictures(const string& dir, const string& curPic) {
+	clearPictures();
+	for (string& it : Filer::listDir(dir, FTYPE_FILE)) {
+		Picture pic(listH, dir+it);
+		if (!pic.tex.tex)
+			continue;
 
-void ReaderBox::setPictures(const vector<Texture*>& pictures, const string& curPic) {
-	listH = 0;
-	listW = 0;
-	listY = 0;
-	for (Texture* it : pictures) {
-		pics.push_back(Image(vec2i(0, listH), it));
-		if (it->getFile() == curPic)
+		pics.push_back(pic);
+		if (pic.tex.getFile() == curPic)
 			listY = listH;
-		if (it->resolution().x > listW)
-			listW = it->resolution().x;
-		listH += it->resolution().y + Default::itemSpacing;
+		if (pic.tex.getRes().x > listW)
+			listW = pic.tex.getRes().x;
+		listH += pic.tex.getRes().y + Default::itemSpacing;
 	}
 	setValues();
 }
 
-SDL_Rect ReaderBox::listRect() const {
-	vec2i ps = pos();
-	return {ps.x, ps.y, Default::rbBlistW, int(listObjects.size())*Default::rbBlistW};
+void ReaderBox::clearPictures() {
+	for (Picture& it : pics)
+		it.tex.clear();
+	pics.clear();
+
+	listH = 0;
+	listW = 0;
+	listY = 0;
+	listX = 0;
 }
 
-const vector<Object*>& ReaderBox::getListObjects() const {
-	return listObjects;
+SDL_Rect ReaderBox::listRect() const {
+	vec2i ps = pos();
+	return {ps.x, ps.y, Default::rbBlistW, int(listWidgets.size())*Default::rbBlistW};
+}
+
+const vector<Widget*>& ReaderBox::getListWidgets() const {
+	return listWidgets;
 }
 
 SDL_Rect ReaderBox::playerRect() const {
 	return {pos().x+size().x/2-Default::rbPlayerW/2, end().y-Default::rbPlayerH, Default::rbPlayerW, Default::rbPlayerH};
 }
 
-const vector<Object*>& ReaderBox::getPlayerObjects() {
-	static_cast<Label*>(playerObjects[0])->text = World::audioSys()->curSongName();
-	return playerObjects;
+const vector<Widget*>& ReaderBox::getPlayerWidgets() {
+	static_cast<Label*>(playerWidgets[0])->label = World::audioSys()->curSongName();
+	return playerWidgets;
 }
 
-Image ReaderBox::image(size_t id) const {
-	SDL_Rect crop;
-	return image(id, crop);
+Texture* ReaderBox::texture(size_t id) {
+	return &pics[id].tex;
 }
 
-Image ReaderBox::image(size_t id, SDL_Rect& crop) const {
-	Image img = pics[id];
-	img.size = vec2i(pics[id].size.x*zoom, pics[id].size.y*zoom);
-	img.pos = vec2i(pos().x + size().x/2 - img.size.x/2 - listX, pics[id].pos.y*zoom - listY);
-	
-	crop = getCrop(img.rect(), rect());
+Image ReaderBox::image(size_t id) {
+	Image img(vec2i(0, pics[id].pos*zoom - listY), &pics[id].tex);
+	img.size *= zoom;
+	img.pos.x = pos().x + size().x/2 - img.size.x/2 - listX;
 	return img;
 }
 
-vec2t ReaderBox::visibleItems() const {
+vec2t ReaderBox::visiblePictures() const {
 	int sizY = size().y;
 	if (sizY <= 0)
 		return vec2t(1, 0);
 
 	vec2t interval(0, pics.size()-1);
 	for (size_t i=interval.x; i<=interval.y; i++)
-		if ((pics[i].pos.y + pics[i].size.y)*zoom >= listY) {
+		if ((pics[i].pos + pics[i].tex.getRes().y)*zoom >= listY) {
 			interval.x = i;
 			break;
 		}
 	for (size_t i=interval.x; i<=interval.y; i++)
-		if (pics[i].pos.y*zoom > listY + sizY) {
+		if (pics[i].pos*zoom > listY + sizY) {
 			interval.y = i-1;
 			break;
 		}
 	return interval;
 }
+
+// READER BOX PICTURE
+
+ReaderBox::Picture::Picture() :
+	pos(0)
+{}
+
+ReaderBox::Picture::Picture(int POS, const string& file) :
+	pos(POS),
+	tex(file)
+{}

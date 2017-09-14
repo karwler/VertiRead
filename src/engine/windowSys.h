@@ -17,10 +17,11 @@ public:
 	void eventWindow(const SDL_WindowEvent& window);
 
 	void setRedrawNeeded();
-	void drawObjects(const vector<Object*>& objects, const Popup* popup);
+	void drawWidgets(const vector<Widget*>& widgets, const Popup* popup);
 	static vec2i displayResolution();
 	vec2i resolution() const;
 	vec2i position() const;
+	DrawSys* getDrawSys();
 
 	const VideoSettings& getSettings() const;
 	void setRenderer(const string& name);
@@ -29,7 +30,7 @@ public:
 	void setTheme(const string& theme);
 
 private:
-	DrawSys shaderSys;
+	DrawSys drawSys;
 	SDL_Window* window;
 
 	VideoSettings sets;

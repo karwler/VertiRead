@@ -20,7 +20,7 @@ protected:
 // clickable item with additional optional data
 class ItemButton : public ListItem {
 public:
-	ItemButton(const string& LBL="", const string& DAT="", void (Program::*CALL)(void*)=nullptr, ScrollAreaItems* SA=nullptr);
+	ItemButton(const string& LBL="", const string& DAT="", void (Program::*LCALL)(void*)=nullptr, void (Program::*RCALL)(void*)=nullptr, ScrollAreaItems* SA=nullptr);
 	virtual ~ItemButton();
 
 	virtual void onClick(ClickType click);
@@ -28,7 +28,8 @@ public:
 	void setData(const string& dat);
 
 private:
-	void (Program::*call)(void*);
+	void (Program::*lcall)(void*);	// on left click
+	void (Program::*rcall)(void*);	// on right click
 	string data;	// additional text data that might be needed for other operations when the button is pressed (in case label isn't enough)
 };
 

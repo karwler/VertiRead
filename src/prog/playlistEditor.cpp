@@ -16,6 +16,15 @@ void PlaylistEditor::loadPlaylist(const string& playlist) {
 	selected = false;
 }
 
+bool PlaylistEditor::getShowSongs() const {
+	return showSongs;
+}
+
+void PlaylistEditor::setShowSongs(bool show) {
+	showSongs = show;
+	selected = false;
+}
+
 void PlaylistEditor::addSong(string path) {
 	if (Filer::fileType(path) == FTYPE_DIR) {
 		path = appendDsep(path);

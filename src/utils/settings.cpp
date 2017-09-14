@@ -2,7 +2,6 @@
 #include "engine/filer.h"
 #include "prog/program.h"
 #include <algorithm>
-#include <cctype>
 
 // GENEREAL SETTINGS
 
@@ -85,8 +84,8 @@ void VideoSettings::setDefaultTheme() {
 	}
 }
 
-map<EColor, vec4c> VideoSettings::getDefaultColors() {
-	map<EColor, vec4c> colors = {
+map<EColor, SDL_Color> VideoSettings::getDefaultColors() {
+	map<EColor, SDL_Color> colors = {
 		make_pair(EColor::background, getDefaultColor(EColor::background)),
 		make_pair(EColor::rectangle, getDefaultColor(EColor::rectangle)),
 		make_pair(EColor::highlighted, getDefaultColor(EColor::highlighted)),
@@ -96,7 +95,7 @@ map<EColor, vec4c> VideoSettings::getDefaultColors() {
 	return colors;
 }
 
-vec4c VideoSettings::getDefaultColor(EColor color) {
+SDL_Color VideoSettings::getDefaultColor(EColor color) {
 	switch (color) {
 	case EColor::background:
 		return Default::colorBackground;
@@ -109,7 +108,7 @@ vec4c VideoSettings::getDefaultColor(EColor color) {
 	case EColor::text:
 		return Default::colorText;
 	}
-	return 0;	// just so msvc doesn't bitch around
+	return {0, 0, 0, 0};	// just so msvc doesn't bitch around
 }
 
 int VideoSettings::getRenderDriverIndex() {

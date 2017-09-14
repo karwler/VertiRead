@@ -10,7 +10,6 @@
 #include "kklib/grid2.h"
 #include "kklib/vec2.h"
 #include "kklib/vec3.h"
-#include "kklib/vec4.h"
 
 #include <iostream>
 #include <string>
@@ -32,7 +31,6 @@ using std::to_string;
 using kk::vec2i;
 using kk::vec2u;
 using kk::vec2f;
-using kk::vec4c;
 using vec2t = kk::vec2<size_t>;
 using kk::grid2;
 
@@ -42,21 +40,12 @@ using kk::grid2;
 #endif
 
 // forward declaraions
-enum class EColor : uint8;
 enum class ETextCase : uint8;
 
-class AudioSys;
-class Engine;
-class InputSys;
-class WinSys;
-
-class Scene;
 class Program;
 
-class Object;
-class ScrollArea;
+class Widget;
 class ScrollAreaItems;
-class Capturer;
 
 // directory separator
 #ifdef _WIN32
@@ -73,7 +62,7 @@ const char language[] = "english";
 // video settings
 const bool maximized = false;
 const bool fullscreen = false;
-const vec2i resolution = vec2i(800, 600);
+const vec2i resolution(800, 600);
 const char font[] = "arial";
 
 // window
@@ -82,12 +71,13 @@ const uint32 windowFlags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN;
 const uint32 rendererFlags = SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED;
 
 // colors
-const vec4c colorBackground(10, 10, 10, 255);
-const vec4c colorRectangle(90, 90, 90, 255);
-const vec4c colorHighlighted(120, 120, 120, 255);
-const vec4c colorDarkened(60, 60, 60, 255);
-const vec4c colorText(210, 210, 210, 255);
-const vec4c colorPopupDim(2, 2, 2, 1);
+const SDL_Color colorBackground = {10, 10, 10, 255};
+const SDL_Color colorRectangle = {90, 90, 90, 255};
+const SDL_Color colorHighlighted = {120, 120, 120, 255};
+const SDL_Color colorDarkened = {60, 60, 60, 255};
+const SDL_Color colorText = {210, 210, 210, 255};
+const SDL_Color colorPopupDim = {2, 2, 2, 1};
+const SDL_Color colorNoDim = {1, 1, 1, 1};
 
 // audio settings
 const int volumeMusic = 128;
@@ -202,7 +192,7 @@ const bool axisDirDown = true;
 const bool axisDirRight = true;
 const bool axisDirLeft = false;
 
-// objects' properties
+// widgets' properties
 const int itemSpacing = 5;
 const int itemHeight = 30;
 const int scrollBarWidth = 10;
@@ -232,6 +222,7 @@ const char fileGeneralSettings[] = "general.ini";
 const char fileVideoSettings[] = "video.ini";
 const char fileAudioSettings[] = "audio.ini";
 const char fileControlsSettings[] = "controls.ini";
+const char fileLastPages[] = "last.ini";
 const char dirLibrary[] = "library";
 const char dirPlaylists[] = "playlists";
 const char dirLanguages[] = "languages";

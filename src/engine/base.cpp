@@ -1,11 +1,12 @@
-#include "engine.h"
+#include "base.h"
+#include "filer.h"
 
-Engine::Engine() :
+Base::Base() :
 	run(false),
 	dSec(0.f)
 {}
 
-void Engine::start() {
+void Base::start() {
 	// initialize all components
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER))
 		throw Exception("couldn't initialize SDL\n" + string(SDL_GetError()), 1);
@@ -22,7 +23,6 @@ void Engine::start() {
 	// initialize values
 	scene->getProgram().eventOpenBookList();
 	run = true;
-	SDL_Event event;
 	uint32 oldTime = SDL_GetTicks();
 
 	// the loop :o
@@ -33,19 +33,21 @@ void Engine::start() {
 		oldTime = newTime;
 
 		// draw scene if requested
-		winSys->drawObjects(scene->getObjects(), scene->getPopup());
+		winSys->drawWidgets(scene->getWidgets(), scene->getPopup());
 
 		// handle events
 		audioSys->tick(dSec);
+		inputSys->tick(dSec);
 		scene->tick(dSec);
 
+		SDL_Event event;
 		uint32 timeout = SDL_GetTicks() + Default::eventCheckTimeout;
-		while (SDL_PollEvent(&event) && timeout - SDL_GetTicks() > 0)
+		while (SDL_PollEvent(&event) && SDL_GetTicks() < timeout)
 			handleEvent(event);
 	}
 }
 
-void Engine::close() {
+void Base::close() {
 	// save all settings before quitting
 	Filer::saveSettings(scene->getLibrary().getSettings());
 	Filer::saveSettings(winSys->getSettings());
@@ -55,7 +57,7 @@ void Engine::close() {
 	run = false;
 }
 
-void Engine::cleanup() {
+void Base::cleanup() {
 	scene.clear();
 	audioSys.clear();
 	inputSys.clear();
@@ -65,7 +67,7 @@ void Engine::cleanup() {
 	SDL_Quit();
 }
 
-void Engine::handleEvent(const SDL_Event& event) {
+void Base::handleEvent(const SDL_Event& event) {
 	if (event.type == SDL_KEYDOWN)
 		inputSys->eventKeypress(event.key);
 	else if (event.type == SDL_JOYBUTTONDOWN)
@@ -98,22 +100,22 @@ void Engine::handleEvent(const SDL_Event& event) {
 		close();
 }
 
-float Engine::getDSec() const {
+float Base::getDSec() const {
 	return dSec;
 }
 
-AudioSys* Engine::getAudioSys() {
+AudioSys* Base::getAudioSys() {
 	return audioSys;
 }
 
-InputSys* Engine::getInputSys() {
+InputSys* Base::getInputSys() {
 	return inputSys;
 }
 
-WindowSys* Engine::getWindowSys() {
+WindowSys* Base::getWindowSys() {
 	return winSys;
 }
 
-Scene* Engine::getScene() {
+Scene* Base::getScene() {
 	return scene;
 }

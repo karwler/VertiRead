@@ -151,10 +151,7 @@ Text LineEdit::text() const {
 }
 
 SDL_Rect LineEdit::caretRect() const {
-	ListBox* box = static_cast<ListBox*>(parent);
-
-	int offset = Text(editor.getText().substr(0, editor.getCaretPos()), 0, Default::itemHeight).size().x - textPos;
-	return {offset, 0, Default::caretWidth, Default::itemHeight};
+	return {Text(editor.getText().substr(0, editor.getCaretPos()), 0, Default::itemHeight).size().x - textPos, 0, Default::caretWidth, Default::itemHeight};
 }
 
 void LineEdit::checkCaretRight() {
@@ -227,6 +224,8 @@ void KeyGetter::onGAxis(uint8 gaxis, bool positive) {
 }
 
 string KeyGetter::text() const {
+	if (World::inputSys()->getCaptured() == this)
+		return "...";
 	if (acceptType == EAcceptType::keyboard) {
 		if (shortcut->keyAssigned())
 			return SDL_GetScancodeName(shortcut->getKey());

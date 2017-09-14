@@ -9,6 +9,8 @@ public:
 
 	const Playlist& getPlaylist() const;
 	void loadPlaylist(const string& playlist);
+	bool getShowSongs() const;
+	void setShowSongs(bool show);
 
 	void addSong(string path);
 	void renameSong(const string& path);
@@ -17,8 +19,8 @@ public:
 	void renameBook(const string& name);
 	void delBook();
 
-	bool showSongs;	// show song list or book list
 	btsel selected;	// currently selected item
 private:
 	Playlist pList;	// the thing we're working on
+	bool showSongs;	// show song list or book list
 };

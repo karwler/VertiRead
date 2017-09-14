@@ -21,15 +21,15 @@ public:
 	static void checkDirectories(const GeneralSettings& sets);	// check if all (more or less) necessary files and directories exist
 
 	static vector<string> getAvailibleThemes();
-	static void getColors(map<EColor, vec4c>& colors, const string& theme);	// get theme's colors
+	static void getColors(map<EColor, SDL_Color>& colors, const string& theme);	// get theme's colors
 	static vector<string> getAvailibleLanguages();
 	static map<string, string> getLines(const string& language);	// get translations from language (-file)
 	static map<string, Mix_Chunk*> getSounds();
-	static map<string, Texture> getTextures();
-	static vector<string> getPics(const string& dir);	// get pictures for ReaderBox instance
 
 	static Playlist getPlaylist(const string& name);
 	static void savePlaylist(const Playlist& plist);
+	static string getLastPage(const string& book);
+	static void saveLastPage(const string& file);
 
 	static GeneralSettings getGeneralSettings();
 	static void saveSettings(const GeneralSettings& sets);

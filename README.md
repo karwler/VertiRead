@@ -27,6 +27,7 @@ Settings files are being saved in "%AppData%\VertiRead".
 ## How to use it
 The idea is that you have a library directory in which you have your manga. The location of this directory can be viewed and/or changed in the general settings menu.  
 It is advised (but not necessary) to sort the files and directories by things like chapters, volumes, etc.  
+Left clicking on a book in the book list wil take you to the file explorer, while right clicking on a book will take you to the last viewed page.  
 Opening an image file opens the reader, which displays all images in the directory of the chosen file.  
 The reader has a hidden side pane on the left. The top two buttons are for switching between directories. (This doesn’t work recursively.)  
 

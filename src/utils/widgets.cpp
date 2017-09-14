@@ -24,9 +24,9 @@ EFix operator|=(EFix& a, EFix b) {
 	return a = static_cast<EFix>(static_cast<uint8>(a) | static_cast<uint8>(b));
 }
 
-// OBJECT
+// widget
 
-Object::Object(const vec2i& ANC, vec2i POS, const vec2i& SIZ, EFix FIX, EColor CLR) :
+Widget::Widget(const vec2i& ANC, vec2i POS, const vec2i& SIZ, EFix FIX, EColor CLR) :
 	color(CLR),
 	fix(FIX)
 {
@@ -41,61 +41,61 @@ Object::Object(const vec2i& ANC, vec2i POS, const vec2i& SIZ, EFix FIX, EColor C
 	setPos(POS);
 	setSize(SIZ);
 }
-Object::~Object() {}
+Widget::~Widget() {}
 
-Object* Object::clone() const {
-	return new Object(*this);
+Widget* Widget::clone() const {
+	return new Widget(*this);
 }
 
-SDL_Rect Object::rect() const {
+SDL_Rect Widget::rect() const {
 	vec2i ps = pos();
 	vec2i sz = size();
 	return {ps.x, ps.y, sz.x, sz.y};
 }
 
-vec2i Object::anchor() const {
+vec2i Widget::anchor() const {
 	vec2i ret;
 	ret.x = (fix & FIX_X) ? vanc.x : pixX(vanc.x);
 	ret.y = (fix & FIX_Y) ? vanc.y : pixY(vanc.y);
 	return ret;
 }
 
-void Object::setAnchor(const vec2i& newPos) {
+void Widget::setAnchor(const vec2i& newPos) {
 	vanc.x = (fix & FIX_X) ? newPos.x : prcX(newPos.x);
 	vanc.y = (fix & FIX_Y) ? newPos.y : prcY(newPos.y);
 }
 
-vec2i Object::pos() const {
+vec2i Widget::pos() const {
 	vec2i ret = anchor();
 	ret.x = (fix & FIX_PX) ? pixX(vpos.x) : (fix & FIX_W) ? ret.x + vpos.x : ret.x + pixX(vpos.x);
 	ret.y = (fix & FIX_PY) ? pixY(vpos.y) : (fix & FIX_H) ? ret.y + vpos.y : ret.y + pixY(vpos.y);
 	return ret;
 }
 
-void Object::setPos(const vec2i& newPos) {
+void Widget::setPos(const vec2i& newPos) {
 	vec2i dist = newPos - anchor();
 	vpos.x = (fix & FIX_PX) ? prcX(newPos.x) : (fix & FIX_W) ? dist.x : prcX(dist.x);
 	vpos.y = (fix & FIX_PY) ? prcY(newPos.y) : (fix & FIX_H) ? dist.y : prcY(dist.y);
 }
 
-vec2i Object::end() const {
+vec2i Widget::end() const {
 	vec2i ret = anchor();
 	ret.x = (fix & FIX_EX) ? pixX(vend.x) : (fix & FIX_W) ? ret.x + vend.x : ret.x + pixX(vend.x);
 	ret.y = (fix & FIX_EY) ? pixY(vend.y) : (fix & FIX_H) ? ret.y + vend.y : ret.y + pixY(vend.y);
 	return ret;
 }
 
-void Object::setEnd(const vec2i& newPos) {
+void Widget::setEnd(const vec2i& newPos) {
 	vec2i dist = newPos - anchor();
 	vend.x = (fix & FIX_EX) ? prcX(newPos.x) : (fix & FIX_W) ? dist.x : prcX(dist.x);
 	vend.y = (fix & FIX_EY) ? prcY(newPos.y) : (fix & FIX_H) ? dist.y : prcY(dist.y);
 }
 
-vec2i Object::size() const {
+vec2i Widget::size() const {
 	return end() - pos();
 }
 
-void Object::setSize(const vec2i& newSize) {
+void Widget::setSize(const vec2i& newSize) {
 	vec2i dist = pos() + newSize - anchor();
 	vend.x = (fix & FIX_EX) ? prcX(pos().x + newSize.x) : (fix & FIX_W) ? dist.x : prcX(dist.x);
 	vend.y = (fix & FIX_EY) ? prcY(pos().y + newSize.y) : (fix & FIX_H) ? dist.y : prcY(dist.y);
@@ -103,10 +103,10 @@ void Object::setSize(const vec2i& newSize) {
 
 // LABEL
 
-Label::Label(const Object& BASE, const string& TXT, ETextAlign ALG) :
-	Object(BASE),
+Label::Label(const Widget& BASE, const string& LBL, ETextAlign ALG) :
+	Widget(BASE),
 	align(ALG),
-	text(TXT)
+	label(LBL)
 {}
 Label::~Label() {}
 
@@ -114,16 +114,16 @@ Label* Label::clone() const {
 	return new Label(*this);
 }
 
-Text Label::getText() const {
-	Text txt(text, 0, size().y);
+Text Label::text() const {
+	Text txt(label, 0, size().y);
 	txt.setPosToRect(rect(), align);
 	return txt;
 }
 
 // BUTTON
 
-Button::Button(const Object& BASE, void (Program::*CALLB)()) :
-	Object(BASE),
+Button::Button(const Widget& BASE, void (Program::*CALLB)()) :
+	Widget(BASE),
 	call(CALLB)
 {}
 Button::~Button() {}
@@ -143,10 +143,10 @@ void Button::setCall(void (Program::*func)()) {
 
 // BUTTON TEXT
 
-ButtonText::ButtonText(const Object& BASE, void (Program::*CALLB)(), const string& TXT, ETextAlign ALG) :
+ButtonText::ButtonText(const Widget& BASE, void (Program::*CALLB)(), const string& LBL, ETextAlign ALG) :
 	Button(BASE, CALLB),
 	align(ALG),
-	label(TXT)
+	label(LBL)
 {}
 ButtonText::~ButtonText() {}
 
@@ -162,7 +162,7 @@ Text ButtonText::text() const {
 
 // BUTTON IMAGE
 
-ButtonImage::ButtonImage(const Object& BASE, void (Program::*CALLB)(), const vector<string>& TEXS) :
+ButtonImage::ButtonImage(const Widget& BASE, void (Program::*CALLB)(), const vector<string>& TEXS) :
 	Button(BASE, CALLB),
 	curTex(0)
 {
@@ -193,8 +193,8 @@ Image ButtonImage::getCurTex() const {
 
 // LINE EDITOR
 
-LineEditor::LineEditor(const Object& BASE, const string& TXT, ETextType TYPE, void (Program::*KCALL)(const string&), void (Program::*CCALL)()) :
-	Object(BASE),
+LineEditor::LineEditor(const Widget& BASE, const string& TXT, ETextType TYPE, void (Program::*KCALL)(const string&), void (Program::*CCALL)()) :
+	Widget(BASE),
 	LineEdit(nullptr, "", TXT, TYPE, KCALL, CCALL)
 {}
 LineEditor::~LineEditor() {}
@@ -230,13 +230,13 @@ void LineEditor::checkCaretLeft() {
 
 // POPUP
 
-Popup::Popup(const Object& BASE, const vector<Object*>& OBJS) :
-	Object(BASE),
-	objects(OBJS)
+Popup::Popup(const Widget& BASE, const vector<Widget*>& wgtS) :
+	Widget(BASE),
+	widgets(wgtS)
 {}
 
 Popup::~Popup() {
-	clear(objects);
+	clear(widgets);
 }
 
 Popup*Popup::clone() const {

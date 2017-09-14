@@ -1,15 +1,14 @@
 #pragma once
 
 #include "audioSys.h"
-#include "filer.h"
 #include "inputSys.h"
 #include "windowSys.h"
 #include "scene.h"
 
 // the thing that runs and kills everything
-class Engine {
+class Base {
 public:
-	Engine();
+	Base();
 
 	void start();
 	void close();

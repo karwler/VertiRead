@@ -18,15 +18,11 @@ string appendDsep(const string& path);	// append directory separator if necessar
 bool isDriveLetter(const string& path);	// check if path is a drive letter (plus colon and optionally dsep). only for windows
 string modifyCase(string str, ETextCase caseChange);
 vector<string> getWords(const string& line, char splitter);
-bool splitIniLine(const string& line, string& arg, string& val, string& key, bool& isTitle);	// split line from ini file into multiple arguments. if line is a title, arg will be set to the title string. returns false if interpreting failed
+string getBook(const string& picPath);
 
 // graphics
-bool inRect(const SDL_Rect& rect, vec2i point);
-bool needsCrop(const SDL_Rect& crop);
-SDL_Rect getCrop(SDL_Rect item, SDL_Rect frame);
-void textCropRight(SDL_Rect& crop, int textLen, int rectWidth);
-SDL_Rect cropRect(const SDL_Rect& rect, const SDL_Rect& crop);
-SDL_Surface* cropSurface(SDL_Surface* surface, SDL_Rect& rect, SDL_Rect crop);
+bool inRect(const SDL_Rect& rect, const vec2i& point);
+SDL_Rect cropRect(SDL_Rect& rect, const SDL_Rect& frame);	// crop rect so it fits in the frame and return how much was cut off
 
 // other
 string getRendererName(int id);

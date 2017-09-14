@@ -42,29 +42,29 @@ enum class EPopupType : uint8 {
 // texture surface data with path to the initial file
 class Texture {
 public:
-	Texture(const string& FILE="");
-	Texture(const string& FILE, SDL_Surface* SURF);
+	Texture();
+	Texture(const string& FILE);
 
-	void loadSurface(const string& path);
+	void load(const string& path);
 	void clear();
 
+	vec2i getRes() const;
 	string getFile() const;
-	vec2i resolution() const;
 
-	SDL_Surface* surface;
+	SDL_Texture* tex;
 private:
+	vec2i res;
 	string file;
 };
 
 // texture with position and custom size
 struct Image {
 	Image(const vec2i& POS=0, Texture* TEX=nullptr, const vec2i& SIZ=0);
-	Image(const vec2i& POS, const string& TEX, const vec2i& SIZ=0);
 
 	SDL_Rect rect() const;
 
 	vec2i pos, size;
-	Texture* texture;
+	Texture* tex;
 };
 
 // text related stuff
@@ -72,11 +72,11 @@ struct Image {
 // loads different font sizes from one family
 class FontSet {
 public:
-	bool Initialize(const string& FILE="");
+	bool init(const string& FILE="");
 	void clear();
 
 	bool canRun() const;
-	TTF_Font* get(int size);
+	TTF_Font* getFont(int size);
 	vec2i textSize(const string& text, int size);
 
 private:
@@ -88,7 +88,7 @@ private:
 
 // a string with position, size and color
 struct Text {
-	Text(const string& TXT="", const vec2i& POS=0, int H=50, EColor CLR=EColor::text);
+	Text(const string& TXT="", const vec2i& POS=0, int HEI=50, EColor CLR=EColor::text);
 
 	vec2i pos;
 	int height;
@@ -135,11 +135,11 @@ struct ClickType {
 };
 
 struct ClickStamp {
-	ClickStamp(Object* OBJ=nullptr, uint8 BUT=0, const vec2i& POS=0);
+	ClickStamp(Widget* wgt=nullptr, uint8 BUT=0, const vec2i& POS=0);
 
 	void reset();
 
-	Object* object;
+	Widget* widget;
 	uint8 button;
 	vec2i mPos;
 };
@@ -253,6 +253,29 @@ struct Directory {
 	string name;
 	vector<string> dirs;
 	vector<string> files;
+};
+
+struct IniLine {
+	IniLine();
+	IniLine(const string& ARG, const string& VAL);
+	IniLine(const string& ARG, const string& KEY, const string& VAL);
+	IniLine(const string& TIT);
+
+	enum class Type : uint8 {
+		av,		// argument, value, no key, not title
+		akv,	// argument, key, value, no title
+		title	// title, no everything else
+	} type;
+	string arg;	// argument, aka. the thing before the equal sign/brackets
+	string key;	// the thing between the brackets (empty if there are no brackets)
+	string val;	// value, aka. the thing after the equal sign
+
+	string line() const;				// get the actual INI line
+	void setVal(const string& ARG, const string& VAL);
+	void setVal(const string& ARG, const string& KEY, const string& VAL);
+	void setTitle(const string& TIT);
+	bool setLine(const string& lin);	// returns false if not an INI line
+	void clear();
 };
 
 struct Exception {

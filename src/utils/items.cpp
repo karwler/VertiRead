@@ -28,9 +28,10 @@ bool ListItem::selectable() const {
 
 // ITEM BUTTON
 
-ItemButton::ItemButton(const string& LBL, const string& DAT, void (Program::*CALLB)(void*), ScrollAreaItems* SA) :
+ItemButton::ItemButton(const string& LBL, const string& DAT, void (Program::*LCALL)(void*), void (Program::*RCALL)(void*), ScrollAreaItems* SA) :
 	ListItem(LBL, SA),
-	call(CALLB),
+	lcall(LCALL),
+	rcall(RCALL),
 	data(DAT)
 {}
 ItemButton::~ItemButton() {}
@@ -39,14 +40,11 @@ void ItemButton::onClick(ClickType click) {
 	ListItem::onClick(click);
 
 	// decide what to send
-	void* dat;
-	if (parent)
-		dat = parent;
-	else
-		dat = (void*)getData().c_str();
-	
-	if (call)
-		(World::program()->*call)(dat);
+	void* dat = parent ? static_cast<void*>(parent) : const_cast<char*>(getData().c_str());
+	if (click.button == SDL_BUTTON_LEFT && lcall)
+		(World::program()->*lcall)(dat);
+	else if (click.button == SDL_BUTTON_RIGHT && rcall)
+		(World::program()->*rcall)(dat);
 }
 
 const string& ItemButton::getData() const {

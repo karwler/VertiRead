@@ -8,6 +8,10 @@ DrawSys::~DrawSys() {
 	destroyRenderer();
 }
 
+SDL_Renderer* DrawSys::getRenderer() {
+	return renderer;
+}
+
 void DrawSys::createRenderer(SDL_Window* window, int driverIndex) {
 	renderer = SDL_CreateRenderer(window, driverIndex, Default::rendererFlags);
 	if (!renderer)
@@ -22,222 +26,189 @@ void DrawSys::destroyRenderer() {
 	}
 }
 
-void DrawSys::drawObjects(const vector<Object*>& objects, const Popup* popup) {
+void DrawSys::drawWidgets(const vector<Widget*>& widgets, const Popup* popup) {
 	// clear screen
-	colorDim = popup ? Default::colorPopupDim : 1;
-	vec4c bgcolor = World::winSys()->getSettings().colors.at(EColor::background);
+	colorDim = popup ? Default::colorPopupDim : Default::colorNoDim;
+	SDL_Color bgcolor = World::winSys()->getSettings().colors.at(EColor::background);
 	SDL_SetRenderDrawColor(renderer, bgcolor.r/colorDim.r, bgcolor.g/colorDim.g, bgcolor.b/colorDim.b, bgcolor.a/colorDim.a);
 	SDL_RenderClear(renderer);
 
-	// draw main objects
-	for (Object* it : objects)
-		passDrawObject(it);
+	// draw main widgets
+	for (Widget* it : widgets)
+		passDrawWidget(it);
 
 	// draw popup if exists
-	colorDim = 1;
+	colorDim = Default::colorNoDim;
 	if (popup) {
 		drawRect(popup->rect(), popup->color);
-		for (Object* it : popup->objects)
-			passDrawObject(it);
+		for (Widget* it : popup->widgets)
+			passDrawWidget(it);
 	}
 
 	SDL_RenderPresent(renderer);
 }
 
-void DrawSys::passDrawObject(Object* obj) {
-	// specific drawing for each object
-	if (Label* lbl = dynamic_cast<Label*>(obj))
-		drawObject(lbl->rect(), lbl->color, lbl->getText());
-	else if (ButtonText* btxt = dynamic_cast<ButtonText*>(obj))
-		drawObject(btxt->rect(), btxt->color, btxt->text());
-	else if (ButtonImage* bimg = dynamic_cast<ButtonImage*>(obj))
-		drawImage(bimg->getCurTex());
-	else if (LineEditor* edt = dynamic_cast<LineEditor*>(obj))
-		drawObject(edt);
-	else if (ScrollAreaItems* box = dynamic_cast<ScrollAreaItems*>(obj))
-		drawObject(box);
-	else if (ReaderBox* box = dynamic_cast<ReaderBox*>(obj))
-		drawObject(box);
+void DrawSys::passDrawWidget(Widget* wgt) {
+	// specific drawing for each widget
+	if (Label* lbl = dynamic_cast<Label*>(wgt))
+		drawWidget(lbl->rect(), lbl->color, lbl->text());
+	else if (ButtonText* btxt = dynamic_cast<ButtonText*>(wgt))
+		drawWidget(btxt->rect(), btxt->color, btxt->text());
+	else if (ButtonImage* bimg = dynamic_cast<ButtonImage*>(wgt))
+		drawImage(bimg->getCurTex(), bimg->rect());
+	else if (LineEditor* edt = dynamic_cast<LineEditor*>(wgt))
+		drawWidget(edt);
+	else if (ScrollAreaItems* box = dynamic_cast<ScrollAreaItems*>(wgt))
+		drawWidget(box);
+	else if (ReaderBox* box = dynamic_cast<ReaderBox*>(wgt))
+		drawWidget(box);
 	else
-		drawRect(obj->rect(), obj->color);
+		drawRect(wgt->rect(), wgt->color);
 }
 
-void DrawSys::drawObject(const SDL_Rect& bg, EColor bgColor, const Text& text) {
+void DrawSys::drawWidget(const SDL_Rect& bg, EColor bgColor, const Text& text) {
 	drawRect(bg, bgColor);
-
-	int len = text.size().x;
-	int left = (text.pos.x < bg.x) ? bg.x-text.pos.x : 0;
-	int right = (text.pos.x+len > bg.x+bg.w) ? text.pos.x+len-bg.x-bg.w : 0;
-	drawText(text, {left, 0, right, 0});
+	drawText(text, bg);
 }
 
-void DrawSys::drawObject(LineEditor* obj) {
-	SDL_Rect bg = obj->rect();
-	drawRect(bg, obj->color);
+void DrawSys::drawWidget(LineEditor* wgt) {
+	SDL_Rect bg = wgt->rect();
+	drawRect(bg, wgt->color);
+	drawText(wgt->text(), bg);
 
-	// get text and calculate left and right crop
-	Text text = obj->text();
-	int len = text.size().x;
-	int left = (text.pos.x < bg.x) ? bg.x - text.pos.x : 0;
-	int right = (len-left > bg.w) ? len - left - bg.w : 0;
-	drawText(text, {left, 0, right, 0});
-
-	if (World::inputSys()->getCaptured() == obj)
-		drawRect(obj->caretRect(), EColor::highlighted);
+	if (World::inputSys()->getCaptured() == wgt)
+		drawRect(wgt->caretRect(), EColor::highlighted);
 }
 
-void DrawSys::drawObject(ScrollAreaItems* obj) {
-	// get index interval of items on screen
-	vec2t interval = obj->visibleItems();
-	if (interval.x > interval.y)
-		return;
+void DrawSys::drawWidget(ScrollAreaItems* wgt) {
+	// draw scroll are background
+	SDL_Rect bg = wgt->rect();
+	drawRect(bg, wgt->color);
 
-	// draw items
-	const vector<ListItem*>& items = obj->getItems();
+	// get index interval of items on screen and draw items
+	vec2t interval = wgt->visibleItems();
 	for (size_t i=interval.x; i<=interval.y; i++) {
+		ListItem* it = wgt->item(i);
+
 		// draw background rect
-		EColor color;
-		SDL_Rect crop;
-		SDL_Rect rect = obj->itemRect(i, crop, color);
+		SDL_Rect rect = wgt->itemRect(i);
+		vec2i textPos(rect.x + Default::textOffset, rect.y);
+		cropRect(rect, bg);
+		EColor color = (it == wgt->selectedItem) ? EColor::highlighted : EColor::rectangle;
 		drawRect(rect, color);
 
 		// draw label
-		Text txt(items[i]->label, vec2i(rect.x+Default::textOffset, rect.y-crop.y), Default::itemHeight);
-		textCropRight(crop, txt.size().x, rect.w);
-		drawText(txt, crop);
+		Text txt(it->label, textPos, Default::itemHeight);
+		drawText(txt, rect);
 
 		// draw the rest specific to the derived class
-		passDrawItem(items[i], rect, crop);
+		if (!it->label.empty())
+			textPos.x += txt.size().x + Default::lineEditOffset;
+		passDrawItem(it, rect, textPos);
 	}
 	// draw scroll bar
-	drawRect(obj->barRect(), EColor::darkened);
-	drawRect(obj->sliderRect(), EColor::highlighted);
+	drawRect(wgt->barRect(), EColor::darkened);
+	drawRect(wgt->sliderRect(), EColor::highlighted);
 }
 
-void DrawSys::drawObject(ReaderBox* obj) {
-	vec2t interval = obj->visibleItems();
-	for (size_t i=interval.x; i<=interval.y; i++) {
-		SDL_Rect crop;
-		Image img = obj->image(i, crop);
-		drawImage(img, crop);
+void DrawSys::drawWidget(ReaderBox* wgt) {
+	// draw scroll are background
+	SDL_Rect bg = wgt->rect();
+	drawRect(bg, wgt->color);
+
+	// get index interval of pictures on screen and draw pictures
+	vec2t interval = wgt->visiblePictures();
+	for (size_t i=interval.x; i<=interval.y; i++)
+		drawImage(wgt->image(i), bg);
+
+	if (wgt->showSlider()) {
+		drawRect(wgt->barRect(), EColor::darkened);
+		drawRect(wgt->sliderRect(), EColor::highlighted);
 	}
-	if (obj->showSlider()) {
-		drawRect(obj->barRect(), EColor::darkened);
-		drawRect(obj->sliderRect(), EColor::highlighted);
+	if (wgt->showList()) {
+		drawRect(wgt->listRect(), EColor::darkened);
+		for (Widget* it : wgt->getListWidgets())
+			passDrawWidget(it);
 	}
-	if (obj->showList()) {
-		drawRect(obj->listRect(), EColor::darkened);
-		for (Object* it : obj->getListObjects())
-			passDrawObject(it);
-	}
-	if (obj->showPlayer()) {
-		drawRect(obj->playerRect(), EColor::darkened);
-		for (Object* it : obj->getPlayerObjects())
-			passDrawObject(it);
+	if (wgt->showPlayer()) {
+		drawRect(wgt->playerRect(), EColor::darkened);
+		for (Widget* it : wgt->getPlayerWidgets())
+			passDrawWidget(it);
 	}
 }
 
-void DrawSys::passDrawItem(ListItem* item, const SDL_Rect& rect, const SDL_Rect& crop) {
-	if (Checkbox* obj = dynamic_cast<Checkbox*>(item))
-		drawItem(obj, rect, crop);
-	else if (Switchbox* obj = dynamic_cast<Switchbox*>(item))
-		drawItem(obj, rect, crop);
-	else if (LineEdit* obj = dynamic_cast<LineEdit*>(item))
-		drawItem(obj, rect, crop);
-	else if (KeyGetter* obj = dynamic_cast<KeyGetter*>(item))
-		drawItem(obj, rect, crop);
+void DrawSys::passDrawItem(ListItem* item, const SDL_Rect& rect, const vec2i& textPos) {
+	if (Checkbox* wgt = dynamic_cast<Checkbox*>(item))
+		drawItem(wgt, rect, textPos);
+	else if (Switchbox* wgt = dynamic_cast<Switchbox*>(item))
+		drawItem(wgt, rect, textPos);
+	else if (LineEdit* wgt = dynamic_cast<LineEdit*>(item))
+		drawItem(wgt, rect, textPos);
+	else if (KeyGetter* wgt = dynamic_cast<KeyGetter*>(item))
+		drawItem(wgt, rect, textPos);
 }
 
-void DrawSys::drawItem(Checkbox* item, const SDL_Rect& rect, const SDL_Rect& crop) {
-	int offset = item->label.empty() ? Default::textOffset : Text(item->label, 0, Default::itemHeight).size().x + Default::lineEditOffset;
-	int top = (crop.y < Default::checkboxSpacing) ? Default::checkboxSpacing - crop.y : crop.y;
-	int bot = (crop.h > Default::checkboxSpacing) ? crop.h - Default::checkboxSpacing : Default::checkboxSpacing;
-
+void DrawSys::drawItem(Checkbox* item, const SDL_Rect& rect, const vec2i& textPos) {
 	EColor clr = item->getOn() ? EColor::highlighted : EColor::darkened;
-	drawRect({rect.x+offset+Default::checkboxSpacing, rect.y-crop.y+top, Default::itemHeight-Default::checkboxSpacing*2, rect.h+crop.h-top-bot}, clr);
+	int size = Default::itemHeight - Default::checkboxSpacing*2;
+	SDL_Rect box = {textPos.x+Default::checkboxSpacing, textPos.y+Default::checkboxSpacing, size, size};
+	cropRect(box, rect);
+	drawRect(box, clr);
 }
 
-void DrawSys::drawItem(Switchbox* item, const SDL_Rect& rect, const SDL_Rect& crop) {
-	int offset = item->label.empty() ? Default::textOffset : Text(item->label, 0, Default::itemHeight).size().x + Default::lineEditOffset;
-
-	drawText(Text(item->getCurOption(), vec2i(rect.x+offset, rect.y-crop.y), Default::itemHeight), crop);
+void DrawSys::drawItem(Switchbox* item, const SDL_Rect& rect, const vec2i& textPos) {
+	drawText(Text(item->getCurOption(), textPos, Default::itemHeight), rect);
 }
 
-void DrawSys::drawItem(LineEdit* item, const SDL_Rect& rect, SDL_Rect crop) {
-	// set up text
-	int offset = item->label.empty() ? Default::textOffset : Text(item->label, 0, Default::itemHeight).size().x + Default::lineEditOffset;
-	Text text(item->getEditor().getText(), vec2i(rect.x+offset-item->getTextPos(), rect.y-crop.y), Default::itemHeight);
+void DrawSys::drawItem(LineEdit* item, const SDL_Rect& rect, const vec2i& textPos) {
+	drawText(Text(item->getEditor().getText(), vec2i(textPos.x-item->getTextPos(), textPos.y), Default::itemHeight), {textPos.x, rect.y, rect.w-textPos.x+rect.x, rect.h});
 
-	// set text's left and right crop
-	int end = rect.x + rect.w;
-	int len = text.size().x;
-	crop.x = (text.pos.x < rect.x+offset) ? rect.x + offset - text.pos.x : 0;
-	crop.w = (text.pos.x+len > end) ? text.pos.x + len - end : 0;
-	drawText(text, crop);
-
-	// draw caret if selected
 	if (World::inputSys()->getCaptured() == item) {
-		offset += Text(item->getEditor().getText().substr(0, item->getEditor().getCaretPos()), 0, Default::itemHeight).size().x - item->getTextPos();
-		drawRect({rect.x+offset, rect.y, Default::textOffset, rect.h}, EColor::highlighted);
+		int pos = textPos.x + Text(item->getEditor().getText().substr(0, item->getEditor().getCaretPos()), 0, Default::itemHeight).size().x - item->getTextPos();
+		drawRect({pos, rect.y, Default::caretWidth, rect.h}, EColor::highlighted);
 	}
 }
 
-void DrawSys::drawItem(KeyGetter* item, const SDL_Rect& rect, SDL_Rect crop) {
-	// set up text
-	int offset = item->label.empty() ? Default::textOffset : Text(item->label, 0, Default::itemHeight).size().x + Default::lineEditOffset;
-	string str = (World::inputSys()->getCaptured() == item) ? "..." : item->text();
+void DrawSys::drawItem(KeyGetter* item, const SDL_Rect& rect, const vec2i& textPos) {
 	EColor clr = (World::inputSys()->getCaptured() == item) ? EColor::highlighted : EColor::text;
-	Text text(str, vec2i(rect.x+offset, rect.y-crop.y), Default::itemHeight, clr);
-
-	// set text's left and right crop
-	int end = rect.x + rect.w;
-	int len = text.size().x;
-	crop.w = (text.pos.x+len > end) ? text.pos.x + len - end : 0;
-	drawText(text, crop);
+	Text text(item->text(), textPos, Default::itemHeight, clr);
+	drawText(text, rect);
 }
 
 void DrawSys::drawRect(const SDL_Rect& rect, EColor color) {
-	vec4c clr = World::winSys()->getSettings().colors.at(color) / colorDim;
-	SDL_SetRenderDrawColor(renderer, clr.r, clr.g, clr.b, clr.a);
+	SDL_Color clr = World::winSys()->getSettings().colors.at(color);
+	SDL_SetRenderDrawColor(renderer, clr.r/colorDim.r, clr.g/colorDim.g, clr.b/colorDim.b, clr.a/colorDim.a);
 	SDL_RenderFillRect(renderer, &rect);
 }
 
-void DrawSys::drawImage(const Image& img, const SDL_Rect& crop) {
-	SDL_Rect rect = img.rect();	// the rect the image is gonna be projected on
-	SDL_Texture* tex;
-	if (needsCrop(crop)) {
-		SDL_Rect ori = {rect.x, rect.y, img.texture->surface->w, img.texture->surface->h};	// proportions of the original image
-		vec2f fac(float(ori.w) / float(rect.w), float(ori.h) / float(rect.h));				// scaling factor
-		rect = cropRect(rect, crop);														// adjust rect to crop
+void DrawSys::drawImage(const Image& img, const SDL_Rect& frame) {
+	// get destination rect and crop
+	SDL_Rect dst = img.rect();
+	SDL_Rect crop = cropRect(dst, frame);
 
-		// crop original image by factor
-		SDL_Surface* sheet = cropSurface(img.texture->surface, ori, {int(float(crop.x)*fac.x), int(float(crop.y)*fac.y), int(float(crop.w)*fac.x), int(float(crop.h)*fac.y)});
-		tex = SDL_CreateTextureFromSurface(renderer, sheet);
-		SDL_FreeSurface(sheet);
-	} else
-		tex = SDL_CreateTextureFromSurface(renderer, img.texture->surface);
+	// get cropped source rect
+	vec2f factor(float(img.tex->getRes().x) / float(img.size.x), float(img.tex->getRes().y) / float(img.size.y));
+	SDL_Rect src = {float(crop.x) * factor.x, float(crop.y) * factor.y, img.size.x - int(float(crop.w) * factor.x), img.size.y - int(float(crop.h) * factor.y)};
 
-	SDL_RenderCopy(renderer, tex, nullptr, &rect);
-	SDL_DestroyTexture(tex);
+	SDL_RenderCopy(renderer, img.tex->tex, &src, &dst);
 }
 
-void DrawSys::drawText(const Text& txt, const SDL_Rect& crop) {
+void DrawSys::drawText(const Text& txt, const SDL_Rect& frame) {
 	if (txt.text.empty())
 		return;
-	
-	vec4c tclr = World::winSys()->getSettings().colors.at(txt.color) / colorDim;
-	vec2i siz = txt.size();
-	SDL_Rect rect = {txt.pos.x, txt.pos.y, siz.x, siz.y};
-	SDL_Surface* surface = TTF_RenderUTF8_Blended(World::library()->getFonts().get(txt.height), txt.text.c_str(), {tclr.r, tclr.g, tclr.b, tclr.a});
-	SDL_Texture* tex;
-	if (needsCrop(crop)) {
-		SDL_Surface* sheet = cropSurface(surface, rect, crop);
-		tex = SDL_CreateTextureFromSurface(renderer, sheet);
-		SDL_FreeSurface(sheet);
-	} else
-		tex = SDL_CreateTextureFromSurface(renderer, surface);
 
-	SDL_RenderCopy(renderer, tex, nullptr, &rect);
+	// get text texture
+	SDL_Color clr = World::winSys()->getSettings().colors.at(txt.color);
+	SDL_Surface* surf = TTF_RenderUTF8_Blended(World::library()->getFonts().getFont(txt.height), txt.text.c_str(), {clr.r/colorDim.r, clr.g/colorDim.g, clr.b/colorDim.b, clr.a/colorDim.a});
+	SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+
+	// crop destination rect and original texture rect
+	SDL_Rect dst = {txt.pos.x, txt.pos.y, surf->w, surf->h};
+	SDL_Rect crop = cropRect(dst, frame);
+	SDL_Rect src = {crop.x, crop.y, surf->w - crop.w, surf->h - crop.h};
+
+	// draw and cleanup
+	SDL_RenderCopy(renderer, tex, &src, &dst);
 	SDL_DestroyTexture(tex);
-	SDL_FreeSurface(surface);
+	SDL_FreeSurface(surf);
 }

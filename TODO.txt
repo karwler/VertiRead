@@ -1,0 +1,7 @@
+arrow keys/hats navigation
+horizontal scroll
+more lineedit edit options
+refactor item selection system
+refactor draw calculations
+animations?
+event system?
