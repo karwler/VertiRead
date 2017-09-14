@@ -199,7 +199,7 @@ void DrawSys::drawText(const Text& txt, const SDL_Rect& frame) {
 
 	// get text texture
 	SDL_Color clr = World::winSys()->getSettings().colors.at(txt.color);
-	SDL_Surface* surf = TTF_RenderUTF8_Blended(World::library()->getFonts().getFont(txt.height), txt.text.c_str(), {clr.r/colorDim.r, clr.g/colorDim.g, clr.b/colorDim.b, clr.a/colorDim.a});
+	SDL_Surface* surf = TTF_RenderUTF8_Blended(World::library()->getFonts().getFont(txt.height), txt.text.c_str(), {uint8(clr.r/colorDim.r), uint8(clr.g/colorDim.g), uint8(clr.b/colorDim.b), uint8(clr.a/colorDim.a)});
 	SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
 
 	// crop destination rect and original texture rect

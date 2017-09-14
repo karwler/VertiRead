@@ -498,7 +498,7 @@ void IniLine::setVal(const std::string& ARG, const std::string& KEY, const std::
 }
 
 void IniLine::setTitle(const string& TIT) {
-	type == Type::title;
+	type = Type::title;
 	arg = TIT;
 	key.clear();
 	val.clear();
@@ -508,7 +508,7 @@ bool IniLine::setLine(const string& lin) {
 	// check if title
 	if (lin[0] == '[' && lin[lin.length()-1] == ']') {
 		arg = lin.substr(1, lin.length()-2);
-		type == Type::title;
+		type = Type::title;
 		return true;
 	}
 

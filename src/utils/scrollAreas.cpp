@@ -146,7 +146,7 @@ ListItem* ListBox::item(size_t id) const {
 
 SDL_Rect ListBox::itemRect(size_t id) const {
 	vec2i ps = pos();
-	return {ps.x, ps.y - listY + id * (Default::itemHeight + Default::itemSpacing), size().x-barW(), Default::itemHeight};
+	return {ps.x, ps.y - listY + int(id) * (Default::itemHeight + Default::itemSpacing), size().x-barW(), Default::itemHeight};
 }
 
 btsel ListBox::getSelectedItem() const {
@@ -210,7 +210,7 @@ SDL_Rect TableBox::itemRect(size_t id) const {
 	float pref = 0.f;
 	for (uint i=0; i!=loc.x; i++)
 		pref += itemW[i];
-	return {ps.x + pref*float(siz.x) + Default::itemSpacing/2, ps.y - listY + loc.y * (Default::itemHeight + Default::itemSpacing), itemW[loc.x]*float(siz.x) - Default::itemSpacing, Default::itemHeight};
+	return {ps.x + int(pref*float(siz.x)) + Default::itemSpacing/2, ps.y - listY + int(loc.y) * (Default::itemHeight + Default::itemSpacing), int(itemW[loc.x]*float(siz.x)) - Default::itemSpacing, Default::itemHeight};
 }
 
 btsel TableBox::getSelectedItem() const {
@@ -277,7 +277,7 @@ ListItem* TileBox::item(size_t id) const {
 
 SDL_Rect TileBox::itemRect(size_t id) const {
 	vec2i ps = pos();
-	return {(id - (id/dim.x) * dim.x) * (tileSize.x+Default::itemSpacing) + ps.x, (id/dim.x) * (tileSize.y+Default::itemSpacing) + ps.y - listY, tileSize.x, tileSize.y};
+	return {(int(id) - (int(id)/dim.x) * dim.x) * (tileSize.x+Default::itemSpacing) + ps.x, (int(id)/dim.x) * (tileSize.y+Default::itemSpacing) + ps.y - listY, tileSize.x, tileSize.y};
 }
 
 btsel TileBox::getSelectedItem() const {
