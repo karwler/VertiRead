@@ -232,7 +232,7 @@ private:
 	virtual vec2i textPos() const;
 	int caretPos() const;	// caret's relative x position
 	void checkTextOffset();
-	void setCPos(int cp);
+	void setCPos(sizt cp);
 
 	sizt findWordStart();	// returns index of first character of word before cpos
 	sizt findWordEnd();		// returns index of character after last character of word after cpos

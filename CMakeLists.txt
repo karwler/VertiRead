@@ -1,10 +1,8 @@
 # project properties
 cmake_minimum_required(VERSION 3.1.0)
-cmake_policy(SET CMP0015 NEW)
-cmake_policy(SET CMP0043 NEW)
 project(VertiRead LANGUAGES CXX)
-set(CMAKE_BUILD_TYPE "Debug")
-#set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
+#set(CMAKE_BUILD_TYPE "Debug")
+set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
 
 # source files
 set(SRC_FILES
@@ -45,73 +43,51 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	list(APPEND SRC_FILES "rsc/resource.rc")
 endif()
 
-# include directories
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
-
-if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-	include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-endif()
-
 # library/framework directories
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-    if (${CMAKE_SIZEOF_VOID_P} MATCHES "8")
-		set(LIB_DIR ${CMAKE_SOURCE_DIR}/lib/win64)
-		set(DLL_FILES
-			"libFLAC-8.dll"
-			"libfreetype-6.dll"
-			"libjpeg-9.dll"
-			"libmikmod-2.dll"
-			"libmodplug-1.dll"
-			"libogg-0.dll"
-			"libpng16-16.dll"
-			"libtiff-5.dll"
-			"libvorbis-0.dll"
-			"libvorbisfile-3.dll"
-			"libwebp-4.dll"
-			"SDL2.dll"
-			"SDL2_image.dll"
-			"SDL2_mixer.dll"
-			"SDL2_ttf.dll"
-			"smpeg2.dll"
-			"zlib1.dll")
-    else()
-        set(LIB_DIR ${CMAKE_SOURCE_DIR}/lib/win32)
-		set(DLL_FILES
-			"libFLAC-8.dll"
-			"libfreetype-6.dll"
-			"libjpeg-9.dll"
-			"libmodplug-1.dll"
-			"libogg-0.dll"
-			"libpng16-16.dll"
-			"libtiff-5.dll"
-			"libvorbis-0.dll"
-			"libvorbisfile-3.dll"
-			"libwebp-4.dll"
-			"SDL2.dll"
-			"SDL2_image.dll"
-			"SDL2_mixer.dll"
-			"SDL2_ttf.dll"
-			"smpeg2.dll"
-			"zlib1.dll")
-    endif()	
+	if (MSVC)
+		if (${CMAKE_SIZEOF_VOID_P} MATCHES "8")
+			set(LIB_DIR ${CMAKE_SOURCE_DIR}/lib/msvc64)
+		else()
+			set(LIB_DIR ${CMAKE_SOURCE_DIR}/lib/msvc32)
+		endif()
+	endif()
+	
 	link_directories(${LIB_DIR})
+	set(DLL_FILES
+		"libFLAC-8.dll"
+		"libfreetype-6.dll"
+		"libjpeg-9.dll"
+		"libmodplug-1.dll"
+		"libmpg123-0.dll"
+		"libogg-0.dll"
+		"libpng16-16.dll"
+		"libtiff-5.dll"
+		"libvorbis-0.dll"
+		"libvorbisfile-3.dll"
+		"libwebp-7.dll"
+		"SDL2.dll"
+		"SDL2_image.dll"
+		"SDL2_mixer.dll"
+		"SDL2_ttf.dll"
+		"zlib1.dll")	
 endif()
 
 # definitions
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	add_definitions(-D_UNICODE -D_CRT_SECURE_NO_WARNINGS)
 endif()
-	
+
 # set main target
 add_executable(VertiRead ${SRC_FILES})
 target_compile_features(VertiRead PUBLIC cxx_aggregate_default_initializers cxx_alias_templates cxx_alignas cxx_alignof cxx_attributes cxx_constexpr cxx_contextual_conversions cxx_decltype cxx_default_function_template_args cxx_defaulted_functions cxx_defaulted_move_initializers cxx_delegating_constructors cxx_deleted_functions cxx_enum_forward_declarations cxx_explicit_conversions cxx_extended_friend_declarations cxx_extern_templates cxx_final cxx_func_identifier cxx_generalized_initializers cxx_inheriting_constructors cxx_inline_namespaces cxx_local_type_template_args cxx_long_long_type cxx_noexcept cxx_nonstatic_member_init cxx_nullptr cxx_override cxx_range_for cxx_raw_string_literals cxx_reference_qualified_functions cxx_right_angle_brackets cxx_rvalue_references cxx_sizeof_member cxx_strong_enums cxx_unicode_literals cxx_uniform_initialization cxx_unrestricted_unions cxx_user_literals cxx_variadic_macros cxx_variadic_templates cxx_template_template_parameters)
 
-# linker flags
+# include directories and linker flags
+include_directories(${CMAKE_SOURCE_DIR}/src)
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-	target_link_libraries(VertiRead SDL2.lib SDL2_mixer.lib SDL2_image.lib SDL2_ttf.lib)
-elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-	target_link_libraries(VertiRead SDL2 SDL2_mixer SDL2_image SDL2_ttf)
+	include_directories(${CMAKE_SOURCE_DIR}/lib/include)
 endif()
+target_link_libraries(VertiRead SDL2 SDL2_mixer SDL2_image SDL2_ttf)
 
 # target path
 set(EXECUTABLE_OUTPUT_PATH "${CMAKE_BINARY_DIR}/bin")
@@ -121,7 +97,7 @@ set_target_properties(VertiRead PROPERTIES
 								RUNTIME_OUTPUT_DIRECTORY "${EXECUTABLE_OUTPUT_PATH}"
 								RUNTIME_OUTPUT_DIRECTORY_DEBUG "${EXECUTABLE_OUTPUT_PATH}"
 								RUNTIME_OUTPUT_DIRECTORY_RELEASE "${EXECUTABLE_OUTPUT_PATH}")
-								
+
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	set_target_properties(VertiRead PROPERTIES
 									OUTPUT_NAME VertiRead

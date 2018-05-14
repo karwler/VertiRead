@@ -184,6 +184,7 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 			if (!sets.maximized)
 				sets.resolution = resolution();
 		}
+		scene->onResize();
 	} else if (winEvent.event == SDL_WINDOWEVENT_SIZE_CHANGED)
 		scene->onResize();
 	else if (winEvent.event == SDL_WINDOWEVENT_LEAVE)

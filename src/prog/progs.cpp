@@ -119,11 +119,11 @@ void ProgReader::eventDown(float amt) {
 }
 
 void ProgReader::eventRight(float amt) {
-	static_cast<ReaderBox*>(World::scene()->getLayout())->onScroll(vec2i(modifySpeed(amt * World::winSys()->sets.scrollSpeed.x), 0));
+	static_cast<ReaderBox*>(World::scene()->getLayout())->onScroll(vec2i(-modifySpeed(amt * World::winSys()->sets.scrollSpeed.x), 0));
 }
 
 void ProgReader::eventLeft(float amt) {
-	static_cast<ReaderBox*>(World::scene()->getLayout())->onScroll(vec2i(-modifySpeed(amt * World::winSys()->sets.scrollSpeed.x), 0));
+	static_cast<ReaderBox*>(World::scene()->getLayout())->onScroll(vec2i(modifySpeed(amt * World::winSys()->sets.scrollSpeed.x), 0));
 }
 
 void ProgReader::eventPageUp() {

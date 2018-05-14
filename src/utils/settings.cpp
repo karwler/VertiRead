@@ -2,7 +2,7 @@
 
 // PLAYLIST
 
-Playlist::Playlist(const string& NAME, const vector<std::__cxx11::string>& SGS, const uset<string>& BKS) :
+Playlist::Playlist(const string& NAME, const vector<string>& SGS, const uset<string>& BKS) :
 	name(NAME),
 	songs(SGS),
 	books(BKS)
@@ -298,9 +298,9 @@ string Settings::getScrollSpeedString() const {
 void Settings::setScrollSpeed(const string& line) {
 	vector<vec2t> elems = getWords(line);
 	if (elems.size() >= 1)
-		scrollSpeed.x = stoi(line.substr(elems[0].l, elems[0].u));
+		scrollSpeed.x = stof(line.substr(elems[0].l, elems[0].u));
 	if (elems.size() >= 2)
-		scrollSpeed.y = stoi(line.substr(elems[1].l, elems[1].u));
+		scrollSpeed.y = stof(line.substr(elems[1].l, elems[1].u));
 }
 
 void Settings::setDeadzone(int zone) {

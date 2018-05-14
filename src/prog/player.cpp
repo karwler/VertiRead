@@ -17,7 +17,7 @@ Player::~Player() {
 bool Player::init(const string& book) {
 	// set up mix
 	if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 4096)) {
-		cerr << "Couldn't open audio" << endl << Mix_GetError() << endl;
+		cerr << "Couldn't open audio:" << endl << Mix_GetError() << endl;
 		return false;
 	}
 	Mix_HookMusicFinished(musicFinishCallback);

@@ -328,7 +328,7 @@ vector<Binding> Filer::getBindings() {
 	vector<Binding> bindings(static_cast<sizt>(Binding::Type::numBindings));
 	for (sizt i=0; i<bindings.size(); i++)
 		bindings[i].setDefaultSelf(static_cast<Binding::Type>(i));
-
+	
 	vector<string> lines;
 	if (!readTextFile(dirSets + Default::fileBindings, lines, false))
 		return bindings;
@@ -392,7 +392,7 @@ bool Filer::readTextFile(const string& file, vector<string>& lines, bool printMe
 	std::ifstream ifs(file.c_str());
 	if (!ifs.good()) {
 		if (printMessage)
-			cerr << "couldn't open file " << file << endl;
+			cerr << "Couldn't open file " << file << endl;
 		return false;
 	}
 	lines.clear();
@@ -406,7 +406,7 @@ bool Filer::readTextFile(const string& file, vector<string>& lines, bool printMe
 bool Filer::writeTextFile(const string& file, const vector<string>& lines) {
 	std::ofstream ofs(file.c_str());
 	if (!ofs.good()) {
-		cerr << "couldn't write file " << file << endl;
+		cerr << "Couldn't write file " << file << endl;
 		return false;
 	}
 	for (const string& line : lines)
@@ -426,7 +426,7 @@ vector<string> Filer::listDir(const string& dir, FileType filter) {
 	vector<string> entries;
 #ifdef _WIN32
 	WIN32_FIND_DATAW data;
-	HANDLE hFind = FindFirstFileW(stow(dir+"*").c_str(), &data);
+	HANDLE hFind = FindFirstFileW(stow(appendDsep(dir) + "*").c_str(), &data);
 	if (hFind == INVALID_HANDLE_VALUE)
 		return entries;
 
@@ -456,7 +456,7 @@ vector<string> Filer::listDirRecursively(string dir) {
 	vector<string> entries;
 #ifdef _WIN32
 	WIN32_FIND_DATAW data;
-	HANDLE hFind = FindFirstFileW(stow(dir+"*").c_str(), &data);
+	HANDLE hFind = FindFirstFileW(stow(dir + "*").c_str(), &data);
 	if (hFind == INVALID_HANDLE_VALUE)
 		return entries;
 

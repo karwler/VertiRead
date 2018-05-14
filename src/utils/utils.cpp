@@ -288,7 +288,7 @@ Binding::Type strToBindingType(string str) {
 		return Binding::Type::prevSong;
 	if (str == "volume_up")
 		return Binding::Type::volumeUp;
-	if (str == "volume_donw")
+	if (str == "volume_down")
 		return Binding::Type::volumeDown;
 	if (str == "page_up")
 		return Binding::Type::pageUp;
@@ -298,9 +298,9 @@ Binding::Type strToBindingType(string str) {
 		return Binding::Type::up;
 	if (str == "down")
 		return Binding::Type::down;
-	if (str == "left")
-		return Binding::Type::right;
 	if (str == "right")
+		return Binding::Type::right;
+	if (str == "left")
 		return Binding::Type::left;
 	return Binding::Type::numBindings;
 }

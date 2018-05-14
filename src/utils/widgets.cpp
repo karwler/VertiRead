@@ -409,7 +409,7 @@ SDL_Rect LineEdit::caretRect() const {
 	return {caretPos() + ps.x + Default::textOffset, ps.y, Default::caretWidth, size().y};
 }
 
-void LineEdit::setCPos(int cp) {
+void LineEdit::setCPos(sizt cp) {
 	cpos = cp;
 	checkTextOffset();
 }

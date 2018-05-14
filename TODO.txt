@@ -1,8 +1,3 @@
-check editor and playlists
-adjust scroll speed
-improve exception handling
-test sdl_texteditingevent
-
 advanced book adding
 arrow keys/hats navigation
 multiple scroll modes for reader

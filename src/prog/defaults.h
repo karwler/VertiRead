@@ -231,7 +231,7 @@ const char iniKeywordDeadzone[] = "deadzone";
 // other random crap
 const char titleDefault[] = "VertiRead";
 const char titleExtra[] = "vertiread";
-const float clickThreshold = 8.f;
+const float clickThreshold = 8;
 const int fontTestHeight = 100;
 const char fontTestString[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`~!@#$%^&*()_+-=[]{}'\\\"|;:,.<>/?";
 const int textOffset = 5;
