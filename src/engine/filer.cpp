@@ -1,7 +1,5 @@
-#include "filer.h"
 #include "world.h"
 #include <fstream>
-#include <algorithm>
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -10,28 +8,99 @@
 #include <sys/stat.h>
 #endif
 
-// FILE TYPE
+// INI LINE
 
-EFileType operator~(EFileType a) {
-	return static_cast<EFileType>(~static_cast<uint8>(a));
+IniLine::IniLine() :
+	type(Type::empty)
+{}
+
+IniLine::IniLine(const string& ARG, const string& VAL) :
+	type(Type::argVal),
+	arg(ARG),
+	val(VAL)
+{}
+
+IniLine::IniLine(const string& ARG, const string& KEY, const string& VAL) :
+	type(Type::argKeyVal),
+	arg(ARG),
+	key(KEY),
+	val(VAL)
+{}
+
+IniLine::IniLine(const string& TIT) :
+	type(Type::title),
+	arg(TIT)
+{}
+
+string IniLine::line() const {
+	if (type == Type::argVal)
+		return arg + '=' + val;
+	if (type == Type::argKeyVal)
+		return arg + '[' + key + "]=" + val;
+	if (type == Type::title)
+		return '[' + arg + ']';
+	return "";
 }
-EFileType operator&(EFileType a, EFileType b) {
-	return static_cast<EFileType>(static_cast<uint8>(a) & static_cast<uint8>(b));
+
+void IniLine::setVal(const string& ARG, const string& VAL) {
+	type = Type::argVal;
+	arg = ARG;
+	key.clear();
+	val = VAL;
 }
-EFileType operator&=(EFileType& a, EFileType b) {
-	return a = static_cast<EFileType>(static_cast<uint8>(a) & static_cast<uint8>(b));
+
+void IniLine::setVal(const string& ARG, const string& KEY, const string& VAL) {
+	type = Type::argKeyVal;
+	arg = ARG;
+	key = KEY;
+	val = VAL;
 }
-EFileType operator^(EFileType a, EFileType b) {
-	return static_cast<EFileType>(static_cast<uint8>(a) ^ static_cast<uint8>(b));
+
+void IniLine::setTitle(const string& TIT) {
+	type = Type::title;
+	arg = TIT;
+	key.clear();
+	val.clear();
 }
-EFileType operator^=(EFileType& a, EFileType b) {
-	return a = static_cast<EFileType>(static_cast<uint8>(a) ^ static_cast<uint8>(b));
+
+bool IniLine::setLine(const string& str) {
+	// clear line in case the function will return false
+	clear();
+	if (str.empty())
+		return false;
+
+	// check if title
+	if (str[0] == '[' && str.back() == ']') {
+		arg = str.substr(1, str.length()-2);
+		type = Type::title;
+		return true;
+	}
+
+	// find position of the '=' to split line into argument and value
+	sizt i0 = str.find_first_of('=');
+	if (i0 == string::npos)
+		return false;
+	val = str.substr(i0+1);
+
+	// get arg and key if availible
+	sizt i1 = str.find_first_of('[');
+	sizt i2 = str.find_first_of(']', i1);
+	if (i1 < i2 && i2 < i0) {	// if '[' preceeds ']' and both preceed '='
+		arg = str.substr(0, i1);
+		key = str.substr(i1+1, i2-i1-1);
+		type = Type::argKeyVal;
+	} else {
+		arg = str.substr(0, i0);
+		type = Type::argVal;
+	}
+	return true;
 }
-EFileType operator|(EFileType a, EFileType b) {
-	return static_cast<EFileType>(static_cast<uint8>(a) | static_cast<uint8>(b));
-}
-EFileType operator|=(EFileType& a, EFileType b) {
-	return a = static_cast<EFileType>(static_cast<uint8>(a) | static_cast<uint8>(b));
+
+void IniLine::clear() {
+	type = Type::empty;
+	arg.clear();
+	val.clear();
+	key.clear();
 }
 
 // FILER
@@ -45,7 +114,6 @@ const string Filer::dirSets = string(std::getenv("HOME")) + "/."+Default::titleE
 #endif
 
 const string Filer::dirLangs = Filer::dirExec + Default::dirLanguages + dsep;
-const string Filer::dirSnds = Filer::dirExec + Default::dirSounds + dsep;
 const string Filer::dirTexs = Filer::dirExec + Default::dirTextures + dsep;
 
 #ifdef _WIN32
@@ -53,23 +121,6 @@ const vector<string> Filer::dirFonts = {string(std::getenv("SystemDrive")) + "\\
 #else
 const vector<string> Filer::dirFonts = {"/usr/share/fonts/"};
 #endif
-
-void Filer::checkDirectories(const GeneralSettings& sets) {
-	if (!fileExists(dirSets))
-		mkDir(dirSets);
-	if (!fileExists(sets.libraryPath()))
-		mkDir(sets.libraryPath());
-	if (!fileExists(sets.playlistPath()))
-		mkDir(sets.playlistPath());
-	if (!fileExists(dirExec + Default::fileThemes))
-		cerr << "couldn't find themes.ini" << endl;
-	if (!fileExists(dirLangs))
-		cerr << "couldn't find translation directory" << endl;
-	if (!fileExists(dirSnds))
-		cerr << "couldn't find sound directory" << endl;
-	if (!fileExists(dirTexs))
-		cerr << "couldn't find texture directory" << endl;
-}
 
 vector<string> Filer::getAvailibleThemes() {
 	vector<string> lines;
@@ -79,84 +130,95 @@ vector<string> Filer::getAvailibleThemes() {
 	vector<string> themes;
 	for (string& line : lines) {
 		IniLine il;
-		if (il.setLine(line) && il.type != IniLine::Type::title && !contains(themes, il.arg))
-			themes.push_back(il.arg);
+		if (il.setLine(line) && il.getType() == IniLine::Type::title)
+			themes.push_back(il.getArg());
 	}
 	return themes;
 }
 
-void Filer::getColors(map<EColor, SDL_Color>& colors, const string& theme) {
+vector<SDL_Color> Filer::getColors(const string& theme) {
+	vector<SDL_Color> colors = {
+		Default::colorBackground,
+		Default::colorNormal,
+		Default::colorDark,
+		Default::colorLight,
+		Default::colorText
+	};
 	vector<string> lines;
 	if (!readTextFile(dirExec + Default::fileThemes, lines), false)
-		return;
+		return colors;
 
-	for (string& line : lines) {
-		IniLine il;
-		if (!il.setLine(line) || il.type == IniLine::Type::title)
-			continue;
+	// find title equal to theme
+	IniLine il;
+	sizt i = 0;
+	while (i < lines.size()) {
+		il.setLine(lines[i]);
+		if (il.getType() == IniLine::Type::title && il.getArg() == theme)
+			break;
+		i++;
+	}
 
-		if (il.arg == theme) {
-			EColor clr = EColor(stoi(il.key));
-			if (colors.count(clr) == 0)
-				colors.insert(make_pair(clr, VideoSettings::getDefaultColor(clr)));
-			SDL_Color& color = colors[clr];
+	// read colors until the end of the file or another title
+	while (++i < lines.size()) {
+		il.setLine(lines[i]);
+		if (il.getType() == IniLine::Type::title)
+			break;
 
-			vector<string> elems = getWords(il.val, ' ');
-			if (elems.size() > 0) color.r = stoi(elems[0]);
-			if (elems.size() > 1) color.g = stoi(elems[1]);
-			if (elems.size() > 2) color.b = stoi(elems[2]);
-			if (elems.size() > 3) color.a = stoi(elems[3]);
+		sizt cid = static_cast<sizt>(strToColor(il.getArg()));
+		if (cid < colors.size()) {
+			vector<vec2t> elems = getWords(il.getVal());
+			if (elems.size() > 0)
+				colors[cid].r = stoi(il.getVal().substr(elems[0].l, elems[0].u));
+			if (elems.size() > 1)
+				colors[cid].g = stoi(il.getVal().substr(elems[1].l, elems[1].u));
+			if (elems.size() > 2)
+				colors[cid].b = stoi(il.getVal().substr(elems[2].l, elems[2].u));
+			if (elems.size() > 3)
+				colors[cid].a = stoi(il.getVal().substr(elems[3].l, elems[3].u));
 		}
 	}
+	return colors;
 }
 
 vector<string> Filer::getAvailibleLanguages() {
 	vector<string> files = {Default::language};
-	if (!fileExists(dirLangs))
+	if (fileType(dirLangs) != FTYPE_DIR)
 		return {};
 
-	for (string& it : listDir(dirLangs, FTYPE_FILE, {".ini"}))
+	for (string& it : listDir(dirLangs, FTYPE_FILE))
 		files.push_back(delExt(it));
 	return files;
 }
 
-map<string, string> Filer::getLines(const string& language) {
+umap<string, string> Filer::getTranslations(const string& language) {
 	vector<string> lines;
 	if (!readTextFile(dirLangs + language + ".ini", lines, false))
-		return map<string, string>();
+		return umap<string, string>();
 
-	map<string, string> translation;
+	umap<string, string> translation;
 	for (string& line : lines) {
 		IniLine il;
-		if (il.setLine(line) && il.type != IniLine::Type::title)
-			translation.insert(make_pair(il.arg, il.val));
+		if (il.setLine(line) && il.getType() != IniLine::Type::title)
+			translation.insert(make_pair(il.getArg(), il.getVal()));
 	}
 	return translation;
 }
 
-map<string, Mix_Chunk*> Filer::getSounds() {
-	map<string, Mix_Chunk*> sounds;
-	for (string& it : listDir(dirSnds, FTYPE_FILE))
-		if (Mix_Chunk* cue = Mix_LoadWAV(string(dirSnds+it).c_str()))	// add only valid sound files
-			sounds.insert(make_pair(delExt(it), cue));
-	return sounds;
-}
-
 Playlist Filer::getPlaylist(const string& name) {
 	vector<string> lines;
-	if (!readTextFile(World::library()->getSettings().playlistPath() + name + ".ini", lines))
+	if (!readTextFile(appendDsep(World::winSys()->sets.getDirPlist()) + name + ".ini", lines))
 		return Playlist();
 
 	Playlist plist(name);
 	for (string& line : lines) {
 		IniLine il;
-		if (!il.setLine(line) || il.type == IniLine::Type::title)
+		if (!il.setLine(line) || il.getType() == IniLine::Type::title)
 			continue;
 
-		if (il.arg == Default::iniKeywordBook)
-			plist.books.push_back(il.val);
-		else if (il.arg == Default::iniKeywordSong)
-			plist.songs.push_back(il.val);	// AudioSys will check if the song is playable cause we want all lines for the playlist editor
+		if (il.getArg() == Default::iniKeywordBook)
+			plist.books.insert(il.getVal());
+		else if (il.getArg() == Default::iniKeywordSong)
+			plist.songs.push_back(il.getVal());	// AudioSys will check if the song is playable cause we want all lines for the playlist editor
 	}
 	return plist;
 }
@@ -164,11 +226,10 @@ Playlist Filer::getPlaylist(const string& name) {
 void Filer::savePlaylist(const Playlist& plist) {
 	vector<string> lines;
 	for (const string& name : plist.books)
-		lines.push_back(IniLine(Default::iniKeywordSong, name).line());
+		lines.push_back(IniLine(Default::iniKeywordBook, name).line());
 	for (const string& file : plist.songs)
 		lines.push_back(IniLine(Default::iniKeywordSong, file).line());
-
-	writeTextFile(World::library()->getSettings().playlistPath() + plist.name + ".ini", lines);
+	writeTextFile(appendDsep(World::winSys()->sets.getDirPlist()) + plist.name + ".ini", lines);
 }
 
 string Filer::getLastPage(const string& book) {
@@ -178,8 +239,8 @@ string Filer::getLastPage(const string& book) {
 
 	for (string& line : lines) {
 		IniLine il;
-		if (il.setLine(line) && il.type != IniLine::Type::title && il.arg == book)
-			return il.val;
+		if (il.setLine(line) && il.getType() != IniLine::Type::title && il.getArg() == book)
+			return il.getVal();
 	}
 	return "";
 }
@@ -189,11 +250,11 @@ void Filer::saveLastPage(const string& file) {
 	readTextFile(dirSets + Default::fileLastPages, lines, false);
 
 	// find line to replace or push back
-	size_t id = lines.size();
+	sizt id = lines.size();
 	string book = getBook(file);
-	for (size_t i=0; i!=lines.size(); i++) {
+	for (sizt i=0; i!=lines.size(); i++) {
 		IniLine il;
-		if (il.setLine(lines[i]) && il.type != IniLine::Type::title && il.arg == book) {
+		if (il.setLine(lines[i]) && il.getType() != IniLine::Type::title && il.getArg() == book) {
 			id = i;
 			break;
 		}
@@ -206,193 +267,125 @@ void Filer::saveLastPage(const string& file) {
 	writeTextFile(dirSets + Default::fileLastPages, lines);
 }
 
-GeneralSettings Filer::getGeneralSettings() {
+Settings Filer::getSettings() {
+	Settings sets;
 	vector<string> lines;
-	if (!readTextFile(dirSets + Default::fileGeneralSettings, lines, false))
-		return GeneralSettings();
+	if (!readTextFile(dirSets + Default::fileSettings, lines, false))
+		return sets;
 
-	GeneralSettings sets;
 	for (string& line : lines) {
 		IniLine il;
-		if (!il.setLine(line) || il.type == IniLine::Type::title)
+		if (!il.setLine(line) || il.getType() == IniLine::Type::title)
 			continue;
 
-		if (il.arg == Default::iniKeywordLanguage)
-			sets.setLang(il.val);
-		else if (il.arg == Default::iniKeywordLibrary)
-			sets.setDirLib(il.val);
-		else if (il.arg == Default::iniKeywordPlaylists)
-			sets.setDirPlist(il.val);
+		if (il.getArg() == Default::iniKeywordMaximized)
+			sets.maximized = stob(il.getVal());
+		else if (il.getArg() == Default::iniKeywordFullscreen)
+			sets.fullscreen = stob(il.getVal());
+		else if (il.getArg() == Default::iniKeywordResolution)
+			sets.setResolution(il.getVal());
+		else if (il.getArg() == Default::iniKeywordFont)
+			sets.setFont(il.getVal());
+		else if (il.getArg() == Default::iniKeywordLanguage)
+			sets.setLang(il.getVal());
+		else if (il.getArg() == Default::iniKeywordTheme)
+			sets.setTheme(il.getVal());
+		else if (il.getArg() == Default::iniKeywordLibrary)
+			sets.setDirLib(il.getVal());
+		else if (il.getArg() == Default::iniKeywordPlaylists)
+			sets.setDirPlist(il.getVal());
+		else if (il.getArg() == Default::iniKeywordVolume)
+			sets.setVolume(stoi(il.getVal()));
+		else if (il.getArg() == Default::iniKeywordRenderer)
+			sets.renderer = il.getVal();
+		else if (il.getArg() == Default::iniKeywordScrollSpeed)
+			sets.setScrollSpeed(il.getVal());
+		else if (il.getArg() == Default::iniKeywordDeadzone)
+			sets.setDeadzone(stoi(il.getVal()));
 	}
 	return sets;
 }
 
-void Filer::saveSettings(const GeneralSettings& sets) {
+void Filer::saveSettings(const Settings& sets) {
 	vector<string> lines = {
-		IniLine(Default::iniKeywordLanguage, sets.getLang()).line(),
-		IniLine(Default::iniKeywordLibrary, sets.getDirLib()).line(),
-		IniLine(Default::iniKeywordPlaylists, sets.getDirPlist()).line()
-	};
-	writeTextFile(dirSets + Default::fileGeneralSettings, lines);
-}
-
-VideoSettings Filer::getVideoSettings() {
-	vector<string> lines;
-	if (!readTextFile(dirSets + Default::fileVideoSettings, lines, false))
-		return VideoSettings();
-
-	VideoSettings sets;
-	for (string& line : lines) {
-		IniLine il;
-		if (!il.setLine(line) || il.type == IniLine::Type::title)
-			continue;
-
-		if (il.arg == Default::iniKeywordFont)
-			sets.setFont(il.val);
-		else if (il.arg == Default::iniKeywordRenderer)
-			sets.renderer = il.val;
-		else if (il.arg == Default::iniKeywordMaximized)
-			sets.maximized = stob(il.val);
-		else if (il.arg == Default::iniKeywordFullscreen)
-			sets.fullscreen = stob(il.val);
-		else if (il.arg == Default::iniKeywordResolution) {
-			vector<string> elems = getWords(il.val, ' ');
-			if (elems.size() > 0) sets.resolution.x = stoi(elems[0]);
-			if (elems.size() > 1) sets.resolution.y = stoi(elems[1]);
-		} else if (il.arg == Default::iniKeywordTheme)
-			sets.theme = il.val;
-	}
-	getColors(sets.colors, sets.theme);
-	return sets;
-}
-
-void Filer::saveSettings(const VideoSettings& sets) {
-	vector<string> lines = {
-		IniLine(Default::iniKeywordFont, sets.getFont()).line(),
-		IniLine(Default::iniKeywordRenderer, sets.renderer).line(),
 		IniLine(Default::iniKeywordMaximized, btos(sets.maximized)).line(),
 		IniLine(Default::iniKeywordFullscreen, btos(sets.fullscreen)).line(),
-		IniLine(Default::iniKeywordResolution, to_string(sets.resolution.x) + ' ' + to_string(sets.resolution.y)).line(),
-		IniLine(Default::iniKeywordTheme, sets.theme).line()
+		IniLine(Default::iniKeywordResolution, sets.getResolutionString()).line(),
+		IniLine(Default::iniKeywordFont, sets.getFont()).line(),
+		IniLine(Default::iniKeywordLanguage, sets.getLang()).line(),
+		IniLine(Default::iniKeywordTheme, sets.getTheme()).line(),
+		IniLine(Default::iniKeywordLibrary, sets.getDirLib()).line(),
+		IniLine(Default::iniKeywordPlaylists, sets.getDirPlist()).line(),
+		IniLine(Default::iniKeywordVolume, ntos(sets.getVolume())).line(),
+		IniLine(Default::iniKeywordRenderer, sets.renderer).line(),
+		IniLine(Default::iniKeywordScrollSpeed, sets.getScrollSpeedString()).line(),
+		IniLine(Default::iniKeywordDeadzone, ntos(sets.getDeadzone())).line()
 	};
-	writeTextFile(dirSets + Default::fileVideoSettings, lines);
+	writeTextFile(dirSets + Default::fileSettings, lines);
 }
 
-AudioSettings Filer::getAudioSettings() {
-	vector<string> lines;
-	if (!readTextFile(dirSets + Default::fileAudioSettings, lines, false))
-		return AudioSettings();
+vector<Binding> Filer::getBindings() {
+	vector<Binding> bindings(static_cast<sizt>(Binding::Type::numBindings));
+	for (sizt i=0; i<bindings.size(); i++)
+		bindings[i].setDefaultSelf(static_cast<Binding::Type>(i));
 
-	AudioSettings sets;
+	vector<string> lines;
+	if (!readTextFile(dirSets + Default::fileBindings, lines, false))
+		return bindings;
+
 	for (string& line : lines) {
 		IniLine il;
-		if (!il.setLine(line) || il.type == IniLine::Type::title)
+		if (!il.setLine(line) || il.getType() == IniLine::Type::title || il.getVal().size() < 3)
 			continue;
 
-		if (il.arg == Default::iniKeywordVolMusic)
-			sets.musicVolume = stoi(il.val);
-		else if (il.arg == Default::iniKeywordVolSound)
-			sets.soundVolume = stoi(il.val);
-		else if (il.arg == Default::iniKeywordSongDelay)
-			sets.songDelay = stof(il.val);
-	}
-	return sets;
-}
-
-void Filer::saveSettings(const AudioSettings& sets) {
-	vector<string> lines = {
-		IniLine(Default::iniKeywordVolMusic, to_string(sets.musicVolume)).line(),
-		IniLine(Default::iniKeywordVolSound, to_string(sets.soundVolume)).line(),
-		IniLine(Default::iniKeywordSongDelay, to_string(sets.songDelay)).line()
-	};
-	writeTextFile(dirSets + Default::fileAudioSettings, lines);
-}
-
-ControlsSettings Filer::getControlsSettings() {
-	vector<string> lines;
-	if (!readTextFile(dirSets + Default::fileControlsSettings, lines, false))
-		return ControlsSettings();
-
-	ControlsSettings sets;
-	for (string& line : lines) {
-		IniLine il;
-		if (!il.setLine(line) || il.type == IniLine::Type::title)
-			continue;
-
-		if (il.arg == Default::iniKeywordScrollSpeed) {
-			vector<string> elems = getWords(il.val, ' ');
-			if (elems.size() > 0)
-				sets.scrollSpeed.x = stof(elems[0]);
-			if (elems.size() > 1)
-				sets.scrollSpeed.y = stof(elems[1]);
-		} else if (il.arg == Default::iniKeywordDeadzone)
-			sets.deadzone = stoi(il.val);
-		else if (il.arg == Default::iniKeywordShortcut && sets.shortcuts.count(il.key) != 0) {		// shortcuts have to already contain a variable for this key
-			Shortcut* sc = sets.shortcuts[il.key];
-			switch (toupper(il.val[0])) {
-			case 'K':	// keyboard key
-				sc->setKey(SDL_GetScancodeFromName(il.val.substr(2).c_str()));
-				break;
-			case 'B':	// joystick button
-				sc->setJbutton(stoi(il.val.substr(2)));
-				break;
-			case 'H':	// joystick hat
-				for (size_t i=2; i<il.val.size(); i++)
-					if (il.val[i] < '0' || il.val[i] > '9') {
-						sc->setJhat(stoi(il.val.substr(2, i-2)), jtStrToHat(il.val.substr(i+1)));
-						break;
-					}
-				break;
-			case 'A':	// joystick axis
-				sc->setJaxis(stoi(il.val.substr(3)), (il.val[2] != '-'));
-				break;
-			case 'G':	// gamepad button
-				sc->gbutton(gpStrToButton(il.val.substr(2)));
-				break;
-			case 'X':	// gamepad axis
-				sc->setGaxis(gpStrToAxis(il.val.substr(3)), (il.val[2] != '-'));
-			}
+		sizt bid = static_cast<sizt>(strToBindingType(il.getArg()));
+		switch (toupper(il.getVal()[0])) {
+		case 'K':	// keyboard key
+			bindings[bid].setKey(SDL_GetScancodeFromName(il.getVal().substr(2).c_str()));
+			break;
+		case 'B':	// joystick button
+			bindings[bid].setJbutton(stoi(il.getVal().substr(2)));
+			break;
+		case 'H':	// joystick hat
+			for (sizt i=2; i<il.getVal().size(); i++)
+				if (il.getVal()[i] < '0' || il.getVal()[i] > '9') {
+					bindings[bid].setJhat(stoi(il.getVal().substr(2, i-2)), jtStrToHat(il.getVal().substr(i+1)));
+					break;
+				}
+			break;
+		case 'A':	// joystick axis
+			bindings[bid].setJaxis(stoi(il.getVal().substr(3)), (il.getVal()[2] != '-'));
+			break;
+		case 'G':	// gamepad button
+			bindings[bid].setGbutton(gpStrToButton(il.getVal().substr(2)));
+			break;
+		case 'X':	// gamepad axis
+			bindings[bid].setGaxis(gpStrToAxis(il.getVal().substr(3)), (il.getVal()[2] != '-'));
 		}
 	}
-	return sets;
+	return bindings;
 }
 
-void Filer::saveSettings(const ControlsSettings& sets) {
-	vector<string> lines = {
-		IniLine(Default::iniKeywordShortcut, to_string(sets.scrollSpeed.x) + " " + to_string(sets.scrollSpeed.y)).line(),
-		IniLine(Default::iniKeywordDeadzone, to_string(sets.deadzone)).line()
-	};
-	for (const pair<string, Shortcut*>& it : sets.shortcuts) {
-		vector<string> values;
-		if (it.second->keyAssigned())
-			values.push_back("K_" + string(SDL_GetScancodeName(it.second->getKey())));
+void Filer::saveBindings(const vector<Binding>& bindings) {
+	vector<string> lines;
+	for (sizt i=0; i<bindings.size(); i++) {
+		string name = bindingTypeToStr(static_cast<Binding::Type>(i));
+		if (bindings[i].keyAssigned())
+			lines.push_back(IniLine(name, "K_" + string(SDL_GetScancodeName(bindings[i].getKey()))).line());
 
-		if (it.second->jbuttonAssigned())
-			values.push_back("B_" + to_string(it.second->getJctID()));
-		else if (it.second->jhatAssigned())
-			values.push_back("H_" + to_string(it.second->getJctID()) + "_" + jtHatToStr(it.second->getJhatVal()));
-		else if (it.second->jaxisAssigned())
-			values.push_back(string(it.second->jposAxisAssigned() ? "A_+" : "A_-") + to_string(it.second->getJctID()));
+		if (bindings[i].jbuttonAssigned())
+			lines.push_back(IniLine(name, "B_" + ntos(bindings[i].getJctID())).line());
+		else if (bindings[i].jhatAssigned())
+			lines.push_back(IniLine(name, "H_" + ntos(bindings[i].getJctID()) + "_" + jtHatToStr(bindings[i].getJhatVal())).line());
+		else if (bindings[i].jaxisAssigned())
+			lines.push_back(IniLine(name, string(bindings[i].jposAxisAssigned() ? "A_+" : "A_-") + ntos(bindings[i].getJctID())).line());
 
-		if (it.second->gbuttonAssigned())
-			values.push_back("G_" + gpButtonToStr(it.second->getGctID()));
-		else if (it.second->gbuttonAssigned())
-			values.push_back(string(it.second->gposAxisAssigned() ? "X_+" : "X_-") + gpAxisToStr(it.second->getGctID()));
-
-		for (string& val : values)
-			lines.push_back(IniLine(Default::iniKeywordShortcut, it.first, val).line());
+		if (bindings[i].gbuttonAssigned())
+			lines.push_back(IniLine(name, "G_" + gpButtonToStr(bindings[i].getGctID())).line());
+		else if (bindings[i].gbuttonAssigned())
+			lines.push_back(IniLine(name, string(bindings[i].gposAxisAssigned() ? "X_+" : "X_-") + gpAxisToStr(bindings[i].getGctID())).line());
 	}
-	writeTextFile(dirSets + Default::fileControlsSettings, lines);
-}
-
-bool Filer::readTextFile(const string& file, string& data) {
-	std::ifstream ifs(file.c_str());
-	if (!ifs.good()) {
-		cerr << "couldn't opem file " << file << endl;
-		return false;
-	}
-	data = string((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-	return true;
+	writeTextFile(dirSets + Default::fileBindings, lines);
 }
 
 bool Filer::readTextFile(const string& file, vector<string>& lines, bool printMessage) {
@@ -429,151 +422,102 @@ bool Filer::mkDir(const string& path) {
 #endif
 }
 
-bool Filer::remove(const string& path) {
-	return remove(path.c_str());
-}
-
-bool Filer::rename(const string& path, const string& newPath) {
-	return rename(path.c_str(), newPath.c_str());
-}
-
-vector<string> Filer::listDir(const string& dir, EFileType filter, const vector<string>& extFilter) {
+vector<string> Filer::listDir(const string& dir, FileType filter) {
 	vector<string> entries;
 #ifdef _WIN32
 	WIN32_FIND_DATAW data;
 	HANDLE hFind = FindFirstFileW(stow(dir+"*").c_str(), &data);
 	if (hFind == INVALID_HANDLE_VALUE)
-		return {};
+		return entries;
+
 	do {
-		if (data.cFileName == wstring(L".") || data.cFileName == wstring(L".."))
-			continue;
-		
-		string name = wtos(data.cFileName);
-		if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-			if (filter & FTYPE_DIR)
-				entries.push_back(name);
-		} else if (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
-			if (filter & FTYPE_LINK)
-				entries.push_back(name);
-		} else if (filter & FTYPE_FILE) {
-			if (extFilter.empty())
-				entries.push_back(name);
-			else
-				for (const string& ext : extFilter)
-					if (hasExt(name, ext)) {
-						entries.push_back(name);
-						break;
-					}
-		}
-	} while (FindNextFileW(hFind, &data) != 0);
+		if (wcscmp(data.cFileName, L".") && wcscmp(data.cFileName, L".."))	// ignore . and ..
+			if ((!(data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && (filter & FTYPE_FILE)) || ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && (filter & FTYPE_DIR)))
+				entries.push_back(wtos(data.cFileName));
+	} while (FindNextFileW(hFind, &data));
 	FindClose(hFind);
 #else
 	DIR* directory = opendir(dir.c_str());
-	if (directory) {
-		dirent* data = readdir(directory);
-		while (data) {
-			if (data->d_name == string(".") || data->d_name == string("..")) {
-				data = readdir(directory);
-				continue;
-			}
+	if (!directory)
+		return entries;
 
-			if (data->d_type == DT_DIR) {
-				if (filter & FTYPE_DIR)
-					entries.push_back(data->d_name);
-			} else if (data->d_type == DT_LNK) {
-				if (filter & FTYPE_LINK)
-					entries.push_back(data->d_name);
-			} else if (filter & FTYPE_FILE) {
-				if (extFilter.empty())
-					entries.push_back(data->d_name);
-				else
-					for (const string& ext : extFilter)
-						if (hasExt(data->d_name, ext)) {
-							entries.push_back(data->d_name);
-							break;
-						}
-			}
-			data = readdir(directory);
-		}
-		closedir(directory);
-	}
+	while (dirent* data = readdir(directory))
+		if (strcmp(data->d_name, ".") && strcmp(data->d_name, ".."))	// ignore . and ..
+			if ((data->d_type != DT_DIR && (filter & FTYPE_FILE)) || (data->d_type == DT_DIR && (filter & FTYPE_DIR)))
+				entries.push_back(data->d_name);
+	closedir(directory);
 #endif
 	std::sort(entries.begin(), entries.end());
 	return entries;
 }
 
-vector<string> Filer::listDirRecursively(const string& dir, size_t offs) {
-	if (offs == 0)
-		offs = dir.length();
+vector<string> Filer::listDirRecursively(string dir) {
+	dir = appendDsep(dir);
 	vector<string> entries;
 #ifdef _WIN32
 	WIN32_FIND_DATAW data;
 	HANDLE hFind = FindFirstFileW(stow(dir+"*").c_str(), &data);
 	if (hFind == INVALID_HANDLE_VALUE)
-		return {};
+		return entries;
+
 	do {
-		if (data.cFileName == wstring(L".") || data.cFileName == wstring(L".."))
+		if (!(wcscmp(data.cFileName, L".") && wcscmp(data.cFileName, L"..")))	// ignore . and ..
 			continue;
 
 		string name = wtos(data.cFileName);
-		if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-			vector<string> newEs = listDirRecursively(dir+name+dsep, offs);
-			std::sort(entries.begin(), entries.end());
+		if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {	// append subdirectoy's files to entries
+			vector<string> newEs = listDirRecursively(dir + name);
 			entries.insert(entries.end(), newEs.begin(), newEs.end());
 		} else
-			entries.push_back(dir.substr(offs) + name);
-	} while (FindNextFileW(hFind, &data) != 0);
+			entries.push_back(dir + name);
+	} while (FindNextFileW(hFind, &data));
 	FindClose(hFind);
 #else
 	DIR* directory = opendir(dir.c_str());
-	if (directory) {
-		dirent* data = readdir(directory);
-		while (data) {
-			if (data->d_name == string(".") || data->d_name == string("..")) {
-				data = readdir(directory);
-				continue;
-			}
+	if (!directory)
+		return entries;
 
-			if (data->d_type == DT_DIR) {
-				vector<string> newEs = listDirRecursively(dir+data->d_name+dsep, offs);
-				std::sort(entries.begin(), entries.end());
-				entries.insert(entries.end(), newEs.begin(), newEs.end());
-			} else
-				entries.push_back(dir.substr(offs) + data->d_name);
+	while (dirent* data = readdir(directory)) {
+		if (!(strcmp(data->d_name, ".") && strcmp(data->d_name, "..")))	// ignore . and ..
+			continue;
 
-			data = readdir(directory);
-		}
-		closedir(directory);
+		if (data->d_type == DT_DIR) {	// append subdirectoy's files to entries
+			vector<string> newEs = listDirRecursively(dir + data->d_name);
+			entries.insert(entries.end(), newEs.begin(), newEs.end());
+		} else
+			entries.push_back(dir + data->d_name);
 	}
+	closedir(directory);
 #endif
 	return entries;
 }
 
-EFileType Filer::fileType(const string& path) {
+FileType Filer::fileType(const string& path) {
 #ifdef _WIN32
 	DWORD attrib = GetFileAttributesW(stow(path).c_str());
+	if (attrib == INVALID_FILE_ATTRIBUTES)
+		return FTYPE_NONE;
 	if (attrib & FILE_ATTRIBUTE_DIRECTORY)
 		return FTYPE_DIR;
-	if (attrib & FILE_ATTRIBUTE_SPARSE_FILE)
-		return FTYPE_LINK;
 #else
 	struct stat ps;
-	stat(path.c_str(), &ps);
+	if (stat(path.c_str(), &ps))
+		return FTYPE_NONE;
 	if (S_ISDIR(ps.st_mode))
 		return FTYPE_DIR;
-	if (S_ISLNK(ps.st_mode))
-		return FTYPE_LINK;
 #endif
 	return FTYPE_FILE;
 }
 
-bool Filer::fileExists(const string& path) {
-#ifdef _WIN32
-	return GetFileAttributesW(stow(path).c_str()) != INVALID_FILE_ATTRIBUTES;
-#else
-	struct stat ps;
-	return stat(path.c_str(), &ps) == 0;
-#endif
+bool Filer::rename(const string& path, const string& newPath) {
+	return !std::rename(path.c_str(), newPath.c_str());
+}
+
+bool Filer::remove(const string& path) {
+	if (fileType(path) == FTYPE_DIR)
+		for (string& it : listDir(path))
+			remove(appendDsep(path) + it);
+	return !std::remove(path.c_str());
 }
 
 #ifdef _WIN32
@@ -581,7 +525,7 @@ vector<char> Filer::listDrives() {
 	vector<char> letters;
 	DWORD drives = GetLogicalDrives();
 	
-	for (char i=0; i!=26; i++)
+	for (char i=0; i<26; i++)
 		if (drives & (1 << i))
 			letters.push_back('A'+i);
 	return letters;
@@ -591,45 +535,31 @@ vector<char> Filer::listDrives() {
 string Filer::getDirExec() {
 	string path;
 #ifdef _WIN32
-	wchar buffer[Default::dirExecMaxBufferLength];
-	GetModuleFileNameW(0, buffer, Default::dirExecMaxBufferLength);
+	wchar buffer[MAX_PATH];
+	GetModuleFileNameW(0, buffer, MAX_PATH);
 	path = wtos(buffer);
 #else
-	char buffer[Default::dirExecMaxBufferLength];
-	int len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
+	char buffer[PATH_MAX];
+	int len = readlink("/proc/self/exe", buffer, PATH_MAX-1);
 	buffer[len] = '\0';
 	path = buffer;
 #endif
 	return parentPath(path);
 }
 
-string Filer::findFont(const string& font) {
-	if (isAbsolute(font)) {	// check fontpath first
-		if (fileType(font) == FTYPE_FILE)
-			return font;
-		return checkDirForFont(filename(font), parentPath(font));
-	}
+string Filer::findFont(const string& font) {	
+	if (isAbsolute(font) && fileType(font) == FTYPE_FILE)	// check if font refers to a file
+		return font;
 
-	for (const string& dir : dirFonts) {	// check global font directories
-		string file = checkDirForFont(font, dir);
-		if (!file.empty())
-			return file;
-	}
-	return "";
-}
-
-string Filer::checkDirForFont(const string& font, const string& dir) {
-	for (string& it : listDirRecursively(dir)) {
-		string file = findChar(font, '.') ? filename(it) : delExt(filename(it));
-		if (strcmpCI(file, font))
-			return dir + it;
-	}
-	return "";
+	for (const string& dir : dirFonts)	// check font directories
+		for (string& it : listDirRecursively(dir))
+			if (strcmpCI(hasExt(it) ? delExt(filename(it)) : filename(it), font))
+				return it;
+	return "";	// nothing found
 }
 
 std::istream& Filer::readLine(std::istream& ifs, string& str) {
 	str.clear();
-
 	std::istream::sentry se(ifs, true);
 	std::streambuf* sbf = ifs.rdbuf();
 

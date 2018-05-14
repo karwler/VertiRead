@@ -1,56 +1,43 @@
+# project properties
 cmake_minimum_required(VERSION 3.1.0)
 cmake_policy(SET CMP0015 NEW)
 cmake_policy(SET CMP0043 NEW)
-
 project(VertiRead LANGUAGES CXX)
-set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
+set(CMAKE_BUILD_TYPE "Debug")
+#set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
 
 # source files
 set(SRC_FILES
-	"src/engine/audioSys.cpp"
-	"src/engine/audioSys.h"
-	"src/engine/base.cpp"
-	"src/engine/base.h"
 	"src/engine/drawSys.cpp"
 	"src/engine/drawSys.h"
 	"src/engine/filer.cpp"
 	"src/engine/filer.h"
 	"src/engine/inputSys.cpp"
 	"src/engine/inputSys.h"
-	"src/engine/library.cpp"
-	"src/engine/library.h"
-	"src/engine/main.cpp"
 	"src/engine/scene.cpp"
 	"src/engine/scene.h"
 	"src/engine/windowSys.cpp"
 	"src/engine/windowSys.h"
 	"src/engine/world.cpp"
 	"src/engine/world.h"
-	"src/kklib/aliases.h"
-	"src/kklib/grid2.h"
-	"src/kklib/sptr.h"
-	"src/kklib/vec2.h"
-	"src/kklib/vec3.h"
-	"src/kklib/vec4.h"
 	"src/prog/browser.cpp"
 	"src/prog/browser.h"
 	"src/prog/defaults.h"
+	"src/prog/player.cpp"
+	"src/prog/player.h"
 	"src/prog/playlistEditor.cpp"
 	"src/prog/playlistEditor.h"
 	"src/prog/program.cpp"
 	"src/prog/program.h"
-	"src/utils/capturers.cpp"
-	"src/utils/capturers.h"
-	"src/utils/items.cpp"
-	"src/utils/items.h"
-	"src/utils/scrollAreas.cpp"
-	"src/utils/scrollAreas.h"
+	"src/prog/progs.cpp"
+	"src/prog/progs.h"
+	"src/utils/layouts.cpp"
+	"src/utils/layouts.h"
 	"src/utils/settings.cpp"
 	"src/utils/settings.h"
-	"src/utils/types.cpp"
-	"src/utils/types.h"
 	"src/utils/utils.cpp"
 	"src/utils/utils.h"
+	"src/utils/vec2.h"
 	"src/utils/widgets.cpp"
 	"src/utils/widgets.h")
 	
@@ -117,7 +104,7 @@ endif()
 	
 # set main target
 add_executable(VertiRead ${SRC_FILES})
-target_compile_features(VertiRead PUBLIC cxx_nullptr cxx_enum_forward_declarations cxx_variadic_templates cxx_alias_templates cxx_raw_string_literals cxx_unicode_literals cxx_long_long_type cxx_rvalue_references)
+target_compile_features(VertiRead PUBLIC cxx_aggregate_default_initializers cxx_alias_templates cxx_alignas cxx_alignof cxx_attributes cxx_constexpr cxx_contextual_conversions cxx_decltype cxx_default_function_template_args cxx_defaulted_functions cxx_defaulted_move_initializers cxx_delegating_constructors cxx_deleted_functions cxx_enum_forward_declarations cxx_explicit_conversions cxx_extended_friend_declarations cxx_extern_templates cxx_final cxx_func_identifier cxx_generalized_initializers cxx_inheriting_constructors cxx_inline_namespaces cxx_local_type_template_args cxx_long_long_type cxx_noexcept cxx_nonstatic_member_init cxx_nullptr cxx_override cxx_range_for cxx_raw_string_literals cxx_reference_qualified_functions cxx_right_angle_brackets cxx_rvalue_references cxx_sizeof_member cxx_strong_enums cxx_unicode_literals cxx_uniform_initialization cxx_unrestricted_unions cxx_user_literals cxx_variadic_macros cxx_variadic_templates cxx_template_template_parameters)
 
 # linker flags
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
@@ -160,7 +147,7 @@ elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 endif()
 add_custom_command(TARGET VertiRead POST_BUILD
 					COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/rsc/icon.ico ${EXECUTABLE_OUTPUT_PATH}
-					COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/data ${EXECUTABLE_OUTPUT_PATH})
+					COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/rsc/data ${EXECUTABLE_OUTPUT_PATH})
 
 # filter file for ms visual studio
 foreach(source IN LISTS SRC_FILES)
@@ -177,4 +164,3 @@ foreach(source IN LISTS SRC_FILES)
 	endif()
 	source_group("${filter_path}" FILES ${source})
 endforeach()
-

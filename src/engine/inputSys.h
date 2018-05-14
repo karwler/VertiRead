@@ -1,12 +1,11 @@
 #pragma once
 
-#include "utils/capturers.h"
 #include "utils/settings.h"
 
 // handles input events and contains controls settings
 class InputSys {
 public:
-	InputSys(const ControlsSettings& SETS=ControlsSettings());
+	InputSys();
 	~InputSys();
 
 	void eventKeypress(const SDL_KeyboardEvent& key);
@@ -16,49 +15,46 @@ public:
 	void eventGamepadButton(const SDL_ControllerButtonEvent& gbutton);
 	void eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis);
 	void eventMouseMotion(const SDL_MouseMotionEvent& motion);
-	void eventMouseButtonDown(const SDL_MouseButtonEvent& button);
-	void eventMouseButtonUp(const SDL_MouseButtonEvent& button);
-	void eventMouseWheel(const SDL_MouseWheelEvent& wheel);
-	void eventText(const SDL_TextInputEvent& text);
 
 	void tick(float dSec);
-	bool isPressed(const string& holder, float* amt=nullptr) const;	// looks through axis shortcuts (aka holders) in controls settings (amt will only be changed if the shortcut is an active axis)
-	bool isPressed(const ShortcutAxis* sc, float* amt=nullptr) const;
-	static bool isPressedK(SDL_Scancode key);		// check if keyboard key is pressed
-	static bool isPressedM(uint32 button);			// check if mouse button is pressed
+	bool isPressed(Binding::Type type, float& amt) const;	// looks through axis bindings (aka holders) in controls settings (amt will only be changed if the binding is an active axis)
+	bool isPressed(const Binding& abind, float& amt) const;
 	bool isPressedB(uint8 jbutton) const;			// check if any of the joysticks' button is pressed
-	bool isPressedG(uint8 gbutton) const;			// check if any of the gamepads' button is pressed
+	bool isPressedG(SDL_GameControllerButton gbutton) const;			// check if any of the gamepads' button is pressed
 	bool isPressedH(uint8 jhat, uint8 val) const;	// check if any of the joysticks' hat is pressed
-	float getAxisJ(uint8 jaxis) const;				// check if any of the joysticks' axis value is greater than 0
-	float getAxisG(uint8 gaxis) const;				// check if any of the gamepads' axis value is greater than 0
+	int getAxisJ(uint8 jaxis) const;				// check if any of the joysticks' axis value is greater than 0
+	int getAxisG(SDL_GameControllerAxis gaxis) const;				// check if any of the gamepads' axis value is greater than 0
+
 	static vec2i mousePos();
-	vec2i getMouseMove() const;
-
-	const ControlsSettings& getSettings() const;
-	void setScrollSpeed(const vec2f& sspeed);
-	void setDeadzone(int16 deadz);
-	Shortcut* getShortcut(const string& name);
-
-	bool hasControllers() const;
-	void updateControllers();
-
-	const Capturer* getCaptured() const;
-	void setCaptured(Capturer* cbox);
+	const vec2i& getMouseMove() { return mouseMove; }
+	Binding& getBinding(Binding::Type type) { return bindings[static_cast<sizt>(type)]; }
+	const vector<Binding>& getBindings() const { return bindings; }
+	void addController(int id);
+	void removeController(int id);
 
 private:
-	ControlsSettings sets;
+	struct Controller {
+		Controller(int id);
+
+		bool open(int id);
+		void close();
+
+		SDL_Joystick* joystick;			// for direct input
+		SDL_GameController* gamepad;	// for xinput
+		int index;
+	};
 	vector<Controller> controllers;	// currently connected game controllers
-	Capturer* captured;				// pointer to widget currently hogging all keyboard input
+	vector<Binding> bindings;
 	vec2i mouseMove;				// how much mouse has moved since last check
 
-	void checkShortcutsK(SDL_Scancode key);
-	void checkShortcutsB(uint8 jbutton);
-	void checkShortcutsH(uint8 jhat, uint8 val);
-	void checkShortcutsA(uint8 jaxis, bool positive);
-	void checkShortcutsG(uint8 gbutton);
-	void checkShortcutsX(uint8 gaxis, bool positive);
+	void checkBindingsK(SDL_Scancode key);
+	void checkBindingsB(uint8 jbutton);
+	void checkBindingsH(uint8 jhat, uint8 val);
+	void checkBindingsA(uint8 jaxis, bool positive);
+	void checkBindingsG(uint8 gbutton);
+	void checkBindingsX(uint8 gaxis, bool positive);
 
 	void clearControllers();
 
-	int16 checkAxisValue(int16 value) const;	// check deadzone in axis value
+	int checkAxisValue(int value) const;	// check deadzone in axis value
 };

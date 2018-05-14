@@ -1,55 +1,81 @@
 #pragma once
 
-#include "utils/settings.h"
+#include "utils/utils.h"
 
-enum EFileType : uint8 {
+enum FileType : uint8 {
+	FTYPE_NONE = 0x0,
 	FTYPE_FILE = 0x1,
 	FTYPE_DIR  = 0x2,
-	FTYPE_LINK = 0x4
+	FTYPE_ANY  = 0xFF
 };
-EFileType operator~(EFileType a);
-EFileType operator&(EFileType a, EFileType b);
-EFileType operator&=(EFileType& a, EFileType b);
-EFileType operator^(EFileType a, EFileType b);
-EFileType operator^=(EFileType& a, EFileType b);
-EFileType operator|(EFileType a, EFileType b);
-EFileType operator|=(EFileType& a, EFileType b);
+inline FileType operator~(FileType a) { return static_cast<FileType>(~static_cast<uint8>(a)); }
+inline FileType operator&(FileType a, FileType b) { return static_cast<FileType>(static_cast<uint8>(a) & static_cast<uint8>(b)); }
+inline FileType operator&=(FileType& a, FileType b) { return a = static_cast<FileType>(static_cast<uint8>(a) & static_cast<uint8>(b)); }
+inline FileType operator^(FileType a, FileType b) { return static_cast<FileType>(static_cast<uint8>(a) ^ static_cast<uint8>(b)); }
+inline FileType operator^=(FileType& a, FileType b) { return a = static_cast<FileType>(static_cast<uint8>(a) ^ static_cast<uint8>(b)); }
+inline FileType operator|(FileType a, FileType b) { return static_cast<FileType>(static_cast<uint8>(a) | static_cast<uint8>(b)); }
+inline FileType operator|=(FileType& a, FileType b) { return a = static_cast<FileType>(static_cast<uint8>(a) | static_cast<uint8>(b)); }
+
+// for interpreting lines in ini files
+class IniLine {
+public:
+	enum class Type : uint8 {
+		empty,
+		argVal,		// argument, value, no key, no title
+		argKeyVal,	// argument, key, value, no title
+		title		// title, no everything else
+	};
+
+	IniLine();
+	IniLine(const string& ARG, const string& VAL);
+	IniLine(const string& ARG, const string& KEY, const string& VAL);
+	IniLine(const string& TIT);
+
+	Type getType() const { return type; }
+	const string& getArg() const { return arg; }
+	const string& getKey() const { return key; }
+	const string& getVal() const { return val; }
+	string line() const;	// get the actual INI line from arg, key and val
+
+	void setVal(const string& ARG, const string& VAL);
+	void setVal(const string& ARG, const string& KEY, const string& VAL);
+	void setTitle(const string& TIT);
+	bool setLine(const string& str);	// returns false if not an INI line
+	void clear();
+
+private:
+	Type type;
+	string arg;	// argument, aka. the thing before the equal sign/brackets
+	string key;	// the thing between the brackets (empty if there are no brackets)
+	string val;	// value, aka. the thing after the equal sign
+};
 
 // handles all filesystem interactions
 class Filer {
 public:
-	static void checkDirectories(const GeneralSettings& sets);	// check if all (more or less) necessary files and directories exist
-
 	static vector<string> getAvailibleThemes();
-	static void getColors(map<EColor, SDL_Color>& colors, const string& theme);	// get theme's colors
+	static vector<SDL_Color> getColors(const string& theme);	// updates settings' colors according to settings' theme
 	static vector<string> getAvailibleLanguages();
-	static map<string, string> getLines(const string& language);	// get translations from language (-file)
-	static map<string, Mix_Chunk*> getSounds();
+	static umap<string, string> getTranslations(const string& language);
 
 	static Playlist getPlaylist(const string& name);
 	static void savePlaylist(const Playlist& plist);
 	static string getLastPage(const string& book);
 	static void saveLastPage(const string& file);
 
-	static GeneralSettings getGeneralSettings();
-	static void saveSettings(const GeneralSettings& sets);
-	static VideoSettings getVideoSettings();
-	static void saveSettings(const VideoSettings& sets);
-	static AudioSettings getAudioSettings();
-	static void saveSettings(const AudioSettings& sets);
-	static ControlsSettings getControlsSettings();
-	static void saveSettings(const ControlsSettings& sets);
+	static Settings getSettings();
+	static void saveSettings(const Settings& sets);
+	static vector<Binding> getBindings();
+	static void saveBindings(const vector<Binding>& sets);
 
-	static bool readTextFile(const string& file, string& data);
 	static bool readTextFile(const string& file, vector<string>& lines, bool printMessage=true);
 	static bool writeTextFile(const string& file, const vector<string>& lines);
 	static bool mkDir(const string& path);
-	static bool remove(const string& path);
+	static vector<string> listDir(const string& dir, FileType filter=FTYPE_ANY);
+	static vector<string> listDirRecursively(string dir);
+	static FileType fileType(const string& path);
 	static bool rename(const string& path, const string& newPath);
-	static vector<string> listDir(const string& dir, EFileType filter=FTYPE_FILE | FTYPE_DIR | FTYPE_LINK, const vector<string>& extFilter={});
-	static vector<string> listDirRecursively(const string& dir, size_t offs=0);
-	static EFileType fileType(const string& path);
-	static bool fileExists(const string& path);		// can be used for directories
+	static bool remove(const string& path);
 
 #ifdef _WIN32
 	static vector<char> listDrives();	// get list of driver letters under windows
@@ -65,6 +91,5 @@ public:
 	static const vector<string> dirFonts;	// os's font directories
 
 private:
-	static string checkDirForFont(const string& font, const string& dir);	// necessary for FindFont()
 	static std::istream& readLine(std::istream& ifs, string& str);
 };

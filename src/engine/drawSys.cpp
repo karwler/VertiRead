@@ -1,214 +1,228 @@
 #include "world.h"
 
-DrawSys::DrawSys() :
-	renderer(nullptr)
-{}
+// FONT SET
 
-DrawSys::~DrawSys() {
-	destroyRenderer();
+FontSet::FontSet(const string& FILE) {
+	init(FILE);
 }
 
-SDL_Renderer* DrawSys::getRenderer() {
-	return renderer;
+FontSet::~FontSet() {
+	for (const pair<int, TTF_Font*>& it : fonts)
+		TTF_CloseFont(it.second);
 }
 
-void DrawSys::createRenderer(SDL_Window* window, int driverIndex) {
+void FontSet::init(const string& path) {
+	clear();
+	file = path;
+
+	// get approximate height scale factor
+	int size;
+	TTF_Font* tmp = TTF_OpenFont(file.c_str(), Default::fontTestHeight);
+	TTF_SizeUTF8(tmp, Default::fontTestString, nullptr, &size);
+	heightScale = float(Default::fontTestHeight) / float(size);
+	TTF_CloseFont(tmp);
+}
+
+void FontSet::clear() {
+	for (const pair<int, TTF_Font*>& it : fonts)
+		TTF_CloseFont(it.second);
+	fonts.clear();
+}
+
+TTF_Font* FontSet::addSize(int size) {
+	TTF_Font* font = TTF_OpenFont(file.c_str(), size);
+	if (font)
+		fonts.insert(make_pair(size, font));
+	return font;
+}
+
+TTF_Font* FontSet::getFont(int height) {
+	height = float(height) * heightScale;
+	return fonts.count(height) ? fonts.at(height) : addSize(height);	// load font if it hasn't been loaded yet
+}
+
+int FontSet::length(const string& text, int height) {
+	int len = 0;
+	TTF_Font* font = getFont(height);
+	if (font)
+		TTF_SizeUTF8(font, text.c_str(), &len, nullptr);
+	return len;
+}
+
+// DRAW SYS
+
+DrawSys::DrawSys(SDL_Window* window, int driverIndex) :
+	colors(Filer::getColors(World::winSys()->sets.getTheme())),
+	fonts(Filer::findFont(World::winSys()->sets.getFont())),
+	trans(Filer::getTranslations(World::winSys()->sets.getLang()))
+{
 	renderer = SDL_CreateRenderer(window, driverIndex, Default::rendererFlags);
 	if (!renderer)
-		throw Exception("couldn't create renderer\n" + string(SDL_GetError()), 4);
+		throw "Couldn't create renderer:\n" + string(SDL_GetError());
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 }
 
-void DrawSys::destroyRenderer() {
-	if (renderer) {
-		SDL_DestroyRenderer(renderer);
-		renderer = nullptr;
-	}
+DrawSys::~DrawSys() {
+	SDL_DestroyRenderer(renderer);
 }
 
-void DrawSys::drawWidgets(const vector<Widget*>& widgets, const Popup* popup) {
+SDL_Rect DrawSys::viewport() const {
+	SDL_Rect view;
+	SDL_RenderGetViewport(renderer, &view);
+	return view;
+}
+
+void DrawSys::setTheme(const string& name) {
+	colors = Filer::getColors(World::winSys()->sets.setTheme(name));
+}
+
+void DrawSys::setFont(const string& font) {
+	fonts.init(World::winSys()->sets.setFont(font));
+}
+
+string DrawSys::translation(const string& line, bool firstCapital) const {
+	string str = trans.count(line) ? trans.at(line) : line;
+	if (firstCapital && !str.empty())
+		str[0] = toupper(str[0]);
+	return str;
+}
+
+void DrawSys::setLanguage(const string& lang) {
+	trans = Filer::getTranslations(World::winSys()->sets.setLang(lang));
+}
+
+void DrawSys::drawWidgets() {
 	// clear screen
-	colorDim = popup ? Default::colorPopupDim : Default::colorNoDim;
-	SDL_Color bgcolor = World::winSys()->getSettings().colors.at(EColor::background);
-	SDL_SetRenderDrawColor(renderer, bgcolor.r/colorDim.r, bgcolor.g/colorDim.g, bgcolor.b/colorDim.b, bgcolor.a/colorDim.a);
+	SDL_Color bgcolor = colors[static_cast<uint8>(Color::background)];
+	SDL_SetRenderDrawColor(renderer, bgcolor.r, bgcolor.g, bgcolor.b, bgcolor.a);
 	SDL_RenderClear(renderer);
 
-	// draw main widgets
-	for (Widget* it : widgets)
-		passDrawWidget(it);
+	// draw main widgets and visible overlays
+	World::scene()->getLayout()->drawSelf();
+	for (Overlay* it : World::scene()->getOverlays())
+		if (it->on)
+			it->drawSelf();
 
-	// draw popup if exists
-	colorDim = Default::colorNoDim;
-	if (popup) {
-		drawRect(popup->rect(), popup->color);
-		for (Widget* it : popup->widgets)
-			passDrawWidget(it);
+	// draw popup if exists and dim main widgets
+	if (World::scene()->getPopup()) {
+		SDL_Rect view = viewport();
+		SDL_SetRenderDrawColor(renderer, Default::colorPopupDim.r, Default::colorPopupDim.g, Default::colorPopupDim.b, Default::colorPopupDim.a);
+		SDL_RenderFillRect(renderer, &view);
+
+		World::scene()->getPopup()->drawSelf();
 	}
+
+	// draw caret if capturing LineEdit
+	if (LineEdit* let = dynamic_cast<LineEdit*>(World::scene()->capture))
+		drawRect(let->caretRect(), Color::light);
 
 	SDL_RenderPresent(renderer);
 }
 
-void DrawSys::passDrawWidget(Widget* wgt) {
-	// specific drawing for each widget
-	if (Label* lbl = dynamic_cast<Label*>(wgt))
-		drawWidget(lbl->rect(), lbl->color, lbl->text());
-	else if (ButtonText* btxt = dynamic_cast<ButtonText*>(wgt))
-		drawWidget(btxt->rect(), btxt->color, btxt->text());
-	else if (ButtonImage* bimg = dynamic_cast<ButtonImage*>(wgt))
-		drawImage(bimg->getCurTex(), bimg->rect());
-	else if (LineEditor* edt = dynamic_cast<LineEditor*>(wgt))
-		drawWidget(edt);
-	else if (ScrollAreaItems* box = dynamic_cast<ScrollAreaItems*>(wgt))
-		drawWidget(box);
-	else if (ReaderBox* box = dynamic_cast<ReaderBox*>(wgt))
-		drawWidget(box);
-	else
-		drawRect(wgt->rect(), wgt->color);
+void DrawSys::drawButton(Button* wgt) {
+	drawRect(overlapRect(wgt->rect(), wgt->parentFrame()), wgt->getParent()->getSelected().count(wgt) ? Color::light : Color::normal);
 }
 
-void DrawSys::drawWidget(const SDL_Rect& bg, EColor bgColor, const Text& text) {
-	drawRect(bg, bgColor);
-	drawText(text, bg);
+void DrawSys::drawCheckBox(CheckBox* wgt) {
+	SDL_Rect frame = wgt->parentFrame();
+	drawRect(overlapRect(wgt->rect(), frame), wgt->getParent()->getSelected().count(wgt) ? Color::light : Color::normal);	// draw background
+	drawRect(overlapRect(wgt->boxRect(), frame), wgt->on ? Color::light : Color::dark);	// draw checkbox
 }
 
-void DrawSys::drawWidget(LineEditor* wgt) {
-	SDL_Rect bg = wgt->rect();
-	drawRect(bg, wgt->color);
-	drawText(wgt->text(), bg);
-
-	if (World::inputSys()->getCaptured() == wgt)
-		drawRect(wgt->caretRect(), EColor::highlighted);
+void DrawSys::drawSlider(Slider* wgt) {
+	SDL_Rect frame = wgt->parentFrame();
+	drawRect(overlapRect(wgt->rect(), frame), wgt->getParent()->getSelected().count(wgt) ? Color::light : Color::normal);	// draw background
+	drawRect(overlapRect(wgt->barRect(), frame), Color::dark);		// draw bar
+	drawRect(overlapRect(wgt->sliderRect(), frame), Color::light);	// draw slider
 }
 
-void DrawSys::drawWidget(ScrollAreaItems* wgt) {
-	// draw scroll are background
-	SDL_Rect bg = wgt->rect();
-	drawRect(bg, wgt->color);
-
-	// get index interval of items on screen and draw items
-	vec2t interval = wgt->visibleItems();
-	for (size_t i=interval.x; i<=interval.y; i++) {
-		ListItem* it = wgt->item(i);
-
-		// draw background rect
-		SDL_Rect rect = wgt->itemRect(i);
-		vec2i textPos(rect.x + Default::textOffset, rect.y);
-		cropRect(rect, bg);
-		EColor color = (it == wgt->selectedItem) ? EColor::highlighted : EColor::rectangle;
-		drawRect(rect, color);
-
-		// draw label
-		Text txt(it->label, textPos, Default::itemHeight);
-		drawText(txt, rect);
-
-		// draw the rest specific to the derived class
-		if (!it->label.empty())
-			textPos.x += txt.size().x + Default::lineEditOffset;
-		passDrawItem(it, rect, textPos);
-	}
-	// draw scroll bar
-	drawRect(wgt->barRect(), EColor::darkened);
-	drawRect(wgt->sliderRect(), EColor::highlighted);
+void DrawSys::drawPicture(Picture* wgt) {
+	drawImage(wgt->getTex(), wgt->rect(), wgt->parentFrame());
 }
 
-void DrawSys::drawWidget(ReaderBox* wgt) {
-	// draw scroll are background
-	SDL_Rect bg = wgt->rect();
-	drawRect(bg, wgt->color);
+void DrawSys::drawLabel(Label* wgt) {
+	SDL_Rect rect = overlapRect(wgt->rect(), wgt->parentFrame());
+	drawRect(rect, wgt->getParent()->getSelected().count(wgt) ? Color::light : Color::normal);	// draw background
 
-	// get index interval of pictures on screen and draw pictures
-	vec2t interval = wgt->visiblePictures();
-	for (size_t i=interval.x; i<=interval.y; i++)
-		drawImage(wgt->image(i), bg);
-
-	if (wgt->showSlider()) {
-		drawRect(wgt->barRect(), EColor::darkened);
-		drawRect(wgt->sliderRect(), EColor::highlighted);
-	}
-	if (wgt->showList()) {
-		drawRect(wgt->listRect(), EColor::darkened);
-		for (Widget* it : wgt->getListWidgets())
-			passDrawWidget(it);
-	}
-	if (wgt->showPlayer()) {
-		drawRect(wgt->playerRect(), EColor::darkened);
-		for (Widget* it : wgt->getPlayerWidgets())
-			passDrawWidget(it);
+	if (wgt->tex) {		// modify frame and draw text if exists
+		rect.x += Default::textOffset;
+		rect.w -= Default::textOffset * 2;
+		drawText(wgt->tex, wgt->textRect(), rect);
 	}
 }
 
-void DrawSys::passDrawItem(ListItem* item, const SDL_Rect& rect, const vec2i& textPos) {
-	if (Checkbox* wgt = dynamic_cast<Checkbox*>(item))
-		drawItem(wgt, rect, textPos);
-	else if (Switchbox* wgt = dynamic_cast<Switchbox*>(item))
-		drawItem(wgt, rect, textPos);
-	else if (LineEdit* wgt = dynamic_cast<LineEdit*>(item))
-		drawItem(wgt, rect, textPos);
-	else if (KeyGetter* wgt = dynamic_cast<KeyGetter*>(item))
-		drawItem(wgt, rect, textPos);
+void DrawSys::drawScrollArea(ScrollArea* box) {
+	vec2t vis = box->visibleWidgets();	// get index interval of items on screen and draw children
+	for (sizt i=vis.l; i<vis.u; i++)
+		box->getWidget(i)->drawSelf();
+
+	drawRect(box->barRect(), Color::dark);		// draw scroll bar
+	drawRect(box->sliderRect(), Color::light);	// draw scroll slider
 }
 
-void DrawSys::drawItem(Checkbox* item, const SDL_Rect& rect, const vec2i& textPos) {
-	EColor clr = item->getOn() ? EColor::highlighted : EColor::darkened;
-	int size = Default::itemHeight - Default::checkboxSpacing*2;
-	SDL_Rect box = {textPos.x+Default::checkboxSpacing, textPos.y+Default::checkboxSpacing, size, size};
-	cropRect(box, rect);
-	drawRect(box, clr);
-}
+void DrawSys::drawReaderBox(ReaderBox* box) {
+	vec2t vis = box->visibleWidgets();
+	for (sizt i=vis.l; i<vis.u; i++)
+		box->getWidget(i)->drawSelf();
 
-void DrawSys::drawItem(Switchbox* item, const SDL_Rect& rect, const vec2i& textPos) {
-	drawText(Text(item->getCurOption(), textPos, Default::itemHeight), rect);
-}
-
-void DrawSys::drawItem(LineEdit* item, const SDL_Rect& rect, const vec2i& textPos) {
-	drawText(Text(item->getEditor().getText(), vec2i(textPos.x-item->getTextPos(), textPos.y), Default::itemHeight), {textPos.x, rect.y, rect.w-textPos.x+rect.x, rect.h});
-
-	if (World::inputSys()->getCaptured() == item) {
-		int pos = textPos.x + Text(item->getEditor().getText().substr(0, item->getEditor().getCaretPos()), 0, Default::itemHeight).size().x - item->getTextPos();
-		drawRect({pos, rect.y, Default::caretWidth, rect.h}, EColor::highlighted);
+	if (box->showBar()) {
+		drawRect(box->barRect(), Color::dark);
+		drawRect(box->sliderRect(), Color::light);
 	}
 }
 
-void DrawSys::drawItem(KeyGetter* item, const SDL_Rect& rect, const vec2i& textPos) {
-	EColor clr = (World::inputSys()->getCaptured() == item) ? EColor::highlighted : EColor::text;
-	Text text(item->text(), textPos, Default::itemHeight, clr);
-	drawText(text, rect);
+void DrawSys::drawPopup(Popup* box) {
+	drawRect(box->rect(), Color::normal);	// draw background
+	for (Widget* it : box->getWidgets())	// draw children
+		it->drawSelf();
 }
 
-void DrawSys::drawRect(const SDL_Rect& rect, EColor color) {
-	SDL_Color clr = World::winSys()->getSettings().colors.at(color);
-	SDL_SetRenderDrawColor(renderer, clr.r/colorDim.r, clr.g/colorDim.g, clr.b/colorDim.b, clr.a/colorDim.a);
+void DrawSys::drawRect(const SDL_Rect& rect, Color color) {
+	SDL_Color clr = colors[static_cast<uint8>(color)];
+	SDL_SetRenderDrawColor(renderer, clr.r, clr.g, clr.b, clr.a);
 	SDL_RenderFillRect(renderer, &rect);
 }
 
-void DrawSys::drawImage(const Image& img, const SDL_Rect& frame) {
+void DrawSys::drawText(SDL_Texture* tex, const SDL_Rect& rect, const SDL_Rect& frame) {
+	// crop destination rect and original texture rect
+	SDL_Rect dst = rect;
+	SDL_Rect crop = cropRect(dst, frame);
+	SDL_Rect src = {crop.x, crop.y, rect.w - crop.w, rect.h - crop.h};
+
+	SDL_RenderCopy(renderer, tex, &src, &dst);
+}
+
+void DrawSys::drawImage(const Texture& tex, const SDL_Rect& rect, const SDL_Rect& frame) {
 	// get destination rect and crop
-	SDL_Rect dst = img.rect();
+	SDL_Rect dst = rect;
 	SDL_Rect crop = cropRect(dst, frame);
 
 	// get cropped source rect
-	vec2f factor(float(img.tex->getRes().x) / float(img.size.x), float(img.tex->getRes().y) / float(img.size.y));
-	SDL_Rect src = {float(crop.x) * factor.x, float(crop.y) * factor.y, img.size.x - int(float(crop.w) * factor.x), img.size.y - int(float(crop.h) * factor.y)};
+	vec2f factor(float(tex.getRes().x) / float(rect.w), float(tex.getRes().y) / float(rect.h));
+	SDL_Rect src = {float(crop.x) * factor.x, float(crop.y) * factor.y, tex.getRes().x - int(float(crop.w) * factor.x), tex.getRes().y - int(float(crop.h) * factor.y)};
 
-	SDL_RenderCopy(renderer, img.tex->tex, &src, &dst);
+	SDL_RenderCopy(renderer, tex.tex, &src, &dst);
 }
 
-void DrawSys::drawText(const Text& txt, const SDL_Rect& frame) {
-	if (txt.text.empty())
-		return;
-
-	// get text texture
-	SDL_Color clr = World::winSys()->getSettings().colors.at(txt.color);
-	SDL_Surface* surf = TTF_RenderUTF8_Blended(World::library()->getFonts().getFont(txt.height), txt.text.c_str(), {uint8(clr.r/colorDim.r), uint8(clr.g/colorDim.g), uint8(clr.b/colorDim.b), uint8(clr.a/colorDim.a)});
+SDL_Texture* DrawSys::renderText(const string& text, int height, vec2i& size) {
+	if (text.empty()) {
+		size = 0;
+		return nullptr;
+	}
+	SDL_Surface* surf = TTF_RenderUTF8_Blended(fonts.getFont(height), text.c_str(), colors[static_cast<uint8>(Color::text)]);
 	SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-
-	// crop destination rect and original texture rect
-	SDL_Rect dst = {txt.pos.x, txt.pos.y, surf->w, surf->h};
-	SDL_Rect crop = cropRect(dst, frame);
-	SDL_Rect src = {crop.x, crop.y, surf->w - crop.w, surf->h - crop.h};
-
-	// draw and cleanup
-	SDL_RenderCopy(renderer, tex, &src, &dst);
-	SDL_DestroyTexture(tex);
+	size = vec2i(surf->w, surf->h);
 	SDL_FreeSurface(surf);
+	return tex;
+}
+
+SDL_Texture* DrawSys::loadTexture(const string& file, vec2i& res) {
+	SDL_Texture* tex = IMG_LoadTexture(renderer, file.c_str());
+	if (tex)
+		SDL_QueryTexture(tex, nullptr, nullptr, &res.x, &res.y);
+	else {
+		cerr << "Couldn't load texture " << file << endl << IMG_GetError << endl;
+		res = 0;
+	}
+	return tex;
 }

@@ -1,36 +1,14 @@
 #include "world.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
-vector<string> World::args;
-Base World::engine;
+WindowSys World::windowSys;
 
-Base* World::base() {
-	return &engine;
-}
-
-AudioSys* World::audioSys() {
-	return engine.getAudioSys();
-}
-
-DrawSys* World::drawSys() {
-	return engine.getWindowSys()->getDrawSys();
-}
-
-InputSys* World::inputSys() {
-	return engine.getInputSys();
-}
-
-WindowSys* World::winSys() {
-	return engine.getWindowSys();
-}
-
-Scene* World::scene() {
-	return engine.getScene();
-}
-
-Library* World::library() {
-	return &engine.getScene()->getLibrary();
-}
-
-Program* World::program() {
-	return &engine.getScene()->getProgram();
+#if defined(_WIN32) && !defined(_DEBUG)
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
+#else
+int main(int argc, char** argv) {
+#endif
+	return World::winSys()->start();
 }

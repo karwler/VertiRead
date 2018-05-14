@@ -2,111 +2,93 @@
 
 #include "browser.h"
 #include "playlistEditor.h"
-#include "utils/widgets.h"
-#include "kklib/sptr.h"
+#include "player.h"
+#include "progs.h"
 
 // handles the frontend
 class Program {
 public:
-	// reader events
-	void eventUp(float amt);
-	void eventDown(float amt);
-	void eventRight(float amt);
-	void eventLeft(float amt);
-	void eventPageUp();
-	void eventPageDown();
-	void eventZoomIn();
-	void eventZoomOut();
-	void eventZoomReset();
-	void eventCenterView();
-	void eventNextDir();
-	void eventPrevDir();
+	Program();
 
-	// player events
-	void eventPlayPause();
-	void eventNextSong();
-	void eventPrevSong();
-	void eventVolumeUp();
-	void eventVolumeDown();
-	void eventMute();
+	// books
+	void eventOpenBookList(Button* but=nullptr);
+	void eventOpenBrowser(Button* but);
+	void eventBrowserGoUp(Button* but=nullptr);
+	void eventBrowserGoIn(Button* but);
+	void eventOpenReader(Button* but);
+	void eventOpenLastPage(Button* but);
 
-	// playlist editor events
-	void eventAddPlaylistButtonClick();
-	void eventDeletePlaylistButtonClick();
-	void eventEditPlaylistButtonClick();
-	void eventNewPlaylistOk();
-	void eventNewPlaylistOk(const string& str);
-	void eventSwitchButtonClick();
-	void eventBrowseButtonClick();
-	void eventAddSongBookButtonClick();
-	void eventAddSongFileDirButtonClick();
-	void eventDeleteSongBookButtonClick();
-	void eventEditSongBookButtonClick();
-	void eventSongBookRenameOk();
-	void eventSongBookRenameOk(const string& str);
-	void eventItemDoubleclicked(ListItem* item);
-	void eventSaveButtonClick();
-	void eventUpButtonClick();
-	void eventAddBook(void* name);
+	// reader
+	void eventZoomIn(Button* but=nullptr);
+	void eventZoomOut(Button* but=nullptr);
+	void eventZoomReset(Button* but=nullptr);
+	void eventCenterView(Button* but=nullptr);
+	void eventNextDir(Button* but=nullptr);
+	void eventPrevDir(Button* but=nullptr);
+	void eventPlayPause(Button* but=nullptr);
+	void eventNextSong(Button* but=nullptr);
+	void eventPrevSong(Button* but=nullptr);
+	void eventVolumeUp(Button* but=nullptr);
+	void eventVolumeDown(Button* but=nullptr);
+	void eventMute(Button* but=nullptr);
+	void eventExitReader(Button* but=nullptr);
 
-	// menu events
-	void eventOpenBookList();
-	void eventOpenBrowser(void* path);
-	void eventOpenReader(void* file);
-	void eventOpenLastPage(void* book);
-	void eventOpenPlaylistList();
-	void eventOpenPlaylistEditor(void* playlist);
-	void eventOpenSongBrowser(const string& dir);
-	void eventOpenGeneralSettings();
-	void eventOpenVideoSettings();
-	void eventOpenAudioSettings();
-	void eventOpenControlsSettings();
-	void eventOk();
-	void eventBack();
+	// playlists
+	void eventOpenPlaylistList(Button* but=nullptr);
+	void eventAddPlaylist(Button* but=nullptr);
+	void eventAddPlaylistOk(Button* but=nullptr);
+	void eventEditPlaylist(Button* but=nullptr);
+	void eventRenamePlaylist(Button* but=nullptr);
+	void eventRenamePlaylistOk(Button* but=nullptr);
+	void eventDeletePlaylist(Button* but=nullptr);
+	void eventDeletePlaylistOk(Button* but=nullptr);
+	void eventExitPlaylistEditor(Button* but=nullptr);
 
-	// settings events
-	void eventSwitchLanguage(const string& language);
-	void eventSetLibraryPath(const string& dir);
-	void eventSetPlaylistsPath(const string& dir);
-	void eventSwitchFullscreen(bool on);
-	void eventSetTheme(const string& theme);
-	void eventSetFont(const string& font);
-	void eventSetRenderer(const string& renderer);
-	void eventSetMusicVolume(const string& mvol);
-	void eventSetSoundVolume(const string& svol);
-	void eventSetSongDelay(const string& sdelay);
-	void eventSetScrollX(const string& scrollx);
-	void eventSetScrollY(const string& scrolly);
-	void eventSetDeadzone(const string& deadz);
+	void eventSwitchSB(Button* but=nullptr);
+	void eventBrowseSB(Button* but=nullptr);
+	void eventAddSB(Button* but=nullptr);
+	void eventAddSBOk(Button* but=nullptr);
+	void eventEditSB(Button* but=nullptr);
+	void eventEditSBOk(Button* but=nullptr);
+	void eventDeleteSB(Button* but=nullptr);
+	void eventSavePlaylist(Button* but=nullptr);
 
-	// other events
-	void eventSelectionSet(void* box);
-	void eventScreenMode();
-	void eventFileDrop(char* file);
+	void eventAddSongFD(Button* but=nullptr);
+	void eventSongBrowserGoUp(Button* but=nullptr);
+	void eventExitSongBrowser(Button* but=nullptr);
+	void eventAddBook(Button* but);
+	void eventExitBookBrowser(Button* but=nullptr);
+
+	// settings
+	void eventOpenSettings(Button* but=nullptr);
+	void eventSwitchLanguage(Button* but);
+	void eventSetLibraryPath(Button* but);
+	void eventSetPlaylistsPath(Button* but);
+	void eventSetVolumeSL(Button* but);
+	void eventSetVolumeLE(Button* but);
+	void eventSwitchFullscreen(Button* but);
+	void eventSetTheme(Button* but);
+	void eventSetFont(Button* but);
+	void eventSetRenderer(Button* but);
+	void eventSetScrollSpeed(Button* but);
+	void eventSetDeadzoneSL(Button* but);
+	void eventSetDeadzoneLE(Button* but);
+
+	// other
+	void eventClosePopup(Button* but=nullptr);
+	void eventExit(Button* but=nullptr);
 	
+	ProgState* getState() { return state.get(); }
+	Browser* getBrowser() { return browser.get(); }
+	PlaylistEditor* getEditor() { return editor.get(); }
+	Player* getPlayer() { return player.get(); }
+
 private:
-	enum class EMenu : uint8 {
-		books,
-		browser,
-		reader,
-		playlists,
-		plistEditor,
-		songSearch,
-		bookSearch,
-		generalSets,
-		videoSets,
-		audioSets,
-		controlsSets
-	} curMenu;
-	kk::sptr<Browser> browser;
-	kk::sptr<PlaylistEditor> editor;
+	uptr<ProgState> state;
+	uptr<Browser> browser;
+	uptr<PlaylistEditor> editor;
+	uptr<Player> player;
 
-	void switchScene(EMenu newMenu, void* dat=nullptr);
-	void switchScene(void* dat=nullptr) const;
-	float modifySpeed(float value, float* axisFactor=nullptr, float normalFactor=1.f, float fastFactor=4.f, float slowFactor=0.5f);	// change scroll speed depending on pressed shortcuts
-	vector<string> findFittingPlaylist(const string& book) const;	// find playlists for the book by using a picture file's path
-
-	Popup* createPopupMessage(const string& msg);
-	Popup* createPopupChoice(const string& msg, void (Program::*callb)());
-	pair<Popup*, LineEditor*> createPopupText(const string& msg, const string& text, void (Program::*callt)(const string&), void (Program::*callb)());	// second return value is a pointer to the widget/item that is supposed to be captured (can be nullptr)
+	void setState(ProgState* newState);
+	bool startReader(const string& picname);
 };

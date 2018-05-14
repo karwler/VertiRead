@@ -1,5 +1,4 @@
 #include "browser.h"
-#include "engine/filer.h"
 
 Browser::Browser(const string& RD, const string& CD)
 {
@@ -17,11 +16,10 @@ vector<string> Browser::listFiles() const {
 
 vector<string> Browser::listDirs() const {
 #ifdef _WIN32
-	if (curDir == "\\") {
-		// get drive letters and present them as directories
+	if (curDir == "\\") {	// if in "root" directory, get drive letters and present them as directories
 		vector<char> letters = Filer::listDrives();
 		vector<string> drives(letters.size());
-		for (size_t i=0; i!=drives.size(); i++)
+		for (sizt i=0; i<drives.size(); i++)
 			drives[i] = letters[i] + string(":");
 		return drives;
 	}
@@ -29,33 +27,29 @@ vector<string> Browser::listDirs() const {
 	return Filer::listDir(curDir, FTYPE_DIR);
 }
 
-bool Browser::goTo(const string& dirname) {
+bool Browser::goIn(const string& dirname) {
 	if (dirname.empty())
 		return false;
 
-	string newPath;
+	curFile.clear();
 #ifdef _WIN32
 	if (curDir == "\\") {
-		newPath = appendDsep(dirname);
-		bool isOk = false;
-		for (char c : Filer::listDrives())
-			if (c == dirname[0]) {
-				isOk = true;
-				break;
-			}
-		
-		if (!isOk || !isDriveLetter(dirname))
-			return false;
-	} else {
-		newPath = curDir + appendDsep(dirname);
-		if (Filer::fileType(newPath) != FTYPE_DIR)
-			return false;
+		vector<char> letters = Filer::listDrives();
+		if (isDriveLetter(dirname) && dirname[0] >= letters[0] && dirname[0] <= letters.back()) {
+			curDir = appendDsep(dirname);
+			return true;
+		}
+		return false;
 	}
-#else
-	newPath = curDir + appendDsep(dirname);
+#endif
+	return goInDir(dirname);
+}
+
+bool Browser::goInDir(const string& dirname) {
+	string newPath = curDir + appendDsep(dirname);
 	if (Filer::fileType(newPath) != FTYPE_DIR)
 		return false;
-#endif
+
 	curDir = newPath;
 	return true;
 }
@@ -64,6 +58,7 @@ bool Browser::goUp() {
 	if (curDir == rootDir)
 		return false;
 
+	curFile.clear();
 #ifdef _WIN32
 	curDir = isDriveLetter(curDir) ? "\\" : parentPath(curDir);
 #else
@@ -72,76 +67,77 @@ bool Browser::goUp() {
 	return true;
 }
 
-string Browser::goNext() {
+void Browser::goNext() {
 	if (curDir == rootDir)
-		return curDir;
+		return;
 
+	curFile.clear();
 #ifdef _WIN32
 	if (isDriveLetter(curDir)) {
-		vector<char> letters = Filer::listDrives();
-		for (vector<char>::const_iterator it=letters.begin(); it!=letters.end(); it++)
-			if (*it == curDir[0]) {
-				curDir[0] = (it == letters.end()-1) ? *letters.begin() : *++it;
-				break;
-			}
-	} else {
-		string parent = parentPath(curDir);
-		vector<string> dirs = Filer::listDir(parent, FTYPE_DIR);
-		for (vector<string>::const_iterator it=dirs.begin(); it!=dirs.end(); it++)
-			if (parent+*it+dsep == curDir) {
-				curDir = (it == dirs.end()-1) ? parent + *dirs.begin() + dsep : parent + *++it + dsep;
-				break;
-			}
+		shiftLetter(1);
+		return;
 	}
-#else
-	string parent = parentPath(curDir);
-	vector<string> dirs = Filer::listDir(parent, FTYPE_DIR);
-	for (vector<string>::const_iterator it=dirs.begin(); it!=dirs.end(); it++)
-		if (parent+*it+dsep == curDir) {
-			curDir = (it == dirs.end()-1) ? parent + *dirs.begin() + dsep : parent + *++it + dsep;
-			break;
-		}
 #endif
-	return curDir;
+	shiftDir(1);
 }
 
-string Browser::goPrev() {
+void Browser::goPrev() {
 	if (curDir == rootDir)
-		return curDir;
+		return;
 
+	curFile.clear();
 #ifdef _WIN32
 	if (isDriveLetter(curDir)) {
-		vector<char> letters = Filer::listDrives();
-		for (vector<char>::const_iterator it=letters.begin(); it!=letters.end(); it++)
-			if (*it == curDir[0]) {
-				curDir[0] = (it == letters.begin()) ? *(letters.end()-1) : *--it;
-				break;
-			}
-	} else {
-		string parent = parentPath(curDir);
-		vector<string> dirs = Filer::listDir(parent, FTYPE_DIR);
-		for (vector<string>::const_iterator it=dirs.begin(); it!=dirs.end(); it++)
-			if (parent+*it+dsep == curDir) {
-				curDir = (it == dirs.begin()) ? parent + *(dirs.end()-1) + dsep : parent + *--it + dsep;
-				break;
-			}
+		shiftLetter(-1);
+		return;
 	}
-#else
-	string parent = parentPath(curDir);
-	vector<string> dirs = Filer::listDir(parent, FTYPE_DIR);
-	for (vector<string>::const_iterator it=dirs.begin(); it!=dirs.end(); it++)
-		if (parent+*it+dsep == curDir) {
-			curDir = (it == dirs.begin()) ? parent + *(dirs.end()-1) + dsep : parent + *--it + dsep;
+#endif
+	shiftDir(-1);
+}
+
+#ifdef _WIN32
+void Browser::shiftLetter(int ofs) {
+	vector<char> letters = Filer::listDrives();
+	for (sizt i=0; i<letters.size(); i++)
+		if (letters[i] == curDir[0]) {
+			curDir[0] = letters[(i + ofs) % letters.size()];
 			break;
 		}
+}
 #endif
-	return curDir;
+
+void Browser::shiftDir(int ofs) {
+	string parent = parentPath(curDir);
+	vector<string> dirs = Filer::listDir(parent, FTYPE_DIR);
+
+	for (sizt i=0; i<dirs.size(); i++)
+		if (parent + dirs[i] + dsep == curDir) {
+			curDir = parent + dirs[(i + ofs) % dirs.size()] + dsep;
+			break;
+		}
 }
 
-string Browser::getRootDir() const {
-	return rootDir;
+bool Browser::selectPicture(const string& filename) {
+	if (isPicture(curDir + filename)) {
+		curFile = filename;
+		return true;
+	}
+	return false;
 }
 
-string Browser::getCurDir() const {
-	return curDir;
+void Browser::selectFirstPicture() {
+	for (string& it : listFiles())
+		if (isPicture(curDir + it)) {
+			curFile = it;
+			return;
+		}
+	curFile.clear();
+}
+
+bool Browser::isPicture(const string& file) {
+	if (SDL_Surface* img = IMG_Load(file.c_str())) {
+		SDL_FreeSurface(img);
+		return true;
+	}
+	return false;
 }

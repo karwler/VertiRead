@@ -1,38 +1,74 @@
 #pragma once
 
-#include "prog/defaults.h"
+#include "settings.h"
 
 // files and strings
 bool strcmpCI(const string& strl, const string& strr);	// case insensitive check if strings are equal
-bool findChar(const string& str, char c);				// whether chacater is in string
-bool findChar(const string& str, char c, size_t& id);	// same as above except it sets id to first found character's index
-bool findString(const string& str, const string& c);	// whether string contains another string
-bool findString(const string& str, const string& c, size_t& id);
 bool isAbsolute(const string& path);
 string parentPath(const string& path);
 string filename(const string& path);	// get filename from path
 string getExt(const string& path);		// get file extension
+bool hasExt(const string& path);
 bool hasExt(const string& path, const string& ext);	// whether file has an extension
 string delExt(const string& path);		// returns filepath without extension
 string appendDsep(const string& path);	// append directory separator if necessary
 bool isDriveLetter(const string& path);	// check if path is a drive letter (plus colon and optionally dsep). only for windows
-string modifyCase(string str, ETextCase caseChange);
-vector<string> getWords(const string& line, char splitter);
+vector<vec2t> getWords(const string& line, char spacer=' ');	// returns index of first character and length of words in line
 string getBook(const string& picPath);
+inline bool isDigit(char c) { return c >= '0' && c <= '9'; }
+inline bool isCapitalLetter(char c) { return c >= 'A' && c <= 'Z'; }
 
-// graphics
-bool inRect(const SDL_Rect& rect, const vec2i& point);
-SDL_Rect cropRect(SDL_Rect& rect, const SDL_Rect& frame);	// crop rect so it fits in the frame and return how much was cut off
+// geometry?
+SDL_Rect cropRect(SDL_Rect& rect, const SDL_Rect& frame);	// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
+SDL_Rect overlapRect(SDL_Rect rect, const SDL_Rect& frame);	// same as above except it returns the overlap instead of the crop
 
-// other
-string getRendererName(int id);
-vector<string> getAvailibleRenderers();
+inline vec2i rectEnd(const SDL_Rect& rect) {
+	return vec2i(rect.x + rect.w - 1, rect.y + rect.h - 1);
+}
+
+inline bool inRect(const vec2i& point, const SDL_Rect& rect) {	// check if point is in rect
+	return point.x >= rect.x && point.x < rect.x + rect.w && point.y >= rect.y && point.y < rect.y + rect.h;
+}
+
+template <typename T>
+bool inRange(T val, T min, T max) {
+	return val >= min && val <= max;
+}
+
+template <typename T>
+bool outRange(T val, T min, T max) {
+	return val < min || val > max;
+}
+
+template <typename T>	// correct val if out of range. returns true if value already in range
+T bringIn(T val, T min, T max) {
+	return (val < min) ? min : (val > max) ? max : val;
+}
+
+template <typename T>
+vec2<T> bringIn(const vec2<T>& val, const vec2<T>& min, const vec2<T>& max) {
+	return vec2<T>(bringIn(val.x, min.x, max.x), bringIn(val.y, min.y, max.y));
+}
+
+template <typename T>	// correct val if out of range. returns true if value already in range
+T bringUnder(T val, T max) {
+	return (val > max) ? max : val;
+}
+
+template <typename T>
+vec2<T> bringUnder(const vec2<T>& val, const vec2<T>& max) {
+	return vec2<T>(bringUnder(val.x, max.x), bringUnder(val.y, max.y));
+}
 
 // convertions
 string wtos(const wstring& wstr);
 wstring stow(const string& str);
-bool stob(const string& str);
-string btos(bool b);
+inline bool stob(const string& str) { return str == "true" || str == "1"; }
+inline string btos(bool b) { return b ? "true" : "false"; }
+string colorToStr(Color color);
+Color strToColor(string str);
+string bindingTypeToStr(Binding::Type type);
+Binding::Type strToBindingType(string str);
 string jtHatToStr(uint8 jhat);
 uint8 jtStrToHat(string str);
 string gpButtonToStr(uint8 gbutton);
@@ -40,64 +76,22 @@ uint8 gpStrToButton(string str);
 string gpAxisToStr(uint8 gaxis);
 uint8 gpStrToAxis(string str);
 
-vec2i pix(const vec2f& p);	// pixel value to "percentage" from 0 - 1
-int pixX(float p);
-int pixY(float p);
-vec2f prc(const vec2i& p);	// "percentage" from 0 - 1 to pixel value
-float prcX(int p);
-float prcY(int p);
-
-float axisToFloat(int16 axisValue);	// input axis value to float from -1 to 1
-int16 floatToAxis(float axisValue);	// same as above except the other way around
-
-// pointer container cleaners
-template <typename T>
-void erase(vector<T*>& vec, size_t i) {
-	delete vec[i];
-	vec.erase(vec.begin() + i);
+inline float axisToFloat(int axisValue) {	// input axis value to float from -1 to 1
+	return float(axisValue) / float(Default::axisLimit);
 }
+
+template <typename T>
+string ntos(T num) {
+	ostringstream ss;
+	ss << +num;
+	return ss.str();
+}
+
+// container stuff
 
 template <typename T>
 void clear(vector<T*>& vec) {
 	for (T* it : vec)
 		delete it;
 	vec.clear();
-}
-
-template <typename T>
-bool contains(const vector<T>& vec, const T& elem) {
-	for (const T& it : vec)
-		if (it == elem)
-			return true;
-	return false;
-}
-
-template <typename T>
-bool contains(const vector<T>& vec, const T& elem, size_t& id) {
-	for (size_t i=0; i!=vec.size(); i++)
-		if (vec[i] == elem) {
-			id = i;
-			return true;
-		}
-	return false;
-}
-
-template <typename A, typename B>
-void erase(map<A, B*>& mp, const A& key) {
-	delete mp[key];
-	mp.erase(key);
-}
-
-template <typename A, typename B>
-void clear(map<A, B*>& mp) {
-	for (const pair<A, B*>& it : mp)
-		delete it.second;
-	mp.clear();
-}
-
-template <typename T>
-void clear(grid2<T*>& gd) {
-	for (T* it : gd)
-		delete it;
-	gd.clear();
 }

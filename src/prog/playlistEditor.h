@@ -1,26 +1,25 @@
 #pragma once
 
-#include "utils/types.h"
+#include "utils/settings.h"
 
 // logic for editing playlists
 class PlaylistEditor {
 public:
 	PlaylistEditor(const string& PLIST="", bool SS=true);
 
-	const Playlist& getPlaylist() const;
+	const Playlist& getPlaylist() const { return pList; }
 	void loadPlaylist(const string& playlist);
-	bool getShowSongs() const;
-	void setShowSongs(bool show);
 
-	void addSong(string path);
-	void renameSong(const string& path);
-	void delSong();
-	void addBook(const string& name);
-	void renameBook(const string& name);
-	void delBook();
+	bool add(const string& str);
+	bool addSong(const string& path);
+	bool addBook(const string& name);
+	bool rename(const string& old, const string& str);
+	void del(const string& name);
 
-	btsel selected;	// currently selected item
+	bool showSongs;	// show song list or book list
 private:
 	Playlist pList;	// the thing we're working on
-	bool showSongs;	// show song list or book list
+
+	bool isSong(const string& file);
+	bool isBook(const string& name);
 };

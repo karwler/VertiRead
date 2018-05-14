@@ -1,71 +1,93 @@
 #include "world.h"
 
-InputSys::InputSys(const ControlsSettings& SETS) :
-	sets(SETS)
+// CONTROLLER
+
+InputSys::Controller::Controller(int id) {
+	gamepad = SDL_IsGameController(id) ? SDL_GameControllerOpen(id) : nullptr;
+	joystick = gamepad ? SDL_GameControllerGetJoystick(gamepad) : SDL_JoystickOpen(id);
+	index = joystick ? id : -1;
+}
+
+void InputSys::Controller::close() {
+	if (gamepad) {
+		SDL_GameControllerClose(gamepad);
+		gamepad = nullptr;
+		joystick = nullptr;
+	} else if (joystick) {
+		SDL_JoystickClose(joystick);
+		joystick = nullptr;
+	}
+}
+
+// INPUT SYS
+
+InputSys::InputSys() :
+	bindings(Filer::getBindings())
 {
-	updateControllers();
-	setCaptured(nullptr);
+	for (int i=0; i<SDL_NumJoysticks(); i++)
+		addController(i);
 }
 
 InputSys::~InputSys() {
-	clearControllers();
+	for (Controller& it : controllers)
+		it.close();
 }
 
 void InputSys::eventKeypress(const SDL_KeyboardEvent& key) {
 	// different behaviour when capturing or not
-	if (captured)
-		captured->onKeypress(key.keysym.scancode);
+	if (World::scene()->capture)
+		World::scene()->capture->onKeypress(key.keysym);
 	else if (!key.repeat)	// handle only once pressed keys
-		checkShortcutsK(key.keysym.scancode);
+		checkBindingsK(key.keysym.scancode);
 }
 
 void InputSys::eventJoystickButton(const SDL_JoyButtonEvent& jbutton) {
 	if (SDL_GameControllerFromInstanceID(jbutton.which))	// don't execute if there can be a gamecontroller event
 		return;
 	
-	if (captured)
-		captured->onJButton(jbutton.button);
+	if (World::scene()->capture)
+		World::scene()->capture->onJButton(jbutton.button);
 	else
-		checkShortcutsB(jbutton.button);
+		checkBindingsB(jbutton.button);
 }
 
 void InputSys::eventJoystickHat(const SDL_JoyHatEvent& jhat) {
 	if (jhat.value == SDL_HAT_CENTERED || SDL_GameControllerFromInstanceID(jhat.which))
 		return;
 
-	if (captured)
-		captured->onJHat(jhat.hat, jhat.value);
+	if (World::scene()->capture)
+		World::scene()->capture->onJHat(jhat.hat, jhat.value);
 	else
-		checkShortcutsH(jhat.hat, jhat.value);
+		checkBindingsH(jhat.hat, jhat.value);
 }
 
 void InputSys::eventJoystickAxis(const SDL_JoyAxisEvent& jaxis) {
-	int16 value = checkAxisValue(jaxis.value);
+	int value = checkAxisValue(jaxis.value);
 	if (value == 0 || SDL_GameControllerFromInstanceID(jaxis.which))
 		return;
 	
-	if (captured)
-		captured->onJAxis(jaxis.axis, (value > 0));
+	if (World::scene()->capture)
+		World::scene()->capture->onJAxis(jaxis.axis, (value > 0));
 	else
-		checkShortcutsA(jaxis.axis, (value > 0));
+		checkBindingsA(jaxis.axis, (value > 0));
 }
 
 void InputSys::eventGamepadButton(const SDL_ControllerButtonEvent& gbutton) {
-	if (captured)
-		captured->onGButton(gbutton.button);
+	if (World::scene()->capture)
+		World::scene()->capture->onGButton(gbutton.button);
 	else
-		checkShortcutsG(gbutton.button);
+		checkBindingsG(gbutton.button);
 }
 
 void InputSys::eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis) {
-	int16 value = checkAxisValue(gaxis.value);
+	int value = checkAxisValue(gaxis.value);
 	if (value == 0)
 		return;
 
-	if (captured)
-		captured->onGAxis(gaxis.axis, (value > 0));
+	if (World::scene()->capture)
+		World::scene()->capture->onGAxis(gaxis.axis, (value > 0));
 	else
-		checkShortcutsX(gaxis.axis, (value > 0));
+		checkBindingsX(gaxis.axis, (value > 0));
 }
 
 void InputSys::eventMouseMotion(const SDL_MouseMotionEvent& motion) {
@@ -73,142 +95,95 @@ void InputSys::eventMouseMotion(const SDL_MouseMotionEvent& motion) {
 	World::scene()->onMouseMove(vec2i(motion.x, motion.y), mouseMove);
 }
 
-void InputSys::eventMouseButtonDown(const SDL_MouseButtonEvent& button) {
-	if (captured && !World::scene()->getPopup() && button.button == SDL_BUTTON_LEFT) {	// left mouse button cancels keyboard capture if not in popup
-		if (LineEdit* box = dynamic_cast<LineEdit*>(captured))		// confirm entered text if such a thing exists
-			box->confirm();
-		setCaptured(nullptr);
-	}
-	World::scene()->onMouseDown(mousePos(), ClickType(button.button, button.clicks));
-}
-
-void InputSys::eventMouseButtonUp(const SDL_MouseButtonEvent& button) {
-	World::scene()->onMouseUp(vec2i(button.x, button.y), ClickType(button.button, button.clicks));
-}
-
-void InputSys::eventMouseWheel(const SDL_MouseWheelEvent& wheel) {
-	World::scene()->onMouseWheel(vec2i(float(wheel.x) * sets.scrollSpeed.x, float(wheel.y) * sets.scrollSpeed.y));
-}
-
-void InputSys::eventText(const SDL_TextInputEvent& text) {
-	static_cast<LineEdit*>(captured)->onText(text.text);	// text input should only run if line edit is being captured, therefore a cast check isn't necessary
-	World::winSys()->setRedrawNeeded();
-}
-
 void InputSys::tick(float dSec) {
 	// handle keyhold
-	for (const pair<string, Shortcut*>& it : sets.shortcuts)
-		if (ShortcutAxis* sc = dynamic_cast<ShortcutAxis*>(it.second)) {
+	for (Binding& it : bindings)
+		if (it.isAxis()) {
 			float amt = 1.f;
-			if (isPressed(sc, &amt) && sc->call)
-				(World::program()->*sc->call)(amt);
+			if (isPressed(it, amt) && it.getAcall())
+				(World::state()->*it.getAcall())(amt);
 		}
 }
 
-void InputSys::checkShortcutsK(SDL_Scancode key) {
-	for (const pair<string, Shortcut*>& it : sets.shortcuts)	// find first shortcut with this key assigned to it
-		if (ShortcutKey* sc = dynamic_cast<ShortcutKey*>(it.second))
-			if (sc->keyAssigned() && sc->getKey() == key && sc->call) {
-				(World::program()->*sc->call)();
-				break;
-			}
+void InputSys::checkBindingsK(SDL_Scancode key) {
+	for (Binding& it : bindings)	// find first binding with this key assigned to it
+		if (!it.isAxis() && it.keyAssigned() && it.getKey() == key && it.getBcall()) {
+			(World::state()->*it.getBcall())();
+			break;
+		}
 }
 
-void InputSys::checkShortcutsB(uint8 jbutton) {
-	for (const pair<string, Shortcut*>& it : sets.shortcuts)
-		if (ShortcutKey* sc = dynamic_cast<ShortcutKey*>(it.second))
-			if (sc->jbuttonAssigned() && sc->getJctID() == jbutton && sc->call) {
-				(World::program()->*sc->call)();
-				break;
-			}
+void InputSys::checkBindingsB(uint8 jbutton) {
+	for (Binding& it : bindings)
+		if (!it.isAxis() && it.jbuttonAssigned() && it.getJctID() == jbutton && it.getBcall()) {
+			(World::state()->*it.getBcall())();
+			break;
+		}
 }
 
-void InputSys::checkShortcutsH(uint8 jhat, uint8 val) {
-	for (const pair<string, Shortcut*>& it : sets.shortcuts)
-		if (ShortcutKey* sc = dynamic_cast<ShortcutKey*>(it.second))
-			if (sc->jhatAssigned() && sc->getJctID() == jhat && sc->getJhatVal() == val && sc->call) {
-				(World::program()->*sc->call)();
-				break;
-			}
+void InputSys::checkBindingsH(uint8 jhat, uint8 val) {
+	for (Binding& it : bindings)
+		if (!it.isAxis() && it.jhatAssigned() && it.getJctID() == jhat && it.getJhatVal() == val && it.getBcall()) {
+			(World::state()->*it.getBcall())();
+			break;
+		}
 }
 
-void InputSys::checkShortcutsA(uint8 jaxis, bool positive) {
-	for (const pair<string, Shortcut*>& it : sets.shortcuts)
-		if (ShortcutKey* sc = dynamic_cast<ShortcutKey*>(it.second))
-			if (((sc->jposAxisAssigned() && positive) || (sc->jnegAxisAssigned() && !positive)) && sc->getJctID() == jaxis && sc->call) {
-				(World::program()->*sc->call)();
-				break;
-			}
+void InputSys::checkBindingsA(uint8 jaxis, bool positive) {
+	for (Binding& it : bindings)
+		if (!it.isAxis() && ((it.jposAxisAssigned() && positive) || (it.jnegAxisAssigned() && !positive)) && it.getJctID() == jaxis && it.getBcall()) {
+			(World::state()->*it.getBcall())();
+			break;
+		}
 }
 
-void InputSys::checkShortcutsG(uint8 gbutton) {
-	for (const pair<string, Shortcut*>& it : sets.shortcuts)
-		if (ShortcutKey* sc = dynamic_cast<ShortcutKey*>(it.second))
-			if (sc->gbuttonAssigned() && sc->getGctID() == gbutton && sc->call) {
-				(World::program()->*sc->call)();
-				break;
-			}
+void InputSys::checkBindingsG(uint8 gbutton) {
+	for (Binding& it : bindings)
+		if (!it.isAxis() && it.gbuttonAssigned() && it.getGctID() == gbutton && it.getBcall()) {
+			(World::state()->*it.getBcall())();
+			break;
+		}
 }
 
-void InputSys::checkShortcutsX(uint8 gaxis, bool positive) {
-	for (const pair<string, Shortcut*>& it : sets.shortcuts)
-		if (ShortcutKey* sc = dynamic_cast<ShortcutKey*>(it.second))
-			if (((sc->gposAxisAssigned() && positive) || (sc->gnegAxisAssigned() && !positive)) && sc->getGctID() == gaxis && sc->call) {
-				(World::program()->*sc->call)();
-				break;
-			}
+void InputSys::checkBindingsX(uint8 gaxis, bool positive) {
+	for (Binding& it : bindings)
+		if (!it.isAxis() && ((it.gposAxisAssigned() && positive) || (it.gnegAxisAssigned() && !positive)) && it.getGctID() == gaxis && it.getBcall()) {
+			(World::state()->*it.getBcall())();
+			break;
+		}
 }
 
-bool InputSys::isPressed(const string& holder, float* amt) const {
-	if (sets.shortcuts.count(holder) == 0)	// if no holder found
-		return false;
-
-	if (ShortcutAxis* sc = dynamic_cast<ShortcutAxis*>(sets.shortcuts.at(holder)))
-		return isPressed(sc, amt);
-	return false;
+bool InputSys::isPressed(Binding::Type type, float& amt) const {
+	sizt i = static_cast<sizt>(type);
+	return bindings[i].isAxis() ? isPressed(bindings[i], amt) : false;
 }
 
-bool InputSys::isPressed(const ShortcutAxis* sc, float* amt) const {
-	if (sc->keyAssigned()) {	// check keyboard keys
-		if (SDL_GetKeyboardState(nullptr)[sc->getKey()])
-			return true;
-	}
+bool InputSys::isPressed(const Binding& abind, float& amt) const {
+	if (abind.keyAssigned() && SDL_GetKeyboardState(nullptr)[abind.getKey()])	// check keyboard keys
+		return true;
 
-	if (sc->jbuttonAssigned()) {	// check controller buttons
-		if (isPressedB(sc->getJctID()))
-			return true;
-	} else if (sc->jhatAssigned()) {
-		if (isPressedH(sc->getJctID(), sc->getJhatVal()))
-			return true;
-	} else if (sc->jaxisAssigned()) {	// check controller axes
-		float val = getAxisJ(sc->getJctID());
-		if ((sc->jposAxisAssigned() && val > 0.f) || (sc->jnegAxisAssigned() && val < 0.f)) {
-			if (amt)
-				*amt = (sc->jposAxisAssigned()) ? val : -val;
+	if (abind.jbuttonAssigned() && isPressedB(abind.getJctID()))	// check controller buttons
+		return true;
+	if (abind.jhatAssigned() && isPressedH(abind.getJctID(), abind.getJhatVal()))
+		return true;
+	if (abind.jaxisAssigned()) {	// check controller axes
+		int val = getAxisJ(abind.getJctID());
+		if ((abind.jposAxisAssigned() && val > 0) || (abind.jnegAxisAssigned() && val < 0)) {
+			amt = axisToFloat(abind.jposAxisAssigned() ? val : -val);
 			return true;
 		}
 	}
 
-	if (sc->gbuttonAssigned()) {	// check controller buttons
-		if (isPressedG(sc->getGctID()))
-			return true;
-	} else if (sc->gaxisAssigned()) {	// check controller axes
-		float val = getAxisG(sc->getGctID());
-		if ((sc->gposAxisAssigned() && val > 0.f) || (sc->gnegAxisAssigned() && val < 0.f)) {
-			if (amt)
-				*amt = (sc->gposAxisAssigned()) ? val : -val;
+	if (abind.gbuttonAssigned() && isPressedG(static_cast<SDL_GameControllerButton>(abind.getGctID())))	// check controller buttons
+		return true;
+	if (abind.gaxisAssigned()) {	// check controller axes
+		int val = getAxisG(static_cast<SDL_GameControllerAxis>(abind.getGctID()));
+		if ((abind.gposAxisAssigned() && val > 0) || (abind.gnegAxisAssigned() && val < 0)) {
+			amt = axisToFloat(abind.gposAxisAssigned() ? val : -val);
 			return true;
 		}
 	}
 	return false;
-}
-
-bool InputSys::isPressedK(SDL_Scancode key) {
-	return SDL_GetKeyboardState(nullptr)[key];
-}
-
-bool InputSys::isPressedM(uint32 button) {
-	return SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON(button);
 }
 
 bool InputSys::isPressedB(uint8 jbutton) const {
@@ -218,9 +193,9 @@ bool InputSys::isPressedB(uint8 jbutton) const {
 	return false;
 }
 
-bool InputSys::isPressedG(uint8 gbutton) const {
+bool InputSys::isPressedG(SDL_GameControllerButton gbutton) const {
 	for (const Controller& it : controllers)
-		if (it.gamepad && SDL_GameControllerGetButton(it.gamepad, static_cast<SDL_GameControllerButton>(gbutton)))
+		if (it.gamepad && SDL_GameControllerGetButton(it.gamepad, gbutton))
 			return true;
 	return false;
 }
@@ -234,24 +209,24 @@ bool InputSys::isPressedH(uint8 jhat, uint8 val) const {
 	return false;
 }
 
-float InputSys::getAxisJ(uint8 jaxis) const {
+int InputSys::getAxisJ(uint8 jaxis) const {
 	for (const Controller& it : controllers)	// get first axis that isn't 0
 		if (!it.gamepad) {
-			int16 val = checkAxisValue(SDL_JoystickGetAxis(it.joystick, jaxis));
+			int val = checkAxisValue(SDL_JoystickGetAxis(it.joystick, jaxis));
 			if (val != 0)
-				return axisToFloat(val);
+				return val;
 		}
-	return 0.f;
+	return 0;
 }
 
-float InputSys::getAxisG(uint8 gaxis) const {
+int InputSys::getAxisG(SDL_GameControllerAxis gaxis) const {
 	for (const Controller& it : controllers)	// get first axis that isn't 0
 		if (it.gamepad) {
-			int16 val = checkAxisValue(SDL_GameControllerGetAxis(it.gamepad, static_cast<SDL_GameControllerAxis>(gaxis)));
+			int val = checkAxisValue(SDL_GameControllerGetAxis(it.gamepad, gaxis));
 			if (val != 0)
-				return axisToFloat(val);
+				return val;
 		}
-	return 0.f;
+	return 0;
 }
 
 vec2i InputSys::mousePos() {
@@ -260,59 +235,21 @@ vec2i InputSys::mousePos() {
 	return pos;
 }
 
-vec2i InputSys::getMouseMove() const {
-	return mouseMove;
+void InputSys::addController(int id) {
+	Controller ctr(id);
+	if (ctr.index >= 0)
+		controllers.push_back(ctr);
 }
 
-const ControlsSettings& InputSys::getSettings() const {
-	return sets;
+void InputSys::removeController(int id) {
+	for (vector<Controller>::iterator it=controllers.begin(); it!=controllers.end(); it++)
+		if (it->index == id) {
+			it->close();
+			controllers.erase(it);
+			break;
+		}
 }
 
-void InputSys::setScrollSpeed(const vec2f& sspeed) {
-	sets.scrollSpeed = sspeed;
-}
-
-void InputSys::setDeadzone(int16 deadz) {
-	sets.deadzone = deadz;
-}
-
-Shortcut* InputSys::getShortcut(const string& name) {
-	return (sets.shortcuts.count(name) == 0) ? nullptr : sets.shortcuts[name];
-}
-
-bool InputSys::hasControllers() const {
-	return !controllers.empty();
-}
-
-void InputSys::updateControllers() {
-	clearControllers();
-	for (int i=0; i!=SDL_NumJoysticks(); i++) {
-		Controller it;
-		if (it.open(i))
-			controllers.push_back(it);
-	}
-}
-
-void InputSys::clearControllers() {
-	for (Controller& it : controllers)
-		it.close();
-	controllers.clear();
-}
-
-const Capturer* InputSys::getCaptured() const {
-	return captured;
-}
-
-void InputSys::setCaptured(Capturer* cbox) {
-	captured = cbox;
-	if (dynamic_cast<LineEdit*>(captured))	// if it's a LineEdit, start text input capture
-		SDL_StartTextInput();
-	else
-		SDL_StopTextInput();
-
-	World::winSys()->setRedrawNeeded();
-}
-
-int16 InputSys::checkAxisValue(int16 value) const {
-	return (std::abs(value) > sets.deadzone) ? value : 0;
+int InputSys::checkAxisValue(int value) const {
+	return (std::abs(value) > World::winSys()->sets.getDeadzone()) ? value : 0;
 }

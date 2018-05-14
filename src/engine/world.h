@@ -1,20 +1,17 @@
 #pragma once
 
-#include "base.h"
+#include "windowSys.h"
 
 // class that makes accessing stuff easier
 class World {
 public:
-	static Base* base();
-	static AudioSys* audioSys();
-	static DrawSys* drawSys();
-	static InputSys* inputSys();
-	static WindowSys* winSys();
-	static Scene* scene();
-	static Library* library();
-	static Program* program();
+	static DrawSys* drawSys() { return windowSys.getDrawSys(); }
+	static InputSys* inputSys() { return windowSys.getInputSys(); }
+	static WindowSys* winSys() { return &windowSys; }
+	static Scene* scene() { return windowSys.getScene(); }
+	static Program* program() { return windowSys.getProgram(); }
+	static ProgState* state() { return windowSys.getProgram()->getState(); }
 
-	static vector<string> args;	// arguments from main()
 private:
-	static Base engine;			// the thing on which everything runs
+	static WindowSys windowSys;			// the thing on which everything runs
 };

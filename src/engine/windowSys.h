@@ -1,39 +1,46 @@
 #pragma once
 
 #include "drawSys.h"
-#include "utils/settings.h"
+#include "inputSys.h"
+#include "prog/program.h"
+#include "scene.h"
 
 // handles window events and contains video settings
 class WindowSys {
 public:
-	WindowSys(const VideoSettings& SETS=VideoSettings());
-	~WindowSys();
+	WindowSys();
+
+	int start();
+	void close() { run = false; }
+
+	DrawSys* getDrawSys() { return drawSys.get(); }
+	InputSys* getInputSys() { return inputSys.get(); }
+	Program* getProgram() { return program.get(); }
+	Scene* getScene() { return scene.get(); }
+
+	float getDSec() const { return dSec; }
+	vec2i resolution() const;
+
+	void setFullscreen(bool on);
+	void setRenderer(const string& name);
+
+	Settings sets;
+private:
+	uptr<DrawSys> drawSys;
+	uptr<InputSys> inputSys;
+	uptr<Program> program;
+	uptr<Scene> scene;
+
+	bool run;			// whether the loop in which the program runs should continue
+	float dSec;			// delta seconds, aka the time between each iteration of the above mentioned loop
+	SDL_Window* window;
+
+	void init();
+	void exec();
+	void cleanup();
 
 	void createWindow();
 	void destroyWindow();
-
-	bool getShowMouse() const;
-	void setShowMouse(bool on);
+	void handleEvent(const SDL_Event& event);	// pass events to their specific handlers
 	void eventWindow(const SDL_WindowEvent& window);
-
-	void setRedrawNeeded();
-	void drawWidgets(const vector<Widget*>& widgets, const Popup* popup);
-	static vec2i displayResolution();
-	vec2i resolution() const;
-	vec2i position() const;
-	DrawSys* getDrawSys();
-
-	const VideoSettings& getSettings() const;
-	void setRenderer(const string& name);
-	void setFullscreen(bool on);
-	void setFont(const string& font);
-	void setTheme(const string& theme);
-
-private:
-	DrawSys drawSys;
-	SDL_Window* window;
-
-	VideoSettings sets;
-	bool redraw;		// whether window contents need to be redrawn
-	bool showMouse;
 };

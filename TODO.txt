@@ -1,7 +1,8 @@
+check editor and playlists
+adjust scroll speed
+improve exception handling
+test sdl_texteditingevent
+
+advanced book adding
 arrow keys/hats navigation
-horizontal scroll
-more lineedit edit options
-refactor item selection system
-refactor draw calculations
-animations?
-event system?
+multiple scroll modes for reader

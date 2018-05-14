@@ -1,132 +1,272 @@
-#pragma once
+﻿#pragma once
 
-#include "capturers.h"
+#include "settings.h"
 
-// fix basically means "store value in pixels instead of a 'percentage'" (which would be a value between 0 and 1)
-enum EFix : uint8 {
-	FIX_NONE = 0x0,
-	FIX_X    = 0x1,
-	FIX_Y    = 0x2,
-	FIX_ANC  = 0x3,		// fix anchor's position
-	FIX_W    = 0x4,
-	FIX_H    = 0x8,
-	FIX_SIZ  = 0xC,		// keep distance between pos/end and anchor (don't resize)
-	FIX_PX   = 0x10,
-	FIX_PY   = 0x20,
-	FIX_POS  = 0x30,	// start point won't be dependent on size (overrides fix_size flag when accessing start point)
-	FIX_EX   = 0x40,
-	FIX_EY   = 0x80,
-	FIX_END  = 0xC0,	// end point won't be dependent on size (overrides fix_size flag when accessing end point)
-	FIX_ALL  = 0xFF
+// size of a widget in pixels or relative to it's parent
+struct Size {
+	Size(int PIX);
+	Size(float PRC=1.f);
+
+	bool usePix;
+	union {
+		int pix;	// use if type is pix
+		float prc;	// use if type is prc
+	};
+
+	void set(int PIX);
+	void set(float PRC);
 };
-EFix operator~(EFix a);
-EFix operator&(EFix a, EFix b);
-EFix operator&=(EFix& a, EFix b);
-EFix operator^(EFix a, EFix b);
-EFix operator^=(EFix& a, EFix b);
-EFix operator|(EFix a, EFix b);
-EFix operator|=(EFix& a, EFix b);
+using vec2s = vec2<Size>;
 
-// basic UI element. an widget on it's own is displayed as a plain rectangle
+// texture surface data with path to the initial file
+class Texture {
+public:
+	Texture(const string& FILE="");
+
+	void load(const string& path);
+	void clear();
+
+	const vec2i& getRes() const { return res; }
+	const string& getFile() const { return file; }
+
+	SDL_Texture* tex;
+private:
+	vec2i res;
+	string file;
+};
+
+// can be used as spacer
 class Widget {
 public:
-	Widget(const vec2i& ANC=0, vec2i POS=-1, const vec2i& SIZ=0, EFix FIX=FIX_NONE, EColor CLR=EColor::rectangle);
-	virtual ~Widget();
-	virtual Widget* clone() const;
-	
-	SDL_Rect rect() const;
-	vec2i anchor() const;
-	void setAnchor(const vec2i& newPos);
-	vec2i pos() const;
-	void setPos(const vec2i& newPos);
-	vec2i end() const;
-	void setEnd(const vec2i& newPos);
-	vec2i size() const;
-	void setSize(const vec2i& newSize);	// only modifies value of end, which means that it doesn't affect pos, aka. expands the rect to the right/bottom
+	Widget(const Size& SIZ=Size());	// parent and id should be set in Layout's setWidgets
+	virtual ~Widget() {}
 
-	EColor color;
+	virtual void drawSelf() {}	// calls appropriate drawing function(s) in DrawSys
+	virtual void onResize() {}	// for updating values when window size changed
+	virtual void tick(float dSec) {}
+	virtual void postInit() {}	// gets called after parent is set and all set up
+	virtual void onClick(const vec2i& mPos, uint8 mBut) {}
+	virtual void onDoubleClick(const vec2i& mPos, uint8 mBut) {}
+	virtual void onMouseMove(const vec2i& mPos, const vec2i& mMov) {}
+	virtual void onHold(const vec2i& mPos, uint8 mBut) {}
+	virtual void onDrag(const vec2i& mPos, const vec2i& mMov) {}	// mouse move while left button down
+	virtual void onUndrag(uint8 mBut) {}	// get's called on mouse button up if instance is Scene's capture
+	virtual void onScroll(const vec2i& wMov) {}	// on mouse wheel y movement
+	virtual void onKeypress(const SDL_Keysym& key) {}
+	virtual void onJButton(uint8 jbutton) {}
+	virtual void onJHat(uint8 jhat, uint8 value) {}
+	virtual void onJAxis(uint8 jaxis, bool positive) {}
+	virtual void onGButton(uint8 gbutton) {}
+	virtual void onGAxis(uint8 gaxis, bool positive) {}
+	virtual void onText(const string& str) {}
+
+	sizt getID() const { return pcID; }
+	Layout* getParent() const { return parent; }
+	void setParent(Layout* PNT, sizt ID);
+
+	const Size& getRelSize() const { return relSize; }
+	virtual vec2i position() const;
+	virtual vec2i size() const;
+	SDL_Rect rect() const;	// the rectangle that is the widget
+	virtual SDL_Rect parentFrame() const;
+	virtual SDL_Rect frame() const { return parentFrame(); }	// the rectangle to restrain the children's visibility (regular widgets don't have one, only scroll areas)
+
 protected:
-	EFix fix;			// how vanc, vpos and vend behave on window resize
-	vec2f vanc;			// anchor point
-	vec2f vpos, vend;	// distance between boundaries and anchor point
+	Layout* parent;	// every widget that isn't a Layout should have a parent
+	sizt pcID;		// this widget's id in parent's widget list
+	Size relSize;	// size relative to parent's parameters
 };
 
-// widget with text
-class Label : public Widget {
-public:
-	Label(const Widget& BASE=Widget(), const string& LBL="", ETextAlign ALG=ETextAlign::left);
-	virtual ~Label();
-	virtual Label* clone() const;
-
-	Text text() const;
-
-	ETextAlign align;
-	string label;
-};
-
-// this class isn't supposed to be used on it's own since it's only a plain rectangle
+// clickable widget with function calls for left and right click (it's rect is drawn so you can use it like a spacer with color)
 class Button : public Widget {
 public:
-	Button(const Widget& BASE=Widget(), void (Program::*CALL)()=nullptr);
-	virtual ~Button();
-	virtual Button* clone() const;
+	Button(const Size& SIZ=Size(), void (Program::*LCL)(Button*)=nullptr, void (Program::*RCL)(Button*)=nullptr, void (Program::*DCL)(Button*)=nullptr);
+	virtual ~Button() {}
 
-	virtual void onClick(ClickType click);
-	void setCall(void (Program::*func)());
+	virtual void drawSelf();
+	virtual void onClick(const vec2i& mPos, uint8 mBut);
+	virtual void onDoubleClick(const vec2i& mPos, uint8 mBut);
 
 protected:
-	void (Program::*call)();
+	void (Program::*lcall)(Button*);
+	void (Program::*rcall)(Button*);
+	void (Program::*dcall)(Button*);
 };
 
-// a button with one line of text with text alignment
-class ButtonText : public Button {
+// if you don't know what a checkbox is then I don't know what to tell ya
+class CheckBox : public Button {
 public:
-	ButtonText(const Widget& BASE=Widget(), void (Program::*CALL)()=nullptr, const string& LBL="", ETextAlign ALG=ETextAlign::left);
-	virtual ~ButtonText();
-	virtual ButtonText* clone() const;
+	CheckBox(const Button& BASE=Button(), bool ON=false);
+	virtual ~CheckBox() {}
 
-	Text text() const;
+	virtual void drawSelf();
+	virtual void onClick(const vec2i& mPos, uint8 mBut);
 
-	ETextAlign align;
-	string label;
+	SDL_Rect boxRect() const;
+
+	bool on;
+};
+
+// horizontal slider (maybe one day it'll be able to be vertical)
+class Slider : public Button {
+public:
+	Slider(const Button& BASE=Button(), int VAL=0, int MIN=0, int MAX=255);
+	virtual ~Slider() {}
+
+	virtual void drawSelf();
+	virtual void onClick(const vec2i& mPos, uint8 mBut);
+	virtual void onHold(const vec2i& mPos, uint8 mBut);
+	virtual void onDrag(const vec2i& mPos, const vec2i& mMov);
+	virtual void onUndrag(uint8 mBut);
+
+	int getVal() const { return val; }
+	void setVal(int VAL);
+
+	SDL_Rect barRect() const;
+	SDL_Rect sliderRect() const;
+
+private:
+	int val, min, max;
+	int diffSliderMouseX;
+
+	void setSlider(int xpos);
+	int sliderPos() const;
+	int sliderLim() const;
 };
 
 // can have multiple images through which it cycles when presed
-class ButtonImage : public Button {
+class Picture : public Button {
 public:
-	ButtonImage(const Widget& BASE=Widget(), void (Program::*CALL)()=nullptr, const vector<string>& TEXS={});
-	virtual ~ButtonImage();
-	virtual ButtonImage* clone() const;
+	Picture(const Button& BASE=Button(), const vector<string>& TEXS={}, sizt CTX=0);
+	virtual ~Picture();
 
-	virtual void onClick(ClickType click);
-	Image getCurTex() const;
+	virtual void drawSelf();
+	virtual void onClick(const vec2i& mPos, uint8 mBut);
+
+	const Texture& getTex() const { return texes[curTex]; }
 
 private:
-	vector<Texture*> texes;	// textures through which the button cycles on click
-	size_t curTex;			// currently displayed texture
+	vector<Texture> texes;	// textures through which the button cycles on click
+	sizt curTex;			// currently displayed texture
 };
 
-// like LineEdit except it's an widget on it's own rather than part of a ScrollArea
-class LineEditor : public Widget, public LineEdit {
+// it's a little ass backwards but labels (aka a line of text) are buttons
+class Label : public Button {
 public:
-	LineEditor(const Widget& BASE=Widget(), const string& TXT="", ETextType TYPE=ETextType::text, void (Program::*KCALL)(const string&)=nullptr, void (Program::*CCALL)()=nullptr);
-	virtual ~LineEditor();
-	virtual LineEditor* clone() const;
+	enum class Alignment : uint8 {
+		left,
+		center,
+		right
+	};
 
-	virtual Text text() const;
-	virtual SDL_Rect caretRect() const;
+	Label(const Button& BASE=Button(), const string& TXT="", Alignment ALG=Alignment::left);
+	virtual ~Label();
+
+	virtual void drawSelf();
+	virtual void postInit();
+
+	const string& getText() const { return text; }
+	virtual void setText(const string& str);
+	SDL_Rect textRect() const;
+
+	Alignment align;	// text alignment
+	SDL_Texture* tex;	// rendered text
+protected:
+	string text;
+	vec2i textSize;
+
+	virtual vec2i textPos() const;
+	void updateTex();
+};
+
+// for switching between multiple options (kinda like a dropdown menu except I was too lazy to make an actual one)
+class SwitchBox : public Label {
+public:
+	SwitchBox(const Button& BASE=Button(), const vector<string>& OPTS={}, const string& COP="", Alignment ALG=Alignment::left);
+	virtual ~SwitchBox() {}
+
+	virtual void onClick(const vec2i& mPos, uint8 mBut);
 
 private:
-	virtual void checkCaretRight();
-	virtual void checkCaretLeft();
+	vector<string> options;
+	sizt curOpt;
+
+	void shiftOption(int ofs);
 };
 
-// a popup window. should be handeled separately by Scene
-class Popup : public Widget {
+// for editing a line of text (ignores Label's align), (calls Button's lcall on text confirm rather than on click)
+class LineEdit : public Label {
 public:
-	Popup(const Widget& BASE=Widget(), const vector<Widget*>& wgtS={});
-	virtual ~Popup();
-	virtual Popup* clone() const;
+	enum class TextType : uint8 {
+		text,
+		sInteger,
+		sIntegerSpaced,
+		uInteger,
+		uIntegerSpaced,
+		sFloating,
+		sFloatingSpaced,
+		uFloating,
+		uFloatingSpaced
+	};
 
-	vector<Widget*> widgets;
+	LineEdit(const Button& BASE=Button(), const string& TXT="", TextType TYP=TextType::text);
+	virtual ~LineEdit() {}
+
+	virtual void onClick(const vec2i& mPos, uint8 mBut);
+	virtual void onKeypress(const SDL_Keysym& key);
+	virtual void onText(const string& str);
+
+	const string& getOldText() const { return oldText; }
+	virtual void setText(const string& str);
+	SDL_Rect caretRect() const;	
+
+	void confirm();
+	void cancel();
+
+private:
+	int textOfs;		// text's horizontal offset
+	sizt cpos;		// caret position
+	TextType textType;
+	string oldText;
+
+	virtual vec2i textPos() const;
+	int caretPos() const;	// caret's relative x position
+	void checkTextOffset();
+	void setCPos(int cp);
+
+	sizt findWordStart();	// returns index of first character of word before cpos
+	sizt findWordEnd();		// returns index of character after last character of word after cpos
+	void cleanText();
+	void cleanSIntSpacedText(sizt i=0);
+	void cleanUIntText(sizt i=0);
+	void cleanUIntSpacedText();
+	void cleanSFloatSpacedText(sizt i=0);
+	void cleanUFloatText(sizt i=0);
+	void cleanUFloatSpacedText();
+	void cleanFunctionText();
+};
+
+// for getting a key/button/axis
+class KeyGetter : public Label {
+public:
+	enum class AcceptType : uint8 {
+		keyboard,
+		joystick,
+		gamepad
+	};
+
+	KeyGetter(const Button& BASE=Button(), AcceptType ACT=AcceptType::keyboard, Binding::Type BND=Binding::Type::numBindings);
+	virtual ~KeyGetter() {}
+
+	virtual void onClick(const vec2i& mPos, uint8 mBut);
+	virtual void onKeypress(const SDL_Keysym& key);
+	virtual void onJButton(uint8 jbutton);
+	virtual void onJHat(uint8 jhat, uint8 value);
+	virtual void onJAxis(uint8 jaxis, bool positive);
+	virtual void onGButton(uint8 gbutton);
+	virtual void onGAxis(uint8 gaxis, bool positive);
+
+private:
+	AcceptType acceptType;		// what kind of binding is being accepted
+	Binding::Type bindingType;	// index of what is currently being edited
 };

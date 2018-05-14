@@ -1,49 +1,51 @@
 #pragma once
 
-#include "utils/scrollAreas.h"
-#include "library.h"
-#include "prog/program.h"
+#include "utils/layouts.h"
+
+// saves what widget is being clicked on with what button at what position
+struct ClickStamp {
+	ClickStamp(Widget* WGT=nullptr, ScrollArea* ARE=nullptr, const vec2i& POS=0);
+
+	Widget* widget;
+	ScrollArea* area;
+	vec2i mPos;
+};
 
 // handles more backend UI interactions, works with widgets (UI elements), and contains Program and Library
 class Scene {
 public:
 	Scene();
 	~Scene();
-	
-	void switchMenu(const vector<Widget*>& wgts);
-	void resizeMenu();
+
 	void tick(float dSec);
 	void onMouseMove(const vec2i& mPos, const vec2i& mMov);
-	void onMouseDown(const vec2i& mPos, ClickType click);
-	void onMouseUp(const vec2i& mPos, ClickType click);
+	void onMouseDown(const vec2i& mPos, uint8 mBut, uint8 mCnt);
+	void onMouseUp(const vec2i& mPos, uint8 mBut);
 	void onMouseWheel(const vec2i& wMov);
 	void onMouseLeave();
+	void onText(const char* str);
+	void onResize();
 
-	Program& getProgram();
-	Library& getLibrary();
-	const vector<Widget*>& getWidgets() const;
-	Widget* getFocWidget();
-	bool isDraggingSlider(ScrollArea* wgt) const;	// whether wgt's slider is currently being dragged
-	ListItem* selectedButton();		// find scroll area with selectable items and get the first selected one (returns nullptr if nothing found)
+	void resetLayouts();
+	Layout* getLayout() { return layout.get(); }
+	vector<Overlay*>& getOverlays() { return overlays; }
+	Popup* getPopup() { return popup.get(); }
+	void setPopup(Popup* newPopup, Widget* newCapture=nullptr);
+	void setPopup(const pair<Popup*, Widget*>& popcap) { setPopup(popcap.first, popcap.second); }
 
-	Popup* getPopup();
-	void setPopup(Popup* newPopup, Capturer* capture=nullptr);
+	bool cursorInClickRange(const vec2i& mPos, uint8 mBut);
+	ScrollArea* getFocusedScrollArea() const;
 
+	Widget* capture;				// either pointer to widget currently hogging all keyboard input or ScrollArea whichs slider is currently being dragged. nullptr if nothing is being captured or dragged
 private:
-	Program program;
-	Library library;
+	uptr<Layout> layout;	// main layout
+	uptr<Popup> popup;
+	vector<Overlay*> overlays;
 
-	vector<Widget*> widgets;	// main widgets
-	kk::sptr<Popup> popup;		// placeholder for popup and it's widgets
+	vector<Widget*> focused;	// list of widgets over which the cursor is poistioned
+	vector<ClickStamp> stamps;	// data about last mouse click (indexes are mouse button numbers)
 
-	Widget* focWidget;	// currently focused widget (should be widget over which the cursor is poistioned)
-	ClickStamp stamp;	// data about last mouse click
-	bool dragSlider;	// whether a slider is currently being dragged
-
-	void resizeWidgets(vector<Widget*>& wgts);
-	void updateFocWidget();
-
-	void checkScrollAreaItemsClick(const vec2i& mPos, ScrollAreaItems* wgt, ClickType click);
-	void checkReaderBoxClick(const vec2i& mPos, ReaderBox* wgt, ClickType click);
-	void checkReaderBoxDoubleClick(const vec2i& mPos, ReaderBox* wgt);
+	void setFocused(const vec2i& mPos);
+	void setFocusedElement(const vec2i& mPos, Layout* box);
+	Overlay* findFocusedOverlay(const vec2i& mPos);
 };
