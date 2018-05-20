@@ -1,2 +1,2 @@
-include/* linguist-vendored
+lib/* linguist-vendored
 jquery.js linguist-vendored=false
