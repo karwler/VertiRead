@@ -12,63 +12,60 @@ ClickStamp::ClickStamp(Widget* WGT, ScrollArea* ARE, const vec2i& POS) :
 
 Scene::Scene() :
 	stamps(SDL_BUTTON_X2+1),
+	select(nullptr),
 	capture(nullptr)
 {}
-
-Scene::~Scene() {
-	clear(overlays);
-}
 
 void Scene::tick(float dSec) {
 	layout->tick(dSec);
 	if (popup)
 		popup->tick(dSec);
-	for (Overlay* it : overlays)
-		it->tick(dSec);
+	if (overlay)
+		overlay->tick(dSec);
 }
 
 void Scene::onMouseMove(const vec2i& mPos, const vec2i& mMov) {
-	setFocused(mPos);
+	setSelected(mPos, popup ? popup.get() : overlayFocused(mPos) ? overlay.get() : layout.get());
 
 	if (capture)
 		capture->onDrag(mPos, mMov);
 
-	// call mouse move events
 	layout->onMouseMove(mPos, mMov);
 	if (popup)
 		popup->onMouseMove(mPos, mMov);
-	for (Overlay* it : overlays)
-		it->onMouseMove(mPos, mMov);
+	if (overlay)
+		overlay->onMouseMove(mPos, mMov);
 }
 
 void Scene::onMouseDown(const vec2i& mPos, uint8 mBut, uint8 mCnt) {
 	if (!popup)	// confirm entered text if such a thing exists unless it's in a popup (that thing handles itself)
 		if (LineEdit* box = dynamic_cast<LineEdit*>(capture))
 			box->confirm();
-
+	
+	setSelected(mPos, popup ? popup.get() : overlayFocused(mPos) ? overlay.get() : layout.get());	// update in case selection has changed through keys while cursor remained at the old position
 	if (mCnt == 1) {
-		stamps[mBut] = ClickStamp(focused.back(), getFocusedScrollArea(), mPos);
+		stamps[mBut] = ClickStamp(select, getSelectedScrollArea(), mPos);
 		if (stamps[mBut].area)	// area goes first so widget can overwrite it's capture
 			stamps[mBut].area->onHold(mPos, mBut);
 		if (stamps[mBut].widget != stamps[mBut].area)
 			stamps[mBut].widget->onHold(mPos, mBut);
-	} else if (mCnt == 2 && stamps[mBut].widget == focused.back() && cursorInClickRange(mPos, mBut))
-		focused.back()->onDoubleClick(mPos, mBut);
+	} else if (mCnt == 2 && stamps[mBut].widget == select && cursorInClickRange(mPos, mBut))
+		select->onDoubleClick(mPos, mBut);
 }
 
 void Scene::onMouseUp(const vec2i& mPos, uint8 mBut) {
 	if (capture)
 		capture->onUndrag(mBut);
 
-	if (stamps[mBut].widget == focused.back() && cursorInClickRange(mPos, mBut))
+	if (select && stamps[mBut].widget == select && cursorInClickRange(mPos, mBut))
 		stamps[mBut].widget->onClick(mPos, mBut);
 }
 
 void Scene::onMouseWheel(const vec2i& wMov) {
-	if (ScrollArea* box = getFocusedScrollArea())
+	if (ScrollArea* box = getSelectedScrollArea())
 		box->onScroll(wMov * Default::scrollFactorWheel);
-	else
-		focused.back()->onScroll(wMov * Default::scrollFactorWheel);
+	else if (select)
+		select->onScroll(wMov * Default::scrollFactorWheel);
 }
 
 void Scene::onMouseLeave() {
@@ -86,27 +83,26 @@ void Scene::onResize() {
 	layout->onResize();
 	if (popup)
 		popup->onResize();
-	for (Overlay* it : overlays)
-		it->onResize();
+	if (overlay)
+		overlay->onResize();
 }
 
 void Scene::resetLayouts() {
 	// clear scene
 	World::drawSys()->clearFonts();
 	onMouseLeave();	// reset stamps
-	focused.clear();
+	select = nullptr;
 	capture = nullptr;
 	popup.reset();
-	clear(overlays);
 
 	// set up new widgets
 	layout.reset(World::state()->createLayout());
-	overlays = World::state()->createOverlays();
+	overlay.reset(World::state()->createOverlay());
 
 	layout->postInit();
-	for (Overlay* it : overlays)
-		it->postInit();
-	onMouseMove(InputSys::mousePos(), World::inputSys()->getMouseMove());
+	if (overlay)
+		overlay->postInit();
+	onMouseMove(InputSys::mousePos(), 0);
 }
 
 void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
@@ -117,55 +113,89 @@ void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
 	capture = newCapture;
 	if (capture)
 		capture->onClick(InputSys::mousePos(), SDL_BUTTON_LEFT);
-
-	setFocused(InputSys::mousePos());
+	onMouseMove(InputSys::mousePos(), 0);
 }
 
-void Scene::setFocused(const vec2i& mPos) {
-	Layout* lay;
-	if (popup)
-		lay = popup.get();
-	else {
-		lay = findFocusedOverlay(mPos);
-		if (!lay)
-			lay = layout.get();
-	}
-	focused.resize(1);
-	focused[0] = lay;
-	setFocusedElement(mPos, lay);
-}
-
-void Scene::setFocusedElement(const vec2i& mPos, Layout* box) {
+void Scene::setSelected(const vec2i& mPos, Layout* box) {
 	SDL_Rect frame = box->frame();
 	for (Widget* it : box->getWidgets())
 		if (inRect(mPos, overlapRect(it->rect(), frame))) {
-			focused.push_back(it);
 			if (Layout* lay = dynamic_cast<Layout*>(it))
-				setFocusedElement(mPos, lay);
-			break;
-		}
-}
-
-Overlay* Scene::findFocusedOverlay(const vec2i& mPos) {
-	for (Overlay* it : overlays) {
-		if (it->on) {
-			if (inRect(mPos, it->rect()))
-				return it;
+				setSelected(mPos, lay);
 			else
-				it->on = false;
-		} else if (inRect(mPos, it->actRect())) {
-			it->on = true;
-			return it;
+				select = dynamic_cast<Button*>(it) ? it : box;
+			return;
 		}
-	}
-	return nullptr;
+	select = box;
 }
 
-ScrollArea* Scene::getFocusedScrollArea() const {
-	for (Widget* it : focused)
-		if (ScrollArea* sa = dynamic_cast<ScrollArea*>(it))
-			return sa;
-	return nullptr;
+ScrollArea* Scene::getSelectedScrollArea() const {
+	Layout* parent = dynamic_cast<Layout*>(select);
+	if (select && !parent)
+		parent = select->getParent();
+
+	while (parent && !dynamic_cast<ScrollArea*>(parent))
+		parent = parent->getParent();
+	return dynamic_cast<ScrollArea*>(parent);
+}
+
+bool Scene::overlayFocused(const vec2i& mPos) {
+	if (!overlay)
+		return false;
+
+	if (overlay->on) {
+		if (inRect(mPos, overlay->rect()))
+			return true;
+		overlay->on = false;
+		return false;
+	}
+	if (inRect(mPos, overlay->actRect())) {
+		overlay->on = true;
+		return true;
+	}
+	return false;
+}
+
+void Scene::selectFirst() {
+	if (popup || overlay)
+		return;
+
+	Layout* lay;
+	if (Layout* next = dynamic_cast<Layout*>(select))
+		lay = next;
+	else
+		lay = layout.get();
+
+	sizt id = 0;
+	while (lay) {
+		if (id >= lay->getWidgets().size()) {
+			id = lay->getID() + 1;
+			lay = lay->getParent();
+		} else if (Layout* next = dynamic_cast<Layout*>(lay->getWidget(id)))
+			lay = next;
+		else if (dynamic_cast<Button*>(lay->getWidget(id))) {
+			select = lay->getWidget(0);
+			break;
+		} else
+			id++;
+	}
+}
+
+sizt Scene::findSelectedID(Layout* box) {
+	Widget* child = select;
+	while (child->getParent() && child->getParent() != box)
+		child = child->getParent();
+	return child->getParent() ? child->getID() : SIZE_MAX;
+}
+
+bool Scene::cursorDisableable() {
+	Layout* parent = dynamic_cast<Layout*>(select);
+	if (select && !parent)
+		parent = select->getParent();
+
+	while (parent->getParent())
+		parent = parent->getParent();
+	return parent == layout.get();
 }
 
 bool Scene::cursorInClickRange(const vec2i& mPos, uint8 mBut) {

@@ -22,25 +22,6 @@ void Size::set(float PRC) {
 	prc = PRC;
 }
 
-// TEXTURE
-
-Texture::Texture(const string& FILE) :
-	tex(nullptr)
-{
-	if (!FILE.empty())
-		load(FILE);
-}
-
-void Texture::load(const string& path) {
-	tex = World::drawSys()->loadTexture(path, res);
-	file = tex ? path : "";
-}
-
-void Texture::clear() {
-	if (tex)
-		SDL_DestroyTexture(tex);
-}
-
 // WIDGET
 
 Widget::Widget(const Size& SIZ) :
@@ -62,6 +43,10 @@ vec2i Widget::size() const {
 	return parent->wgtSize(pcID);
 }
 
+vec2i Widget::center() const {
+	return position() + size() / 2;
+}
+
 SDL_Rect Widget::rect() const {
 	vec2i pos = position();
 	vec2i siz = size();
@@ -70,6 +55,22 @@ SDL_Rect Widget::rect() const {
 
 SDL_Rect Widget::parentFrame() const {
 	return parent->frame();
+}
+
+void Widget::onSelectUp() {
+	parent->selectNext(pcID, center().x, 0);
+}
+
+void Widget::onSelectDown() {
+	parent->selectNext(pcID, center().x, 1);
+}
+
+void Widget::onSelectLeft() {
+	parent->selectNext(pcID, center().y, 2);
+}
+
+void Widget::onSelectRight() {
+	parent->selectNext(pcID, center().y, 3);
 }
 
 // BUTTON
@@ -86,11 +87,9 @@ void Button::drawSelf() {
 }
 
 void Button::onClick(const vec2i& mPos, uint8 mBut) {
-	if (mBut == SDL_BUTTON_LEFT) {
-		parent->selectWidget(this);
-		if (lcall)
-			(World::program()->*lcall)(this);
-	} else if (mBut == SDL_BUTTON_RIGHT && rcall)
+	if (mBut == SDL_BUTTON_LEFT && lcall)
+		(World::program()->*lcall)(this);
+	else if (mBut == SDL_BUTTON_RIGHT && rcall)
 		(World::program()->*rcall)(this);
 }
 
@@ -148,12 +147,12 @@ void Slider::onHold(const vec2i& mPos, uint8 mBut) {
 		int sp = sliderPos();
 		if (outRange(mPos.x, sp, sp + Default::sliderWidth))	// if mouse outside of slider
 			setSlider(mPos.x - Default::sliderWidth/2);
-		diffSliderMouseX = mPos.x - sliderPos();	// get difference between mouse x and slider x
+		diffSliderMouse = mPos.x - sliderPos();	// get difference between mouse x and slider x
 	}
 }
 
 void Slider::onDrag(const vec2i& mPos, const vec2i& mMov) {
-	setSlider(mPos.x - diffSliderMouseX);
+	setSlider(mPos.x - diffSliderMouse);
 }
 
 void Slider::onUndrag(uint8 mBut) {
@@ -196,30 +195,21 @@ int Slider::sliderLim() const {
 
 // PICTURE
 
-Picture::Picture(const Button& BASE, const vector<string>& TEXS, sizt CTX) :
+Picture::Picture(const Button& BASE, const string& TEX) :
 	Button(BASE)
 {
-	for (const string& it : TEXS) {
-		Texture tex(it);
-		if (tex.tex)
-			texes.push_back(tex);
-	}
-	curTex = (CTX < texes.size()) ? CTX : texes.size()-1;
+	tex = World::drawSys()->loadTexture(TEX, res);
+	if (tex)
+		file = TEX;
 }
 
 Picture::~Picture() {
-	for (Texture& it : texes)
-		it.clear();
+	if (tex)
+		SDL_DestroyTexture(tex);
 }
 
 void Picture::drawSelf() {
 	World::drawSys()->drawPicture(this);
-}
-
-void Picture::onClick(const vec2i& mPos, uint8 mBut) {
-	if (mBut == SDL_BUTTON_LEFT)
-		curTex = (curTex + 1) % texes.size();
-	Button::onClick(mPos, mBut);
 }
 
 // LABEL
@@ -411,7 +401,14 @@ SDL_Rect LineEdit::caretRect() const {
 
 void LineEdit::setCPos(sizt cp) {
 	cpos = cp;
-	checkTextOffset();
+	int cl = caretPos();
+	int ce = cl + Default::caretWidth;
+	int sx = size().x - Default::textOffset*2;
+
+	if (cl < 0)
+		textOfs -= cl;
+	else if (ce > sx)
+		textOfs -= ce - sx;
 }
 
 int LineEdit::caretPos() const {
@@ -434,17 +431,6 @@ void LineEdit::cancel() {
 
 	World::scene()->capture = nullptr;
 	SDL_StopTextInput();
-}
-
-void LineEdit::checkTextOffset() {
-	int cp = caretPos();
-	int ce = cp + Default::caretWidth;
-	int sx = size().x;
-
-	if (cp < 0)
-		textOfs -= cp;
-	else if (ce > sx)
-		textOfs -= ce - sx;
 }
 
 sizt LineEdit::findWordStart() {
@@ -600,9 +586,9 @@ KeyGetter::KeyGetter(const Button& BASE, AcceptType ACT, Binding::Type BND) :
 			text = "A " + string(binding.jposAxisAssigned() ? "+" : "-") + ntos(binding.getJctID());
 	} else if (acceptType == AcceptType::gamepad) {
 		if (binding.gbuttonAssigned())
-			text = gpButtonToStr(binding.getGctID());
+			text = enumToStr(Default::gbuttonNames, binding.getGbutton());
 		else if (binding.gaxisAssigned())
-			text = (binding.gposAxisAssigned() ? "+" : "-") + gpAxisToStr(binding.getGctID());
+			text = (binding.gposAxisAssigned() ? "+" : "-") + enumToStr(Default::gaxisNames, binding.getGaxis());
 	}
 }
 
@@ -652,18 +638,18 @@ void KeyGetter::onJAxis(uint8 jaxis, bool positive) {
 	World::scene()->capture = nullptr;
 }
 
-void KeyGetter::onGButton(uint8 gbutton) {
+void KeyGetter::onGButton(SDL_GameControllerButton gbutton) {
 	if (acceptType == AcceptType::gamepad) {
 		World::inputSys()->getBinding(bindingType).setGbutton(gbutton);
-		setText(gpButtonToStr(gbutton));
+		setText(enumToStr(Default::gbuttonNames, gbutton));
 	}
 	World::scene()->capture = nullptr;
 }
 
-void KeyGetter::onGAxis(uint8 gaxis, bool positive) {
+void KeyGetter::onGAxis(SDL_GameControllerAxis gaxis, bool positive) {
 	if (acceptType == AcceptType::gamepad) {
 		World::inputSys()->getBinding(bindingType).setGaxis(gaxis, positive);
-		setText((positive ? "+" : "-") + gpAxisToStr(gaxis));
+		setText((positive ? "+" : "-") + enumToStr(Default::gaxisNames, gaxis));
 	}
 	World::scene()->capture = nullptr;
 }

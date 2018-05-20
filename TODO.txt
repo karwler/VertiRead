@@ -1,3 +1,2 @@
 advanced book adding
-arrow keys/hats navigation
 multiple scroll modes for reader

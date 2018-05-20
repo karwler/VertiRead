@@ -20,7 +20,7 @@ int WindowSys::start() {
 }
 
 void WindowSys::init() {
-	if (SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER))
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER))
 		throw "Couldn't initialize SDL:\n" + string(SDL_GetError());
 	if (TTF_Init())
 		throw "Couldn't initialize fonts:\n" + string(SDL_GetError());
@@ -34,18 +34,6 @@ void WindowSys::init() {
 		cerr << "Couldn't initialize TIF:" << endl << IMG_GetError() << endl;
 	if (!(flags & IMG_INIT_WEBP))
 		cerr << "Couldn't initialize WEBP:" << endl << IMG_GetError() << endl;
-
-	flags = Mix_Init(MIX_INIT_FLAC | MIX_INIT_MID | MIX_INIT_MOD | MIX_INIT_MP3 | MIX_INIT_OGG);
-	if (!(flags & MIX_INIT_FLAC))
-		cerr << "Couldn't initialize FLAC:" << endl << Mix_GetError() << endl;
-	if (!(flags & MIX_INIT_MID))
-		cerr << "Couldn't initialize MID:" << endl << Mix_GetError() << endl;
-	if (!(flags & MIX_INIT_MOD))
-		cerr << "Couldn't initialize MOD:" << endl << Mix_GetError() << endl;
-	if (!(flags & MIX_INIT_MP3))
-		cerr << "Couldn't initialize MP3:" << endl << Mix_GetError() << endl;
-	if (!(flags & MIX_INIT_OGG))
-		cerr << "Couldn't initialize OGG:" << endl << Mix_GetError() << endl;
 
 	SDL_StopTextInput();	// for some reason TextInput is on
 	sets = Filer::getSettings();
@@ -100,7 +88,6 @@ void WindowSys::cleanup() {
 	inputSys.reset();
 	destroyWindow();
 
-	Mix_Quit();
 	IMG_Quit();
 	TTF_Quit();
 	SDL_Quit();
@@ -140,7 +127,15 @@ void WindowSys::destroyWindow() {
 }
 
 void WindowSys::handleEvent(const SDL_Event& event) {
-	if (event.type == SDL_KEYDOWN)
+	if (event.type == SDL_MOUSEMOTION)
+		inputSys->eventMouseMotion(event.motion);
+	else if (event.type == SDL_MOUSEBUTTONDOWN)
+		scene->onMouseDown(vec2i(event.button.x, event.button.y), event.button.button, event.button.clicks);
+	else if (event.type == SDL_MOUSEBUTTONUP)
+		scene->onMouseUp(vec2i(event.button.x, event.button.y), event.button.button);
+	else if (event.type == SDL_MOUSEWHEEL)
+		scene->onMouseWheel(vec2i(event.wheel.x, -event.wheel.y));
+	else if (event.type == SDL_KEYDOWN)
 		inputSys->eventKeypress(event.key);
 	else if (event.type == SDL_JOYBUTTONDOWN)
 		inputSys->eventJoystickButton(event.jbutton);
@@ -152,14 +147,6 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 		inputSys->eventGamepadButton(event.cbutton);
 	else if (event.type == SDL_CONTROLLERAXISMOTION)
 		inputSys->eventGamepadAxis(event.caxis);
-	else if (event.type == SDL_MOUSEMOTION)
-		inputSys->eventMouseMotion(event.motion);
-	else if (event.type == SDL_MOUSEBUTTONDOWN)
-		scene->onMouseDown(vec2i(event.button.x, event.button.y), event.button.button, event.button.clicks);
-	else if (event.type == SDL_MOUSEBUTTONUP)
-		scene->onMouseUp(vec2i(event.button.x, event.button.y), event.button.button);
-	else if (event.type == SDL_MOUSEWHEEL)
-		scene->onMouseWheel(vec2i(event.wheel.x, -event.wheel.y));
 	else if (event.type == SDL_TEXTINPUT)
 		scene->onText(event.text.text);
 	else if (event.type == SDL_WINDOWEVENT)
@@ -197,6 +184,12 @@ vec2i WindowSys::resolution() const {
 	vec2i res;
 	SDL_GetWindowSize(window, &res.x, &res.y);
 	return res;
+}
+
+void WindowSys::moveCursor(const vec2i& mov) {
+	vec2i pos;
+	SDL_GetMouseState(&pos.x, &pos.y);
+	SDL_WarpMouseInWindow(window, pos.x + mov.x, pos.y + mov.y);
 }
 
 void WindowSys::setFullscreen(bool on) {

@@ -20,6 +20,7 @@ public:
 
 	float getDSec() const { return dSec; }
 	vec2i resolution() const;
+	void moveCursor(const vec2i& mov);
 
 	void setFullscreen(bool on);
 	void setRenderer(const string& name);

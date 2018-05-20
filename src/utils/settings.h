@@ -7,42 +7,39 @@ enum class Color : uint8 {
 	normal,
 	dark,
 	light,
+	select,
 	text,
 	numColors
-};
-
-struct Playlist {
-	Playlist(const string& NAME="", const vector<string>& SGS={}, const uset<string>& BKS={});
-
-	string name;
-	vector<string> songs;
-	uset<string> books;
 };
 
 class Binding {
 public:
 	enum class Type : uint8 {
-		back,
+		enter,
+		escape,
+		up,
+		down,
+		left,
+		right,
+		scrollUp,
+		scrollDown,
+		scrollLeft,
+		scrollRight,
+		cursorUp,
+		cursorDown,
+		cursorLeft,
+		cursorRight,
+		centerView,
+		scrollFast,
+		scrollSlow,
+		pageUp,
+		pageDown,
 		zoomIn,
 		zoomOut,
 		zoomReset,
-		centerView,
-		fast,
-		slow,
-		playPause,
-		fullscreen,
 		nextDir,
 		prevDir,
-		nextSong,
-		prevSong,
-		volumeUp,
-		volumeDown,
-		pageUp,
-		pageDown,
-		up,
-		down,
-		right,
-		left,
+		fullscreen,
 		numBindings
 	};
 	enum Assignment : uint8 {
@@ -85,13 +82,15 @@ public:
 	bool gctAssigned() const { return asg & (ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N); }
 	void clearAsgGct();
 
+	SDL_GameControllerButton getGbutton() const { return static_cast<SDL_GameControllerButton>(gctID); }
 	bool gbuttonAssigned() const { return asg & ASG_GBUTTON; }
-	void setGbutton(uint8 BUT);
+	void setGbutton(SDL_GameControllerButton BUT);
 
+	SDL_GameControllerAxis getGaxis() const { return static_cast<SDL_GameControllerAxis>(gctID); }
 	bool gaxisAssigned() const { return asg & (ASG_GAXIS_P | ASG_GAXIS_N); }
 	bool gposAxisAssigned() const { return asg & ASG_GAXIS_P; }
 	bool gnegAxisAssigned() const { return asg & ASG_GAXIS_N; }
-	void setGaxis(uint8 AXIS, bool positive);
+	void setGaxis(SDL_GameControllerAxis AXIS, bool positive);
 
 	bool isAxis() const { return callAxis; }
 	void (ProgState::*(getBcall() const))() { return bcall; }
@@ -122,7 +121,7 @@ inline Binding::Assignment operator|=(Binding::Assignment& a, Binding::Assignmen
 
 class Settings {
 public:
-	Settings(bool MAX=Default::maximized, bool FSC=Default::fullscreen, const vec2i& RES=Default::resolution, const string& THM="", const string& FNT=Default::font, const string& LANG=Default::language, int VOL=Default::volume, const string& LIB="", const string& PST="", const string& RNDR="", const vec2f& SSP=Default::scrollSpeed, int16 DDZ=Default::controllerDeadzone);
+	Settings(bool MAX=Default::maximized, bool FSC=Default::fullscreen, const vec2i& RES=Default::resolution, const string& THM="", const string& FNT=Default::font, const string& LANG=Default::language, const string& LIB="", const string& RNDR="", const vec2f& SSP=Default::scrollSpeed, int16 DDZ=Default::controllerDeadzone);
 
 	string getResolutionString() const;
 	void setResolution(const string& line);
@@ -133,18 +132,13 @@ public:
 	string setFont(const string& newFont);			// returns path to the font file, not the name
 	const string& getLang() const { return lang; }
 	const string& setLang(const string& language);
-
 	const string& getDirLib() const { return dirLib; }
 	uint8 setDirLib(const string& dir);
-	const string& getDirPlist() const { return dirPlist; }
-	uint8 setDirPlist(const string& dir);
 
 	int getRendererIndex();
 	static vector<string> getAvailibleRenderers();
 	static string getRendererName(int id);
 
-	int getVolume() const { return volume; }
-	int setVolume(int vol);
 	string getScrollSpeedString() const;
 	void setScrollSpeed(const string& line);
 	int getDeadzone() const { return deadzone; }
@@ -155,13 +149,11 @@ public:
 	string renderer;
 	vec2f scrollSpeed;
 private:
-	int volume;
 	int deadzone;
 	string theme;
 	string font;
 	string lang;
 	string dirLib;
-	string dirPlist;
 
 	uint8 setDirectory(string& dir, const string& newDir, const string& defaultDir);
 };

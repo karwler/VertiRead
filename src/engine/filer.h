@@ -58,11 +58,8 @@ public:
 	static vector<string> getAvailibleLanguages();
 	static umap<string, string> getTranslations(const string& language);
 
-	static Playlist getPlaylist(const string& name);
-	static void savePlaylist(const Playlist& plist);
 	static string getLastPage(const string& book);
 	static void saveLastPage(const string& file);
-
 	static Settings getSettings();
 	static void saveSettings(const Settings& sets);
 	static vector<Binding> getBindings();
@@ -74,8 +71,7 @@ public:
 	static vector<string> listDir(const string& dir, FileType filter=FTYPE_ANY);
 	static vector<string> listDirRecursively(string dir);
 	static FileType fileType(const string& path);
-	static bool rename(const string& path, const string& newPath);
-	static bool remove(const string& path);
+	static bool isPicture(const string& file);
 
 #ifdef _WIN32
 	static vector<char> listDrives();	// get list of driver letters under windows

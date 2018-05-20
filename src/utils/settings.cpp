@@ -1,13 +1,5 @@
 #include "engine/world.h"
 
-// PLAYLIST
-
-Playlist::Playlist(const string& NAME, const vector<string>& SGS, const uset<string>& BKS) :
-	name(NAME),
-	songs(SGS),
-	books(BKS)
-{}
-
 // BINDING
 
 Binding::Binding() :
@@ -15,16 +7,98 @@ Binding::Binding() :
 {}
 
 void Binding::setDefaultSelf(Type type) {
-	if (type == Type::back) {
-		setBcall(&ProgState::eventBack);
-		setKey(Default::keyBack);
-		setJbutton(Default::jbuttonBack);
-		setGbutton(Default::gbuttonBack);
+	if (type == Type::enter) {
+		setBcall(&ProgState::eventEnter);
+		setKey(Default::keyEnter);
+		setJbutton(Default::jbuttonEnter);
+		setGbutton(Default::gbuttonEnter);
+	} else if (type == Type::escape) {
+		setBcall(&ProgState::eventEscape);
+		setKey(Default::keyEscape);
+		setJbutton(Default::jbuttonEscape);
+		setGbutton(Default::gbuttonEscape);
+	} else if (type == Type::up) {
+		setBcall(&ProgState::eventUp);
+		setKey(Default::keyUp);
+		setJhat(Default::jhatID, Default::jhatUp);
+		setGbutton(Default::gbuttonUp);
+	} else if (type == Type::down) {
+		setBcall(&ProgState::eventDown);
+		setKey(Default::keyDown);
+		setJhat(Default::jhatID, Default::jhatDown);
+		setGbutton(Default::gbuttonDown);
+	} else if (type == Type::left) {
+		setBcall(&ProgState::eventLeft);
+		setKey(Default::keyLeft);
+		setJhat(Default::jhatID, Default::jhatLeft);
+		setGbutton(Default::gbuttonLeft);
+	} else if (type == Type::right) {
+		setBcall(&ProgState::eventRight);
+		setKey(Default::keyRight);
+		setJhat(Default::jhatID, Default::jhatRight);
+		setGbutton(Default::gbuttonRight);
+	} else if (type == Type::scrollUp) {
+		setAcall(&ProgState::eventScrollUp);
+		setKey(Default::keyUp);
+		setJaxis(Default::jaxisScrollVertical, Default::axisDirUp);
+		setGaxis(Default::gaxisScrollVertical, Default::axisDirUp);
+	} else if (type == Type::scrollDown) {
+		setAcall(&ProgState::eventScrollDown);
+		setKey(Default::keyDown);
+		setJaxis(Default::jaxisScrollVertical, Default::axisDirDown);
+		setGaxis(Default::gaxisScrollVertical, Default::axisDirDown);
+	} else if (type == Type::scrollLeft) {
+		setAcall(&ProgState::eventScrollLeft);
+		setKey(Default::keyLeft);
+		setJaxis(Default::jaxisScrollHorizontal, Default::axisDirLeft);
+		setGaxis(Default::gaxisScrollHorizontal, Default::axisDirLeft);
+	} else if (type == Type::scrollRight) {
+		setAcall(&ProgState::eventScrollRight);
+		setKey(Default::keyRight);
+		setJaxis(Default::jaxisScrollHorizontal, Default::axisDirRight);
+		setGaxis(Default::gaxisScrollHorizontal, Default::axisDirRight);
+	} else if (type == Type::cursorUp) {
+		setAcall(&ProgState::eventCursorUp);
+		setJaxis(Default::jaxisCursorVertical, Default::axisDirUp);
+		setGaxis(Default::gaxisCursorVertical, Default::axisDirUp);
+	} else if (type == Type::cursorDown) {
+		setAcall(&ProgState::eventCursorDown);
+		setJaxis(Default::jaxisCursorVertical, Default::axisDirDown);
+		setGaxis(Default::gaxisCursorVertical, Default::axisDirDown);
+	} else if (type == Type::cursorLeft) {
+		setAcall(&ProgState::eventCursorLeft);
+		setJaxis(Default::jaxisCursorHorizontal, Default::axisDirLeft);
+		setGaxis(Default::gaxisCursorHorizontal, Default::axisDirLeft);
+	} else if (type == Type::cursorRight) {
+		setAcall(&ProgState::eventCursorRight);
+		setJaxis(Default::jaxisCursorHorizontal, Default::axisDirRight);
+		setGaxis(Default::gaxisCursorHorizontal, Default::axisDirRight);
+	} else if (type == Type::centerView) {
+		setBcall(&ProgState::eventCenterView);
+		setKey(Default::keyCenterView);
+		setJbutton(Default::jbuttonCenterView);
+		setGbutton(Default::gbuttonCenterView);
+	} else if (type == Type::scrollFast) {
+		setAcall(nullptr);
+		setKey(Default::keyScrollFast);
+		setJbutton(Default::jbuttonScrollFast);
+		setGbutton(Default::gbuttonScrollFast);
+	} else if (type == Type::scrollSlow) {
+		setAcall(nullptr);
+		setKey(Default::keyScrollSlow);
+		setJbutton(Default::jbuttonScrollSlow);
+		setGbutton(Default::gbuttonScrollSlow);
+	} else if (type == Type::pageUp) {
+		setBcall(&ProgState::eventPageUp);
+		setKey(Default::keyPageUp);
+	} else if (type == Type::pageDown) {
+		setBcall(&ProgState::eventPageDown);
+		setKey(Default::keyPageDown);
 	} else if (type == Type::zoomIn) {
 		setBcall(&ProgState::eventZoomIn);
-		setKey(Default::keyZoomOut);
+		setKey(Default::keyZoomIn);
 		setJbutton(Default::jbuttonZoomIn);
-		setGbutton(Default::gbuttonZoomOut);
+		setGbutton(Default::gbuttonZoomIn);
 	} else if (type == Type::zoomOut) {
 		setBcall(&ProgState::eventZoomOut);
 		setKey(Default::keyZoomOut);
@@ -35,31 +109,6 @@ void Binding::setDefaultSelf(Type type) {
 		setKey(Default::keyZoomReset);
 		setJbutton(Default::jbuttonZoomReset);
 		setGbutton(Default::gbuttonZoomReset);
-	} else if (type == Type::centerView) {
-		setBcall(&ProgState::eventCenterView);
-		setKey(Default::keyCenterView);
-		setJbutton(Default::jbuttonCenterView);
-		setGbutton(Default::gbuttonCenterView);
-	} else if (type == Type::fast) {
-		setAcall(nullptr);
-		setKey(Default::keyFast);
-		setJbutton(Default::jbuttonFast);
-		setGbutton(Default::gbuttonFast);
-	} else if (type == Type::slow) {
-		setAcall(nullptr);
-		setKey(Default::keySlow);
-		setJbutton(Default::jbuttonSlow);
-		setGbutton(Default::gbuttonSlow);
-	} else if (type == Type::playPause) {
-		setBcall(&ProgState::eventPlayPause);
-		setKey(Default::keyPlayPause);
-		setJbutton(Default::jbuttonPlayPause);
-		setGbutton(Default::gbuttonPlayPause);
-	} else if (type == Type::fullscreen) {
-		setBcall(&ProgState::eventScreenMode);
-		setKey(Default::keyFullscreen);
-		setJbutton(Default::jbuttonFullscreen);
-		setGbutton(Default::gbuttonFullscreen);
 	} else if (type == Type::nextDir) {
 		setBcall(&ProgState::eventNextDir);
 		setKey(Default::keyNextDir);
@@ -70,52 +119,11 @@ void Binding::setDefaultSelf(Type type) {
 		setKey(Default::keyPrevDir);
 		setJbutton(Default::jbuttonPrevDir);
 		setGaxis(Default::gaxisPrevDir, true);
-	} else if (type == Type::nextSong) {
-		setBcall(&ProgState::eventNextSong);
-		setKey(Default::keyNextSong);
-		setJhat(Default::jhatID, Default::jhatDpadRight);
-		setGbutton(Default::gbuttonDpadRight);
-	} else if (type == Type::prevSong) {
-		setBcall(&ProgState::eventPrevSong);
-		setKey(Default::keyPrevSong);
-		setJhat(Default::jhatID, Default::jhatDpadLeft);
-		setGbutton(Default::gbuttonDpadLeft);
-	} else if (type == Type::volumeUp) {
-		setBcall(&ProgState::eventVolumeUp);
-		setKey(Default::keyVolumeUp);
-		setJhat(Default::jhatID, Default::jhatDpadUp);
-		setGbutton(Default::gbuttonDpadUp);
-	} else if (type == Type::volumeDown) {
-		setBcall(&ProgState::eventVolumeDown);
-		setKey(Default::keyVolumeDown);
-		setJhat(Default::jhatID, Default::jhatDpadDown);
-		setGbutton(Default::gbuttonDpadDown);
-	} else if (type == Type::pageUp) {
-		setBcall(&ProgState::eventPageUp);
-		setKey(Default::keyPageUp);
-	} else if (type == Type::pageDown) {
-		setBcall(&ProgState::eventPageDown);
-		setKey(Default::keyPageDown);
-	} else if (type == Type::up) {
-		setAcall(&ProgState::eventUp);
-		setKey(Default::keyUp);
-		setJaxis(Default::jaxisVertical, Default::axisDirUp);
-		setGaxis(Default::gaxisVertical, Default::axisDirUp);
-	} else if (type == Type::down) {
-		setAcall(&ProgState::eventDown);
-		setKey(Default::keyDown);
-		setJaxis(Default::jaxisVertical, Default::axisDirDown);
-		setGaxis(Default::gaxisVertical, Default::axisDirDown);
-	} else if (type == Type::right) {
-		setAcall(&ProgState::eventRight);
-		setKey(Default::keyRight);
-		setJaxis(Default::jaxisHorizontal, Default::axisDirRight);
-		setGaxis(Default::gaxisHorizontal, Default::axisDirRight);
-	} else if (type == Type::left) {
-		setAcall(&ProgState::eventLeft);
-		setKey(Default::keyLeft);
-		setJaxis(Default::jaxisHorizontal, Default::axisDirLeft);
-		setGaxis(Default::gaxisHorizontal, Default::axisDirLeft);
+	} else if (type == Type::fullscreen) {
+		setBcall(&ProgState::eventFullscreen);
+		setKey(Default::keyFullscreen);
+		setJbutton(Default::jbuttonFullscreen);
+		setGbutton(Default::gbuttonFullscreen);
 	}
 }
 
@@ -162,14 +170,14 @@ void Binding::clearAsgGct() {
 	asg &= ~(ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N);
 }
 
-void Binding::setGbutton(uint8 BUT) {
+void Binding::setGbutton(SDL_GameControllerButton BUT) {
 	gctID = BUT;
 
 	clearAsgGct();
 	asg |= ASG_GBUTTON;
 }
 
-void Binding::setGaxis(uint8 AXIS, bool positive) {
+void Binding::setGaxis(SDL_GameControllerAxis AXIS, bool positive) {
 	gctID = AXIS;
 
 	clearAsgGct();
@@ -188,7 +196,7 @@ void Binding::setAcall(void (ProgState::*call)(float)) {
 
 // SETTINGS
 
-Settings::Settings(bool MAX, bool FSC, const vec2i& RES, const string& THM, const string& FNT, const string& LANG, int VOL, const string& LIB, const string& PST, const string& RNDR, const vec2f& SSP, int16 DDZ) :
+Settings::Settings(bool MAX, bool FSC, const vec2i& RES, const string& THM, const string& FNT, const string& LANG, const string& LIB, const string& RNDR, const vec2f& SSP, int16 DDZ) :
 	maximized(MAX),
 	fullscreen(FSC),
 	resolution(RES),
@@ -199,8 +207,6 @@ Settings::Settings(bool MAX, bool FSC, const vec2i& RES, const string& THM, cons
 	setFont(FNT);
 	setLang(LANG);
 	setDirLib(LIB);
-	setDirPlist(PST);
-	setVolume(VOL);
 	setDeadzone(DDZ);
 }
 
@@ -246,10 +252,6 @@ uint8 Settings::setDirLib(const string& dir) {
 	return setDirectory(dirLib, dir, Filer::dirSets + Default::dirLibrary);
 }
 
-uint8 Settings::setDirPlist(const string& dir) {
-	return setDirectory(dirPlist, dir, Filer::dirSets + Default::dirPlaylists);
-}
-
 uint8 Settings::setDirectory(string& dir, const string& newDir, const string& defaultDir) {
 	if (Filer::fileType(newDir) != FTYPE_DIR)
 		if (!Filer::mkDir(newDir)) {
@@ -274,7 +276,7 @@ int Settings::getRendererIndex() {
 
 vector<string> Settings::getAvailibleRenderers() {
 	vector<string> renderers(SDL_GetNumRenderDrivers());
-	for (int i=0; i<renderers.size(); i++)
+	for (sizt i=0; i<renderers.size(); i++)
 		renderers[i] = getRendererName(i);
 	return renderers;
 }
@@ -283,10 +285,6 @@ string Settings::getRendererName(int id) {
 	SDL_RendererInfo info;
 	SDL_GetRenderDriverInfo(id, &info);
 	return info.name;
-}
-
-int Settings::setVolume(int vol) {
-	return volume = bringIn(vol, 0, MIX_MAX_VOLUME);
 }
 
 string Settings::getScrollSpeedString() const {

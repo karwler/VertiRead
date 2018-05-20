@@ -82,7 +82,7 @@ void DrawSys::setFont(const string& font) {
 
 string DrawSys::translation(const string& line, bool firstCapital) const {
 	string str = trans.count(line) ? trans.at(line) : line;
-	if (firstCapital && !str.empty())
+	if (firstCapital && str.size())
 		str[0] = toupper(str[0]);
 	return str;
 }
@@ -99,9 +99,8 @@ void DrawSys::drawWidgets() {
 
 	// draw main widgets and visible overlays
 	World::scene()->getLayout()->drawSelf();
-	for (Overlay* it : World::scene()->getOverlays())
-		if (it->on)
-			it->drawSelf();
+	if (World::scene()->getOverlay() && World::scene()->getOverlay()->on)
+		World::scene()->getOverlay()->drawSelf();
 
 	// draw popup if exists and dim main widgets
 	if (World::scene()->getPopup()) {
@@ -120,29 +119,29 @@ void DrawSys::drawWidgets() {
 }
 
 void DrawSys::drawButton(Button* wgt) {
-	drawRect(overlapRect(wgt->rect(), wgt->parentFrame()), wgt->getParent()->getSelected().count(wgt) ? Color::light : Color::normal);
+	drawRect(overlapRect(wgt->rect(), wgt->parentFrame()), (World::scene()->select == wgt) ? Color::select : Color::normal);
 }
 
 void DrawSys::drawCheckBox(CheckBox* wgt) {
 	SDL_Rect frame = wgt->parentFrame();
-	drawRect(overlapRect(wgt->rect(), frame), wgt->getParent()->getSelected().count(wgt) ? Color::light : Color::normal);	// draw background
+	drawRect(overlapRect(wgt->rect(), frame), (World::scene()->select == wgt) ? Color::select : Color::normal);	// draw background
 	drawRect(overlapRect(wgt->boxRect(), frame), wgt->on ? Color::light : Color::dark);	// draw checkbox
 }
 
 void DrawSys::drawSlider(Slider* wgt) {
 	SDL_Rect frame = wgt->parentFrame();
-	drawRect(overlapRect(wgt->rect(), frame), wgt->getParent()->getSelected().count(wgt) ? Color::light : Color::normal);	// draw background
+	drawRect(overlapRect(wgt->rect(), frame), (World::scene()->select == wgt) ? Color::select : Color::normal);	// draw background
 	drawRect(overlapRect(wgt->barRect(), frame), Color::dark);		// draw bar
 	drawRect(overlapRect(wgt->sliderRect(), frame), Color::light);	// draw slider
 }
 
 void DrawSys::drawPicture(Picture* wgt) {
-	drawImage(wgt->getTex(), wgt->rect(), wgt->parentFrame());
+	drawImage(wgt->tex, wgt->getRes(), wgt->rect(), wgt->parentFrame());
 }
 
 void DrawSys::drawLabel(Label* wgt) {
 	SDL_Rect rect = overlapRect(wgt->rect(), wgt->parentFrame());
-	drawRect(rect, wgt->getParent()->getSelected().count(wgt) ? Color::light : Color::normal);	// draw background
+	drawRect(rect, (World::scene()->select == wgt) ? Color::select : Color::normal);	// draw background
 
 	if (wgt->tex) {		// modify frame and draw text if exists
 		rect.x += Default::textOffset;
@@ -192,16 +191,16 @@ void DrawSys::drawText(SDL_Texture* tex, const SDL_Rect& rect, const SDL_Rect& f
 	SDL_RenderCopy(renderer, tex, &src, &dst);
 }
 
-void DrawSys::drawImage(const Texture& tex, const SDL_Rect& rect, const SDL_Rect& frame) {
+void DrawSys::drawImage(SDL_Texture* tex, const vec2i& res, const SDL_Rect& rect, const SDL_Rect& frame) {
 	// get destination rect and crop
 	SDL_Rect dst = rect;
 	SDL_Rect crop = cropRect(dst, frame);
 
 	// get cropped source rect
-	vec2f factor(float(tex.getRes().x) / float(rect.w), float(tex.getRes().y) / float(rect.h));
-	SDL_Rect src = {float(crop.x) * factor.x, float(crop.y) * factor.y, tex.getRes().x - int(float(crop.w) * factor.x), tex.getRes().y - int(float(crop.h) * factor.y)};
+	vec2f factor(float(res.x) / float(rect.w), float(res.y) / float(rect.h));
+	SDL_Rect src = {float(crop.x) * factor.x, float(crop.y) * factor.y, res.x - int(float(crop.w) * factor.x), res.y - int(float(crop.h) * factor.y)};
 
-	SDL_RenderCopy(renderer, tex.tex, &src, &dst);
+	SDL_RenderCopy(renderer, tex, &src, &dst);
 }
 
 SDL_Texture* DrawSys::renderText(const string& text, int height, vec2i& size) {

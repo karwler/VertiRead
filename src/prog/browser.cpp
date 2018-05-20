@@ -1,9 +1,10 @@
 #include "browser.h"
 
-Browser::Browser(const string& RD, const string& CD)
+Browser::Browser(const string& RD, const string& CD, void (Program::*XC)(Button*)) :
+	exCall(XC)
 {
-	rootDir = RD.empty() ? Filer::dirExec : appendDsep(RD);
-	curDir = CD.empty() ? rootDir : appendDsep(CD);
+	rootDir = RD.empty() ? Filer::dirExec : RD;
+	curDir = CD.empty() ? rootDir : CD;
 }
 
 vector<string> Browser::listFiles() const {
@@ -36,7 +37,7 @@ bool Browser::goIn(const string& dirname) {
 	if (curDir == "\\") {
 		vector<char> letters = Filer::listDrives();
 		if (isDriveLetter(dirname) && dirname[0] >= letters[0] && dirname[0] <= letters.back()) {
-			curDir = appendDsep(dirname);
+			curDir = dirname;
 			return true;
 		}
 		return false;
@@ -46,7 +47,7 @@ bool Browser::goIn(const string& dirname) {
 }
 
 bool Browser::goInDir(const string& dirname) {
-	string newPath = curDir + appendDsep(dirname);
+	string newPath = appendDsep(curDir) + dirname;
 	if (Filer::fileType(newPath) != FTYPE_DIR)
 		return false;
 
@@ -55,7 +56,7 @@ bool Browser::goInDir(const string& dirname) {
 }
 
 bool Browser::goUp() {
-	if (curDir == rootDir)
+	if (appendDsep(curDir) == appendDsep(rootDir))
 		return false;
 
 	curFile.clear();
@@ -68,7 +69,7 @@ bool Browser::goUp() {
 }
 
 void Browser::goNext() {
-	if (curDir == rootDir)
+	if (appendDsep(curDir) == appendDsep(rootDir))
 		return;
 
 	curFile.clear();
@@ -82,7 +83,7 @@ void Browser::goNext() {
 }
 
 void Browser::goPrev() {
-	if (curDir == rootDir)
+	if (appendDsep(curDir) == appendDsep(rootDir))
 		return;
 
 	curFile.clear();
@@ -107,18 +108,19 @@ void Browser::shiftLetter(int ofs) {
 #endif
 
 void Browser::shiftDir(int ofs) {
-	string parent = parentPath(curDir);
+	string cd = appendDsep(curDir);
+	string parent = appendDsep(parentPath(curDir));
 	vector<string> dirs = Filer::listDir(parent, FTYPE_DIR);
 
 	for (sizt i=0; i<dirs.size(); i++)
-		if (parent + dirs[i] + dsep == curDir) {
-			curDir = parent + dirs[(i + ofs) % dirs.size()] + dsep;
+		if (appendDsep(parent + dirs[i]) == cd) {
+			curDir = parent + dirs[(i + ofs) % dirs.size()];
 			break;
 		}
 }
 
 bool Browser::selectPicture(const string& filename) {
-	if (isPicture(curDir + filename)) {
+	if (Filer::isPicture(appendDsep(curDir) + filename)) {
 		curFile = filename;
 		return true;
 	}
@@ -126,18 +128,11 @@ bool Browser::selectPicture(const string& filename) {
 }
 
 void Browser::selectFirstPicture() {
+	string cd = appendDsep(curDir);
 	for (string& it : listFiles())
-		if (isPicture(curDir + it)) {
+		if (Filer::isPicture(cd + it)) {
 			curFile = it;
 			return;
 		}
 	curFile.clear();
-}
-
-bool Browser::isPicture(const string& file) {
-	if (SDL_Surface* img = IMG_Load(file.c_str())) {
-		SDL_FreeSurface(img);
-		return true;
-	}
-	return false;
 }

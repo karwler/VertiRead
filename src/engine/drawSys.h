@@ -19,7 +19,6 @@ private:
 	string file;
 	umap<int, TTF_Font*> fonts;
 
-	void test();
 	TTF_Font* addSize(int size);
 };
 
@@ -59,5 +58,5 @@ private:
 
 	void drawRect(const SDL_Rect& rect, Color color);
 	void drawText(SDL_Texture* tex, const SDL_Rect& rect, const SDL_Rect& frame);
-	void drawImage(const Texture& tex, const SDL_Rect& rect, const SDL_Rect& frame);
+	void drawImage(SDL_Texture* tex, const vec2i& res, const SDL_Rect& rect, const SDL_Rect& frame);
 };

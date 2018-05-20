@@ -15,7 +15,6 @@ struct ClickStamp {
 class Scene {
 public:
 	Scene();
-	~Scene();
 
 	void tick(float dSec);
 	void onMouseMove(const vec2i& mPos, const vec2i& mMov);
@@ -28,24 +27,25 @@ public:
 
 	void resetLayouts();
 	Layout* getLayout() { return layout.get(); }
-	vector<Overlay*>& getOverlays() { return overlays; }
+	Overlay* getOverlay() { return overlay.get(); }
 	Popup* getPopup() { return popup.get(); }
 	void setPopup(Popup* newPopup, Widget* newCapture=nullptr);
 	void setPopup(const pair<Popup*, Widget*>& popcap) { setPopup(popcap.first, popcap.second); }
 
+	void selectFirst();
+	sizt findSelectedID(Layout* box);	// get id of possibly select or select's parent in relation to box
+	bool cursorDisableable();
 	bool cursorInClickRange(const vec2i& mPos, uint8 mBut);
-	ScrollArea* getFocusedScrollArea() const;
 
-	Widget* capture;				// either pointer to widget currently hogging all keyboard input or ScrollArea whichs slider is currently being dragged. nullptr if nothing is being captured or dragged
+	Widget* select;		// currently selected widget
+	Widget* capture;	// either pointer to widget currently hogging all keyboard input or ScrollArea whichs slider is currently being dragged. nullptr if nothing is being captured or dragged
 private:
-	uptr<Layout> layout;	// main layout
+	uptr<Layout> layout;
 	uptr<Popup> popup;
-	vector<Overlay*> overlays;
+	uptr<Overlay> overlay;
+	vector<ClickStamp> stamps;	// data about last mouse click (indexes are mouse button numbers
 
-	vector<Widget*> focused;	// list of widgets over which the cursor is poistioned
-	vector<ClickStamp> stamps;	// data about last mouse click (indexes are mouse button numbers)
-
-	void setFocused(const vec2i& mPos);
-	void setFocusedElement(const vec2i& mPos, Layout* box);
-	Overlay* findFocusedOverlay(const vec2i& mPos);
+	void setSelected(const vec2i& mPos, Layout* box);
+	ScrollArea* getSelectedScrollArea() const;
+	bool overlayFocused(const vec2i& mPos);
 };

@@ -105,22 +105,18 @@ void IniLine::clear() {
 
 // FILER
 
-const string Filer::dirExec = Filer::getDirExec();
+const string Filer::dirExec = appendDsep(Filer::getDirExec());
 
 #ifdef _WIN32
+const vector<string> Filer::dirFonts = {Filer::dirExec, string(std::getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
 const string Filer::dirSets = string(std::getenv("AppData")) + "\\"+Default::titleDefault+"\\";
 #else
+const vector<string> Filer::dirFonts = {Filer::dirExec, "/usr/share/fonts/", string(std::getenv("HOME")) + "/.fonts/"};
 const string Filer::dirSets = string(std::getenv("HOME")) + "/."+Default::titleExtra+"/";
 #endif
 
 const string Filer::dirLangs = Filer::dirExec + Default::dirLanguages + dsep;
 const string Filer::dirTexs = Filer::dirExec + Default::dirTextures + dsep;
-
-#ifdef _WIN32
-const vector<string> Filer::dirFonts = {string(std::getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
-#else
-const vector<string> Filer::dirFonts = {"/usr/share/fonts/"};
-#endif
 
 vector<string> Filer::getAvailibleThemes() {
 	vector<string> lines;
@@ -137,13 +133,7 @@ vector<string> Filer::getAvailibleThemes() {
 }
 
 vector<SDL_Color> Filer::getColors(const string& theme) {
-	vector<SDL_Color> colors = {
-		Default::colorBackground,
-		Default::colorNormal,
-		Default::colorDark,
-		Default::colorLight,
-		Default::colorText
-	};
+	vector<SDL_Color> colors = Default::colors;
 	vector<string> lines;
 	if (!readTextFile(dirExec + Default::fileThemes, lines), false)
 		return colors;
@@ -164,7 +154,7 @@ vector<SDL_Color> Filer::getColors(const string& theme) {
 		if (il.getType() == IniLine::Type::title)
 			break;
 
-		sizt cid = static_cast<sizt>(strToColor(il.getArg()));
+		sizt cid = strToEnum<sizt>(Default::colorNames, il.getArg());
 		if (cid < colors.size()) {
 			vector<vec2t> elems = getWords(il.getVal());
 			if (elems.size() > 0)
@@ -202,34 +192,6 @@ umap<string, string> Filer::getTranslations(const string& language) {
 			translation.insert(make_pair(il.getArg(), il.getVal()));
 	}
 	return translation;
-}
-
-Playlist Filer::getPlaylist(const string& name) {
-	vector<string> lines;
-	if (!readTextFile(appendDsep(World::winSys()->sets.getDirPlist()) + name + ".ini", lines))
-		return Playlist();
-
-	Playlist plist(name);
-	for (string& line : lines) {
-		IniLine il;
-		if (!il.setLine(line) || il.getType() == IniLine::Type::title)
-			continue;
-
-		if (il.getArg() == Default::iniKeywordBook)
-			plist.books.insert(il.getVal());
-		else if (il.getArg() == Default::iniKeywordSong)
-			plist.songs.push_back(il.getVal());	// AudioSys will check if the song is playable cause we want all lines for the playlist editor
-	}
-	return plist;
-}
-
-void Filer::savePlaylist(const Playlist& plist) {
-	vector<string> lines;
-	for (const string& name : plist.books)
-		lines.push_back(IniLine(Default::iniKeywordBook, name).line());
-	for (const string& file : plist.songs)
-		lines.push_back(IniLine(Default::iniKeywordSong, file).line());
-	writeTextFile(appendDsep(World::winSys()->sets.getDirPlist()) + plist.name + ".ini", lines);
 }
 
 string Filer::getLastPage(const string& book) {
@@ -292,10 +254,6 @@ Settings Filer::getSettings() {
 			sets.setTheme(il.getVal());
 		else if (il.getArg() == Default::iniKeywordLibrary)
 			sets.setDirLib(il.getVal());
-		else if (il.getArg() == Default::iniKeywordPlaylists)
-			sets.setDirPlist(il.getVal());
-		else if (il.getArg() == Default::iniKeywordVolume)
-			sets.setVolume(stoi(il.getVal()));
 		else if (il.getArg() == Default::iniKeywordRenderer)
 			sets.renderer = il.getVal();
 		else if (il.getArg() == Default::iniKeywordScrollSpeed)
@@ -315,8 +273,6 @@ void Filer::saveSettings(const Settings& sets) {
 		IniLine(Default::iniKeywordLanguage, sets.getLang()).line(),
 		IniLine(Default::iniKeywordTheme, sets.getTheme()).line(),
 		IniLine(Default::iniKeywordLibrary, sets.getDirLib()).line(),
-		IniLine(Default::iniKeywordPlaylists, sets.getDirPlist()).line(),
-		IniLine(Default::iniKeywordVolume, ntos(sets.getVolume())).line(),
 		IniLine(Default::iniKeywordRenderer, sets.renderer).line(),
 		IniLine(Default::iniKeywordScrollSpeed, sets.getScrollSpeedString()).line(),
 		IniLine(Default::iniKeywordDeadzone, ntos(sets.getDeadzone())).line()
@@ -338,7 +294,7 @@ vector<Binding> Filer::getBindings() {
 		if (!il.setLine(line) || il.getType() == IniLine::Type::title || il.getVal().size() < 3)
 			continue;
 
-		sizt bid = static_cast<sizt>(strToBindingType(il.getArg()));
+		sizt bid = strToEnum<sizt>(Default::bindingNames, il.getArg());
 		switch (toupper(il.getVal()[0])) {
 		case 'K':	// keyboard key
 			bindings[bid].setKey(SDL_GetScancodeFromName(il.getVal().substr(2).c_str()));
@@ -357,10 +313,10 @@ vector<Binding> Filer::getBindings() {
 			bindings[bid].setJaxis(stoi(il.getVal().substr(3)), (il.getVal()[2] != '-'));
 			break;
 		case 'G':	// gamepad button
-			bindings[bid].setGbutton(gpStrToButton(il.getVal().substr(2)));
+			bindings[bid].setGbutton(strToEnum<SDL_GameControllerButton>(Default::gbuttonNames, il.getVal().substr(2)));
 			break;
 		case 'X':	// gamepad axis
-			bindings[bid].setGaxis(gpStrToAxis(il.getVal().substr(3)), (il.getVal()[2] != '-'));
+			bindings[bid].setGaxis(strToEnum<SDL_GameControllerAxis>(Default::gaxisNames, il.getVal().substr(3)), (il.getVal()[2] != '-'));
 		}
 	}
 	return bindings;
@@ -369,7 +325,7 @@ vector<Binding> Filer::getBindings() {
 void Filer::saveBindings(const vector<Binding>& bindings) {
 	vector<string> lines;
 	for (sizt i=0; i<bindings.size(); i++) {
-		string name = bindingTypeToStr(static_cast<Binding::Type>(i));
+		string name = enumToStr(Default::bindingNames, i);
 		if (bindings[i].keyAssigned())
 			lines.push_back(IniLine(name, "K_" + string(SDL_GetScancodeName(bindings[i].getKey()))).line());
 
@@ -381,9 +337,9 @@ void Filer::saveBindings(const vector<Binding>& bindings) {
 			lines.push_back(IniLine(name, string(bindings[i].jposAxisAssigned() ? "A_+" : "A_-") + ntos(bindings[i].getJctID())).line());
 
 		if (bindings[i].gbuttonAssigned())
-			lines.push_back(IniLine(name, "G_" + gpButtonToStr(bindings[i].getGctID())).line());
+			lines.push_back(IniLine(name, "G_" + enumToStr(Default::gbuttonNames, bindings[i].getGbutton())).line());
 		else if (bindings[i].gbuttonAssigned())
-			lines.push_back(IniLine(name, string(bindings[i].gposAxisAssigned() ? "X_+" : "X_-") + gpAxisToStr(bindings[i].getGctID())).line());
+			lines.push_back(IniLine(name, string(bindings[i].gposAxisAssigned() ? "X_+" : "X_-") + enumToStr(Default::gaxisNames, bindings[i].getGaxis())).line());
 	}
 	writeTextFile(dirSets + Default::fileBindings, lines);
 }
@@ -398,7 +354,7 @@ bool Filer::readTextFile(const string& file, vector<string>& lines, bool printMe
 	lines.clear();
 
 	for (string line; readLine(ifs, line);)
-		if (!line.empty())		// skip empty lines
+		if (line.size())		// skip empty lines
 			lines.push_back(line);
 	return true;
 }
@@ -509,15 +465,12 @@ FileType Filer::fileType(const string& path) {
 	return FTYPE_FILE;
 }
 
-bool Filer::rename(const string& path, const string& newPath) {
-	return !std::rename(path.c_str(), newPath.c_str());
-}
-
-bool Filer::remove(const string& path) {
-	if (fileType(path) == FTYPE_DIR)
-		for (string& it : listDir(path))
-			remove(appendDsep(path) + it);
-	return !std::remove(path.c_str());
+bool Filer::isPicture(const string& file) {
+	if (SDL_Surface* img = IMG_Load(file.c_str())) {
+		SDL_FreeSurface(img);
+		return true;
+	}
+	return false;
 }
 
 #ifdef _WIN32

@@ -65,16 +65,21 @@ string wtos(const wstring& wstr);
 wstring stow(const string& str);
 inline bool stob(const string& str) { return str == "true" || str == "1"; }
 inline string btos(bool b) { return b ? "true" : "false"; }
-string colorToStr(Color color);
-Color strToColor(string str);
-string bindingTypeToStr(Binding::Type type);
-Binding::Type strToBindingType(string str);
 string jtHatToStr(uint8 jhat);
-uint8 jtStrToHat(string str);
-string gpButtonToStr(uint8 gbutton);
-uint8 gpStrToButton(string str);
-string gpAxisToStr(uint8 gaxis);
-uint8 gpStrToAxis(string str);
+uint8 jtStrToHat(const string& str);
+
+template <typename T>
+string enumToStr(const vector<string>& names, T id) {
+	return (T(id) >= names.size()) ? "invalid" : names[T(id)];
+}
+
+template <typename T>
+T strToEnum(const vector<string>& names, string str) {
+	for (sizt i=0; i<names.size(); i++)
+		if (strcmpCI(names[i], str))
+			return T(i);
+	return T(names.size());
+}
 
 inline float axisToFloat(int axisValue) {	// input axis value to float from -1 to 1
 	return float(axisValue) / float(Default::axisLimit);

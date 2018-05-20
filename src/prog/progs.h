@@ -5,126 +5,109 @@
 // for handling program state specific things that occur in all states
 class ProgState {
 public:
-	virtual void eventBack() {}
-	virtual void eventScreenMode();
-	virtual void eventUp(float amt) {}
-	virtual void eventDown(float amt) {}
-	virtual void eventRight(float amt) {}
-	virtual void eventLeft(float amt) {}
+	virtual void eventEnter();
+	virtual void eventEscape() {}
+	virtual void eventUp();
+	virtual void eventDown();
+	virtual void eventLeft();
+	virtual void eventRight();
+	virtual void eventScrollUp(float amt) {}
+	virtual void eventScrollDown(float amt) {}
+	virtual void eventScrollLeft(float amt) {}
+	virtual void eventScrollRight(float amt) {}
+	virtual void eventCursorUp(float amt);
+	virtual void eventCursorDown(float amt);
+	virtual void eventCursorLeft(float amt);
+	virtual void eventCursorRight(float amt);
+	virtual void eventCenterView() {}
 	virtual void eventPageUp() {}
 	virtual void eventPageDown() {}
 	virtual void eventZoomIn() {}
 	virtual void eventZoomOut() {}
 	virtual void eventZoomReset() {}
-	virtual void eventCenterView() {}
 	virtual void eventNextDir() {}
 	virtual void eventPrevDir() {}
-	virtual void eventPlayPause() {}
-	virtual void eventNextSong() {}
-	virtual void eventPrevSong() {}
-	virtual void eventVolumeUp() {}
-	virtual void eventVolumeDown() {}
-	virtual void eventMute() {}
+	virtual void eventFullscreen();
 
 	virtual void eventFileDrop(char* file) {}
 	virtual void eventClosing() {}
 	
 	virtual Layout* createLayout() { return nullptr; }
-	virtual vector<Overlay*> createOverlays() { return {}; }
+	virtual Overlay* createOverlay() { return nullptr; }
 	static Popup* createPopupMessage(const string& msg, const vec2<Size>& size=messageSize);
-	static Popup* createPopupChoice(const string& msg, void (Program::*call)(Button*), const vec2<Size>& size=messageSize);
-	static pair<Popup*, LineEdit*> createPopupTextInput(const string& msg, const string& txt, void (Program::*call)(Button*), LineEdit::TextType type=LineEdit::TextType::text, const vec2<Size>& size=inputSize);
-
+	
 protected:
+	struct Text {
+		Text() {}
+		Text(const string& TXT, int H);
+
+		string text;
+		int length;
+	};
+	vector<Text> createTextList(const vector<string>& strs, int height);
+	int findMaxLength(const vector<string>& strs, int height);
+
+	static const int lineHeight;
 	static const int topHeight;
 	static const int topSpacing;
-	static const vec2i optSize;
-	static const int itemHeight;
-	static const int sideWidth;
 	static const int picSize;
-	static const int picSpaer;
-	static const int setsDescLength;
 	static const vec2s messageSize;
-	static const vec2s inputSize;
 };
 
 class ProgBooks : public ProgState {
 public:
-	virtual void eventBack();
+	virtual void eventEscape();
 	
 	virtual Layout* createLayout();
 };
 
-class ProgBrowser : public ProgState {
+class ProgPageBrowser : public ProgState {
 public:
-	virtual void eventBack();
+	virtual void eventEscape();
 
 	virtual Layout* createLayout();
 };
 
 class ProgReader : public ProgState {
 public:
-	virtual void eventBack();
-	virtual void eventUp(float amt);
-	virtual void eventDown(float amt);
-	virtual void eventRight(float amt);
-	virtual void eventLeft(float amt);
+	virtual void eventEscape();
+	virtual void eventUp();
+	virtual void eventDown();
+	virtual void eventLeft();
+	virtual void eventRight();
+	virtual void eventScrollUp(float amt);
+	virtual void eventScrollDown(float amt);
+	virtual void eventScrollLeft(float amt);
+	virtual void eventScrollRight(float amt);
+	virtual void eventCenterView();
 	virtual void eventPageUp();
 	virtual void eventPageDown();
 	virtual void eventZoomIn();
 	virtual void eventZoomOut();
 	virtual void eventZoomReset();
-	virtual void eventCenterView();
 	virtual void eventNextDir();
 	virtual void eventPrevDir();
-	virtual void eventPlayPause();
-	virtual void eventNextSong();
-	virtual void eventPrevSong();
-	virtual void eventVolumeUp();
-	virtual void eventVolumeDown();
-	virtual void eventMute();
 
 	virtual void eventClosing();
 
 	virtual Layout* createLayout();
-	virtual vector<Overlay*> createOverlays();
+	virtual Overlay* createOverlay();
 
 private:
 	float modifySpeed(float value);	// change scroll speed depending on pressed bindings
 };
 
-class ProgPlaylists : public ProgState {
-public:
-	virtual void eventBack();
-
-	virtual Layout* createLayout();
-};
-
-class ProgEditor : public ProgState {
-public:
-	virtual void eventBack();
-	virtual void eventFileDrop(char* file);
-
-	virtual Layout* createLayout();
-};
-
-class ProgSearchSongs : public ProgState {
-public:
-	virtual void eventBack();
-
-	virtual Layout* createLayout();
-};
-
-class ProgSearchBooks : public ProgState {
-public:
-	virtual void eventBack();
-
-	virtual Layout* createLayout();
-};
-
 class ProgSettings : public ProgState {
 public:
-	virtual void eventBack();
+	virtual void eventEscape();
+	virtual void eventFullscreen();
 	
+	virtual Layout* createLayout();
+};
+
+class ProgSearchDir : public ProgState {
+public:
+	virtual void eventEscape();
+
 	virtual Layout* createLayout();
 };

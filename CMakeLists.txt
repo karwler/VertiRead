@@ -21,10 +21,6 @@ set(SRC_FILES
 	"src/prog/browser.cpp"
 	"src/prog/browser.h"
 	"src/prog/defaults.h"
-	"src/prog/player.cpp"
-	"src/prog/player.h"
-	"src/prog/playlistEditor.cpp"
-	"src/prog/playlistEditor.h"
 	"src/prog/program.cpp"
 	"src/prog/program.h"
 	"src/prog/progs.cpp"
@@ -55,20 +51,13 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	
 	link_directories(${LIB_DIR})
 	set(DLL_FILES
-		"libFLAC-8.dll"
 		"libfreetype-6.dll"
 		"libjpeg-9.dll"
-		"libmodplug-1.dll"
-		"libmpg123-0.dll"
-		"libogg-0.dll"
 		"libpng16-16.dll"
 		"libtiff-5.dll"
-		"libvorbis-0.dll"
-		"libvorbisfile-3.dll"
 		"libwebp-7.dll"
 		"SDL2.dll"
 		"SDL2_image.dll"
-		"SDL2_mixer.dll"
 		"SDL2_ttf.dll"
 		"zlib1.dll")	
 endif()
@@ -87,7 +76,7 @@ include_directories(${CMAKE_SOURCE_DIR}/src)
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	include_directories(${CMAKE_SOURCE_DIR}/lib/include)
 endif()
-target_link_libraries(VertiRead SDL2 SDL2_mixer SDL2_image SDL2_ttf)
+target_link_libraries(VertiRead SDL2 SDL2_image SDL2_ttf)
 
 # target path
 set(EXECUTABLE_OUTPUT_PATH "${CMAKE_BINARY_DIR}/bin")

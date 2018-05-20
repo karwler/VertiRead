@@ -33,6 +33,11 @@ InputSys::~InputSys() {
 		it.close();
 }
 
+void InputSys::eventMouseMotion(const SDL_MouseMotionEvent& motion) {
+	mouseMove = vec2i(motion.xrel, motion.yrel);
+	World::scene()->onMouseMove(vec2i(motion.x, motion.y), mouseMove);
+}
+
 void InputSys::eventKeypress(const SDL_KeyboardEvent& key) {
 	// different behaviour when capturing or not
 	if (World::scene()->capture)
@@ -74,9 +79,9 @@ void InputSys::eventJoystickAxis(const SDL_JoyAxisEvent& jaxis) {
 
 void InputSys::eventGamepadButton(const SDL_ControllerButtonEvent& gbutton) {
 	if (World::scene()->capture)
-		World::scene()->capture->onGButton(gbutton.button);
+		World::scene()->capture->onGButton(static_cast<SDL_GameControllerButton>(gbutton.button));
 	else
-		checkBindingsG(gbutton.button);
+		checkBindingsG(static_cast<SDL_GameControllerButton>(gbutton.button));
 }
 
 void InputSys::eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis) {
@@ -85,14 +90,9 @@ void InputSys::eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis) {
 		return;
 
 	if (World::scene()->capture)
-		World::scene()->capture->onGAxis(gaxis.axis, (value > 0));
+		World::scene()->capture->onGAxis(static_cast<SDL_GameControllerAxis>(gaxis.axis), (value > 0));
 	else
-		checkBindingsX(gaxis.axis, (value > 0));
-}
-
-void InputSys::eventMouseMotion(const SDL_MouseMotionEvent& motion) {
-	mouseMove = vec2i(motion.xrel, motion.yrel);
-	World::scene()->onMouseMove(vec2i(motion.x, motion.y), mouseMove);
+		checkBindingsX(static_cast<SDL_GameControllerAxis>(gaxis.axis), (value > 0));
 }
 
 void InputSys::tick(float dSec) {
@@ -137,17 +137,17 @@ void InputSys::checkBindingsA(uint8 jaxis, bool positive) {
 		}
 }
 
-void InputSys::checkBindingsG(uint8 gbutton) {
+void InputSys::checkBindingsG(SDL_GameControllerButton gbutton) {
 	for (Binding& it : bindings)
-		if (!it.isAxis() && it.gbuttonAssigned() && it.getGctID() == gbutton && it.getBcall()) {
+		if (!it.isAxis() && it.gbuttonAssigned() && it.getGbutton() == gbutton && it.getBcall()) {
 			(World::state()->*it.getBcall())();
 			break;
 		}
 }
 
-void InputSys::checkBindingsX(uint8 gaxis, bool positive) {
+void InputSys::checkBindingsX(SDL_GameControllerAxis gaxis, bool positive) {
 	for (Binding& it : bindings)
-		if (!it.isAxis() && ((it.gposAxisAssigned() && positive) || (it.gnegAxisAssigned() && !positive)) && it.getGctID() == gaxis && it.getBcall()) {
+		if (!it.isAxis() && ((it.gposAxisAssigned() && positive) || (it.gnegAxisAssigned() && !positive)) && it.getGaxis() == gaxis && it.getBcall()) {
 			(World::state()->*it.getBcall())();
 			break;
 		}
@@ -174,10 +174,10 @@ bool InputSys::isPressed(const Binding& abind, float& amt) const {
 		}
 	}
 
-	if (abind.gbuttonAssigned() && isPressedG(static_cast<SDL_GameControllerButton>(abind.getGctID())))	// check controller buttons
+	if (abind.gbuttonAssigned() && isPressedG(abind.getGbutton()))	// check controller buttons
 		return true;
 	if (abind.gaxisAssigned()) {	// check controller axes
-		int val = getAxisG(static_cast<SDL_GameControllerAxis>(abind.getGctID()));
+		int val = getAxisG(abind.getGaxis());
 		if ((abind.gposAxisAssigned() && val > 0) || (abind.gnegAxisAssigned() && val < 0)) {
 			amt = axisToFloat(abind.gposAxisAssigned() ? val : -val);
 			return true;
@@ -227,6 +227,10 @@ int InputSys::getAxisG(SDL_GameControllerAxis gaxis) const {
 				return val;
 		}
 	return 0;
+}
+
+bool InputSys::isPressedM(uint8 mbutton) {
+	return SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON(mbutton);
 }
 
 vec2i InputSys::mousePos() {

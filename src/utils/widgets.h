@@ -18,23 +18,6 @@ struct Size {
 };
 using vec2s = vec2<Size>;
 
-// texture surface data with path to the initial file
-class Texture {
-public:
-	Texture(const string& FILE="");
-
-	void load(const string& path);
-	void clear();
-
-	const vec2i& getRes() const { return res; }
-	const string& getFile() const { return file; }
-
-	SDL_Texture* tex;
-private:
-	vec2i res;
-	string file;
-};
-
 // can be used as spacer
 class Widget {
 public:
@@ -56,9 +39,14 @@ public:
 	virtual void onJButton(uint8 jbutton) {}
 	virtual void onJHat(uint8 jhat, uint8 value) {}
 	virtual void onJAxis(uint8 jaxis, bool positive) {}
-	virtual void onGButton(uint8 gbutton) {}
-	virtual void onGAxis(uint8 gaxis, bool positive) {}
+	virtual void onGButton(SDL_GameControllerButton gbutton) {}
+	virtual void onGAxis(SDL_GameControllerAxis gaxis, bool positive) {}
 	virtual void onText(const string& str) {}
+	virtual void onSelectUp();
+	virtual void onSelectDown();
+	virtual void onSelectLeft();
+	virtual void onSelectRight();
+	virtual bool selectable() const { return false; }
 
 	sizt getID() const { return pcID; }
 	Layout* getParent() const { return parent; }
@@ -67,6 +55,7 @@ public:
 	const Size& getRelSize() const { return relSize; }
 	virtual vec2i position() const;
 	virtual vec2i size() const;
+	vec2i center() const;
 	SDL_Rect rect() const;	// the rectangle that is the widget
 	virtual SDL_Rect parentFrame() const;
 	virtual SDL_Rect frame() const { return parentFrame(); }	// the rectangle to restrain the children's visibility (regular widgets don't have one, only scroll areas)
@@ -86,6 +75,7 @@ public:
 	virtual void drawSelf();
 	virtual void onClick(const vec2i& mPos, uint8 mBut);
 	virtual void onDoubleClick(const vec2i& mPos, uint8 mBut);
+	virtual bool selectable() const { return true; }
 
 protected:
 	void (Program::*lcall)(Button*);
@@ -127,7 +117,7 @@ public:
 
 private:
 	int val, min, max;
-	int diffSliderMouseX;
+	int diffSliderMouse;
 
 	void setSlider(int xpos);
 	int sliderPos() const;
@@ -137,17 +127,18 @@ private:
 // can have multiple images through which it cycles when presed
 class Picture : public Button {
 public:
-	Picture(const Button& BASE=Button(), const vector<string>& TEXS={}, sizt CTX=0);
+	Picture(const Button& BASE=Button(), const string& TEX="");
 	virtual ~Picture();
 
 	virtual void drawSelf();
-	virtual void onClick(const vec2i& mPos, uint8 mBut);
 
-	const Texture& getTex() const { return texes[curTex]; }
+	const vec2i& getRes() const { return res; }
+	const string& getFile() const { return file; }
 
+	SDL_Texture* tex;
 private:
-	vector<Texture> texes;	// textures through which the button cycles on click
-	sizt curTex;			// currently displayed texture
+	vec2i res;
+	string file;
 };
 
 // it's a little ass backwards but labels (aka a line of text) are buttons
@@ -231,7 +222,6 @@ private:
 
 	virtual vec2i textPos() const;
 	int caretPos() const;	// caret's relative x position
-	void checkTextOffset();
 	void setCPos(sizt cp);
 
 	sizt findWordStart();	// returns index of first character of word before cpos
@@ -243,7 +233,6 @@ private:
 	void cleanSFloatSpacedText(sizt i=0);
 	void cleanUFloatText(sizt i=0);
 	void cleanUFloatSpacedText();
-	void cleanFunctionText();
 };
 
 // for getting a key/button/axis
@@ -263,8 +252,8 @@ public:
 	virtual void onJButton(uint8 jbutton);
 	virtual void onJHat(uint8 jhat, uint8 value);
 	virtual void onJAxis(uint8 jaxis, bool positive);
-	virtual void onGButton(uint8 gbutton);
-	virtual void onGAxis(uint8 gaxis, bool positive);
+	virtual void onGButton(SDL_GameControllerButton gbutton);
+	virtual void onGAxis(SDL_GameControllerAxis gaxis, bool positive);
 
 private:
 	AcceptType acceptType;		// what kind of binding is being accepted

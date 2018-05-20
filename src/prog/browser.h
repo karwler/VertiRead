@@ -5,7 +5,7 @@
 // logic for browsing files
 class Browser {
 public:
-	Browser(const string& RD="", const string& CD="");
+	Browser(const string& RD="", const string& CD="", void (Program::*XC)(Button*)=nullptr);
 
 	vector<string> listFiles() const;	// list current directory's files
 	vector<string> listDirs() const;	// list current directory's directories
@@ -21,6 +21,7 @@ public:
 	const string& getCurFile() const { return curFile; }
 	string curFilepath() const { return curDir + curFile; }
 
+	void (Program::*exCall)(Button*);	// gets called when goUp() fails, aka stepping out of rootDir into the previous menu
 private:
 	string rootDir;	// the top directory one can visit
 	string curDir;	// directory in which one currently is
@@ -31,6 +32,4 @@ private:
 	void shiftLetter(int ofs);
 #endif
 	void shiftDir(int ofs);
-
-	bool isPicture(const string& file);
 };
