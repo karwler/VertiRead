@@ -57,20 +57,20 @@ SDL_Rect Widget::parentFrame() const {
 	return parent->frame();
 }
 
-void Widget::onSelectUp() {
-	parent->selectNext(pcID, center().x, 0);
+void Widget::onNavSelectUp() {
+	parent->navSelectNext(pcID, center().x, 0);
 }
 
-void Widget::onSelectDown() {
-	parent->selectNext(pcID, center().x, 1);
+void Widget::onNavSelectDown() {
+	parent->navSelectNext(pcID, center().x, 1);
 }
 
-void Widget::onSelectLeft() {
-	parent->selectNext(pcID, center().y, 2);
+void Widget::onNavSelectLeft() {
+	parent->navSelectNext(pcID, center().y, 2);
 }
 
-void Widget::onSelectRight() {
-	parent->selectNext(pcID, center().y, 3);
+void Widget::onNavSelectRight() {
+	parent->navSelectNext(pcID, center().y, 3);
 }
 
 // BUTTON
@@ -87,15 +87,25 @@ void Button::drawSelf() {
 }
 
 void Button::onClick(const vec2i& mPos, uint8 mBut) {
-	if (mBut == SDL_BUTTON_LEFT && lcall)
-		(World::program()->*lcall)(this);
-	else if (mBut == SDL_BUTTON_RIGHT && rcall)
+	if (mBut == SDL_BUTTON_LEFT) {
+		parent->selectWidget(pcID);
+		if (lcall)
+			(World::program()->*lcall)(this);
+	} else if (mBut == SDL_BUTTON_RIGHT && rcall)
 		(World::program()->*rcall)(this);
 }
 
 void Button::onDoubleClick(const vec2i& mPos, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT && dcall)
 		(World::program()->*dcall)(this);
+}
+
+Color Button::color() {
+	if (parent->getSelected().count(this))
+		return Color::light;
+	if (World::scene()->select == this)
+		return Color::select;
+	return Color::normal;
 }
 
 // CHECK BOX
@@ -120,6 +130,10 @@ SDL_Rect CheckBox::boxRect() const {
 	vec2i siz = size();
 	int margin = (siz.x > siz.y) ? siz.y/4 : siz.x/4;
 	return {pos.x+margin, pos.y+margin, siz.x-margin*2, siz.y-margin*2};
+}
+
+Color CheckBox::boxColor() const {
+	return on ? Color::light : Color::dark;
 }
 
 // SLIDER

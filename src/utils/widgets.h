@@ -42,11 +42,11 @@ public:
 	virtual void onGButton(SDL_GameControllerButton gbutton) {}
 	virtual void onGAxis(SDL_GameControllerAxis gaxis, bool positive) {}
 	virtual void onText(const string& str) {}
-	virtual void onSelectUp();
-	virtual void onSelectDown();
-	virtual void onSelectLeft();
-	virtual void onSelectRight();
-	virtual bool selectable() const { return false; }
+	virtual void onNavSelectUp();
+	virtual void onNavSelectDown();
+	virtual void onNavSelectLeft();
+	virtual void onNavSelectRight();
+	virtual bool navSelectable() const { return false; }
 
 	sizt getID() const { return pcID; }
 	Layout* getParent() const { return parent; }
@@ -75,7 +75,8 @@ public:
 	virtual void drawSelf();
 	virtual void onClick(const vec2i& mPos, uint8 mBut);
 	virtual void onDoubleClick(const vec2i& mPos, uint8 mBut);
-	virtual bool selectable() const { return true; }
+	virtual bool navSelectable() const { return true; }
+	Color color();
 
 protected:
 	void (Program::*lcall)(Button*);
@@ -93,6 +94,7 @@ public:
 	virtual void onClick(const vec2i& mPos, uint8 mBut);
 
 	SDL_Rect boxRect() const;
+	Color boxColor() const;
 
 	bool on;
 };

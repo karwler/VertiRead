@@ -115,9 +115,10 @@ void Program::eventSetLibraryDirLE(Button* but) {
 }
 
 void Program::eventSetLibraryDirBW(Button* but) {
-	string path = browser->getCurDir();
-	if (Label* lbl = dynamic_cast<Label*>(World::scene()->select))
-		path = appendDsep(path) + lbl->getText();
+	string path = appendDsep(browser->getCurDir());
+	const uset<Widget*>& select = static_cast<Layout*>(World::scene()->getLayout()->getWidget(1))->getSelected();
+	if (select.size())
+		path += static_cast<Label*>(*select.begin())->getText();
 
 	World::winSys()->sets.setDirLib(path);
 	browser.reset();

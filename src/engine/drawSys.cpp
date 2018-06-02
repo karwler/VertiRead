@@ -119,18 +119,18 @@ void DrawSys::drawWidgets() {
 }
 
 void DrawSys::drawButton(Button* wgt) {
-	drawRect(overlapRect(wgt->rect(), wgt->parentFrame()), (World::scene()->select == wgt) ? Color::select : Color::normal);
+	drawRect(overlapRect(wgt->rect(), wgt->parentFrame()), wgt->color());
 }
 
 void DrawSys::drawCheckBox(CheckBox* wgt) {
 	SDL_Rect frame = wgt->parentFrame();
-	drawRect(overlapRect(wgt->rect(), frame), (World::scene()->select == wgt) ? Color::select : Color::normal);	// draw background
-	drawRect(overlapRect(wgt->boxRect(), frame), wgt->on ? Color::light : Color::dark);	// draw checkbox
+	drawRect(overlapRect(wgt->rect(), frame), wgt->color());		// draw background
+	drawRect(overlapRect(wgt->boxRect(), frame), wgt->boxColor());	// draw checkbox
 }
 
 void DrawSys::drawSlider(Slider* wgt) {
 	SDL_Rect frame = wgt->parentFrame();
-	drawRect(overlapRect(wgt->rect(), frame), (World::scene()->select == wgt) ? Color::select : Color::normal);	// draw background
+	drawRect(overlapRect(wgt->rect(), frame), wgt->color());		// draw background
 	drawRect(overlapRect(wgt->barRect(), frame), Color::dark);		// draw bar
 	drawRect(overlapRect(wgt->sliderRect(), frame), Color::light);	// draw slider
 }
@@ -141,7 +141,7 @@ void DrawSys::drawPicture(Picture* wgt) {
 
 void DrawSys::drawLabel(Label* wgt) {
 	SDL_Rect rect = overlapRect(wgt->rect(), wgt->parentFrame());
-	drawRect(rect, (World::scene()->select == wgt) ? Color::select : Color::normal);	// draw background
+	drawRect(rect, wgt->color());	// draw background
 
 	if (wgt->tex) {		// modify frame and draw text if exists
 		rect.x += Default::textOffset;

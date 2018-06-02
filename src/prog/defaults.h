@@ -15,6 +15,7 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <memory>
 
 // to make life easier
@@ -58,6 +59,8 @@ using vec2t = vec2<sizt>;
 
 template <typename... T>
 using umap = std::unordered_map<T...>;
+template <typename... T>
+using uset = std::unordered_set<T...>;
 template <typename... T>
 using uptr = std::unique_ptr<T...>;
 

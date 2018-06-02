@@ -41,28 +41,28 @@ void ProgState::eventEnter() {
 
 void ProgState::eventUp() {
 	if (dynamic_cast<Button*>(World::scene()->select))
-		World::scene()->select->onSelectUp();
+		World::scene()->select->onNavSelectUp();
 	else
 		World::scene()->selectFirst();
 }
 
 void ProgState::eventDown() {
 	if (dynamic_cast<Button*>(World::scene()->select))
-		World::scene()->select->onSelectDown();
+		World::scene()->select->onNavSelectDown();
 	else
 		World::scene()->selectFirst();
 }
 
 void ProgState::eventLeft() {
 	if (dynamic_cast<Button*>(World::scene()->select))
-		World::scene()->select->onSelectLeft();
+		World::scene()->select->onNavSelectLeft();
 	else
 		World::scene()->selectFirst();
 }
 
 void ProgState::eventRight() {
 	if (dynamic_cast<Button*>(World::scene()->select))
-		World::scene()->select->onSelectRight();
+		World::scene()->select->onNavSelectRight();
 	else
 		World::scene()->selectFirst();
 }
@@ -95,7 +95,7 @@ Popup* ProgState::createPopupMessage(const string& msg, const vec2<Size>& size) 
 	};
 	vector<Widget*> con = {
 		new Label(Button(), msg),
-		new Layout(1.f, bot, false, 0)
+		new Layout(1.f, bot, false, Layout::Select::none, 0)
 	};
 	return new Popup(size, con);
 }
@@ -123,10 +123,10 @@ Layout* ProgBooks::createLayout() {
 		tiles[i] = new Label(Button(txs[i].length, &Program::eventOpenPageBrowser, &Program::eventOpenLastPage), txs[i].text);
 
 	vector<Widget*> cont = {
-		new Layout(topHeight, top, false, topSpacing),
+		new Layout(topHeight, top, false, Layout::Select::none, topSpacing),
 		new TileBox(1.f, tiles)
 	};
-	return new Layout(1.f, cont, true, topSpacing);
+	return new Layout(1.f, cont, true, Layout::Select::none, topSpacing);
 }
 
 // PROG PAGE BROWSER
@@ -156,7 +156,7 @@ Layout* ProgPageBrowser::createLayout() {
 		new Layout(back.length, bar),
 		new ScrollArea(1.f, items)
 	};
-	return new Layout(1.f, cont, false, topSpacing);
+	return new Layout(1.f, cont, false, Layout::Select::none, topSpacing);
 }
 
 // PROG READER
@@ -363,10 +363,10 @@ Layout* ProgSettings::createLayout() {
 	}
 
 	vector<Widget*> cont = {
-		new Layout(topHeight, top, false, topSpacing),
+		new Layout(topHeight, top, false, Layout::Select::none, topSpacing),
 		new ScrollArea(1.f, lns)
 	};
-	return new Layout(1.f, cont, true, topSpacing);
+	return new Layout(1.f, cont, true, Layout::Select::none, topSpacing);
 }
 
 // PROG SEARCH DIR
@@ -398,7 +398,7 @@ Layout* ProgSearchDir::createLayout() {
 
 	vector<Widget*> cont = {
 		new Layout(barWidth, bar),
-		new ScrollArea(1.f, items)
+		new ScrollArea(1.f, items, Layout::Select::one)
 	};
-	return new Layout(1.f, cont, false, topSpacing);
+	return new Layout(1.f, cont, false, Layout::Select::none, topSpacing);
 }
