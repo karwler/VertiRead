@@ -4,7 +4,6 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
-
 #include "utils/vec2.h"
 
 #include <algorithm>
@@ -106,7 +105,8 @@ const vector<SDL_Color> colors = {
 	{60, 60, 60, 255},		// dark
 	{120, 120, 120, 255},	// light
 	{105, 105, 105, 255},	// select
-	{210, 210, 210, 255}	// text
+	{210, 210, 210, 255},	// text
+	{210, 210, 210, 255}	// texture
 };
 const SDL_Color colorPopupDim = {0, 0, 0, 127};
 
@@ -197,7 +197,7 @@ const char fileIcon[] = "icon.ico";
 const char fileThemes[] = "themes.ini";
 const char fileSettings[] = "settings.ini";
 const char fileBindings[] = "bindings.ini";
-const char fileLastPages[] = "last.ini";
+const char fileBooks[] = "books.ini";
 const char dirLibrary[] = "library";
 const char dirLanguages[] = "languages";
 const char dirTextures[] = "textures";
@@ -283,7 +283,8 @@ const vector<string> colorNames = {
 	"dark",
 	"light",
 	"select",
-	"text"
+	"text",
+	"texture"
 };
 
 // other random crap

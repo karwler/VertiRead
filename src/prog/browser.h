@@ -13,13 +13,13 @@ public:
 	bool goUp();		// go to parent direcory if possible
 	void goNext();	// go to the next directory from the viewpoint of the parent directory
 	void goPrev();	// go to the previous directory from the viewpoint of the parent directory
-	bool selectPicture(const string& filename);
+	bool selectPicture(const string& picname);
 	void selectFirstPicture();
 
 	const string& getRootDir() const { return rootDir; }
 	const string& getCurDir() const { return curDir; }
 	const string& getCurFile() const { return curFile; }
-	string curFilepath() const { return curDir + curFile; }
+	string curFilepath() const { return appendDsep(curDir) + curFile; }
 
 	void (Program::*exCall)(Button*);	// gets called when goUp() fails, aka stepping out of rootDir into the previous menu
 private:
@@ -32,4 +32,6 @@ private:
 	void shiftLetter(int ofs);
 #endif
 	void shiftDir(int ofs);
+
+	bool isPicture(const string& file);
 };

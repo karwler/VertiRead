@@ -44,13 +44,14 @@ protected:
 		string text;
 		int length;
 	};
-	vector<Text> createTextList(const vector<string>& strs, int height);
-	int findMaxLength(const vector<string>& strs, int height);
+	static int findMaxLength(const vector<string>& strs, int height);
 
 	static const int lineHeight;
 	static const int topHeight;
 	static const int topSpacing;
 	static const int picSize;
+	static const int picMargin;
+	static const int iconMargin;
 	static const vec2s messageSize;
 };
 

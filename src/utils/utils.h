@@ -5,16 +5,16 @@
 // files and strings
 bool strcmpCI(const string& strl, const string& strr);	// case insensitive check if strings are equal
 bool isAbsolute(const string& path);
+bool isSubpath(const string& path, string parent);
 string parentPath(const string& path);
 string filename(const string& path);	// get filename from path
 string getExt(const string& path);		// get file extension
 bool hasExt(const string& path);
-bool hasExt(const string& path, const string& ext);	// whether file has an extension
 string delExt(const string& path);		// returns filepath without extension
 string appendDsep(const string& path);	// append directory separator if necessary
 bool isDriveLetter(const string& path);	// check if path is a drive letter (plus colon and optionally dsep). only for windows
 vector<vec2t> getWords(const string& line, char spacer=' ');	// returns index of first character and length of words in line
-string getBook(const string& picPath);
+string getBook(const string& pic);
 inline bool isDigit(char c) { return c >= '0' && c <= '9'; }
 inline bool isCapitalLetter(char c) { return c >= 'A' && c <= 'Z'; }
 

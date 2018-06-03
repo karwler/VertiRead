@@ -81,7 +81,7 @@ public:
 	virtual ~Overlay() {}
 
 	virtual vec2i position() const;
-	SDL_Rect actRect();
+	SDL_Rect actRect() const;
 
 	bool on;
 private:
@@ -113,11 +113,13 @@ public:
 	virtual SDL_Rect frame() const { return rect(); }
 	SDL_Rect barRect() const;
 	SDL_Rect sliderRect() const;
-	virtual vec2t visibleWidgets() const;
+	vec2t visibleWidgets() const;
 	
 protected:
 	void scrollToSelected();
 	virtual vec2i listLim() const;	// max list position
+	virtual int wgtYPos(sizt id) const;
+	virtual int wgtYEnd(sizt id) const;
 
 	vec2i listPos;
 	bool draggingSlider;
@@ -144,7 +146,6 @@ public:
 	virtual void navSelectFrom(int mid, uint8 dir);
 
 	virtual vec2i wgtSize(sizt id) const;
-	virtual vec2t visibleWidgets() const;
 
 private:
 	int wheight;
@@ -154,6 +155,8 @@ private:
 	void scanFromStart(int mid, uint8 dir);
 	void scanFromEnd(int mid, uint8 dir);
 	void navSelectIfInRange(sizt id, int mid, uint8 dir);
+
+	virtual int wgtYEnd(sizt id) const;
 };
 
 // for scrolling through pictures
@@ -181,4 +184,6 @@ private:
 	float zoom;
 
 	virtual vec2i listSize() const;
+	virtual int wgtYPos(sizt id) const;
+	virtual int wgtYEnd(sizt id) const;
 };

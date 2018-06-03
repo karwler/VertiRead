@@ -136,7 +136,9 @@ void DrawSys::drawSlider(Slider* wgt) {
 }
 
 void DrawSys::drawPicture(Picture* wgt) {
-	drawImage(wgt->tex, wgt->getRes(), wgt->rect(), wgt->parentFrame());
+	if (wgt->showBG)
+		drawRect(overlapRect(wgt->rect(), wgt->parentFrame()), wgt->color());
+	drawImage(wgt->tex, wgt->getRes(), wgt->texRect(), wgt->parentFrame());
 }
 
 void DrawSys::drawLabel(Label* wgt) {
@@ -217,9 +219,12 @@ SDL_Texture* DrawSys::renderText(const string& text, int height, vec2i& size) {
 
 SDL_Texture* DrawSys::loadTexture(const string& file, vec2i& res) {
 	SDL_Texture* tex = IMG_LoadTexture(renderer, file.c_str());
-	if (tex)
+	if (tex) {
 		SDL_QueryTexture(tex, nullptr, nullptr, &res.x, &res.y);
-	else {
+		SDL_Color clr = colors[static_cast<uint8>(Color::texture)];
+		SDL_SetTextureColorMod(tex, clr.r, clr.g, clr.b);
+		SDL_SetTextureAlphaMod(tex, clr.a);
+	} else {
 		cerr << "Couldn't load texture " << file << endl << IMG_GetError << endl;
 		res = 0;
 	}

@@ -27,20 +27,22 @@ public:
 	};
 
 	IniLine();
-	IniLine(const string& ARG, const string& VAL);
-	IniLine(const string& ARG, const string& KEY, const string& VAL);
-	IniLine(const string& TIT);
+	IniLine(const string& line);
 
 	Type getType() const { return type; }
 	const string& getArg() const { return arg; }
 	const string& getKey() const { return key; }
 	const string& getVal() const { return val; }
+
 	string line() const;	// get the actual INI line from arg, key and val
+	static string line(const string& title);
+	static string line(const string& arg, const string& val);
+	static string line(const string& arg, const string& key, const string& val);
 
 	void setVal(const string& ARG, const string& VAL);
 	void setVal(const string& ARG, const string& KEY, const string& VAL);
 	void setTitle(const string& TIT);
-	bool setLine(const string& str);	// returns false if not an INI line
+	Type setLine(const string& str);
 	void clear();
 
 private:
@@ -71,7 +73,6 @@ public:
 	static vector<string> listDir(const string& dir, FileType filter=FTYPE_ANY);
 	static vector<string> listDirRecursively(string dir);
 	static FileType fileType(const string& path);
-	static bool isPicture(const string& file);
 
 #ifdef _WIN32
 	static vector<char> listDrives();	// get list of driver letters under windows
@@ -82,7 +83,6 @@ public:
 	static const string dirExec;	// directory in which the executable should currently be
 	static const string dirSets;	// settings directory
 	static const string dirLangs;	// language files directory
-	static const string dirSnds;	// sounds directory
 	static const string dirTexs;	// textures directory
 	static const vector<string> dirFonts;	// os's font directories
 

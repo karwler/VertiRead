@@ -14,32 +14,30 @@ IniLine::IniLine() :
 	type(Type::empty)
 {}
 
-IniLine::IniLine(const string& ARG, const string& VAL) :
-	type(Type::argVal),
-	arg(ARG),
-	val(VAL)
-{}
-
-IniLine::IniLine(const string& ARG, const string& KEY, const string& VAL) :
-	type(Type::argKeyVal),
-	arg(ARG),
-	key(KEY),
-	val(VAL)
-{}
-
-IniLine::IniLine(const string& TIT) :
-	type(Type::title),
-	arg(TIT)
-{}
+IniLine::IniLine(const string& line) {
+	setLine(line);
+}
 
 string IniLine::line() const {
 	if (type == Type::argVal)
-		return arg + '=' + val;
+		return line(arg, val);
 	if (type == Type::argKeyVal)
-		return arg + '[' + key + "]=" + val;
+		return line(arg, key, val);
 	if (type == Type::title)
-		return '[' + arg + ']';
+		return line(arg);
 	return "";
+}
+
+string IniLine::line(const string& title) {
+	return '[' + title + ']';
+}
+
+string IniLine::line(const string& arg, const string& val) {
+	return arg + '=' + val;
+}
+
+string IniLine::line(const string& arg, const string& key, const string& val) {
+	return arg + '[' + key + "]=" + val;
 }
 
 void IniLine::setVal(const string& ARG, const string& VAL) {
@@ -63,23 +61,26 @@ void IniLine::setTitle(const string& TIT) {
 	val.clear();
 }
 
-bool IniLine::setLine(const string& str) {
-	// clear line in case the function will return false
-	clear();
-	if (str.empty())
-		return false;
+IniLine::Type IniLine::setLine(const string& str) {
+	if (str.empty()) {
+		clear();
+		return type;
+	}
 
 	// check if title
 	if (str[0] == '[' && str.back() == ']') {
 		arg = str.substr(1, str.length()-2);
-		type = Type::title;
-		return true;
+		key.clear();
+		val.clear();
+		return type = Type::title;
 	}
 
 	// find position of the '=' to split line into argument and value
 	sizt i0 = str.find_first_of('=');
-	if (i0 == string::npos)
-		return false;
+	if (i0 == string::npos) {
+		clear();
+		return type;
+	}
 	val = str.substr(i0+1);
 
 	// get arg and key if availible
@@ -88,12 +89,11 @@ bool IniLine::setLine(const string& str) {
 	if (i1 < i2 && i2 < i0) {	// if '[' preceeds ']' and both preceed '='
 		arg = str.substr(0, i1);
 		key = str.substr(i1+1, i2-i1-1);
-		type = Type::argKeyVal;
-	} else {
-		arg = str.substr(0, i0);
-		type = Type::argVal;
+		return type = Type::argKeyVal;
 	}
-	return true;
+	arg = str.substr(0, i0);
+	key.clear();
+	return type = Type::argVal;
 }
 
 void IniLine::clear() {
@@ -106,7 +106,6 @@ void IniLine::clear() {
 // FILER
 
 const string Filer::dirExec = appendDsep(Filer::getDirExec());
-
 #ifdef _WIN32
 const vector<string> Filer::dirFonts = {Filer::dirExec, string(std::getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
 const string Filer::dirSets = string(std::getenv("AppData")) + "\\"+Default::titleDefault+"\\";
@@ -114,7 +113,6 @@ const string Filer::dirSets = string(std::getenv("AppData")) + "\\"+Default::tit
 const vector<string> Filer::dirFonts = {Filer::dirExec, "/usr/share/fonts/", string(std::getenv("HOME")) + "/.fonts/"};
 const string Filer::dirSets = string(std::getenv("HOME")) + "/."+Default::titleExtra+"/";
 #endif
-
 const string Filer::dirLangs = Filer::dirExec + Default::dirLanguages + dsep;
 const string Filer::dirTexs = Filer::dirExec + Default::dirTextures + dsep;
 
@@ -125,8 +123,8 @@ vector<string> Filer::getAvailibleThemes() {
 
 	vector<string> themes;
 	for (string& line : lines) {
-		IniLine il;
-		if (il.setLine(line) && il.getType() == IniLine::Type::title)
+		IniLine il(line);
+		if (il.getType() == IniLine::Type::title)
 			themes.push_back(il.getArg());
 	}
 	return themes;
@@ -135,24 +133,24 @@ vector<string> Filer::getAvailibleThemes() {
 vector<SDL_Color> Filer::getColors(const string& theme) {
 	vector<SDL_Color> colors = Default::colors;
 	vector<string> lines;
-	if (!readTextFile(dirExec + Default::fileThemes, lines), false)
+	if (!readTextFile(dirExec + Default::fileThemes, lines))
 		return colors;
 
 	// find title equal to theme
 	IniLine il;
 	sizt i = 0;
 	while (i < lines.size()) {
-		il.setLine(lines[i]);
-		if (il.getType() == IniLine::Type::title && il.getArg() == theme)
+		if (il.setLine(lines[i]) == IniLine::Type::title && il.getArg() == theme)
 			break;
 		i++;
 	}
 
 	// read colors until the end of the file or another title
 	while (++i < lines.size()) {
-		il.setLine(lines[i]);
-		if (il.getType() == IniLine::Type::title)
+		if (il.setLine(lines[i]) == IniLine::Type::title)
 			break;
+		if (il.getType() != IniLine::Type::argVal)
+			continue;
 
 		sizt cid = strToEnum<sizt>(Default::colorNames, il.getArg());
 		if (cid < colors.size()) {
@@ -187,8 +185,8 @@ umap<string, string> Filer::getTranslations(const string& language) {
 
 	umap<string, string> translation;
 	for (string& line : lines) {
-		IniLine il;
-		if (il.setLine(line) && il.getType() != IniLine::Type::title)
+		IniLine il(line);
+		if (il.getType() == IniLine::Type::argVal)
 			translation.insert(make_pair(il.getArg(), il.getVal()));
 	}
 	return translation;
@@ -196,12 +194,12 @@ umap<string, string> Filer::getTranslations(const string& language) {
 
 string Filer::getLastPage(const string& book) {
 	vector<string> lines;
-	if (!readTextFile(dirSets + Default::fileLastPages, lines, false))
+	if (!readTextFile(dirSets + Default::fileBooks, lines, false))
 		return "";
 
 	for (string& line : lines) {
-		IniLine il;
-		if (il.setLine(line) && il.getType() != IniLine::Type::title && il.getArg() == book)
+		IniLine il(line);
+		if (il.getType() == IniLine::Type::argVal && il.getArg() == book)
 			return il.getVal();
 	}
 	return "";
@@ -209,24 +207,22 @@ string Filer::getLastPage(const string& book) {
 
 void Filer::saveLastPage(const string& file) {
 	vector<string> lines;
-	readTextFile(dirSets + Default::fileLastPages, lines, false);
+	readTextFile(dirSets + Default::fileBooks, lines, false);
 
-	// find line to replace or push back
 	sizt id = lines.size();
 	string book = getBook(file);
 	for (sizt i=0; i!=lines.size(); i++) {
-		IniLine il;
-		if (il.setLine(lines[i]) && il.getType() != IniLine::Type::title && il.getArg() == book) {
+		IniLine il(lines[i]);
+		if (il.getType() == IniLine::Type::argVal && il.getArg() == book) {
 			id = i;
 			break;
 		}
 	}
 	if (id == lines.size())
-		lines.push_back(IniLine(book, file).line());
+		lines.push_back(IniLine::line(book, file));
 	else
-		lines[id] = IniLine(book, file).line();
-
-	writeTextFile(dirSets + Default::fileLastPages, lines);
+		lines[id] = IniLine::line(book, file);
+	writeTextFile(dirSets + Default::fileBooks, lines);
 }
 
 Settings Filer::getSettings() {
@@ -236,8 +232,8 @@ Settings Filer::getSettings() {
 		return sets;
 
 	for (string& line : lines) {
-		IniLine il;
-		if (!il.setLine(line) || il.getType() == IniLine::Type::title)
+		IniLine il(line);
+		if (il.getType() != IniLine::Type::argVal)
 			continue;
 
 		if (il.getArg() == Default::iniKeywordMaximized)
@@ -266,16 +262,16 @@ Settings Filer::getSettings() {
 
 void Filer::saveSettings(const Settings& sets) {
 	vector<string> lines = {
-		IniLine(Default::iniKeywordMaximized, btos(sets.maximized)).line(),
-		IniLine(Default::iniKeywordFullscreen, btos(sets.fullscreen)).line(),
-		IniLine(Default::iniKeywordResolution, sets.getResolutionString()).line(),
-		IniLine(Default::iniKeywordFont, sets.getFont()).line(),
-		IniLine(Default::iniKeywordLanguage, sets.getLang()).line(),
-		IniLine(Default::iniKeywordTheme, sets.getTheme()).line(),
-		IniLine(Default::iniKeywordLibrary, sets.getDirLib()).line(),
-		IniLine(Default::iniKeywordRenderer, sets.renderer).line(),
-		IniLine(Default::iniKeywordScrollSpeed, sets.getScrollSpeedString()).line(),
-		IniLine(Default::iniKeywordDeadzone, ntos(sets.getDeadzone())).line()
+		IniLine::line(Default::iniKeywordMaximized, btos(sets.maximized)),
+		IniLine::line(Default::iniKeywordFullscreen, btos(sets.fullscreen)),
+		IniLine::line(Default::iniKeywordResolution, sets.getResolutionString()),
+		IniLine::line(Default::iniKeywordFont, sets.getFont()),
+		IniLine::line(Default::iniKeywordLanguage, sets.getLang()),
+		IniLine::line(Default::iniKeywordTheme, sets.getTheme()),
+		IniLine::line(Default::iniKeywordLibrary, sets.getDirLib()),
+		IniLine::line(Default::iniKeywordRenderer, sets.renderer),
+		IniLine::line(Default::iniKeywordScrollSpeed, sets.getScrollSpeedString()),
+		IniLine::line(Default::iniKeywordDeadzone, ntos(sets.getDeadzone()))
 	};
 	writeTextFile(dirSets + Default::fileSettings, lines);
 }
@@ -290,8 +286,8 @@ vector<Binding> Filer::getBindings() {
 		return bindings;
 
 	for (string& line : lines) {
-		IniLine il;
-		if (!il.setLine(line) || il.getType() == IniLine::Type::title || il.getVal().size() < 3)
+		IniLine il(line);
+		if (il.getType() != IniLine::Type::argKeyVal || il.getVal().size() < 3)
 			continue;
 
 		sizt bid = strToEnum<sizt>(Default::bindingNames, il.getArg());
@@ -327,19 +323,19 @@ void Filer::saveBindings(const vector<Binding>& bindings) {
 	for (sizt i=0; i<bindings.size(); i++) {
 		string name = enumToStr(Default::bindingNames, i);
 		if (bindings[i].keyAssigned())
-			lines.push_back(IniLine(name, "K_" + string(SDL_GetScancodeName(bindings[i].getKey()))).line());
+			lines.push_back(IniLine::line(name, "K_" + string(SDL_GetScancodeName(bindings[i].getKey()))));
 
 		if (bindings[i].jbuttonAssigned())
-			lines.push_back(IniLine(name, "B_" + ntos(bindings[i].getJctID())).line());
+			lines.push_back(IniLine::line(name, "B_" + ntos(bindings[i].getJctID())));
 		else if (bindings[i].jhatAssigned())
-			lines.push_back(IniLine(name, "H_" + ntos(bindings[i].getJctID()) + "_" + jtHatToStr(bindings[i].getJhatVal())).line());
+			lines.push_back(IniLine::line(name, "H_" + ntos(bindings[i].getJctID()) + "_" + jtHatToStr(bindings[i].getJhatVal())));
 		else if (bindings[i].jaxisAssigned())
-			lines.push_back(IniLine(name, string(bindings[i].jposAxisAssigned() ? "A_+" : "A_-") + ntos(bindings[i].getJctID())).line());
+			lines.push_back(IniLine::line(name, string(bindings[i].jposAxisAssigned() ? "A_+" : "A_-") + ntos(bindings[i].getJctID())));
 
 		if (bindings[i].gbuttonAssigned())
-			lines.push_back(IniLine(name, "G_" + enumToStr(Default::gbuttonNames, bindings[i].getGbutton())).line());
+			lines.push_back(IniLine::line(name, "G_" + enumToStr(Default::gbuttonNames, bindings[i].getGbutton())));
 		else if (bindings[i].gbuttonAssigned())
-			lines.push_back(IniLine(name, string(bindings[i].gposAxisAssigned() ? "X_+" : "X_-") + enumToStr(Default::gaxisNames, bindings[i].getGaxis())).line());
+			lines.push_back(IniLine::line(name, string(bindings[i].gposAxisAssigned() ? "X_+" : "X_-") + enumToStr(Default::gaxisNames, bindings[i].getGaxis())));
 	}
 	writeTextFile(dirSets + Default::fileBindings, lines);
 }
@@ -463,14 +459,6 @@ FileType Filer::fileType(const string& path) {
 		return FTYPE_DIR;
 #endif
 	return FTYPE_FILE;
-}
-
-bool Filer::isPicture(const string& file) {
-	if (SDL_Surface* img = IMG_Load(file.c_str())) {
-		SDL_FreeSurface(img);
-		return true;
-	}
-	return false;
 }
 
 #ifdef _WIN32

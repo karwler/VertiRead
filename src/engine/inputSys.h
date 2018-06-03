@@ -45,7 +45,7 @@ private:
 	};
 	vector<Controller> controllers;	// currently connected game controllers
 	vector<Binding> bindings;
-	vec2f mouseMove;				// last mouse motion
+	vec2i mouseMove;				// last mouse motion
 
 	void checkBindingsK(SDL_Scancode key);
 	void checkBindingsB(uint8 jbutton);

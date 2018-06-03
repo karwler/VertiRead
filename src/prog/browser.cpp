@@ -3,8 +3,8 @@
 Browser::Browser(const string& RD, const string& CD, void (Program::*XC)(Button*)) :
 	exCall(XC)
 {
-	rootDir = RD.empty() ? Filer::dirExec : RD;
-	curDir = CD.empty() ? rootDir : CD;
+	rootDir = (Filer::fileType(RD) == FTYPE_DIR) ? RD : string(1, dsep);
+	curDir = (Filer::fileType(CD) == FTYPE_DIR && isSubpath(CD, rootDir)) ? CD : rootDir;
 }
 
 vector<string> Browser::listFiles() const {
@@ -31,12 +31,11 @@ vector<string> Browser::listDirs() const {
 bool Browser::goIn(const string& dirname) {
 	if (dirname.empty())
 		return false;
-
-	curFile.clear();
 #ifdef _WIN32
 	if (curDir == "\\") {
 		vector<char> letters = Filer::listDrives();
 		if (isDriveLetter(dirname) && dirname[0] >= letters[0] && dirname[0] <= letters.back()) {
+			curFile.clear();
 			curDir = dirname;
 			return true;
 		}
@@ -51,6 +50,7 @@ bool Browser::goInDir(const string& dirname) {
 	if (Filer::fileType(newPath) != FTYPE_DIR)
 		return false;
 
+	curFile.clear();
 	curDir = newPath;
 	return true;
 }
@@ -119,9 +119,9 @@ void Browser::shiftDir(int ofs) {
 		}
 }
 
-bool Browser::selectPicture(const string& filename) {
-	if (Filer::isPicture(appendDsep(curDir) + filename)) {
-		curFile = filename;
+bool Browser::selectPicture(const string& picname) {
+	if (isPicture(appendDsep(curDir) + picname)) {
+		curFile = picname;
 		return true;
 	}
 	return false;
@@ -130,9 +130,17 @@ bool Browser::selectPicture(const string& filename) {
 void Browser::selectFirstPicture() {
 	string cd = appendDsep(curDir);
 	for (string& it : listFiles())
-		if (Filer::isPicture(cd + it)) {
+		if (isPicture(cd + it)) {
 			curFile = it;
 			return;
 		}
 	curFile.clear();
+}
+
+bool Browser::isPicture(const string& file) {
+	if (SDL_Surface* img = IMG_Load(file.c_str())) {
+		SDL_FreeSurface(img);
+		return true;
+	}
+	return false;
 }

@@ -12,29 +12,43 @@ bool strcmpCI(const string& strl, const string& strr) {
 }
 
 bool isAbsolute(const string& path) {
-	if (path.empty())
+	return path.size() && (path[0] == dsep || (path.length() == 2 && isCapitalLetter(path[0]) && path[1] == ':') || (path.length() > 2 && isCapitalLetter(path[0]) && path[1] == ':' && path[2] == dsep));
+}
+
+bool isSubpath(const string& path, string parent) {
+	if (!(isAbsolute(path) && isAbsolute(parent)))
 		return false;
-	return path[0] == dsep || (path.length() >= 3 && isCapitalLetter(path[0]) && path[1] == ':' && path[2] == dsep);
+	if (parent == string(1, dsep))
+		return true;
+
+	parent = appendDsep(parent);
+	return !appendDsep(path).compare(0, parent.length(), parent);
 }
 
 string parentPath(const string& path) {
-	for (sizt i = path.length() - ((path.back() == dsep) ? 2 : 1); i<path.length(); i--)
-		if (path[i] == dsep)
-			return path.substr(0, i);
-	return path;
+	if (path.empty() || path == string(1, dsep))
+		return "";
+
+	sizt pos = path.find_last_of(dsep, path.length() - ((path.back() == dsep) ? 2 : 1));
+	return (pos == string::npos) ? "" : path.substr(0, pos);
 }
 
 string filename(const string& path) {
-	for (sizt i=path.length()-1; i<path.length(); i--)
-		if (path[i] == dsep)
-			return path.substr(i+1);
-	return path;
+	if (path.empty() || path == string(1, dsep))
+		return "";
+
+	sizt end = (path.back() == dsep) ? path.length()-1 : path.length();
+	sizt pos = path.find_last_of(dsep, end-1);
+	return (pos == string::npos) ? path.substr(0, end) : path.substr(pos+1, end-pos-1);
 }
 
 string getExt(const string& path) {
-	for (sizt i=path.length()-1; i<path.length(); i--)
+	for (sizt i=path.length()-1; i<path.length(); i--) {
 		if (path[i] == '.')
 			return path.substr(i+1);
+		else if (path[i] == dsep)
+			return "";
+	}
 	return "";
 }
 
@@ -48,26 +62,18 @@ bool hasExt(const string& path) {
 	return false;
 }
 
-bool hasExt(const string& path, const string& ext) {
-	if (path.length() < ext.length())
-		return false;
-
-	sizt pos = path.length() - ext.length();
-	for (sizt i=0; i<ext.length(); i++)
-		if (path[pos+i] != ext[i])
-			return false;
-	return true;
-}
-
 string delExt(const string& path) {
-	for (sizt i=path.length()-1; i<path.length(); i--)
+	for (sizt i=path.length()-1; i<path.length(); i--) {
 		if (path[i] == '.')
 			return path.substr(0, i);
+		else if (path[i] == dsep)
+			return path;
+	}
 	return path;
 }
 
 string appendDsep(const string& path) {
-	return (path.length() && path.back() == dsep) ? path : path + dsep;
+	return (path.size() && path.back() == dsep) ? path : path + dsep;
 }
 
 bool isDriveLetter(const string& path) {
@@ -94,12 +100,11 @@ vector<vec2t> getWords(const string& line, char spacer) {
 	return words;
 }
 
-string getBook(const string& picPath) {
-	sizt start = appendDsep(World::winSys()->sets.getDirLib()).length();
-	for (sizt i=start; i<picPath.length(); i++)
-		if (picPath[i] == dsep)
-			return picPath.substr(start, i-start);
-	return "";
+string getBook(const string& pic) {
+	string dirLib = appendDsep(World::winSys()->sets.getDirLib());
+	if (!isSubpath(pic, dirLib) || pic.length() == dirLib.length())
+		return ".";
+	return pic.substr(dirLib.length(), pic.find_first_of(dsep, dirLib.length()) - dirLib.length());
 }
 
 SDL_Rect cropRect(SDL_Rect& rect, const SDL_Rect& frame) {

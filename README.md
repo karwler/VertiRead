@@ -22,6 +22,7 @@ Settings files are being saved in "%AppData%\VertiRead".
 
 ## How to use it
 The idea is that you have a library directory in which you have your comics saved in form of pictures. The location of this directory can be changed in the settings.  
+The last button in the book list allows you to navigate through files outside of the library directory.  
 Left clicking on a book in the book list wil take you to the file explorer, while right clicking on a book will take you to the last viewed page.  
 The reader has a hidden side panel on the left.  
 

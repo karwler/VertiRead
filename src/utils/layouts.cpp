@@ -217,7 +217,7 @@ vec2i Overlay::position() const {
 	return vec2i(pos.x.usePix ? pos.x.pix : pos.x.prc * res.x, pos.y.usePix ? pos.y.pix : pos.y.prc * res.y);
 }
 
-SDL_Rect Overlay::actRect() {
+SDL_Rect Overlay::actRect() const {
 	vec2f res = World::winSys()->resolution();
 	vec2i ps(actPos.x.usePix ? actPos.x.pix : actPos.x.prc * res.x, actPos.y.usePix ? actPos.y.pix : actPos.y.prc * res.y);
 	vec2i sz(actSize.x.usePix ? actSize.x.pix : actSize.x.prc * res.x, actSize.y.usePix ? actSize.y.pix : actSize.y.prc * res.y);
@@ -325,11 +325,11 @@ void ScrollArea::scrollToSelected() {
 }
 
 void ScrollArea::scrollToWidgetPos(sizt id) {
-	listPos.y = positions[id].y;
+	listPos.y = wgtYPos(id);
 }
 
 void ScrollArea::scrollToWidgetEnd(sizt id) {
-	listPos.y = positions[id].y + wgtSize(id).y - size().y;
+	listPos.y = wgtYEnd(id) - size().y;
 }
 
 void ScrollArea::setSlider(int ypos) {
@@ -384,19 +384,25 @@ SDL_Rect ScrollArea::sliderRect() const {
 }
 
 vec2t ScrollArea::visibleWidgets() const {
+	vec2t ival;
 	if (widgets.empty())	// nothing to draw
-		return 0;
-
-	sizt first = 1;	// start one too far cause it's checking the end of each widget
-	while (first < widgets.size() && positions[first].y - spacing < listPos.y)
-		first++;
+		return ival;
+	while (ival.l < widgets.size() && wgtYEnd(ival.l) < listPos.y)
+		ival.l++;
 
 	int end = listPos.y + size().y;
-	sizt last = first;	// last is one greater than the actual last index
-	while (last < widgets.size() && positions[last].y <= end)
-		last++;
+	ival.u = ival.l + 1;	// last is one greater than the actual last index
+	while (ival.u < widgets.size() && wgtYPos(ival.u) <= end)
+		ival.u++;
+	return ival;
+}
 
-	return vec2t(first-1, last);	// correct first so it's the first element rather than it's end
+int ScrollArea::wgtYPos(sizt id) const {
+	return positions[id].y;
+}
+
+int ScrollArea::wgtYEnd(sizt id) const {
+	return positions[id+1].y - spacing;
 }
 
 // TILE BOX
@@ -486,20 +492,8 @@ vec2i TileBox::wgtSize(sizt id) const {
 	return vec2i(widgets[id]->getRelSize().pix, wheight);
 }
 
-vec2t TileBox::visibleWidgets() const {
-	if (widgets.empty())	// nothing to draw
-		return 0;
-
-	sizt first = 0;
-	while (first < widgets.size() && positions[first].y + wheight - spacing < listPos.y)
-		first++;
-
-	int end = listPos.y + size().y;
-	sizt last = first + 1;
-	while (last < widgets.size() && positions[last].y <= end)
-		last++;
-
-	return vec2t(first, last);
+int TileBox::wgtYEnd(sizt id) const {
+	return positions[id].y + wheight;
 }
 
 // READER BOX
@@ -556,7 +550,7 @@ void ReaderBox::postInit() {
 	string curPic = World::program()->getBrowser()->curFilepath();
 	for (sizt i=0; i<widgets.size(); i++)
 		if (static_cast<Picture*>(widgets[i])->getFile() == curPic) {
-			listPos.y = positions[i].y;
+			scrollToWidgetPos(i);
 			break;
 		}
 	centerListX();
@@ -598,4 +592,12 @@ vec2i ReaderBox::wgtSize(sizt id) const {
 vec2i ReaderBox::listSize() const {
 	const vec2i& end = positions.back();
 	return vec2i(end.x, end.y + (widgets.size()-1) * spacing);
+}
+
+int ReaderBox::wgtYPos(sizt id) const {
+	return positions[id].y + id * spacing;
+}
+
+int ReaderBox::wgtYEnd(sizt id) const {
+	return positions[id+1].y + id * spacing;
 }

@@ -129,14 +129,17 @@ private:
 // can have multiple images through which it cycles when presed
 class Picture : public Button {
 public:
-	Picture(const Button& BASE=Button(), const string& TEX="");
+	Picture(const Button& BASE=Button(), const string& TEX="", bool SBG=false, int MRG=0);
 	virtual ~Picture();
 
 	virtual void drawSelf();
 
 	const vec2i& getRes() const { return res; }
 	const string& getFile() const { return file; }
+	SDL_Rect texRect() const;
 
+	bool showBG;
+	int margin;
 	SDL_Texture* tex;
 private:
 	vec2i res;

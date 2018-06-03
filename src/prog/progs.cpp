@@ -7,13 +7,6 @@ ProgState::Text::Text(const string& TXT, int H) :
 	length(World::drawSys()->textLength(TXT, H) + Default::textOffset * 2)
 {}
 
-vector<ProgState::Text> ProgState::createTextList(const vector<string>& strs, int height) {
-	vector<Text> txts(strs.size());
-	for (sizt i=0; i<txts.size(); i++)
-		txts[i] = Text(strs[i], height);
-	return txts;
-}
-
 int ProgState::findMaxLength(const vector<string>& strs, int height) {
 	int width = 0;
 	for (const string& it : strs) {
@@ -30,6 +23,8 @@ const int ProgState::lineHeight = 30;
 const int ProgState::topHeight = 40;
 const int ProgState::topSpacing = 10;
 const int ProgState::picSize = 40;
+const int ProgState::picMargin = 4;
+const int ProgState::iconMargin = 2;
 const vec2s ProgState::messageSize(300, 100);
 
 void ProgState::eventEnter() {
@@ -117,10 +112,13 @@ Layout* ProgBooks::createLayout() {
 		new Label(Button(exit.length, &Program::eventExit), exit.text)
 	};
 
-	vector<Text> txs = createTextList(Filer::listDir(World::winSys()->sets.getDirLib(), FTYPE_DIR), Default::itemHeight);
-	vector<Widget*> tiles(txs.size());
-	for (sizt i=0; i<txs.size(); i++)
-		tiles[i] = new Label(Button(txs[i].length, &Program::eventOpenPageBrowser, &Program::eventOpenLastPage), txs[i].text);
+	vector<string> books = Filer::listDir(World::winSys()->sets.getDirLib(), FTYPE_DIR);
+	vector<Widget*> tiles(books.size()+1);
+	for (sizt i=0; i<books.size(); i++) {
+		Text txt(filename(books[i]), Default::itemHeight);
+		tiles[i] = new Label(Button(txt.length, &Program::eventOpenPageBrowser, &Program::eventOpenLastPage), txt.text);
+	}
+	tiles.back() = new Picture(Button(Default::itemHeight, &Program::eventOpenPageBrowser, &Program::eventOpenLastPage), Filer::dirTexs + "search.png", true, iconMargin);
 
 	vector<Widget*> cont = {
 		new Layout(topHeight, top, false, Layout::Select::none, topSpacing),
@@ -139,9 +137,13 @@ void ProgPageBrowser::eventEscape() {
 }
 
 Layout* ProgPageBrowser::createLayout() {
-	Text back(World::drawSys()->translation("back"), lineHeight);
+	vector<string> txs = {
+		World::drawSys()->translation("back"),
+		World::drawSys()->translation("up")
+	};
 	vector<Widget*> bar = {
-		new Label(Button(lineHeight, &Program::eventBrowserGoUp), back.text)
+		new Label(Button(lineHeight, &Program::eventExitBrowser), txs[0]),
+		new Label(Button(lineHeight, &Program::eventBrowserGoUp), txs[1])
 	};
 
 	vector<string> dirs = World::program()->getBrowser()->listDirs();
@@ -153,7 +155,7 @@ Layout* ProgPageBrowser::createLayout() {
 		items[dirs.size()+i] = new Label(Button(lineHeight, &Program::eventOpenReader), files[i]);
 	
 	vector<Widget*> cont = {
-		new Layout(back.length, bar),
+		new Layout(findMaxLength(txs, lineHeight), bar),
 		new ScrollArea(1.f, items)
 	};
 	return new Layout(1.f, cont, false, Layout::Select::none, topSpacing);
@@ -244,9 +246,10 @@ void ProgReader::eventClosing() {
 }
 
 Layout* ProgReader::createLayout() {
+	string curDir = appendDsep(World::program()->getBrowser()->getCurDir());
 	vector<Widget*> pics;
-	for (string& it : Filer::listDir(World::program()->getBrowser()->getCurDir(), FTYPE_FILE)) {
-		string file = appendDsep(World::program()->getBrowser()->getCurDir()) + it;
+	for (string& file : Filer::listDir(curDir, FTYPE_FILE)) {
+		file = curDir + file;
 		SDL_Surface* pic = IMG_Load(file.c_str());
 		if (pic) {
 			pics.push_back(new Picture(Button(pic->h), file));
@@ -258,13 +261,13 @@ Layout* ProgReader::createLayout() {
 
 Overlay* ProgReader::createOverlay() {
 	vector<Widget*> menu = {
-		new Picture(Button(picSize, &Program::eventExitReader), Filer::dirTexs + "back.png"),
-		new Picture(Button(picSize, &Program::eventNextDir), Filer::dirTexs + "next_dir.png"),
-		new Picture(Button(picSize, &Program::eventPrevDir), Filer::dirTexs + "prev_dir.png"),
-		new Picture(Button(picSize, &Program::eventZoomIn), Filer::dirTexs + "zoom_in.png"),
-		new Picture(Button(picSize, &Program::eventZoomOut), Filer::dirTexs + "zoom_out.png"),
-		new Picture(Button(picSize, &Program::eventZoomReset), Filer::dirTexs + "zoom_reset.png"),
-		new Picture(Button(picSize, &Program::eventCenterView), Filer::dirTexs + "center.png")
+		new Picture(Button(picSize, &Program::eventExitReader), Filer::dirTexs + "cross.png", false, picMargin),
+		new Picture(Button(picSize, &Program::eventNextDir), Filer::dirTexs + "right.png", false, picMargin),
+		new Picture(Button(picSize, &Program::eventPrevDir), Filer::dirTexs + "left.png", false, picMargin),
+		new Picture(Button(picSize, &Program::eventZoomIn), Filer::dirTexs + "plus.png", false, picMargin),
+		new Picture(Button(picSize, &Program::eventZoomOut), Filer::dirTexs + "minus.png", false, picMargin),
+		new Picture(Button(picSize, &Program::eventZoomReset), Filer::dirTexs + "circle.png", false, picMargin),
+		new Picture(Button(picSize, &Program::eventCenterView), Filer::dirTexs + "square.png", false, picMargin)
 	};
 	return new Overlay(vec2s(0), vec2s(picSize, picSize*int(menu.size())), vec2s(0), vec2s(picSize/2, 1.f), menu, true, 0);
 }
@@ -380,15 +383,14 @@ void ProgSearchDir::eventEscape() {
 
 Layout* ProgSearchDir::createLayout() {
 	vector<string> txs = {
-		World::drawSys()->translation("set"),
+		World::drawSys()->translation("back"),
 		World::drawSys()->translation("up"),
-		World::drawSys()->translation("back")
+		World::drawSys()->translation("set")
 	};
-	int barWidth = findMaxLength(txs, lineHeight);
 	vector<Widget*> bar = {
-		new Label(Button(lineHeight, &Program::eventSetLibraryDirBW), txs[0]),
+		new Label(Button(lineHeight, &Program::eventExitBrowser), txs[0]),
 		new Label(Button(lineHeight, &Program::eventBrowserGoUp), txs[1]),
-		new Label(Button(lineHeight, &Program::eventExitBrowser), txs[2])
+		new Label(Button(lineHeight, &Program::eventSetLibraryDirBW), txs[2])
 	};
 
 	vector<string> strs = World::program()->getBrowser()->listDirs();
@@ -397,7 +399,7 @@ Layout* ProgSearchDir::createLayout() {
 		items[i] = new Label(Button(lineHeight, nullptr, nullptr, &Program::eventBrowserGoIn), strs[i]);
 
 	vector<Widget*> cont = {
-		new Layout(barWidth, bar),
+		new Layout(findMaxLength(txs, lineHeight), bar),
 		new ScrollArea(1.f, items, Layout::Select::one)
 	};
 	return new Layout(1.f, cont, false, Layout::Select::none, topSpacing);

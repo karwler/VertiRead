@@ -11,7 +11,8 @@ void Program::eventOpenBookList(Button* but) {
 }
 
 void Program::eventOpenPageBrowser(Button* but) {
-	browser.reset(new Browser(appendDsep(World::winSys()->sets.getDirLib()) + static_cast<Label*>(but)->getText(), "", &Program::eventOpenBookList));
+	string rd = dynamic_cast<Label*>(but) ? appendDsep(World::winSys()->sets.getDirLib()) + static_cast<Label*>(but)->getText() : "";
+	browser.reset(new Browser(rd, "", &Program::eventOpenBookList));
 	setState(new ProgPageBrowser);
 }
 
@@ -20,12 +21,13 @@ void Program::eventOpenReader(Button* but) {
 }
 
 void Program::eventOpenLastPage(Button* but) {
-	const string& book = static_cast<Label*>(but)->getText();
-	string file = Filer::getLastPage(book);
+	Label* lbl = dynamic_cast<Label*>(but);
+	string file = Filer::getLastPage(lbl ? lbl->getText() : ".");
 	if (file.empty())
 		eventOpenPageBrowser(but);
 	else {
-		browser.reset(new Browser(appendDsep(World::winSys()->sets.getDirLib()) + book, "", &Program::eventOpenBookList));
+		string rd = lbl ? appendDsep(World::winSys()->sets.getDirLib()) + lbl->getText() : "";
+		browser.reset(new Browser(rd, parentPath(file), &Program::eventOpenBookList));
 		if (!startReader(filename(file)))
 			eventOpenPageBrowser(but);
 	}
@@ -90,7 +92,7 @@ void Program::eventExitReader(Button* but) {
 bool Program::startReader(const string& picname) {
 	if (!browser->selectPicture(picname))
 		return false;
-
+	
 	setState(new ProgReader);
 	return true;
 }
@@ -108,7 +110,7 @@ void Program::eventSwitchLanguage(Button* but) {
 
 void Program::eventSetLibraryDirLE(Button* but) {
 	LineEdit* le = static_cast<LineEdit*>(but);
-	if (World::winSys()->sets.setDirLib(le->getText())) {
+	if (!World::winSys()->sets.setDirLib(le->getText())) {
 		World::scene()->setPopup(ProgState::createPopupMessage("Invalid directory."));
 		le->setText(World::winSys()->sets.getDirLib());
 	}

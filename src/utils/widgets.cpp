@@ -209,8 +209,10 @@ int Slider::sliderLim() const {
 
 // PICTURE
 
-Picture::Picture(const Button& BASE, const string& TEX) :
-	Button(BASE)
+Picture::Picture(const Button& BASE, const string& TEX, bool SBG, int MRG) :
+	Button(BASE),
+	showBG(SBG),
+	margin(MRG)
 {
 	tex = World::drawSys()->loadTexture(TEX, res);
 	if (tex)
@@ -224,6 +226,11 @@ Picture::~Picture() {
 
 void Picture::drawSelf() {
 	World::drawSys()->drawPicture(this);
+}
+
+SDL_Rect Picture::texRect() const {
+	SDL_Rect rct = rect();
+	return {rct.x + margin, rct.y + margin, rct.w - margin*2, rct.h - margin*2};
 }
 
 // LABEL

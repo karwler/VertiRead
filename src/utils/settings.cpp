@@ -248,20 +248,15 @@ const string& Settings::setLang(const string& language) {
 	return lang = (Filer::fileType(Filer::dirLangs + language + ".ini") == FTYPE_FILE) ? language : Default::language;
 }
 
-uint8 Settings::setDirLib(const string& dir) {
-	return setDirectory(dirLib, dir, Filer::dirSets + Default::dirLibrary);
-}
-
-uint8 Settings::setDirectory(string& dir, const string& newDir, const string& defaultDir) {
-	if (Filer::fileType(newDir) != FTYPE_DIR)
-		if (!Filer::mkDir(newDir)) {
-			dir = defaultDir;
-			if (Filer::fileType(dir) != FTYPE_DIR)
-				return Filer::mkDir(dir) ? 1 : 2;
-			return 1;
+bool Settings::setDirLib(const string& dir) {
+	dirLib = isAbsolute(dir) ? dir : Filer::dirExec + dir;
+	if (Filer::fileType(dirLib) != FTYPE_DIR)
+		if (!Filer::mkDir(dirLib)) {
+			dirLib = Filer::dirSets + Default::dirLibrary;
+			if (Filer::fileType(dirLib) != FTYPE_DIR)
+				Filer::mkDir(dirLib);
 		}
-	dir = newDir;
-	return 0;
+	return dirLib == dir;
 }
 
 int Settings::getRendererIndex() {

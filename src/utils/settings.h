@@ -9,6 +9,7 @@ enum class Color : uint8 {
 	light,
 	select,
 	text,
+	texture,
 	numColors
 };
 
@@ -133,7 +134,7 @@ public:
 	const string& getLang() const { return lang; }
 	const string& setLang(const string& language);
 	const string& getDirLib() const { return dirLib; }
-	uint8 setDirLib(const string& dir);
+	bool setDirLib(const string& dir);
 
 	int getRendererIndex();
 	static vector<string> getAvailibleRenderers();
@@ -154,6 +155,4 @@ private:
 	string font;
 	string lang;
 	string dirLib;
-
-	uint8 setDirectory(string& dir, const string& newDir, const string& defaultDir);
 };

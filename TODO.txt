@@ -1,2 +1,1 @@
-advanced book adding
 multiple scroll modes for reader
