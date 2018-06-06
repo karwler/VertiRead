@@ -24,10 +24,10 @@ void Size::set(float PRC) {
 
 // WIDGET
 
-Widget::Widget(const Size& SIZ) :
-	parent(nullptr),
-	pcID(SIZE_MAX),
-	relSize(SIZ)
+Widget::Widget(const Size& SIZ, Layout* PNT, sizt ID) :
+	relSize(SIZ),
+	parent(PNT),
+	pcID(ID)
 {}
 
 void Widget::setParent(Layout* PNT, sizt ID) {
@@ -53,7 +53,7 @@ SDL_Rect Widget::rect() const {
 	return {pos.x, pos.y, siz.x, siz.y};
 }
 
-SDL_Rect Widget::parentFrame() const {
+SDL_Rect Widget::frame() const {
 	return parent->frame();
 }
 
@@ -75,8 +75,11 @@ void Widget::onNavSelectRight() {
 
 // BUTTON
 
-Button::Button(const Size& SIZ, void (Program::*LCL)(Button*), void (Program::*RCL)(Button*), void (Program::*DCL)(Button*)) :
-	Widget(SIZ),
+Button::Button(const Size& SIZ, void (Program::*LCL)(Button*), void (Program::*RCL)(Button*), void (Program::*DCL)(Button*), SDL_Texture* TEX, bool SBG, int MRG, Layout* PNT, sizt ID) :
+	Widget(SIZ, PNT, ID),
+	tex(TEX),
+	showBG(SBG),
+	margin(MRG),
 	lcall(LCL),
 	rcall(RCL),
 	dcall(DCL)
@@ -108,10 +111,21 @@ Color Button::color() {
 	return Color::normal;
 }
 
+vec2i Button::texRes() const {
+	vec2i res;
+	SDL_QueryTexture(tex, nullptr, nullptr, &res.x, &res.y);
+	return res;
+}
+
+SDL_Rect Button::texRect() const {
+	SDL_Rect rct = rect();
+	return {rct.x + margin, rct.y + margin, rct.w - margin*2, rct.h - margin*2};
+}
+
 // CHECK BOX
 
-CheckBox::CheckBox(const Button& BASE, bool ON) :
-	Button(BASE),
+CheckBox::CheckBox(const Size& SIZ, bool ON, void (Program::*LCL)(Button*), void (Program::*RCL)(Button*), void (Program::*DCL)(Button*), SDL_Texture* TEX, bool SBG, int MRG, Layout* PNT, sizt ID) :
+	Button(SIZ, LCL, RCL, DCL, TEX, SBG, MRG, PNT, ID),
 	on(ON)
 {}
 
@@ -138,8 +152,8 @@ Color CheckBox::boxColor() const {
 
 // SLIDER
 
-Slider::Slider(const Button& BASE, int VAL, int MIN, int MAX) :
-	Button(BASE),
+Slider::Slider(const Size& SIZ, int VAL, int MIN, int MAX, void (Program::*LCL)(Button*), void (Program::*RCL)(Button*), void (Program::*DCL)(Button*), SDL_Texture* TEX, bool SBG, int MRG, Layout* PNT, sizt ID) :
+	Button(SIZ, LCL, RCL, DCL, TEX, SBG, MRG, PNT, ID),
 	val(VAL),
 	min(MIN),
 	max(MAX)
@@ -207,44 +221,19 @@ int Slider::sliderLim() const {
 	return siz.x - siz.y/2 - Default::sliderWidth;
 }
 
-// PICTURE
-
-Picture::Picture(const Button& BASE, const string& TEX, bool SBG, int MRG) :
-	Button(BASE),
-	showBG(SBG),
-	margin(MRG)
-{
-	tex = World::drawSys()->loadTexture(TEX, res);
-	if (tex)
-		file = TEX;
-}
-
-Picture::~Picture() {
-	if (tex)
-		SDL_DestroyTexture(tex);
-}
-
-void Picture::drawSelf() {
-	World::drawSys()->drawPicture(this);
-}
-
-SDL_Rect Picture::texRect() const {
-	SDL_Rect rct = rect();
-	return {rct.x + margin, rct.y + margin, rct.w - margin*2, rct.h - margin*2};
-}
-
 // LABEL
 
-Label::Label(const Button& BASE, const string& TXT, Alignment ALG) :
-	Button(BASE),
+Label::Label(const Size& SIZ, const string& TXT, void (Program::*LCL)(Button*), void (Program::*RCL)(Button*), void (Program::*DCL)(Button*), Alignment ALG, SDL_Texture* TEX, int TMG, bool SBG, int MRG, Layout* PNT, sizt ID) :
+	Button(SIZ, LCL, RCL, DCL, TEX, SBG, MRG, PNT, ID),
 	align(ALG),
 	text(TXT),
-	tex(nullptr)
+	textMargin(TMG),
+	textTex(nullptr)
 {}
 
 Label::~Label() {
-	if (tex)
-		SDL_DestroyTexture(tex);
+	if (textTex)
+		SDL_DestroyTexture(textTex);
 }
 
 void Label::drawSelf() {
@@ -260,31 +249,60 @@ void Label::setText(const string& str) {
 	updateTex();
 }
 
+SDL_Rect Label::textRect() const {
+	vec2i pos = textPos();
+	vec2i siz = textSize();
+	return {pos.x, pos.y, siz.x, siz.y};
+}
+
+SDL_Rect Label::textFrame() const {
+	SDL_Rect rct = rect();
+	int ofs = textIconOffset();
+	return overlapRect({rct.x + ofs + textMargin, rct.y, rct.w - ofs - textMargin * 2, rct.h}, frame());
+}
+
+SDL_Rect Label::texRect() const {
+	SDL_Rect rct = rect();
+	rct.h -= margin * 2;
+	vec2i res = texRes();
+	return {rct.x + margin, rct.y + margin, int(float(rct.h * res.x) / float(res.y)), rct.h};
+}
+
 vec2i Label::textPos() const {
 	vec2i pos = position();
 	if (align == Alignment::left)
-		return vec2i(pos.x + Default::textOffset, pos.y);
+		return vec2i(pos.x + textIconOffset() + textMargin, pos.y);
 	if (align == Alignment::center)
-		return vec2i(pos.x + (size().x - textSize.x)/2, pos.y);
-	return vec2i(pos.x + size().x - textSize.x - Default::textOffset, pos.y);	// Alignment::right
+		return vec2i(pos.x + textIconOffset() + (size().x - textSize().x)/2, pos.y);
+	return vec2i(pos.x + size().x - textSize().x - textMargin, pos.y);	// Alignment::right
 }
 
-SDL_Rect Label::textRect() const {
-	vec2i pos = textPos();
-	return {pos.x, pos.y, textSize.x, textSize.y};
+int Label::textIconOffset() const {
+	if (tex) {
+		vec2i res = texRes();
+		return int(float(size().y * res.x) / float(res.y));
+	}
+	return 0;
+}
+
+vec2i Label::textSize() const {
+	vec2i res;
+	SDL_QueryTexture(textTex, nullptr, nullptr, &res.x, &res.y);
+	return res;
 }
 
 void Label::updateTex() {
-	if (tex)
-		SDL_DestroyTexture(tex);
-	tex = World::drawSys()->renderText(text, size().y, textSize);
+	if (textTex)
+		SDL_DestroyTexture(textTex);
+	textTex = World::drawSys()->renderText(text, size().y);
 }
 
 // SWITCH BOX
 
-SwitchBox::SwitchBox(const Button& BASE, const vector<string>& OPTS, const string& COP, Alignment ALG) :
-	Label(BASE, COP, ALG),
-	options(OPTS)
+SwitchBox::SwitchBox(const Size& SIZ, const vector<string>& OPTS, const string& COP, void (Program::*CCL)(Button*), Alignment ALG, SDL_Texture* TEX, int TMG, bool SBG, int MRG, Layout* PNT, sizt ID) :
+	Label(SIZ, COP, CCL, CCL, nullptr, ALG, TEX, TMG, SBG, MRG, PNT, ID),
+	options(OPTS),
+	curOpt(0)
 {
 	for (sizt i=0; i<options.size(); i++)
 		if (COP == options[i]) {
@@ -308,12 +326,12 @@ void SwitchBox::shiftOption(int ofs) {
 
 // LINE EDITOR
 
-LineEdit::LineEdit(const Button& BASE, const string& TXT, TextType TYP) :
-	Label(BASE, TXT, Alignment::left),
+LineEdit::LineEdit(const Size& SIZ, const string& TXT, void (Program::*LCL)(Button*), void (Program::*RCL)(Button*), void (Program::*DCL)(Button*), TextType TYP, SDL_Texture* TEX, int TMG, bool SBG, int MRG, Layout* PNT, sizt ID) :
+	Label(SIZ, TXT, LCL, RCL, DCL, Alignment::left, TEX, TMG, SBG, MRG, PNT, ID),
 	textType(TYP),
+	oldText(TXT),
 	textOfs(0),
-	cpos(0),
-	oldText(TXT)
+	cpos(0)
 {
 	cleanText();
 }
@@ -404,7 +422,7 @@ void LineEdit::onText(const string& str) {
 
 vec2i LineEdit::textPos() const {
 	vec2i pos = position();
-	return vec2i(pos.x + textOfs + Default::textOffset, pos.y);
+	return vec2i(pos.x + textOfs + textIconOffset() + textMargin, pos.y);
 }
 
 void LineEdit::setText(const string& str) {
@@ -417,14 +435,14 @@ void LineEdit::setText(const string& str) {
 
 SDL_Rect LineEdit::caretRect() const {
 	vec2i ps = position();
-	return {caretPos() + ps.x + Default::textOffset, ps.y, Default::caretWidth, size().y};
+	return {caretPos() + ps.x + margin, ps.y, Default::caretWidth, size().y};
 }
 
 void LineEdit::setCPos(sizt cp) {
 	cpos = cp;
 	int cl = caretPos();
 	int ce = cl + Default::caretWidth;
-	int sx = size().x - Default::textOffset*2;
+	int sx = size().x - margin*2;
 
 	if (cl < 0)
 		textOfs -= cl;
@@ -590,8 +608,8 @@ void LineEdit::cleanUFloatSpacedText() {
 
 // KEY GETTER
 
-KeyGetter::KeyGetter(const Button& BASE, AcceptType ACT, Binding::Type BND) :
-	Label(BASE, "-void-", Alignment::center),
+KeyGetter::KeyGetter(const Size& SIZ, AcceptType ACT, Binding::Type BND, void (Program::*LCL)(Button*), void (Program::*RCL)(Button*), void (Program::*DCL)(Button*), Alignment ALG, SDL_Texture* TEX, int TMG, bool SBG, int MRG, Layout* PNT, sizt ID) :
+	Label(SIZ, "-void-", nullptr, nullptr, nullptr, ALG, TEX, TMG, SBG, MRG, PNT, ID),
 	acceptType(ACT),
 	bindingType(BND)
 {

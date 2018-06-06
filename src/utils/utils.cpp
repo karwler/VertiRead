@@ -15,6 +15,10 @@ bool isAbsolute(const string& path) {
 	return path.size() && (path[0] == dsep || (path.length() == 2 && isCapitalLetter(path[0]) && path[1] == ':') || (path.length() > 2 && isCapitalLetter(path[0]) && path[1] == ':' && path[2] == dsep));
 }
 
+string getAbsolute(const string& path) {
+	return isAbsolute(path) ? path : appendDsep(Filer::getWorkingDir()) + path;
+}
+
 bool isSubpath(const string& path, string parent) {
 	if (!(isAbsolute(path) && isAbsolute(parent)))
 		return false;
@@ -28,6 +32,8 @@ bool isSubpath(const string& path, string parent) {
 string parentPath(const string& path) {
 	if (path.empty() || path == string(1, dsep))
 		return "";
+	if (isDriveLetter(path))
+		return string(1, dsep);
 
 	sizt pos = path.find_last_of(dsep, path.length() - ((path.back() == dsep) ? 2 : 1));
 	return (pos == string::npos) ? "" : path.substr(0, pos);

@@ -8,11 +8,14 @@ class Program {
 public:
 	Program();
 
+	void init();
+
 	// books
 	void eventOpenBookList(Button* but=nullptr);
 	void eventOpenPageBrowser(Button* but);
 	void eventOpenReader(Button* but);
 	void eventOpenLastPage(Button* but);
+	bool openFile(string file);
 
 	// browser
 	void eventBrowserGoUp(Button* but=nullptr);

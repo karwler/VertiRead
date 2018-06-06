@@ -5,6 +5,7 @@
 // files and strings
 bool strcmpCI(const string& strl, const string& strr);	// case insensitive check if strings are equal
 bool isAbsolute(const string& path);
+string getAbsolute(const string& path);
 bool isSubpath(const string& path, string parent);
 string parentPath(const string& path);
 string filename(const string& path);	// get filename from path

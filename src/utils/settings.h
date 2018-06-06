@@ -134,7 +134,7 @@ public:
 	const string& getLang() const { return lang; }
 	const string& setLang(const string& language);
 	const string& getDirLib() const { return dirLib; }
-	bool setDirLib(const string& dir);
+	const string& setDirLib(const string& dir);
 
 	int getRendererIndex();
 	static vector<string> getAvailibleRenderers();

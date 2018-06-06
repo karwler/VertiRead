@@ -17,6 +17,11 @@
 #include <unordered_set>
 #include <memory>
 
+// get rid of SDL's main
+#ifdef main
+#undef main
+#endif
+
 // to make life easier
 using std::cout;
 using std::cerr;
@@ -62,11 +67,6 @@ template <typename... T>
 using uset = std::unordered_set<T...>;
 template <typename... T>
 using uptr = std::unique_ptr<T...>;
-
-// get rid of SDL's main
-#ifdef main
-#undef main
-#endif
 
 // forward declaraions
 class Button;
@@ -293,7 +293,8 @@ const char titleExtra[] = "vertiread";
 const float clickThreshold = 8;
 const int fontTestHeight = 100;
 const char fontTestString[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`~!@#$%^&*()_+-=[]{}'\\\"|;:,.<>/?";
-const int textOffset = 5;
+const int textMargin = 5;
+const int iconMargin = 2;
 const uint32 eventCheckTimeout = 50;
 const float menuHideTimeout = 3.f;
 const int axisLimit = 32768;

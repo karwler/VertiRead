@@ -38,20 +38,18 @@ public:
 	
 protected:
 	struct Text {
-		Text() {}
-		Text(const string& TXT, int H);
+		Text(const string& str, int height, int margin=Default::textMargin);
 
 		string text;
 		int length;
 	};
-	static int findMaxLength(const vector<string>& strs, int height);
+	static int findMaxLength(const vector<string>& strs, int height, int margin=Default::textMargin);
 
 	static const int lineHeight;
 	static const int topHeight;
 	static const int topSpacing;
 	static const int picSize;
 	static const int picMargin;
-	static const int iconMargin;
 	static const vec2s messageSize;
 };
 
@@ -59,12 +57,16 @@ class ProgBooks : public ProgState {
 public:
 	virtual void eventEscape();
 	
+	virtual void eventFileDrop(char* file);
+
 	virtual Layout* createLayout();
 };
 
 class ProgPageBrowser : public ProgState {
 public:
 	virtual void eventEscape();
+
+	virtual void eventFileDrop(char* file);
 
 	virtual Layout* createLayout();
 };
@@ -102,6 +104,8 @@ class ProgSettings : public ProgState {
 public:
 	virtual void eventEscape();
 	virtual void eventFullscreen();
+
+	virtual void eventFileDrop(char* file);
 	
 	virtual Layout* createLayout();
 };

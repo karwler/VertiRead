@@ -1,9 +1,12 @@
 #include "browser.h"
 
-Browser::Browser(const string& RD, const string& CD, void (Program::*XC)(Button*)) :
+Browser::Browser(string RD, string CD, void (Program::*XC)(Button*)) :
 	exCall(XC)
 {
+	RD = getAbsolute(RD);
 	rootDir = (Filer::fileType(RD) == FTYPE_DIR) ? RD : string(1, dsep);
+
+	CD = getAbsolute(CD);
 	curDir = (Filer::fileType(CD) == FTYPE_DIR && isSubpath(CD, rootDir)) ? CD : rootDir;
 }
 
@@ -120,7 +123,7 @@ void Browser::shiftDir(int ofs) {
 }
 
 bool Browser::selectPicture(const string& picname) {
-	if (isPicture(appendDsep(curDir) + picname)) {
+	if (Filer::isPicture(appendDsep(curDir) + picname)) {
 		curFile = picname;
 		return true;
 	}
@@ -130,17 +133,9 @@ bool Browser::selectPicture(const string& picname) {
 void Browser::selectFirstPicture() {
 	string cd = appendDsep(curDir);
 	for (string& it : listFiles())
-		if (isPicture(cd + it)) {
+		if (Filer::isPicture(cd + it)) {
 			curFile = it;
 			return;
 		}
 	curFile.clear();
-}
-
-bool Browser::isPicture(const string& file) {
-	if (SDL_Surface* img = IMG_Load(file.c_str())) {
-		SDL_FreeSurface(img);
-		return true;
-	}
-	return false;
 }

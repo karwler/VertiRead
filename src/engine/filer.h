@@ -73,11 +73,14 @@ public:
 	static vector<string> listDir(const string& dir, FileType filter=FTYPE_ANY);
 	static vector<string> listDirRecursively(string dir);
 	static FileType fileType(const string& path);
+	static bool isPicture(const string& file);
+	static bool isFont(const string& file);
 
 #ifdef _WIN32
 	static vector<char> listDrives();	// get list of driver letters under windows
 #endif
-	static string getDirExec();		// set dirExec
+	static string getExecDir();
+	static string getWorkingDir();
 	static string findFont(const string& font);	// on success returns absolute path to font file, otherwise returns empty path
 	
 	static const string dirExec;	// directory in which the executable should currently be

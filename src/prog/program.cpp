@@ -3,16 +3,20 @@
 // BOOKS
 
 Program::Program() :
-	state(new ProgBooks)
+	state(new ProgState)	// necessary as a placeholder to prevent nullptr exceptions
 {}
+
+void Program::init() {
+	if (!(World::getArgs().size() && openFile(World::getArg(0))))
+		eventOpenBookList();
+}
 
 void Program::eventOpenBookList(Button* but) {
 	setState(new ProgBooks);
 }
 
 void Program::eventOpenPageBrowser(Button* but) {
-	string rd = dynamic_cast<Label*>(but) ? appendDsep(World::winSys()->sets.getDirLib()) + static_cast<Label*>(but)->getText() : "";
-	browser.reset(new Browser(rd, "", &Program::eventOpenBookList));
+	browser.reset(new Browser(dynamic_cast<Label*>(but) ? appendDsep(World::winSys()->sets.getDirLib()) + static_cast<Label*>(but)->getText() : "", "", &Program::eventOpenBookList));
 	setState(new ProgPageBrowser);
 }
 
@@ -26,11 +30,25 @@ void Program::eventOpenLastPage(Button* but) {
 	if (file.empty())
 		eventOpenPageBrowser(but);
 	else {
-		string rd = lbl ? appendDsep(World::winSys()->sets.getDirLib()) + lbl->getText() : "";
-		browser.reset(new Browser(rd, parentPath(file), &Program::eventOpenBookList));
+		browser.reset(new Browser(lbl ? appendDsep(World::winSys()->sets.getDirLib()) + lbl->getText() : "", parentPath(file), &Program::eventOpenBookList));
 		if (!startReader(filename(file)))
 			eventOpenPageBrowser(but);
 	}
+}
+
+bool Program::openFile(string file) {
+	file = getAbsolute(file);
+	if (Filer::isPicture(file)) {
+		browser.reset(new Browser(string(1, dsep), parentPath(file), &Program::eventOpenBookList));
+		if (startReader(filename(file)))
+			return true;
+		browser.reset();
+	} else if (Filer::fileType(file) == FTYPE_DIR) {
+		browser.reset(new Browser(string(1, dsep), file, &Program::eventOpenBookList));
+		setState(new ProgPageBrowser);
+		return true;
+	}
+	return false;
 }
 
 // BROWSER
@@ -43,7 +61,7 @@ void Program::eventBrowserGoUp(Button* but) {
 }
 
 void Program::eventBrowserGoIn(Button* but) {
-	if (browser->goIn(static_cast<Label*>(but)->getText()))
+	if (browser->goIn(static_cast<Label*>(dynamic_cast<Label*>(but) ? but : but->getParent()->getWidget(1))->getText()))
 		World::scene()->resetLayouts();
 }
 
@@ -54,6 +72,14 @@ void Program::eventExitBrowser(Button* but) {
 }
 
 // READER
+
+bool Program::startReader(const string& picname) {
+	if (!browser->selectPicture(picname))
+		return false;
+
+	setState(new ProgReader);
+	return true;
+}
 
 void Program::eventZoomIn(Button* but) {
 	static_cast<ReaderBox*>(World::scene()->getLayout())->setZoom(Default::zoomFactor);
@@ -89,14 +115,6 @@ void Program::eventExitReader(Button* but) {
 	setState(new ProgPageBrowser);
 }
 
-bool Program::startReader(const string& picname) {
-	if (!browser->selectPicture(picname))
-		return false;
-	
-	setState(new ProgReader);
-	return true;
-}
-
 // SETTINGS
 
 void Program::eventOpenSettings(Button* but) {
@@ -110,17 +128,15 @@ void Program::eventSwitchLanguage(Button* but) {
 
 void Program::eventSetLibraryDirLE(Button* but) {
 	LineEdit* le = static_cast<LineEdit*>(but);
-	if (!World::winSys()->sets.setDirLib(le->getText())) {
+	if (World::winSys()->sets.setDirLib(le->getText()) != le->getText()) {
 		World::scene()->setPopup(ProgState::createPopupMessage("Invalid directory."));
 		le->setText(World::winSys()->sets.getDirLib());
 	}
 }
 
 void Program::eventSetLibraryDirBW(Button* but) {
-	string path = appendDsep(browser->getCurDir());
 	const uset<Widget*>& select = static_cast<Layout*>(World::scene()->getLayout()->getWidget(1))->getSelected();
-	if (select.size())
-		path += static_cast<Label*>(*select.begin())->getText();
+	string path = select.size() ? appendDsep(browser->getCurDir()) + static_cast<Label*>(*select.begin())->getText() : browser->getCurDir();
 
 	World::winSys()->sets.setDirLib(path);
 	browser.reset();

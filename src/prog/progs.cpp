@@ -2,15 +2,15 @@
 
 // PROGRAM TEXT
 
-ProgState::Text::Text(const string& TXT, int H) :
-	text(TXT),
-	length(World::drawSys()->textLength(TXT, H) + Default::textOffset * 2)
+ProgState::Text::Text(const string& str, int height, int margin) :
+	text(str),
+	length(World::drawSys()->textLength(str, height) + margin * 2)
 {}
 
-int ProgState::findMaxLength(const vector<string>& strs, int height) {
+int ProgState::findMaxLength(const vector<string>& strs, int height, int margin) {
 	int width = 0;
 	for (const string& it : strs) {
-		int len = World::drawSys()->textLength(it, height) + Default::textOffset * 2;
+		int len = World::drawSys()->textLength(it, height) + margin * 2;
 		if (len > width)
 			width = len;
 	}
@@ -24,7 +24,6 @@ const int ProgState::topHeight = 40;
 const int ProgState::topSpacing = 10;
 const int ProgState::picSize = 40;
 const int ProgState::picMargin = 4;
-const int ProgState::iconMargin = 2;
 const vec2s ProgState::messageSize(300, 100);
 
 void ProgState::eventEnter() {
@@ -85,11 +84,11 @@ void ProgState::eventFullscreen() {
 Popup* ProgState::createPopupMessage(const string& msg, const vec2<Size>& size) {
 	vector<Widget*> bot = {
 		new Widget(1.f),
-		new Label(Button(1.f, &Program::eventClosePopup), World::drawSys()->translation("ok"), Label::Alignment::center),
+		new Label(1.f, World::drawSys()->translation("ok"), &Program::eventClosePopup, nullptr, nullptr, Label::Alignment::center),
 		new Widget(1.f)
 	};
 	vector<Widget*> con = {
-		new Label(Button(), msg),
+		new Label(1.f, msg),
 		new Layout(1.f, bot, false, Layout::Select::none, 0)
 	};
 	return new Popup(size, con);
@@ -104,21 +103,25 @@ void ProgBooks::eventEscape() {
 		World::program()->eventExit();
 }
 
+void ProgBooks::eventFileDrop(char* file) {
+	World::program()->openFile(file);
+}
+
 Layout* ProgBooks::createLayout() {
 	Text settings(World::drawSys()->translation("settings"), topHeight);
 	Text exit(World::drawSys()->translation("exit"), topHeight);
 	vector<Widget*> top = {
-		new Label(Button(settings.length, &Program::eventOpenSettings), settings.text),
-		new Label(Button(exit.length, &Program::eventExit), exit.text)
+		new Label(settings.length, settings.text, &Program::eventOpenSettings),
+		new Label(exit.length, exit.text, &Program::eventExit)
 	};
 
 	vector<string> books = Filer::listDir(World::winSys()->sets.getDirLib(), FTYPE_DIR);
 	vector<Widget*> tiles(books.size()+1);
 	for (sizt i=0; i<books.size(); i++) {
 		Text txt(filename(books[i]), Default::itemHeight);
-		tiles[i] = new Label(Button(txt.length, &Program::eventOpenPageBrowser, &Program::eventOpenLastPage), txt.text);
+		tiles[i] = new Label(txt.length, txt.text, &Program::eventOpenPageBrowser, &Program::eventOpenLastPage);
 	}
-	tiles.back() = new Picture(Button(Default::itemHeight, &Program::eventOpenPageBrowser, &Program::eventOpenLastPage), Filer::dirTexs + "search.png", true, iconMargin);
+	tiles.back() = new Button(Default::itemHeight, &Program::eventOpenPageBrowser, &Program::eventOpenLastPage, nullptr, World::drawSys()->texture("search"));
 
 	vector<Widget*> cont = {
 		new Layout(topHeight, top, false, Layout::Select::none, topSpacing),
@@ -136,23 +139,27 @@ void ProgPageBrowser::eventEscape() {
 		World::program()->eventBrowserGoUp();
 }
 
+void ProgPageBrowser::eventFileDrop(char* file) {
+	World::program()->openFile(file);
+}
+
 Layout* ProgPageBrowser::createLayout() {
 	vector<string> txs = {
 		World::drawSys()->translation("back"),
 		World::drawSys()->translation("up")
 	};
 	vector<Widget*> bar = {
-		new Label(Button(lineHeight, &Program::eventExitBrowser), txs[0]),
-		new Label(Button(lineHeight, &Program::eventBrowserGoUp), txs[1])
+		new Label(lineHeight, txs[0], &Program::eventExitBrowser),
+		new Label(lineHeight, txs[1], &Program::eventBrowserGoUp)
 	};
 
 	vector<string> dirs = World::program()->getBrowser()->listDirs();
 	vector<string> files = World::program()->getBrowser()->listFiles();
 	vector<Widget*> items(dirs.size() + files.size());
 	for (sizt i=0; i<dirs.size(); i++)
-		items[i] = new Label(Button(lineHeight, &Program::eventBrowserGoIn), dirs[i]);
+		items[i] = new Label(lineHeight, dirs[i], &Program::eventBrowserGoIn, nullptr, nullptr, Label::Alignment::left, World::drawSys()->texture("folder"));
 	for (sizt i=0; i<files.size(); i++)
-		items[dirs.size()+i] = new Label(Button(lineHeight, &Program::eventOpenReader), files[i]);
+		items[dirs.size()+i] = new Label(lineHeight, files[i], &Program::eventOpenReader, nullptr, nullptr, Label::Alignment::left, World::drawSys()->texture("file"));
 	
 	vector<Widget*> cont = {
 		new Layout(findMaxLength(txs, lineHeight), bar),
@@ -242,32 +249,22 @@ void ProgReader::eventClosing() {
 	ReaderBox* reader = static_cast<ReaderBox*>(World::scene()->getLayout());
 	vec2t vis = reader->visibleWidgets();
 	if (vis.l < vis.u)
-		Filer::saveLastPage(static_cast<Picture*>(reader->getWidget(vis.l))->getFile());
+		Filer::saveLastPage(appendDsep(World::program()->getBrowser()->getCurDir()) + reader->getFile(vis.l));
 }
 
 Layout* ProgReader::createLayout() {
-	string curDir = appendDsep(World::program()->getBrowser()->getCurDir());
-	vector<Widget*> pics;
-	for (string& file : Filer::listDir(curDir, FTYPE_FILE)) {
-		file = curDir + file;
-		SDL_Surface* pic = IMG_Load(file.c_str());
-		if (pic) {
-			pics.push_back(new Picture(Button(pic->h), file));
-			SDL_FreeSurface(pic);
-		}
-	}
-	return new ReaderBox(1.f, pics);
+	return new ReaderBox(1.f, World::program()->getBrowser()->getCurDir());
 }
 
 Overlay* ProgReader::createOverlay() {
 	vector<Widget*> menu = {
-		new Picture(Button(picSize, &Program::eventExitReader), Filer::dirTexs + "cross.png", false, picMargin),
-		new Picture(Button(picSize, &Program::eventNextDir), Filer::dirTexs + "right.png", false, picMargin),
-		new Picture(Button(picSize, &Program::eventPrevDir), Filer::dirTexs + "left.png", false, picMargin),
-		new Picture(Button(picSize, &Program::eventZoomIn), Filer::dirTexs + "plus.png", false, picMargin),
-		new Picture(Button(picSize, &Program::eventZoomOut), Filer::dirTexs + "minus.png", false, picMargin),
-		new Picture(Button(picSize, &Program::eventZoomReset), Filer::dirTexs + "circle.png", false, picMargin),
-		new Picture(Button(picSize, &Program::eventCenterView), Filer::dirTexs + "square.png", false, picMargin)
+		new Button(picSize, &Program::eventExitReader, nullptr, nullptr, World::drawSys()->texture("cross"), false, picMargin),
+		new Button(picSize, &Program::eventNextDir, nullptr, nullptr, World::drawSys()->texture("right"), false, picMargin),
+		new Button(picSize, &Program::eventPrevDir, nullptr, nullptr, World::drawSys()->texture("left"), false, picMargin),
+		new Button(picSize, &Program::eventZoomIn, nullptr, nullptr, World::drawSys()->texture("plus"), false, picMargin),
+		new Button(picSize, &Program::eventZoomOut, nullptr, nullptr, World::drawSys()->texture("minus"), false, picMargin),
+		new Button(picSize, &Program::eventZoomReset, nullptr, nullptr, World::drawSys()->texture("circle"), false, picMargin),
+		new Button(picSize, &Program::eventCenterView, nullptr, nullptr, World::drawSys()->texture("square"), false, picMargin)
 	};
 	return new Overlay(vec2s(0), vec2s(picSize, picSize*int(menu.size())), vec2s(0), vec2s(picSize/2, 1.f), menu, true, 0);
 }
@@ -295,12 +292,21 @@ void ProgSettings::eventFullscreen() {
 	static_cast<CheckBox*>(static_cast<Layout*>(static_cast<Layout*>(World::scene()->getLayout()->getWidget(1))->getWidget(0))->getWidget(1))->on = World::winSys()->sets.fullscreen;
 }
 
+void ProgSettings::eventFileDrop(char* file) {
+	string path = getAbsolute(file);
+	if (Filer::isFont(path)) {
+		World::drawSys()->setFont(path);
+		World::scene()->resetLayouts();
+	} else if (Filer::fileType(path) == FTYPE_DIR)
+		World::winSys()->sets.setDirLib(path);
+}
+
 Layout* ProgSettings::createLayout() {
 	Text back(World::drawSys()->translation("back"), topHeight);
 	Text exit(World::drawSys()->translation("exit"), topHeight);
 	vector<Widget*> top = {
-		new Label(Button(back.length, &Program::eventOpenBookList), back.text),
-		new Label(Button(exit.length, &Program::eventExit), exit.text)
+		new Label(back.length, back.text, &Program::eventOpenBookList),
+		new Label(exit.length, exit.text, &Program::eventExit)
 	};
 
 	vector<string> txs = {
@@ -323,31 +329,31 @@ Layout* ProgSettings::createLayout() {
 	Text dots("...", lineHeight);
 	Text dznum(ntos(Default::axisLimit), lineHeight);
 	vector<Widget*> lx[] = { {
-		new Label(Button(descLength), txs[0]),
-		new CheckBox(Button(lineHeight, &Program::eventSwitchFullscreen), World::winSys()->sets.fullscreen)
+		new Label(descLength, txs[0]),
+		new CheckBox(lineHeight, World::winSys()->sets.fullscreen, &Program::eventSwitchFullscreen)
 	}, {
-		new Label(Button(descLength), txs[1]),
-		new SwitchBox(Button(1.f, &Program::eventSetTheme, &Program::eventSetTheme), Filer::getAvailibleThemes(), World::winSys()->sets.getTheme())
+		new Label(descLength, txs[1]),
+		new SwitchBox(1.f, Filer::getAvailibleThemes(), World::winSys()->sets.getTheme(), &Program::eventSetTheme)
 	}, {
-		new Label(Button(descLength), txs[2]),
-		new SwitchBox(Button(1.f, &Program::eventSwitchLanguage, &Program::eventSwitchLanguage), Filer::getAvailibleLanguages(), World::winSys()->sets.getLang())
+		new Label(descLength, txs[2]),
+		new SwitchBox(1.f, Filer::getAvailibleLanguages(), World::winSys()->sets.getLang(), &Program::eventSwitchLanguage)
 	}, {
-		new Label(Button(descLength), txs[3]),
-		new LineEdit(Button(1.f, &Program::eventSetFont), World::winSys()->sets.getFont())
+		new Label(descLength, txs[3]),
+		new LineEdit(1.f, World::winSys()->sets.getFont(), &Program::eventSetFont)
 	}, {
-		new Label(Button(descLength), txs[4]),
-		new LineEdit(Button(1.f, &Program::eventSetLibraryDirLE), World::winSys()->sets.getDirLib()),
-		new Label(Button(dots.length, &Program::eventOpenLibDirBrowser), dots.text, Label::Alignment::center)
+		new Label(descLength, txs[4]),
+		new LineEdit(1.f, World::winSys()->sets.getDirLib(), &Program::eventSetLibraryDirLE),
+		new Label(dots.length, dots.text, &Program::eventOpenLibDirBrowser, nullptr, nullptr, Label::Alignment::center)
 	}, {
-		new Label(Button(descLength), txs[5]),
-		new SwitchBox(Button(1.f, &Program::eventSetRenderer, &Program::eventSetRenderer), Settings::getAvailibleRenderers(), World::winSys()->sets.renderer)
+		new Label(descLength, txs[5]),
+		new SwitchBox(1.f, Settings::getAvailibleRenderers(), World::winSys()->sets.renderer, &Program::eventSetRenderer)
 	}, {
-		new Label(Button(descLength), txs[6]),
-		new LineEdit(Button(1.f, &Program::eventSetScrollSpeed), World::winSys()->sets.getScrollSpeedString(), LineEdit::TextType::sFloatingSpaced)
+		new Label(descLength, txs[6]),
+		new LineEdit(1.f, World::winSys()->sets.getScrollSpeedString(), &Program::eventSetScrollSpeed, nullptr, nullptr, LineEdit::TextType::sFloatingSpaced)
 	}, {
-		new Label(Button(descLength), txs[7]),
-		new Slider(Button(1.f, &Program::eventSetDeadzoneSL), World::winSys()->sets.getDeadzone(), 0, Default::axisLimit),
-		new LineEdit(Button(dznum.length, &Program::eventSetDeadzoneLE), ntos(World::winSys()->sets.getDeadzone()), LineEdit::TextType::uInteger)
+		new Label(descLength, txs[7]),
+		new Slider(1.f, World::winSys()->sets.getDeadzone(), 0, Default::axisLimit, &Program::eventSetDeadzoneSL),
+		new LineEdit(dznum.length, ntos(World::winSys()->sets.getDeadzone()), &Program::eventSetDeadzoneLE, nullptr, nullptr, LineEdit::TextType::uInteger)
 	} };
 	vector<Widget*> lns(lcnt + 1 + bindings.size());
 	for (sizt i=0; i<lcnt; i++)
@@ -357,10 +363,10 @@ Layout* ProgSettings::createLayout() {
 	for (sizt i=0; i<bindings.size(); i++) {
 		Binding::Type type = static_cast<Binding::Type>(i);
 		vector<Widget*> lin {
-			new Label(Button(descLength), txs[lcnt+i]),
-			new KeyGetter(Button(1.f), KeyGetter::AcceptType::keyboard, type),
-			new KeyGetter(Button(1.f), KeyGetter::AcceptType::joystick, type),
-			new KeyGetter(Button(1.f), KeyGetter::AcceptType::gamepad, type),
+			new Label(descLength, txs[lcnt+i]),
+			new KeyGetter(1.f, KeyGetter::AcceptType::keyboard, type),
+			new KeyGetter(1.f, KeyGetter::AcceptType::joystick, type),
+			new KeyGetter(1.f, KeyGetter::AcceptType::gamepad, type),
 		};
 		lns[lcnt+1+i] = new Layout(lineHeight, lin, false);
 	}
@@ -388,15 +394,15 @@ Layout* ProgSearchDir::createLayout() {
 		World::drawSys()->translation("set")
 	};
 	vector<Widget*> bar = {
-		new Label(Button(lineHeight, &Program::eventExitBrowser), txs[0]),
-		new Label(Button(lineHeight, &Program::eventBrowserGoUp), txs[1]),
-		new Label(Button(lineHeight, &Program::eventSetLibraryDirBW), txs[2])
+		new Label(lineHeight, txs[0], &Program::eventExitBrowser),
+		new Label(lineHeight, txs[1], &Program::eventBrowserGoUp),
+		new Label(lineHeight, txs[2], &Program::eventSetLibraryDirBW)
 	};
 
 	vector<string> strs = World::program()->getBrowser()->listDirs();
 	vector<Widget*> items(strs.size());
 	for (sizt i=0; i<strs.size(); i++)
-		items[i] = new Label(Button(lineHeight, nullptr, nullptr, &Program::eventBrowserGoIn), strs[i]);
+		items[i] = new Label(lineHeight, strs[i], nullptr, nullptr, &Program::eventBrowserGoIn, Label::Alignment::left, World::drawSys()->texture("folder"));
 
 	vector<Widget*> cont = {
 		new Layout(findMaxLength(txs, lineHeight), bar),

@@ -5,7 +5,7 @@
 // logic for browsing files
 class Browser {
 public:
-	Browser(const string& RD="", const string& CD="", void (Program::*XC)(Button*)=nullptr);
+	Browser(string RD="", string CD="", void (Program::*XC)(Button*)=nullptr);
 
 	vector<string> listFiles() const;	// list current directory's files
 	vector<string> listDirs() const;	// list current directory's directories
@@ -32,6 +32,4 @@ private:
 	void shiftLetter(int ofs);
 #endif
 	void shiftDir(int ofs);
-
-	bool isPicture(const string& file);
 };

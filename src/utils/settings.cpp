@@ -234,9 +234,7 @@ const string& Settings::setTheme(const string& name) {
 
 string Settings::setFont(const string& newFont) {
 	string path = Filer::findFont(newFont);
-	TTF_Font* tmp = TTF_OpenFont(path.c_str(), Default::fontTestHeight);
-	if (tmp) {
-		TTF_CloseFont(tmp);
+	if (Filer::isFont(path)) {
 		font = newFont;
 		return path;
 	}
@@ -248,15 +246,15 @@ const string& Settings::setLang(const string& language) {
 	return lang = (Filer::fileType(Filer::dirLangs + language + ".ini") == FTYPE_FILE) ? language : Default::language;
 }
 
-bool Settings::setDirLib(const string& dir) {
-	dirLib = isAbsolute(dir) ? dir : Filer::dirExec + dir;
+const string& Settings::setDirLib(const string& dir) {
+	dirLib = getAbsolute(dir);
 	if (Filer::fileType(dirLib) != FTYPE_DIR)
 		if (!Filer::mkDir(dirLib)) {
 			dirLib = Filer::dirSets + Default::dirLibrary;
 			if (Filer::fileType(dirLib) != FTYPE_DIR)
 				Filer::mkDir(dirLib);
 		}
-	return dirLib == dir;
+	return dirLib;
 }
 
 int Settings::getRendererIndex() {

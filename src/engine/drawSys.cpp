@@ -2,10 +2,6 @@
 
 // FONT SET
 
-FontSet::FontSet(const string& FILE) {
-	init(FILE);
-}
-
 FontSet::~FontSet() {
 	for (const pair<int, TTF_Font*>& it : fonts)
 		TTF_CloseFont(it.second);
@@ -38,7 +34,11 @@ TTF_Font* FontSet::addSize(int size) {
 
 TTF_Font* FontSet::getFont(int height) {
 	height = float(height) * heightScale;
-	return fonts.count(height) ? fonts.at(height) : addSize(height);	// load font if it hasn't been loaded yet
+	try {	// load font if it hasn't been loaded yet
+		return fonts.at(height);
+	} catch (std::out_of_range e) {
+		return addSize(height);
+	}
 }
 
 int FontSet::length(const string& text, int height) {
@@ -51,18 +51,30 @@ int FontSet::length(const string& text, int height) {
 
 // DRAW SYS
 
-DrawSys::DrawSys(SDL_Window* window, int driverIndex) :
-	colors(Filer::getColors(World::winSys()->sets.getTheme())),
-	fonts(Filer::findFont(World::winSys()->sets.getFont())),
-	trans(Filer::getTranslations(World::winSys()->sets.getLang()))
-{
+DrawSys::DrawSys(SDL_Window* window, int driverIndex) {
+	// create and set up renderer
 	renderer = SDL_CreateRenderer(window, driverIndex, Default::rendererFlags);
 	if (!renderer)
 		throw "Couldn't create renderer:\n" + string(SDL_GetError());
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+	// load default textures with colors and initialize fonts and translations
+	for (string& it : Filer::listDir(Filer::dirTexs, FTYPE_FILE)) {
+		string file = Filer::dirTexs + it;
+		SDL_Texture* tex = IMG_LoadTexture(renderer, file.c_str());
+		if (tex)
+			texes.insert(make_pair(delExt(it), tex));
+		else
+			cerr << "Couldn't load texture " << file << endl << IMG_GetError << endl;
+	}
+	setTheme(World::winSys()->sets.getTheme());
+	setFont(World::winSys()->sets.getFont());
+	setLanguage(World::winSys()->sets.getLang());
 }
 
 DrawSys::~DrawSys() {
+	for (const pair<string, SDL_Texture*>& it : texes)
+		SDL_DestroyTexture(it.second);
 	SDL_DestroyRenderer(renderer);
 }
 
@@ -72,8 +84,19 @@ SDL_Rect DrawSys::viewport() const {
 	return view;
 }
 
+vec2i DrawSys::viewSize() const {
+	SDL_Rect view;
+	SDL_RenderGetViewport(renderer, &view);
+	return vec2i(view.w, view.h);
+}
+
 void DrawSys::setTheme(const string& name) {
 	colors = Filer::getColors(World::winSys()->sets.setTheme(name));
+	SDL_Color clr = colors[static_cast<uint8>(Color::texture)];
+	for (const pair<string, SDL_Texture*>& it : texes) {
+		SDL_SetTextureColorMod(it.second, clr.r, clr.g, clr.b);
+		SDL_SetTextureAlphaMod(it.second, clr.a);
+	}
 }
 
 void DrawSys::setFont(const string& font) {
@@ -119,37 +142,33 @@ void DrawSys::drawWidgets() {
 }
 
 void DrawSys::drawButton(Button* wgt) {
-	drawRect(overlapRect(wgt->rect(), wgt->parentFrame()), wgt->color());
+	if (wgt->showBG)
+		drawRect(overlapRect(wgt->rect(), wgt->frame()), wgt->color());
+	if (wgt->tex)
+		drawImage(wgt->tex, wgt->texRect(), wgt->frame());
 }
 
 void DrawSys::drawCheckBox(CheckBox* wgt) {
-	SDL_Rect frame = wgt->parentFrame();
-	drawRect(overlapRect(wgt->rect(), frame), wgt->color());		// draw background
+	SDL_Rect frame = wgt->frame();
+	drawButton(wgt);												// draw background
 	drawRect(overlapRect(wgt->boxRect(), frame), wgt->boxColor());	// draw checkbox
 }
 
 void DrawSys::drawSlider(Slider* wgt) {
-	SDL_Rect frame = wgt->parentFrame();
-	drawRect(overlapRect(wgt->rect(), frame), wgt->color());		// draw background
+	SDL_Rect frame = wgt->frame();
+	drawButton(wgt);												// draw background
 	drawRect(overlapRect(wgt->barRect(), frame), Color::dark);		// draw bar
 	drawRect(overlapRect(wgt->sliderRect(), frame), Color::light);	// draw slider
 }
 
-void DrawSys::drawPicture(Picture* wgt) {
-	if (wgt->showBG)
-		drawRect(overlapRect(wgt->rect(), wgt->parentFrame()), wgt->color());
-	drawImage(wgt->tex, wgt->getRes(), wgt->texRect(), wgt->parentFrame());
-}
-
 void DrawSys::drawLabel(Label* wgt) {
-	SDL_Rect rect = overlapRect(wgt->rect(), wgt->parentFrame());
-	drawRect(rect, wgt->color());	// draw background
-
-	if (wgt->tex) {		// modify frame and draw text if exists
-		rect.x += Default::textOffset;
-		rect.w -= Default::textOffset * 2;
-		drawText(wgt->tex, wgt->textRect(), rect);
-	}
+	SDL_Rect rect = overlapRect(wgt->rect(), wgt->frame());
+	if (wgt->showBG)	// draw background
+		drawRect(rect, wgt->color());
+	if (wgt->tex)		// draw left icon
+		drawImage(wgt->tex, wgt->texRect(), rect);
+	if (wgt->textTex)	// draw text
+		drawText(wgt->textTex, wgt->textRect(), wgt->textFrame());
 }
 
 void DrawSys::drawScrollArea(ScrollArea* box) {
@@ -193,40 +212,44 @@ void DrawSys::drawText(SDL_Texture* tex, const SDL_Rect& rect, const SDL_Rect& f
 	SDL_RenderCopy(renderer, tex, &src, &dst);
 }
 
-void DrawSys::drawImage(SDL_Texture* tex, const vec2i& res, const SDL_Rect& rect, const SDL_Rect& frame) {
+void DrawSys::drawImage(SDL_Texture* tex, const SDL_Rect& rect, const SDL_Rect& frame) {
 	// get destination rect and crop
 	SDL_Rect dst = rect;
 	SDL_Rect crop = cropRect(dst, frame);
 
 	// get cropped source rect
+	vec2i res;
+	SDL_QueryTexture(tex, nullptr, nullptr, &res.x, &res.y);
 	vec2f factor(float(res.x) / float(rect.w), float(res.y) / float(rect.h));
 	SDL_Rect src = {float(crop.x) * factor.x, float(crop.y) * factor.y, res.x - int(float(crop.w) * factor.x), res.y - int(float(crop.h) * factor.y)};
 
 	SDL_RenderCopy(renderer, tex, &src, &dst);
 }
 
-SDL_Texture* DrawSys::renderText(const string& text, int height, vec2i& size) {
-	if (text.empty()) {
-		size = 0;
+SDL_Texture* DrawSys::renderText(const string& text, int height) {
+	if (text.empty())
 		return nullptr;
-	}
+	
 	SDL_Surface* surf = TTF_RenderUTF8_Blended(fonts.getFont(height), text.c_str(), colors[static_cast<uint8>(Color::text)]);
 	SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-	size = vec2i(surf->w, surf->h);
 	SDL_FreeSurface(surf);
 	return tex;
 }
 
-SDL_Texture* DrawSys::loadTexture(const string& file, vec2i& res) {
-	SDL_Texture* tex = IMG_LoadTexture(renderer, file.c_str());
-	if (tex) {
-		SDL_QueryTexture(tex, nullptr, nullptr, &res.x, &res.y);
-		SDL_Color clr = colors[static_cast<uint8>(Color::texture)];
-		SDL_SetTextureColorMod(tex, clr.r, clr.g, clr.b);
-		SDL_SetTextureAlphaMod(tex, clr.a);
-	} else {
-		cerr << "Couldn't load texture " << file << endl << IMG_GetError << endl;
-		res = 0;
+vector<pair<string, SDL_Texture*>> DrawSys::loadTextures(string dir) {
+	dir = appendDsep(dir);
+	vector<pair<string, SDL_Texture*>> pics;
+	for (string& it : Filer::listDir(dir, FTYPE_FILE))
+		if (SDL_Texture* tex = IMG_LoadTexture(renderer, string(dir + it).c_str()))
+			pics.push_back(make_pair(it, tex));
+	return pics;
+}
+
+SDL_Texture* DrawSys::texture(const string& name) const {
+	try {
+		return texes.at(name);
+	} catch (std::out_of_range e) {
+		cerr << "Texture " << name << " doesn't exist." << endl;
+		return nullptr;
 	}
-	return tex;
 }

@@ -2,8 +2,8 @@
 
 // LAYOUT
 
-Layout::Layout(const Size& SIZ, const vector<Widget*>& WGS, bool VRT, Select SLC, int SPC) :
-	Widget(SIZ),
+Layout::Layout(const Size& SIZ, const vector<Widget*>& WGS, bool VRT, Select SLC, int SPC, Layout* PNT, sizt ID) :
+	Widget(SIZ, PNT, ID),
 	widgets(WGS),
 	positions(WGS.size()+1),
 	selection(SLC),
@@ -115,10 +115,10 @@ vec2i Layout::position() const {
 }
 
 vec2i Layout::size() const {
-	return parent ? parent->wgtSize(pcID) : World::winSys()->resolution();
+	return parent ? parent->wgtSize(pcID) : World::drawSys()->viewSize();
 }
 
-SDL_Rect Layout::parentFrame() const {
+SDL_Rect Layout::frame() const {
 	return parent ? parent->frame() : World::drawSys()->viewport();
 }
 
@@ -186,7 +186,7 @@ sizt Layout::findMaxSelectedID() const {
 // POPUP
 
 Popup::Popup(const vec2s& SIZ, const vector<Widget*>& WGS, bool VRT, int SPC) :
-	Layout(SIZ.x, WGS, VRT, Select::none, SPC),
+	Layout(SIZ.x, WGS, VRT, Select::none, SPC, nullptr, SIZE_MAX),
 	sizeY(SIZ.y)
 {}
 
@@ -195,12 +195,16 @@ void Popup::drawSelf() {
 }
 
 vec2i Popup::position() const {
-	return (World::winSys()->resolution() - size()) / 2;
+	return (World::drawSys()->viewSize() - size()) / 2;
 }
 
 vec2i Popup::size() const {
-	vec2f res = World::winSys()->resolution();
+	vec2f res = World::drawSys()->viewSize();
 	return vec2i(relSize.usePix ? relSize.pix : relSize.prc * res.x, sizeY.usePix ? sizeY.pix : sizeY.prc * res.y);
+}
+
+SDL_Rect Popup::frame() const {
+	return World::drawSys()->viewport();
 }
 
 // OVERLAY
@@ -213,12 +217,12 @@ Overlay::Overlay(const vec2s& POS, const vec2s& SIZ, const vec2s& APS, const vec
 {}
 
 vec2i Overlay::position() const {
-	vec2f res = World::winSys()->resolution();
+	vec2f res = World::drawSys()->viewSize();
 	return vec2i(pos.x.usePix ? pos.x.pix : pos.x.prc * res.x, pos.y.usePix ? pos.y.pix : pos.y.prc * res.y);
 }
 
 SDL_Rect Overlay::actRect() const {
-	vec2f res = World::winSys()->resolution();
+	vec2f res = World::drawSys()->viewSize();
 	vec2i ps(actPos.x.usePix ? actPos.x.pix : actPos.x.prc * res.x, actPos.y.usePix ? actPos.y.pix : actPos.y.prc * res.y);
 	vec2i sz(actSize.x.usePix ? actSize.x.pix : actSize.x.prc * res.x, actSize.y.usePix ? actSize.y.pix : actSize.y.prc * res.y);
 	return {ps.x, ps.y, sz.x, sz.y};
@@ -226,8 +230,8 @@ SDL_Rect Overlay::actRect() const {
 
 // SCROLL AREA
 
-ScrollArea::ScrollArea(const Size& SIZ, const vector<Widget*>& WGS, Select SLC, int SPC) :
-	Layout(SIZ, WGS, true, SLC, SPC),
+ScrollArea::ScrollArea(const Size& SIZ, const vector<Widget*>& WGS, Select SLC, int SPC, Layout* PNT, sizt ID) :
+	Layout(SIZ, WGS, true, SLC, SPC, PNT, ID),
 	listPos(0),
 	motion(0.f),
 	diffSliderMouse(0),
@@ -362,6 +366,10 @@ int ScrollArea::sliderLim() const {
 	return size().y - sliderHeight();
 }
 
+SDL_Rect ScrollArea::frame() const {
+	return parent ? overlapRect(rect(), parent->frame()) : rect();
+}
+
 vec2i ScrollArea::wgtPosition(sizt id) const {
 	return Layout::wgtPosition(id) - listPos;
 }
@@ -407,8 +415,8 @@ int ScrollArea::wgtYEnd(sizt id) const {
 
 // TILE BOX
 
-TileBox::TileBox(const Size& SIZ, const vector<Widget*>& WGS, int WHT, Select SLC, int SPC) :
-	ScrollArea(SIZ, WGS, SLC, SPC),
+TileBox::TileBox(const Size& SIZ, const vector<Widget*>& WGS, int WHT, Select SLC, int SPC, Layout* PNT, sizt ID) :
+	ScrollArea(SIZ, WGS, SLC, SPC, PNT, ID),
 	wheight(WHT)
 {}
 
@@ -498,12 +506,23 @@ int TileBox::wgtYEnd(sizt id) const {
 
 // READER BOX
 
-ReaderBox::ReaderBox(const Size& SIZ, const vector<Widget*>& PICS, int SPC) :
-	ScrollArea(SIZ, PICS, Select::none, SPC),
+ReaderBox::ReaderBox(const Size& SIZ, const string& DIR, int SPC, Layout* PNT, sizt ID) :
+	ScrollArea(SIZ, {}, Select::none, SPC, PNT, ID),
+	pics(World::drawSys()->loadTextures(DIR)),
 	countDown(true),
 	cursorTimer(Default::menuHideTimeout),
 	zoom(1.f)
-{}
+{
+	widgets.resize(pics.size());
+	positions.resize(pics.size()+1);
+	for (sizt i=0; i<pics.size(); i++)
+		widgets[i] = new Button(texRes(i).y, nullptr, nullptr, nullptr, pics[i].second, false, 0, this, i);
+}
+
+ReaderBox::~ReaderBox() {
+	for (pair<string, SDL_Texture*>& it : pics)
+		SDL_DestroyTexture(it.second);
+}
 
 void ReaderBox::drawSelf() {
 	World::drawSys()->drawReaderBox(this);
@@ -512,8 +531,8 @@ void ReaderBox::drawSelf() {
 void ReaderBox::onResize() {
 	// figure out the width of the list
 	int maxWidth = size().x;
-	for (Widget* it : widgets) {
-		int width = float(static_cast<Picture*>(it)->getRes().x) * zoom;
+	for (sizt i=0; i<pics.size(); i++) {
+		int width = float(texRes(i).x) * zoom;
 		if (width > maxWidth)
 			maxWidth = width;
 	}
@@ -521,7 +540,7 @@ void ReaderBox::onResize() {
 	// set position of each picture
 	int ypos = 0;
 	for (sizt i=0; i<widgets.size(); i++) {
-		vec2i psz = vec2f(static_cast<Picture*>(widgets[i])->getRes()) * zoom;
+		vec2i psz = vec2f(texRes(i)) * zoom;
 		positions[i] = vec2i((maxWidth - psz.x) / 2, ypos);
 		ypos += psz.y;
 	}
@@ -547,9 +566,8 @@ void ReaderBox::postInit() {
 	Layout::postInit();
 
 	// scroll down to opened picture
-	string curPic = World::program()->getBrowser()->curFilepath();
 	for (sizt i=0; i<widgets.size(); i++)
-		if (static_cast<Picture*>(widgets[i])->getFile() == curPic) {
+		if (pics[i].first == World::program()->getBrowser()->getCurFile()) {
 			scrollToWidgetPos(i);
 			break;
 		}
@@ -586,7 +604,7 @@ vec2i ReaderBox::wgtPosition(sizt id) const {
 }
 
 vec2i ReaderBox::wgtSize(sizt id) const {
-	return vec2f(static_cast<Picture*>(widgets[id])->getRes()) * zoom;
+	return vec2f(texRes(id)) * zoom;
 }
 
 vec2i ReaderBox::listSize() const {
@@ -600,4 +618,10 @@ int ReaderBox::wgtYPos(sizt id) const {
 
 int ReaderBox::wgtYEnd(sizt id) const {
 	return positions[id+1].y + id * spacing;
+}
+
+vec2i ReaderBox::texRes(sizt id) const {
+	vec2i res;
+	SDL_QueryTexture(pics[id].second, nullptr, nullptr, &res.x, &res.y);
+	return res;
 }

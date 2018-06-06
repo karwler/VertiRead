@@ -11,7 +11,7 @@ public:
 		any
 	};
 
-	Layout(const Size& SIZ=Size(), const vector<Widget*>& WGS={}, bool VRT=true, Select SLC=Select::none, int SPC=Default::spacing);
+	Layout(const Size& SIZ=Size(), const vector<Widget*>& WGS={}, bool VRT=true, Select SLC=Select::none, int SPC=Default::spacing, Layout* PNT=nullptr, sizt ID=SIZE_MAX);
 	virtual ~Layout();
 
 	virtual void drawSelf();
@@ -34,7 +34,7 @@ public:
 	bool isVertical() const { return vertical; }
 	virtual vec2i position() const;
 	virtual vec2i size() const;
-	virtual SDL_Rect parentFrame() const;
+	virtual SDL_Rect frame() const;
 	virtual vec2i wgtPosition(sizt id) const;
 	virtual vec2i wgtSize(sizt id) const;
 	void selectWidget(sizt id);
@@ -69,6 +69,7 @@ public:
 
 	virtual vec2i position() const;
 	virtual vec2i size() const;
+	virtual SDL_Rect frame() const;
 
 private:
 	Size sizeY;	// use Widget's relSize as sizeX
@@ -92,7 +93,7 @@ private:
 // places widgets vertically through which the user can scroll (DON"T PUT SCROLL AREAS INTO OTHER SCROLL AREAS)
 class ScrollArea : public Layout {
 public:
-	ScrollArea(const Size& SIZ=Size(), const vector<Widget*>& WGS={}, Select SLC=Select::none, int SPC=Default::spacing);
+	ScrollArea(const Size& SIZ=Size(), const vector<Widget*>& WGS={}, Select SLC=Select::none, int SPC=Default::spacing, Layout* PNT=nullptr, sizt ID=SIZE_MAX);
 	virtual ~ScrollArea() {}
 
 	virtual void drawSelf();
@@ -108,9 +109,9 @@ public:
 	void scrollToWidgetPos(sizt id);	// set listPos.y to the widget's position
 	void scrollToWidgetEnd(sizt id);
 
+	virtual SDL_Rect frame() const;
 	virtual vec2i wgtPosition(sizt id) const;
 	virtual vec2i wgtSize(sizt id) const;
-	virtual SDL_Rect frame() const { return rect(); }
 	SDL_Rect barRect() const;
 	SDL_Rect sliderRect() const;
 	vec2t visibleWidgets() const;
@@ -137,7 +138,7 @@ private:
 // places items as tiles one after another
 class TileBox : public ScrollArea {
 public:
-	TileBox(const Size& SIZ=Size(), const vector<Widget*>& WGS={}, int WHT=Default::itemHeight, Select SLC=Select::none, int SPC=Default::spacing);
+	TileBox(const Size& SIZ=Size(), const vector<Widget*>& WGS={}, int WHT=Default::itemHeight, Select SLC=Select::none, int SPC=Default::spacing, Layout* PNT=nullptr, sizt ID=SIZE_MAX);
 	virtual ~TileBox() {}
 
 	virtual void onResize();
@@ -162,8 +163,8 @@ private:
 // for scrolling through pictures
 class ReaderBox : public ScrollArea {
 public:
-	ReaderBox(const Size& SIZ=Size(), const vector<Widget*>& PICS={}, int SPC=Default::spacing);
-	virtual ~ReaderBox() {}
+	ReaderBox(const Size& SIZ=Size(), const string& DIR="", int SPC=Default::spacing, Layout* PNT=nullptr, sizt ID=SIZE_MAX);
+	virtual ~ReaderBox();
 
 	virtual void drawSelf();
 	virtual void onResize();
@@ -175,10 +176,12 @@ public:
 	float getZoom() const { return zoom; }
 	void setZoom(float factor);
 	void centerListX();		// set listPos.x so that the view will be in the centter
+	const string& getFile(sizt id) const { return pics[id].first; }
 	virtual vec2i wgtPosition(sizt id) const;
 	virtual vec2i wgtSize(sizt id) const;
 
 private:
+	vector<pair<string, SDL_Texture*>> pics;
 	bool countDown;		// whether to decrease cursorTimer until cursor hide
 	float cursorTimer;	// time left until cursor/overlay disappeares
 	float zoom;
@@ -186,4 +189,6 @@ private:
 	virtual vec2i listSize() const;
 	virtual int wgtYPos(sizt id) const;
 	virtual int wgtYEnd(sizt id) const;
+
+	vec2i texRes(sizt id) const;
 };

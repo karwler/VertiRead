@@ -22,8 +22,8 @@ Settings files are being saved in "%AppData%\VertiRead".
 
 ## How to use it
 The idea is that you have a library directory in which you have your comics saved in form of pictures. The location of this directory can be changed in the settings.  
-The last button in the book list allows you to navigate through files outside of the library directory.  
 Left clicking on a book in the book list wil take you to the file explorer, while right clicking on a book will take you to the last viewed page.  
+The last button in the book list allows you to navigate through files outside of the library directory. When in the book list or browser view, you can drag and drop a folder or file into the window to browse/open it. It's also possible to start the program with a file/directory path as a command line argument to start in the page browser or reader.  
 The reader has a hidden side panel on the left.  
 
 The program supports keyboard and controller bindings. DirectInput and XInput are handled separately. The bindings can be changed in the settings.  

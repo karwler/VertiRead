@@ -53,13 +53,12 @@ void WindowSys::init() {
 	inputSys.reset(new InputSys);
 	scene.reset(new Scene);
 	program.reset(new Program);
+	program->init();
 }
 
 void WindowSys::exec() {
-	scene->resetLayouts();
-	uint32 oldTime = SDL_GetTicks();
-
 	// the loop :o
+	uint32 oldTime = SDL_GetTicks();
 	while (run) {
 		// get delta seconds
 		uint32 newTime = SDL_GetTicks();

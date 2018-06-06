@@ -105,7 +105,7 @@ void IniLine::clear() {
 
 // FILER
 
-const string Filer::dirExec = appendDsep(Filer::getDirExec());
+const string Filer::dirExec = appendDsep(Filer::getExecDir());
 #ifdef _WIN32
 const vector<string> Filer::dirFonts = {Filer::dirExec, string(std::getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
 const string Filer::dirSets = string(std::getenv("AppData")) + "\\"+Default::titleDefault+"\\";
@@ -461,6 +461,23 @@ FileType Filer::fileType(const string& path) {
 	return FTYPE_FILE;
 }
 
+bool Filer::isPicture(const string& file) {
+	if (SDL_Surface* img = IMG_Load(file.c_str())) {
+		SDL_FreeSurface(img);
+		return true;
+	}
+	return false;
+}
+
+bool Filer::isFont(const string& file) {
+	TTF_Font* tmp = TTF_OpenFont(file.c_str(), Default::fontTestHeight);
+	if (tmp) {
+		TTF_CloseFont(tmp);
+		return true;
+	}
+	return false;
+}
+
 #ifdef _WIN32
 vector<char> Filer::listDrives() {
 	vector<char> letters;
@@ -473,28 +490,38 @@ vector<char> Filer::listDrives() {
 }
 #endif
 
-string Filer::getDirExec() {
+string Filer::getExecDir() {
 	string path;
 #ifdef _WIN32
 	wchar buffer[MAX_PATH];
-	GetModuleFileNameW(0, buffer, MAX_PATH);
-	path = wtos(buffer);
+	return GetModuleFileNameW(GetModuleHandleW(nullptr), buffer, MAX_PATH) ? parentPath(wtos(buffer)) : getWorkingDir();
 #else
 	char buffer[PATH_MAX];
-	int len = readlink("/proc/self/exe", buffer, PATH_MAX-1);
-	buffer[len] = '\0';
-	path = buffer;
+	if (ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1)) {
+		buffer[len] = '\0';
+		return parentPath(buffer);
+	}
+	return getWorkingDir();
 #endif
-	return parentPath(path);
+}
+
+string Filer::getWorkingDir() {
+#ifdef _WIN32
+	wchar buffer[MAX_PATH];
+	return GetCurrentDirectoryW(MAX_PATH, buffer) ? wtos(buffer) : "";
+#else
+	char buffer[PATH_MAX];
+	return getcwd(buffer, sizeof(buffer)) ? buffer : "";
+#endif
 }
 
 string Filer::findFont(const string& font) {	
-	if (isAbsolute(font) && fileType(font) == FTYPE_FILE)	// check if font refers to a file
+	if (isAbsolute(font) && isFont(font))	// check if font refers to a file
 		return font;
 
 	for (const string& dir : dirFonts)	// check font directories
 		for (string& it : listDirRecursively(dir))
-			if (strcmpCI(hasExt(it) ? delExt(filename(it)) : filename(it), font))
+			if (strcmpCI(hasExt(it) ? delExt(filename(it)) : filename(it), font) && isFont(it))
 				return it;
 	return "";	// nothing found
 }
