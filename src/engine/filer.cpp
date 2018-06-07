@@ -497,11 +497,11 @@ string Filer::getExecDir() {
 	return GetModuleFileNameW(GetModuleHandleW(nullptr), buffer, MAX_PATH) ? parentPath(wtos(buffer)) : getWorkingDir();
 #else
 	char buffer[PATH_MAX];
-	if (ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1)) {
-		buffer[len] = '\0';
-		return parentPath(buffer);
-	}
-	return getWorkingDir();
+	ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
+	if (len < 0)
+		return getWorkingDir();
+	buffer[len] = '\0';
+	return parentPath(buffer);
 #endif
 }
 

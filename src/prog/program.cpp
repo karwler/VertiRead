@@ -61,7 +61,7 @@ void Program::eventBrowserGoUp(Button* but) {
 }
 
 void Program::eventBrowserGoIn(Button* but) {
-	if (browser->goIn(static_cast<Label*>(dynamic_cast<Label*>(but) ? but : but->getParent()->getWidget(1))->getText()))
+	if (browser->goIn(static_cast<Label*>(but)->getText()))
 		World::scene()->resetLayouts();
 }
 
