@@ -27,13 +27,13 @@ void WindowSys::init() {
 
 	int flags = IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP);
 	if (!(flags & IMG_INIT_JPG))
-		cerr << "Couldn't initialize JPG:" << endl << IMG_GetError() << endl;
+		std::cerr << "Couldn't initialize JPG:" << std::endl << IMG_GetError() << std::endl;
 	if (!(flags & IMG_INIT_PNG))
-		cerr << "Couldn't initialize PNG:" << endl << IMG_GetError() << endl;
+		std::cerr << "Couldn't initialize PNG:" << std::endl << IMG_GetError() << std::endl;
 	if (!(flags & IMG_INIT_TIF))
-		cerr << "Couldn't initialize TIF:" << endl << IMG_GetError() << endl;
+		std::cerr << "Couldn't initialize TIF:" << std::endl << IMG_GetError() << std::endl;
 	if (!(flags & IMG_INIT_WEBP))
-		cerr << "Couldn't initialize WEBP:" << endl << IMG_GetError() << endl;
+		std::cerr << "Couldn't initialize WEBP:" << std::endl << IMG_GetError() << std::endl;
 
 	SDL_StopTextInput();	// for some reason TextInput is on
 	sets = Filer::getSettings();
@@ -41,13 +41,13 @@ void WindowSys::init() {
 	// check if all (more or less) necessary files and directories exist
 	if (Filer::fileType(Filer::dirSets) != FTYPE_DIR)
 		if (!Filer::mkDir(Filer::dirSets))
-			cerr << "Couldn't create settings directory." << endl;
+			std::cerr << "Couldn't create settings directory." << std::endl;
 	if (Filer::fileType(Filer::dirExec + Default::fileThemes) != FTYPE_FILE)
-		cerr << "Couldn't find themes file." << endl;
+		std::cerr << "Couldn't find themes file." << std::endl;
 	if (Filer::fileType(Filer::dirLangs) != FTYPE_DIR)
-		cerr << "Couldn't find language directory." << endl;
+		std::cerr << "Couldn't find language directory." << std::endl;
 	if (Filer::fileType(Filer::dirTexs) != FTYPE_DIR)
-		cerr << "Couldn't find texture directory." << endl;
+		std::cerr << "Couldn't find texture directory." << std::endl;
 
 	createWindow();
 	inputSys.reset(new InputSys);

@@ -65,7 +65,7 @@ DrawSys::DrawSys(SDL_Window* window, int driverIndex) {
 		if (tex)
 			texes.insert(make_pair(delExt(it), tex));
 		else
-			cerr << "Couldn't load texture " << file << endl << IMG_GetError << endl;
+			std::cerr << "Couldn't load texture " << file << std::endl << IMG_GetError << std::endl;
 	}
 	setTheme(World::winSys()->sets.getTheme());
 	setFont(World::winSys()->sets.getFont());
@@ -249,7 +249,7 @@ SDL_Texture* DrawSys::texture(const string& name) const {
 	try {
 		return texes.at(name);
 	} catch (std::out_of_range e) {
-		cerr << "Texture " << name << " doesn't exist." << endl;
+		std::cerr << "Texture " << name << " doesn't exist." << std::endl;
 		return nullptr;
 	}
 }

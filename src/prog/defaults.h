@@ -23,9 +23,6 @@
 #endif
 
 // to make life easier
-using std::cout;
-using std::cerr;
-using std::endl;
 using std::vector;
 using std::map;
 using std::pair;

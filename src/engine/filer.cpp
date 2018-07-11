@@ -344,7 +344,7 @@ bool Filer::readTextFile(const string& file, vector<string>& lines, bool printMe
 	std::ifstream ifs(file.c_str());
 	if (!ifs.good()) {
 		if (printMessage)
-			cerr << "Couldn't open file " << file << endl;
+			std::cerr << "Couldn't open file " << file << std::endl;
 		return false;
 	}
 	lines.clear();
@@ -358,11 +358,11 @@ bool Filer::readTextFile(const string& file, vector<string>& lines, bool printMe
 bool Filer::writeTextFile(const string& file, const vector<string>& lines) {
 	std::ofstream ofs(file.c_str());
 	if (!ofs.good()) {
-		cerr << "Couldn't write file " << file << endl;
+		std::cerr << "Couldn't write file " << file << std::endl;
 		return false;
 	}
 	for (const string& line : lines)
-		ofs << line << endl;
+		ofs << line << std::endl;
 	return true;
 }
 
@@ -370,7 +370,7 @@ bool Filer::mkDir(const string& path) {
 #ifdef _WIN32
 	return CreateDirectoryW(stow(path).c_str(), 0);
 #else
-	return !mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	return !mkdir(path.c_str(), 0775);
 #endif
 }
 
