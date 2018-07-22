@@ -168,7 +168,7 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 		if (!(flags & SDL_WINDOW_FULLSCREEN_DESKTOP)) {
 			sets.maximized = flags & SDL_WINDOW_MAXIMIZED;
 			if (!sets.maximized)
-				sets.resolution = resolution();
+				SDL_GetWindowSize(window, &sets.resolution.x, &sets.resolution.y);
 		}
 		scene->onResize();
 	} else if (winEvent.event == SDL_WINDOWEVENT_SIZE_CHANGED)
@@ -179,16 +179,19 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 		close();
 }
 
-vec2i WindowSys::resolution() const {
-	vec2i res;
-	SDL_GetWindowSize(window, &res.x, &res.y);
-	return res;
+vec2i WindowSys::displayResolution() const {
+	SDL_DisplayMode mode;
+	return SDL_GetDesktopDisplayMode(SDL_GetWindowDisplayIndex(window), &mode) ? 0 : vec2i(mode.w, mode.h);
+}
+
+void WindowSys::setWindowPos(const vec2i& pos) {
+	SDL_SetWindowPosition(window, pos.x, pos.y);
 }
 
 void WindowSys::moveCursor(const vec2i& mov) {
-	vec2i pos;
-	SDL_GetMouseState(&pos.x, &pos.y);
-	SDL_WarpMouseInWindow(window, pos.x + mov.x, pos.y + mov.y);
+	int px, py;
+	SDL_GetMouseState(&px, &py);
+	SDL_WarpMouseInWindow(window, px + mov.x, py + mov.y);
 }
 
 void WindowSys::setFullscreen(bool on) {
@@ -196,7 +199,17 @@ void WindowSys::setFullscreen(bool on) {
 	SDL_SetWindowFullscreen(window, on ? SDL_GetWindowFlags(window) | SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_GetWindowFlags(window) & ~SDL_WINDOW_FULLSCREEN_DESKTOP);
 }
 
+void WindowSys::setResolution(const vec2i& res) {
+	sets.resolution = res;
+	SDL_SetWindowSize(window, res.x, res.y);
+}
+
 void WindowSys::setRenderer(const string& name) {
 	sets.renderer = name;
+	createWindow();
+}
+
+void WindowSys::resetSettings() {
+	sets = Settings();
 	createWindow();
 }

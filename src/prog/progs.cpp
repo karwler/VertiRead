@@ -89,7 +89,7 @@ Popup* ProgState::createPopupMessage(const string& msg, const vec2<Size>& size) 
 	};
 	vector<Widget*> con = {
 		new Label(1.f, msg),
-		new Layout(1.f, bot, false, Layout::Select::none, 0)
+		new Layout(1.f, bot, Direction::right, Layout::Select::none, 0)
 	};
 	return new Popup(size, con);
 }
@@ -117,17 +117,17 @@ Layout* ProgBooks::createLayout() {
 
 	vector<string> books = Filer::listDir(World::winSys()->sets.getDirLib(), FTYPE_DIR);
 	vector<Widget*> tiles(books.size()+1);
-	for (sizt i=0; i<books.size(); i++) {
+	for (sizt i = 0; i < books.size(); i++) {
 		Text txt(filename(books[i]), Default::itemHeight);
 		tiles[i] = new Label(txt.length, txt.text, &Program::eventOpenPageBrowser, &Program::eventOpenLastPage);
 	}
 	tiles.back() = new Button(Default::itemHeight, &Program::eventOpenPageBrowser, &Program::eventOpenLastPage, nullptr, World::drawSys()->texture("search"));
 
 	vector<Widget*> cont = {
-		new Layout(topHeight, top, false, Layout::Select::none, topSpacing),
+		new Layout(topHeight, top, Direction::right, Layout::Select::none, topSpacing),
 		new TileBox(1.f, tiles)
 	};
-	return new Layout(1.f, cont, true, Layout::Select::none, topSpacing);
+	return new Layout(1.f, cont, Direction::down, Layout::Select::none, topSpacing);
 }
 
 // PROG PAGE BROWSER
@@ -156,16 +156,16 @@ Layout* ProgPageBrowser::createLayout() {
 	vector<string> dirs = World::program()->getBrowser()->listDirs();
 	vector<string> files = World::program()->getBrowser()->listFiles();
 	vector<Widget*> items(dirs.size() + files.size());
-	for (sizt i=0; i<dirs.size(); i++)
+	for (sizt i = 0; i < dirs.size(); i++)
 		items[i] = new Label(lineHeight, dirs[i], &Program::eventBrowserGoIn, nullptr, nullptr, Label::Alignment::left, World::drawSys()->texture("folder"));
-	for (sizt i=0; i<files.size(); i++)
+	for (sizt i = 0; i < files.size(); i++)
 		items[dirs.size()+i] = new Label(lineHeight, files[i], &Program::eventOpenReader, nullptr, nullptr, Label::Alignment::left, World::drawSys()->texture("file"));
 	
 	vector<Widget*> cont = {
 		new Layout(findMaxLength(txs, lineHeight), bar),
 		new ScrollArea(1.f, items)
 	};
-	return new Layout(1.f, cont, false, Layout::Select::none, topSpacing);
+	return new Layout(1.f, cont, Direction::right, Layout::Select::none, topSpacing);
 }
 
 // PROG READER
@@ -253,7 +253,7 @@ void ProgReader::eventClosing() {
 }
 
 Layout* ProgReader::createLayout() {
-	return new ReaderBox(1.f, World::program()->getBrowser()->getCurDir());
+	return new ReaderBox(1.f, World::program()->getBrowser()->getCurDir(), World::winSys()->sets.direction);
 }
 
 Overlay* ProgReader::createOverlay() {
@@ -266,7 +266,7 @@ Overlay* ProgReader::createOverlay() {
 		new Button(picSize, &Program::eventZoomReset, nullptr, nullptr, World::drawSys()->texture("circle"), false, picMargin),
 		new Button(picSize, &Program::eventCenterView, nullptr, nullptr, World::drawSys()->texture("square"), false, picMargin)
 	};
-	return new Overlay(vec2s(0), vec2s(picSize, picSize*int(menu.size())), vec2s(0), vec2s(picSize/2, 1.f), menu, true, 0);
+	return new Overlay(vec2s(0), vec2s(picSize, picSize*int(menu.size())), vec2s(0), vec2s(picSize/2, 1.f), menu, Direction::down, 0);
 }
 
 float ProgReader::modifySpeed(float value) {
@@ -309,8 +309,16 @@ Layout* ProgSettings::createLayout() {
 		new Label(exit.length, exit.text, &Program::eventExit)
 	};
 
+	vector<Text> butts = {
+		Text(World::drawSys()->translation("portrait"), lineHeight),
+		Text(World::drawSys()->translation("landscape"), lineHeight),
+		Text(World::drawSys()->translation("square"), lineHeight),
+		Text(World::drawSys()->translation("fill"), lineHeight)
+	};
 	vector<string> txs = {
+		World::drawSys()->translation("direction"),
 		World::drawSys()->translation("fullscreen"),
+		World::drawSys()->translation("size"),
 		World::drawSys()->translation("theme"),
 		World::drawSys()->translation("language"),
 		World::drawSys()->translation("font"),
@@ -322,7 +330,7 @@ Layout* ProgSettings::createLayout() {
 	sizt lcnt = txs.size();
 	const vector<Binding>& bindings = World::inputSys()->getBindings();
 	txs.resize(txs.size() + bindings.size());
-	for (sizt i=0; i<bindings.size(); i++)
+	for (sizt i = 0; i < bindings.size(); i++)
 		txs[lcnt+i] = World::drawSys()->translation(enumToStr(Default::bindingNames, i));
 	
 	int descLength = findMaxLength(txs, lineHeight);
@@ -330,52 +338,69 @@ Layout* ProgSettings::createLayout() {
 	Text dznum(ntos(Default::axisLimit), lineHeight);
 	vector<Widget*> lx[] = { {
 		new Label(descLength, txs[0]),
-		new CheckBox(lineHeight, World::winSys()->sets.fullscreen, &Program::eventSwitchFullscreen)
-	}, {
+		new SwitchBox(1.f, Default::directionNames, enumToStr(Default::directionNames, World::winSys()->sets.direction), &Program::eventSwitchDirection)
+	},{
 		new Label(descLength, txs[1]),
-		new SwitchBox(1.f, Filer::getAvailibleThemes(), World::winSys()->sets.getTheme(), &Program::eventSetTheme)
-	}, {
+		new CheckBox(lineHeight, World::winSys()->sets.fullscreen, &Program::eventSwitchFullscreen)
+	},{
 		new Label(descLength, txs[2]),
-		new SwitchBox(1.f, Filer::getAvailibleLanguages(), World::winSys()->sets.getLang(), &Program::eventSwitchLanguage)
+		new Label(butts[0].length, butts[0].text, &Program::eventSetPortrait),
+		new Label(butts[1].length, butts[1].text, &Program::eventSetLandscape),
+		new Label(butts[2].length, butts[2].text, &Program::eventSetSquare),
+		new Label(butts[3].length, butts[3].text, &Program::eventSetFill)
 	}, {
 		new Label(descLength, txs[3]),
-		new LineEdit(1.f, World::winSys()->sets.getFont(), &Program::eventSetFont)
+		new SwitchBox(1.f, Filer::getAvailibleThemes(), World::winSys()->sets.getTheme(), &Program::eventSetTheme)
 	}, {
 		new Label(descLength, txs[4]),
+		new SwitchBox(1.f, Filer::getAvailibleLanguages(), World::winSys()->sets.getLang(), &Program::eventSwitchLanguage)
+	}, {
+		new Label(descLength, txs[5]),
+		new LineEdit(1.f, World::winSys()->sets.getFont(), &Program::eventSetFont)
+	}, {
+		new Label(descLength, txs[6]),
 		new LineEdit(1.f, World::winSys()->sets.getDirLib(), &Program::eventSetLibraryDirLE),
 		new Label(dots.length, dots.text, &Program::eventOpenLibDirBrowser, nullptr, nullptr, Label::Alignment::center)
 	}, {
-		new Label(descLength, txs[5]),
+		new Label(descLength, txs[7]),
 		new SwitchBox(1.f, Settings::getAvailibleRenderers(), World::winSys()->sets.renderer, &Program::eventSetRenderer)
 	}, {
-		new Label(descLength, txs[6]),
+		new Label(descLength, txs[8]),
 		new LineEdit(1.f, World::winSys()->sets.getScrollSpeedString(), &Program::eventSetScrollSpeed, nullptr, nullptr, LineEdit::TextType::sFloatingSpaced)
 	}, {
-		new Label(descLength, txs[7]),
+		new Label(descLength, txs[9]),
 		new Slider(1.f, World::winSys()->sets.getDeadzone(), 0, Default::axisLimit, &Program::eventSetDeadzoneSL),
 		new LineEdit(dznum.length, ntos(World::winSys()->sets.getDeadzone()), &Program::eventSetDeadzoneLE, nullptr, nullptr, LineEdit::TextType::uInteger)
 	} };
-	vector<Widget*> lns(lcnt + 1 + bindings.size());
-	for (sizt i=0; i<lcnt; i++)
-		lns[i] = new Layout(lineHeight, lx[i], false);
+	vector<Widget*> lns(lcnt + 1 + bindings.size() + 2);
+	for (sizt i = 0; i < lcnt; i++)
+		lns[i] = new Layout(lineHeight, lx[i], Direction::right);
 	lns[lcnt] = new Widget(0);
 	
-	for (sizt i=0; i<bindings.size(); i++) {
+	for (sizt i = 0; i < bindings.size(); i++) {
 		Binding::Type type = static_cast<Binding::Type>(i);
 		vector<Widget*> lin {
 			new Label(descLength, txs[lcnt+i]),
 			new KeyGetter(1.f, KeyGetter::AcceptType::keyboard, type),
 			new KeyGetter(1.f, KeyGetter::AcceptType::joystick, type),
-			new KeyGetter(1.f, KeyGetter::AcceptType::gamepad, type),
+			new KeyGetter(1.f, KeyGetter::AcceptType::gamepad, type)
 		};
-		lns[lcnt+1+i] = new Layout(lineHeight, lin, false);
+		lns[lcnt+1+i] = new Layout(lineHeight, lin, Direction::right);
 	}
+	lcnt += 1 + bindings.size();
+
+	Text resbut(World::drawSys()->translation("reset"), lineHeight);
+	vector<Widget*> resln = {
+		new Label(resbut.length, resbut.text, &Program::eventResetSettings)
+	};
+	lns[lcnt] = new Widget(0);
+	lns[lcnt+1] = new Layout(lineHeight, resln, Direction::right);
 
 	vector<Widget*> cont = {
-		new Layout(topHeight, top, false, Layout::Select::none, topSpacing),
+		new Layout(topHeight, top, Direction::right, Layout::Select::none, topSpacing),
 		new ScrollArea(1.f, lns)
 	};
-	return new Layout(1.f, cont, true, Layout::Select::none, topSpacing);
+	return new Layout(1.f, cont, Direction::down, Layout::Select::none, topSpacing);
 }
 
 // PROG SEARCH DIR
@@ -401,12 +426,12 @@ Layout* ProgSearchDir::createLayout() {
 
 	vector<string> strs = World::program()->getBrowser()->listDirs();
 	vector<Widget*> items(strs.size());
-	for (sizt i=0; i<strs.size(); i++)
+	for (sizt i = 0; i < strs.size(); i++)
 		items[i] = new Label(lineHeight, strs[i], nullptr, nullptr, &Program::eventBrowserGoIn, Label::Alignment::left, World::drawSys()->texture("folder"));
 
 	vector<Widget*> cont = {
 		new Layout(findMaxLength(txs, lineHeight), bar),
-		new ScrollArea(1.f, items, Layout::Select::one)
+		new ScrollArea(1.f, items, Direction::down, Layout::Select::one)
 	};
-	return new Layout(1.f, cont, false, Layout::Select::none, topSpacing);
+	return new Layout(1.f, cont, Direction::right, Layout::Select::none, topSpacing);
 }

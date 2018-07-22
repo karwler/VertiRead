@@ -173,7 +173,7 @@ void DrawSys::drawLabel(Label* wgt) {
 
 void DrawSys::drawScrollArea(ScrollArea* box) {
 	vec2t vis = box->visibleWidgets();	// get index interval of items on screen and draw children
-	for (sizt i=vis.l; i<vis.u; i++)
+	for (sizt i = vis.l; i < vis.u; i++)
 		box->getWidget(i)->drawSelf();
 
 	drawRect(box->barRect(), Color::dark);		// draw scroll bar
@@ -182,7 +182,7 @@ void DrawSys::drawScrollArea(ScrollArea* box) {
 
 void DrawSys::drawReaderBox(ReaderBox* box) {
 	vec2t vis = box->visibleWidgets();
-	for (sizt i=vis.l; i<vis.u; i++)
+	for (sizt i = vis.l; i < vis.u; i++)
 		box->getWidget(i)->drawSelf();
 
 	if (box->showBar()) {
@@ -236,11 +236,11 @@ SDL_Texture* DrawSys::renderText(const string& text, int height) {
 	return tex;
 }
 
-vector<pair<string, SDL_Texture*>> DrawSys::loadTextures(string dir) {
-	dir = appendDsep(dir);
+vector<pair<string, SDL_Texture*>> DrawSys::loadTextures(string drc) {
+	drc = appendDsep(drc);
 	vector<pair<string, SDL_Texture*>> pics;
-	for (string& it : Filer::listDir(dir, FTYPE_FILE))
-		if (SDL_Texture* tex = IMG_LoadTexture(renderer, string(dir + it).c_str()))
+	for (string& it : Filer::listDir(drc, FTYPE_FILE))
+		if (SDL_Texture* tex = IMG_LoadTexture(renderer, string(drc + it).c_str()))
 			pics.push_back(make_pair(it, tex));
 	return pics;
 }

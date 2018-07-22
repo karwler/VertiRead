@@ -55,46 +55,46 @@ protected:
 
 class ProgBooks : public ProgState {
 public:
-	virtual void eventEscape();
+	virtual void eventEscape() override;
 	
-	virtual void eventFileDrop(char* file);
+	virtual void eventFileDrop(char* file) override;
 
-	virtual Layout* createLayout();
+	virtual Layout* createLayout() override;
 };
 
 class ProgPageBrowser : public ProgState {
 public:
-	virtual void eventEscape();
+	virtual void eventEscape() override;
 
-	virtual void eventFileDrop(char* file);
+	virtual void eventFileDrop(char* file) override;
 
-	virtual Layout* createLayout();
+	virtual Layout* createLayout() override;
 };
 
 class ProgReader : public ProgState {
 public:
-	virtual void eventEscape();
-	virtual void eventUp();
-	virtual void eventDown();
-	virtual void eventLeft();
-	virtual void eventRight();
-	virtual void eventScrollUp(float amt);
-	virtual void eventScrollDown(float amt);
-	virtual void eventScrollLeft(float amt);
-	virtual void eventScrollRight(float amt);
-	virtual void eventCenterView();
-	virtual void eventPageUp();
-	virtual void eventPageDown();
-	virtual void eventZoomIn();
-	virtual void eventZoomOut();
-	virtual void eventZoomReset();
-	virtual void eventNextDir();
-	virtual void eventPrevDir();
+	virtual void eventEscape() override;
+	virtual void eventUp() override;
+	virtual void eventDown() override;
+	virtual void eventLeft() override;
+	virtual void eventRight() override;
+	virtual void eventScrollUp(float amt) override;
+	virtual void eventScrollDown(float amt) override;
+	virtual void eventScrollLeft(float amt) override;
+	virtual void eventScrollRight(float amt) override;
+	virtual void eventCenterView() override;
+	virtual void eventPageUp() override;
+	virtual void eventPageDown() override;
+	virtual void eventZoomIn() override;
+	virtual void eventZoomOut() override;
+	virtual void eventZoomReset() override;
+	virtual void eventNextDir() override;
+	virtual void eventPrevDir() override;
 
-	virtual void eventClosing();
+	virtual void eventClosing() override;
 
-	virtual Layout* createLayout();
-	virtual Overlay* createOverlay();
+	virtual Layout* createLayout() override;
+	virtual Overlay* createOverlay() override;
 
 private:
 	float modifySpeed(float value);	// change scroll speed depending on pressed bindings
@@ -102,17 +102,17 @@ private:
 
 class ProgSettings : public ProgState {
 public:
-	virtual void eventEscape();
-	virtual void eventFullscreen();
+	virtual void eventEscape() override;
+	virtual void eventFullscreen() override;
 
-	virtual void eventFileDrop(char* file);
+	virtual void eventFileDrop(char* file) override;
 	
-	virtual Layout* createLayout();
+	virtual Layout* createLayout() override;
 };
 
 class ProgSearchDir : public ProgState {
 public:
-	virtual void eventEscape();
+	virtual void eventEscape() override;
 
-	virtual Layout* createLayout();
+	virtual Layout* createLayout() override;
 };

@@ -70,8 +70,8 @@ public:
 	static bool readTextFile(const string& file, vector<string>& lines, bool printMessage=true);
 	static bool writeTextFile(const string& file, const vector<string>& lines);
 	static bool mkDir(const string& path);
-	static vector<string> listDir(const string& dir, FileType filter=FTYPE_ANY);
-	static vector<string> listDirRecursively(string dir);
+	static vector<string> listDir(const string& drc, FileType filter=FTYPE_ANY);
+	static vector<string> listDirRecursively(string drc);
 	static FileType fileType(const string& path);
 	static bool isPicture(const string& file);
 	static bool isFont(const string& file);

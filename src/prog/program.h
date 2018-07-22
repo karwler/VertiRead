@@ -33,6 +33,7 @@ public:
 
 	// settings
 	void eventOpenSettings(Button* but=nullptr);
+	void eventSwitchDirection(Button* but);
 	void eventSwitchLanguage(Button* but);
 	void eventSetLibraryDirLE(Button* but);
 	void eventSetLibraryDirBW(Button* but);
@@ -44,6 +45,11 @@ public:
 	void eventSetScrollSpeed(Button* but);
 	void eventSetDeadzoneSL(Button* but);
 	void eventSetDeadzoneLE(Button* but);
+	void eventSetPortrait(Button* but);
+	void eventSetLandscape(Button* but);
+	void eventSetSquare(Button* but);
+	void eventSetFill(Button* but);
+	void eventResetSettings(Button* but);
 
 	// other
 	void eventClosePopup(Button* but=nullptr);
@@ -58,4 +64,5 @@ private:
 
 	void setState(ProgState* newState);
 	bool startReader(const string& picname);
+	void reposizeWindow(const vec2i& dres, const vec2i& wsiz);
 };

@@ -47,7 +47,7 @@ public:
 	void drawPopup(Popup* box);
 
 	SDL_Texture* renderText(const string& text, int height);
-	vector<pair<string, SDL_Texture*>> loadTextures(string dir);
+	vector<pair<string, SDL_Texture*>> loadTextures(string drc);
 
 	SDL_Renderer* renderer;
 private:

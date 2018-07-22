@@ -71,12 +71,12 @@ uint8 jtStrToHat(const string& str);
 
 template <typename T>
 string enumToStr(const vector<string>& names, T id) {
-	return (T(id) >= names.size()) ? "invalid" : names[T(id)];
+	return (sizt(id) >= names.size()) ? "invalid" : names[sizt(id)];
 }
 
 template <typename T>
 T strToEnum(const vector<string>& names, string str) {
-	for (sizt i=0; i<names.size(); i++)
+	for (sizt i = 0; i < names.size(); i++)
 		if (strcmpCI(names[i], str))
 			return T(i);
 	return T(names.size());

@@ -196,9 +196,10 @@ void Binding::setAcall(void (ProgState::*call)(float)) {
 
 // SETTINGS
 
-Settings::Settings(bool MAX, bool FSC, const vec2i& RES, const string& THM, const string& FNT, const string& LANG, const string& LIB, const string& RNDR, const vec2f& SSP, int16 DDZ) :
+Settings::Settings(bool MAX, bool FSC, const vec2i& RES, const Direction& DIR, const string& THM, const string& FNT, const string& LANG, const string& LIB, const string& RNDR, const vec2f& SSP, int16 DDZ) :
 	maximized(MAX),
 	fullscreen(FSC),
+	direction(DIR),
 	resolution(RES),
 	renderer(RNDR),
 	scrollSpeed(SSP)
@@ -246,8 +247,8 @@ const string& Settings::setLang(const string& language) {
 	return lang = (Filer::fileType(Filer::dirLangs + language + ".ini") == FTYPE_FILE) ? language : Default::language;
 }
 
-const string& Settings::setDirLib(const string& dir) {
-	dirLib = getAbsolute(dir);
+const string& Settings::setDirLib(const string& drc) {
+	dirLib = getAbsolute(drc);
 	if (Filer::fileType(dirLib) != FTYPE_DIR)
 		if (!Filer::mkDir(dirLib)) {
 			dirLib = Filer::dirSets + Default::dirLibrary;
@@ -259,7 +260,7 @@ const string& Settings::setDirLib(const string& dir) {
 
 int Settings::getRendererIndex() {
 	// get index of currently selected renderer (if name doesn't match, choose the first renderer)
-	for (int i=0; i<SDL_GetNumRenderDrivers(); i++)
+	for (int i = 0; i < SDL_GetNumRenderDrivers(); i++)
 		if (getRendererName(i) == renderer)
 			return i;
 
@@ -269,7 +270,7 @@ int Settings::getRendererIndex() {
 
 vector<string> Settings::getAvailibleRenderers() {
 	vector<string> renderers(SDL_GetNumRenderDrivers());
-	for (sizt i=0; i<renderers.size(); i++)
+	for (sizt i = 0; i < renderers.size(); i++)
 		renderers[i] = getRendererName(i);
 	return renderers;
 }

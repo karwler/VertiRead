@@ -10,7 +10,7 @@ vector<string> World::args;
 #ifdef _DEBUG
 void World::setArgs(int argc, wchar** argv) {
 	args.resize(argc-1);
-	for (sizt i=0; i<args.size(); i++)
+	for (sizt i = 0; i < args.size(); i++)
 		args[i] = wtos(argv[1+i]);
 }
 #else
@@ -19,17 +19,15 @@ void World::setArgs(wchar* argstr) {
 	LPWSTR* argv = CommandLineToArgvW(argstr, &argc);
 	
 	args.resize(argc);
-	for (sizt i=0; i<args.size(); i++) {
+	for (sizt i = 0; i < args.size(); i++)
 		args[i] = wtos(argv[i]);
-		cout << args[i] << endl;
-	}
 	LocalFree(argv);
 }
 #endif
 #else
 void World::setArgs(int argc, char** argv) {
 	args.resize(argc-1);
-	for (sizt i=0; i<args.size(); i++)
+	for (sizt i = 0; i < args.size(); i++)
 		args[i] = argv[1+i];
 }
 #endif

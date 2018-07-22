@@ -26,5 +26,6 @@ Left clicking on a book in the book list wil take you to the file explorer, whil
 The last button in the book list allows you to navigate through files outside of the library directory. When in the book list or browser view, you can drag and drop a folder or file into the window to browse/open it. It's also possible to start the program with a file/directory path as a command line argument to start in the page browser or reader.  
 The reader has a hidden side panel on the left.  
 
+The direction in which pictures in the reader are stacked can be set in the settings menu.  
 The program supports keyboard and controller bindings. DirectInput and XInput are handled separately. The bindings can be changed in the settings.  
-To reset certain groups of settings, edit or delete the corresponding ini files in the settings directory.  
+To reset certain settings, edit or delete the corresponding ini files in the settings directory or use the reset button in the settings menu to reset all settings.  

@@ -95,7 +95,7 @@ void Program::eventZoomReset(Button* but) {
 }
 
 void Program::eventCenterView(Button* but) {
-	static_cast<ReaderBox*>(World::scene()->getLayout())->centerListX();
+	static_cast<ReaderBox*>(World::scene()->getLayout())->centerList();
 }
 
 void Program::eventNextDir(Button* but) {
@@ -119,6 +119,10 @@ void Program::eventExitReader(Button* but) {
 
 void Program::eventOpenSettings(Button* but) {
 	setState(new ProgSettings);
+}
+
+void Program::eventSwitchDirection(Button* but) {
+	World::winSys()->sets.direction = strToEnum<Direction::Dir>(Default::directionNames, static_cast<SwitchBox*>(but)->getText());
 }
 
 void Program::eventSwitchLanguage(Button* but) {
@@ -154,6 +158,7 @@ void Program::eventOpenLibDirBrowser(Button* but) {
 
 void Program::eventSwitchFullscreen(Button* but) {
 	World::winSys()->setFullscreen(static_cast<CheckBox*>(but)->on);
+	World::scene()->onResize();
 }
 
 void Program::eventSetTheme(Button* but) {
@@ -188,6 +193,54 @@ void Program::eventSetDeadzoneLE(Button* but) {
 	World::winSys()->sets.setDeadzone(stoi(le->getText()));
 	le->setText(ntos(World::winSys()->sets.getDeadzone()));	// set text again in case the volume was out of range
 	static_cast<Slider*>(but->getParent()->getWidget(1))->setVal(World::winSys()->sets.getDeadzone());	// update slider
+}
+
+void Program::eventSetPortrait(Button* but) {
+	vec2i res = World::winSys()->displayResolution();
+	float width, height;
+	if (res.x < res.y) {
+		width = float(res.x) * Default::resModeBorder;
+		height = width / Default::resModeRatio;
+	} else {
+		height = float(res.y) * Default::resModeBorder;
+		width = height * Default::resModeRatio;
+	}
+	reposizeWindow(res, vec2i(height * Default::resModeRatio, height));
+}
+
+void Program::eventSetLandscape(Button* but) {
+	vec2i res = World::winSys()->displayResolution();
+	float width, height;
+	if (res.x < res.y) {
+		width = float(res.x) * Default::resModeBorder;
+		height = width * Default::resModeRatio;
+	} else {
+		height = float(res.y) * Default::resModeBorder;
+		width = height / Default::resModeRatio;
+	}
+	reposizeWindow(res, vec2i(width, height));
+}
+
+void Program::eventSetSquare(Button* but) {
+	vec2i res = World::winSys()->displayResolution();
+	reposizeWindow(res, vec2f((res.x < res.y) ? res.x : res.y) * Default::resModeBorder);
+}
+
+void Program::eventSetFill(Button* but) {
+	vec2i res = World::winSys()->displayResolution();
+	reposizeWindow(res, vec2f(res) * Default::resModeBorder);
+}
+
+void Program::eventResetSettings(Button* but) {
+	World::winSys()->resetSettings();
+	World::inputSys()->resetBindings();
+	World::scene()->resetLayouts();
+}
+
+void Program::reposizeWindow(const vec2i& dres, const vec2i& wsiz) {
+	World::winSys()->setWindowPos((dres - wsiz) / 2);
+	World::winSys()->setResolution(wsiz);
+	World::scene()->onResize();
 }
 
 // OTHER

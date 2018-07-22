@@ -24,7 +24,7 @@ void InputSys::Controller::close() {
 InputSys::InputSys() :
 	bindings(Filer::getBindings())
 {
-	for (int i=0; i<SDL_NumJoysticks(); i++)
+	for (int i = 0; i < SDL_NumJoysticks(); i++)
 		addController(i);
 }
 
@@ -203,7 +203,7 @@ bool InputSys::isPressedG(SDL_GameControllerButton gbutton) const {
 bool InputSys::isPressedH(uint8 jhat, uint8 val) const {
 	for (const Controller& it : controllers)
 		if (!it.gamepad)
-			for (int i=0; i!=SDL_JoystickNumHats(it.joystick); i++)
+			for (int i = 0; i < SDL_JoystickNumHats(it.joystick); i++)
 				if (jhat == i && SDL_JoystickGetHat(it.joystick, i) == val)
 					return true;
 	return false;
@@ -234,9 +234,14 @@ bool InputSys::isPressedM(uint8 mbutton) {
 }
 
 vec2i InputSys::mousePos() {
-	vec2i pos;
-	SDL_GetMouseState(&pos.x, &pos.y);
-	return pos;
+	int px, py;
+	SDL_GetMouseState(&px, &py);
+	return vec2i(px, py);
+}
+
+void InputSys::resetBindings() {
+	for (sizt i = 0; i < bindings.size(); i++)
+		bindings[i].setDefaultSelf(static_cast<Binding::Type>(i));
 }
 
 void InputSys::addController(int id) {
@@ -246,7 +251,7 @@ void InputSys::addController(int id) {
 }
 
 void InputSys::removeController(int id) {
-	for (vector<Controller>::iterator it=controllers.begin(); it!=controllers.end(); it++)
+	for (vector<Controller>::iterator it = controllers.begin(); it != controllers.end(); it++)
 		if (it->index == id) {
 			it->close();
 			controllers.erase(it);

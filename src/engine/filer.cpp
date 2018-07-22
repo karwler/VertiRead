@@ -211,7 +211,7 @@ void Filer::saveLastPage(const string& file) {
 
 	sizt id = lines.size();
 	string book = getBook(file);
-	for (sizt i=0; i!=lines.size(); i++) {
+	for (sizt i = 0; i < lines.size(); i++) {
 		IniLine il(lines[i]);
 		if (il.getType() == IniLine::Type::argVal && il.getArg() == book) {
 			id = i;
@@ -242,6 +242,8 @@ Settings Filer::getSettings() {
 			sets.fullscreen = stob(il.getVal());
 		else if (il.getArg() == Default::iniKeywordResolution)
 			sets.setResolution(il.getVal());
+		else if (il.getArg() == Default::iniKeywordDirection)
+			sets.direction = strToEnum<Direction::Dir>(Default::directionNames, il.getVal());
 		else if (il.getArg() == Default::iniKeywordFont)
 			sets.setFont(il.getVal());
 		else if (il.getArg() == Default::iniKeywordLanguage)
@@ -265,6 +267,7 @@ void Filer::saveSettings(const Settings& sets) {
 		IniLine::line(Default::iniKeywordMaximized, btos(sets.maximized)),
 		IniLine::line(Default::iniKeywordFullscreen, btos(sets.fullscreen)),
 		IniLine::line(Default::iniKeywordResolution, sets.getResolutionString()),
+		IniLine::line(Default::iniKeywordDirection, enumToStr(Default::directionNames, sets.direction)),
 		IniLine::line(Default::iniKeywordFont, sets.getFont()),
 		IniLine::line(Default::iniKeywordLanguage, sets.getLang()),
 		IniLine::line(Default::iniKeywordTheme, sets.getTheme()),
@@ -278,7 +281,7 @@ void Filer::saveSettings(const Settings& sets) {
 
 vector<Binding> Filer::getBindings() {
 	vector<Binding> bindings(static_cast<sizt>(Binding::Type::numBindings));
-	for (sizt i=0; i<bindings.size(); i++)
+	for (sizt i = 0; i < bindings.size(); i++)
 		bindings[i].setDefaultSelf(static_cast<Binding::Type>(i));
 	
 	vector<string> lines;
@@ -299,7 +302,7 @@ vector<Binding> Filer::getBindings() {
 			bindings[bid].setJbutton(stoi(il.getVal().substr(2)));
 			break;
 		case 'H':	// joystick hat
-			for (sizt i=2; i<il.getVal().size(); i++)
+			for (sizt i = 2; i < il.getVal().size(); i++)
 				if (il.getVal()[i] < '0' || il.getVal()[i] > '9') {
 					bindings[bid].setJhat(stoi(il.getVal().substr(2, i-2)), jtStrToHat(il.getVal().substr(i+1)));
 					break;
@@ -320,7 +323,7 @@ vector<Binding> Filer::getBindings() {
 
 void Filer::saveBindings(const vector<Binding>& bindings) {
 	vector<string> lines;
-	for (sizt i=0; i<bindings.size(); i++) {
+	for (sizt i = 0; i < bindings.size(); i++) {
 		string name = enumToStr(Default::bindingNames, i);
 		if (bindings[i].keyAssigned())
 			lines.push_back(IniLine::line(name, "K_" + string(SDL_GetScancodeName(bindings[i].getKey()))));
@@ -374,11 +377,11 @@ bool Filer::mkDir(const string& path) {
 #endif
 }
 
-vector<string> Filer::listDir(const string& dir, FileType filter) {
+vector<string> Filer::listDir(const string& drc, FileType filter) {
 	vector<string> entries;
 #ifdef _WIN32
 	WIN32_FIND_DATAW data;
-	HANDLE hFind = FindFirstFileW(stow(appendDsep(dir) + "*").c_str(), &data);
+	HANDLE hFind = FindFirstFileW(stow(appendDsep(drc) + "*").c_str(), &data);
 	if (hFind == INVALID_HANDLE_VALUE)
 		return entries;
 
@@ -389,7 +392,7 @@ vector<string> Filer::listDir(const string& dir, FileType filter) {
 	} while (FindNextFileW(hFind, &data));
 	FindClose(hFind);
 #else
-	DIR* directory = opendir(dir.c_str());
+	DIR* directory = opendir(drc.c_str());
 	if (!directory)
 		return entries;
 
@@ -403,12 +406,12 @@ vector<string> Filer::listDir(const string& dir, FileType filter) {
 	return entries;
 }
 
-vector<string> Filer::listDirRecursively(string dir) {
-	dir = appendDsep(dir);
+vector<string> Filer::listDirRecursively(string drc) {
+	drc = appendDsep(drc);
 	vector<string> entries;
 #ifdef _WIN32
 	WIN32_FIND_DATAW data;
-	HANDLE hFind = FindFirstFileW(stow(dir + "*").c_str(), &data);
+	HANDLE hFind = FindFirstFileW(stow(drc + "*").c_str(), &data);
 	if (hFind == INVALID_HANDLE_VALUE)
 		return entries;
 
@@ -418,14 +421,14 @@ vector<string> Filer::listDirRecursively(string dir) {
 
 		string name = wtos(data.cFileName);
 		if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {	// append subdirectoy's files to entries
-			vector<string> newEs = listDirRecursively(dir + name);
+			vector<string> newEs = listDirRecursively(drc + name);
 			entries.insert(entries.end(), newEs.begin(), newEs.end());
 		} else
-			entries.push_back(dir + name);
+			entries.push_back(drc + name);
 	} while (FindNextFileW(hFind, &data));
 	FindClose(hFind);
 #else
-	DIR* directory = opendir(dir.c_str());
+	DIR* directory = opendir(drc.c_str());
 	if (!directory)
 		return entries;
 
@@ -434,10 +437,10 @@ vector<string> Filer::listDirRecursively(string dir) {
 			continue;
 
 		if (data->d_type == DT_DIR) {	// append subdirectoy's files to entries
-			vector<string> newEs = listDirRecursively(dir + data->d_name);
+			vector<string> newEs = listDirRecursively(drc + data->d_name);
 			entries.insert(entries.end(), newEs.begin(), newEs.end());
 		} else
-			entries.push_back(dir + data->d_name);
+			entries.push_back(drc + data->d_name);
 	}
 	closedir(directory);
 #endif
@@ -483,7 +486,7 @@ vector<char> Filer::listDrives() {
 	vector<char> letters;
 	DWORD drives = GetLogicalDrives();
 	
-	for (char i=0; i<26; i++)
+	for (char i = 0; i < 26; i++)
 		if (drives & (1 << i))
 			letters.push_back('A'+i);
 	return letters;
@@ -519,8 +522,8 @@ string Filer::findFont(const string& font) {
 	if (isAbsolute(font) && isFont(font))	// check if font refers to a file
 		return font;
 
-	for (const string& dir : dirFonts)	// check font directories
-		for (string& it : listDirRecursively(dir))
+	for (const string& drc : dirFonts)	// check font directories
+		for (string& it : listDirRecursively(drc))
 			if (strcmpCI(hasExt(it) ? delExt(filename(it)) : filename(it), font) && isFont(it))
 				return it;
 	return "";	// nothing found

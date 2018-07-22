@@ -13,6 +13,27 @@ enum class Color : uint8 {
 	numColors
 };
 
+class Direction {
+public:
+	enum Dir : uint8 {
+		up,
+		down,
+		left,
+		right
+	};
+	Direction(Dir DIR = Direction::up) : dir(DIR) {}
+
+	operator Dir() const { return dir; }
+
+	bool vertical() const { return dir <= 1; }
+	bool horizontal() const { return dir >= 2; }
+	bool positive() const { return dir % 2; }
+	bool negative() const { return !positive(); }
+
+private:
+	Dir dir;
+};
+
 class Binding {
 public:
 	enum class Type : uint8 {
@@ -122,7 +143,7 @@ inline Binding::Assignment operator|=(Binding::Assignment& a, Binding::Assignmen
 
 class Settings {
 public:
-	Settings(bool MAX=Default::maximized, bool FSC=Default::fullscreen, const vec2i& RES=Default::resolution, const string& THM="", const string& FNT=Default::font, const string& LANG=Default::language, const string& LIB="", const string& RNDR="", const vec2f& SSP=Default::scrollSpeed, int16 DDZ=Default::controllerDeadzone);
+	Settings(bool MAX=Default::maximized, bool FSC=Default::fullscreen, const vec2i& RES=Default::resolution, const Direction& DIR=Direction::down, const string& THM="", const string& FNT=Default::font, const string& LANG=Default::language, const string& LIB="", const string& RNDR="", const vec2f& SSP=Default::scrollSpeed, int16 DDZ=Default::controllerDeadzone);
 
 	string getResolutionString() const;
 	void setResolution(const string& line);
@@ -134,7 +155,7 @@ public:
 	const string& getLang() const { return lang; }
 	const string& setLang(const string& language);
 	const string& getDirLib() const { return dirLib; }
-	const string& setDirLib(const string& dir);
+	const string& setDirLib(const string& drc);
 
 	int getRendererIndex();
 	static vector<string> getAvailibleRenderers();
@@ -146,6 +167,7 @@ public:
 	void setDeadzone(int zone);
 
 	bool maximized, fullscreen;
+	Direction direction;
 	vec2i resolution;
 	string renderer;
 	vec2f scrollSpeed;

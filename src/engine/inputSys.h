@@ -30,6 +30,7 @@ public:
 	const vec2i& getMouseMove() const { return mouseMove; }
 	Binding& getBinding(Binding::Type type) { return bindings[static_cast<sizt>(type)]; }
 	const vector<Binding>& getBindings() const { return bindings; }
+	void resetBindings();
 	void addController(int id);
 	void removeController(int id);
 

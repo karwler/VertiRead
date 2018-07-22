@@ -58,19 +58,19 @@ SDL_Rect Widget::frame() const {
 }
 
 void Widget::onNavSelectUp() {
-	parent->navSelectNext(pcID, center().x, 0);
+	parent->navSelectNext(pcID, center().x, Direction::up);
 }
 
 void Widget::onNavSelectDown() {
-	parent->navSelectNext(pcID, center().x, 1);
+	parent->navSelectNext(pcID, center().x, Direction::down);
 }
 
 void Widget::onNavSelectLeft() {
-	parent->navSelectNext(pcID, center().y, 2);
+	parent->navSelectNext(pcID, center().y, Direction::left);
 }
 
 void Widget::onNavSelectRight() {
-	parent->navSelectNext(pcID, center().y, 3);
+	parent->navSelectNext(pcID, center().y, Direction::right);
 }
 
 // BUTTON
@@ -173,8 +173,8 @@ void Slider::onHold(const vec2i& mPos, uint8 mBut) {
 		World::scene()->capture = this;
 
 		int sp = sliderPos();
-		if (outRange(mPos.x, sp, sp + Default::sliderWidth))	// if mouse outside of slider
-			setSlider(mPos.x - Default::sliderWidth/2);
+		if (outRange(mPos.x, sp, sp + Default::sbarSize))	// if mouse outside of slider
+			setSlider(mPos.x - Default::sbarSize / 2);
 		diffSliderMouse = mPos.x - sliderPos();	// get difference between mouse x and slider x
 	}
 }
@@ -209,7 +209,7 @@ SDL_Rect Slider::barRect() const {
 SDL_Rect Slider::sliderRect() const {
 	vec2i pos = position();
 	vec2i siz = size();
-	return {sliderPos(), pos.y, Default::sliderWidth, siz.y};
+	return {sliderPos(), pos.y, Default::sbarSize, siz.y};
 }
 
 int Slider::sliderPos() const {
@@ -218,7 +218,7 @@ int Slider::sliderPos() const {
 
 int Slider::sliderLim() const {
 	vec2i siz = size();
-	return siz.x - siz.y/2 - Default::sliderWidth;
+	return siz.x - siz.y/2 - Default::sbarSize;
 }
 
 // LABEL
@@ -304,7 +304,7 @@ SwitchBox::SwitchBox(const Size& SIZ, const vector<string>& OPTS, const string& 
 	options(OPTS),
 	curOpt(0)
 {
-	for (sizt i=0; i<options.size(); i++)
+	for (sizt i = 0; i < options.size(); i++)
 		if (COP == options[i]) {
 			curOpt = i;
 			break;

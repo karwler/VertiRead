@@ -23,7 +23,7 @@ vector<string> Browser::listDirs() const {
 	if (curDir == "\\") {	// if in "root" directory, get drive letters and present them as directories
 		vector<char> letters = Filer::listDrives();
 		vector<string> drives(letters.size());
-		for (sizt i=0; i<drives.size(); i++)
+		for (sizt i = 0; i < drives.size(); i++)
 			drives[i] = letters[i] + string(":");
 		return drives;
 	}
@@ -102,7 +102,7 @@ void Browser::goPrev() {
 #ifdef _WIN32
 void Browser::shiftLetter(int ofs) {
 	vector<char> letters = Filer::listDrives();
-	for (sizt i=0; i<letters.size(); i++)
+	for (sizt i = 0; i < letters.size(); i++)
 		if (letters[i] == curDir[0]) {
 			curDir[0] = letters[(i + ofs) % letters.size()];
 			break;
@@ -115,7 +115,7 @@ void Browser::shiftDir(int ofs) {
 	string parent = appendDsep(parentPath(curDir));
 	vector<string> dirs = Filer::listDir(parent, FTYPE_DIR);
 
-	for (sizt i=0; i<dirs.size(); i++)
+	for (sizt i = 0; i < dirs.size(); i++)
 		if (appendDsep(parent + dirs[i]) == cd) {
 			curDir = parent + dirs[(i + ofs) % dirs.size()];
 			break;

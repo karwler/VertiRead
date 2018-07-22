@@ -26,25 +26,38 @@ struct vec2 {
 		x(X), y(Y)
 	{}
 
+	vec2(const T& X, const T& Y, bool swap) {
+		if (swap) {
+			y = X;
+			x = Y;
+		} else {
+			y = Y;
+			x = X;
+		}
+	}
+
 	template <typename A>
 	vec2(const vec2<A>& V) :
 		x(V.x), y(V.y)
 	{}
+
+	template <typename A>
+	vec2(const vec2<A>& V, bool swap) {
+		if (swap) {
+			y = V.x;
+			x = V.y;
+		} else {
+			y = V.y;
+			x = V.x;
+		}
+	}
 	
 	T& operator[](char i) {
-		if (i == 0)
-			return x;
-		if (i == 1)
-			return y;
-		throw "out of range";
+		return reinterpret_cast<T*>(this)[i];
 	}
 
 	const T& operator[](char i) const {
-		if (i == 0)
-			return x;
-		if (i == 1)
-			return y;
-		throw "out of range";
+		return reinterpret_cast<const T*>(this)[i];
 	}
 
 	vec2& operator=(const vec2& v) {
@@ -169,6 +182,14 @@ struct vec2 {
 
 	vec2 rotate(const T& ang) const {
 		return ::rotate(*this, ang);
+	}
+
+	vec2 swap() const {
+		return vec2(y, x);
+	}
+
+	vec2 swap(bool yes) const {
+		return yes ? swap() : *this;
 	}
 
 	union { T x, w, l; };

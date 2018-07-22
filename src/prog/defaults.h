@@ -178,7 +178,7 @@ const bool axisDirLeft = false;
 // widgets' properties
 const int spacing = 5;
 const int itemHeight = 30;
-const int sliderWidth = 10;
+const int sbarSize = 10;
 const int checkboxSpacing = 5;
 const int caretWidth = 4;
 
@@ -203,6 +203,7 @@ const char dirTextures[] = "textures";
 const char iniKeywordMaximized[] = "maximized";
 const char iniKeywordFullscreen[] = "fullscreen";
 const char iniKeywordResolution[] = "resolution";
+const char iniKeywordDirection[] = "direction";
 const char iniKeywordFont[] = "font";
 const char iniKeywordLanguage[] = "language";
 const char iniKeywordTheme[] = "theme";
@@ -211,6 +212,7 @@ const char iniKeywordRenderer[] = "renderer";
 const char iniKeywordScrollSpeed[] = "scroll_speed";
 const char iniKeywordDeadzone[] = "deadzone";
 
+// containers for converting enums to strings and back (in vectors an element's index corresponds to the integer value of the corresponding enum value)
 const vector<string> bindingNames = {
 	"enter",
 	"escape",
@@ -234,8 +236,8 @@ const vector<string> bindingNames = {
 	"zoom in",
 	"zoom out",
 	"zoom reset",
-	"next dir",
-	"prev dir",
+	"next directory",
+	"prev directory",
 	"fullscreen"
 };
 const map<uint8, string> hatNames = {
@@ -283,6 +285,12 @@ const vector<string> colorNames = {
 	"text",
 	"texture"
 };
+const vector<string> directionNames = {
+	"Up",
+	"Down",
+	"Left",
+	"Right"
+};
 
 // other random crap
 const char titleDefault[] = "VertiRead";
@@ -295,5 +303,7 @@ const int iconMargin = 2;
 const uint32 eventCheckTimeout = 50;
 const float menuHideTimeout = 3.f;
 const int axisLimit = 32768;
+const float resModeBorder = 0.85f;
+const float resModeRatio = 0.75f;
 
 }

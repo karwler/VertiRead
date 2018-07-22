@@ -49,7 +49,7 @@ string filename(const string& path) {
 }
 
 string getExt(const string& path) {
-	for (sizt i=path.length()-1; i<path.length(); i--) {
+	for (sizt i = path.length()-1; i < path.length(); i--) {
 		if (path[i] == '.')
 			return path.substr(i+1);
 		else if (path[i] == dsep)
@@ -59,7 +59,7 @@ string getExt(const string& path) {
 }
 
 bool hasExt(const string& path) {
-	for (sizt i=path.length()-1; i<path.length(); i--) {
+	for (sizt i = path.length()-1; i < path.length(); i--) {
 		if (path[i] == '.')
 			return true;
 		else if (path[i] == dsep)
@@ -69,7 +69,7 @@ bool hasExt(const string& path) {
 }
 
 string delExt(const string& path) {
-	for (sizt i=path.length()-1; i<path.length(); i--) {
+	for (sizt i = path.length()-1; i < path.length(); i--) {
 		if (path[i] == '.')
 			return path.substr(0, i);
 		else if (path[i] == dsep)
