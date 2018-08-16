@@ -39,9 +39,9 @@ public:
 	static string line(const string& arg, const string& val);
 	static string line(const string& arg, const string& key, const string& val);
 
-	void setVal(const string& ARG, const string& VAL);
-	void setVal(const string& ARG, const string& KEY, const string& VAL);
-	void setTitle(const string& TIT);
+	void setVal(const string& property, const string& value);
+	void setVal(const string& property, const string& vkey, const string& value);
+	void setTitle(const string& title);
 	Type setLine(const string& str);
 	void clear();
 
@@ -69,15 +69,18 @@ public:
 
 	static bool readTextFile(const string& file, vector<string>& lines, bool printMessage=true);
 	static bool writeTextFile(const string& file, const vector<string>& lines);
-	static bool mkDir(const string& path);
+	static bool createDir(const string& path);
 	static vector<string> listDir(const string& drc, FileType filter=FTYPE_ANY);
 	static vector<string> listDirRecursively(string drc);
+	static pair<vector<string>, vector<string>> listDirSeparate(const string& drc);	// first is list of files, second is list of directories
 	static FileType fileType(const string& path);
 	static bool isPicture(const string& file);
+	static bool isArchive(const string& file);
 	static bool isFont(const string& file);
 
 #ifdef _WIN32
 	static vector<char> listDrives();	// get list of driver letters under windows
+	static string wgetenv(const string& name);
 #endif
 	static string getExecDir();
 	static string getWorkingDir();

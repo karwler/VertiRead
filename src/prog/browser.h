@@ -5,31 +5,34 @@
 // logic for browsing files
 class Browser {
 public:
-	Browser(string RD="", string CD="", void (Program::*XC)(Button*)=nullptr);
+	enum class FileType : uint8 {
+		none,
+		picture,
+		archive
+	};
 
-	vector<string> listFiles() const;	// list current directory's files
-	vector<string> listDirs() const;	// list current directory's directories
+	Browser(string rootDirectory="", string curDirectory="", PCall exitCall=nullptr);
+
 	bool goIn(const string& dirname);
-	bool goUp();		// go to parent direcory if possible
-	void goNext();	// go to the next directory from the viewpoint of the parent directory
-	void goPrev();	// go to the previous directory from the viewpoint of the parent directory
-	bool selectPicture(const string& picname);
-	void selectFirstPicture();
+	bool goUp();			// go to parent direcory if possible
+	void goNext(bool fwd);	// go to the next/previous archive or directory from the viewpoint of the parent directory
+	bool selectFile(const string& filename) { return selectFile(curDir, filename); }
 
 	const string& getRootDir() const { return rootDir; }
 	const string& getCurDir() const { return curDir; }
 	const string& getCurFile() const { return curFile; }
 	string curFilepath() const { return appendDsep(curDir) + curFile; }
+	FileType getCurType() const { return curType; }
 
-	void (Program::*exCall)(Button*);	// gets called when goUp() fails, aka stepping out of rootDir into the previous menu
+	PCall exCall;	// gets called when goUp() fails, aka stepping out of rootDir into the previous menu
 private:
 	string rootDir;	// the top directory one can visit
 	string curDir;	// directory in which one currently is
 	string curFile;	// currently selected or temporarily saved file (name) in curDir
+	FileType curType;
 
-	bool goInDir(const string& dirname);
-#ifdef _WIN32
-	void shiftLetter(int ofs);
-#endif
-	void shiftDir(int ofs);
+	void shiftDir(bool fwd);
+	void shiftArchive(bool fwd);
+	bool selectFile(const string& drc, const string& fname);
+	void clearCurFile();
 };

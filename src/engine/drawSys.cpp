@@ -36,7 +36,7 @@ TTF_Font* FontSet::getFont(int height) {
 	height = float(height) * heightScale;
 	try {	// load font if it hasn't been loaded yet
 		return fonts.at(height);
-	} catch (std::out_of_range e) {
+	} catch (const std::out_of_range&) {
 		return addSize(height);
 	}
 }
@@ -236,19 +236,48 @@ SDL_Texture* DrawSys::renderText(const string& text, int height) {
 	return tex;
 }
 
-vector<pair<string, SDL_Texture*>> DrawSys::loadTextures(string drc) {
-	drc = appendDsep(drc);
+vector<pair<string, SDL_Texture*>> DrawSys::loadTexturesDirectory(string drc) {
 	vector<pair<string, SDL_Texture*>> pics;
 	for (string& it : Filer::listDir(drc, FTYPE_FILE))
-		if (SDL_Texture* tex = IMG_LoadTexture(renderer, string(drc + it).c_str()))
+		if (SDL_Texture* tex = IMG_LoadTexture(renderer, childPath(drc, it).c_str()))
 			pics.push_back(make_pair(it, tex));
+	return pics;
+}
+
+vector<pair<string, SDL_Texture*>> DrawSys::loadTexturesArchive(const string& arc) {
+	struct archive* arch = archive_read_new();
+	archive_read_support_compression_all(arch);
+	archive_read_support_filter_all(arch);
+	archive_read_support_format_all(arch);
+
+	vector<pair<string, SDL_Texture*>> pics;
+	if (archive_read_open_filename(arch, arc.c_str(), Default::archiveReadBlockSize))
+		return pics;
+
+	struct archive_entry* entry;
+	while (!archive_read_next_header(arch, &entry)) {
+		la_int64_t bsiz = archive_entry_size(entry);
+		if (bsiz <= 0)
+			continue;
+	
+		void* buffer = malloc(bsiz);
+		la_ssize_t size = archive_read_data(arch, buffer, bsiz);
+		if (size < 0)
+			continue;
+		
+		SDL_RWops* io = SDL_RWFromMem(buffer, size);
+		if (SDL_Texture* tex = IMG_LoadTexture_RW(renderer, io, SDL_TRUE))
+			pics.push_back(make_pair(archive_entry_pathname(entry), tex));
+	}
+	archive_read_free(arch);
+	std::sort(pics.begin(), pics.end(), [](const pair<string, SDL_Texture*>& a, const pair<string, SDL_Texture*>& b) -> bool { return strnatless(a.first, b.first); });
 	return pics;
 }
 
 SDL_Texture* DrawSys::texture(const string& name) const {
 	try {
 		return texes.at(name);
-	} catch (std::out_of_range e) {
+	} catch (const std::out_of_range&) {
 		std::cerr << "Texture " << name << " doesn't exist." << std::endl;
 		return nullptr;
 	}

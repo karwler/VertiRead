@@ -2,37 +2,37 @@
 
 // SIZE
 
-Size::Size(int PIX) :
+Size::Size(int pixels) :
 	usePix(true),
-	pix(PIX)
+	pix(pixels)
 {}
 
-Size::Size(float PRC) :
+Size::Size(float percent) :
 	usePix(false),
-	prc(PRC)
+	prc(percent)
 {}
 
-void Size::set(int PIX) {
+void Size::set(int pixels) {
 	usePix = true;
-	pix = PIX;
+	pix = pixels;
 }
 
-void Size::set(float PRC) {
+void Size::set(float percent) {
 	usePix = false;
-	prc = PRC;
+	prc = percent;
 }
 
 // WIDGET
 
-Widget::Widget(const Size& SIZ, Layout* PNT, sizt ID) :
-	relSize(SIZ),
-	parent(PNT),
-	pcID(ID)
+Widget::Widget(const Size& relSize, Layout* parent, sizt id) :
+	relSize(relSize),
+	parent(parent),
+	pcID(id)
 {}
 
-void Widget::setParent(Layout* PNT, sizt ID) {
-	parent = PNT;
-	pcID = ID;
+void Widget::setParent(Layout* pnt, sizt id) {
+	parent = pnt;
+	pcID = id;
 }
 
 vec2i Widget::position() const {
@@ -57,32 +57,20 @@ SDL_Rect Widget::frame() const {
 	return parent->frame();
 }
 
-void Widget::onNavSelectUp() {
-	parent->navSelectNext(pcID, center().x, Direction::up);
-}
-
-void Widget::onNavSelectDown() {
-	parent->navSelectNext(pcID, center().x, Direction::down);
-}
-
-void Widget::onNavSelectLeft() {
-	parent->navSelectNext(pcID, center().y, Direction::left);
-}
-
-void Widget::onNavSelectRight() {
-	parent->navSelectNext(pcID, center().y, Direction::right);
+void Widget::onNavSelect(const Direction& dir) {
+	parent->navSelectNext(pcID, dir.vertical() ? center().x : center().y, dir);
 }
 
 // BUTTON
 
-Button::Button(const Size& SIZ, void (Program::*LCL)(Button*), void (Program::*RCL)(Button*), void (Program::*DCL)(Button*), SDL_Texture* TEX, bool SBG, int MRG, Layout* PNT, sizt ID) :
-	Widget(SIZ, PNT, ID),
-	tex(TEX),
-	showBG(SBG),
-	margin(MRG),
-	lcall(LCL),
-	rcall(RCL),
-	dcall(DCL)
+Button::Button(const Size& relSize, PCall leftCall, PCall rightCall, PCall doubleCall, SDL_Texture* background, bool showBackground, int backgroundMargin, Layout* parent, sizt id) :
+	Widget(relSize, parent, id),
+	tex(background),
+	showBG(showBackground),
+	margin(backgroundMargin),
+	lcall(leftCall),
+	rcall(rightCall),
+	dcall(doubleCall)
 {}
 
 void Button::drawSelf() {
@@ -101,6 +89,10 @@ void Button::onClick(const vec2i& mPos, uint8 mBut) {
 void Button::onDoubleClick(const vec2i& mPos, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT && dcall)
 		(World::program()->*dcall)(this);
+}
+
+bool Button::navSelectable() const {
+	return lcall || rcall || dcall;
 }
 
 Color Button::color() {
@@ -124,9 +116,9 @@ SDL_Rect Button::texRect() const {
 
 // CHECK BOX
 
-CheckBox::CheckBox(const Size& SIZ, bool ON, void (Program::*LCL)(Button*), void (Program::*RCL)(Button*), void (Program::*DCL)(Button*), SDL_Texture* TEX, bool SBG, int MRG, Layout* PNT, sizt ID) :
-	Button(SIZ, LCL, RCL, DCL, TEX, SBG, MRG, PNT, ID),
-	on(ON)
+CheckBox::CheckBox(const Size& relSize, bool on, PCall leftCall, PCall rightCall, PCall doubleCall, SDL_Texture* background, bool showBackground, int backgroundMargin, Layout* parent, sizt id) :
+	Button(relSize, leftCall, rightCall, doubleCall, background, showBackground, backgroundMargin, parent, id),
+	on(on)
 {}
 
 void CheckBox::drawSelf() {
@@ -142,7 +134,7 @@ void CheckBox::onClick(const vec2i& mPos, uint8 mBut) {
 SDL_Rect CheckBox::boxRect() const {
 	vec2i pos = position();
 	vec2i siz = size();
-	int margin = (siz.x > siz.y) ? siz.y/4 : siz.x/4;
+	int margin = (siz.x > siz.y ? siz.y : siz.x) / 4;
 	return {pos.x+margin, pos.y+margin, siz.x-margin*2, siz.y-margin*2};
 }
 
@@ -152,11 +144,11 @@ Color CheckBox::boxColor() const {
 
 // SLIDER
 
-Slider::Slider(const Size& SIZ, int VAL, int MIN, int MAX, void (Program::*LCL)(Button*), void (Program::*RCL)(Button*), void (Program::*DCL)(Button*), SDL_Texture* TEX, bool SBG, int MRG, Layout* PNT, sizt ID) :
-	Button(SIZ, LCL, RCL, DCL, TEX, SBG, MRG, PNT, ID),
-	val(VAL),
-	min(MIN),
-	max(MAX)
+Slider::Slider(const Size& relSize, int value, int minimum, int maximum, PCall leftCall, PCall rightCall, PCall doubleCall, SDL_Texture* background, bool showBackground, int backgroundMargin, Layout* parent, sizt id) :
+	Button(relSize, leftCall, rightCall, doubleCall, background, showBackground, backgroundMargin, parent, id),
+	val(value),
+	vmin(minimum),
+	vmax(maximum)
 {}
 
 void Slider::drawSelf() {
@@ -189,13 +181,13 @@ void Slider::onUndrag(uint8 mBut) {
 }
 
 void Slider::setSlider(int xpos) {
-	setVal((xpos - position().x - size().y/4) * max / sliderLim());
+	setVal((xpos - position().x - size().y/4) * vmax / sliderLim());
 	if (lcall)
 		(World::program()->*lcall)(this);
 }
 
-void Slider::setVal(int VAL) {
-	val = bringIn(VAL, min, max);
+void Slider::setVal(int value) {
+	val = bringIn(value, vmin, vmax);
 }
 
 SDL_Rect Slider::barRect() const {
@@ -213,7 +205,7 @@ SDL_Rect Slider::sliderRect() const {
 }
 
 int Slider::sliderPos() const {
-	return position().x + size().y/4 + val * sliderLim() / max;
+	return position().x + size().y/4 + val * sliderLim() / vmax;
 }
 
 int Slider::sliderLim() const {
@@ -223,11 +215,11 @@ int Slider::sliderLim() const {
 
 // LABEL
 
-Label::Label(const Size& SIZ, const string& TXT, void (Program::*LCL)(Button*), void (Program::*RCL)(Button*), void (Program::*DCL)(Button*), Alignment ALG, SDL_Texture* TEX, int TMG, bool SBG, int MRG, Layout* PNT, sizt ID) :
-	Button(SIZ, LCL, RCL, DCL, TEX, SBG, MRG, PNT, ID),
-	align(ALG),
-	text(TXT),
-	textMargin(TMG),
+Label::Label(const Size& relSize, const string& text, PCall leftCall, PCall rightCall, PCall doubleCall, Alignment alignment, SDL_Texture* background, int textMargin, bool showBackground, int backgroundMargin, Layout* parent, sizt id) :
+	Button(relSize, leftCall, rightCall, doubleCall, background, showBackground, backgroundMargin, parent, id),
+	align(alignment),
+	text(text),
+	textMargin(textMargin),
 	textTex(nullptr)
 {}
 
@@ -299,13 +291,13 @@ void Label::updateTex() {
 
 // SWITCH BOX
 
-SwitchBox::SwitchBox(const Size& SIZ, const vector<string>& OPTS, const string& COP, void (Program::*CCL)(Button*), Alignment ALG, SDL_Texture* TEX, int TMG, bool SBG, int MRG, Layout* PNT, sizt ID) :
-	Label(SIZ, COP, CCL, CCL, nullptr, ALG, TEX, TMG, SBG, MRG, PNT, ID),
-	options(OPTS),
+SwitchBox::SwitchBox(const Size& relSize, const vector<string>& options, const string& curOption, PCall call, Alignment alignment, SDL_Texture* background, int textMargin, bool showBackground, int backgroundMargin, Layout* parent, sizt id) :
+	Label(relSize, curOption, call, call, nullptr, alignment, background, textMargin, showBackground, backgroundMargin, parent, id),
+	options(options),
 	curOpt(0)
 {
 	for (sizt i = 0; i < options.size(); i++)
-		if (COP == options[i]) {
+		if (curOption == options[i]) {
 			curOpt = i;
 			break;
 		}
@@ -326,10 +318,10 @@ void SwitchBox::shiftOption(int ofs) {
 
 // LINE EDITOR
 
-LineEdit::LineEdit(const Size& SIZ, const string& TXT, void (Program::*LCL)(Button*), void (Program::*RCL)(Button*), void (Program::*DCL)(Button*), TextType TYP, SDL_Texture* TEX, int TMG, bool SBG, int MRG, Layout* PNT, sizt ID) :
-	Label(SIZ, TXT, LCL, RCL, DCL, Alignment::left, TEX, TMG, SBG, MRG, PNT, ID),
-	textType(TYP),
-	oldText(TXT),
+LineEdit::LineEdit(const Size& relSize, const string& text, PCall leftCall, PCall rightCall, PCall doubleCall, TextType type, SDL_Texture* background, int textMargin, bool showBackground, int backgroundMargin, Layout* parent, sizt id) :
+	Label(relSize, text, leftCall, rightCall, doubleCall, Alignment::left, background, textMargin, showBackground, backgroundMargin, parent, id),
+	textType(type),
+	oldText(text),
 	textOfs(0),
 	cpos(0)
 {
@@ -480,7 +472,7 @@ sizt LineEdit::findWordStart() {
 		i--;
 	while (text[i] != ' ' && i > 0)	// skip word
 		i--;
-	return (i == 0) ? i : i+1;	// correct position if necessary
+	return i == 0 ? i : i+1;	// correct position if necessary
 }
 
 sizt LineEdit::findWordEnd() {
@@ -494,7 +486,7 @@ sizt LineEdit::findWordEnd() {
 
 void LineEdit::cleanText() {
 	if (textType == TextType::sInteger)
-		cleanUIntText((text[0] == '-') ? 1 : 0);
+		cleanUIntText(text[0] == '-');
 	else if (textType == TextType::sIntegerSpaced)
 		cleanSIntSpacedText();
 	else if (textType == TextType::uInteger)
@@ -502,7 +494,7 @@ void LineEdit::cleanText() {
 	else if (textType == TextType::uIntegerSpaced)
 		cleanUIntSpacedText();
 	else if (textType == TextType::sFloating)
-		cleanUFloatText((text[0] == '-') ? 1 : 0);
+		cleanUFloatText(text[0] == '-');
 	else if (textType == TextType::sFloatingSpaced)
 		cleanSFloatSpacedText();
 	else if (textType == TextType::uFloating)
@@ -512,7 +504,7 @@ void LineEdit::cleanText() {
 }
 
 void LineEdit::cleanSIntSpacedText(sizt i) {
-	while (text[i] == ' ')
+	while (isSpace(text[i]))
 		i++;
 	if (text[i] == '-')
 		i++;
@@ -520,8 +512,8 @@ void LineEdit::cleanSIntSpacedText(sizt i) {
 	while (i < text.length()) {
 		if (isDigit(text[i]))
 			i++;
-		else if (text[i] == ' ') {
-			cleanSIntSpacedText(i+1);
+		else if (isSpace(text[i])) {
+			cleanSIntSpacedText(i + 1);
 			break;
 		} else
 			text.erase(i);
@@ -539,21 +531,21 @@ void LineEdit::cleanUIntText(sizt i) {
 
 void LineEdit::cleanUIntSpacedText() {
 	sizt i = 0;
-	while (text[i] == ' ')
+	while (isSpace(text[i]))
 		i++;
 
 	while (i < text.length()) {
 		if (isDigit(text[i]))
 			i++;
-		else if (text[i] == ' ')
-			while (text[++i] == ' ');
+		else if (isSpace(text[i]))
+			while (isSpace(text[++i]));
 		else
 			text.erase(i);
 	}
 }
 
 void LineEdit::cleanSFloatSpacedText(sizt i) {
-	while (text[i] == ' ')
+	while (isSpace(text[i]))
 		i++;
 	if (text[i] == '-')
 		i++;
@@ -565,8 +557,8 @@ void LineEdit::cleanSFloatSpacedText(sizt i) {
 		else if (text[i] == '.' && !foundDot) {
 			foundDot = true;
 			i++;
-		} else if (text[i] == ' ') {
-			cleanSFloatSpacedText(i+1);
+		} else if (isSpace(text[i])) {
+			cleanSFloatSpacedText(i + 1);
 			break;
 		} else
 			text.erase(i);
@@ -588,7 +580,7 @@ void LineEdit::cleanUFloatText(sizt i) {
 
 void LineEdit::cleanUFloatSpacedText() {
 	sizt i = 0;
-	while (text[i] == ' ')
+	while (isSpace(text[i]))
 		i++;
 
 	bool foundDot = false;
@@ -598,8 +590,8 @@ void LineEdit::cleanUFloatSpacedText() {
 		else if (text[i] == '.' && !foundDot) {
 			foundDot = true;
 			i++;
-		} else if (text[i] == ' ') {
-			while (text[++i] == ' ');
+		} else if (isSpace(text[i])) {
+			while (isSpace(text[++i]));
 			foundDot = false;
 		} else
 			text.erase(i);
@@ -608,26 +600,26 @@ void LineEdit::cleanUFloatSpacedText() {
 
 // KEY GETTER
 
-KeyGetter::KeyGetter(const Size& SIZ, AcceptType ACT, Binding::Type BND, void (Program::*LCL)(Button*), void (Program::*RCL)(Button*), void (Program::*DCL)(Button*), Alignment ALG, SDL_Texture* TEX, int TMG, bool SBG, int MRG, Layout* PNT, sizt ID) :
-	Label(SIZ, "-void-", nullptr, nullptr, nullptr, ALG, TEX, TMG, SBG, MRG, PNT, ID),
-	acceptType(ACT),
-	bindingType(BND)
+KeyGetter::KeyGetter(const Size& relSize, AcceptType type, Binding::Type binding, PCall leftCall, PCall rightCall, PCall doubleCall, Alignment alignment, SDL_Texture* background, int textMargin, bool showBackground, int backgroundMargin, Layout* parent, sizt id) :
+	Label(relSize, "-void-", nullptr, nullptr, nullptr, alignment, background, textMargin, showBackground, backgroundMargin, parent, id),
+	acceptType(type),
+	bindingType(binding)
 {
-	Binding& binding = World::inputSys()->getBinding(bindingType);
-	if (acceptType == AcceptType::keyboard && binding.keyAssigned())
-		text = SDL_GetScancodeName(binding.getKey());
+	Binding& bind = World::inputSys()->getBinding(bindingType);
+	if (acceptType == AcceptType::keyboard && bind.keyAssigned())
+		text = SDL_GetScancodeName(bind.getKey());
 	else if (acceptType == AcceptType::joystick) {
-		if (binding.jbuttonAssigned())
-			text = "B " + ntos(binding.getJctID());
-		else if (binding.jhatAssigned())
-			text = "H " + ntos(binding.getJctID()) + " " + jtHatToStr(binding.getJhatVal());
-		else if (binding.jaxisAssigned())
-			text = "A " + string(binding.jposAxisAssigned() ? "+" : "-") + ntos(binding.getJctID());
+		if (bind.jbuttonAssigned())
+			text = "B " + ntos(bind.getJctID());
+		else if (bind.jhatAssigned())
+			text = "H " + ntos(bind.getJctID()) + " " + jtHatToStr(bind.getJhatVal());
+		else if (bind.jaxisAssigned())
+			text = "A " + string(bind.jposAxisAssigned() ? "+" : "-") + ntos(bind.getJctID());
 	} else if (acceptType == AcceptType::gamepad) {
-		if (binding.gbuttonAssigned())
-			text = enumToStr(Default::gbuttonNames, binding.getGbutton());
-		else if (binding.gaxisAssigned())
-			text = (binding.gposAxisAssigned() ? "+" : "-") + enumToStr(Default::gaxisNames, binding.getGaxis());
+		if (bind.gbuttonAssigned())
+			text = enumToStr(Default::gbuttonNames, bind.getGbutton());
+		else if (bind.gaxisAssigned())
+			text = (bind.gposAxisAssigned() ? "+" : "-") + enumToStr(Default::gaxisNames, bind.getGaxis());
 	}
 }
 

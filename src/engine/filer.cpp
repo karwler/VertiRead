@@ -40,23 +40,23 @@ string IniLine::line(const string& arg, const string& key, const string& val) {
 	return arg + '[' + key + "]=" + val;
 }
 
-void IniLine::setVal(const string& ARG, const string& VAL) {
+void IniLine::setVal(const string& property, const string& value) {
 	type = Type::argVal;
-	arg = ARG;
+	arg = property;
 	key.clear();
-	val = VAL;
+	val = value;
 }
 
-void IniLine::setVal(const string& ARG, const string& KEY, const string& VAL) {
+void IniLine::setVal(const string& property, const string& vkey, const string& value) {
 	type = Type::argKeyVal;
-	arg = ARG;
-	key = KEY;
-	val = VAL;
+	arg = property;
+	key = vkey;
+	val = value;
 }
 
-void IniLine::setTitle(const string& TIT) {
+void IniLine::setTitle(const string& title) {
 	type = Type::title;
-	arg = TIT;
+	arg = title;
 	key.clear();
 	val.clear();
 }
@@ -107,11 +107,11 @@ void IniLine::clear() {
 
 const string Filer::dirExec = appendDsep(Filer::getExecDir());
 #ifdef _WIN32
-const vector<string> Filer::dirFonts = {Filer::dirExec, string(std::getenv("SystemDrive")) + "\\Windows\\Fonts\\"};
-const string Filer::dirSets = string(std::getenv("AppData")) + "\\"+Default::titleDefault+"\\";
+const vector<string> Filer::dirFonts = {Filer::dirExec, wgetenv("SystemDrive") + "\\Windows\\Fonts\\"};
+const string Filer::dirSets = wgetenv("AppData") + "\\" + Default::titleDefault + "\\";
 #else
-const vector<string> Filer::dirFonts = {Filer::dirExec, "/usr/share/fonts/", string(std::getenv("HOME")) + "/.fonts/"};
-const string Filer::dirSets = string(std::getenv("HOME")) + "/."+Default::titleExtra+"/";
+const vector<string> Filer::dirFonts = {Filer::dirExec, "/usr/share/fonts/", string(getenv("HOME")) + "/.fonts/"};
+const string Filer::dirSets = string(getenv("HOME")) + "/." + Default::titleExtra + "/";
 #endif
 const string Filer::dirLangs = Filer::dirExec + Default::dirLanguages + dsep;
 const string Filer::dirTexs = Filer::dirExec + Default::dirTextures + dsep;
@@ -154,15 +154,9 @@ vector<SDL_Color> Filer::getColors(const string& theme) {
 
 		sizt cid = strToEnum<sizt>(Default::colorNames, il.getArg());
 		if (cid < colors.size()) {
-			vector<vec2t> elems = getWords(il.getVal());
-			if (elems.size() > 0)
-				colors[cid].r = stoi(il.getVal().substr(elems[0].l, elems[0].u));
-			if (elems.size() > 1)
-				colors[cid].g = stoi(il.getVal().substr(elems[1].l, elems[1].u));
-			if (elems.size() > 2)
-				colors[cid].b = stoi(il.getVal().substr(elems[2].l, elems[2].u));
-			if (elems.size() > 3)
-				colors[cid].a = stoi(il.getVal().substr(elems[3].l, elems[3].u));
+			vector<string> elems = getWords(il.getVal());
+			for (uint8 i = 0; i < elems.size() && i < 4; i++)
+				reinterpret_cast<uint8*>(&colors[cid])[i] = stoi(elems[i]);
 		}
 	}
 	return colors;
@@ -369,7 +363,7 @@ bool Filer::writeTextFile(const string& file, const vector<string>& lines) {
 	return true;
 }
 
-bool Filer::mkDir(const string& path) {
+bool Filer::createDir(const string& path) {
 #ifdef _WIN32
 	return CreateDirectoryW(stow(path).c_str(), 0);
 #else
@@ -380,6 +374,14 @@ bool Filer::mkDir(const string& path) {
 vector<string> Filer::listDir(const string& drc, FileType filter) {
 	vector<string> entries;
 #ifdef _WIN32
+	if (drc == "\\") {	// if in "root" directory, get drive letters and present them as directories
+		vector<char> letters = listDrives();
+		entries.resize(letters.size());
+		for (sizt i = 0; i < entries.size(); i++)
+			entries[i] = letters[i] + string(":");
+		return entries;
+	}
+
 	WIN32_FIND_DATAW data;
 	HANDLE hFind = FindFirstFileW(stow(appendDsep(drc) + "*").c_str(), &data);
 	if (hFind == INVALID_HANDLE_VALUE)
@@ -402,7 +404,7 @@ vector<string> Filer::listDir(const string& drc, FileType filter) {
 				entries.push_back(data->d_name);
 	closedir(directory);
 #endif
-	std::sort(entries.begin(), entries.end());
+	std::sort(entries.begin(), entries.end(), strnatless);
 	return entries;
 }
 
@@ -410,6 +412,14 @@ vector<string> Filer::listDirRecursively(string drc) {
 	drc = appendDsep(drc);
 	vector<string> entries;
 #ifdef _WIN32
+	if (drc == "\\") {	// if in "root" directory, get drive letters and present them as directories
+		for (char c : listDrives()) {
+			vector<string> newEs = listDirRecursively(c + string(":"));
+			entries.insert(entries.end(), newEs.begin(), newEs.end());
+		}
+		return entries;
+	}
+
 	WIN32_FIND_DATAW data;
 	HANDLE hFind = FindFirstFileW(stow(drc + "*").c_str(), &data);
 	if (hFind == INVALID_HANDLE_VALUE)
@@ -447,8 +457,56 @@ vector<string> Filer::listDirRecursively(string drc) {
 	return entries;
 }
 
+pair<vector<string>, vector<string>> Filer::listDirSeparate(const string& drc) {
+	vector<string> files, dirs;
+#ifdef _WIN32
+	if (drc == "\\") {	// if in "root" directory, get drive letters and present them as directories
+		vector<char> letters = listDrives();
+		dirs.resize(letters.size());
+		for (sizt i = 0; i < dirs.size(); i++)
+			dirs[i] = letters[i] + string(":");
+		return make_pair(files, dirs);
+	}
+
+	WIN32_FIND_DATAW data;
+	HANDLE hFind = FindFirstFileW(stow(appendDsep(drc) + "*").c_str(), &data);
+	if (hFind == INVALID_HANDLE_VALUE)
+		return make_pair(files, dirs);
+
+	do {
+		if (wcscmp(data.cFileName, L".") && wcscmp(data.cFileName, L"..")) {	// ignore . and ..
+			if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+				dirs.push_back(wtos(data.cFileName));
+			else
+				files.push_back(wtos(data.cFileName));
+		}
+	} while (FindNextFileW(hFind, &data));
+	FindClose(hFind);
+#else
+	DIR* directory = opendir(drc.c_str());
+	if (!directory)
+		return make_pair(files, dirs);
+
+	while (dirent* data = readdir(directory))
+		if (strcmp(data->d_name, ".") && strcmp(data->d_name, "..")) {	// ignore . and ..
+			if (data->d_type == DT_DIR)
+				dirs.push_back(data->d_name);
+			else
+				files.push_back(data->d_name);
+		}
+	closedir(directory);
+#endif
+	std::sort(files.begin(), files.end(), strnatless);
+	std::sort(dirs.begin(), dirs.end(), strnatless);
+	return make_pair(files, dirs);
+}
+
 FileType Filer::fileType(const string& path) {
 #ifdef _WIN32
+	if (isDriveLetter(path)) {
+		vector<char> letters = Filer::listDrives();
+		return inRange(path[0], letters[0], letters.back()) ? FTYPE_DIR : FTYPE_NONE;
+	}
 	DWORD attrib = GetFileAttributesW(stow(path).c_str());
 	if (attrib == INVALID_FILE_ATTRIBUTES)
 		return FTYPE_NONE;
@@ -472,15 +530,24 @@ bool Filer::isPicture(const string& file) {
 	return false;
 }
 
+bool Filer::isArchive(const string& file) {
+	struct archive* arch = archive_read_new();
+	archive_read_support_format_all(arch);
+	archive_read_support_compression_all(arch);
+	if (archive_read_open_filename(arch, file.c_str(), Default::archiveReadBlockSize))
+		return false;
+	
+	archive_read_free(arch);
+	return true;
+}
+
 bool Filer::isFont(const string& file) {
-	TTF_Font* tmp = TTF_OpenFont(file.c_str(), Default::fontTestHeight);
-	if (tmp) {
-		TTF_CloseFont(tmp);
+	if (TTF_Font* fnt = TTF_OpenFont(file.c_str(), Default::fontTestHeight)) {
+		TTF_CloseFont(fnt);
 		return true;
 	}
 	return false;
 }
-
 #ifdef _WIN32
 vector<char> Filer::listDrives() {
 	vector<char> letters;
@@ -491,8 +558,24 @@ vector<char> Filer::listDrives() {
 			letters.push_back('A'+i);
 	return letters;
 }
-#endif
 
+string Filer::wgetenv(const string& name) {
+	wchar* buffer = new wchar[Default::envBufferSize];
+	DWORD res = GetEnvironmentVariableW(stow(name).c_str(), buffer, Default::envBufferSize);
+	if (!res)
+		buffer[0] = L'\0';
+	else if (res >= Default::envBufferSize) {
+		delete[] buffer;
+		buffer = new wchar[res];
+		res = GetEnvironmentVariableW(stow(name).c_str(), buffer, res);
+		if (!res)
+			buffer[0] = L'\0';
+	}
+	string val = wtos(buffer);
+	delete[] buffer;
+	return val;
+}
+#endif
 string Filer::getExecDir() {
 	string path;
 #ifdef _WIN32
@@ -524,7 +607,7 @@ string Filer::findFont(const string& font) {
 
 	for (const string& drc : dirFonts)	// check font directories
 		for (string& it : listDirRecursively(drc))
-			if (strcmpCI(hasExt(it) ? delExt(filename(it)) : filename(it), font) && isFont(it))
+			if (!strcicmp(hasExt(it) ? delExt(filename(it)).c_str() : filename(it).c_str(), font.c_str()) && isFont(it))
 				return it;
 	return "";	// nothing found
 }

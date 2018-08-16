@@ -1,5 +1,5 @@
 # project properties
-cmake_minimum_required(VERSION 3.1.0)
+cmake_minimum_required(VERSION 3.1.3)
 project(VertiRead LANGUAGES CXX)
 #set(CMAKE_BUILD_TYPE "Debug")
 set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
@@ -51,6 +51,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	
 	link_directories(${LIB_DIR})
 	set(DLL_FILES
+		"archive.dll"
 		"libfreetype-6.dll"
 		"libjpeg-9.dll"
 		"libpng16-16.dll"
@@ -64,7 +65,7 @@ endif()
 
 # definitions
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-	add_definitions(-D_UNICODE -D_CRT_SECURE_NO_WARNINGS)
+	add_definitions(-D_UNICODE)
 endif()
 
 # set main target
@@ -76,7 +77,7 @@ include_directories(${CMAKE_SOURCE_DIR}/src)
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	include_directories(${CMAKE_SOURCE_DIR}/lib/include)
 endif()
-target_link_libraries(VertiRead SDL2 SDL2_image SDL2_ttf)
+target_link_libraries(VertiRead SDL2 SDL2_image SDL2_ttf archive)
 
 # target path
 set(EXECUTABLE_OUTPUT_PATH "${CMAKE_BINARY_DIR}/bin")

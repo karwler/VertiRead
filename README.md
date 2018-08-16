@@ -1,14 +1,13 @@
 # VertiRead
 A simple comic reader for Linux and Windows.  
 
-Used libraries are SDL2, SDL2_image, SDL2_ttf and all that come with those three.   
+Used libraries are SDL2, SDL2_image, SDL2_ttf, libarchive and all that come with those three.   
 The minimum required Cmake version is 3.1.3 and your compiler needs to support at least C++11.  
-
-Note: When setting the output directory in Qt, don’t name it ‘build’, cause it might mess up the executable’s location.  
+Note: When setting the output directory in Qt Creator, don’t name it ‘build’, cause it might mess up the executable’s location.  
 
 ## Linux
 All dependencies need to be installed manually.  
-Installing the packages "libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev" should do the trick. (Assuming that all necessary dependencies for those are installed automatically in the process.)  
+Installing the packages "libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libarchive-dev" should do the trick. (Assuming that all necessary dependencies for those are installed automatically in the process.)  
 The default font is set to "Arial", so you probably need to install some kind of "ttf-ms-fonts" package.  
 If you don't want to install any new fonts, you can just change the default font in the "src/prog/defaults.h" file.  
 Settings files are being saved in "~/.vertiread".  
@@ -21,7 +20,7 @@ All necessary libraries are already included in the project. However they're bui
 Settings files are being saved in "%AppData%\VertiRead".  
 
 ## How to use it
-The idea is that you have a library directory in which you have your comics saved in form of pictures. The location of this directory can be changed in the settings.  
+The idea is that you have a library directory in which you have your comics saved in form of pictures or archives of pictures. The location of this directory can be changed in the settings.  
 Left clicking on a book in the book list wil take you to the file explorer, while right clicking on a book will take you to the last viewed page.  
 The last button in the book list allows you to navigate through files outside of the library directory. When in the book list or browser view, you can drag and drop a folder or file into the window to browse/open it. It's also possible to start the program with a file/directory path as a command line argument to start in the page browser or reader.  
 The reader has a hidden side panel on the left.  

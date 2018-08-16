@@ -2,13 +2,13 @@
 
 // LAYOUT
 
-Layout::Layout(const Size& SIZ, const vector<Widget*>& WGS, const Direction& DIR, Select SLC, int SPC, Layout* PNT, sizt ID) :
-	Widget(SIZ, PNT, ID),
-	widgets(WGS),
-	positions(WGS.size() + 1),
-	direction(DIR),
-	selection(SLC),
-	spacing(SPC)
+Layout::Layout(const Size& relSize, const vector<Widget*>& children, const Direction& direction, Select select, int spacing, Layout* parent, sizt id) :
+	Widget(relSize, parent, id),
+	widgets(children),
+	positions(children.size() + 1),
+	direction(direction),
+	selection(select),
+	spacing(spacing)
 {
 	if (direction.negative())
 		std::reverse(widgets.begin(), widgets.end());
@@ -146,7 +146,7 @@ void Layout::selectWidget(sizt id) {
 			if (selected.size()) {
 				vec2t lims = findMinMaxSelectedID();
 				if (outRange(id, lims.l, lims.u))
-					selected.insert(widgets.begin() + ((id < lims.l) ? id : lims.u+1), widgets.begin() + ((id < lims.l) ? lims.u : id+1));
+					selected.insert(widgets.begin() + (id < lims.l ? id : lims.u+1), widgets.begin() + ((id < lims.l) ? lims.u : id+1));
 				else
 					selected.erase(widgets[id]);
 			} else
@@ -182,9 +182,9 @@ vec2t Layout::findMinMaxSelectedID() const {
 
 // POPUP
 
-Popup::Popup(const vec2s& SIZ, const vector<Widget*>& WGS, const Direction& DIR, int SPC) :
-	Layout(SIZ.x, WGS, DIR, Select::none, SPC, nullptr, SIZE_MAX),
-	sizeY(SIZ.y)
+Popup::Popup(const vec2s& relSize, const vector<Widget*>& children, const Direction& direction, int spacing) :
+	Layout(relSize.x, children, direction, Select::none, spacing, nullptr, SIZE_MAX),
+	sizeY(relSize.y)
 {}
 
 void Popup::drawSelf() {
@@ -206,11 +206,12 @@ SDL_Rect Popup::frame() const {
 
 // OVERLAY
 
-Overlay::Overlay(const vec2s& POS, const vec2s& SIZ, const vec2s& APS, const vec2s& ASZ, const vector<Widget*>& WGS, const Direction& DIR, int SPC) :
-	Popup(SIZ, WGS, DIR, SPC),
-	pos(POS),
-	actPos(APS),
-	actSize(ASZ)
+Overlay::Overlay(const vec2s& position, const vec2s& relSize, const vec2s& activationPos, const vec2s& activationSize, const vector<Widget*>& children, const Direction& direction, int spacing) :
+	Popup(relSize, children, direction, spacing),
+	pos(position),
+	actPos(activationPos),
+	actSize(activationSize),
+	on(false)
 {}
 
 vec2i Overlay::position() const {
@@ -227,8 +228,8 @@ SDL_Rect Overlay::actRect() const {
 
 // SCROLL AREA
 
-ScrollArea::ScrollArea(const Size& SIZ, const vector<Widget*>& WGS, const Direction& DIR, Select SLC, int SPC, Layout* PNT, sizt ID) :
-	Layout(SIZ, WGS, DIR, SLC, SPC, PNT, ID),
+ScrollArea::ScrollArea(const Size& relSize, const vector<Widget*>& children, const Direction& direction, Select select, int spacing, Layout* parent, sizt id) :
+	Layout(relSize, children, direction, select, spacing, parent, id),
 	listPos(0),
 	motion(0.f),
 	diffSliderMouse(0),
@@ -340,25 +341,25 @@ void ScrollArea::setSlider(int spos) {
 
 int ScrollArea::barSize() const {
 	int8 di = direction.vertical();
-	return (listSize()[di] > size()[di]) ? Default::sbarSize : 0;
+	return listSize()[di] > size()[di] ? Default::sbarSize : 0;
 }
 
 vec2i ScrollArea::listLim() const {
 	vec2i wsiz = size();
 	vec2i lsiz = listSize();
-	return vec2i((wsiz.x < lsiz.x) ? lsiz.x - wsiz.x : 0, (wsiz.y < lsiz.y) ? lsiz.y - wsiz.y : 0);
+	return vec2i(wsiz.x < lsiz.x ? lsiz.x - wsiz.x : 0, wsiz.y < lsiz.y ? lsiz.y - wsiz.y : 0);
 }
 
 int ScrollArea::sliderPos() const {
 	int8 di = direction.vertical();
-	return (listSize()[di] > size()[di]) ? position()[di] + listPos[di] * sliderLim() / listLim()[di] : position()[di];
+	return listSize()[di] > size()[di] ? position()[di] + listPos[di] * sliderLim() / listLim()[di] : position()[di];
 }
 
 int ScrollArea::sliderSize() const {
 	int8 di = direction.vertical();
 	int siz = size()[di];
 	int lts = listSize()[di];
-	return (siz < lts) ? siz * siz / lts : siz;
+	return siz < lts ? siz * siz / lts : siz;
 }
 
 int ScrollArea::sliderLim() const {
@@ -427,9 +428,9 @@ int ScrollArea::wgtREnd(sizt id) const {
 
 // TILE BOX
 
-TileBox::TileBox(const Size& SIZ, const vector<Widget*>& WGS, int WHT, const Direction& DIR, Select SLC, int SPC, Layout* PNT, sizt ID) :
-	ScrollArea(SIZ, WGS, DIR, SLC, SPC, PNT, ID),
-	wheight(WHT)
+TileBox::TileBox(const Size& relSize, const vector<Widget*>& children, int childHeight, const Direction& direction, Select select, int spacing, Layout* parent, sizt id) :
+	ScrollArea(relSize, children, direction, select, spacing, parent, id),
+	wheight(childHeight)
 {}
 
 void TileBox::onResize() {
@@ -521,13 +522,13 @@ int TileBox::wgtREnd(sizt id) const {
 
 // READER BOX
 
-ReaderBox::ReaderBox(const Size& SIZ, const string& DRC, const Direction& DIR, int SPC, Layout* PNT, sizt ID) :
-	ScrollArea(SIZ, {}, DIR, Select::none, SPC, PNT, ID),
-	pics(World::drawSys()->loadTextures(DRC)),
+ReaderBox::ReaderBox(const Size& relSize, const Direction& direction, int spacing, Layout* parent, sizt id) :
+	ScrollArea(relSize, {}, direction, Select::none, spacing, parent, id),
 	countDown(true),
 	cursorTimer(Default::menuHideTimeout),
 	zoom(1.f)
 {
+	pics = World::program()->getBrowser()->getCurType() == Browser::FileType::archive ? World::drawSys()->loadTexturesArchive(World::program()->getBrowser()->curFilepath()) : World::drawSys()->loadTexturesDirectory(World::program()->getBrowser()->getCurDir());
 	widgets.resize(pics.size());
 	positions.resize(pics.size()+1);
 
@@ -587,11 +588,12 @@ void ReaderBox::postInit() {
 	Layout::postInit();
 
 	// scroll down to opened picture
-	for (sizt i = 0; i < widgets.size(); i++)
-		if (pics[i].first == World::program()->getBrowser()->getCurFile()) {
-			scrollToWidgetPos(i);
-			break;
-		}
+	if (World::program()->getBrowser()->getCurType() == Browser::FileType::picture)
+		for (sizt i = 0; i < widgets.size(); i++)
+			if (pics[i].first == World::program()->getBrowser()->getCurFile()) {
+				scrollToWidgetPos(i);
+				break;
+			}
 	centerList();
 }
 

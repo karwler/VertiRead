@@ -51,6 +51,10 @@ protected:
 	static const int picSize;
 	static const int picMargin;
 	static const vec2s messageSize;
+
+	bool tryClosePopup();
+private:
+	void eventSelect(const Direction& dir);
 };
 
 class ProgBooks : public ProgState {

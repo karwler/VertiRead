@@ -10,7 +10,7 @@ int WindowSys::start() {
 	try {
 		init();
 		exec();
-	} catch (string str) {
+	} catch (const string& str) {
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", str.c_str(), window);
 	} catch (...) {
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Unknown error.", window);
@@ -40,7 +40,7 @@ void WindowSys::init() {
 
 	// check if all (more or less) necessary files and directories exist
 	if (Filer::fileType(Filer::dirSets) != FTYPE_DIR)
-		if (!Filer::mkDir(Filer::dirSets))
+		if (!Filer::createDir(Filer::dirSets))
 			std::cerr << "Couldn't create settings directory." << std::endl;
 	if (Filer::fileType(Filer::dirExec + Default::fileThemes) != FTYPE_FILE)
 		std::cerr << "Couldn't find themes file." << std::endl;

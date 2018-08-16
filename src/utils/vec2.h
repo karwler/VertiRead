@@ -2,55 +2,57 @@
 
 #include <cmath>
 
-template <typename T>
+template <class T>
 struct vec2;
 
-template <typename T>
+template <class T>
 T dot(const vec2<T>& a, const vec2<T>& b);
-template <typename T>
+template <class T>
 T cross(const vec2<T>& a, const vec2<T>& b);
-template <typename T>
+template <class T>
 vec2<T> reflect(const vec2<T>& vec, vec2<T> nrm);
-template <typename T>
+template <class T>
 vec2<T> rotate(const vec2<T>& vec, const T& ang);
-template <typename T>
+template <class T>
 char intersect(vec2<T>& in, vec2<T>& im, const vec2<T>& ap, const vec2<T>& av, const vec2<T>& bp, const vec2<T>& bv);
 
-template <typename T>
+template <class T>
 struct vec2 {
-	vec2(const T& N=T(0)) :
-		x(N), y(N)
+	vec2(const T& n=T(0)) :
+		x(n), y(n)
 	{}
 
-	vec2(const T& X, const T& Y) :
-		x(X), y(Y)
+	vec2(const T& x, const T& y) :
+		x(x), y(y)
 	{}
 
-	vec2(const T& X, const T& Y, bool swap) {
+	vec2(const T& vx, const T& vy, bool swap) {
 		if (swap) {
-			y = X;
-			x = Y;
+			y = vx;
+			x = vy;
 		} else {
-			y = Y;
-			x = X;
+			y = vy;
+			x = vx;
 		}
 	}
 
-	template <typename A>
-	vec2(const vec2<A>& V) :
-		x(V.x), y(V.y)
+	template <class A>
+	vec2(const vec2<A>& v) :
+		x(v.x), y(v.y)
 	{}
 
-	template <typename A>
-	vec2(const vec2<A>& V, bool swap) {
+	template <class A>
+	vec2(const vec2<A>& v, bool swap) {
 		if (swap) {
-			y = V.x;
-			x = V.y;
+			y = v.x;
+			x = v.y;
 		} else {
-			y = V.y;
-			x = V.x;
+			y = v.y;
+			x = v.x;
 		}
 	}
+
+	~vec2() {}	// for some reason this needs to be here to make msvc happy
 	
 	T& operator[](char i) {
 		return reinterpret_cast<T*>(this)[i];
@@ -161,7 +163,7 @@ struct vec2 {
 	}
 
 	T length() const {
-		return std::sqrt(x*x + y*y);
+		return sqrt(x*x + y*y);
 	}
 
 	vec2 normalize() const {
@@ -196,220 +198,220 @@ struct vec2 {
 	union { T y, h, u; };
 };
 
-template <typename T>
+template <class T>
 vec2<T> operator+(const vec2<T>& a, const vec2<T>& b) {
 	return vec2<T>(a.x + b.x, a.y + b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator+(const vec2<T>& a, const T& b) {
 	return vec2<T>(a.x + b, a.y + b);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator+(const T& a, const vec2<T>& b) {
 	return vec2<T>(a + b.x, a + b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator-(const vec2<T>& a) {
 	return vec2<T>(-a.x, -a.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator-(const vec2<T>& a, const vec2<T>& b) {
 	return vec2<T>(a.x - b.x, a.y - b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator-(const vec2<T>& a, const T& b) {
 	return vec2<T>(a.x - b, a.y - b);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator-(const T& a, const vec2<T>& b) {
 	return vec2<T>(a - b.x, a - b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator*(const vec2<T>& a, const vec2<T>& b) {
 	return vec2<T>(a.x * b.x, a.y * b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator*(const vec2<T>& a, const T& b) {
 	return vec2<T>(a.x * b, a.y * b);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator*(const T& a, const vec2<T>& b) {
 	return vec2<T>(a * b.x, a * b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator/(const vec2<T>& a, const vec2<T>& b) {
 	return vec2<T>(a.x / b.x, a.y / b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator/(const vec2<T>& a, const T& b) {
 	return vec2<T>(a.x / b, a.y / b);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator/(const T& a, const vec2<T>& b) {
 	return vec2<T>(a % b.x, a % b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator%(const vec2<T>& a, const vec2<T>& b) {
 	return vec2<T>(a.x % b.x, a.y % b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator%(const vec2<T>& a, const T& b) {
 	return vec2<T>(a.x % b, a.y % b);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator%(const T& a, const vec2<T>& b) {
 	return vec2<T>(a % b.x, a % b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator~(const vec2<T>& a) {
 	return vec2<T>(~a.x, ~a.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator&(const vec2<T>& a, const vec2<T>& b) {
 	return vec2<T>(a.x & b.x, a.y & b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator&(const vec2<T>& a, const T& b) {
 	return vec2<T>(a.x & b, a.y & b);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator&(const T& a, const vec2<T>& b) {
 	return vec2<T>(a & b.x, a & b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator|(const vec2<T>& a, const vec2<T>& b) {
 	return vec2<T>(a.x | b.x, a.y | b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator|(const vec2<T>& a, const T& b) {
 	return vec2<T>(a.x | b, a.y | b);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator|(const T& a, const vec2<T>& b) {
 	return vec2<T>(a | b.x, a | b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator^(const vec2<T>& a, const vec2<T>& b) {
 	return vec2<T>(a.x ^ b.x, a.y ^ b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator^(const vec2<T>& a, const T& b) {
 	return vec2<T>(a.x ^ b, a.y ^ b);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator^(const T& a, const vec2<T>& b) {
 	return vec2<T>(a ^ b.x, a ^ b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator<<(const vec2<T>& a, const vec2<T>& b) {
 	return vec2<T>(a.x << b.x, a.y << b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator<<(const vec2<T>& a, const T& b) {
 	return vec2<T>(a.x << b, a.y << b);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator<<(const T& a, const vec2<T>& b) {
 	return vec2<T>(a << b.x, a << b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator>>(const vec2<T>& a, const vec2<T>& b) {
 	return vec2<T>(a.x >> b.x, a.y >> b.y);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator>>(const vec2<T>& a, const T& b) {
 	return vec2<T>(a.x >> b, a.y >> b);
 }
 
-template <typename T>
+template <class T>
 vec2<T> operator>>(const T& a, const vec2<T>& b) {
 	return vec2<T>(a >> b.x, a >> b.y);
 }
 
-template <typename T>
+template <class T>
 bool operator==(const vec2<T>& a, const vec2<T>& b) {
 	return a.x == b.x && a.y == b.y;
 }
 
-template <typename T>
+template <class T>
 bool operator==(const vec2<T>& a, const T& b) {
 	return a.x == b && a.y == b;
 }
 
-template <typename T>
+template <class T>
 bool operator==(const T& a, const vec2<T>& b) {
 	return a == b.x && a == b.y;
 }
 
-template <typename T>
+template <class T>
 bool operator!=(const vec2<T>& a, const vec2<T>& b) {
 	return a.x != b.x || a.y != b.y;
 }
 
-template <typename T>
+template <class T>
 bool operator!=(const vec2<T>& a, const T& b) {
 	return a.x != b || a.y != b;
 }
 
-template <typename T>
+template <class T>
 bool operator!=(const T& a, const vec2<T>& b) {
 	return a != b.x || a != b.y;
 }
 
-template <typename T>
+template <class T>
 T dot(const vec2<T>& a, const vec2<T>& b) {
 	return a.x * b.x + a.y * b.y;
 }
 
-template <typename T>
+template <class T>
 T cross(const vec2<T>& a, const vec2<T>& b) {
 	return a.x * b.y - a.y * b.x;
 }
 
-template <typename T>
+template <class T>
 vec2<T> reflect(const vec2<T>& vec, vec2<T> nrm) {
 	nrm = nrm.normalize();
 	return vec - T(2) * dot(vec, nrm) * nrm;
 }
 
-template <typename T>
+template <class T>
 vec2<T> rotate(const vec2<T>& vec, const T& ang) {
-	T sa = std::sin(ang);
-	T ca = std::cos(ang);
+	T sa = sin(ang);
+	T ca = cos(ang);
 	return vec2<T>(vec.x * ca - vec.y * sa, vec.x * sa + vec.y * ca);
 }
 
-template <typename T>
+template <class T>
 char intersect(vec2<T>& in, vec2<T>& im, const vec2<T>& ap, const vec2<T>& av, const vec2<T>& bp, const vec2<T>& bv) {	// return 0 if no intersection, 1 if lines intersect, 2 if lines overlap
 	vec2<T> dp = bp - ap;
 	T dt = cross(av, bv);
@@ -423,9 +425,9 @@ char intersect(vec2<T>& in, vec2<T>& im, const vec2<T>& ap, const vec2<T>& av, c
 			T t1 = t0 + dot(bv, av) / ad;
 
 			if ((t0 >= T(0) && t0 <= T(1)) || (t1 >= T(0) && t1 <= T(1))) {	// liens overlap
-				vec2<T> iv = (dot(av, bv) < T(0)) ? vec2<T>(t1, t0) : vec2<T>(t0, t1);
-				in = (iv.l < T(0)) ? ap : ap + iv.l * av;
-				im = (iv.u > T(1)) ? ap + av : ap + iv.u * av;
+				vec2<T> iv = dot(av, bv) < T(0) ? vec2<T>(t1, t0) : vec2<T>(t0, t1);
+				in = iv.l < T(0) ? ap : ap + iv.l * av;
+				im = iv.u > T(1) ? ap + av : ap + iv.u * av;
 				return 2;
 			}
 		}

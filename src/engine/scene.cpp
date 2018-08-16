@@ -2,10 +2,10 @@
 
 // CLICK STAMP
 
-ClickStamp::ClickStamp(Widget* WGT, ScrollArea* ARE, const vec2i& POS) :
-	widget(WGT),
-	area(ARE),
-	mPos(POS)
+ClickStamp::ClickStamp(Widget* widget, ScrollArea* area, const vec2i& mPos) :
+	widget(widget),
+	area(area),
+	mPos(mPos)
 {}
 
 // SCENE
@@ -25,7 +25,7 @@ void Scene::tick(float dSec) {
 }
 
 void Scene::onMouseMove(const vec2i& mPos, const vec2i& mMov) {
-	setSelected(mPos, popup ? popup.get() : overlayFocused(mPos) ? overlay.get() : layout.get());
+	setSelected(mPos, topLayout(mPos));
 
 	if (capture)
 		capture->onDrag(mPos, mMov);
@@ -42,7 +42,7 @@ void Scene::onMouseDown(const vec2i& mPos, uint8 mBut, uint8 mCnt) {
 		if (LineEdit* box = dynamic_cast<LineEdit*>(capture))
 			box->confirm();
 	
-	setSelected(mPos, popup ? popup.get() : overlayFocused(mPos) ? overlay.get() : layout.get());	// update in case selection has changed through keys while cursor remained at the old position
+	setSelected(mPos, topLayout(mPos));	// update in case selection has changed through keys while cursor remained at the old position
 	if (mCnt == 1) {
 		stamps[mBut] = ClickStamp(select, getSelectedScrollArea(), mPos);
 		if (stamps[mBut].area)	// area goes first so widget can overwrite it's capture
@@ -200,4 +200,8 @@ bool Scene::cursorDisableable() {
 
 bool Scene::cursorInClickRange(const vec2i& mPos, uint8 mBut) {
 	return vec2f(mPos - stamps[mBut].mPos).length() <= Default::clickThreshold;
+}
+
+Layout* Scene::topLayout(const vec2i& mPos) {
+	return popup ? popup.get() : overlayFocused(mPos) ? overlay.get() : layout.get();
 }

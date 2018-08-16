@@ -131,8 +131,8 @@ void Binding::clearAsgKey() {
 	asg &= ~ASG_KEY;
 }
 
-void Binding::setKey(SDL_Scancode KEY) {
-	key = KEY;
+void Binding::setKey(SDL_Scancode kkey) {
+	key = kkey;
 	asg |= ASG_KEY;
 }
 
@@ -144,23 +144,23 @@ void Binding::clearAsgJct() {
 	asg &= ~(ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N);
 }
 
-void Binding::setJbutton(uint8 BUT) {
-	jctID = BUT;
+void Binding::setJbutton(uint8 but) {
+	jctID = but;
 
 	clearAsgJct();
 	asg |= ASG_JBUTTON;
 }
 
-void Binding::setJaxis(uint8 AXIS, bool positive) {
-	jctID = AXIS;
+void Binding::setJaxis(uint8 axis, bool positive) {
+	jctID = axis;
 
 	clearAsgJct();
-	asg |= (positive) ? ASG_JAXIS_P : ASG_JAXIS_N;
+	asg |= positive ? ASG_JAXIS_P : ASG_JAXIS_N;
 }
 
-void Binding::setJhat(uint8 HAT, uint8 VAL) {
-	jctID = HAT;
-	jHatVal = VAL;
+void Binding::setJhat(uint8 hat, uint8 val) {
+	jctID = hat;
+	jHatVal = val;
 
 	clearAsgJct();
 	asg |= ASG_JHAT;
@@ -170,45 +170,45 @@ void Binding::clearAsgGct() {
 	asg &= ~(ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N);
 }
 
-void Binding::setGbutton(SDL_GameControllerButton BUT) {
-	gctID = BUT;
+void Binding::setGbutton(SDL_GameControllerButton but) {
+	gctID = but;
 
 	clearAsgGct();
 	asg |= ASG_GBUTTON;
 }
 
-void Binding::setGaxis(SDL_GameControllerAxis AXIS, bool positive) {
-	gctID = AXIS;
+void Binding::setGaxis(SDL_GameControllerAxis axis, bool positive) {
+	gctID = axis;
 
 	clearAsgGct();
-	asg |= (positive) ? ASG_GAXIS_P : ASG_GAXIS_N;
+	asg |= positive ? ASG_GAXIS_P : ASG_GAXIS_N;
 }
 
-void Binding::setBcall(void (ProgState::*call)()) {
+void Binding::setBcall(SBCall call) {
 	callAxis = false;
 	bcall = call;
 }
 
-void Binding::setAcall(void (ProgState::*call)(float)) {
+void Binding::setAcall(SACall call) {
 	callAxis = true;
 	acall = call;
 }
 
 // SETTINGS
 
-Settings::Settings(bool MAX, bool FSC, const vec2i& RES, const Direction& DIR, const string& THM, const string& FNT, const string& LANG, const string& LIB, const string& RNDR, const vec2f& SSP, int16 DDZ) :
-	maximized(MAX),
-	fullscreen(FSC),
-	direction(DIR),
-	resolution(RES),
-	renderer(RNDR),
-	scrollSpeed(SSP)
+Settings::Settings(bool maximized, bool fullscreen, const vec2i& resolution, const Direction& direction, const string& theme, const string& font, const string& language, const string& library, const string& renderer, const vec2f& speed, int16 deadzone) :
+	maximized(maximized),
+	fullscreen(fullscreen),
+	direction(direction),
+	resolution(resolution),
+	renderer(renderer),
+	scrollSpeed(speed)
 {
-	setTheme(THM);
-	setFont(FNT);
-	setLang(LANG);
-	setDirLib(LIB);
-	setDeadzone(DDZ);
+	setTheme(theme);
+	setFont(font);
+	setLang(language);
+	setDirLib(library);
+	setDeadzone(deadzone);
 }
 
 string Settings::getResolutionString() const {
@@ -218,11 +218,9 @@ string Settings::getResolutionString() const {
 }
 
 void Settings::setResolution(const string& line) {
-	vector<vec2t> elems = getWords(line);
-	if (elems.size() >= 1)
-		resolution.x = stoi(line.substr(elems[0].l, elems[0].u));
-	if (elems.size() >= 2)
-		resolution.y = stoi(line.substr(elems[1].l, elems[1].u));
+	vector<string> elems = getWords(line);
+	for (uint8 i = 0; i < elems.size() && i < 2; i++)
+		resolution[i] = stoi(elems[i]);
 }
 
 const string& Settings::setTheme(const string& name) {
@@ -244,16 +242,16 @@ string Settings::setFont(const string& newFont) {
 }
 
 const string& Settings::setLang(const string& language) {
-	return lang = (Filer::fileType(Filer::dirLangs + language + ".ini") == FTYPE_FILE) ? language : Default::language;
+	return lang = Filer::fileType(Filer::dirLangs + language + ".ini") == FTYPE_FILE ? language : Default::language;
 }
 
 const string& Settings::setDirLib(const string& drc) {
-	dirLib = getAbsolute(drc);
+	dirLib = absolutePath(drc);
 	if (Filer::fileType(dirLib) != FTYPE_DIR)
-		if (!Filer::mkDir(dirLib)) {
+		if (!Filer::createDir(dirLib)) {
 			dirLib = Filer::dirSets + Default::dirLibrary;
 			if (Filer::fileType(dirLib) != FTYPE_DIR)
-				Filer::mkDir(dirLib);
+				Filer::createDir(dirLib);
 		}
 	return dirLib;
 }
@@ -288,11 +286,9 @@ string Settings::getScrollSpeedString() const {
 }
 
 void Settings::setScrollSpeed(const string& line) {
-	vector<vec2t> elems = getWords(line);
-	if (elems.size() >= 1)
-		scrollSpeed.x = stof(line.substr(elems[0].l, elems[0].u));
-	if (elems.size() >= 2)
-		scrollSpeed.y = stof(line.substr(elems[1].l, elems[1].u));
+	vector<string> elems = getWords(line);
+	for (uint8 i = 0; i < elems.size() && i < 2; i++)
+		scrollSpeed[i] = stof(elems[i]);
 }
 
 void Settings::setDeadzone(int zone) {

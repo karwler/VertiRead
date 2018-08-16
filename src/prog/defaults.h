@@ -4,6 +4,8 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
+#include <archive.h>
+#include <archive_entry.h>
 #include "utils/vec2.h"
 
 #include <algorithm>
@@ -58,11 +60,11 @@ using vec2u = vec2<uint>;
 using vec2f = vec2<float>;
 using vec2t = vec2<sizt>;
 
-template <typename... T>
+template <class... T>
 using umap = std::unordered_map<T...>;
-template <typename... T>
+template <class... T>
 using uset = std::unordered_set<T...>;
-template <typename... T>
+template <class... T>
 using uptr = std::unique_ptr<T...>;
 
 // forward declaraions
@@ -71,11 +73,17 @@ class Layout;
 class Program;
 class ProgState;
 
+using PCall = void (Program::*)(Button*);
+using SBCall = void (ProgState::*)();
+using SACall = void (ProgState::*)(float);
+
 // directory separator
 #ifdef _WIN32
 const char dsep = '\\';
+const char dseps[] = "\\";
 #else
 const char dsep = '/';
+const char dseps[] = "/";
 #endif
 
 namespace Default {
@@ -305,5 +313,9 @@ const float menuHideTimeout = 3.f;
 const int axisLimit = 32768;
 const float resModeBorder = 0.85f;
 const float resModeRatio = 0.75f;
+const sizt archiveReadBlockSize = 10240;
+#ifdef _WIN32
+const ulong envBufferSize = 2048;
+#endif
 
 }

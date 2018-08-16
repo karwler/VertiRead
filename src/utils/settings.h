@@ -21,7 +21,7 @@ public:
 		left,
 		right
 	};
-	Direction(Dir DIR = Direction::up) : dir(DIR) {}
+	Direction(Dir direction=Direction::up) : dir(direction) {}
 
 	operator Dir() const { return dir; }
 
@@ -82,23 +82,23 @@ public:
 	SDL_Scancode getKey() const { return key; }
 	bool keyAssigned() const { return asg & ASG_KEY; }
 	void clearAsgKey();
-	void setKey(SDL_Scancode KEY);
+	void setKey(SDL_Scancode kkey);
 
 	uint8 getJctID() const { return jctID; }
 	bool jctAssigned() const;
 	void clearAsgJct();
 
 	bool jbuttonAssigned() const { return asg & ASG_JBUTTON; }
-	void setJbutton(uint8 BUT);
-
+	void setJbutton(uint8 but);
+	
 	bool jaxisAssigned() const { return asg & (ASG_JAXIS_P | ASG_JAXIS_N); }
 	bool jposAxisAssigned() const { return asg & ASG_JAXIS_P; }
 	bool jnegAxisAssigned() const { return asg & ASG_JAXIS_N; }
-	void setJaxis(uint8 AXIS, bool positive);
+	void setJaxis(uint8 axis, bool positive);
 
 	uint8 getJhatVal() const { return jHatVal; }
 	bool jhatAssigned() const { return asg & ASG_JHAT; }
-	void setJhat(uint8 HAT, uint8 VAL);
+	void setJhat(uint8 hat, uint8 val);
 
 	uint8 getGctID() const { return gctID; }
 	bool gctAssigned() const { return asg & (ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N); }
@@ -106,31 +106,31 @@ public:
 
 	SDL_GameControllerButton getGbutton() const { return static_cast<SDL_GameControllerButton>(gctID); }
 	bool gbuttonAssigned() const { return asg & ASG_GBUTTON; }
-	void setGbutton(SDL_GameControllerButton BUT);
+	void setGbutton(SDL_GameControllerButton but);
 
 	SDL_GameControllerAxis getGaxis() const { return static_cast<SDL_GameControllerAxis>(gctID); }
 	bool gaxisAssigned() const { return asg & (ASG_GAXIS_P | ASG_GAXIS_N); }
 	bool gposAxisAssigned() const { return asg & ASG_GAXIS_P; }
 	bool gnegAxisAssigned() const { return asg & ASG_GAXIS_N; }
-	void setGaxis(SDL_GameControllerAxis AXIS, bool positive);
-
+	void setGaxis(SDL_GameControllerAxis axis, bool positive);
+	
 	bool isAxis() const { return callAxis; }
-	void (ProgState::*(getBcall() const))() { return bcall; }
-	void setBcall(void (ProgState::*call)());
-	void (ProgState::*(getAcall() const))(float) { return acall; }
-	void setAcall(void (ProgState::*call)(float));
+	SBCall getBcall() const { return bcall; }
+	void setBcall(SBCall call);
+	SACall getAcall() const { return acall; }
+	void setAcall(SACall call);
 
 private:
 	Assignment asg;		// stores data for checking whether key and/or button/axis are assigned
 	SDL_Scancode key;	// keybord key
-	uint8 jctID;		// joystick control ID
+	uint8 jctID;		// joystick control id
 	uint8 jHatVal;		// joystick hat value
-	uint8 gctID;		// gamepad control ID
+	uint8 gctID;		// gamepad control id
 
 	bool callAxis;
 	union {
-		void (ProgState::*bcall)();
-		void (ProgState::*acall)(float);
+		SBCall bcall;
+		SACall acall;
 	};
 };
 inline Binding::Assignment operator~(Binding::Assignment a) { return static_cast<Binding::Assignment>(~static_cast<uint8>(a)); }
@@ -143,7 +143,7 @@ inline Binding::Assignment operator|=(Binding::Assignment& a, Binding::Assignmen
 
 class Settings {
 public:
-	Settings(bool MAX=Default::maximized, bool FSC=Default::fullscreen, const vec2i& RES=Default::resolution, const Direction& DIR=Direction::down, const string& THM="", const string& FNT=Default::font, const string& LANG=Default::language, const string& LIB="", const string& RNDR="", const vec2f& SSP=Default::scrollSpeed, int16 DDZ=Default::controllerDeadzone);
+	Settings(bool maximized=Default::maximized, bool fullscreen=Default::fullscreen, const vec2i& resolution=Default::resolution, const Direction& direction=Direction::down, const string& theme="", const string& font=Default::font, const string& language=Default::language, const string& library="", const string& renderer="", const vec2f& speed=Default::scrollSpeed, int16 deadzone=Default::controllerDeadzone);
 
 	string getResolutionString() const;
 	void setResolution(const string& line);

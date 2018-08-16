@@ -260,5 +260,9 @@ void InputSys::removeController(int id) {
 }
 
 int InputSys::checkAxisValue(int value) const {
-	return (std::abs(value) > World::winSys()->sets.getDeadzone()) ? value : 0;
+	return abs(value) > World::winSys()->sets.getDeadzone() ? value : 0;
+}
+
+float InputSys::axisToFloat(int axisValue) {
+	return float(axisValue) / float(Default::axisLimit);
 }

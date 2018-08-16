@@ -4,7 +4,7 @@
 
 // saves what widget is being clicked on with what button at what position
 struct ClickStamp {
-	ClickStamp(Widget* WGT=nullptr, ScrollArea* ARE=nullptr, const vec2i& POS=0);
+	ClickStamp(Widget* widget=nullptr, ScrollArea* area=nullptr, const vec2i& mPos=0);
 
 	Widget* widget;
 	ScrollArea* area;
@@ -48,4 +48,5 @@ private:
 	void setSelected(const vec2i& mPos, Layout* box);
 	ScrollArea* getSelectedScrollArea() const;
 	bool overlayFocused(const vec2i& mPos);
+	Layout* topLayout(const vec2i& mPos);
 };

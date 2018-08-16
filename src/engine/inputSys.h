@@ -56,4 +56,5 @@ private:
 	void checkBindingsX(SDL_GameControllerAxis gaxis, bool positive);
 
 	int checkAxisValue(int value) const;	// check deadzone in axis value
+	static float axisToFloat(int axisValue);
 };
