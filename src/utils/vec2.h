@@ -163,7 +163,7 @@ struct vec2 {
 	}
 
 	T length() const {
-		return sqrt(x*x + y*y);
+		return std::sqrt(x*x + y*y);
 	}
 
 	vec2 normalize() const {
@@ -406,8 +406,8 @@ vec2<T> reflect(const vec2<T>& vec, vec2<T> nrm) {
 
 template <class T>
 vec2<T> rotate(const vec2<T>& vec, const T& ang) {
-	T sa = sin(ang);
-	T ca = cos(ang);
+	T sa = std::sin(ang);
+	T ca = std::cos(ang);
 	return vec2<T>(vec.x * ca - vec.y * sa, vec.x * sa + vec.y * ca);
 }
 

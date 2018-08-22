@@ -84,6 +84,10 @@ void ProgState::eventFullscreen() {
 	World::winSys()->setFullscreen(!World::winSys()->sets.fullscreen);
 }
 
+void ProgState::eventRefresh() {
+	World::scene()->resetLayouts();
+}
+
 Popup* ProgState::createPopupMessage(const string& msg, const vec2<Size>& size) {
 	vector<Widget*> bot = {
 		new Widget(1.f),
@@ -211,16 +215,12 @@ void ProgReader::eventScrollLeft(float amt) {
 	World::scene()->getLayout()->onScroll(vec2i(-modifySpeed(amt * World::winSys()->sets.scrollSpeed.x), 0));
 }
 
-void ProgReader::eventPageUp() {
-	ReaderBox* reader = static_cast<ReaderBox*>(World::scene()->getLayout());
-	sizt i = reader->visibleWidgets().l;
-	reader->scrollToWidgetPos(i == 0 ? i : i-1);
+void ProgReader::eventNextPage() {
+	static_cast<ReaderBox*>(World::scene()->getLayout())->scrollToNext();
 }
 
-void ProgReader::eventPageDown() {
-	ReaderBox* reader = static_cast<ReaderBox*>(World::scene()->getLayout());
-	sizt i = reader->visibleWidgets().u;
-	reader->scrollToWidgetPos(i == reader->getWidgets().size() ? i-1 : i);
+void ProgReader::eventPrevPage() {
+	static_cast<ReaderBox*>(World::scene()->getLayout())->scrollToPrevious();
 }
 
 void ProgReader::eventZoomIn() {
@@ -233,6 +233,14 @@ void ProgReader::eventZoomOut() {
 
 void ProgReader::eventZoomReset() {
 	World::program()->eventZoomReset();
+}
+
+void ProgReader::eventToStart() {
+	static_cast<ReaderBox*>(World::scene()->getLayout())->scrollToLimit(true);
+}
+
+void ProgReader::eventToEnd() {
+	static_cast<ReaderBox*>(World::scene()->getLayout())->scrollToLimit(false);
 }
 
 void ProgReader::eventCenterView() {
@@ -250,16 +258,12 @@ void ProgReader::eventPrevDir() {
 void ProgReader::eventClosing() {
 	if (World::program()->getBrowser()->getCurType() == Browser::FileType::archive)
 		Filer::saveLastPage(World::program()->getBrowser()->curFilepath());
-	else {
-		ReaderBox* reader = static_cast<ReaderBox*>(World::scene()->getLayout());
-		vec2t vis = reader->visibleWidgets();
-		if (vis.l < vis.u)
-			Filer::saveLastPage(childPath(World::program()->getBrowser()->getCurDir(), reader->getFile(vis.l)));
-	}
+	else
+		static_cast<ReaderBox*>(World::scene()->getLayout())->saveCurPage();
 }
 
 Layout* ProgReader::createLayout() {
-	return new ReaderBox(1.f, World::winSys()->sets.direction);
+	return new ReaderBox(1.f, World::winSys()->sets.direction, World::winSys()->sets.zoom, World::winSys()->sets.spacing);
 }
 
 Overlay* ProgReader::createOverlay() {
@@ -323,6 +327,8 @@ Layout* ProgSettings::createLayout() {
 	};
 	vector<string> txs = {
 		World::drawSys()->translation("direction"),
+		World::drawSys()->translation("zoom"),
+		World::drawSys()->translation("spacing"),
 		World::drawSys()->translation("fullscreen"),
 		World::drawSys()->translation("size"),
 		World::drawSys()->translation("theme"),
@@ -345,37 +351,43 @@ Layout* ProgSettings::createLayout() {
 	Text dznum(ntos(Default::axisLimit), lineHeight);
 	vector<Widget*> lx[] = { {
 		new Label(descLength, txs[0]),
-		new SwitchBox(1.f, Default::directionNames, enumToStr(Default::directionNames, World::winSys()->sets.direction), &Program::eventSwitchDirection)
+		new SwitchBox(1.f, Default::directionNames, World::winSys()->sets.direction.toString(), &Program::eventSwitchDirection)
 	},{
 		new Label(descLength, txs[1]),
+		new LineEdit(1.f, ntos(World::winSys()->sets.zoom), &Program::eventSetZoom, nullptr, nullptr, LineEdit::TextType::uFloating)
+	}, {
+		new Label(descLength, txs[2]),
+		new LineEdit(1.f, ntos(World::winSys()->sets.spacing), &Program::eventSetSpacing, nullptr, nullptr, LineEdit::TextType::uInteger)
+	}, {
+		new Label(descLength, txs[3]),
 		new CheckBox(lineHeight, World::winSys()->sets.fullscreen, &Program::eventSwitchFullscreen)
 	},{
-		new Label(descLength, txs[2]),
+		new Label(descLength, txs[4]),
 		new Label(butts[0].length, butts[0].text, &Program::eventSetPortrait),
 		new Label(butts[1].length, butts[1].text, &Program::eventSetLandscape),
 		new Label(butts[2].length, butts[2].text, &Program::eventSetSquare),
 		new Label(butts[3].length, butts[3].text, &Program::eventSetFill)
 	}, {
-		new Label(descLength, txs[3]),
+		new Label(descLength, txs[5]),
 		new SwitchBox(1.f, Filer::getAvailibleThemes(), World::winSys()->sets.getTheme(), &Program::eventSetTheme)
 	}, {
-		new Label(descLength, txs[4]),
+		new Label(descLength, txs[6]),
 		new SwitchBox(1.f, Filer::getAvailibleLanguages(), World::winSys()->sets.getLang(), &Program::eventSwitchLanguage)
 	}, {
-		new Label(descLength, txs[5]),
+		new Label(descLength, txs[7]),
 		new LineEdit(1.f, World::winSys()->sets.getFont(), &Program::eventSetFont)
 	}, {
-		new Label(descLength, txs[6]),
+		new Label(descLength, txs[8]),
 		new LineEdit(1.f, World::winSys()->sets.getDirLib(), &Program::eventSetLibraryDirLE),
 		new Label(dots.length, dots.text, &Program::eventOpenLibDirBrowser, nullptr, nullptr, Label::Alignment::center)
 	}, {
-		new Label(descLength, txs[7]),
+		new Label(descLength, txs[9]),
 		new SwitchBox(1.f, Settings::getAvailibleRenderers(), World::winSys()->sets.renderer, &Program::eventSetRenderer)
 	}, {
-		new Label(descLength, txs[8]),
+		new Label(descLength, txs[10]),
 		new LineEdit(1.f, World::winSys()->sets.getScrollSpeedString(), &Program::eventSetScrollSpeed, nullptr, nullptr, LineEdit::TextType::sFloatingSpaced)
 	}, {
-		new Label(descLength, txs[9]),
+		new Label(descLength, txs[11]),
 		new Slider(1.f, World::winSys()->sets.getDeadzone(), 0, Default::axisLimit, &Program::eventSetDeadzoneSL),
 		new LineEdit(dznum.length, ntos(World::winSys()->sets.getDeadzone()), &Program::eventSetDeadzoneLE, nullptr, nullptr, LineEdit::TextType::uInteger)
 	} };

@@ -1,10 +1,16 @@
 #include "engine/world.h"
 #include <locale>
 #include <codecvt>
+#ifndef _WIN32
+#include <strings.h>
+#endif
 
-int strcicmp(const char* a, const char* b) {
-	for (; *a && toupper(*a) == toupper(*b); a++, b++);
-	return *reinterpret_cast<const unsigned char*>(a) - *reinterpret_cast<const unsigned char*>(b);
+int strcicmp(const string& a, const string& b) {
+#ifdef _WIN32
+	return _stricmp(a.c_str(), b.c_str());
+#else
+	return strcasecmp(a.c_str(), b.c_str());
+#endif
 }
 
 static int natCompareRight(const char* a, const char* b) {
@@ -272,7 +278,7 @@ string jtHatToStr(uint8 jhat) {
 
 uint8 jtStrToHat(const string& str) {
 	for (const pair<uint8, string>& it : Default::hatNames)
-		if (!strcicmp(it.second.c_str(), str.c_str()))
+		if (!strcicmp(it.second, str))
 			return it.first;
 	return 0x10;
 }

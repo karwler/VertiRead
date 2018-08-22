@@ -1,5 +1,19 @@
 #include "engine/world.h"
 
+// DIRECTION
+
+Direction::Direction(Dir direction) :
+	dir(direction)
+{}
+
+string Direction::toString() const {
+	return enumToStr(Default::directionNames, dir);
+}
+
+void Direction::set(const string& str) {
+	dir = strToEnum<Dir>(Default::directionNames, str);
+}
+
 // BINDING
 
 Binding::Binding() :
@@ -88,12 +102,12 @@ void Binding::setDefaultSelf(Type type) {
 		setKey(Default::keyScrollSlow);
 		setJbutton(Default::jbuttonScrollSlow);
 		setGbutton(Default::gbuttonScrollSlow);
-	} else if (type == Type::pageUp) {
-		setBcall(&ProgState::eventPageUp);
-		setKey(Default::keyPageUp);
-	} else if (type == Type::pageDown) {
-		setBcall(&ProgState::eventPageDown);
-		setKey(Default::keyPageDown);
+	} else if (type == Type::nextPage) {
+		setBcall(&ProgState::eventNextPage);
+		setKey(Default::keyNextPage);
+	} else if (type == Type::prevPage) {
+		setBcall(&ProgState::eventPrevPage);
+		setKey(Default::keyPrevPage);
 	} else if (type == Type::zoomIn) {
 		setBcall(&ProgState::eventZoomIn);
 		setKey(Default::keyZoomIn);
@@ -109,6 +123,12 @@ void Binding::setDefaultSelf(Type type) {
 		setKey(Default::keyZoomReset);
 		setJbutton(Default::jbuttonZoomReset);
 		setGbutton(Default::gbuttonZoomReset);
+	} else if (type == Type::toStart) {
+		setBcall(&ProgState::eventToStart);
+		setKey(Default::keyToStart);
+	} else if (type == Type::toEnd) {
+		setBcall(&ProgState::eventToEnd);
+		setKey(Default::keyToEnd);
 	} else if (type == Type::nextDir) {
 		setBcall(&ProgState::eventNextDir);
 		setKey(Default::keyNextDir);
@@ -124,6 +144,9 @@ void Binding::setDefaultSelf(Type type) {
 		setKey(Default::keyFullscreen);
 		setJbutton(Default::jbuttonFullscreen);
 		setGbutton(Default::gbuttonFullscreen);
+	} else if (type == Type::refresh) {
+		setBcall(&ProgState::eventRefresh);
+		setKey(Default::keyRefresh);
 	}
 }
 
@@ -196,10 +219,12 @@ void Binding::setAcall(SACall call) {
 
 // SETTINGS
 
-Settings::Settings(bool maximized, bool fullscreen, const vec2i& resolution, const Direction& direction, const string& theme, const string& font, const string& language, const string& library, const string& renderer, const vec2f& speed, int16 deadzone) :
+Settings::Settings(bool maximized, bool fullscreen, const vec2i& resolution, const Direction& direction, float zoom, int spacing, const string& theme, const string& font, const string& language, const string& library, const string& renderer, const vec2f& speed, int16 deadzone) :
 	maximized(maximized),
 	fullscreen(fullscreen),
 	direction(direction),
+	zoom(zoom),
+	spacing(spacing),
 	resolution(resolution),
 	renderer(renderer),
 	scrollSpeed(speed)

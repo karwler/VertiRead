@@ -1,4 +1,9 @@
 #include "world.h"
+#include <SDL2/SDL_image.h>
+#include <archive.h>
+#include <archive_entry.h>
+#include <algorithm>
+#include <iostream>
 
 // FONT SET
 
@@ -55,7 +60,7 @@ DrawSys::DrawSys(SDL_Window* window, int driverIndex) {
 	// create and set up renderer
 	renderer = SDL_CreateRenderer(window, driverIndex, Default::rendererFlags);
 	if (!renderer)
-		throw "Couldn't create renderer:\n" + string(SDL_GetError());
+		throw std::exception(string("Couldn't create renderer:\n" + string(SDL_GetError())).c_str());
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
 	// load default textures with colors and initialize fonts and translations

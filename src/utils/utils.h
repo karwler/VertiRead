@@ -3,7 +3,7 @@
 #include "settings.h"
 
 // files and strings
-int strcicmp(const char* a, const char* b);		// case insensitive check if strings are equal
+int strcicmp(const string& a, const string& b);	// case insensitive check if strings are equal
 int strnatcmp(const char* a, const char* b);	// natural string compare
 inline bool strnatless(const string& a, const string& b) { return strnatcmp(a.c_str(), b.c_str()) < 0; }
 bool isAbsolute(const string& path);
@@ -68,6 +68,16 @@ vec2<T> bringUnder(const vec2<T>& val, const vec2<T>& max) {
 	return vec2<T>(bringUnder(val.x, max.x), bringUnder(val.y, max.y));
 }
 
+template <class T>	// correct val if out of range. returns true if value already in range
+T bringOver(T val, T min) {
+	return (val < min) ? min : val;
+}
+
+template <class T>
+vec2<T> bringOver(const vec2<T>& val, const vec2<T>& min) {
+	return vec2<T>(bringUnder(val.x, min.x), bringUnder(val.y, min.y));
+}
+
 // convertions
 string wtos(const wstring& wstr);
 wstring stow(const string& str);
@@ -78,15 +88,15 @@ uint8 jtStrToHat(const string& str);
 
 template <class T>
 string enumToStr(const vector<string>& names, T id) {
-	return sizt(id) >= names.size() ? "invalid" : names[sizt(id)];
+	return static_cast<sizt>(id) < names.size() ? names[static_cast<sizt>(id)] : "";
 }
 
 template <class T>
 T strToEnum(const vector<string>& names, string str) {
 	for (sizt i = 0; i < names.size(); i++)
-		if (!strcicmp(names[i].c_str(), str.c_str()))
-			return T(i);
-	return T(names.size());
+		if (!strcicmp(names[i], str))
+			return static_cast<T>(i);
+	return static_cast<T>(SIZE_MAX);
 }
 
 template <class T>

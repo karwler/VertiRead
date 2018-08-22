@@ -8,7 +8,7 @@ class Program {
 public:
 	Program();
 
-	void init();
+	void start();
 
 	// books
 	void eventOpenBookList(Button* but=nullptr);
@@ -34,6 +34,8 @@ public:
 	// settings
 	void eventOpenSettings(Button* but=nullptr);
 	void eventSwitchDirection(Button* but);
+	void eventSetZoom(Button* but);
+	void eventSetSpacing(Button* but);
 	void eventSwitchLanguage(Button* but);
 	void eventSetLibraryDirLE(Button* but);
 	void eventSetLibraryDirBW(Button* but);

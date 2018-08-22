@@ -6,7 +6,7 @@ Program::Program() :
 	state(new ProgState)	// necessary as a placeholder to prevent nullptr exceptions
 {}
 
-void Program::init() {
+void Program::start() {
 	if (!(World::getArgs().size() && openFile(World::getArg(0))))
 		eventOpenBookList();
 }
@@ -38,7 +38,7 @@ void Program::eventOpenLastPage(Button* but) {
 
 bool Program::openFile(string file) {
 	file = absolutePath(file);
-	if (Filer::isPicture(file)) {
+	if (Filer::isPicture(file) || Filer::isArchive(file)) {
 		browser.reset(new Browser(dseps, parentPath(file), &Program::eventOpenBookList));
 		if (startReader(filename(file)))
 			return true;
@@ -120,7 +120,15 @@ void Program::eventOpenSettings(Button* but) {
 }
 
 void Program::eventSwitchDirection(Button* but) {
-	World::winSys()->sets.direction = strToEnum<Direction::Dir>(Default::directionNames, static_cast<SwitchBox*>(but)->getText());
+	World::winSys()->sets.direction.set(static_cast<SwitchBox*>(but)->getText());
+}
+
+void Program::eventSetZoom(Button * but) {
+	World::winSys()->sets.zoom = stof(static_cast<LineEdit*>(but)->getText());
+}
+
+void Program::eventSetSpacing(Button* but) {
+	World::winSys()->sets.spacing = stoi(static_cast<LineEdit*>(but)->getText());
 }
 
 void Program::eventSwitchLanguage(Button* but) {
@@ -149,7 +157,7 @@ void Program::eventOpenLibDirBrowser(Button* but) {
 #ifdef _WIN32
 	browser.reset(new Browser("\\", Filer::wgetenv("UserProfile"), &Program::eventOpenSettings));
 #else
-	browser.reset(new Browser("/", getenv("HOME"), &Program::eventOpenSettings));
+	browser.reset(new Browser("/", std::getenv("HOME"), &Program::eventOpenSettings));
 #endif
 	setState(new ProgSearchDir);
 }

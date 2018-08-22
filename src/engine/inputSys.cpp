@@ -154,8 +154,7 @@ void InputSys::checkBindingsX(SDL_GameControllerAxis gaxis, bool positive) {
 }
 
 bool InputSys::isPressed(Binding::Type type, float& amt) const {
-	sizt i = static_cast<sizt>(type);
-	return bindings[i].isAxis() ? isPressed(bindings[i], amt) : false;
+	return bindings[static_cast<sizt>(type)].isAxis() ? isPressed(bindings[static_cast<sizt>(type)], amt) : false;
 }
 
 bool InputSys::isPressed(const Binding& abind, float& amt) const {
@@ -260,7 +259,7 @@ void InputSys::removeController(int id) {
 }
 
 int InputSys::checkAxisValue(int value) const {
-	return abs(value) > World::winSys()->sets.getDeadzone() ? value : 0;
+	return std::abs(value) > World::winSys()->sets.getDeadzone() ? value : 0;
 }
 
 float InputSys::axisToFloat(int axisValue) {

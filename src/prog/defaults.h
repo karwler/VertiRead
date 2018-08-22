@@ -1,16 +1,8 @@
 #pragma once
 
 // stuff that's used pretty much everywhere
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
-#include <SDL2/SDL_ttf.h>
-#include <archive.h>
-#include <archive_entry.h>
 #include "utils/vec2.h"
-
-#include <algorithm>
-#include <cstdint>
-#include <iostream>
+#include <SDL2/SDL.h>
 #include <string>
 #include <sstream>
 #include <vector>
@@ -73,6 +65,7 @@ class Layout;
 class Program;
 class ProgState;
 
+// events
 using PCall = void (Program::*)(Button*);
 using SBCall = void (ProgState::*)();
 using SACall = void (ProgState::*)(float);
@@ -92,6 +85,8 @@ namespace Default {
 const char language[] = "English";
 const bool maximized = false;
 const bool fullscreen = false;
+const float zoom = 1.f;
+const int spacing = 10;
 const vec2i resolution(800, 600);
 const char font[] = "Arial";
 const vec2f scrollSpeed(800.f, 1000.f);
@@ -125,14 +120,17 @@ const SDL_Scancode keyRight = SDL_SCANCODE_RIGHT;
 const SDL_Scancode keyCenterView = SDL_SCANCODE_C;
 const SDL_Scancode keyScrollFast = SDL_SCANCODE_X;
 const SDL_Scancode keyScrollSlow = SDL_SCANCODE_Z;
-const SDL_Scancode keyPageUp = SDL_SCANCODE_W;
-const SDL_Scancode keyPageDown = SDL_SCANCODE_S;
-const SDL_Scancode keyZoomIn = SDL_SCANCODE_D;
-const SDL_Scancode keyZoomOut = SDL_SCANCODE_A;
+const SDL_Scancode keyNextPage = SDL_SCANCODE_PAGEDOWN;
+const SDL_Scancode keyPrevPage = SDL_SCANCODE_PAGEUP;
+const SDL_Scancode keyZoomIn = SDL_SCANCODE_W;
+const SDL_Scancode keyZoomOut = SDL_SCANCODE_S;
 const SDL_Scancode keyZoomReset = SDL_SCANCODE_R;
-const SDL_Scancode keyNextDir = SDL_SCANCODE_E;
-const SDL_Scancode keyPrevDir = SDL_SCANCODE_Q;
-const SDL_Scancode keyFullscreen = SDL_SCANCODE_F;
+const SDL_Scancode keyToStart = SDL_SCANCODE_HOME;
+const SDL_Scancode keyToEnd = SDL_SCANCODE_END;
+const SDL_Scancode keyNextDir = SDL_SCANCODE_N;
+const SDL_Scancode keyPrevDir = SDL_SCANCODE_B;
+const SDL_Scancode keyFullscreen = SDL_SCANCODE_F11;
+const SDL_Scancode keyRefresh = SDL_SCANCODE_F5;
 
 // joystick bindings
 const uint8 jbuttonEnter = 2;
@@ -184,7 +182,7 @@ const bool axisDirRight = true;
 const bool axisDirLeft = false;
 
 // widgets' properties
-const int spacing = 5;
+const int itemSpacing = 5;
 const int itemHeight = 30;
 const int sbarSize = 10;
 const int checkboxSpacing = 5;
@@ -212,6 +210,8 @@ const char iniKeywordMaximized[] = "maximized";
 const char iniKeywordFullscreen[] = "fullscreen";
 const char iniKeywordResolution[] = "resolution";
 const char iniKeywordDirection[] = "direction";
+const char iniKeywordZoom[] = "zoom";
+const char iniKeywordSpacing[] = "spacing";
 const char iniKeywordFont[] = "font";
 const char iniKeywordLanguage[] = "language";
 const char iniKeywordTheme[] = "theme";
@@ -239,15 +239,19 @@ const vector<string> bindingNames = {
 	"center view",
 	"scroll fast",
 	"scroll slow",
-	"page up",
-	"page down",
+	"next page",
+	"prev page",
 	"zoom in",
 	"zoom out",
 	"zoom reset",
+	"to start",
+	"to end",
 	"next directory",
 	"prev directory",
-	"fullscreen"
+	"fullscreen",
+	"refresh"
 };
+
 const map<uint8, string> hatNames = {
 	pair<uint8, string>(SDL_HAT_CENTERED, "Center"),
 	pair<uint8, string>(SDL_HAT_UP, "Up"),
@@ -259,6 +263,7 @@ const map<uint8, string> hatNames = {
 	pair<uint8, string>(SDL_HAT_LEFTDOWN, "Left-Down"),
 	pair<uint8, string>(SDL_HAT_LEFTUP, "Left-Up")
 };
+
 const vector<string> gbuttonNames = {
 	"A",
 	"B",
@@ -276,6 +281,7 @@ const vector<string> gbuttonNames = {
 	"Left",
 	"Right"
 };
+
 const vector<string> gaxisNames = {
 	"LX",
 	"LY",
@@ -284,6 +290,7 @@ const vector<string> gaxisNames = {
 	"LT",
 	"RT"
 };
+
 const vector<string> colorNames = {
 	"background",
 	"normal",
@@ -293,6 +300,7 @@ const vector<string> colorNames = {
 	"text",
 	"texture"
 };
+
 const vector<string> directionNames = {
 	"Up",
 	"Down",

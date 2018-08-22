@@ -466,20 +466,20 @@ void LineEdit::cancel() {
 
 sizt LineEdit::findWordStart() {
 	sizt i = cpos;
-	if (text[i] != ' ' && i > 0 && text[i-1] == ' ')	// skip if first letter of word
+	if (!isSpace(text[i]) && i > 0 && isSpace(text[i-1]))	// skip if first letter of word
 		i--;
-	while (text[i] == ' ' && i > 0)	// skip first spaces
+	while (isSpace(text[i]) && i > 0)	// skip first spaces
 		i--;
-	while (text[i] != ' ' && i > 0)	// skip word
+	while (!isSpace(text[i]) && i > 0)	// skip word
 		i--;
-	return i == 0 ? i : i+1;	// correct position if necessary
+	return i == 0 ? i : i + 1;			// correct position if necessary
 }
 
 sizt LineEdit::findWordEnd() {
 	sizt i = cpos;
-	while (text[i] == ' ' && i < text.length())	// skip first spaces
+	while (isSpace(text[i]) && i < text.length())	// skip first spaces
 		i++;
-	while (text[i] != ' ' && i < text.length())	// skip word
+	while (!isSpace(text[i]) && i < text.length())	// skip word
 		i++;
 	return i;
 }

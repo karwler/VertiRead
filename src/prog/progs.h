@@ -5,7 +5,7 @@
 // for handling program state specific things that occur in all states
 class ProgState {
 public:
-	virtual void eventEnter();
+	void eventEnter();
 	virtual void eventEscape() {}
 	virtual void eventUp();
 	virtual void eventDown();
@@ -15,19 +15,22 @@ public:
 	virtual void eventScrollDown(float amt) {}
 	virtual void eventScrollLeft(float amt) {}
 	virtual void eventScrollRight(float amt) {}
-	virtual void eventCursorUp(float amt);
-	virtual void eventCursorDown(float amt);
-	virtual void eventCursorLeft(float amt);
-	virtual void eventCursorRight(float amt);
+	void eventCursorUp(float amt);
+	void eventCursorDown(float amt);
+	void eventCursorLeft(float amt);
+	void eventCursorRight(float amt);
 	virtual void eventCenterView() {}
-	virtual void eventPageUp() {}
-	virtual void eventPageDown() {}
+	virtual void eventNextPage() {}
+	virtual void eventPrevPage() {}
 	virtual void eventZoomIn() {}
 	virtual void eventZoomOut() {}
 	virtual void eventZoomReset() {}
+	virtual void eventToStart() {}
+	virtual void eventToEnd() {}
 	virtual void eventNextDir() {}
 	virtual void eventPrevDir() {}
 	virtual void eventFullscreen();
+	void eventRefresh();
 
 	virtual void eventFileDrop(char* file) {}
 	virtual void eventClosing() {}
@@ -87,11 +90,13 @@ public:
 	virtual void eventScrollLeft(float amt) override;
 	virtual void eventScrollRight(float amt) override;
 	virtual void eventCenterView() override;
-	virtual void eventPageUp() override;
-	virtual void eventPageDown() override;
+	virtual void eventNextPage() override;
+	virtual void eventPrevPage() override;
 	virtual void eventZoomIn() override;
 	virtual void eventZoomOut() override;
 	virtual void eventZoomReset() override;
+	virtual void eventToStart() override;
+	virtual void eventToEnd() override;
 	virtual void eventNextDir() override;
 	virtual void eventPrevDir() override;
 

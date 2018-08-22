@@ -21,7 +21,7 @@ public:
 		left,
 		right
 	};
-	Direction(Dir direction=Direction::up) : dir(direction) {}
+	Direction(Dir direction=Direction::up);
 
 	operator Dir() const { return dir; }
 
@@ -29,6 +29,9 @@ public:
 	bool horizontal() const { return dir >= 2; }
 	bool positive() const { return dir % 2; }
 	bool negative() const { return !positive(); }
+
+	string toString() const;
+	void set(const string& str);
 
 private:
 	Dir dir;
@@ -54,16 +57,20 @@ public:
 		centerView,
 		scrollFast,
 		scrollSlow,
-		pageUp,
-		pageDown,
+		nextPage,
+		prevPage,
 		zoomIn,
 		zoomOut,
 		zoomReset,
+		toStart,
+		toEnd,
 		nextDir,
 		prevDir,
 		fullscreen,
+		refresh,
 		numBindings
 	};
+
 	enum Assignment : uint8 {
 		ASG_NONE	= 0x0,
 		ASG_KEY     = 0x1,
@@ -143,7 +150,7 @@ inline Binding::Assignment operator|=(Binding::Assignment& a, Binding::Assignmen
 
 class Settings {
 public:
-	Settings(bool maximized=Default::maximized, bool fullscreen=Default::fullscreen, const vec2i& resolution=Default::resolution, const Direction& direction=Direction::down, const string& theme="", const string& font=Default::font, const string& language=Default::language, const string& library="", const string& renderer="", const vec2f& speed=Default::scrollSpeed, int16 deadzone=Default::controllerDeadzone);
+	Settings(bool maximized=Default::maximized, bool fullscreen=Default::fullscreen, const vec2i& resolution=Default::resolution, const Direction& direction=Direction::down, float zoom=Default::zoom, int spacing=Default::spacing, const string& theme="", const string& font=Default::font, const string& language=Default::language, const string& library="", const string& renderer="", const vec2f& speed=Default::scrollSpeed, int16 deadzone=Default::controllerDeadzone);
 
 	string getResolutionString() const;
 	void setResolution(const string& line);
@@ -168,6 +175,8 @@ public:
 
 	bool maximized, fullscreen;
 	Direction direction;
+	float zoom;
+	int spacing;
 	vec2i resolution;
 	string renderer;
 	vec2f scrollSpeed;

@@ -1,4 +1,9 @@
 #include "world.h"
+#include <SDL2/SDL_image.h>
+#include <archive.h>
+#include <archive_entry.h>
+#include <algorithm>
+#include <iostream>
 #include <fstream>
 #ifdef _WIN32
 #include <windows.h>
@@ -110,8 +115,8 @@ const string Filer::dirExec = appendDsep(Filer::getExecDir());
 const vector<string> Filer::dirFonts = {Filer::dirExec, wgetenv("SystemDrive") + "\\Windows\\Fonts\\"};
 const string Filer::dirSets = wgetenv("AppData") + "\\" + Default::titleDefault + "\\";
 #else
-const vector<string> Filer::dirFonts = {Filer::dirExec, "/usr/share/fonts/", string(getenv("HOME")) + "/.fonts/"};
-const string Filer::dirSets = string(getenv("HOME")) + "/." + Default::titleExtra + "/";
+const vector<string> Filer::dirFonts = {Filer::dirExec, "/usr/share/fonts/", string(std::getenv("HOME")) + "/.fonts/"};
+const string Filer::dirSets = string(std::getenv("HOME")) + "/." + Default::titleExtra + "/";
 #endif
 const string Filer::dirLangs = Filer::dirExec + Default::dirLanguages + dsep;
 const string Filer::dirTexs = Filer::dirExec + Default::dirTextures + dsep;
@@ -237,7 +242,11 @@ Settings Filer::getSettings() {
 		else if (il.getArg() == Default::iniKeywordResolution)
 			sets.setResolution(il.getVal());
 		else if (il.getArg() == Default::iniKeywordDirection)
-			sets.direction = strToEnum<Direction::Dir>(Default::directionNames, il.getVal());
+			sets.direction.set(il.getVal());
+		else if (il.getArg() == Default::iniKeywordZoom)
+			sets.zoom = stof(il.getVal());
+		else if (il.getArg() == Default::iniKeywordSpacing)
+			sets.spacing = stoi(il.getVal());
 		else if (il.getArg() == Default::iniKeywordFont)
 			sets.setFont(il.getVal());
 		else if (il.getArg() == Default::iniKeywordLanguage)
@@ -261,7 +270,9 @@ void Filer::saveSettings(const Settings& sets) {
 		IniLine::line(Default::iniKeywordMaximized, btos(sets.maximized)),
 		IniLine::line(Default::iniKeywordFullscreen, btos(sets.fullscreen)),
 		IniLine::line(Default::iniKeywordResolution, sets.getResolutionString()),
-		IniLine::line(Default::iniKeywordDirection, enumToStr(Default::directionNames, sets.direction)),
+		IniLine::line(Default::iniKeywordDirection, sets.direction.toString()),
+		IniLine::line(Default::iniKeywordZoom, ntos(sets.zoom)),
+		IniLine::line(Default::iniKeywordSpacing, ntos(sets.spacing)),
 		IniLine::line(Default::iniKeywordFont, sets.getFont()),
 		IniLine::line(Default::iniKeywordLanguage, sets.getLang()),
 		IniLine::line(Default::iniKeywordTheme, sets.getTheme()),
@@ -284,10 +295,13 @@ vector<Binding> Filer::getBindings() {
 
 	for (string& line : lines) {
 		IniLine il(line);
-		if (il.getType() != IniLine::Type::argKeyVal || il.getVal().size() < 3)
+		if (il.getType() != IniLine::Type::argVal || il.getVal().length() < 3)
 			continue;
 
 		sizt bid = strToEnum<sizt>(Default::bindingNames, il.getArg());
+		if (bid >= bindings.size())
+			continue;
+
 		switch (toupper(il.getVal()[0])) {
 		case 'K':	// keyboard key
 			bindings[bid].setKey(SDL_GetScancodeFromName(il.getVal().substr(2).c_str()));
@@ -296,7 +310,7 @@ vector<Binding> Filer::getBindings() {
 			bindings[bid].setJbutton(stoi(il.getVal().substr(2)));
 			break;
 		case 'H':	// joystick hat
-			for (sizt i = 2; i < il.getVal().size(); i++)
+			for (sizt i = 2; i < il.getVal().length(); i++)
 				if (il.getVal()[i] < '0' || il.getVal()[i] > '9') {
 					bindings[bid].setJhat(stoi(il.getVal().substr(2, i-2)), jtStrToHat(il.getVal().substr(i+1)));
 					break;
@@ -305,12 +319,16 @@ vector<Binding> Filer::getBindings() {
 		case 'A':	// joystick axis
 			bindings[bid].setJaxis(stoi(il.getVal().substr(3)), (il.getVal()[2] != '-'));
 			break;
-		case 'G':	// gamepad button
-			bindings[bid].setGbutton(strToEnum<SDL_GameControllerButton>(Default::gbuttonNames, il.getVal().substr(2)));
-			break;
-		case 'X':	// gamepad axis
-			bindings[bid].setGaxis(strToEnum<SDL_GameControllerAxis>(Default::gaxisNames, il.getVal().substr(3)), (il.getVal()[2] != '-'));
-		}
+		case 'G': {	// gamepad button
+			SDL_GameControllerButton cid = strToEnum<SDL_GameControllerButton>(Default::gbuttonNames, il.getVal().substr(2));
+			if (cid < SDL_CONTROLLER_BUTTON_MAX)
+				bindings[bid].setGbutton(cid);
+			break; }
+		case 'X': {	// gamepad axis
+			SDL_GameControllerAxis cid = strToEnum<SDL_GameControllerAxis>(Default::gaxisNames, il.getVal().substr(3));
+			if (cid < SDL_CONTROLLER_AXIS_MAX)
+				bindings[bid].setGaxis(cid, (il.getVal()[2] != '-'));
+		} }
 	}
 	return bindings;
 }
@@ -607,7 +625,7 @@ string Filer::findFont(const string& font) {
 
 	for (const string& drc : dirFonts)	// check font directories
 		for (string& it : listDirRecursively(drc))
-			if (!strcicmp(hasExt(it) ? delExt(filename(it)).c_str() : filename(it).c_str(), font.c_str()) && isFont(it))
+			if (!strcicmp(hasExt(it) ? delExt(filename(it)) : filename(it), font) && isFont(it))
 				return it;
 	return "";	// nothing found
 }
