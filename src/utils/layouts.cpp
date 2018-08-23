@@ -334,12 +334,20 @@ void ScrollArea::scrollToWidgetEnd(sizt id) {
 	listPos[di] = bringOver(wgtREnd(id) - size()[di], 0);
 }
 
-void ScrollArea::scrollToNext() {
+bool ScrollArea::scrollToNext() {
+	int8 dv = direction.vertical();
+	if (outIRange(listPos[dv], 0, listLim()[dv]))
+		return false;
+	
 	scrollToFollowing(direction.positive() ? visibleWidgets().l + 1 : visibleWidgets().u - 2, false);
+	return true;
 }
 
-void ScrollArea::scrollToPrevious() {
+bool ScrollArea::scrollToPrevious() {
 	int8 dv = direction.vertical();
+	if (outIRange(listPos[dv], 0, listLim()[dv]))
+		return false;
+
 	sizt id;
 	if (direction.positive()) {
 		id = visibleWidgets().l;
@@ -351,12 +359,7 @@ void ScrollArea::scrollToPrevious() {
 			id++;
 	}
 	scrollToFollowing(id, true);
-}
-
-void ScrollArea::scrollToLimit(bool start) {
-	int8 di = direction.vertical();
-	listPos[di] = direction.positive() == start ? 0 : listLim()[di];
-	motion = 0.f;
+	return true;
 }
 
 void ScrollArea::scrollToFollowing(sizt id, bool prev) {
@@ -367,6 +370,12 @@ void ScrollArea::scrollToFollowing(sizt id, bool prev) {
 			scrollToWidgetEnd(id);
 	} else
 		scrollToLimit(prev);
+	motion = 0.f;
+}
+
+void ScrollArea::scrollToLimit(bool start) {
+	int8 di = direction.vertical();
+	listPos[di] = direction.positive() == start ? 0 : listLim()[di];
 	motion = 0.f;
 }
 

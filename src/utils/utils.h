@@ -6,6 +6,9 @@
 int strcicmp(const string& a, const string& b);	// case insensitive check if strings are equal
 int strnatcmp(const char* a, const char* b);	// natural string compare
 inline bool strnatless(const string& a, const string& b) { return strnatcmp(a.c_str(), b.c_str()) < 0; }
+string trim(const string& str);
+string ltrim(const string& str);
+string rtrim(const string& str);
 bool isAbsolute(const string& path);
 string absolutePath(const string& path);
 bool isSubpath(const string& path, string parent);
@@ -46,6 +49,11 @@ bool inRange(T val, T min, T max) {
 template <class T>
 bool outRange(T val, T min, T max) {
 	return val < min || val > max;
+}
+
+template <class T>
+bool outIRange(T val, T min, T max) {
+	return val <= min || val >= max;
 }
 
 template <class T>	// correct val if out of range. returns true if value already in range

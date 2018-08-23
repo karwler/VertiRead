@@ -2,7 +2,6 @@
 #include <SDL2/SDL_image.h>
 #include <archive.h>
 #include <archive_entry.h>
-#include <algorithm>
 #include <iostream>
 
 // FONT SET
@@ -60,7 +59,7 @@ DrawSys::DrawSys(SDL_Window* window, int driverIndex) {
 	// create and set up renderer
 	renderer = SDL_CreateRenderer(window, driverIndex, Default::rendererFlags);
 	if (!renderer)
-		throw std::exception(string("Couldn't create renderer:\n" + string(SDL_GetError())).c_str());
+		throw std::runtime_error("Couldn't create renderer:\n" + string(SDL_GetError()));
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
 	// load default textures with colors and initialize fonts and translations
@@ -226,7 +225,7 @@ void DrawSys::drawImage(SDL_Texture* tex, const SDL_Rect& rect, const SDL_Rect& 
 	vec2i res;
 	SDL_QueryTexture(tex, nullptr, nullptr, &res.x, &res.y);
 	vec2f factor(float(res.x) / float(rect.w), float(res.y) / float(rect.h));
-	SDL_Rect src = {float(crop.x) * factor.x, float(crop.y) * factor.y, res.x - int(float(crop.w) * factor.x), res.y - int(float(crop.h) * factor.y)};
+	SDL_Rect src = {int(float(crop.x) * factor.x), int(float(crop.y) * factor.y), res.x - int(float(crop.w) * factor.x), res.y - int(float(crop.h) * factor.y)};
 
 	SDL_RenderCopy(renderer, tex, &src, &dst);
 }
@@ -251,7 +250,6 @@ vector<pair<string, SDL_Texture*>> DrawSys::loadTexturesDirectory(string drc) {
 
 vector<pair<string, SDL_Texture*>> DrawSys::loadTexturesArchive(const string& arc) {
 	struct archive* arch = archive_read_new();
-	archive_read_support_compression_all(arch);
 	archive_read_support_filter_all(arch);
 	archive_read_support_format_all(arch);
 

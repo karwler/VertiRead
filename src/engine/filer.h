@@ -42,7 +42,7 @@ public:
 	void setVal(const string& property, const string& value);
 	void setVal(const string& property, const string& vkey, const string& value);
 	void setTitle(const string& title);
-	Type setLine(const string& str);
+	Type setLine(string str);
 	void clear();
 
 private:

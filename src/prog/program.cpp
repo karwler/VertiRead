@@ -173,10 +173,10 @@ void Program::eventSetTheme(Button* but) {
 }
 
 void Program::eventSetFont(Button* but) {
-	LineEdit* le = static_cast<LineEdit*>(but);
-	World::drawSys()->setFont(le->getText());
+	string otxt = static_cast<LineEdit*>(but)->getText();
+	World::drawSys()->setFont(otxt);
 	World::scene()->resetLayouts();
-	if (World::winSys()->sets.getFont() != le->getText())
+	if (World::winSys()->sets.getFont() != otxt)
 		World::scene()->setPopup(ProgState::createPopupMessage("Invalid font."));
 }
 

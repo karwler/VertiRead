@@ -2,7 +2,6 @@
 #include <SDL2/SDL_image.h>
 #include <archive.h>
 #include <archive_entry.h>
-#include <algorithm>
 #include <iostream>
 #include <fstream>
 #ifdef _WIN32
@@ -66,7 +65,8 @@ void IniLine::setTitle(const string& title) {
 	val.clear();
 }
 
-IniLine::Type IniLine::setLine(const string& str) {
+IniLine::Type IniLine::setLine(string str) {
+	str = trim(str);
 	if (str.empty()) {
 		clear();
 		return type;
@@ -74,7 +74,7 @@ IniLine::Type IniLine::setLine(const string& str) {
 
 	// check if title
 	if (str[0] == '[' && str.back() == ']') {
-		arg = str.substr(1, str.length()-2);
+		arg = trim(str.substr(1, str.length() - 2));
 		key.clear();
 		val.clear();
 		return type = Type::title;
@@ -86,17 +86,17 @@ IniLine::Type IniLine::setLine(const string& str) {
 		clear();
 		return type;
 	}
-	val = str.substr(i0+1);
+	val = ltrim(str.substr(i0 + 1));
 
 	// get arg and key if availible
 	sizt i1 = str.find_first_of('[');
 	sizt i2 = str.find_first_of(']', i1);
 	if (i1 < i2 && i2 < i0) {	// if '[' preceeds ']' and both preceed '='
-		arg = str.substr(0, i1);
-		key = str.substr(i1+1, i2-i1-1);
+		arg = rtrim(str.substr(0, i1));
+		key = trim(str.substr(i1 + 1, i2 - i1 - 1));
 		return type = Type::argKeyVal;
 	}
-	arg = str.substr(0, i0);
+	arg = rtrim(str.substr(0, i0));
 	key.clear();
 	return type = Type::argVal;
 }
@@ -550,8 +550,8 @@ bool Filer::isPicture(const string& file) {
 
 bool Filer::isArchive(const string& file) {
 	struct archive* arch = archive_read_new();
+	archive_read_support_filter_all(arch);
 	archive_read_support_format_all(arch);
-	archive_read_support_compression_all(arch);
 	if (archive_read_open_filename(arch, file.c_str(), Default::archiveReadBlockSize))
 		return false;
 	

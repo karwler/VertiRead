@@ -12,7 +12,7 @@ int WindowSys::start() {
 	try {
 		init();
 		exec();
-	} catch (const std::exception& e) {
+	} catch (const std::runtime_error& e) {
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", e.what(), window);
 	} catch (...) {
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Unknown error.", window);
@@ -23,9 +23,9 @@ int WindowSys::start() {
 
 void WindowSys::init() {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER))
-		throw std::exception(string("Couldn't initialize SDL:\n" + string(SDL_GetError())).c_str());
+		throw std::runtime_error("Couldn't initialize SDL:\n" + string(SDL_GetError()));
 	if (TTF_Init())
-		throw std::exception(string("Couldn't initialize fonts:\n" + string(SDL_GetError())).c_str());
+		throw std::runtime_error("Couldn't initialize fonts:\n" + string(SDL_GetError()));
 
 	int flags = IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP);
 	if (!(flags & IMG_INIT_JPG))
@@ -106,7 +106,7 @@ void WindowSys::createWindow() {
 
 	window = SDL_CreateWindow(Default::titleDefault, Default::windowPos.x, Default::windowPos.y, sets.resolution.x, sets.resolution.y, flags);
 	if (!window)
-		throw std::exception(string("Couldn't create window:\n" + string(SDL_GetError())).c_str());
+		throw std::runtime_error("Couldn't create window:\n" + string(SDL_GetError()));
 
 	// minor stuff
 	SDL_Surface* icon = IMG_Load(string(Filer::dirExec + Default::fileIcon).c_str());

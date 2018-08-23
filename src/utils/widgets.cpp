@@ -363,7 +363,7 @@ void LineEdit::onKeypress(const SDL_Keysym& key) {
 			updateTex();
 			setCPos(0);
 		} else if (cpos != 0) {	// otherwise delete left character
-			text.erase(cpos - 1);
+			text.erase(cpos - 1, 1);
 			updateTex();
 			setCPos(cpos - 1);
 		}
@@ -516,7 +516,7 @@ void LineEdit::cleanSIntSpacedText(sizt i) {
 			cleanSIntSpacedText(i + 1);
 			break;
 		} else
-			text.erase(i);
+			text.erase(i, 1);
 	}
 }
 
@@ -525,7 +525,7 @@ void LineEdit::cleanUIntText(sizt i) {
 		if (isDigit(text[i]))
 			i++;
 		else
-			text.erase(i);
+			text.erase(i, 1);
 	}
 }
 
@@ -540,7 +540,7 @@ void LineEdit::cleanUIntSpacedText() {
 		else if (isSpace(text[i]))
 			while (isSpace(text[++i]));
 		else
-			text.erase(i);
+			text.erase(i, 1);
 	}
 }
 
@@ -561,7 +561,7 @@ void LineEdit::cleanSFloatSpacedText(sizt i) {
 			cleanSFloatSpacedText(i + 1);
 			break;
 		} else
-			text.erase(i);
+			text.erase(i, 1);
 	}
 }
 
@@ -574,7 +574,7 @@ void LineEdit::cleanUFloatText(sizt i) {
 			foundDot = true;
 			i++;
 		} else
-			text.erase(i);
+			text.erase(i, 1);
 	}
 }
 
@@ -594,7 +594,7 @@ void LineEdit::cleanUFloatSpacedText() {
 			while (isSpace(text[++i]));
 			foundDot = false;
 		} else
-			text.erase(i);
+			text.erase(i, 1);
 	}
 }
 

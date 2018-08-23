@@ -77,6 +77,34 @@ int strnatcmp(const char* a, const char* b) {
 	}
 }
 
+string trim(const string& str) {
+	sizt pos = 0;
+	while (isSpace(str[pos]) && pos < str.length())
+		pos++;
+	if (pos == str.length())
+		return "";
+
+	sizt end = str.length();
+	while (isSpace(str[--end]) && end < str.length());
+	return str.substr(pos, end - pos + 1);
+}
+
+string ltrim(const string& str) {
+	sizt pos = 0;
+	while (isSpace(str[pos]) && pos < str.length())
+		pos++;
+	return str.substr(pos);
+}
+
+string rtrim(const string& str) {
+	if (str.empty())
+		return "";
+
+	sizt end = str.length();
+	while (isSpace(str[--end]) && end < str.length());
+	return str.substr(0, end + 1);
+}
+
 bool isAbsolute(const string& path) {
 #ifdef _WIN32
 	return path.size() && (path[0] == '\\' || (path.length() == 2 && isDriveLetter(path[0]) && path[1] == ':') || (path.length() > 2 && isDriveLetter(path[0]) && path[1] == ':' && path[2] == '\\'));

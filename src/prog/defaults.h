@@ -3,6 +3,7 @@
 // stuff that's used pretty much everywhere
 #include "utils/vec2.h"
 #include <SDL2/SDL.h>
+#include <algorithm>
 #include <string>
 #include <sstream>
 #include <vector>

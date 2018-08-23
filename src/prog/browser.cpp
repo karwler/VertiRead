@@ -37,7 +37,7 @@ bool Browser::goUp() {
 	return false;
 }
 
-void Browser::goNext(bool fwd){
+void Browser::goNext(bool fwd) {
 	if (curType == FileType::archive)
 		shiftArchive(fwd);
 	else if (!directoryCmp(curDir, rootDir))

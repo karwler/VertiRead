@@ -103,8 +103,8 @@ public:
 	virtual void navSelectFrom(int mid, const Direction& dir) override;
 	void scrollToWidgetPos(sizt id);	// set listPos.y to the widget's position
 	void scrollToWidgetEnd(sizt id);
-	void scrollToNext();				// scroll to next widget
-	void scrollToPrevious();			// scroll to previous widget
+	bool scrollToNext();				// scroll to next widget (returns false if at scroll limit)
+	bool scrollToPrevious();			// scroll to previous widget (returns false if at scroll limit)
 	void scrollToLimit(bool start);		// scroll to start or end of the list relative to it's direction
 
 	virtual SDL_Rect frame() const;

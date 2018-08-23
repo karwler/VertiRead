@@ -216,11 +216,13 @@ void ProgReader::eventScrollLeft(float amt) {
 }
 
 void ProgReader::eventNextPage() {
-	static_cast<ReaderBox*>(World::scene()->getLayout())->scrollToNext();
+	if (!static_cast<ReaderBox*>(World::scene()->getLayout())->scrollToNext())
+		World::program()->eventNextDir();
 }
 
 void ProgReader::eventPrevPage() {
-	static_cast<ReaderBox*>(World::scene()->getLayout())->scrollToPrevious();
+	if (!static_cast<ReaderBox*>(World::scene()->getLayout())->scrollToPrevious())
+		World::program()->eventPrevDir();
 }
 
 void ProgReader::eventZoomIn() {
