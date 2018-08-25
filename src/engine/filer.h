@@ -60,12 +60,12 @@ public:
 	static vector<string> getAvailibleLanguages();
 	static umap<string, string> getTranslations(const string& language);
 
-	static string getLastPage(const string& book);
-	static void saveLastPage(const string& file);
+	static bool getLastPage(const string& book, string& drc, string& fname);
+	static bool saveLastPage(const string& book, const string& drc, const string& fname);
 	static Settings getSettings();
-	static void saveSettings(const Settings& sets);
+	static bool saveSettings(const Settings& sets);
 	static vector<Binding> getBindings();
-	static void saveBindings(const vector<Binding>& sets);
+	static bool saveBindings(const vector<Binding>& sets);
 
 	static bool readTextFile(const string& file, vector<string>& lines, bool printMessage=true);
 	static bool writeTextFile(const string& file, const vector<string>& lines);

@@ -94,6 +94,7 @@ public:
 	virtual void drawSelf() override;
 	virtual void onResize() override;
 	virtual void tick(float dSec) override;
+	virtual void postInit() override;
 	virtual void onHold(const vec2i& mPos, uint8 mBut) override;
 	virtual void onDrag(const vec2i& mPos, const vec2i& mMov) override;
 	virtual void onUndrag(uint8 mBut) override;
@@ -177,7 +178,7 @@ public:
 	float getZoom() const { return zoom; }
 	void setZoom(float factor);
 	void centerList();		// set listPos.x so that the view will be in the centter
-	void saveCurPage();
+	string curPage() const;
 	virtual vec2i wgtPosition(sizt id) const override;
 	virtual vec2i wgtSize(sizt id) const override;
 

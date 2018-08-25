@@ -258,10 +258,17 @@ void ProgReader::eventPrevDir() {
 }
 
 void ProgReader::eventClosing() {
-	if (World::program()->getBrowser()->getCurType() == Browser::FileType::archive)
-		Filer::saveLastPage(World::program()->getBrowser()->curFilepath());
-	else
-		static_cast<ReaderBox*>(World::scene()->getLayout())->saveCurPage();
+	string dirLib = appendDsep(World::winSys()->sets.getDirLib());
+	const string& drc = World::program()->getBrowser()->getCurDir();
+	string fname = static_cast<ReaderBox*>(World::scene()->getLayout())->curPage();
+
+	if (World::program()->getBrowser()->getRootDir() == dseps && !dirCmp(World::program()->getBrowser()->getRootDir(), dirLib))
+		Filer::saveLastPage(".", drc, fname);
+	else if (fname.size() && !drc.compare(0, dirLib.length(), dirLib)) {
+		sizt mid = drc.find_first_of(dsep, dirLib.length());
+		Filer::saveLastPage(drc.substr(dirLib.length(), mid == string::npos ? string::npos : mid - dirLib.length()), drc.substr(mid == string::npos ? string::npos : mid + 1), fname);
+	}
+	World::program()->getBrowser()->clearCurFile();
 }
 
 Layout* ProgReader::createLayout() {

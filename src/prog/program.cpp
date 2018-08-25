@@ -16,34 +16,45 @@ void Program::eventOpenBookList(Button* but) {
 }
 
 void Program::eventOpenPageBrowser(Button* but) {
-	browser.reset(new Browser(dynamic_cast<Label*>(but) ? childPath(World::winSys()->sets.getDirLib(), static_cast<Label*>(but)->getText()) : dseps, "", &Program::eventOpenBookList));
+	Label* lbl = dynamic_cast<Label*>(but);
+	browser.reset(new Browser(lbl ? childPath(World::winSys()->sets.getDirLib(), lbl->getText()) : dseps, "", &Program::eventOpenBookList));
 	setState(new ProgPageBrowser);
 }
 
 void Program::eventOpenReader(Button* but) {
-	startReader(static_cast<Label*>(but)->getText());
+	if (browser->selectFile(static_cast<Label*>(but)->getText()))
+		setState(new ProgReader);
 }
 
 void Program::eventOpenLastPage(Button* but) {
 	Label* lbl = dynamic_cast<Label*>(but);
-	string file = Filer::getLastPage(lbl ? lbl->getText() : ".");
-	if (file.empty())
-		eventOpenPageBrowser(but);
-	else {
-		browser.reset(new Browser(lbl ? childPath(World::winSys()->sets.getDirLib(), lbl->getText()) : dseps, parentPath(file), &Program::eventOpenBookList));
-		if (!startReader(filename(file)))
+	string drc, fname;
+	if (Filer::getLastPage(lbl ? lbl->getText() : ".", drc, fname)) {
+		try {
+			browser.reset(new Browser(lbl ? childPath(World::winSys()->sets.getDirLib(), lbl->getText()) : dseps, lbl ? childPath(World::winSys()->sets.getDirLib(), childPath(lbl->getText(), drc)) : drc, fname, &Program::eventOpenBookList, true));
+			setState(new ProgReader);
+		} catch (const std::runtime_error&) {
 			eventOpenPageBrowser(but);
-	}
+		}
+	} else
+		eventOpenPageBrowser(but);
 }
 
 bool Program::openFile(string file) {
 	file = absolutePath(file);
-	if (Filer::isPicture(file) || Filer::isArchive(file)) {
-		browser.reset(new Browser(dseps, parentPath(file), &Program::eventOpenBookList));
-		if (startReader(filename(file)))
-			return true;
-		browser.reset();
-	} else if (Filer::fileType(file) == FTYPE_DIR) {
+	switch (Filer::fileType(file)) {
+	case FTYPE_FILE:
+		try {
+			bool isArch = Filer::isArchive(file);
+			browser.reset(new Browser(dseps, isArch ? file : parentPath(file), isArch ? "" : filename(file), &Program::eventOpenBookList, false));
+			setState(new ProgReader);
+		} catch (const std::runtime_error& e) {
+			browser.reset();
+			World::scene()->setPopup(ProgState::createPopupMessage(e.what()));
+			return false;
+		}
+		return true;
+	case FTYPE_DIR:
 		browser.reset(new Browser(dseps, file, &Program::eventOpenBookList));
 		setState(new ProgPageBrowser);
 		return true;
@@ -72,14 +83,6 @@ void Program::eventExitBrowser(Button* but) {
 }
 
 // READER
-
-bool Program::startReader(const string& filename) {
-	if (!browser->selectFile(filename))
-		return false;
-
-	setState(new ProgReader);
-	return true;
-}
 
 void Program::eventZoomIn(Button* but) {
 	static_cast<ReaderBox*>(World::scene()->getLayout())->setZoom(Default::zoomFactor);
@@ -155,9 +158,9 @@ void Program::eventSetLibraryDirBW(Button* but) {
 
 void Program::eventOpenLibDirBrowser(Button* but) {
 #ifdef _WIN32
-	browser.reset(new Browser("\\", Filer::wgetenv("UserProfile"), &Program::eventOpenSettings));
+	browser.reset(new Browser(dseps, Filer::wgetenv("UserProfile"), &Program::eventOpenSettings));
 #else
-	browser.reset(new Browser("/", std::getenv("HOME"), &Program::eventOpenSettings));
+	browser.reset(new Browser(dseps, std::getenv("HOME"), &Program::eventOpenSettings));
 #endif
 	setState(new ProgSearchDir);
 }

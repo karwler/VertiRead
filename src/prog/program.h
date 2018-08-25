@@ -65,6 +65,5 @@ private:
 	uptr<Browser> browser;
 
 	void setState(ProgState* newState);
-	bool startReader(const string& filename);
 	void reposizeWindow(const vec2i& dres, const vec2i& wsiz);
 };

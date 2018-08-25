@@ -107,24 +107,23 @@ string rtrim(const string& str) {
 
 bool isAbsolute(const string& path) {
 #ifdef _WIN32
-	return path.size() && (path[0] == '\\' || (path.length() == 2 && isDriveLetter(path[0]) && path[1] == ':') || (path.length() > 2 && isDriveLetter(path[0]) && path[1] == ':' && path[2] == '\\'));
+	return path.size() && (path[0] == dsep || (path.length() == 2 && isDriveLetter(path[0]) && path[1] == ':') || (path.length() > 2 && isDriveLetter(path[0]) && path[1] == ':' && path[2] == dsep));
 #else
-	return path.size() && path[0] == '/';
+	return path.size() && path[0] == dsep;
 #endif
 }
 
 string absolutePath(const string& path) {
-	if (path.empty())
-		return dseps;
 	return isAbsolute(path) ? path : childPath(Filer::getWorkingDir(), path);
 }
 
 bool isSubpath(const string& path, string parent) {
 	if (!(isAbsolute(path) && isAbsolute(parent)))
 		return false;
+#ifdef _WIN32
 	if (parent == dseps)
 		return true;
-
+#endif
 	parent = appendDsep(parent);
 	return !appendDsep(path).compare(0, parent.length(), parent);
 }
@@ -146,7 +145,7 @@ string parentPath(const string& path) {
 
 string childPath(const string& parent, const string& child) {
 #ifdef _WIN32
-	return parent == "\\" && isDriveLetter(child) ? child : appendDsep(parent) + child;
+	return parent == dseps && isDriveLetter(child) ? child : appendDsep(parent) + child;
 #else
 	return appendDsep(parent) + child;
 #endif
@@ -208,22 +207,37 @@ vector<string> getWords(const string& line) {
 	vector<string> words;
 	while (i < line.length()) {
 		if (isSpace(line[i])) {
-			words.push_back(line.substr(start, i-start));
-			while (isSpace(line[++i]));
+			words.push_back(line.substr(start, i - start));
+			while (isSpace(line[++i]) && i < line.length());
 			start = i;
 		} else
 			i++;
 	}
-	if (start < i)
-		words.push_back(line.substr(start, i-start));
+	if (i > start)
+		words.push_back(line.substr(start, i - start));
 	return words;
 }
 
-string getBook(const string& pic) {
-	string dirLib = appendDsep(World::winSys()->sets.getDirLib());
-	if (!isSubpath(pic, dirLib) || pic.length() == dirLib.length())
-		return ".";
-	return pic.substr(dirLib.length(), pic.find_first_of(dsep, dirLib.length()) - dirLib.length());
+archive* openArchive(const string& file) {
+	archive* arch = archive_read_new();
+	archive_read_support_filter_all(arch);
+	archive_read_support_format_all(arch);
+
+	if (archive_read_open_filename(arch, file.c_str(), Default::archiveReadBlockSize)) {
+		archive_read_free(arch);
+		return nullptr;
+	}
+	return arch;
+}
+
+SDL_RWops* readArchiveEntry(archive* arch, archive_entry* entry) {
+	la_int64_t bsiz = archive_entry_size(entry);
+	if (bsiz <= 0)
+		return nullptr;
+
+	void* buffer = malloc(bsiz);
+	la_ssize_t size = archive_read_data(arch, buffer, bsiz);
+	return size < 0 ? nullptr : SDL_RWFromMem(buffer, size);
 }
 
 SDL_Rect cropRect(SDL_Rect& rect, const SDL_Rect& frame) {

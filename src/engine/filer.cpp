@@ -1,8 +1,4 @@
 #include "world.h"
-#include <SDL2/SDL_image.h>
-#include <archive.h>
-#include <archive_entry.h>
-#include <iostream>
 #include <fstream>
 #ifdef _WIN32
 #include <windows.h>
@@ -113,10 +109,10 @@ void IniLine::clear() {
 const string Filer::dirExec = appendDsep(Filer::getExecDir());
 #ifdef _WIN32
 const vector<string> Filer::dirFonts = {Filer::dirExec, wgetenv("SystemDrive") + "\\Windows\\Fonts\\"};
-const string Filer::dirSets = wgetenv("AppData") + "\\" + Default::titleDefault + "\\";
+const string Filer::dirSets = wgetenv("AppData") + dseps + Default::titleDefault + dseps;
 #else
 const vector<string> Filer::dirFonts = {Filer::dirExec, "/usr/share/fonts/", string(std::getenv("HOME")) + "/.fonts/"};
-const string Filer::dirSets = string(std::getenv("HOME")) + "/." + Default::titleExtra + "/";
+const string Filer::dirSets = string(std::getenv("HOME")) + "/." + Default::titleExtra + dseps;
 #endif
 const string Filer::dirLangs = Filer::dirExec + Default::dirLanguages + dsep;
 const string Filer::dirTexs = Filer::dirExec + Default::dirTextures + dsep;
@@ -191,25 +187,30 @@ umap<string, string> Filer::getTranslations(const string& language) {
 	return translation;
 }
 
-string Filer::getLastPage(const string& book) {
+bool Filer::getLastPage(const string& book, string& drc, string& fname) {
 	vector<string> lines;
 	if (!readTextFile(dirSets + Default::fileBooks, lines, false))
-		return "";
+		return false;
 
 	for (string& line : lines) {
 		IniLine il(line);
-		if (il.getType() == IniLine::Type::argVal && il.getArg() == book)
-			return il.getVal();
+		if (il.getType() == IniLine::Type::argVal && il.getArg() == book) {
+			sizt id = il.getVal().find(string(2, dsep));
+			if (id != string::npos) {
+				drc = il.getVal().substr(0, id);
+				fname = il.getVal().substr(id + 2);
+				return true;
+			}
+		}
 	}
-	return "";
+	return false;
 }
 
-void Filer::saveLastPage(const string& file) {
+bool Filer::saveLastPage(const string& book, const string& drc, const string& fname) {
 	vector<string> lines;
 	readTextFile(dirSets + Default::fileBooks, lines, false);
 
 	sizt id = lines.size();
-	string book = getBook(file);
 	for (sizt i = 0; i < lines.size(); i++) {
 		IniLine il(lines[i]);
 		if (il.getType() == IniLine::Type::argVal && il.getArg() == book) {
@@ -217,11 +218,13 @@ void Filer::saveLastPage(const string& file) {
 			break;
 		}
 	}
+
+	string ilin = IniLine::line(book, drc + string(2, dsep) + fname);
 	if (id == lines.size())
-		lines.push_back(IniLine::line(book, file));
+		lines.push_back(ilin);
 	else
-		lines[id] = IniLine::line(book, file);
-	writeTextFile(dirSets + Default::fileBooks, lines);
+		lines[id] = ilin;
+	return writeTextFile(dirSets + Default::fileBooks, lines);
 }
 
 Settings Filer::getSettings() {
@@ -265,7 +268,7 @@ Settings Filer::getSettings() {
 	return sets;
 }
 
-void Filer::saveSettings(const Settings& sets) {
+bool Filer::saveSettings(const Settings& sets) {
 	vector<string> lines = {
 		IniLine::line(Default::iniKeywordMaximized, btos(sets.maximized)),
 		IniLine::line(Default::iniKeywordFullscreen, btos(sets.fullscreen)),
@@ -281,7 +284,7 @@ void Filer::saveSettings(const Settings& sets) {
 		IniLine::line(Default::iniKeywordScrollSpeed, sets.getScrollSpeedString()),
 		IniLine::line(Default::iniKeywordDeadzone, ntos(sets.getDeadzone()))
 	};
-	writeTextFile(dirSets + Default::fileSettings, lines);
+	return writeTextFile(dirSets + Default::fileSettings, lines);
 }
 
 vector<Binding> Filer::getBindings() {
@@ -333,7 +336,7 @@ vector<Binding> Filer::getBindings() {
 	return bindings;
 }
 
-void Filer::saveBindings(const vector<Binding>& bindings) {
+bool Filer::saveBindings(const vector<Binding>& bindings) {
 	vector<string> lines;
 	for (sizt i = 0; i < bindings.size(); i++) {
 		string name = enumToStr(Default::bindingNames, i);
@@ -352,7 +355,7 @@ void Filer::saveBindings(const vector<Binding>& bindings) {
 		else if (bindings[i].gbuttonAssigned())
 			lines.push_back(IniLine::line(name, string(bindings[i].gposAxisAssigned() ? "X_+" : "X_-") + enumToStr(Default::gaxisNames, bindings[i].getGaxis())));
 	}
-	writeTextFile(dirSets + Default::fileBindings, lines);
+	return writeTextFile(dirSets + Default::fileBindings, lines);
 }
 
 bool Filer::readTextFile(const string& file, vector<string>& lines, bool printMessage) {
@@ -392,7 +395,7 @@ bool Filer::createDir(const string& path) {
 vector<string> Filer::listDir(const string& drc, FileType filter) {
 	vector<string> entries;
 #ifdef _WIN32
-	if (drc == "\\") {	// if in "root" directory, get drive letters and present them as directories
+	if (drc == dseps) {	// if in "root" directory, get drive letters and present them as directories
 		vector<char> letters = listDrives();
 		entries.resize(letters.size());
 		for (sizt i = 0; i < entries.size(); i++)
@@ -430,7 +433,7 @@ vector<string> Filer::listDirRecursively(string drc) {
 	drc = appendDsep(drc);
 	vector<string> entries;
 #ifdef _WIN32
-	if (drc == "\\") {	// if in "root" directory, get drive letters and present them as directories
+	if (drc == dseps) {	// if in "root" directory, get drive letters and present them as directories
 		for (char c : listDrives()) {
 			vector<string> newEs = listDirRecursively(c + string(":"));
 			entries.insert(entries.end(), newEs.begin(), newEs.end());
@@ -478,7 +481,7 @@ vector<string> Filer::listDirRecursively(string drc) {
 pair<vector<string>, vector<string>> Filer::listDirSeparate(const string& drc) {
 	vector<string> files, dirs;
 #ifdef _WIN32
-	if (drc == "\\") {	// if in "root" directory, get drive letters and present them as directories
+	if (drc == dseps) {	// if in "root" directory, get drive letters and present them as directories
 		vector<char> letters = listDrives();
 		dirs.resize(letters.size());
 		for (sizt i = 0; i < dirs.size(); i++)
@@ -549,14 +552,11 @@ bool Filer::isPicture(const string& file) {
 }
 
 bool Filer::isArchive(const string& file) {
-	struct archive* arch = archive_read_new();
-	archive_read_support_filter_all(arch);
-	archive_read_support_format_all(arch);
-	if (archive_read_open_filename(arch, file.c_str(), Default::archiveReadBlockSize))
-		return false;
-	
-	archive_read_free(arch);
-	return true;
+	if (archive* arch = openArchive(file)) {
+		archive_read_free(arch);
+		return true;
+	}
+	return false;
 }
 
 bool Filer::isFont(const string& file) {

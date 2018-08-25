@@ -1,7 +1,6 @@
 #pragma once
 
 #include "utils/layouts.h"
-#include <SDL2/SDL_ttf.h>
 
 // loads different font sizes from one file
 class FontSet {

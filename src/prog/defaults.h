@@ -3,9 +3,15 @@
 // stuff that's used pretty much everywhere
 #include "utils/vec2.h"
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
+#include <SDL2/SDL_ttf.h>
+#include <archive.h>
+#include <archive_entry.h>
+
 #include <algorithm>
 #include <string>
 #include <sstream>
+#include <iostream>
 #include <vector>
 #include <map>
 #include <unordered_map>

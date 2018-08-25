@@ -1,8 +1,4 @@
 #include "world.h"
-#include <SDL2/SDL_image.h>
-#include <archive.h>
-#include <archive_entry.h>
-#include <iostream>
 
 // FONT SET
 
@@ -249,29 +245,17 @@ vector<pair<string, SDL_Texture*>> DrawSys::loadTexturesDirectory(string drc) {
 }
 
 vector<pair<string, SDL_Texture*>> DrawSys::loadTexturesArchive(const string& arc) {
-	struct archive* arch = archive_read_new();
-	archive_read_support_filter_all(arch);
-	archive_read_support_format_all(arch);
-
 	vector<pair<string, SDL_Texture*>> pics;
-	if (archive_read_open_filename(arch, arc.c_str(), Default::archiveReadBlockSize))
+	archive* arch = openArchive(arc);
+	if (!arch)
 		return pics;
 
-	struct archive_entry* entry;
-	while (!archive_read_next_header(arch, &entry)) {
-		la_int64_t bsiz = archive_entry_size(entry);
-		if (bsiz <= 0)
-			continue;
-	
-		void* buffer = malloc(bsiz);
-		la_ssize_t size = archive_read_data(arch, buffer, bsiz);
-		if (size < 0)
-			continue;
-		
-		SDL_RWops* io = SDL_RWFromMem(buffer, size);
-		if (SDL_Texture* tex = IMG_LoadTexture_RW(renderer, io, SDL_TRUE))
-			pics.push_back(make_pair(archive_entry_pathname(entry), tex));
-	}
+	archive_entry* entry;
+	while (!archive_read_next_header(arch, &entry))
+		if (SDL_RWops* io = readArchiveEntry(arch, entry))
+			if (SDL_Texture* tex = IMG_LoadTexture_RW(renderer, io, SDL_TRUE))
+				pics.push_back(make_pair(archive_entry_pathname(entry), tex));
+
 	archive_read_free(arch);
 	std::sort(pics.begin(), pics.end(), [](const pair<string, SDL_Texture*>& a, const pair<string, SDL_Texture*>& b) -> bool { return strnatless(a.first, b.first); });
 	return pics;

@@ -255,6 +255,11 @@ void ScrollArea::tick(float dSec) {
 	}
 }
 
+void ScrollArea::postInit() {
+	Layout::postInit();
+	listPos = direction.positive() ? 0 : listLim();
+}
+
 void ScrollArea::onHold(const vec2i& mPos, uint8 mBut) {
 	motion = 0.f;	// get rid of scroll motion
 
@@ -335,8 +340,9 @@ void ScrollArea::scrollToWidgetEnd(sizt id) {
 }
 
 bool ScrollArea::scrollToNext() {
+	bool dp = direction.positive();
 	int8 dv = direction.vertical();
-	if (outIRange(listPos[dv], 0, listLim()[dv]))
+	if ((dp && listPos[dv] >= listLim()[dv]) || (!dp && listPos[dv] <= 0))
 		return false;
 	
 	scrollToFollowing(direction.positive() ? visibleWidgets().l + 1 : visibleWidgets().u - 2, false);
@@ -344,12 +350,13 @@ bool ScrollArea::scrollToNext() {
 }
 
 bool ScrollArea::scrollToPrevious() {
+	bool dp = direction.positive();
 	int8 dv = direction.vertical();
-	if (outIRange(listPos[dv], 0, listLim()[dv]))
+	if ((dp && listPos[dv] <= 0) || (!dp && listPos[dv] >= listLim()[dv]))
 		return false;
 
 	sizt id;
-	if (direction.positive()) {
+	if (dp) {
 		id = visibleWidgets().l;
 		if (listPos[dv] <= wgtRPos(id))
 			id--;
@@ -574,7 +581,7 @@ ReaderBox::ReaderBox(const Size& relSize, const Direction& direction, float zoom
 	countDown(true),
 	cursorTimer(Default::menuHideTimeout)
 {
-	pics = World::program()->getBrowser()->getCurType() == Browser::FileType::archive ? World::drawSys()->loadTexturesArchive(World::program()->getBrowser()->curFilepath()) : World::drawSys()->loadTexturesDirectory(World::program()->getBrowser()->getCurDir());
+	pics = World::program()->getBrowser()->getInArchive() ? World::drawSys()->loadTexturesArchive(World::program()->getBrowser()->getCurDir()) : World::drawSys()->loadTexturesDirectory(World::program()->getBrowser()->getCurDir());
 	widgets.resize(pics.size());
 	positions.resize(pics.size()+1);
 
@@ -631,18 +638,17 @@ void ReaderBox::tick(float dSec) {
 }
 
 void ReaderBox::postInit() {
-	Layout::postInit();
+	ScrollArea::postInit();
 
-	// scroll down to opened picture
-	if (World::program()->getBrowser()->getCurType() == Browser::FileType::picture)
-		for (sizt i = 0; i < widgets.size(); i++)
-			if (pics[i].first == World::program()->getBrowser()->getCurFile()) {
-				if (direction.positive())
-					scrollToWidgetPos(i);
-				else
-					scrollToWidgetEnd(i);
-				break;
-			}
+	// scroll down to opened picture if it exists, otherwise start at beginning
+	for (sizt i = 0; i < widgets.size(); i++)
+		if (pics[i].first == World::program()->getBrowser()->getCurFile()) {
+			if (direction.positive())
+				scrollToWidgetPos(i);
+			else
+				scrollToWidgetEnd(i);
+			break;
+		}
 	centerList();
 }
 
@@ -672,9 +678,10 @@ void ReaderBox::centerList() {
 	listPos[di] = listLim()[di] / 2;
 }
 
-void ReaderBox::saveCurPage() {
-	if (widgets.size())
-		Filer::saveLastPage(childPath(World::program()->getBrowser()->getCurDir(), pics[direction.positive() ? visibleWidgets().l : visibleWidgets().u - 1].first));
+string ReaderBox::curPage() const {
+	if (widgets.empty())
+		return "";
+	return pics[direction.positive() ? visibleWidgets().l : visibleWidgets().u - 1].first;
 }
 
 vec2i ReaderBox::wgtPosition(sizt id) const {

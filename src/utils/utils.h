@@ -19,7 +19,7 @@ string getExt(const string& path);		// get file extension
 bool hasExt(const string& path);
 string delExt(const string& path);		// returns filepath without extension
 string appendDsep(const string& path);	// append directory separator if necessary
-inline bool directoryCmp(const string& a, const string& b) { return appendDsep(a) == appendDsep(b); }
+inline bool dirCmp(const string& a, const string& b) { return appendDsep(a) == appendDsep(b); }
 #ifdef _WIN32
 bool isDriveLetter(const string& path);	// check if path is a drive letter (plus colon and optionally dsep). only for windows
 inline bool isDriveLetter(char c) { return c >= 'A' && c <= 'Z'; }
@@ -27,7 +27,8 @@ inline bool isDriveLetter(char c) { return c >= 'A' && c <= 'Z'; }
 inline bool isSpace(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f'; }
 inline bool isDigit(char c) { return c >= '0' && c <= '9'; }
 vector<string> getWords(const string& line);
-string getBook(const string& pic);
+archive* openArchive(const string& file);
+SDL_RWops* readArchiveEntry(archive* arch, archive_entry* entry);
 
 // geometry?
 SDL_Rect cropRect(SDL_Rect& rect, const SDL_Rect& frame);	// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
@@ -49,11 +50,6 @@ bool inRange(T val, T min, T max) {
 template <class T>
 bool outRange(T val, T min, T max) {
 	return val < min || val > max;
-}
-
-template <class T>
-bool outIRange(T val, T min, T max) {
-	return val <= min || val >= max;
 }
 
 template <class T>	// correct val if out of range. returns true if value already in range

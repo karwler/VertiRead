@@ -1,5 +1,6 @@
 # VertiRead
 A simple comic reader for Linux and Windows.  
+It's basically just an image viewer that shows all pictures in a directory/archive.  
 
 Used libraries are SDL2, SDL2_image, SDL2_ttf, libarchive and all that come with those three.   
 The minimum required Cmake version is 3.1.3 and your compiler needs to support at least C++11.  
