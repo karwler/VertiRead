@@ -2,27 +2,27 @@
 
 Browser::Browser(const string& rootDirectory, const string& curDirectory, PCall exitCall) :
 	exCall(exitCall),
-	rootDir(absolutePath(rootDirectory)),
+	rootDir(rootDirectory),
 	inArchive(false)
 {
-	curDir = curDirectory.empty() ? rootDir : absolutePath(curDirectory);
-	if (Filer::fileType(rootDirectory) != FTYPE_DIR || Filer::fileType(curDir) != FTYPE_DIR || !isSubpath(curDir, rootDir))
+	curDir = curDirectory.empty() ? rootDir : curDirectory;
+	if (FileSys::fileType(rootDir) != FTYPE_DIR || FileSys::fileType(curDir) != FTYPE_DIR || !isSubpath(curDir, rootDir))
 		throw std::runtime_error("Invalid file browser arguments");
 }
 
 Browser::Browser(const string& rootDirectory, const string& container, const string& file, PCall exitCall, bool checkFile) :
 	exCall(exitCall),
-	rootDir(absolutePath(rootDirectory)),
-	curDir(absolutePath(container)),
+	rootDir(rootDirectory),
+	curDir(container),
 	curFile(file)
 {
-	if (Filer::fileType(rootDirectory) != FTYPE_DIR || !isSubpath(curDir, rootDir))
+	if (FileSys::fileType(rootDir) != FTYPE_DIR || !isSubpath(curDir, rootDir))
 		throw std::runtime_error("Invalid archive browser arguments");
 
-	if (Filer::fileType(curDir) == FTYPE_DIR) {
+	if (FileSys::fileType(curDir) == FTYPE_DIR) {
 		inArchive = false;
 		string path = childPath(curDir, curFile);
-		if (checkFile && !Filer::isPicture(path))
+		if (checkFile && !FileSys::isPicture(path))
 			throw std::runtime_error(path + " isn't a valid picture or archive");
 	} else {
 		archive* arch = openArchive(curDir);
@@ -53,12 +53,22 @@ Browser::Browser(const string& rootDirectory, const string& container, const str
 	}
 }
 
-bool Browser::goIn(const string& dirname) {
-	if (dirname.empty())
-		return false;
+bool Browser::goTo(const string& path) {
+	if (isSubpath(path, rootDir))
+		switch (FileSys::fileType(path)) {
+		case FTYPE_FILE:
+			curDir = parentPath(path);
+			return true;
+		case FTYPE_DIR:
+			curDir = path;
+			return true;
+		}
+	return false;
+}
 
+bool Browser::goIn(const string& dirname) {
 	string newPath = childPath(curDir, dirname);
-	if (Filer::fileType(newPath) == FTYPE_DIR) {
+	if (dirname.size() && FileSys::fileType(newPath) == FTYPE_DIR) {
 		curDir = newPath;
 		return true;
 	}
@@ -66,7 +76,7 @@ bool Browser::goIn(const string& dirname) {
 }
 
 bool Browser::goUp() {
-	if (dirCmp(curDir, rootDir))
+	if (pathCmp(curDir, rootDir))
 		return false;
 
 	curDir = parentPath(curDir);
@@ -76,44 +86,58 @@ bool Browser::goUp() {
 void Browser::goNext(bool fwd) {
 	if (inArchive)
 		shiftArchive(fwd);
-	else if (!dirCmp(curDir, rootDir))
+	else if (!pathCmp(curDir, rootDir))
 		shiftDir(fwd);
 }
 
 void Browser::shiftDir(bool fwd) {
-	// find id of current directory and set it to the path of the next directory in the parent directory
+	// find id of current directory and set it to the path of the next valid directory in the parent directory
 	string dir = parentPath(curDir);
-	vector<string> dirs = Filer::listDir(dir, FTYPE_DIR);
+	vector<string> dirs = FileSys::listDir(dir, FTYPE_DIR);
 	for (sizt i = 0; i < dirs.size(); i++)
-		if (dirCmp(childPath(dir, dirs[i]), curDir)) {
-			curDir = childPath(dir, dirs[nextIndex(i, dirs.size(), fwd)]);
+		if (pathCmp(childPath(dir, dirs[i]), curDir)) {
+			foreachAround(dirs, i, fwd, this, &Browser::nextDir, dir);
 			break;
 		}
 	curFile.clear();
 }
 
-void Browser::shiftArchive(bool fwd) {
-	// get list of archive files in the same directory
-	string dir = parentPath(curDir);
-	vector<string> files; 
-	for (string& it : Filer::listDir(dir, FTYPE_FILE))
-		if (Filer::isArchive(childPath(dir, it)))
-			files.push_back(it);
+bool Browser::nextDir(const string& dit, const string& pdir) {
+	string idir = childPath(pdir, dit);
+	for (string& it : FileSys::listDir(idir, FTYPE_FILE))
+		if (FileSys::isPicture(childPath(idir, it))) {
+			curDir = idir;
+			return true;
+		}
+	return false;
+}
 
-	// find id of the current file and select the next one
+void Browser::shiftArchive(bool fwd) {
+	// get list of archive files in the same directory and find id of the current file and select the next one
+	string dir = parentPath(curDir);
+	vector<string> files = FileSys::listDir(dir, FTYPE_FILE);
 	for (sizt i = 0; i < files.size(); i++)
 		if (curDir == childPath(dir, files[i])) {
-			curDir = childPath(dir, files[nextIndex(i, files.size(), fwd)]);
+			foreachAround(files, i, fwd, this, &Browser::nextArchive, dir);
 			break;
 		}
 	curFile.clear();
+}
+
+bool Browser::nextArchive(const string& ait, const string& pdir) {
+	string path = childPath(pdir, ait);
+	if (FileSys::isArchive(path)) {
+		curDir = path;
+		return true;
+	}
+	return false;
 }
 
 bool Browser::selectFile(const string& fname) {
 	string path = childPath(curDir, fname);
-	if (Filer::isPicture(path))
+	if (FileSys::isPicture(path))
 		curFile = fname;
-	else if (Filer::isArchive(path)) {
+	else if (FileSys::isArchive(path)) {
 		curDir = path;
 		curFile.clear();
 		inArchive = true;

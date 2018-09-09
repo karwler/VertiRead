@@ -81,7 +81,7 @@ void ProgState::eventCursorRight(float amt) {
 }
 
 void ProgState::eventFullscreen() {
-	World::winSys()->setFullscreen(!World::winSys()->sets.fullscreen);
+	World::winSys()->setFullscreen(!World::sets()->fullscreen);
 }
 
 void ProgState::eventRefresh() {
@@ -108,7 +108,7 @@ void ProgBooks::eventEscape() {
 		World::program()->eventExit();
 }
 
-void ProgBooks::eventFileDrop(char* file) {
+void ProgBooks::eventFileDrop(const string& file) {
 	World::program()->openFile(file);
 }
 
@@ -122,7 +122,7 @@ Layout* ProgBooks::createLayout() {
 	};
 
 	// book list
-	vector<string> books = Filer::listDir(World::winSys()->sets.getDirLib(), FTYPE_DIR);
+	vector<string> books = FileSys::listDir(World::sets()->getDirLib(), FTYPE_DIR);
 	vector<Widget*> tiles(books.size()+1);
 	for (sizt i = 0; i < books.size(); i++) {
 		Text txt(filename(books[i]), Default::itemHeight);
@@ -145,7 +145,7 @@ void ProgPageBrowser::eventEscape() {
 		World::program()->eventBrowserGoUp();
 }
 
-void ProgPageBrowser::eventFileDrop(char* file) {
+void ProgPageBrowser::eventFileDrop(const string& file) {
 	World::program()->openFile(file);
 }
 
@@ -161,19 +161,25 @@ Layout* ProgPageBrowser::createLayout() {
 	};
 
 	// list of files and directories
-	pair<vector<string>, vector<string>> entries = Filer::listDirSeparate(World::program()->getBrowser()->getCurDir());
+	pair<vector<string>, vector<string>> entries = FileSys::listDirSeparate(World::browser()->getCurDir());
 	vector<Widget*> items(entries.first.size() + entries.second.size());
 	for (sizt i = 0; i < entries.second.size(); i++)
 		items[i] = new Label(lineHeight, entries.second[i], &Program::eventBrowserGoIn, nullptr, nullptr, Label::Alignment::left, World::drawSys()->texture("folder"));
 	for (sizt i = 0; i < entries.first.size(); i++)
 		items[entries.second.size()+i] = new Label(lineHeight, entries.first[i], &Program::eventOpenReader, nullptr, nullptr, Label::Alignment::left, World::drawSys()->texture("file"));
 	
-	// root layout
-	vector<Widget*> cont = {
+	// main content
+	vector<Widget*> mid = {
 		new Layout(findMaxLength(txs, lineHeight), bar),
 		new ScrollArea(1.f, items)
 	};
-	return new Layout(1.f, cont, Direction::right, Layout::Select::none, topSpacing);
+
+	// root layout
+	vector<Widget*> cont = {
+		new LineEdit(lineHeight, World::browser()->getRootDir() == dseps ? World::browser()->getCurDir() : World::browser()->getCurDir().substr(appendDsep(World::sets()->getDirLib()).length()), &Program::eventBrowserGoTo),
+		new Layout(1.f, mid, Direction::right, Layout::Select::none, topSpacing)
+	};
+	return new Layout(1.f, cont, Direction::down, Layout::Select::none, topSpacing);
 }
 
 // PROG READER
@@ -200,19 +206,19 @@ void ProgReader::eventRight() {
 }
 
 void ProgReader::eventScrollUp(float amt) {
-	World::scene()->getLayout()->onScroll(vec2i(0, -modifySpeed(amt * World::winSys()->sets.scrollSpeed.y)));
+	World::scene()->getLayout()->onScroll(vec2i(0, -modifySpeed(amt * World::sets()->scrollSpeed.y)));
 }
 
 void ProgReader::eventScrollDown(float amt) {
-	World::scene()->getLayout()->onScroll(vec2i(0, modifySpeed(amt * World::winSys()->sets.scrollSpeed.y)));
+	World::scene()->getLayout()->onScroll(vec2i(0, modifySpeed(amt * World::sets()->scrollSpeed.y)));
 }
 
 void ProgReader::eventScrollRight(float amt) {
-	World::scene()->getLayout()->onScroll(vec2i(modifySpeed(amt * World::winSys()->sets.scrollSpeed.x), 0));
+	World::scene()->getLayout()->onScroll(vec2i(modifySpeed(amt * World::sets()->scrollSpeed.x), 0));
 }
 
 void ProgReader::eventScrollLeft(float amt) {
-	World::scene()->getLayout()->onScroll(vec2i(-modifySpeed(amt * World::winSys()->sets.scrollSpeed.x), 0));
+	World::scene()->getLayout()->onScroll(vec2i(-modifySpeed(amt * World::sets()->scrollSpeed.x), 0));
 }
 
 void ProgReader::eventNextPage() {
@@ -258,21 +264,19 @@ void ProgReader::eventPrevDir() {
 }
 
 void ProgReader::eventClosing() {
-	string dirLib = appendDsep(World::winSys()->sets.getDirLib());
-	const string& drc = World::program()->getBrowser()->getCurDir();
-	string fname = static_cast<ReaderBox*>(World::scene()->getLayout())->curPage();
-
-	if (World::program()->getBrowser()->getRootDir() == dseps && !dirCmp(World::program()->getBrowser()->getRootDir(), dirLib))
-		Filer::saveLastPage(".", drc, fname);
-	else if (fname.size() && !drc.compare(0, dirLib.length(), dirLib)) {
-		sizt mid = drc.find_first_of(dsep, dirLib.length());
-		Filer::saveLastPage(drc.substr(dirLib.length(), mid == string::npos ? string::npos : mid - dirLib.length()), drc.substr(mid == string::npos ? string::npos : mid + 1), fname);
+	string rpath = getChild(World::browser()->getCurDir(), World::sets()->getDirLib());
+	if (rpath.empty())
+		World::fileSys()->saveLastPage(".", World::browser()->getCurDir(), static_cast<ReaderBox*>(World::scene()->getLayout())->curPage());
+	else {
+		sizt mid = rpath.find_first_of(dsep);
+		sizt nxt = rpath.find_first_not_of(dsep, mid);
+		World::fileSys()->saveLastPage(rpath.substr(0, mid), nxt < rpath.length() ? rpath.substr(nxt) : "", static_cast<ReaderBox*>(World::scene()->getLayout())->curPage());
 	}
-	World::program()->getBrowser()->clearCurFile();
+	World::browser()->clearCurFile();
 }
 
 Layout* ProgReader::createLayout() {
-	return new ReaderBox(1.f, World::winSys()->sets.direction, World::winSys()->sets.zoom, World::winSys()->sets.spacing);
+	return new ReaderBox(1.f, World::sets()->direction, World::sets()->zoom, World::sets()->spacing);
 }
 
 Overlay* ProgReader::createOverlay() {
@@ -285,14 +289,14 @@ Overlay* ProgReader::createOverlay() {
 		new Button(picSize, &Program::eventZoomReset, nullptr, nullptr, World::drawSys()->texture("circle"), false, picMargin),
 		new Button(picSize, &Program::eventCenterView, nullptr, nullptr, World::drawSys()->texture("square"), false, picMargin)
 	};
-	return new Overlay(vec2s(0), vec2s(picSize, picSize*int(menu.size())), vec2s(0), vec2s(picSize/2, 1.f), menu, Direction::down, 0);
+	return new Overlay(vec2s(0), vec2s(picSize, picSize*int(menu.size())), vec2s(0), vec2s(picSize/2, picSize*int(menu.size())), menu, Direction::down, 0);
 }
 
 float ProgReader::modifySpeed(float value) {
 	float factor = 1.f;
 	if (World::inputSys()->isPressed(Binding::Type::scrollFast, factor))
 		value *= Default::scrollFactor * factor;
-	else if (World::inputSys()->isPressed(Binding::Type::scrollFast, factor))
+	else if (World::inputSys()->isPressed(Binding::Type::scrollSlow, factor))
 		value /= Default::scrollFactor * factor;
 	return value * World::winSys()->getDSec();
 }
@@ -306,16 +310,15 @@ void ProgSettings::eventEscape() {
 
 void ProgSettings::eventFullscreen() {
 	ProgState::eventFullscreen();
-	static_cast<CheckBox*>(static_cast<Layout*>(static_cast<Layout*>(World::scene()->getLayout()->getWidget(1))->getWidget(0))->getWidget(1))->on = World::winSys()->sets.fullscreen;
+	static_cast<CheckBox*>(static_cast<Layout*>(static_cast<Layout*>(World::scene()->getLayout()->getWidget(1))->getWidget(0))->getWidget(1))->on = World::sets()->fullscreen;
 }
 
-void ProgSettings::eventFileDrop(char* file) {
-	string path = absolutePath(file);
-	if (Filer::isFont(path)) {
-		World::drawSys()->setFont(path);
+void ProgSettings::eventFileDrop(const string& file) {
+	if (FileSys::isFont(file)) {
+		World::drawSys()->setFont(file);
 		World::scene()->resetLayouts();
-	} else if (Filer::fileType(path) == FTYPE_DIR)
-		World::winSys()->sets.setDirLib(path);
+	} else if (FileSys::fileType(file) == FTYPE_DIR)
+		World::sets()->setDirLib(file);
 }
 
 Layout* ProgSettings::createLayout() {
@@ -360,16 +363,16 @@ Layout* ProgSettings::createLayout() {
 	Text dznum(ntos(Default::axisLimit), lineHeight);
 	vector<Widget*> lx[] = { {
 		new Label(descLength, txs[0]),
-		new SwitchBox(1.f, Default::directionNames, World::winSys()->sets.direction.toString(), &Program::eventSwitchDirection)
+		new SwitchBox(1.f, Default::directionNames, World::sets()->direction.toString(), &Program::eventSwitchDirection)
 	},{
 		new Label(descLength, txs[1]),
-		new LineEdit(1.f, ntos(World::winSys()->sets.zoom), &Program::eventSetZoom, nullptr, nullptr, LineEdit::TextType::uFloating)
+		new LineEdit(1.f, ntos(World::sets()->zoom), &Program::eventSetZoom, nullptr, nullptr, LineEdit::TextType::uFloating)
 	}, {
 		new Label(descLength, txs[2]),
-		new LineEdit(1.f, ntos(World::winSys()->sets.spacing), &Program::eventSetSpacing, nullptr, nullptr, LineEdit::TextType::uInteger)
+		new LineEdit(1.f, ntos(World::sets()->spacing), &Program::eventSetSpacing, nullptr, nullptr, LineEdit::TextType::uInteger)
 	}, {
 		new Label(descLength, txs[3]),
-		new CheckBox(lineHeight, World::winSys()->sets.fullscreen, &Program::eventSwitchFullscreen)
+		new CheckBox(lineHeight, World::sets()->fullscreen, &Program::eventSwitchFullscreen)
 	},{
 		new Label(descLength, txs[4]),
 		new Label(butts[0].length, butts[0].text, &Program::eventSetPortrait),
@@ -378,27 +381,27 @@ Layout* ProgSettings::createLayout() {
 		new Label(butts[3].length, butts[3].text, &Program::eventSetFill)
 	}, {
 		new Label(descLength, txs[5]),
-		new SwitchBox(1.f, Filer::getAvailibleThemes(), World::winSys()->sets.getTheme(), &Program::eventSetTheme)
+		new SwitchBox(1.f, World::fileSys()->getAvailibleThemes(), World::sets()->getTheme(), &Program::eventSetTheme)
 	}, {
 		new Label(descLength, txs[6]),
-		new SwitchBox(1.f, Filer::getAvailibleLanguages(), World::winSys()->sets.getLang(), &Program::eventSwitchLanguage)
+		new SwitchBox(1.f, World::fileSys()->getAvailibleLanguages(), World::sets()->getLang(), &Program::eventSwitchLanguage)
 	}, {
 		new Label(descLength, txs[7]),
-		new LineEdit(1.f, World::winSys()->sets.getFont(), &Program::eventSetFont)
+		new LineEdit(1.f, World::sets()->getFont(), &Program::eventSetFont)
 	}, {
 		new Label(descLength, txs[8]),
-		new LineEdit(1.f, World::winSys()->sets.getDirLib(), &Program::eventSetLibraryDirLE),
+		new LineEdit(1.f, World::sets()->getDirLib(), &Program::eventSetLibraryDirLE),
 		new Label(dots.length, dots.text, &Program::eventOpenLibDirBrowser, nullptr, nullptr, Label::Alignment::center)
 	}, {
 		new Label(descLength, txs[9]),
-		new SwitchBox(1.f, Settings::getAvailibleRenderers(), World::winSys()->sets.renderer, &Program::eventSetRenderer)
+		new SwitchBox(1.f, Settings::getAvailibleRenderers(), World::sets()->renderer, &Program::eventSetRenderer)
 	}, {
 		new Label(descLength, txs[10]),
-		new LineEdit(1.f, World::winSys()->sets.getScrollSpeedString(), &Program::eventSetScrollSpeed, nullptr, nullptr, LineEdit::TextType::sFloatingSpaced)
+		new LineEdit(1.f, World::sets()->getScrollSpeedString(), &Program::eventSetScrollSpeed, nullptr, nullptr, LineEdit::TextType::sFloatingSpaced)
 	}, {
 		new Label(descLength, txs[11]),
-		new Slider(1.f, World::winSys()->sets.getDeadzone(), 0, Default::axisLimit, &Program::eventSetDeadzoneSL),
-		new LineEdit(dznum.length, ntos(World::winSys()->sets.getDeadzone()), &Program::eventSetDeadzoneLE, nullptr, nullptr, LineEdit::TextType::uInteger)
+		new Slider(1.f, World::sets()->getDeadzone(), 0, Default::axisLimit, &Program::eventSetDeadzoneSL),
+		new LineEdit(dznum.length, ntos(World::sets()->getDeadzone()), &Program::eventSetDeadzoneLE, nullptr, nullptr, LineEdit::TextType::uInteger)
 	} };
 	vector<Widget*> lns(lcnt + 1 + bindings.size() + 2);
 	for (sizt i = 0; i < lcnt; i++)
@@ -455,15 +458,21 @@ Layout* ProgSearchDir::createLayout() {
 	};
 
 	// directory list
-	vector<string> strs = Filer::listDir(World::program()->getBrowser()->getCurDir(), FTYPE_DIR);
+	vector<string> strs = FileSys::listDir(World::browser()->getCurDir(), FTYPE_DIR);
 	vector<Widget*> items(strs.size());
 	for (sizt i = 0; i < strs.size(); i++)
 		items[i] = new Label(lineHeight, strs[i], nullptr, nullptr, &Program::eventBrowserGoIn, Label::Alignment::left, World::drawSys()->texture("folder"));
 
-	// root layout
-	vector<Widget*> cont = {
+	// main content
+	vector<Widget*> mid = {
 		new Layout(findMaxLength(txs, lineHeight), bar),
 		new ScrollArea(1.f, items, Direction::down, Layout::Select::one)
 	};
-	return new Layout(1.f, cont, Direction::right, Layout::Select::none, topSpacing);
+
+	// root layout
+	vector<Widget*> cont = {
+		new LineEdit(lineHeight, World::browser()->getCurDir(), &Program::eventBrowserGoTo),
+		new Layout(1.f, mid, Direction::right, Layout::Select::none, topSpacing)
+	};
+	return new Layout(1.f, cont, Direction::down, Layout::Select::none, topSpacing);
 }

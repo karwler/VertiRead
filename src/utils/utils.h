@@ -9,24 +9,27 @@ inline bool strnatless(const string& a, const string& b) { return strnatcmp(a.c_
 string trim(const string& str);
 string ltrim(const string& str);
 string rtrim(const string& str);
-bool isAbsolute(const string& path);
-string absolutePath(const string& path);
+bool pathCmp(const string& as, const string& bs);
 bool isSubpath(const string& path, string parent);
 string parentPath(const string& path);
 string childPath(const string& parent, const string& child);
+string getChild(const string& path, const string& parent);
 string filename(const string& path);	// get filename from path
 string getExt(const string& path);		// get file extension
 bool hasExt(const string& path);
 string delExt(const string& path);		// returns filepath without extension
 string appendDsep(const string& path);	// append directory separator if necessary
-inline bool dirCmp(const string& a, const string& b) { return appendDsep(a) == appendDsep(b); }
 #ifdef _WIN32
 bool isDriveLetter(const string& path);	// check if path is a drive letter (plus colon and optionally dsep). only for windows
 inline bool isDriveLetter(char c) { return c >= 'A' && c <= 'Z'; }
 #endif
 inline bool isSpace(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f'; }
 inline bool isDigit(char c) { return c >= '0' && c <= '9'; }
+bool strchk(const string& str, bool (*cmp)(char));
+bool strchk(const string& str, sizt pos, sizt len, bool (*cmp)(char));
 vector<string> getWords(const string& line);
+string strEnclose(string str);
+vector<string> strUnenclose(const string& str);
 archive* openArchive(const string& file);
 SDL_RWops* readArchiveEntry(archive* arch, archive_entry* entry);
 
@@ -112,7 +115,33 @@ string ntos(T num) {
 
 // container stuff
 
-sizt nextIndex(sizt id, sizt lim, bool fwd);
+template <class T, class P, class F, class... A>
+bool foreachAround(const vector<T>& vec, sizt start, bool fwd, P* parent, F func, A... args) {
+	return fwd ? foreachFAround(vec, start, parent, func, args...) : foreachRAround(vec, start, parent, func, args...);
+}
+
+template <class T, class P, class F, class... A>
+bool foreachFAround(const vector<T>& vec, sizt start, P* parent, F func, A... args) {
+	for (sizt i = start+1; i < vec.size(); i++)
+		if ((parent->*func)(vec[i], args...))
+			return true;
+	for (sizt i = 0; i < start; i++)
+		if ((parent->*func)(vec[i], args...))
+			return true;
+	return false;
+}
+
+template <class T, class P, class F, class... A>
+bool foreachRAround(const vector<T>& vec, sizt start, P* parent, F func, A... args) {
+	for (sizt i = start-1; i < vec.size(); i--)
+		if ((parent->*func)(vec[i], args...))
+			return true;
+	if (vec.size())
+		for (sizt i = vec.size()-1; i > start; i--)
+			if ((parent->*func)(vec[i], args...))
+				return true;
+	return false;
+}
 
 template <class T>
 void clear(vector<T*>& vec) {

@@ -2,26 +2,26 @@
 
 // stuff that's used pretty much everywhere
 #include "utils/vec2.h"
+#include <archive.h>
+#include <archive_entry.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
-#include <archive.h>
-#include <archive_entry.h>
-
-#include <algorithm>
-#include <string>
-#include <sstream>
-#include <iostream>
-#include <vector>
-#include <map>
-#include <unordered_map>
-#include <unordered_set>
-#include <memory>
 
 // get rid of SDL's main
 #ifdef main
 #undef main
 #endif
+
+#include <algorithm>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 // to make life easier
 using std::vector;
@@ -96,7 +96,7 @@ const float zoom = 1.f;
 const int spacing = 10;
 const vec2i resolution(800, 600);
 const char font[] = "Arial";
-const vec2f scrollSpeed(800.f, 1000.f);
+const vec2f scrollSpeed(1600.f, 1600.f);
 const int16 controllerDeadzone = 256;
 
 // window
@@ -207,7 +207,7 @@ const char fileIcon[] = "icon.ico";
 const char fileThemes[] = "themes.ini";
 const char fileSettings[] = "settings.ini";
 const char fileBindings[] = "bindings.ini";
-const char fileBooks[] = "books.ini";
+const char fileBooks[] = "books.txt";
 const char dirLibrary[] = "library";
 const char dirLanguages[] = "languages";
 const char dirTextures[] = "textures";

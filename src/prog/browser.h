@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/filer.h"
+#include "engine/fileSys.h"
 
 // logic for browsing files
 class Browser {
@@ -8,6 +8,7 @@ public:
 	Browser(const string& rootDirectory, const string& curDirectory, PCall exitCall);
 	Browser(const string& rootDirectory, const string& container, const string& file, PCall exitCall, bool checkFile);
 
+	bool goTo(const string& path);
 	bool goIn(const string& dirname);
 	bool goUp();			// go to parent direcory if possible
 	void goNext(bool fwd);	// go to the next/previous archive or directory from the viewpoint of the parent directory
@@ -29,4 +30,6 @@ private:
 
 	void shiftDir(bool fwd);
 	void shiftArchive(bool fwd);
+	bool nextDir(const string& dit, const string& pdir);
+	bool nextArchive(const string& ait, const string& pdir);
 };

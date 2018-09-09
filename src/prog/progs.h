@@ -32,7 +32,7 @@ public:
 	virtual void eventFullscreen();
 	void eventRefresh();
 
-	virtual void eventFileDrop(char* file) {}
+	virtual void eventFileDrop(const string& file) {}
 	virtual void eventClosing() {}
 	
 	virtual Layout* createLayout() { return nullptr; }
@@ -64,7 +64,7 @@ class ProgBooks : public ProgState {
 public:
 	virtual void eventEscape() override;
 	
-	virtual void eventFileDrop(char* file) override;
+	virtual void eventFileDrop(const string& file) override;
 
 	virtual Layout* createLayout() override;
 };
@@ -73,7 +73,7 @@ class ProgPageBrowser : public ProgState {
 public:
 	virtual void eventEscape() override;
 
-	virtual void eventFileDrop(char* file) override;
+	virtual void eventFileDrop(const string& file) override;
 
 	virtual Layout* createLayout() override;
 };
@@ -114,7 +114,7 @@ public:
 	virtual void eventEscape() override;
 	virtual void eventFullscreen() override;
 
-	virtual void eventFileDrop(char* file) override;
+	virtual void eventFileDrop(const string& file) override;
 	
 	virtual Layout* createLayout() override;
 };

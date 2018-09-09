@@ -17,7 +17,7 @@ void Program::eventOpenBookList(Button* but) {
 
 void Program::eventOpenPageBrowser(Button* but) {
 	Label* lbl = dynamic_cast<Label*>(but);
-	browser.reset(new Browser(lbl ? childPath(World::winSys()->sets.getDirLib(), lbl->getText()) : dseps, "", &Program::eventOpenBookList));
+	browser.reset(new Browser(lbl ? childPath(World::sets()->getDirLib(), lbl->getText()) : dseps, "", &Program::eventOpenBookList));
 	setState(new ProgPageBrowser);
 }
 
@@ -29,28 +29,28 @@ void Program::eventOpenReader(Button* but) {
 void Program::eventOpenLastPage(Button* but) {
 	Label* lbl = dynamic_cast<Label*>(but);
 	string drc, fname;
-	if (Filer::getLastPage(lbl ? lbl->getText() : ".", drc, fname)) {
+	if (World::fileSys()->getLastPage(lbl ? lbl->getText() : ".", drc, fname)) {
 		try {
-			browser.reset(new Browser(lbl ? childPath(World::winSys()->sets.getDirLib(), lbl->getText()) : dseps, lbl ? childPath(World::winSys()->sets.getDirLib(), childPath(lbl->getText(), drc)) : drc, fname, &Program::eventOpenBookList, true));
+			browser.reset(new Browser(lbl ? childPath(World::sets()->getDirLib(), lbl->getText()) : dseps, lbl ? childPath(World::sets()->getDirLib(), childPath(lbl->getText(), drc)) : drc, fname, &Program::eventOpenBookList, true));
 			setState(new ProgReader);
-		} catch (const std::runtime_error&) {
+		} catch (const std::runtime_error& e) {
+			std::cerr << e.what() << std::endl;
 			eventOpenPageBrowser(but);
 		}
 	} else
 		eventOpenPageBrowser(but);
 }
 
-bool Program::openFile(string file) {
-	file = absolutePath(file);
-	switch (Filer::fileType(file)) {
+bool Program::openFile(const string& file) {
+	switch (FileSys::fileType(file)) {
 	case FTYPE_FILE:
 		try {
-			bool isArch = Filer::isArchive(file);
-			browser.reset(new Browser(dseps, isArch ? file : parentPath(file), isArch ? "" : filename(file), &Program::eventOpenBookList, false));
+			bool isPic = FileSys::isPicture(file);
+			browser.reset(new Browser(dseps, isPic ? parentPath(file) : file, isPic ? filename(file) : "", &Program::eventOpenBookList, false));
 			setState(new ProgReader);
 		} catch (const std::runtime_error& e) {
+			std::cerr << e.what() << std::endl;
 			browser.reset();
-			World::scene()->setPopup(ProgState::createPopupMessage(e.what()));
 			return false;
 		}
 		return true;
@@ -74,6 +74,16 @@ void Program::eventBrowserGoUp(Button* but) {
 void Program::eventBrowserGoIn(Button* but) {
 	if (browser->goIn(static_cast<Label*>(but)->getText()))
 		World::scene()->resetLayouts();
+}
+
+void Program::eventBrowserGoTo(Button* but) {
+	LineEdit* le = static_cast<LineEdit*>(but);
+	if (browser->goTo(browser->getRootDir() == dseps ? le->getText() : childPath(World::sets()->getDirLib(), le->getText())))
+		World::scene()->resetLayouts();
+	else {
+		le->setText(le->getOldText());
+		World::scene()->setPopup(ProgState::createPopupMessage("Invalid path."));
+	}
 }
 
 void Program::eventExitBrowser(Button* but) {
@@ -123,15 +133,15 @@ void Program::eventOpenSettings(Button* but) {
 }
 
 void Program::eventSwitchDirection(Button* but) {
-	World::winSys()->sets.direction.set(static_cast<SwitchBox*>(but)->getText());
+	World::sets()->direction.set(static_cast<SwitchBox*>(but)->getText());
 }
 
 void Program::eventSetZoom(Button * but) {
-	World::winSys()->sets.zoom = stof(static_cast<LineEdit*>(but)->getText());
+	World::sets()->zoom = stof(static_cast<LineEdit*>(but)->getText());
 }
 
 void Program::eventSetSpacing(Button* but) {
-	World::winSys()->sets.spacing = stoi(static_cast<LineEdit*>(but)->getText());
+	World::sets()->spacing = stoi(static_cast<LineEdit*>(but)->getText());
 }
 
 void Program::eventSwitchLanguage(Button* but) {
@@ -141,9 +151,9 @@ void Program::eventSwitchLanguage(Button* but) {
 
 void Program::eventSetLibraryDirLE(Button* but) {
 	LineEdit* le = static_cast<LineEdit*>(but);
-	if (World::winSys()->sets.setDirLib(le->getText()) != le->getText()) {
+	if (World::sets()->setDirLib(le->getText()) != le->getText()) {
+		le->setText(World::sets()->getDirLib());
 		World::scene()->setPopup(ProgState::createPopupMessage("Invalid directory."));
-		le->setText(World::winSys()->sets.getDirLib());
 	}
 }
 
@@ -151,14 +161,14 @@ void Program::eventSetLibraryDirBW(Button* but) {
 	const uset<Widget*>& select = static_cast<Layout*>(World::scene()->getLayout()->getWidget(1))->getSelected();
 	string path = select.size() ? childPath(browser->getCurDir(), static_cast<Label*>(*select.begin())->getText()) : browser->getCurDir();
 
-	World::winSys()->sets.setDirLib(path);
+	World::sets()->setDirLib(path);
 	browser.reset();
 	eventOpenSettings();
 }
 
 void Program::eventOpenLibDirBrowser(Button* but) {
 #ifdef _WIN32
-	browser.reset(new Browser(dseps, Filer::wgetenv("UserProfile"), &Program::eventOpenSettings));
+	browser.reset(new Browser(dseps, FileSys::wgetenv("UserProfile"), &Program::eventOpenSettings));
 #else
 	browser.reset(new Browser(dseps, std::getenv("HOME"), &Program::eventOpenSettings));
 #endif
@@ -179,7 +189,7 @@ void Program::eventSetFont(Button* but) {
 	string otxt = static_cast<LineEdit*>(but)->getText();
 	World::drawSys()->setFont(otxt);
 	World::scene()->resetLayouts();
-	if (World::winSys()->sets.getFont() != otxt)
+	if (World::sets()->getFont() != otxt)
 		World::scene()->setPopup(ProgState::createPopupMessage("Invalid font."));
 }
 
@@ -189,19 +199,19 @@ void Program::eventSetRenderer(Button* but) {
 }
 
 void Program::eventSetScrollSpeed(Button* but) {
-	World::winSys()->sets.setScrollSpeed(static_cast<LineEdit*>(but)->getText());
+	World::sets()->setScrollSpeed(static_cast<LineEdit*>(but)->getText());
 }
 
 void Program::eventSetDeadzoneSL(Button* but) {
-	World::winSys()->sets.setDeadzone(static_cast<Slider*>(but)->getVal());
-	static_cast<LineEdit*>(but->getParent()->getWidget(2))->setText(ntos(World::winSys()->sets.getDeadzone()));	// update line edit
+	World::sets()->setDeadzone(static_cast<Slider*>(but)->getVal());
+	static_cast<LineEdit*>(but->getParent()->getWidget(2))->setText(ntos(World::sets()->getDeadzone()));	// update line edit
 }
 
 void Program::eventSetDeadzoneLE(Button* but) {
 	LineEdit* le = static_cast<LineEdit*>(but);
-	World::winSys()->sets.setDeadzone(stoi(le->getText()));
-	le->setText(ntos(World::winSys()->sets.getDeadzone()));	// set text again in case the volume was out of range
-	static_cast<Slider*>(but->getParent()->getWidget(1))->setVal(World::winSys()->sets.getDeadzone());	// update slider
+	World::sets()->setDeadzone(stoi(le->getText()));
+	le->setText(ntos(World::sets()->getDeadzone()));	// set text again in case the volume was out of range
+	static_cast<Slider*>(but->getParent()->getWidget(1))->setVal(World::sets()->getDeadzone());	// update slider
 }
 
 void Program::eventSetPortrait(Button* but) {

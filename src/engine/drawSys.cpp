@@ -59,17 +59,17 @@ DrawSys::DrawSys(SDL_Window* window, int driverIndex) {
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
 	// load default textures with colors and initialize fonts and translations
-	for (string& it : Filer::listDir(Filer::dirTexs, FTYPE_FILE)) {
-		string file = Filer::dirTexs + it;
+	for (string& it : FileSys::listDir(World::fileSys()->getDirTexs(), FTYPE_FILE)) {
+		string file = World::fileSys()->getDirTexs() + it;
 		SDL_Texture* tex = IMG_LoadTexture(renderer, file.c_str());
 		if (tex)
 			texes.insert(make_pair(delExt(it), tex));
 		else
 			std::cerr << "Couldn't load texture " << file << std::endl << IMG_GetError << std::endl;
 	}
-	setTheme(World::winSys()->sets.getTheme());
-	setFont(World::winSys()->sets.getFont());
-	setLanguage(World::winSys()->sets.getLang());
+	setTheme(World::sets()->getTheme());
+	setFont(World::sets()->getFont());
+	setLanguage(World::sets()->getLang());
 }
 
 DrawSys::~DrawSys() {
@@ -91,7 +91,7 @@ vec2i DrawSys::viewSize() const {
 }
 
 void DrawSys::setTheme(const string& name) {
-	colors = Filer::getColors(World::winSys()->sets.setTheme(name));
+	colors = World::fileSys()->getColors(World::sets()->setTheme(name));
 	SDL_Color clr = colors[static_cast<uint8>(Color::texture)];
 	for (const pair<string, SDL_Texture*>& it : texes) {
 		SDL_SetTextureColorMod(it.second, clr.r, clr.g, clr.b);
@@ -100,7 +100,7 @@ void DrawSys::setTheme(const string& name) {
 }
 
 void DrawSys::setFont(const string& font) {
-	fonts.init(World::winSys()->sets.setFont(font));
+	fonts.init(World::sets()->setFont(font));
 }
 
 string DrawSys::translation(const string& line, bool firstCapital) const {
@@ -111,7 +111,7 @@ string DrawSys::translation(const string& line, bool firstCapital) const {
 }
 
 void DrawSys::setLanguage(const string& lang) {
-	trans = Filer::getTranslations(World::winSys()->sets.setLang(lang));
+	trans = World::fileSys()->getTranslations(World::sets()->setLang(lang));
 }
 
 void DrawSys::drawWidgets() {
@@ -238,7 +238,7 @@ SDL_Texture* DrawSys::renderText(const string& text, int height) {
 
 vector<pair<string, SDL_Texture*>> DrawSys::loadTexturesDirectory(string drc) {
 	vector<pair<string, SDL_Texture*>> pics;
-	for (string& it : Filer::listDir(drc, FTYPE_FILE))
+	for (string& it : FileSys::listDir(drc, FTYPE_FILE))
 		if (SDL_Texture* tex = IMG_LoadTexture(renderer, childPath(drc, it).c_str()))
 			pics.push_back(make_pair(it, tex));
 	return pics;

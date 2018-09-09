@@ -15,11 +15,12 @@ public:
 	void eventOpenPageBrowser(Button* but);
 	void eventOpenReader(Button* but);
 	void eventOpenLastPage(Button* but);
-	bool openFile(string file);
+	bool openFile(const string& file);
 
 	// browser
 	void eventBrowserGoUp(Button* but=nullptr);
 	void eventBrowserGoIn(Button* but);
+	void eventBrowserGoTo(Button* but);
 	void eventExitBrowser(Button* but=nullptr);
 
 	// reader

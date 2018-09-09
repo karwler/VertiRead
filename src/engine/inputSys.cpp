@@ -22,7 +22,7 @@ void InputSys::Controller::close() {
 // INPUT SYS
 
 InputSys::InputSys() :
-	bindings(Filer::getBindings())
+	bindings(World::fileSys()->getBindings())
 {
 	for (int i = 0; i < SDL_NumJoysticks(); i++)
 		addController(i);
@@ -100,55 +100,55 @@ void InputSys::tick(float dSec) {
 	for (Binding& it : bindings)
 		if (it.isAxis()) {
 			float amt = 1.f;
-			if (isPressed(it, amt) && it.getAcall())
-				(World::state()->*it.getAcall())(amt);
+			if (isPressed(it, amt))
+				World::srun(it.getAcall(), amt);
 		}
 }
 
 void InputSys::checkBindingsK(SDL_Scancode key) {
 	for (Binding& it : bindings)	// find first binding with this key assigned to it
-		if (!it.isAxis() && it.keyAssigned() && it.getKey() == key && it.getBcall()) {
-			(World::state()->*it.getBcall())();
+		if (!it.isAxis() && it.keyAssigned() && it.getKey() == key) {
+			World::srun(it.getBcall());
 			break;
 		}
 }
 
 void InputSys::checkBindingsB(uint8 jbutton) {
 	for (Binding& it : bindings)
-		if (!it.isAxis() && it.jbuttonAssigned() && it.getJctID() == jbutton && it.getBcall()) {
-			(World::state()->*it.getBcall())();
+		if (!it.isAxis() && it.jbuttonAssigned() && it.getJctID() == jbutton) {
+			World::srun(it.getBcall());
 			break;
 		}
 }
 
 void InputSys::checkBindingsH(uint8 jhat, uint8 val) {
 	for (Binding& it : bindings)
-		if (!it.isAxis() && it.jhatAssigned() && it.getJctID() == jhat && it.getJhatVal() == val && it.getBcall()) {
-			(World::state()->*it.getBcall())();
+		if (!it.isAxis() && it.jhatAssigned() && it.getJctID() == jhat && it.getJhatVal() == val) {
+			World::srun(it.getBcall());
 			break;
 		}
 }
 
 void InputSys::checkBindingsA(uint8 jaxis, bool positive) {
 	for (Binding& it : bindings)
-		if (!it.isAxis() && ((it.jposAxisAssigned() && positive) || (it.jnegAxisAssigned() && !positive)) && it.getJctID() == jaxis && it.getBcall()) {
-			(World::state()->*it.getBcall())();
+		if (!it.isAxis() && ((it.jposAxisAssigned() && positive) || (it.jnegAxisAssigned() && !positive)) && it.getJctID() == jaxis) {
+			World::srun(it.getBcall());
 			break;
 		}
 }
 
 void InputSys::checkBindingsG(SDL_GameControllerButton gbutton) {
 	for (Binding& it : bindings)
-		if (!it.isAxis() && it.gbuttonAssigned() && it.getGbutton() == gbutton && it.getBcall()) {
-			(World::state()->*it.getBcall())();
+		if (!it.isAxis() && it.gbuttonAssigned() && it.getGbutton() == gbutton) {
+			World::srun(it.getBcall());
 			break;
 		}
 }
 
 void InputSys::checkBindingsX(SDL_GameControllerAxis gaxis, bool positive) {
 	for (Binding& it : bindings)
-		if (!it.isAxis() && ((it.gposAxisAssigned() && positive) || (it.gnegAxisAssigned() && !positive)) && it.getGaxis() == gaxis && it.getBcall()) {
-			(World::state()->*it.getBcall())();
+		if (!it.isAxis() && ((it.gposAxisAssigned() && positive) || (it.gnegAxisAssigned() && !positive)) && it.getGaxis() == gaxis) {
+			World::srun(it.getBcall());
 			break;
 		}
 }
@@ -259,7 +259,7 @@ void InputSys::removeController(int id) {
 }
 
 int InputSys::checkAxisValue(int value) const {
-	return std::abs(value) > World::winSys()->sets.getDeadzone() ? value : 0;
+	return std::abs(value) > World::sets()->getDeadzone() ? value : 0;
 }
 
 float InputSys::axisToFloat(int axisValue) {

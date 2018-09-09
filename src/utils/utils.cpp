@@ -105,50 +105,73 @@ string rtrim(const string& str) {
 	return str.substr(0, end + 1);
 }
 
-bool isAbsolute(const string& path) {
-#ifdef _WIN32
-	return path.size() && (path[0] == dsep || (path.length() == 2 && isDriveLetter(path[0]) && path[1] == ':') || (path.length() > 2 && isDriveLetter(path[0]) && path[1] == ':' && path[2] == dsep));
-#else
-	return path.size() && path[0] == dsep;
-#endif
+static bool pathCompareLoop(const string& as, const string& bs, sizt& ai, sizt& bi) {
+	do {
+		// comparee names of next entry
+		sizt an = as.find_first_of(dsep, ai);
+		sizt bn = bs.find_first_of(dsep, bi);
+		if (as.compare(ai, an - ai, bs, bi, bn - bi))
+			return false;
+		ai = an;
+		bi = bn;
+
+		// skip directory separators
+		ai = as.find_first_not_of(dsep, ai);
+		bi = bs.find_first_not_of(dsep, bi);
+	} while (ai < as.length() && bi < bs.length());
+	return true;	// one has reached it's end so don't forget to check later which one (paths are equal if both have ended)
 }
 
-string absolutePath(const string& path) {
-	return isAbsolute(path) ? path : childPath(Filer::getWorkingDir(), path);
+bool pathCmp(const string& as, const string& bs) {
+	sizt ai = 0, bi = 0;
+	if (pathCompareLoop(as, bs, ai, bi))
+		return ai >= as.length() && bi >= bs.length();	// check if both paths have reached their ends simultaneously
+	return false;
 }
 
 bool isSubpath(const string& path, string parent) {
-	if (!(isAbsolute(path) && isAbsolute(parent)))
-		return false;
-#ifdef _WIN32
-	if (parent == dseps)
+	if (strchk(parent, [](char c) -> bool { return c == dsep; }))	// always true if parent is root
 		return true;
-#endif
-	parent = appendDsep(parent);
-	return !appendDsep(path).compare(0, parent.length(), parent);
+
+	sizt ai = 0, bi = 0;
+	if (pathCompareLoop(path, parent, ai, bi))
+		return bi >= parent.length();	// parent has to have reached it's end while path was still matching
+	return false;
 }
 
 string parentPath(const string& path) {
-	if (path.empty())
-		return "";
-
-	string sds = dseps;
-	if (path == sds)
-		return sds;
 #ifdef _WIN32
 	if (isDriveLetter(path))
-		return sds;
+		return dseps;
 #endif
-	sizt pos = path.find_last_of(dsep, path.length() - (path.back() == dsep ? 2 : 1));
-	return pos == string::npos ? "" : path.substr(0, pos);
+	sizt end = path.find_last_not_of(dsep);		// skip initial separators
+	if (end == string::npos)					// if the entire path is separators, return root
+		return dseps;
+
+	sizt pos = path.find_last_of(dsep, end);	// skip to separators between parent and child
+	if (pos == string::npos)					// if there are none, just cut off child
+		return path.substr(0, end + 1);
+
+	pos = path.find_last_not_of(dsep, pos);		// skip separators to get to the parent entry
+	return pos == string::npos ? dseps : path.substr(0, pos + 1);	// cut off child
 }
 
 string childPath(const string& parent, const string& child) {
 #ifdef _WIN32
-	return parent == dseps && isDriveLetter(child) ? child : appendDsep(parent) + child;
+	return strchk(parent, [](char c) -> bool { return c == dsep; }) && isDriveLetter(child) ? child : appendDsep(parent) + child;
 #else
 	return appendDsep(parent) + child;
 #endif
+}
+
+string getChild(const string& path, const string& parent) {
+	if (strchk(parent, [](char c) -> bool { return c == dsep; }))
+		return path;
+
+	sizt ai = 0, bi = 0;
+	if (pathCompareLoop(path, parent, ai, bi) && bi >= parent.length())
+		return path.substr(ai);
+	return "";
 }
 
 string filename(const string& path) {
@@ -164,7 +187,7 @@ string getExt(const string& path) {
 	for (sizt i = path.length()-1; i < path.length(); i--) {
 		if (path[i] == '.')
 			return path.substr(i+1);
-		else if (path[i] == dsep)
+		if (path[i] == dsep)
 			return "";
 	}
 	return "";
@@ -174,7 +197,7 @@ bool hasExt(const string& path) {
 	for (sizt i = path.length()-1; i < path.length(); i--) {
 		if (path[i] == '.')
 			return true;
-		else if (path[i] == dsep)
+		if (path[i] == dsep)
 			return false;
 	}
 	return false;
@@ -184,7 +207,7 @@ string delExt(const string& path) {
 	for (sizt i = path.length()-1; i < path.length(); i--) {
 		if (path[i] == '.')
 			return path.substr(0, i);
-		else if (path[i] == dsep)
+		if (path[i] == dsep)
 			return path;
 	}
 	return path;
@@ -195,9 +218,30 @@ string appendDsep(const string& path) {
 }
 #ifdef _WIN32
 bool isDriveLetter(const string& path) {
-	return (path.length() == 2 && isDriveLetter(path[0]) && path[1] == ':') || (path.length() == 3 && isDriveLetter(path[0]) && path[1] == ':' && path[2] == dsep);
+	if (path.length() >= 2 && isDriveLetter(path[0]) && path[1] == ':') {
+		for (sizt i = 2; i < path.length(); i++)
+			if (path[i] != dsep)
+				return false;
+		return true;
+	}
+	return false;
 }
 #endif
+bool strchk(const string& str, bool (*cmp)(char)) {
+	for (sizt i = 0; i < str.length(); i++)
+		if (!cmp(str[i]))
+			return false;
+	return true;
+}
+
+bool strchk(const string& str, sizt pos, sizt len, bool (*cmp)(char)) {
+	bringUnder(len, str.length());
+	while (pos < len)
+		if (!cmp(str[pos++]))
+			return false;
+	return true;
+}
+
 vector<string> getWords(const string& line) {
 	sizt i = 0;
 	while (isSpace(line[i]))
@@ -218,6 +262,47 @@ vector<string> getWords(const string& line) {
 	return words;
 }
 
+string strEnclose(string str) {
+	for (string::iterator it = str.begin(); it != str.end(); it++)
+		if (*it == '"')
+			str.insert(it++, '\\');
+	return '"' + str + '"';
+}
+
+vector<string> strUnenclose(const string& str) {
+	vector<string> words;
+	for (sizt pos = 0;;) {
+		// find next start
+		pos = str.find_first_of('"', pos);
+		if (pos < str.length())
+			pos++;
+		else
+			break;
+
+		// find start's end
+		sizt end = pos;
+		while (end < str.length()) {
+			end = str.find_first_of('"', end);
+			if (str[end-1] == '\\')
+				end++;
+			else
+				break;
+		}
+
+		// remove escapes and add to quote list
+		if (end < str.length()) {
+			string quote = str.substr(pos, end - pos);
+			for (sizt i = 0; i < quote.length(); i++)
+				if (quote[i] == '\\' && quote[i+1] == '"')
+					quote.erase(i, 1);
+			words.push_back(quote);
+			pos = end + 1;
+		} else
+			break;
+	}
+	return words;
+}
+
 archive* openArchive(const string& file) {
 	archive* arch = archive_read_new();
 	archive_read_support_filter_all(arch);
@@ -235,24 +320,20 @@ SDL_RWops* readArchiveEntry(archive* arch, archive_entry* entry) {
 	if (bsiz <= 0)
 		return nullptr;
 
-	void* buffer = malloc(bsiz);
+	void* buffer = new uint8[bsiz];
 	la_ssize_t size = archive_read_data(arch, buffer, bsiz);
 	return size < 0 ? nullptr : SDL_RWFromMem(buffer, size);
 }
 
 SDL_Rect cropRect(SDL_Rect& rect, const SDL_Rect& frame) {
-	if (rect.w <= 0 || rect.h <= 0 || frame.w <= 0 || frame.h <= 0) {	// idfk
-		rect = {0, 0, 0, 0};
-		return rect;
-	}
+	if (rect.w <= 0 || rect.h <= 0 || frame.w <= 0 || frame.h <= 0)	// idfk
+		return rect = {0, 0, 0, 0};
 
 	// ends of each rect and frame
 	vec2i rend = rectEnd(rect);
 	vec2i fend = rectEnd(frame);
-	if (rect.x > fend.x || rect.y > fend.y || rend.x < frame.x || rend.y < frame.y) {	// if rect is out of frame
-		rect = {0, 0, 0, 0};
-		return rect;
-	}
+	if (rect.x > fend.x || rect.y > fend.y || rend.x < frame.x || rend.y < frame.y)	// if rect is out of frame
+		return rect = {0, 0, 0, 0};
 
 	// crop rect if it's boundaries are out of frame
 	SDL_Rect crop = {0, 0, 0, 0};
@@ -323,10 +404,4 @@ uint8 jtStrToHat(const string& str) {
 		if (!strcicmp(it.second, str))
 			return it.first;
 	return 0x10;
-}
-
-sizt nextIndex(sizt id, sizt lim, bool fwd) {
-	if (fwd)
-		return id == lim - 1 ? 0 : id + 1;
-	return id == 0 ? lim - 1 : id - 1;
 }

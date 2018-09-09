@@ -82,7 +82,7 @@ void Layout::navSelectNext(sizt id, int mid, const Direction& dir) {
 
 void Layout::navSelectFrom(int mid, const Direction& dir) {
 	if (dir.vertical() == direction.vertical())
-		scanSequential(dir.positive() ? widgets.size() : SIZE_MAX, mid, dir);
+		scanSequential(dir.positive() ? SIZE_MAX : widgets.size(), mid, dir);
 	else
 		scanPerpendicular(mid, dir);
 }
@@ -581,7 +581,7 @@ ReaderBox::ReaderBox(const Size& relSize, const Direction& direction, float zoom
 	countDown(true),
 	cursorTimer(Default::menuHideTimeout)
 {
-	pics = World::program()->getBrowser()->getInArchive() ? World::drawSys()->loadTexturesArchive(World::program()->getBrowser()->getCurDir()) : World::drawSys()->loadTexturesDirectory(World::program()->getBrowser()->getCurDir());
+	pics = World::browser()->getInArchive() ? World::drawSys()->loadTexturesArchive(World::browser()->getCurDir()) : World::drawSys()->loadTexturesDirectory(World::browser()->getCurDir());
 	widgets.resize(pics.size());
 	positions.resize(pics.size()+1);
 
@@ -642,7 +642,7 @@ void ReaderBox::postInit() {
 
 	// scroll down to opened picture if it exists, otherwise start at beginning
 	for (sizt i = 0; i < widgets.size(); i++)
-		if (pics[i].first == World::program()->getBrowser()->getCurFile()) {
+		if (pics[i].first == World::browser()->getCurFile()) {
 			if (direction.positive())
 				scrollToWidgetPos(i);
 			else

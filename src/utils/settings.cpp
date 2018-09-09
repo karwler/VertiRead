@@ -249,7 +249,7 @@ void Settings::setResolution(const string& line) {
 }
 
 const string& Settings::setTheme(const string& name) {
-	vector<string> themes = Filer::getAvailibleThemes();
+	vector<string> themes = World::fileSys()->getAvailibleThemes();
 	for (string& it : themes)
 		if (it == name)
 			return theme = name;
@@ -257,26 +257,26 @@ const string& Settings::setTheme(const string& name) {
 }
 
 string Settings::setFont(const string& newFont) {
-	string path = Filer::findFont(newFont);
-	if (Filer::isFont(path)) {
+	string path = World::fileSys()->findFont(newFont);
+	if (FileSys::isFont(path)) {
 		font = newFont;
 		return path;
 	}
 	font = Default::font;
-	return Filer::findFont(font);
+	return World::fileSys()->findFont(font);
 }
 
 const string& Settings::setLang(const string& language) {
-	return lang = Filer::fileType(Filer::dirLangs + language + ".ini") == FTYPE_FILE ? language : Default::language;
+	return lang = FileSys::fileType(World::fileSys()->getDirLangs() + language + ".ini") == FTYPE_FILE ? language : Default::language;
 }
 
 const string& Settings::setDirLib(const string& drc) {
-	dirLib = absolutePath(drc);
-	if (Filer::fileType(dirLib) != FTYPE_DIR)
-		if (!Filer::createDir(dirLib)) {
-			dirLib = Filer::dirSets + Default::dirLibrary;
-			if (Filer::fileType(dirLib) != FTYPE_DIR)
-				Filer::createDir(dirLib);
+	dirLib = drc;
+	if (FileSys::fileType(dirLib) != FTYPE_DIR)
+		if (!FileSys::createDir(dirLib)) {
+			dirLib = World::fileSys()->getDirSets() + Default::dirLibrary;
+			if (FileSys::fileType(dirLib) != FTYPE_DIR)
+				FileSys::createDir(dirLib);
 		}
 	return dirLib;
 }

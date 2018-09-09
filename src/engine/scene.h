@@ -22,7 +22,7 @@ public:
 	void onMouseUp(const vec2i& mPos, uint8 mBut);
 	void onMouseWheel(const vec2i& wMov);
 	void onMouseLeave();
-	void onText(const char* str);
+	void onText(const string& str);
 	void onResize();
 
 	void resetLayouts();

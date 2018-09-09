@@ -24,6 +24,7 @@ void WindowSys::init() {
 		throw std::runtime_error("Couldn't initialize SDL:\n" + string(SDL_GetError()));
 	if (TTF_Init())
 		throw std::runtime_error("Couldn't initialize fonts:\n" + string(SDL_GetError()));
+	SDL_StopTextInput();	// for some reason TextInput is on
 
 	int flags = IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP);
 	if (!(flags & IMG_INIT_JPG))
@@ -35,20 +36,8 @@ void WindowSys::init() {
 	if (!(flags & IMG_INIT_WEBP))
 		std::cerr << "Couldn't initialize WEBP:" << std::endl << IMG_GetError() << std::endl;
 
-	SDL_StopTextInput();	// for some reason TextInput is on
-	sets = Filer::getSettings();
-
-	// check if all (more or less) necessary files and directories exist
-	if (Filer::fileType(Filer::dirSets) != FTYPE_DIR)
-		if (!Filer::createDir(Filer::dirSets))
-			std::cerr << "Couldn't create settings directory." << std::endl;
-	if (Filer::fileType(Filer::dirExec + Default::fileThemes) != FTYPE_FILE)
-		std::cerr << "Couldn't find themes file." << std::endl;
-	if (Filer::fileType(Filer::dirLangs) != FTYPE_DIR)
-		std::cerr << "Couldn't find language directory." << std::endl;
-	if (Filer::fileType(Filer::dirTexs) != FTYPE_DIR)
-		std::cerr << "Couldn't find texture directory." << std::endl;
-
+	fileSys.reset(new FileSys);
+	sets.reset(fileSys->getSettings());
 	createWindow();
 	inputSys.reset(new InputSys);
 	scene.reset(new Scene);
@@ -77,8 +66,8 @@ void WindowSys::exec() {
 			handleEvent(event);
 	}
 	program->getState()->eventClosing();
-	Filer::saveSettings(sets);
-	Filer::saveBindings(inputSys->getBindings());
+	fileSys->saveSettings(sets.get());
+	fileSys->saveBindings(inputSys->getBindings());
 }
 
 void WindowSys::cleanup() {
@@ -86,6 +75,7 @@ void WindowSys::cleanup() {
 	scene.reset();
 	inputSys.reset();
 	destroyWindow();
+	fileSys.reset();
 
 	IMG_Quit();
 	TTF_Quit();
@@ -97,23 +87,23 @@ void WindowSys::createWindow() {
 
 	// create new window
 	uint32 flags = Default::windowFlags;
-	if (sets.maximized)
+	if (sets->maximized)
 		flags |= SDL_WINDOW_MAXIMIZED;
-	if (sets.fullscreen)
+	if (sets->fullscreen)
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 
-	window = SDL_CreateWindow(Default::titleDefault, Default::windowPos.x, Default::windowPos.y, sets.resolution.x, sets.resolution.y, flags);
+	window = SDL_CreateWindow(Default::titleDefault, Default::windowPos.x, Default::windowPos.y, sets->resolution.x, sets->resolution.y, flags);
 	if (!window)
 		throw std::runtime_error("Couldn't create window:\n" + string(SDL_GetError()));
 
 	// minor stuff
-	SDL_Surface* icon = IMG_Load(string(Filer::dirExec + Default::fileIcon).c_str());
+	SDL_Surface* icon = IMG_Load(string(World::fileSys()->getDirExec() + Default::fileIcon).c_str());
 	if (icon) {
 		SDL_SetWindowIcon(window, icon);
 		SDL_FreeSurface(icon);
 	}
 
-	drawSys.reset(new DrawSys(window, sets.getRendererIndex()));
+	drawSys.reset(new DrawSys(window, sets->getRendererIndex()));
 	SDL_SetWindowMinimumSize(window, Default::windowMinSize.x, Default::windowMinSize.y);	// for some reason this function has to be called after the renderer is created
 }
 
@@ -166,9 +156,9 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 		// update settings if needed
 		uint32 flags = SDL_GetWindowFlags(window);
 		if (!(flags & SDL_WINDOW_FULLSCREEN_DESKTOP)) {
-			sets.maximized = flags & SDL_WINDOW_MAXIMIZED;
-			if (!sets.maximized)
-				SDL_GetWindowSize(window, &sets.resolution.x, &sets.resolution.y);
+			sets->maximized = flags & SDL_WINDOW_MAXIMIZED;
+			if (!sets->maximized)
+				SDL_GetWindowSize(window, &sets->resolution.x, &sets->resolution.y);
 		}
 		scene->onResize();
 	} else if (winEvent.event == SDL_WINDOWEVENT_SIZE_CHANGED)
@@ -195,21 +185,21 @@ void WindowSys::moveCursor(const vec2i& mov) {
 }
 
 void WindowSys::setFullscreen(bool on) {
-	sets.fullscreen = on;
+	sets->fullscreen = on;
 	SDL_SetWindowFullscreen(window, on ? SDL_GetWindowFlags(window) | SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_GetWindowFlags(window) & ~SDL_WINDOW_FULLSCREEN_DESKTOP);
 }
 
 void WindowSys::setResolution(const vec2i& res) {
-	sets.resolution = res;
+	sets->resolution = res;
 	SDL_SetWindowSize(window, res.x, res.y);
 }
 
 void WindowSys::setRenderer(const string& name) {
-	sets.renderer = name;
+	sets->renderer = name;
 	createWindow();
 }
 
 void WindowSys::resetSettings() {
-	sets = Settings();
+	sets.reset(new Settings);
 	createWindow();
 }

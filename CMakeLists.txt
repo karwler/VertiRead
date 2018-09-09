@@ -8,8 +8,8 @@ set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
 set(SRC_FILES
 	"src/engine/drawSys.cpp"
 	"src/engine/drawSys.h"
-	"src/engine/filer.cpp"
-	"src/engine/filer.h"
+	"src/engine/fileSys.cpp"
+	"src/engine/fileSys.h"
 	"src/engine/inputSys.cpp"
 	"src/engine/inputSys.h"
 	"src/engine/scene.cpp"

@@ -80,15 +80,14 @@ void Button::drawSelf() {
 void Button::onClick(const vec2i& mPos, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		parent->selectWidget(pcID);
-		if (lcall)
-			(World::program()->*lcall)(this);
-	} else if (mBut == SDL_BUTTON_RIGHT && rcall)
-		(World::program()->*rcall)(this);
+		World::prun(lcall, this);
+	} else if (mBut == SDL_BUTTON_RIGHT)
+		World::prun(rcall, this);
 }
 
 void Button::onDoubleClick(const vec2i& mPos, uint8 mBut) {
-	if (mBut == SDL_BUTTON_LEFT && dcall)
-		(World::program()->*dcall)(this);
+	if (mBut == SDL_BUTTON_LEFT)
+		World::prun(dcall, this);
 }
 
 bool Button::navSelectable() const {
@@ -98,7 +97,7 @@ bool Button::navSelectable() const {
 Color Button::color() {
 	if (parent->getSelected().count(this))
 		return Color::light;
-	if (World::scene()->select == this)
+	if (navSelectable() && World::scene()->select == this)
 		return Color::select;
 	return Color::normal;
 }
@@ -156,8 +155,8 @@ void Slider::drawSelf() {
 }
 
 void Slider::onClick(const vec2i& mPos, uint8 mBut) {
-	if (mBut == SDL_BUTTON_RIGHT && rcall)
-		(World::program()->*rcall)(this);
+	if (mBut == SDL_BUTTON_RIGHT)
+		World::prun(rcall, this);
 }
 
 void Slider::onHold(const vec2i& mPos, uint8 mBut) {
@@ -182,8 +181,7 @@ void Slider::onUndrag(uint8 mBut) {
 
 void Slider::setSlider(int xpos) {
 	setVal((xpos - position().x - size().y/4) * vmax / sliderLim());
-	if (lcall)
-		(World::program()->*lcall)(this);
+	World::prun(lcall, this);
 }
 
 void Slider::setVal(int value) {
@@ -333,8 +331,8 @@ void LineEdit::onClick(const vec2i& mPos, uint8 mBut) {
 		World::scene()->capture = this;
 		SDL_StartTextInput();
 		setCPos(text.length());
-	} else if (mBut == SDL_BUTTON_RIGHT && rcall)
-		(World::program()->*rcall)(this);
+	} else if (mBut == SDL_BUTTON_RIGHT)
+		World::prun(rcall, this);
 }
 
 void LineEdit::onKeypress(const SDL_Keysym& key) {
@@ -418,8 +416,10 @@ vec2i LineEdit::textPos() const {
 }
 
 void LineEdit::setText(const string& str) {
-	oldText = text;
+	string pot = text;	// use copy in case str is oldText
 	text = str;
+	oldText = pot;
+
 	cleanText();
 	updateTex();
 	setCPos(text.length());
@@ -450,9 +450,7 @@ void LineEdit::confirm() {
 	textOfs = 0;
 	World::scene()->capture = nullptr;
 	SDL_StopTextInput();
-
-	if (lcall)
-		(World::program()->*lcall)(this);
+	World::prun(lcall, this);
 }
 
 void LineEdit::cancel() {
@@ -627,8 +625,8 @@ void KeyGetter::onClick(const vec2i& mPos, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		World::scene()->capture = this;
 		setText("...");
-	} else if (mBut == SDL_BUTTON_RIGHT && rcall)
-		(World::program()->*rcall)(this);
+	} else if (mBut == SDL_BUTTON_RIGHT)
+		World::prun(rcall, this);
 }
 
 void KeyGetter::onKeypress(const SDL_Keysym& key) {

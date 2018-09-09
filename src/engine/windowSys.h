@@ -13,11 +13,6 @@ public:
 	int start();
 	void close() { run = false; }
 
-	DrawSys* getDrawSys() { return drawSys.get(); }
-	InputSys* getInputSys() { return inputSys.get(); }
-	Program* getProgram() { return program.get(); }
-	Scene* getScene() { return scene.get(); }
-
 	float getDSec() const { return dSec; }
 	vec2i displayResolution() const;
 	void setWindowPos(const vec2i& pos);
@@ -27,12 +22,20 @@ public:
 	void setRenderer(const string& name);
 	void resetSettings();
 
-	Settings sets;
+	FileSys* getFileSys() { return fileSys.get(); }
+	DrawSys* getDrawSys() { return drawSys.get(); }
+	InputSys* getInputSys() { return inputSys.get(); }
+	Program* getProgram() { return program.get(); }
+	Scene* getScene() { return scene.get(); }
+	Settings* getSets() { return sets.get(); }
+
 private:
+	uptr<FileSys> fileSys;
 	uptr<DrawSys> drawSys;
 	uptr<InputSys> inputSys;
 	uptr<Program> program;
 	uptr<Scene> scene;
+	uptr<Settings> sets;
 
 	bool run;			// whether the loop in which the program runs should continue
 	float dSec;			// delta seconds, aka the time between each iteration of the above mentioned loop

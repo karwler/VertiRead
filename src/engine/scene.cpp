@@ -11,6 +11,7 @@ ClickStamp::ClickStamp(Widget* widget, ScrollArea* area, const vec2i& mPos) :
 // SCENE
 
 Scene::Scene() :
+	layout(new Layout(1.f, {})),	// dummy layout in case a function gets called preemptively
 	stamps(SDL_BUTTON_X2+1),
 	select(nullptr),
 	capture(nullptr)
@@ -75,7 +76,7 @@ void Scene::onMouseLeave() {
 	}
 }
 
-void Scene::onText(const char* str) {
+void Scene::onText(const string& str) {
 	capture->onText(str);	// text input should only run if line edit is being captured, therefore a cast check isn't necessary
 }
 

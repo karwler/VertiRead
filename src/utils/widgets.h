@@ -240,6 +240,7 @@ public:
 	virtual void onJAxis(uint8 jaxis, bool positive) override;
 	virtual void onGButton(SDL_GameControllerButton gbutton) override;
 	virtual void onGAxis(SDL_GameControllerAxis gaxis, bool positive) override;
+	virtual bool navSelectable() const override { return true; }
 
 private:
 	AcceptType acceptType;		// what kind of binding is being accepted
