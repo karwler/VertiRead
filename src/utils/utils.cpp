@@ -1,17 +1,4 @@
 #include "engine/world.h"
-#include <locale>
-#include <codecvt>
-#ifndef _WIN32
-#include <strings.h>
-#endif
-
-int strcicmp(const string& a, const string& b) {
-#ifdef _WIN32
-	return _stricmp(a.c_str(), b.c_str());
-#else
-	return strcasecmp(a.c_str(), b.c_str());
-#endif
-}
 
 static int natCompareRight(const char* a, const char* b) {
 	for (int bias = 0;; a++, b++) {
@@ -87,22 +74,6 @@ string trim(const string& str) {
 	sizt end = str.length();
 	while (isSpace(str[--end]) && end < str.length());
 	return str.substr(pos, end - pos + 1);
-}
-
-string ltrim(const string& str) {
-	sizt pos = 0;
-	while (isSpace(str[pos]) && pos < str.length())
-		pos++;
-	return str.substr(pos);
-}
-
-string rtrim(const string& str) {
-	if (str.empty())
-		return "";
-
-	sizt end = str.length();
-	while (isSpace(str[--end]) && end < str.length());
-	return str.substr(0, end + 1);
 }
 
 static bool pathCompareLoop(const string& as, const string& bs, sizt& ai, sizt& bi) {
@@ -247,18 +218,16 @@ vector<string> getWords(const string& line) {
 	while (isSpace(line[i]))
 		i++;
 
-	sizt start = i;
 	vector<string> words;
 	while (i < line.length()) {
-		if (isSpace(line[i])) {
-			words.push_back(line.substr(start, i - start));
-			while (isSpace(line[++i]) && i < line.length());
-			start = i;
-		} else
+		sizt pos = i;
+		while (!isSpace(line[i]))
+			i++;
+		words.push_back(line.substr(pos, i - pos));
+
+		while (isSpace(line[i]) && i < line.length())
 			i++;
 	}
-	if (i > start)
-		words.push_back(line.substr(start, i - start));
 	return words;
 }
 
@@ -385,18 +354,6 @@ SDL_Rect overlapRect(SDL_Rect rect, const SDL_Rect& frame) {
 	if (rend.y > fend.y)	// bottom
 		rect.h -= rend.y - fend.y;
 	return rect;
-}
-
-string wtos(const wstring& wstr) {
-	return std::wstring_convert<std::codecvt_utf8<wchar>, wchar>().to_bytes(wstr);
-}
-
-wstring stow(const string& str) {
-	return std::wstring_convert<std::codecvt_utf8<wchar>, wchar>().from_bytes(str);
-}
-
-string jtHatToStr(uint8 jhat) {
-	return Default::hatNames.count(jhat) ? Default::hatNames.at(jhat) : "invalid";
 }
 
 uint8 jtStrToHat(const string& str) {

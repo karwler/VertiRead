@@ -108,9 +108,9 @@ public:
 	bool scrollToPrevious();			// scroll to previous widget (returns false if at scroll limit)
 	void scrollToLimit(bool start);		// scroll to start or end of the list relative to it's direction
 
-	virtual SDL_Rect frame() const;
-	virtual vec2i wgtPosition(sizt id) const;
-	virtual vec2i wgtSize(sizt id) const;
+	virtual SDL_Rect frame() const override;
+	virtual vec2i wgtPosition(sizt id) const override;
+	virtual vec2i wgtSize(sizt id) const override;
 	SDL_Rect barRect() const;
 	SDL_Rect sliderRect() const;
 	vec2t visibleWidgets() const;
@@ -188,7 +188,7 @@ private:
 	float cursorTimer;		// time left until cursor/overlay disappeares
 	float zoom;
 
-	virtual vec2i listSize() const;
+	virtual vec2i listSize() const override;
 	virtual int wgtRPos(sizt id) const override;
 	virtual int wgtREnd(sizt id) const override;
 

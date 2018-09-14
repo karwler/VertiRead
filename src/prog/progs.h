@@ -5,12 +5,14 @@
 // for handling program state specific things that occur in all states
 class ProgState {
 public:
+	virtual ~ProgState() {}	// to keep the compiler happy
+
 	void eventEnter();
 	virtual void eventEscape() {}
-	virtual void eventUp();
-	virtual void eventDown();
-	virtual void eventLeft();
-	virtual void eventRight();
+	virtual void eventUp() { eventSelect(Direction::up); }
+	virtual void eventDown() { eventSelect(Direction::down); }
+	virtual void eventLeft() { eventSelect(Direction::left); }
+	virtual void eventRight() { eventSelect(Direction::right); }
 	virtual void eventScrollUp(float amt) {}
 	virtual void eventScrollDown(float amt) {}
 	virtual void eventScrollLeft(float amt) {}
@@ -31,7 +33,6 @@ public:
 	virtual void eventPrevDir() {}
 	virtual void eventFullscreen();
 	void eventRefresh();
-
 	virtual void eventFileDrop(const string& file) {}
 	virtual void eventClosing() {}
 	
@@ -62,8 +63,9 @@ private:
 
 class ProgBooks : public ProgState {
 public:
+	virtual ~ProgBooks() {}
+
 	virtual void eventEscape() override;
-	
 	virtual void eventFileDrop(const string& file) override;
 
 	virtual Layout* createLayout() override;
@@ -71,8 +73,9 @@ public:
 
 class ProgPageBrowser : public ProgState {
 public:
-	virtual void eventEscape() override;
+	virtual ~ProgPageBrowser() {}
 
+	virtual void eventEscape() override;
 	virtual void eventFileDrop(const string& file) override;
 
 	virtual Layout* createLayout() override;
@@ -80,11 +83,13 @@ public:
 
 class ProgReader : public ProgState {
 public:
+	virtual ~ProgReader() {}
+
 	virtual void eventEscape() override;
-	virtual void eventUp() override;
-	virtual void eventDown() override;
-	virtual void eventLeft() override;
-	virtual void eventRight() override;
+	virtual void eventUp() override { eventScrollUp(1.f); }
+	virtual void eventDown() override { eventScrollDown(1.f); }
+	virtual void eventLeft() override { eventScrollLeft(1.f); }
+	virtual void eventRight() override { eventScrollRight(1.f); }
 	virtual void eventScrollUp(float amt) override;
 	virtual void eventScrollDown(float amt) override;
 	virtual void eventScrollLeft(float amt) override;
@@ -99,7 +104,6 @@ public:
 	virtual void eventToEnd() override;
 	virtual void eventNextDir() override;
 	virtual void eventPrevDir() override;
-
 	virtual void eventClosing() override;
 
 	virtual Layout* createLayout() override;
@@ -111,9 +115,10 @@ private:
 
 class ProgSettings : public ProgState {
 public:
+	virtual ~ProgSettings() {}
+
 	virtual void eventEscape() override;
 	virtual void eventFullscreen() override;
-
 	virtual void eventFileDrop(const string& file) override;
 	
 	virtual Layout* createLayout() override;
@@ -121,6 +126,8 @@ public:
 
 class ProgSearchDir : public ProgState {
 public:
+	virtual ~ProgSearchDir() {}
+
 	virtual void eventEscape() override;
 
 	virtual Layout* createLayout() override;

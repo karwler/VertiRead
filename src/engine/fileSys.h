@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/utils.h"
+#include "utils/settings.h"
 
 enum FileType : uint8 {
 	FTYPE_NONE = 0x0,

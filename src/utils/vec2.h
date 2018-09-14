@@ -52,13 +52,13 @@ struct vec2 {
 		}
 	}
 
-	~vec2() {}	// for some reason this needs to be here to make msvc happy
+	~vec2() {}	// for some reason this needs to be here so msvc doesn't bitch around
 	
-	T& operator[](char i) {
+	T& operator[](unsigned char i) {
 		return reinterpret_cast<T*>(this)[i];
 	}
 
-	const T& operator[](char i) const {
+	const T& operator[](unsigned char i) const {
 		return reinterpret_cast<const T*>(this)[i];
 	}
 

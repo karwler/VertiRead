@@ -1,19 +1,5 @@
 #include "engine/world.h"
 
-// DIRECTION
-
-Direction::Direction(Dir direction) :
-	dir(direction)
-{}
-
-string Direction::toString() const {
-	return enumToStr(Default::directionNames, dir);
-}
-
-void Direction::set(const string& str) {
-	dir = strToEnum<Dir>(Default::directionNames, str);
-}
-
 // BINDING
 
 Binding::Binding() :

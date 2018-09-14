@@ -1,14 +1,29 @@
 #pragma once
 
-#include "settings.h"
+#include "prog/defaults.h"
+#ifdef _WIN32
+#include <locale>
+#include <codecvt>
+#else
+#include <strings.h>
+#endif
 
 // files and strings
-int strcicmp(const string& a, const string& b);	// case insensitive check if strings are equal
 int strnatcmp(const char* a, const char* b);	// natural string compare
-inline bool strnatless(const string& a, const string& b) { return strnatcmp(a.c_str(), b.c_str()) < 0; }
+
+inline bool strnatless(const string& a, const string& b) {
+	return strnatcmp(a.c_str(), b.c_str()) < 0;
+}
+
+inline int strcicmp(const string& a, const string& b) {	// case insensitive check if strings are equal
+#ifdef _WIN32
+	return _stricmp(a.c_str(), b.c_str());
+#else
+	return strcasecmp(a.c_str(), b.c_str());
+#endif
+}
+
 string trim(const string& str);
-string ltrim(const string& str);
-string rtrim(const string& str);
 bool pathCmp(const string& as, const string& bs);
 bool isSubpath(const string& path, string parent);
 string parentPath(const string& path);
@@ -21,10 +36,11 @@ string delExt(const string& path);		// returns filepath without extension
 string appendDsep(const string& path);	// append directory separator if necessary
 #ifdef _WIN32
 bool isDriveLetter(const string& path);	// check if path is a drive letter (plus colon and optionally dsep). only for windows
-inline bool isDriveLetter(char c) { return c >= 'A' && c <= 'Z'; }
+
+inline bool isDriveLetter(char c) {
+	return c >= 'A' && c <= 'Z';
+}
 #endif
-inline bool isSpace(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f'; }
-inline bool isDigit(char c) { return c >= '0' && c <= '9'; }
 bool strchk(const string& str, bool (*cmp)(char));
 bool strchk(const string& str, sizt pos, sizt len, bool (*cmp)(char));
 vector<string> getWords(const string& line);
@@ -32,6 +48,14 @@ string strEnclose(string str);
 vector<string> strUnenclose(const string& str);
 archive* openArchive(const string& file);
 SDL_RWops* readArchiveEntry(archive* arch, archive_entry* entry);
+
+inline bool isSpace(char c) {
+	return c > '\0' && c <= ' ';
+}
+
+inline bool isDigit(char c) {
+	return c >= '0' && c <= '9';
+}
 
 // geometry?
 SDL_Rect cropRect(SDL_Rect& rect, const SDL_Rect& frame);	// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
@@ -86,12 +110,28 @@ vec2<T> bringOver(const vec2<T>& val, const vec2<T>& min) {
 }
 
 // convertions
-string wtos(const wstring& wstr);
-wstring stow(const string& str);
-inline bool stob(const string& str) { return str == "true" || str == "1"; }
-inline string btos(bool b) { return b ? "true" : "false"; }
-string jtHatToStr(uint8 jhat);
+#ifdef _WIN32
+inline string wtos(const wstring& wstr) {
+	return std::wstring_convert<std::codecvt_utf8<wchar>, wchar>().to_bytes(wstr);
+}
+
+inline wstring stow(const string& str) {
+	return std::wstring_convert<std::codecvt_utf8<wchar>, wchar>().from_bytes(str);
+}
+#endif
 uint8 jtStrToHat(const string& str);
+
+inline string jtHatToStr(uint8 jhat) {
+	return Default::hatNames.count(jhat) ? Default::hatNames.at(jhat) : "invalid";
+}
+
+inline bool stob(const string& str) {
+	return str == "true" || str == "1";
+}
+
+inline string btos(bool b) {
+	return b ? "true" : "false";
+}
 
 template <class T>
 string enumToStr(const vector<string>& names, T id) {
@@ -102,8 +142,8 @@ template <class T>
 T strToEnum(const vector<string>& names, string str) {
 	for (sizt i = 0; i < names.size(); i++)
 		if (!strcicmp(names[i], str))
-			return static_cast<T>(i);
-	return static_cast<T>(SIZE_MAX);
+			return T(i);
+	return T(SIZE_MAX);
 }
 
 template <class T>

@@ -11,10 +11,6 @@ void Program::start() {
 		eventOpenBookList();
 }
 
-void Program::eventOpenBookList(Button* but) {
-	setState(new ProgBooks);
-}
-
 void Program::eventOpenPageBrowser(Button* but) {
 	Label* lbl = dynamic_cast<Label*>(but);
 	browser.reset(new Browser(lbl ? childPath(World::sets()->getDirLib(), lbl->getText()) : dseps, "", &Program::eventOpenBookList));
@@ -127,10 +123,6 @@ void Program::eventExitReader(Button* but) {
 }
 
 // SETTINGS
-
-void Program::eventOpenSettings(Button* but) {
-	setState(new ProgSettings);
-}
 
 void Program::eventSwitchDirection(Button* but) {
 	World::sets()->direction.set(static_cast<SwitchBox*>(but)->getText());

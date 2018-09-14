@@ -33,22 +33,6 @@ void ProgState::eventEnter() {
 		World::scene()->select->onClick(World::scene()->select->position(), SDL_BUTTON_LEFT);
 }
 
-void ProgState::eventUp() {
-	eventSelect(Direction::up);
-}
-
-void ProgState::eventDown() {
-	eventSelect(Direction::down);
-}
-
-void ProgState::eventLeft() {
-	eventSelect(Direction::left);
-}
-
-void ProgState::eventRight() {
-	eventSelect(Direction::right);
-}
-
 bool ProgState::tryClosePopup() {
 	if (World::scene()->getPopup()) {
 		World::program()->eventClosePopup();
@@ -187,22 +171,6 @@ Layout* ProgPageBrowser::createLayout() {
 void ProgReader::eventEscape() {
 	if (!tryClosePopup())
 		World::program()->eventExitReader();
-}
-
-void ProgReader::eventUp() {
-	eventScrollUp(1.f);
-}
-
-void ProgReader::eventDown() {
-	eventScrollDown(1.f);
-}
-
-void ProgReader::eventLeft() {
-	eventScrollLeft(1.f);
-}
-
-void ProgReader::eventRight() {
-	eventScrollRight(1.f);
 }
 
 void ProgReader::eventScrollUp(float amt) {

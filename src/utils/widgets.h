@@ -54,7 +54,7 @@ public:
 	virtual vec2i size() const;
 	vec2i center() const;
 	SDL_Rect rect() const;	// the rectangle that is the widget
-	virtual SDL_Rect frame() const;	// the rectangle to restrain a widget's visibility (in Widget it returns the parent's frame and if in Layout, it returns a frame for it's children)	
+	virtual SDL_Rect frame() const;	// the rectangle to restrain a widget's visibility (in Widget it returns the parent's frame and if in Layout, it returns a frame for it's children)
 
 protected:
 	Layout* parent;	// every widget that isn't a Layout should have a parent
@@ -207,7 +207,7 @@ private:
 	TextType textType;
 	string oldText;
 
-	virtual vec2i textPos() const;
+	virtual vec2i textPos() const override;
 	int caretPos() const;	// caret's relative x position
 	void setCPos(sizt cp);
 

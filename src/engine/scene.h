@@ -22,7 +22,7 @@ public:
 	void onMouseUp(const vec2i& mPos, uint8 mBut);
 	void onMouseWheel(const vec2i& wMov);
 	void onMouseLeave();
-	void onText(const string& str);
+	void onText(const string& str) {capture->onText(str); }	// text input should only run if line edit is being captured, therefore a cast check isn't necessary
 	void onResize();
 
 	void resetLayouts();

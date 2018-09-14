@@ -76,10 +76,6 @@ void Scene::onMouseLeave() {
 	}
 }
 
-void Scene::onText(const string& str) {
-	capture->onText(str);	// text input should only run if line edit is being captured, therefore a cast check isn't necessary
-}
-
 void Scene::onResize() {
 	layout->onResize();
 	if (popup)

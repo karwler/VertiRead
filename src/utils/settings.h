@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "prog/defaults.h"
+#include "utils.h"
 
 enum class Color : uint8 {
 	background,
@@ -21,7 +21,10 @@ public:
 		left,
 		right
 	};
-	Direction(Dir direction=Direction::up);
+
+	Direction(Dir direction=Direction::up) :
+		dir(direction)
+	{}
 
 	operator Dir() const { return dir; }
 
@@ -30,8 +33,8 @@ public:
 	bool positive() const { return dir % 2; }
 	bool negative() const { return !positive(); }
 
-	string toString() const;
-	void set(const string& str);
+	string toString() const { return enumToStr(Default::directionNames, dir); }
+	void set(const string& str) { dir = strToEnum<Dir>(Default::directionNames, str); }
 
 private:
 	Dir dir;

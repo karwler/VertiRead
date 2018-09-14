@@ -11,7 +11,7 @@ public:
 	void start();
 
 	// books
-	void eventOpenBookList(Button* but=nullptr);
+	void eventOpenBookList(Button* but=nullptr) { setState(new ProgBooks); }
 	void eventOpenPageBrowser(Button* but);
 	void eventOpenReader(Button* but);
 	void eventOpenLastPage(Button* but);
@@ -33,7 +33,7 @@ public:
 	void eventExitReader(Button* but=nullptr);
 
 	// settings
-	void eventOpenSettings(Button* but=nullptr);
+	void eventOpenSettings(Button* but=nullptr) { setState(new ProgSettings); }
 	void eventSwitchDirection(Button* but);
 	void eventSetZoom(Button* but);
 	void eventSetSpacing(Button* but);
