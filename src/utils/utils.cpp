@@ -7,13 +7,13 @@ static int natCompareRight(const char* a, const char* b) {
 		else if (!isDigit(*a))
 			return -1;
 		else if (!isDigit(*b))
-			return +1;
+			return 1;
 		else if (*a < *b) {
 			if (!bias)
 				bias = -1;
 		} else if (*a > *b) {
 			if (!bias)
-				bias = +1;
+				bias = 1;
 		} else if (!*a  &&  !*b)
 			return bias;
 	}
@@ -27,11 +27,11 @@ static int natCompareLeft(const char* a, const char* b) {
 		else if (!isDigit(*a))
 			return -1;
 		else if (!isDigit(*b))
-			return +1;
+			return 1;
 		else if (*a < *b)
 			return -1;
 		else if (*a > *b)
-			return +1;
+			return 1;
 	}
 	return 0;
 }
@@ -60,7 +60,7 @@ int strnatcmp(const char* a, const char* b) {
 		if (ca < cb)
 			return -1;
 		if (ca > cb)
-			return +1;
+			return 1;
 	}
 }
 
@@ -221,11 +221,11 @@ vector<string> getWords(const string& line) {
 	vector<string> words;
 	while (i < line.length()) {
 		sizt pos = i;
-		while (!isSpace(line[i]))
+		while (!isSpace(line[i]) && i < line.length())
 			i++;
 		words.push_back(line.substr(pos, i - pos));
 
-		while (isSpace(line[i]) && i < line.length())
+		while (isSpace(line[i]))
 			i++;
 	}
 	return words;

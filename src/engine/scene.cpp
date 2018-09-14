@@ -170,7 +170,7 @@ void Scene::selectFirst() {
 			lay = lay->getParent();
 		} else if (Layout* next = dynamic_cast<Layout*>(lay->getWidget(id)))
 			lay = next;
-		else if (dynamic_cast<Button*>(lay->getWidget(id))) {
+		else if (lay->getWidget(id)->navSelectable()) {
 			select = lay->getWidget(0);
 			break;
 		} else

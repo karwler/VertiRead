@@ -299,6 +299,7 @@ void ScrollArea::onUndrag(uint8 mBut) {
 
 void ScrollArea::onScroll(const vec2i& wMov) {
 	moveListPos(wMov.swap(direction.horizontal()));
+	motion = 0.f;
 }
 
 void ScrollArea::moveListPos(const vec2i& mov) {

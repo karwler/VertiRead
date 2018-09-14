@@ -147,7 +147,8 @@ Slider::Slider(const Size& relSize, int value, int minimum, int maximum, PCall l
 	Button(relSize, leftCall, rightCall, doubleCall, background, showBackground, backgroundMargin, parent, id),
 	val(value),
 	vmin(minimum),
-	vmax(maximum)
+	vmax(maximum),
+	diffSliderMouse(0)
 {}
 
 void Slider::drawSelf() {
