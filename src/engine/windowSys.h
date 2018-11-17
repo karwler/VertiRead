@@ -37,9 +37,9 @@ private:
 	uptr<Scene> scene;
 	uptr<Settings> sets;
 
-	bool run;			// whether the loop in which the program runs should continue
-	float dSec;			// delta seconds, aka the time between each iteration of the above mentioned loop
 	SDL_Window* window;
+	float dSec;			// delta seconds, aka the time between each iteration of the above mentioned loop
+	bool run;			// whether the loop in which the program runs should continue
 
 	void init();
 	void exec();
@@ -49,4 +49,5 @@ private:
 	void destroyWindow();
 	void handleEvent(const SDL_Event& event);	// pass events to their specific handlers
 	void eventWindow(const SDL_WindowEvent& window);
+	void setDSec(uint32& oldTicks);
 };

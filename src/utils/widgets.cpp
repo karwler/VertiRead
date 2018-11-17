@@ -3,13 +3,13 @@
 // SIZE
 
 Size::Size(int pixels) :
-	usePix(true),
-	pix(pixels)
+	pix(pixels),
+	usePix(true)
 {}
 
 Size::Size(float percent) :
-	usePix(false),
-	prc(percent)
+	prc(percent),
+	usePix(false)
 {}
 
 void Size::set(int pixels) {
@@ -25,9 +25,9 @@ void Size::set(float percent) {
 // WIDGET
 
 Widget::Widget(const Size& relSize, Layout* parent, sizt id) :
-	relSize(relSize),
 	parent(parent),
-	pcID(id)
+	pcID(id),
+	relSize(relSize)
 {}
 
 void Widget::setParent(Layout* pnt, sizt id) {
@@ -48,8 +48,7 @@ vec2i Widget::center() const {
 }
 
 SDL_Rect Widget::rect() const {
-	vec2i pos = position();
-	vec2i siz = size();
+	vec2i pos = position(), siz = size();
 	return {pos.x, pos.y, siz.x, siz.y};
 }
 
@@ -66,8 +65,8 @@ void Widget::onNavSelect(const Direction& dir) {
 Button::Button(const Size& relSize, PCall leftCall, PCall rightCall, PCall doubleCall, SDL_Texture* background, bool showBackground, int backgroundMargin, Layout* parent, sizt id) :
 	Widget(relSize, parent, id),
 	tex(background),
-	showBG(showBackground),
 	margin(backgroundMargin),
+	showBG(showBackground),
 	lcall(leftCall),
 	rcall(rightCall),
 	dcall(doubleCall)
@@ -77,7 +76,7 @@ void Button::drawSelf() {
 	World::drawSys()->drawButton(this);
 }
 
-void Button::onClick(const vec2i& mPos, uint8 mBut) {
+void Button::onClick(const vec2i&, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		parent->selectWidget(pcID);
 		World::prun(lcall, this);
@@ -85,7 +84,7 @@ void Button::onClick(const vec2i& mPos, uint8 mBut) {
 		World::prun(rcall, this);
 }
 
-void Button::onDoubleClick(const vec2i& mPos, uint8 mBut) {
+void Button::onDoubleClick(const vec2i&, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT)
 		World::prun(dcall, this);
 }
@@ -131,8 +130,7 @@ void CheckBox::onClick(const vec2i& mPos, uint8 mBut) {
 }
 
 SDL_Rect CheckBox::boxRect() const {
-	vec2i pos = position();
-	vec2i siz = size();
+	vec2i pos = position(), siz = size();
 	int margin = (siz.x > siz.y ? siz.y : siz.x) / 4;
 	return {pos.x+margin, pos.y+margin, siz.x-margin*2, siz.y-margin*2};
 }
@@ -155,7 +153,7 @@ void Slider::drawSelf() {
 	World::drawSys()->drawSlider(this);
 }
 
-void Slider::onClick(const vec2i& mPos, uint8 mBut) {
+void Slider::onClick(const vec2i&, uint8 mBut) {
 	if (mBut == SDL_BUTTON_RIGHT)
 		World::prun(rcall, this);
 }
@@ -163,15 +161,13 @@ void Slider::onClick(const vec2i& mPos, uint8 mBut) {
 void Slider::onHold(const vec2i& mPos, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		World::scene()->capture = this;
-
-		int sp = sliderPos();
-		if (outRange(mPos.x, sp, sp + Default::sbarSize))	// if mouse outside of slider
+		if (int sp = sliderPos(); outRange(mPos.x, sp, sp + Default::sbarSize))	// if mouse outside of slider
 			setSlider(mPos.x - Default::sbarSize / 2);
 		diffSliderMouse = mPos.x - sliderPos();	// get difference between mouse x and slider x
 	}
 }
 
-void Slider::onDrag(const vec2i& mPos, const vec2i& mMov) {
+void Slider::onDrag(const vec2i& mPos, const vec2i&) {
 	setSlider(mPos.x - diffSliderMouse);
 }
 
@@ -190,16 +186,13 @@ void Slider::setVal(int value) {
 }
 
 SDL_Rect Slider::barRect() const {
-	vec2i pos = position();
-	vec2i siz = size();
-	int margin = siz.y / 4;
-	int height = siz.y / 2;
+	vec2i pos = position(), siz = size();
+	int margin = siz.y / 4, height = siz.y / 2;
 	return {pos.x + margin, pos.y + margin, siz.x - height, height};
 }
 
 SDL_Rect Slider::sliderRect() const {
-	vec2i pos = position();
-	vec2i siz = size();
+	vec2i pos = position(), siz = size();
 	return {sliderPos(), pos.y, Default::sbarSize, siz.y};
 }
 
@@ -217,9 +210,9 @@ int Slider::sliderLim() const {
 Label::Label(const Size& relSize, const string& text, PCall leftCall, PCall rightCall, PCall doubleCall, Alignment alignment, SDL_Texture* background, int textMargin, bool showBackground, int backgroundMargin, Layout* parent, sizt id) :
 	Button(relSize, leftCall, rightCall, doubleCall, background, showBackground, backgroundMargin, parent, id),
 	align(alignment),
+	textTex(nullptr),
 	text(text),
-	textMargin(textMargin),
-	textTex(nullptr)
+	textMargin(textMargin)
 {}
 
 Label::~Label() {
@@ -241,8 +234,7 @@ void Label::setText(const string& str) {
 }
 
 SDL_Rect Label::textRect() const {
-	vec2i pos = textPos();
-	vec2i siz = textSize();
+	vec2i pos = textPos(), siz = textSize();
 	return {pos.x, pos.y, siz.x, siz.y};
 }
 
@@ -271,7 +263,7 @@ vec2i Label::textPos() const {
 int Label::textIconOffset() const {
 	if (tex) {
 		vec2i res = texRes();
-		return int(float(size().y * res.x) / float(res.y));
+		return float(size().y * res.x) / float(res.y);
 	}
 	return 0;
 }
@@ -319,15 +311,15 @@ void SwitchBox::shiftOption(int ofs) {
 
 LineEdit::LineEdit(const Size& relSize, const string& text, PCall leftCall, PCall rightCall, PCall doubleCall, TextType type, SDL_Texture* background, int textMargin, bool showBackground, int backgroundMargin, Layout* parent, sizt id) :
 	Label(relSize, text, leftCall, rightCall, doubleCall, Alignment::left, background, textMargin, showBackground, backgroundMargin, parent, id),
-	textType(type),
-	oldText(text),
 	textOfs(0),
-	cpos(0)
+	textType(type),
+	cpos(0),
+	oldText(text)
 {
 	cleanText();
 }
 
-void LineEdit::onClick(const vec2i& mPos, uint8 mBut) {
+void LineEdit::onClick(const vec2i&, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		World::scene()->capture = this;
 		SDL_StartTextInput();
@@ -433,13 +425,9 @@ SDL_Rect LineEdit::caretRect() const {
 
 void LineEdit::setCPos(sizt cp) {
 	cpos = cp;
-	int cl = caretPos();
-	int ce = cl + Default::caretWidth;
-	int sx = size().x - margin*2;
-
-	if (cl < 0)
+	if (int cl = caretPos(); cl < 0)
 		textOfs -= cl;
-	else if (ce > sx)
+	else if (int ce = cl + Default::caretWidth, sx = size().x - margin*2; ce > sx)
 		textOfs -= ce - sx;
 }
 
@@ -467,19 +455,15 @@ sizt LineEdit::findWordStart() {
 	sizt i = cpos;
 	if (!isSpace(text[i]) && i > 0 && isSpace(text[i-1]))	// skip if first letter of word
 		i--;
-	while (isSpace(text[i]) && i > 0)	// skip first spaces
-		i--;
-	while (!isSpace(text[i]) && i > 0)	// skip word
-		i--;
+	for (; isSpace(text[i]) && i > 0; i--);		// skip first spaces
+	for (; !isSpace(text[i]) && i > 0; i--);	// skip word
 	return i == 0 ? i : i + 1;			// correct position if necessary
 }
 
 sizt LineEdit::findWordEnd() {
 	sizt i = cpos;
-	while (isSpace(text[i]) && i < text.length())	// skip first spaces
-		i++;
-	while (!isSpace(text[i]) && i < text.length())	// skip word
-		i++;
+	for (; isSpace(text[i]) && i < text.length(); i++);		// skip first spaces
+	for (; !isSpace(text[i]) && i < text.length(); i++);	// skip word
 	return i;
 }
 
@@ -503,8 +487,7 @@ void LineEdit::cleanText() {
 }
 
 void LineEdit::cleanSIntSpacedText(sizt i) {
-	while (isSpace(text[i]))
-		i++;
+	for (; isSpace(text[i]); i++);
 	if (text[i] == '-')
 		i++;
 
@@ -530,8 +513,7 @@ void LineEdit::cleanUIntText(sizt i) {
 
 void LineEdit::cleanUIntSpacedText() {
 	sizt i = 0;
-	while (isSpace(text[i]))
-		i++;
+	for (; isSpace(text[i]); i++);
 
 	while (i < text.length()) {
 		if (isDigit(text[i]))
@@ -544,8 +526,7 @@ void LineEdit::cleanUIntSpacedText() {
 }
 
 void LineEdit::cleanSFloatSpacedText(sizt i) {
-	while (isSpace(text[i]))
-		i++;
+	for (; isSpace(text[i]); i++);
 	if (text[i] == '-')
 		i++;
 
@@ -579,8 +560,7 @@ void LineEdit::cleanUFloatText(sizt i) {
 
 void LineEdit::cleanUFloatSpacedText() {
 	sizt i = 0;
-	while (isSpace(text[i]))
-		i++;
+	for (; isSpace(text[i]); i++);
 
 	bool foundDot = false;
 	while (i < text.length()) {
@@ -599,21 +579,20 @@ void LineEdit::cleanUFloatSpacedText() {
 
 // KEY GETTER
 
-KeyGetter::KeyGetter(const Size& relSize, AcceptType type, Binding::Type binding, PCall leftCall, PCall rightCall, PCall doubleCall, Alignment alignment, SDL_Texture* background, int textMargin, bool showBackground, int backgroundMargin, Layout* parent, sizt id) :
+KeyGetter::KeyGetter(const Size& relSize, AcceptType type, Binding::Type binding, Alignment alignment, SDL_Texture* background, int textMargin, bool showBackground, int backgroundMargin, Layout* parent, sizt id) :
 	Label(relSize, "-void-", nullptr, nullptr, nullptr, alignment, background, textMargin, showBackground, backgroundMargin, parent, id),
 	acceptType(type),
 	bindingType(binding)
 {
-	Binding& bind = World::inputSys()->getBinding(bindingType);
-	if (acceptType == AcceptType::keyboard && bind.keyAssigned())
+	if (Binding& bind = World::inputSys()->getBinding(bindingType); acceptType == AcceptType::keyboard && bind.keyAssigned())
 		text = SDL_GetScancodeName(bind.getKey());
 	else if (acceptType == AcceptType::joystick) {
 		if (bind.jbuttonAssigned())
-			text = "B " + ntos(bind.getJctID());
+			text = "B " + to_string(bind.getJctID());
 		else if (bind.jhatAssigned())
-			text = "H " + ntos(bind.getJctID()) + " " + jtHatToStr(bind.getJhatVal());
+			text = "H " + to_string(bind.getJctID()) + " " + jtHatToStr(bind.getJhatVal());
 		else if (bind.jaxisAssigned())
-			text = "A " + string(bind.jposAxisAssigned() ? "+" : "-") + ntos(bind.getJctID());
+			text = "A " + string(bind.jposAxisAssigned() ? "+" : "-") + to_string(bind.getJctID());
 	} else if (acceptType == AcceptType::gamepad) {
 		if (bind.gbuttonAssigned())
 			text = enumToStr(Default::gbuttonNames, bind.getGbutton());
@@ -622,7 +601,7 @@ KeyGetter::KeyGetter(const Size& relSize, AcceptType type, Binding::Type binding
 	}
 }
 
-void KeyGetter::onClick(const vec2i& mPos, uint8 mBut) {
+void KeyGetter::onClick(const vec2i&, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		World::scene()->capture = this;
 		setText("...");
@@ -641,7 +620,7 @@ void KeyGetter::onKeypress(const SDL_Keysym& key) {
 void KeyGetter::onJButton(uint8 jbutton) {
 	if (acceptType == AcceptType::joystick) {
 		World::inputSys()->getBinding(bindingType).setJbutton(jbutton);
-		setText("B " + ntos(jbutton));
+		setText("B " + to_string(jbutton));
 	}
 	World::scene()->capture = nullptr;
 }
@@ -655,7 +634,7 @@ void KeyGetter::onJHat(uint8 jhat, uint8 value) {
 				value = SDL_HAT_LEFT;
 		}
 		World::inputSys()->getBinding(bindingType).setJhat(jhat, value);
-		setText("H " + ntos(jhat) + " " + jtHatToStr(value));
+		setText("H " + to_string(jhat) + " " + jtHatToStr(value));
 	}
 	World::scene()->capture = nullptr;
 }
@@ -663,7 +642,7 @@ void KeyGetter::onJHat(uint8 jhat, uint8 value) {
 void KeyGetter::onJAxis(uint8 jaxis, bool positive) {
 	if (acceptType == AcceptType::joystick) {
 		World::inputSys()->getBinding(bindingType).setJaxis(jaxis, positive);
-		setText("A " + string(positive ? "+" : "-") + ntos(jaxis));
+		setText("A " + string(positive ? "+" : "-") + to_string(jaxis));
 	}
 	World::scene()->capture = nullptr;
 }

@@ -22,7 +22,7 @@ public:
 		right
 	};
 
-	Direction(Dir direction=Direction::up) :
+	Direction(Dir direction = Direction::up) :
 		dir(direction)
 	{}
 
@@ -131,11 +131,11 @@ public:
 	void setAcall(SACall call);
 
 private:
-	Assignment asg;		// stores data for checking whether key and/or button/axis are assigned
 	SDL_Scancode key;	// keybord key
 	uint8 jctID;		// joystick control id
 	uint8 jHatVal;		// joystick hat value
 	uint8 gctID;		// gamepad control id
+	Assignment asg;		// stores data for checking whether key and/or button/axis are assigned
 
 	bool callAxis;
 	union {
@@ -153,7 +153,7 @@ inline Binding::Assignment operator|=(Binding::Assignment& a, Binding::Assignmen
 
 class Settings {
 public:
-	Settings(bool maximized=Default::maximized, bool fullscreen=Default::fullscreen, const vec2i& resolution=Default::resolution, const Direction& direction=Direction::down, float zoom=Default::zoom, int spacing=Default::spacing, const string& theme="", const string& font=Default::font, const string& language=Default::language, const string& library="", const string& renderer="", const vec2f& speed=Default::scrollSpeed, int16 deadzone=Default::controllerDeadzone);
+	Settings(bool maximized = Default::maximized, bool fullscreen = Default::fullscreen, const vec2i& resolution = Default::resolution, const Direction& direction = Direction::down, float zoom = Default::zoom, int spacing = Default::spacing, const string& theme="", const string& font = Default::font, const string& language = Default::language, const string& library = "", const string& renderer = "", const vec2f& speed = Default::scrollSpeed, int16 deadzone = Default::controllerDeadzone);
 
 	string getResolutionString() const;
 	void setResolution(const string& line);

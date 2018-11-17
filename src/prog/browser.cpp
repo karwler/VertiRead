@@ -21,8 +21,7 @@ Browser::Browser(const string& rootDirectory, const string& container, const str
 
 	if (FileSys::fileType(curDir) == FTYPE_DIR) {
 		inArchive = false;
-		string path = childPath(curDir, curFile);
-		if (checkFile && !FileSys::isPicture(path))
+		if (string path = childPath(curDir, curFile); checkFile && !FileSys::isPicture(path))
 			throw std::runtime_error(path + " isn't a valid picture or archive");
 	} else {
 		archive* arch = openArchive(curDir);
@@ -32,8 +31,7 @@ Browser::Browser(const string& rootDirectory, const string& container, const str
 		inArchive = true;
 		if (checkFile) {
 			bool found = false;
-			archive_entry* entry;
-			while (!archive_read_next_header(arch, &entry)) {
+			for (archive_entry* entry; !archive_read_next_header(arch, &entry);) {
 				if (archive_entry_pathname(entry) != curFile)
 					archive_read_data_skip(arch);
 				else {
@@ -55,20 +53,15 @@ Browser::Browser(const string& rootDirectory, const string& container, const str
 
 bool Browser::goTo(const string& path) {
 	if (isSubpath(path, rootDir))
-		switch (FileSys::fileType(path)) {
-		case FTYPE_FILE:
-			curDir = parentPath(path);
-			return true;
-		case FTYPE_DIR:
-			curDir = path;
+		if (FileType type = FileSys::fileType(path); type == FTYPE_FILE || type == FTYPE_DIR) {
+			curDir = type == FTYPE_FILE ? parentPath(path) : path;
 			return true;
 		}
 	return false;
 }
 
 bool Browser::goIn(const string& dirname) {
-	string newPath = childPath(curDir, dirname);
-	if (dirname.size() && FileSys::fileType(newPath) == FTYPE_DIR) {
+	if (string newPath = childPath(curDir, dirname); dirname.size() && FileSys::fileType(newPath) == FTYPE_DIR) {
 		curDir = newPath;
 		return true;
 	}
@@ -125,8 +118,7 @@ void Browser::shiftArchive(bool fwd) {
 }
 
 bool Browser::nextArchive(const string& ait, const string& pdir) {
-	string path = childPath(pdir, ait);
-	if (FileSys::isArchive(path)) {
+	if (string path = childPath(pdir, ait); FileSys::isArchive(path)) {
 		curDir = path;
 		return true;
 	}
@@ -134,8 +126,7 @@ bool Browser::nextArchive(const string& ait, const string& pdir) {
 }
 
 bool Browser::selectFile(const string& fname) {
-	string path = childPath(curDir, fname);
-	if (FileSys::isPicture(path))
+	if (string path = childPath(curDir, fname);FileSys::isPicture(path))
 		curFile = fname;
 	else if (FileSys::isArchive(path)) {
 		curDir = path;

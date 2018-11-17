@@ -20,9 +20,8 @@ inline FileType operator|=(FileType& a, FileType b) { return a = static_cast<Fil
 class IniLine {
 public:
 	/* The first equal sign to be read splits the line into property and value, therefore titles can't contain equal signs.
-	   A key must be enclosed by brackets immediatly positioned before the equal sign.
-	   If there are any characters other than spaces between a closing bracket and the equal sign, the brackets count as part of the property name.
-	   Any space characters before and after the property string are ignored.
+	   A key must be enclosed by brackets positioned before the equal sign.
+	   Any space characters before and after the property string as well as between a key's closing bracket and the eqal sign are ignored.
 	   The same applies to titles and keys, but not to values. */
 	enum class Type : uint8 {
 		empty,
@@ -62,27 +61,29 @@ public:
 	FileSys();
 
 	vector<string> getAvailibleThemes();
-	vector<SDL_Color> getColors(const string& theme);	// updates settings' colors according to settings' theme
+	vector<SDL_Color> loadColors(const string& theme);	// updates settings' colors according to settings' theme
 	vector<string> getAvailibleLanguages();
-	umap<string, string> getTranslations(const string& language);
+	umap<string, string> loadTranslations(const string& language);
 
 	bool getLastPage(const string& book, string& drc, string& fname);
 	bool saveLastPage(const string& book, const string& drc, const string& fname);
-	Settings* getSettings();
+	Settings* loadSettings();
 	bool saveSettings(const Settings* sets);
 	vector<Binding> getBindings();
 	bool saveBindings(const vector<Binding>& sets);
 	string findFont(const string& font);	// on success returns absolute path to font file, otherwise returns empty path
 
 	static bool createDir(const string& path);
-	static vector<string> listDir(const string& drc, FileType filter=FTYPE_ANY);
+	static vector<string> listDir(const string& drc, FileType filter = FTYPE_ANY);
 	static vector<string> listDirRecursively(string drc);
 	static pair<vector<string>, vector<string>> listDirSeparate(const string& drc);	// first is list of files, second is list of directories
 	static FileType fileType(const string& path);
 	static bool isPicture(const string& file);
 	static bool isArchive(const string& file);
 	static bool isFont(const string& file);
+#ifdef _WIN32
 	static string wgetenv(const string& name);
+#endif
 
 	const string& getDirExec() const { return dirExec; }
 	const string& getDirSets() const { return dirSets; }
@@ -97,7 +98,6 @@ private:
 #endif
 	static string getExecDir();
 	static string getWorkingDir();
-	static std::istream& readLine(std::istream& ifs, string& str);
 
 	string dirExec;	// directory in which the executable should currently be
 	string dirSets;	// settings directory

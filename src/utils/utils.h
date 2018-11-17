@@ -1,10 +1,7 @@
 #pragma once
 
 #include "prog/defaults.h"
-#ifdef _WIN32
-#include <locale>
-#include <codecvt>
-#else
+#ifndef _WIN32
 #include <strings.h>
 #endif
 
@@ -24,6 +21,7 @@ inline int strcicmp(const string& a, const string& b) {	// case insensitive chec
 }
 
 string trim(const string& str);
+string trimZero(const string& str);
 bool pathCmp(const string& as, const string& bs);
 bool isSubpath(const string& path, string parent);
 string parentPath(const string& path);
@@ -42,7 +40,6 @@ inline bool isDriveLetter(char c) {
 }
 #endif
 bool strchk(const string& str, bool (*cmp)(char));
-bool strchk(const string& str, sizt pos, sizt len, bool (*cmp)(char));
 vector<string> getWords(const string& line);
 string strEnclose(string str);
 vector<string> strUnenclose(const string& str);
@@ -109,15 +106,10 @@ vec2<T> bringOver(const vec2<T>& val, const vec2<T>& min) {
 	return vec2<T>(bringUnder(val.x, min.x), bringUnder(val.y, min.y));
 }
 
-// convertions
+// conversions
 #ifdef _WIN32
-inline string wtos(const wstring& wstr) {
-	return std::wstring_convert<std::codecvt_utf8<wchar>, wchar>().to_bytes(wstr);
-}
-
-inline wstring stow(const string& str) {
-	return std::wstring_convert<std::codecvt_utf8<wchar>, wchar>().from_bytes(str);
-}
+string wtos(const wstring& wstr);
+wstring stow(const string& str);
 #endif
 uint8 jtStrToHat(const string& str);
 
@@ -146,11 +138,32 @@ T strToEnum(const vector<string>& names, string str) {
 	return T(SIZE_MAX);
 }
 
-template <class T>
-string ntos(T num) {
-	ostringstream ss;
-	ss << +num;
-	return ss.str();
+inline ulong sstol(const string& str, int base = 0) {
+	return strtol(str.c_str(), nullptr, base);
+}
+
+inline ullong sstoll(const string& str, int base = 0) {
+	return strtoll(str.c_str(), nullptr, base);
+}
+
+inline ulong sstoul(const string& str, int base = 0) {
+	return strtoul(str.c_str(), nullptr, base);
+}
+
+inline ullong sstoull(const string& str, int base = 0) {
+	return strtoull(str.c_str(), nullptr, base);
+}
+
+inline float sstof(const string& str) {
+	return strtof(str.c_str(), nullptr);
+}
+
+inline double sstod(const string& str) {
+	return strtof(str.c_str(), nullptr);
+}
+
+inline ldouble sstold(const string& str) {
+	return strtof(str.c_str(), nullptr);
 }
 
 // container stuff

@@ -24,8 +24,7 @@ void Program::eventOpenReader(Button* but) {
 
 void Program::eventOpenLastPage(Button* but) {
 	Label* lbl = dynamic_cast<Label*>(but);
-	string drc, fname;
-	if (World::fileSys()->getLastPage(lbl ? lbl->getText() : ".", drc, fname)) {
+	if (string drc, fname; World::fileSys()->getLastPage(lbl ? lbl->getText() : ".", drc, fname)) {
 		try {
 			browser.reset(new Browser(lbl ? childPath(World::sets()->getDirLib(), lbl->getText()) : dseps, lbl ? childPath(World::sets()->getDirLib(), childPath(lbl->getText(), drc)) : drc, fname, &Program::eventOpenBookList, true));
 			setState(new ProgReader);
@@ -60,7 +59,7 @@ bool Program::openFile(const string& file) {
 
 // BROWSER
 
-void Program::eventBrowserGoUp(Button* but) {
+void Program::eventBrowserGoUp(Button*) {
 	if (browser->goUp())
 		World::scene()->resetLayouts();
 	else
@@ -73,8 +72,7 @@ void Program::eventBrowserGoIn(Button* but) {
 }
 
 void Program::eventBrowserGoTo(Button* but) {
-	LineEdit* le = static_cast<LineEdit*>(but);
-	if (browser->goTo(browser->getRootDir() == dseps ? le->getText() : childPath(World::sets()->getDirLib(), le->getText())))
+	if (LineEdit* le = static_cast<LineEdit*>(but); browser->goTo(browser->getRootDir() == dseps ? le->getText() : childPath(World::sets()->getDirLib(), le->getText())))
 		World::scene()->resetLayouts();
 	else {
 		le->setText(le->getOldText());
@@ -82,7 +80,7 @@ void Program::eventBrowserGoTo(Button* but) {
 	}
 }
 
-void Program::eventExitBrowser(Button* but) {
+void Program::eventExitBrowser(Button*) {
 	PCall call = browser->exCall;
 	browser.reset();
 	(this->*call)(nullptr);
@@ -90,34 +88,34 @@ void Program::eventExitBrowser(Button* but) {
 
 // READER
 
-void Program::eventZoomIn(Button* but) {
+void Program::eventZoomIn(Button*) {
 	static_cast<ReaderBox*>(World::scene()->getLayout())->setZoom(Default::zoomFactor);
 }
 
-void Program::eventZoomOut(Button* but) {
+void Program::eventZoomOut(Button*) {
 	static_cast<ReaderBox*>(World::scene()->getLayout())->setZoom(1.f / Default::zoomFactor);
 }
 
-void Program::eventZoomReset(Button* but) {
+void Program::eventZoomReset(Button*) {
 	ReaderBox* reader = static_cast<ReaderBox*>(World::scene()->getLayout());
 	reader->setZoom(1.f / reader->getZoom());
 }
 
-void Program::eventCenterView(Button* but) {
+void Program::eventCenterView(Button*) {
 	static_cast<ReaderBox*>(World::scene()->getLayout())->centerList();
 }
 
-void Program::eventNextDir(Button* but) {
+void Program::eventNextDir(Button*) {
 	browser->goNext(true);
 	World::scene()->resetLayouts();
 }
 
-void Program::eventPrevDir(Button* but) {
+void Program::eventPrevDir(Button*) {
 	browser->goNext(false);
 	World::scene()->resetLayouts();
 }
 
-void Program::eventExitReader(Button* but) {
+void Program::eventExitReader(Button*) {
 	SDL_ShowCursor(SDL_ENABLE);
 	setState(new ProgPageBrowser);
 }
@@ -129,11 +127,11 @@ void Program::eventSwitchDirection(Button* but) {
 }
 
 void Program::eventSetZoom(Button * but) {
-	World::sets()->zoom = stof(static_cast<LineEdit*>(but)->getText());
+	World::sets()->zoom = sstof(static_cast<LineEdit*>(but)->getText());
 }
 
 void Program::eventSetSpacing(Button* but) {
-	World::sets()->spacing = stoi(static_cast<LineEdit*>(but)->getText());
+	World::sets()->spacing = sstoul(static_cast<LineEdit*>(but)->getText());
 }
 
 void Program::eventSwitchLanguage(Button* but) {
@@ -142,14 +140,13 @@ void Program::eventSwitchLanguage(Button* but) {
 }
 
 void Program::eventSetLibraryDirLE(Button* but) {
-	LineEdit* le = static_cast<LineEdit*>(but);
-	if (World::sets()->setDirLib(le->getText()) != le->getText()) {
+	if (LineEdit* le = static_cast<LineEdit*>(but); World::sets()->setDirLib(le->getText()) != le->getText()) {
 		le->setText(World::sets()->getDirLib());
 		World::scene()->setPopup(ProgState::createPopupMessage("Invalid directory."));
 	}
 }
 
-void Program::eventSetLibraryDirBW(Button* but) {
+void Program::eventSetLibraryDirBW(Button*) {
 	const uset<Widget*>& select = static_cast<Layout*>(World::scene()->getLayout()->getWidget(1))->getSelected();
 	string path = select.size() ? childPath(browser->getCurDir(), static_cast<Label*>(*select.begin())->getText()) : browser->getCurDir();
 
@@ -158,11 +155,11 @@ void Program::eventSetLibraryDirBW(Button* but) {
 	eventOpenSettings();
 }
 
-void Program::eventOpenLibDirBrowser(Button* but) {
+void Program::eventOpenLibDirBrowser(Button*) {
 #ifdef _WIN32
 	browser.reset(new Browser(dseps, FileSys::wgetenv("UserProfile"), &Program::eventOpenSettings));
 #else
-	browser.reset(new Browser(dseps, std::getenv("HOME"), &Program::eventOpenSettings));
+	browser.reset(new Browser(dseps, getenv("HOME"), &Program::eventOpenSettings));
 #endif
 	setState(new ProgSearchDir);
 }
@@ -196,17 +193,17 @@ void Program::eventSetScrollSpeed(Button* but) {
 
 void Program::eventSetDeadzoneSL(Button* but) {
 	World::sets()->setDeadzone(static_cast<Slider*>(but)->getVal());
-	static_cast<LineEdit*>(but->getParent()->getWidget(2))->setText(ntos(World::sets()->getDeadzone()));	// update line edit
+	static_cast<LineEdit*>(but->getParent()->getWidget(2))->setText(to_string(World::sets()->getDeadzone()));	// update line edit
 }
 
 void Program::eventSetDeadzoneLE(Button* but) {
 	LineEdit* le = static_cast<LineEdit*>(but);
-	World::sets()->setDeadzone(stoi(le->getText()));
-	le->setText(ntos(World::sets()->getDeadzone()));	// set text again in case the volume was out of range
+	World::sets()->setDeadzone(sstoul(le->getText()));
+	le->setText(to_string(World::sets()->getDeadzone()));	// set text again in case the volume was out of range
 	static_cast<Slider*>(but->getParent()->getWidget(1))->setVal(World::sets()->getDeadzone());	// update slider
 }
 
-void Program::eventSetPortrait(Button* but) {
+void Program::eventSetPortrait(Button*) {
 	vec2i res = World::winSys()->displayResolution();
 	float width, height;
 	if (res.x < res.y) {
@@ -219,7 +216,7 @@ void Program::eventSetPortrait(Button* but) {
 	reposizeWindow(res, vec2i(height * Default::resModeRatio, height));
 }
 
-void Program::eventSetLandscape(Button* but) {
+void Program::eventSetLandscape(Button*) {
 	vec2i res = World::winSys()->displayResolution();
 	float width, height;
 	if (res.x < res.y) {
@@ -232,17 +229,17 @@ void Program::eventSetLandscape(Button* but) {
 	reposizeWindow(res, vec2i(width, height));
 }
 
-void Program::eventSetSquare(Button* but) {
+void Program::eventSetSquare(Button*) {
 	vec2i res = World::winSys()->displayResolution();
 	reposizeWindow(res, vec2f(res.x < res.y ? res.x : res.y) * Default::resModeBorder);
 }
 
-void Program::eventSetFill(Button* but) {
+void Program::eventSetFill(Button*) {
 	vec2i res = World::winSys()->displayResolution();
 	reposizeWindow(res, vec2f(res) * Default::resModeBorder);
 }
 
-void Program::eventResetSettings(Button* but) {
+void Program::eventResetSettings(Button*) {
 	World::winSys()->resetSettings();
 	World::inputSys()->resetBindings();
 	World::scene()->resetLayouts();
@@ -256,11 +253,11 @@ void Program::reposizeWindow(const vec2i& dres, const vec2i& wsiz) {
 
 // OTHER
 
-void Program::eventClosePopup(Button* but) {
+void Program::eventClosePopup(Button*) {
 	World::scene()->setPopup(nullptr);
 }
 
-void Program::eventExit(Button* but) {
+void Program::eventExit(Button*) {
 	World::winSys()->close();
 }
 

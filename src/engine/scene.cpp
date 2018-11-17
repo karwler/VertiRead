@@ -11,10 +11,10 @@ ClickStamp::ClickStamp(Widget* widget, ScrollArea* area, const vec2i& mPos) :
 // SCENE
 
 Scene::Scene() :
-	layout(new Layout(1.f, {})),	// dummy layout in case a function gets called preemptively
-	stamps(SDL_BUTTON_X2+1),
 	select(nullptr),
-	capture(nullptr)
+	capture(nullptr),
+	layout(new Layout(1.f, {})),	// dummy layout in case a function gets called preemptively
+	stamps(SDL_BUTTON_X2 + 1)
 {}
 
 void Scene::tick(float dSec) {
@@ -163,8 +163,7 @@ void Scene::selectFirst() {
 	else
 		lay = layout.get();
 
-	sizt id = 0;
-	while (lay) {
+	for (sizt id = 0; lay;) {
 		if (id >= lay->getWidgets().size()) {
 			id = lay->getID() + 1;
 			lay = lay->getParent();

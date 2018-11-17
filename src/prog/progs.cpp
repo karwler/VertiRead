@@ -232,8 +232,7 @@ void ProgReader::eventPrevDir() {
 }
 
 void ProgReader::eventClosing() {
-	string rpath = getChild(World::browser()->getCurDir(), World::sets()->getDirLib());
-	if (rpath.empty())
+	if (string rpath = getChild(World::browser()->getCurDir(), World::sets()->getDirLib()); rpath.empty())
 		World::fileSys()->saveLastPage(".", World::browser()->getCurDir(), static_cast<ReaderBox*>(World::scene()->getLayout())->curPage());
 	else {
 		sizt mid = rpath.find_first_of(dsep);
@@ -261,8 +260,7 @@ Overlay* ProgReader::createOverlay() {
 }
 
 float ProgReader::modifySpeed(float value) {
-	float factor = 1.f;
-	if (World::inputSys()->isPressed(Binding::Type::scrollFast, factor))
+	if (float factor = 1.f; World::inputSys()->isPressed(Binding::Type::scrollFast, factor))
 		value *= Default::scrollFactor * factor;
 	else if (World::inputSys()->isPressed(Binding::Type::scrollSlow, factor))
 		value /= Default::scrollFactor * factor;
@@ -328,16 +326,16 @@ Layout* ProgSettings::createLayout() {
 	// action fields for labels
 	int descLength = findMaxLength(txs, lineHeight);
 	Text dots("...", lineHeight);
-	Text dznum(ntos(Default::axisLimit), lineHeight);
+	Text dznum(to_string(Default::axisLimit), lineHeight);
 	vector<Widget*> lx[] = { {
 		new Label(descLength, txs[0]),
 		new SwitchBox(1.f, Default::directionNames, World::sets()->direction.toString(), &Program::eventSwitchDirection)
 	},{
 		new Label(descLength, txs[1]),
-		new LineEdit(1.f, ntos(World::sets()->zoom), &Program::eventSetZoom, nullptr, nullptr, LineEdit::TextType::uFloating)
+		new LineEdit(1.f, trimZero(to_string(World::sets()->zoom)), &Program::eventSetZoom, nullptr, nullptr, LineEdit::TextType::uFloating)
 	}, {
 		new Label(descLength, txs[2]),
-		new LineEdit(1.f, ntos(World::sets()->spacing), &Program::eventSetSpacing, nullptr, nullptr, LineEdit::TextType::uInteger)
+		new LineEdit(1.f, to_string(World::sets()->spacing), &Program::eventSetSpacing, nullptr, nullptr, LineEdit::TextType::uInteger)
 	}, {
 		new Label(descLength, txs[3]),
 		new CheckBox(lineHeight, World::sets()->fullscreen, &Program::eventSwitchFullscreen)
@@ -369,7 +367,7 @@ Layout* ProgSettings::createLayout() {
 	}, {
 		new Label(descLength, txs[11]),
 		new Slider(1.f, World::sets()->getDeadzone(), 0, Default::axisLimit, &Program::eventSetDeadzoneSL),
-		new LineEdit(dznum.length, ntos(World::sets()->getDeadzone()), &Program::eventSetDeadzoneLE, nullptr, nullptr, LineEdit::TextType::uInteger)
+		new LineEdit(dznum.length, to_string(World::sets()->getDeadzone()), &Program::eventSetDeadzoneLE, nullptr, nullptr, LineEdit::TextType::uInteger)
 	} };
 	vector<Widget*> lns(lcnt + 1 + bindings.size() + 2);
 	for (sizt i = 0; i < lcnt; i++)

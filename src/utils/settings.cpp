@@ -223,15 +223,13 @@ Settings::Settings(bool maximized, bool fullscreen, const vec2i& resolution, con
 }
 
 string Settings::getResolutionString() const {
-	ostringstream ss;
-	ss << resolution.x << ' ' << resolution.y;
-	return ss.str();
+	return to_string(resolution.x) + ' ' + to_string(resolution.y);
 }
 
 void Settings::setResolution(const string& line) {
 	vector<string> elems = getWords(line);
-	for (uint8 i = 0; i < elems.size() && i < 2; i++)
-		resolution[i] = stoi(elems[i]);
+	for (sizt i = 0; i < elems.size() && i < 2; i++)
+		resolution[i] = sstoul(elems[i]);
 }
 
 const string& Settings::setTheme(const string& name) {
@@ -243,8 +241,7 @@ const string& Settings::setTheme(const string& name) {
 }
 
 string Settings::setFont(const string& newFont) {
-	string path = World::fileSys()->findFont(newFont);
-	if (FileSys::isFont(path)) {
+	if (string path = World::fileSys()->findFont(newFont); FileSys::isFont(path)) {
 		font = newFont;
 		return path;
 	}
@@ -272,7 +269,6 @@ int Settings::getRendererIndex() {
 	for (int i = 0; i < SDL_GetNumRenderDrivers(); i++)
 		if (getRendererName(i) == renderer)
 			return i;
-
 	renderer = getRendererName(0);
 	return 0;
 }
@@ -291,15 +287,13 @@ string Settings::getRendererName(int id) {
 }
 
 string Settings::getScrollSpeedString() const {
-	ostringstream ss;
-	ss << scrollSpeed.x << ' ' << scrollSpeed.y;
-	return ss.str();
+	return trimZero(to_string(scrollSpeed.x)) + ' ' + trimZero(to_string(scrollSpeed.y));
 }
 
 void Settings::setScrollSpeed(const string& line) {
 	vector<string> elems = getWords(line);
-	for (uint8 i = 0; i < elems.size() && i < 2; i++)
-		scrollSpeed[i] = stof(elems[i]);
+	for (sizt i = 0; i < elems.size() && i < 2; i++)
+		scrollSpeed[i] = sstof(elems[i].c_str());
 }
 
 void Settings::setDeadzone(int zone) {

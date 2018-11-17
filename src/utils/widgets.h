@@ -5,13 +5,13 @@
 // size of a widget in pixels or relative to it's parent
 struct Size {
 	Size(int pixels);
-	Size(float percent=1.f);
+	Size(float percent = 1.f);
 
-	bool usePix;
 	union {
 		int pix;	// use if type is pix
 		float prc;	// use if type is prc
 	};
+	bool usePix;
 
 	void set(int pxiels);
 	void set(float precent);
@@ -21,27 +21,27 @@ using vec2s = vec2<Size>;
 // can be used as spacer
 class Widget {
 public:
-	Widget(const Size& relSize=Size(), Layout* parent=nullptr, sizt id=SIZE_MAX);	// parent and id should be set by Layout
+	Widget(const Size& relSize = Size(), Layout* parent = nullptr, sizt id = SIZE_MAX);	// parent and id should be set by Layout
 	virtual ~Widget() {}
 
 	virtual void drawSelf() {}	// calls appropriate drawing function(s) in DrawSys
 	virtual void onResize() {}	// for updating values when window size changed
-	virtual void tick(float dSec) {}
+	virtual void tick(float) {}
 	virtual void postInit() {}	// gets called after parent is set and all set up
-	virtual void onClick(const vec2i& mPos, uint8 mBut) {}
-	virtual void onDoubleClick(const vec2i& mPos, uint8 mBut) {}
-	virtual void onMouseMove(const vec2i& mPos, const vec2i& mMov) {}
-	virtual void onHold(const vec2i& mPos, uint8 mBut) {}
-	virtual void onDrag(const vec2i& mPos, const vec2i& mMov) {}	// mouse move while left button down
-	virtual void onUndrag(uint8 mBut) {}	// get's called on mouse button up if instance is Scene's capture
-	virtual void onScroll(const vec2i& wMov) {}	// on mouse wheel y movement
-	virtual void onKeypress(const SDL_Keysym& key) {}
-	virtual void onJButton(uint8 jbutton) {}
-	virtual void onJHat(uint8 jhat, uint8 value) {}
-	virtual void onJAxis(uint8 jaxis, bool positive) {}
-	virtual void onGButton(SDL_GameControllerButton gbutton) {}
-	virtual void onGAxis(SDL_GameControllerAxis gaxis, bool positive) {}
-	virtual void onText(const string& str) {}
+	virtual void onClick(const vec2i&, uint8) {}
+	virtual void onDoubleClick(const vec2i&, uint8) {}
+	virtual void onMouseMove(const vec2i&, const vec2i&) {}
+	virtual void onHold(const vec2i&, uint8) {}
+	virtual void onDrag(const vec2i&, const vec2i&) {}	// mouse move while left button down
+	virtual void onUndrag(uint8) {}			// get's called on mouse button up if instance is Scene's capture
+	virtual void onScroll(const vec2i&) {}	// on mouse wheel y movement
+	virtual void onKeypress(const SDL_Keysym&) {}
+	virtual void onJButton(uint8) {}
+	virtual void onJHat(uint8, uint8) {}
+	virtual void onJAxis(uint8, bool) {}
+	virtual void onGButton(SDL_GameControllerButton) {}
+	virtual void onGAxis(SDL_GameControllerAxis, bool) {}
+	virtual void onText(const string&) {}
 	virtual void onNavSelect(const Direction& dir);
 	virtual bool navSelectable() const { return false; }
 
@@ -53,7 +53,7 @@ public:
 	virtual vec2i position() const;
 	virtual vec2i size() const;
 	vec2i center() const;
-	SDL_Rect rect() const;	// the rectangle that is the widget
+	SDL_Rect rect() const;			// the rectangle that is the widget
 	virtual SDL_Rect frame() const;	// the rectangle to restrain a widget's visibility (in Widget it returns the parent's frame and if in Layout, it returns a frame for it's children)
 
 protected:
@@ -65,12 +65,12 @@ protected:
 // clickable widget with function calls for left and right click (it's rect is drawn so you can use it like a spacer with color)
 class Button : public Widget {
 public:
-	Button(const Size& relSize=Size(), PCall leftCall=nullptr, PCall rightCall=nullptr, PCall doubleCall=nullptr, SDL_Texture* background=nullptr, bool showBackground=true, int backgroundMargin=Default::iconMargin, Layout* parent=nullptr, sizt id=SIZE_MAX);
-	virtual ~Button() {}
+	Button(const Size& relSize = Size(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, SDL_Texture* background = nullptr, bool showBackground = true, int backgroundMargin = Default::iconMargin, Layout* parent = nullptr, sizt id = SIZE_MAX);
+	virtual ~Button() override {}
 
 	virtual void drawSelf() override;
-	virtual void onClick(const vec2i& mPos, uint8 mBut) override;
-	virtual void onDoubleClick(const vec2i& mPos, uint8 mBut) override;
+	virtual void onClick(const vec2i&, uint8 mBut) override;
+	virtual void onDoubleClick(const vec2i&, uint8 mBut) override;
 	virtual bool navSelectable() const override;
 	
 	Color color();
@@ -78,8 +78,8 @@ public:
 	virtual SDL_Rect texRect() const;
 
 	SDL_Texture* tex;
-	bool showBG;
 	int margin;
+	bool showBG;
 protected:
 	PCall lcall, rcall, dcall;
 };
@@ -87,8 +87,8 @@ protected:
 // if you don't know what a checkbox is then I don't know what to tell ya
 class CheckBox : public Button {
 public:
-	CheckBox(const Size& relSize=Size(), bool on=false, PCall leftCall=nullptr, PCall rightCall=nullptr, PCall doubleCall=nullptr, SDL_Texture* background=nullptr, bool showBackground=true, int backgroundMargin=Default::iconMargin, Layout* parent=nullptr, sizt id=SIZE_MAX);
-	virtual ~CheckBox() {}
+	CheckBox(const Size& relSize = Size(), bool on = false, PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, SDL_Texture* background = nullptr, bool showBackground = true, int backgroundMargin = Default::iconMargin, Layout* parent = nullptr, sizt id = SIZE_MAX);
+	virtual ~CheckBox() override {}
 
 	virtual void drawSelf() override;
 	virtual void onClick(const vec2i& mPos, uint8 mBut) override;
@@ -102,13 +102,13 @@ public:
 // horizontal slider (maybe one day it'll be able to be vertical)
 class Slider : public Button {
 public:
-	Slider(const Size& relSize=Size(), int value=0, int minimum=0, int maximum=255, PCall leftCall=nullptr, PCall rightCall=nullptr, PCall doubleCall=nullptr, SDL_Texture* background=nullptr, bool showBackground=true, int backgroundMargin=Default::iconMargin, Layout* parent=nullptr, sizt id=SIZE_MAX);
-	virtual ~Slider() {}
+	Slider(const Size& relSize = Size(), int value = 0, int minimum = 0, int maximum = 255, PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, SDL_Texture* background = nullptr, bool showBackground = true, int backgroundMargin = Default::iconMargin, Layout* parent = nullptr, sizt id = SIZE_MAX);
+	virtual ~Slider() override {}
 
 	virtual void drawSelf() override;
-	virtual void onClick(const vec2i& mPos, uint8 mBut) override;
+	virtual void onClick(const vec2i&, uint8 mBut) override;
 	virtual void onHold(const vec2i& mPos, uint8 mBut) override;
-	virtual void onDrag(const vec2i& mPos, const vec2i& mMov) override;
+	virtual void onDrag(const vec2i& mPos, const vec2i&) override;
 	virtual void onUndrag(uint8 mBut) override;
 
 	int getVal() const { return val; }
@@ -134,8 +134,8 @@ public:
 		center,
 		right
 	};
-	Label(const Size& relSize=Size(), const string& text="", PCall leftCall=nullptr, PCall rightCall=nullptr, PCall doubleCall=nullptr, Alignment alignment=Alignment::left, SDL_Texture* background=nullptr, int textMargin=Default::textMargin, bool showBackground=true, int backgroundMargin=Default::iconMargin, Layout* parent=nullptr, sizt id=SIZE_MAX);
-	virtual ~Label();
+	Label(const Size& relSize = Size(), const string& text = "", PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Alignment alignment = Alignment::left, SDL_Texture* background = nullptr, int textMargin = Default::textMargin, bool showBackground = true, int backgroundMargin = Default::iconMargin, Layout* parent = nullptr, sizt id = SIZE_MAX);
+	virtual ~Label() override;
 
 	virtual void drawSelf() override;
 	virtual void postInit() override;
@@ -161,8 +161,8 @@ protected:
 // for switching between multiple options (kinda like a dropdown menu except I was too lazy to make an actual one)
 class SwitchBox : public Label {
 public:
-	SwitchBox(const Size& relSize=Size(), const vector<string>& options={}, const string& curOption="", PCall call=nullptr, Alignment alignment=Alignment::left, SDL_Texture* background=nullptr, int textMargin=Default::textMargin, bool showBackground=true, int backgroundMargin=Default::iconMargin, Layout* parent=nullptr, sizt id=SIZE_MAX);
-	virtual ~SwitchBox() {}
+	SwitchBox(const Size& relSize = Size(), const vector<string>& options = {}, const string& curOption = "", PCall call = nullptr, Alignment alignment = Alignment::left, SDL_Texture* background = nullptr, int textMargin = Default::textMargin, bool showBackground = true, int backgroundMargin = Default::iconMargin, Layout* parent = nullptr, sizt id = SIZE_MAX);
+	virtual ~SwitchBox() override {}
 
 	virtual void onClick(const vec2i& mPos, uint8 mBut) override;
 
@@ -187,10 +187,10 @@ public:
 		uFloating,
 		uFloatingSpaced
 	};
-	LineEdit(const Size& relSize=Size(), const string& text="", PCall leftCall=nullptr, PCall rightCall=nullptr, PCall doubleCall=nullptr, TextType type=TextType::text, SDL_Texture* background=nullptr, int textMargin=Default::textMargin, bool showBackground=true, int backgroundMargin=Default::iconMargin, Layout* parent=nullptr, sizt id=SIZE_MAX);
-	virtual ~LineEdit() {}
+	LineEdit(const Size& relSize = Size(), const string& text = "", PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, TextType type = TextType::text, SDL_Texture* background = nullptr, int textMargin = Default::textMargin, bool showBackground = true, int backgroundMargin = Default::iconMargin, Layout* parent = nullptr, sizt id = SIZE_MAX);
+	virtual ~LineEdit() override {}
 
-	virtual void onClick(const vec2i& mPos, uint8 mBut) override;
+	virtual void onClick(const vec2i&, uint8 mBut) override;
 	virtual void onKeypress(const SDL_Keysym& key) override;
 	virtual void onText(const string& str) override;
 
@@ -203,8 +203,8 @@ public:
 
 private:
 	int textOfs;		// text's horizontal offset
-	sizt cpos;		// caret position
 	TextType textType;
+	sizt cpos;		// caret position
 	string oldText;
 
 	virtual vec2i textPos() const override;
@@ -214,11 +214,11 @@ private:
 	sizt findWordStart();	// returns index of first character of word before cpos
 	sizt findWordEnd();		// returns index of character after last character of word after cpos
 	void cleanText();
-	void cleanSIntSpacedText(sizt i=0);
-	void cleanUIntText(sizt i=0);
+	void cleanSIntSpacedText(sizt i = 0);
+	void cleanUIntText(sizt i = 0);
 	void cleanUIntSpacedText();
-	void cleanSFloatSpacedText(sizt i=0);
-	void cleanUFloatText(sizt i=0);
+	void cleanSFloatSpacedText(sizt i = 0);
+	void cleanUFloatText(sizt i = 0);
 	void cleanUFloatSpacedText();
 };
 
@@ -230,10 +230,10 @@ public:
 		joystick,
 		gamepad
 	};
-	KeyGetter(const Size& relSize=Size(), AcceptType type=AcceptType::keyboard, Binding::Type binding=Binding::Type::numBindings, PCall leftCall=nullptr, PCall rightCall=nullptr, PCall doubleCall=nullptr, Alignment alignment=Alignment::center, SDL_Texture* background=nullptr, int textMargin=Default::textMargin, bool showBackground=true, int backgroundMargin=Default::iconMargin, Layout* parent=nullptr, sizt id=SIZE_MAX);
-	virtual ~KeyGetter() {}
+	KeyGetter(const Size& relSize = Size(), AcceptType type = AcceptType::keyboard, Binding::Type binding = Binding::Type::numBindings, Alignment alignment = Alignment::center, SDL_Texture* background = nullptr, int textMargin = Default::textMargin, bool showBackground = true, int backgroundMargin = Default::iconMargin, Layout* parent = nullptr, sizt id = SIZE_MAX);
+	virtual ~KeyGetter() override {}
 
-	virtual void onClick(const vec2i& mPos, uint8 mBut) override;
+	virtual void onClick(const vec2i&, uint8 mBut) override;
 	virtual void onKeypress(const SDL_Keysym& key) override;
 	virtual void onJButton(uint8 jbutton) override;
 	virtual void onJHat(uint8 jhat, uint8 value) override;

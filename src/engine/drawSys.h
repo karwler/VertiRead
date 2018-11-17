@@ -34,7 +34,7 @@ public:
 	void setFont(const string& font);
 	void clearFonts() { fonts.clear(); }
 	SDL_Texture* texture(const string& name) const;
-	string translation(const string& line, bool firstCapital=true) const;
+	string translation(const string& line, bool firstCapital = true) const;
 	void setLanguage(const string& lang);
 
 	void drawWidgets();

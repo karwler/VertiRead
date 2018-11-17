@@ -13,10 +13,10 @@ public:
 	virtual void eventDown() { eventSelect(Direction::down); }
 	virtual void eventLeft() { eventSelect(Direction::left); }
 	virtual void eventRight() { eventSelect(Direction::right); }
-	virtual void eventScrollUp(float amt) {}
-	virtual void eventScrollDown(float amt) {}
-	virtual void eventScrollLeft(float amt) {}
-	virtual void eventScrollRight(float amt) {}
+	virtual void eventScrollUp(float) {}
+	virtual void eventScrollDown(float) {}
+	virtual void eventScrollLeft(float) {}
+	virtual void eventScrollRight(float) {}
 	void eventCursorUp(float amt);
 	void eventCursorDown(float amt);
 	void eventCursorLeft(float amt);
@@ -33,21 +33,21 @@ public:
 	virtual void eventPrevDir() {}
 	virtual void eventFullscreen();
 	void eventRefresh();
-	virtual void eventFileDrop(const string& file) {}
+	virtual void eventFileDrop(const string&) {}
 	virtual void eventClosing() {}
 	
 	virtual Layout* createLayout() { return nullptr; }
 	virtual Overlay* createOverlay() { return nullptr; }
-	static Popup* createPopupMessage(const string& msg, const vec2<Size>& size=messageSize);
+	static Popup* createPopupMessage(const string& msg, const vec2<Size>& size = messageSize);
 	
 protected:
 	struct Text {
-		Text(const string& str, int height, int margin=Default::textMargin);
+		Text(const string& str, int height, int margin = Default::textMargin);
 
 		string text;
 		int length;
 	};
-	static int findMaxLength(const vector<string>& strs, int height, int margin=Default::textMargin);
+	static int findMaxLength(const vector<string>& strs, int height, int margin = Default::textMargin);
 
 	static const int lineHeight;
 	static const int topHeight;
@@ -63,7 +63,7 @@ private:
 
 class ProgBooks : public ProgState {
 public:
-	virtual ~ProgBooks() {}
+	virtual ~ProgBooks() override {}
 
 	virtual void eventEscape() override;
 	virtual void eventFileDrop(const string& file) override;
@@ -73,7 +73,7 @@ public:
 
 class ProgPageBrowser : public ProgState {
 public:
-	virtual ~ProgPageBrowser() {}
+	virtual ~ProgPageBrowser() override {}
 
 	virtual void eventEscape() override;
 	virtual void eventFileDrop(const string& file) override;
@@ -83,7 +83,7 @@ public:
 
 class ProgReader : public ProgState {
 public:
-	virtual ~ProgReader() {}
+	virtual ~ProgReader() override {}
 
 	virtual void eventEscape() override;
 	virtual void eventUp() override { eventScrollUp(1.f); }
@@ -115,7 +115,7 @@ private:
 
 class ProgSettings : public ProgState {
 public:
-	virtual ~ProgSettings() {}
+	virtual ~ProgSettings() override {}
 
 	virtual void eventEscape() override;
 	virtual void eventFullscreen() override;
@@ -126,7 +126,7 @@ public:
 
 class ProgSearchDir : public ProgState {
 public:
-	virtual ~ProgSearchDir() {}
+	virtual ~ProgSearchDir() override {}
 
 	virtual void eventEscape() override;
 

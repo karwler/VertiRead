@@ -1,5 +1,5 @@
 # project properties
-cmake_minimum_required(VERSION 3.8.2)
+cmake_minimum_required(VERSION 3.12.4)
 project(VertiRead LANGUAGES CXX)
 set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
 
@@ -68,7 +68,7 @@ endif()
 
 # definitions
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-	add_definitions(-D_UNICODE)
+	add_definitions(-D_UNICODE -D_CRT_SECURE_NO_WARNINGS)
 endif()
 
 if(${CMAKE_BUILD_TYPE} MATCHES "Debug")
@@ -79,7 +79,7 @@ endif()
 
 # set main target
 add_executable(VertiRead ${SRC_FILES})
-target_compile_features(VertiRead PUBLIC cxx_std_11)
+target_compile_features(VertiRead PUBLIC cxx_std_17)
 
 # include directories and link libraries
 include_directories("${CMAKE_SOURCE_DIR}/src")
@@ -96,7 +96,7 @@ set_target_properties(VertiRead PROPERTIES
 
 if(${CMAKE_CXX_COMPILER_ID} MATCHES "GNU" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
 	if(${CMAKE_BUILD_TYPE} MATCHES "Debug")	# for some reason half of this shit doesn't work with set_target_properties
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -Wall -Wextra")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -Wall -Wextra -Wpedantic")
 	else()
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 	endif()

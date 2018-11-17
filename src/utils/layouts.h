@@ -11,15 +11,15 @@ public:
 		any
 	};
 
-	Layout(const Size& relSize=Size(), const vector<Widget*>& children={}, const Direction& direction=Direction::down, Select select=Select::none, int spacing=Default::itemSpacing, Layout* parent=nullptr, sizt id=SIZE_MAX);
-	virtual ~Layout();
+	Layout(const Size& relSize = Size(), const vector<Widget*>& children = {}, const Direction& direction = Direction::down, Select select = Select::none, int spacing = Default::itemSpacing, Layout* parent = nullptr, sizt id = SIZE_MAX);
+	virtual ~Layout() override;
 
 	virtual void drawSelf() override;
 	virtual void onResize() override;
 	virtual void tick(float dSec) override;
 	virtual void postInit() override;
 	virtual void onMouseMove(const vec2i& mPos, const vec2i& mMov) override;
-	virtual void onNavSelect(const Direction& dir) override {}
+	virtual void onNavSelect(const Direction&) override {}
 	virtual bool navSelectable() const override { return widgets.size(); }
 
 	virtual void navSelectNext(sizt id, int mid, const Direction& dir);
@@ -39,8 +39,8 @@ protected:
 	vector<Widget*> widgets;
 	vector<vec2i> positions;	// widgets' positions. one element larger than wgts. last element is layout's size
 	uset<Widget*> selected;
-	Direction direction;		// in what direction widgets are stacked (TileBox doesn't support horizontal)
 	Select selection;			// how many items can be selected at once
+	Direction direction;		// in what direction widgets are stacked (TileBox doesn't support horizontal)
 	int spacing;				// space between widgets
 
 	virtual vec2i listSize() const;
@@ -57,8 +57,8 @@ private:
 // layout with background with free position/size (shouldn't have a parent)
 class Popup : public Layout {
 public:
-	Popup(const vec2s& relSize=vec2s(), const vector<Widget*>& children={}, const Direction& direction=Direction::down, int spacing=Default::itemSpacing);
-	virtual ~Popup() {}
+	Popup(const vec2s& relSize = vec2s(), const vector<Widget*>& children = {}, const Direction& direction = Direction::down, int spacing = Default::itemSpacing);
+	virtual ~Popup() override {}
 
 	virtual void drawSelf() override;
 
@@ -73,8 +73,8 @@ private:
 // popup that can be enabled or disabled
 class Overlay : public Popup {
 public:
-	Overlay(const vec2s& position=vec2s(), const vec2s& relSize=vec2s(), const vec2s& activationPos=vec2s(), const vec2s& activationSize=vec2s(), const vector<Widget*>& children={}, const Direction& direction=Direction::down, int spacing=Default::itemSpacing);
-	virtual ~Overlay() {}
+	Overlay(const vec2s& position = vec2s(), const vec2s& relSize = vec2s(), const vec2s& activationPos = vec2s(), const vec2s& activationSize = vec2s(), const vector<Widget*>& children = {}, const Direction& direction = Direction::down, int spacing = Default::itemSpacing);
+	virtual ~Overlay() override {}
 
 	virtual vec2i position() const override;
 	SDL_Rect actRect() const;
@@ -88,8 +88,8 @@ private:
 // places widgets vertically through which the user can scroll (DON"T PUT SCROLL AREAS INTO OTHER SCROLL AREAS)
 class ScrollArea : public Layout {
 public:
-	ScrollArea(const Size& relSize=Size(), const vector<Widget*>& children={}, const Direction& direction=Direction::down, Select select=Select::none, int spacing=Default::itemSpacing, Layout* parent=nullptr, sizt id=SIZE_MAX);
-	virtual ~ScrollArea() {}
+	ScrollArea(const Size& relSize = Size(), const vector<Widget*>& children = {}, const Direction& direction = Direction::down, Select select = Select::none, int spacing = Default::itemSpacing, Layout* parent = nullptr, sizt id = SIZE_MAX);
+	virtual ~ScrollArea() override {}
 
 	virtual void drawSelf() override;
 	virtual void onResize() override;
@@ -122,8 +122,8 @@ protected:
 	virtual int wgtRPos(sizt id) const;
 	virtual int wgtREnd(sizt id) const;
 
-	vec2i listPos;
 	bool draggingSlider;
+	vec2i listPos;
 private:
 	vec2f motion;			// how much the list scrolls over time
 	int diffSliderMouse;	// space between slider and mouse position
@@ -140,8 +140,8 @@ private:
 // places items as tiles one after another
 class TileBox : public ScrollArea {
 public:
-	TileBox(const Size& relSize=Size(), const vector<Widget*>& children={}, int childHeight=Default::itemHeight, const Direction& direction=Direction::down, Select select=Select::none, int spacing=Default::itemSpacing, Layout* parent=nullptr, sizt id=SIZE_MAX);
-	virtual ~TileBox() {}
+	TileBox(const Size& relSize = Size(), const vector<Widget*>& children = {}, int childHeight = Default::itemHeight, const Direction& direction = Direction::down, Select select = Select::none, int spacing = Default::itemSpacing, Layout* parent = nullptr, sizt id = SIZE_MAX);
+	virtual ~TileBox() override {}
 
 	virtual void onResize() override;
 
@@ -165,8 +165,8 @@ private:
 // for scrolling through pictures
 class ReaderBox : public ScrollArea {
 public:
-	ReaderBox(const Size& relSize=Size(), const Direction& direction=Direction::down, float zoom=Default::zoom, int spacing=Default::spacing, Layout* parent=nullptr, sizt id=SIZE_MAX);
-	virtual ~ReaderBox();
+	ReaderBox(const Size& relSize = Size(), const Direction& direction = Direction::down, float zoom = Default::zoom, int spacing = Default::spacing, Layout* parent = nullptr, sizt id = SIZE_MAX);
+	virtual ~ReaderBox() override;
 
 	virtual void drawSelf() override;
 	virtual void onResize() override;
@@ -184,9 +184,9 @@ public:
 
 private:
 	vector<pair<string, SDL_Texture*>> pics;
-	bool countDown;			// whether to decrease cursorTimer until cursor hide
 	float cursorTimer;		// time left until cursor/overlay disappeares
 	float zoom;
+	bool countDown;			// whether to decrease cursorTimer until cursor hide
 
 	virtual vec2i listSize() const override;
 	virtual int wgtRPos(sizt id) const override;

@@ -15,23 +15,18 @@
 
 #include <algorithm>
 #include <iostream>
-#include <map>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 // to make life easier
-using std::vector;
-using std::map;
-using std::pair;
-using std::make_pair;
 using std::string;
 using std::wstring;
-using std::ostringstream;
-using sizt = size_t;
+using std::vector;
+using std::pair;
+using std::to_string;
 
 using uchar = unsigned char;
 using ushort = unsigned short;
@@ -40,6 +35,8 @@ using ulong = unsigned long;
 using ullong = unsigned long long;
 using llong = long long;
 using ldouble = long double;
+using wchar = wchar_t;
+using sizt = size_t;
 
 using int8 = int8_t;
 using uint8 = uint8_t;
@@ -50,12 +47,7 @@ using uint32 = uint32_t;
 using int64 = int64_t;
 using uint64 = uint64_t;
 
-using char16 = char16_t;
-using char32 = char32_t;
-using wchar = wchar_t;
-
 using vec2i = vec2<int>;
-using vec2u = vec2<uint>;
 using vec2f = vec2<float>;
 using vec2t = vec2<sizt>;
 
@@ -259,7 +251,7 @@ const vector<string> bindingNames = {
 	"refresh"
 };
 
-const map<uint8, string> hatNames = {
+const umap<uint8, string> hatNames = {
 	pair<uint8, string>(SDL_HAT_CENTERED, "Center"),
 	pair<uint8, string>(SDL_HAT_UP, "Up"),
 	pair<uint8, string>(SDL_HAT_RIGHT, "Right"),
@@ -329,8 +321,5 @@ const int axisLimit = 32768;
 const float resModeBorder = 0.85f;
 const float resModeRatio = 0.75f;
 const sizt archiveReadBlockSize = 10240;
-#ifdef _WIN32
-const ulong envBufferSize = 2048;
-#endif
 
 }

@@ -95,14 +95,12 @@ void InputSys::eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis) {
 		checkBindingsX(static_cast<SDL_GameControllerAxis>(gaxis.axis), (value > 0));
 }
 
-void InputSys::tick(float dSec) {
+void InputSys::tick(float) {
 	// handle keyhold
 	for (Binding& it : bindings)
-		if (it.isAxis()) {
-			float amt = 1.f;
-			if (isPressed(it, amt))
+		if (it.isAxis())
+			if (float amt = 1.f; isPressed(it, amt))
 				World::srun(it.getAcall(), amt);
-		}
 }
 
 void InputSys::checkBindingsK(SDL_Scancode key) {
@@ -154,7 +152,7 @@ void InputSys::checkBindingsX(SDL_GameControllerAxis gaxis, bool positive) {
 }
 
 bool InputSys::isPressed(Binding::Type type, float& amt) const {
-	return bindings[static_cast<sizt>(type)].isAxis() ? isPressed(bindings[static_cast<sizt>(type)], amt) : false;
+	return bindings[sizt(type)].isAxis() ? isPressed(bindings[sizt(type)], amt) : false;
 }
 
 bool InputSys::isPressed(const Binding& abind, float& amt) const {
@@ -165,23 +163,19 @@ bool InputSys::isPressed(const Binding& abind, float& amt) const {
 		return true;
 	if (abind.jhatAssigned() && isPressedH(abind.getJctID(), abind.getJhatVal()))
 		return true;
-	if (abind.jaxisAssigned()) {	// check controller axes
-		int val = getAxisJ(abind.getJctID());
-		if ((abind.jposAxisAssigned() && val > 0) || (abind.jnegAxisAssigned() && val < 0)) {
+	if (abind.jaxisAssigned())	// check controller axes
+		if (int val = getAxisJ(abind.getJctID()); (abind.jposAxisAssigned() && val > 0) || (abind.jnegAxisAssigned() && val < 0)) {
 			amt = axisToFloat(abind.jposAxisAssigned() ? val : -val);
 			return true;
 		}
-	}
 
 	if (abind.gbuttonAssigned() && isPressedG(abind.getGbutton()))	// check controller buttons
 		return true;
-	if (abind.gaxisAssigned()) {	// check controller axes
-		int val = getAxisG(abind.getGaxis());
-		if ((abind.gposAxisAssigned() && val > 0) || (abind.gnegAxisAssigned() && val < 0)) {
+	if (abind.gaxisAssigned())	// check controller axes
+		if (int val = getAxisG(abind.getGaxis()); (abind.gposAxisAssigned() && val > 0) || (abind.gnegAxisAssigned() && val < 0)) {
 			amt = axisToFloat(abind.gposAxisAssigned() ? val : -val);
 			return true;
 		}
-	}
 	return false;
 }
 
@@ -210,21 +204,17 @@ bool InputSys::isPressedH(uint8 jhat, uint8 val) const {
 
 int InputSys::getAxisJ(uint8 jaxis) const {
 	for (const Controller& it : controllers)	// get first axis that isn't 0
-		if (!it.gamepad) {
-			int val = checkAxisValue(SDL_JoystickGetAxis(it.joystick, jaxis));
-			if (val != 0)
+		if (!it.gamepad)
+			if (int val = checkAxisValue(SDL_JoystickGetAxis(it.joystick, jaxis)); val != 0)
 				return val;
-		}
 	return 0;
 }
 
 int InputSys::getAxisG(SDL_GameControllerAxis gaxis) const {
 	for (const Controller& it : controllers)	// get first axis that isn't 0
-		if (it.gamepad) {
-			int val = checkAxisValue(SDL_GameControllerGetAxis(it.gamepad, gaxis));
-			if (val != 0)
+		if (it.gamepad)
+			if (int val = checkAxisValue(SDL_GameControllerGetAxis(it.gamepad, gaxis)); val != 0)
 				return val;
-		}
 	return 0;
 }
 
@@ -244,8 +234,7 @@ void InputSys::resetBindings() {
 }
 
 void InputSys::addController(int id) {
-	Controller ctr(id);
-	if (ctr.index >= 0)
+	if (Controller ctr(id); ctr.index >= 0)
 		controllers.push_back(ctr);
 }
 
@@ -259,7 +248,7 @@ void InputSys::removeController(int id) {
 }
 
 int InputSys::checkAxisValue(int value) const {
-	return std::abs(value) > World::sets()->getDeadzone() ? value : 0;
+	return abs(value) > World::sets()->getDeadzone() ? value : 0;
 }
 
 float InputSys::axisToFloat(int axisValue) {

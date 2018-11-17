@@ -16,7 +16,7 @@ public:
 	void eventGamepadButton(const SDL_ControllerButtonEvent& gbutton);
 	void eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis);
 
-	void tick(float dSec);
+	void tick(float);
 	bool isPressed(Binding::Type type, float& amt) const;	// looks through axis bindings (aka holders) in controls settings (amt will only be changed if the binding is an active axis)
 	bool isPressed(const Binding& abind, float& amt) const;
 	bool isPressedB(uint8 jbutton) const;			// check if any of the joysticks' button is pressed

@@ -3,7 +3,7 @@
 // FONT SET
 
 FontSet::~FontSet() {
-	for (const pair<int, TTF_Font*>& it : fonts)
+	for (const pair<const int, TTF_Font*>& it : fonts)
 		TTF_CloseFont(it.second);
 }
 
@@ -20,7 +20,7 @@ void FontSet::init(const string& path) {
 }
 
 void FontSet::clear() {
-	for (const pair<int, TTF_Font*>& it : fonts)
+	for (const pair<const int, TTF_Font*>& it : fonts)
 		TTF_CloseFont(it.second);
 	fonts.clear();
 }
@@ -28,7 +28,7 @@ void FontSet::clear() {
 TTF_Font* FontSet::addSize(int size) {
 	TTF_Font* font = TTF_OpenFont(file.c_str(), size);
 	if (font)
-		fonts.insert(make_pair(size, font));
+		fonts.insert(std::make_pair(size, font));
 	return font;
 }
 
@@ -43,8 +43,7 @@ TTF_Font* FontSet::getFont(int height) {
 
 int FontSet::length(const string& text, int height) {
 	int len = 0;
-	TTF_Font* font = getFont(height);
-	if (font)
+	if (TTF_Font* font = getFont(height))
 		TTF_SizeUTF8(font, text.c_str(), &len, nullptr);
 	return len;
 }
@@ -53,19 +52,16 @@ int FontSet::length(const string& text, int height) {
 
 DrawSys::DrawSys(SDL_Window* window, int driverIndex) {
 	// create and set up renderer
-	renderer = SDL_CreateRenderer(window, driverIndex, Default::rendererFlags);
-	if (!renderer)
+	if (!(renderer = SDL_CreateRenderer(window, driverIndex, Default::rendererFlags)))
 		throw std::runtime_error("Couldn't create renderer:\n" + string(SDL_GetError()));
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
 	// load default textures with colors and initialize fonts and translations
 	for (string& it : FileSys::listDir(World::fileSys()->getDirTexs(), FTYPE_FILE)) {
-		string file = World::fileSys()->getDirTexs() + it;
-		SDL_Texture* tex = IMG_LoadTexture(renderer, file.c_str());
-		if (tex)
+		if (string file = World::fileSys()->getDirTexs() + it; SDL_Texture* tex = IMG_LoadTexture(renderer, file.c_str()))
 			texes.insert(make_pair(delExt(it), tex));
 		else
-			std::cerr << "Couldn't load texture " << file << std::endl << IMG_GetError << std::endl;
+			std::cerr << "Couldn't load texture " << file << '\n' << IMG_GetError << std::endl;
 	}
 	setTheme(World::sets()->getTheme());
 	setFont(World::sets()->getFont());
@@ -91,8 +87,9 @@ vec2i DrawSys::viewSize() const {
 }
 
 void DrawSys::setTheme(const string& name) {
-	colors = World::fileSys()->getColors(World::sets()->setTheme(name));
+	colors = World::fileSys()->loadColors(World::sets()->setTheme(name));
 	SDL_Color clr = colors[static_cast<uint8>(Color::texture)];
+
 	for (const pair<string, SDL_Texture*>& it : texes) {
 		SDL_SetTextureColorMod(it.second, clr.r, clr.g, clr.b);
 		SDL_SetTextureAlphaMod(it.second, clr.a);
@@ -111,7 +108,7 @@ string DrawSys::translation(const string& line, bool firstCapital) const {
 }
 
 void DrawSys::setLanguage(const string& lang) {
-	trans = World::fileSys()->getTranslations(World::sets()->setLang(lang));
+	trans = World::fileSys()->loadTranslations(World::sets()->setLang(lang));
 }
 
 void DrawSys::drawWidgets() {
@@ -173,7 +170,7 @@ void DrawSys::drawLabel(Label* wgt) {
 
 void DrawSys::drawScrollArea(ScrollArea* box) {
 	vec2t vis = box->visibleWidgets();	// get index interval of items on screen and draw children
-	for (sizt i = vis.l; i < vis.u; i++)
+	for (sizt i = vis.b; i < vis.t; i++)
 		box->getWidget(i)->drawSelf();
 
 	drawRect(box->barRect(), Color::dark);		// draw scroll bar
@@ -182,7 +179,7 @@ void DrawSys::drawScrollArea(ScrollArea* box) {
 
 void DrawSys::drawReaderBox(ReaderBox* box) {
 	vec2t vis = box->visibleWidgets();
-	for (sizt i = vis.l; i < vis.u; i++)
+	for (sizt i = vis.b; i < vis.t; i++)
 		box->getWidget(i)->drawSelf();
 
 	if (box->showBar()) {
@@ -250,11 +247,10 @@ vector<pair<string, SDL_Texture*>> DrawSys::loadTexturesArchive(const string& ar
 	if (!arch)
 		return pics;
 
-	archive_entry* entry;
-	while (!archive_read_next_header(arch, &entry))
+	for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
 		if (SDL_RWops* io = readArchiveEntry(arch, entry))
 			if (SDL_Texture* tex = IMG_LoadTexture_RW(renderer, io, SDL_TRUE))
-				pics.push_back(make_pair(archive_entry_pathname(entry), tex));
+				pics.push_back(std::make_pair(archive_entry_pathname(entry), tex));
 
 	archive_read_free(arch);
 	std::sort(pics.begin(), pics.end(), [](const pair<string, SDL_Texture*>& a, const pair<string, SDL_Texture*>& b) -> bool { return strnatless(a.first, b.first); });

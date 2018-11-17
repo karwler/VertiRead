@@ -4,7 +4,7 @@
 
 // saves what widget is being clicked on with what button at what position
 struct ClickStamp {
-	ClickStamp(Widget* widget=nullptr, ScrollArea* area=nullptr, const vec2i& mPos=0);
+	ClickStamp(Widget* widget = nullptr, ScrollArea* area = nullptr, const vec2i& mPos = 0);
 
 	Widget* widget;
 	ScrollArea* area;
@@ -29,7 +29,7 @@ public:
 	Layout* getLayout() { return layout.get(); }
 	Overlay* getOverlay() { return overlay.get(); }
 	Popup* getPopup() { return popup.get(); }
-	void setPopup(Popup* newPopup, Widget* newCapture=nullptr);
+	void setPopup(Popup* newPopup, Widget* newCapture = nullptr);
 	void setPopup(const pair<Popup*, Widget*>& popcap) { setPopup(popcap.first, popcap.second); }
 
 	void selectFirst();

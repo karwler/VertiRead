@@ -1,12 +1,13 @@
 #include "engine/world.h"
+#include <windows.h>
 
 static int natCompareRight(const char* a, const char* b) {
 	for (int bias = 0;; a++, b++) {
-		if (!isDigit(*a)  &&  !isDigit(*b))
+		if (bool nad = !isDigit(*a), nbd = !isDigit(*b); nad && nbd)
 			return bias;
-		else if (!isDigit(*a))
+		else if (nad)
 			return -1;
-		else if (!isDigit(*b))
+		else if (nbd)
 			return 1;
 		else if (*a < *b) {
 			if (!bias)
@@ -14,48 +15,41 @@ static int natCompareRight(const char* a, const char* b) {
 		} else if (*a > *b) {
 			if (!bias)
 				bias = 1;
-		} else if (!*a  &&  !*b)
+		} else if (!(*a || *b))
 			return bias;
 	}
-	return 0;
 }
 
 static int natCompareLeft(const char* a, const char* b) {
 	for (;; a++, b++) {
-		if (!isDigit(*a)  &&  !isDigit(*b))
+		if (bool nad = !isDigit(*a), nbd = !isDigit(*b); nad && nbd)
 			return 0;
-		else if (!isDigit(*a))
+		else if (nad)
 			return -1;
-		else if (!isDigit(*b))
+		else if (nbd)
 			return 1;
 		else if (*a < *b)
 			return -1;
 		else if (*a > *b)
 			return 1;
 	}
-	return 0;
 }
 
 int strnatcmp(const char* a, const char* b) {
 	for (;; a++, b++) {
-		char ca = *a;
-		char cb = *b;
-		while (isSpace(ca))
-			ca = *++a;
-		while (isSpace(cb))
-			cb = *++b;
+		char ca = *a, cb = *b;
+		for (; isSpace(ca); ca = *++a);
+		for (; isSpace(cb); cb = *++b);
 
 		if (isDigit(ca) && isDigit(cb)) {
 			if (ca == '0' || cb == '0') {
 				if (int result = natCompareLeft(a, b))
 					return result;
-			} else {
-				if (int result = natCompareRight(a, b))
-					return result;
-			}
+			} else if (int result = natCompareRight(a, b))
+				return result;
 		}
 
-		if (!ca && !cb)
+		if (!(ca || cb))
 			return 0;
 		if (ca < cb)
 			return -1;
@@ -66,14 +60,18 @@ int strnatcmp(const char* a, const char* b) {
 
 string trim(const string& str) {
 	sizt pos = 0;
-	while (isSpace(str[pos]) && pos < str.length())
-		pos++;
+	for (; isSpace(str[pos]); pos++);
 	if (pos == str.length())
 		return "";
 
 	sizt end = str.length();
-	while (isSpace(str[--end]) && end < str.length());
+	while (--end < str.length() && isSpace(str[end]));
 	return str.substr(pos, end - pos + 1);
+}
+
+string trimZero(const string& str) {
+	sizt id = str.find_last_not_of('0');
+	return str.substr(0, str[id] == '.' ? id : id + 1);
 }
 
 static bool pathCompareLoop(const string& as, const string& bs, sizt& ai, sizt& bi) {
@@ -94,8 +92,7 @@ static bool pathCompareLoop(const string& as, const string& bs, sizt& ai, sizt& 
 }
 
 bool pathCmp(const string& as, const string& bs) {
-	sizt ai = 0, bi = 0;
-	if (pathCompareLoop(as, bs, ai, bi))
+	if (sizt ai = 0, bi = 0; pathCompareLoop(as, bs, ai, bi))
 		return ai >= as.length() && bi >= bs.length();	// check if both paths have reached their ends simultaneously
 	return false;
 }
@@ -104,8 +101,7 @@ bool isSubpath(const string& path, string parent) {
 	if (strchk(parent, [](char c) -> bool { return c == dsep; }))	// always true if parent is root
 		return true;
 
-	sizt ai = 0, bi = 0;
-	if (pathCompareLoop(path, parent, ai, bi))
+	if (sizt ai = 0, bi = 0; pathCompareLoop(path, parent, ai, bi))
 		return bi >= parent.length();	// parent has to have reached it's end while path was still matching
 	return false;
 }
@@ -139,8 +135,7 @@ string getChild(const string& path, const string& parent) {
 	if (strchk(parent, [](char c) -> bool { return c == dsep; }))
 		return path;
 
-	sizt ai = 0, bi = 0;
-	if (pathCompareLoop(path, parent, ai, bi) && bi >= parent.length())
+	if (sizt ai = 0, bi = 0; pathCompareLoop(path, parent, ai, bi) && bi >= parent.length())
 		return path.substr(ai);
 	return "";
 }
@@ -205,28 +200,16 @@ bool strchk(const string& str, bool (*cmp)(char)) {
 	return true;
 }
 
-bool strchk(const string& str, sizt pos, sizt len, bool (*cmp)(char)) {
-	bringUnder(len, str.length());
-	while (pos < len)
-		if (!cmp(str[pos++]))
-			return false;
-	return true;
-}
-
 vector<string> getWords(const string& line) {
 	sizt i = 0;
-	while (isSpace(line[i]))
-		i++;
+	for (; isSpace(line[i]); i++);
 
 	vector<string> words;
 	while (i < line.length()) {
 		sizt pos = i;
-		while (!isSpace(line[i]) && i < line.length())
-			i++;
+		while (line[++i] > ' ');      // not space && i < line.length
 		words.push_back(line.substr(pos, i - pos));
-
-		while (isSpace(line[i]))
-			i++;
+		for (; isSpace(line[i]); i++);
 	}
 	return words;
 }
@@ -285,12 +268,12 @@ archive* openArchive(const string& file) {
 }
 
 SDL_RWops* readArchiveEntry(archive* arch, archive_entry* entry) {
-	la_int64_t bsiz = archive_entry_size(entry);
+	int64 bsiz = archive_entry_size(entry);
 	if (bsiz <= 0)
 		return nullptr;
 
-	void* buffer = new uint8[bsiz];
-	la_ssize_t size = archive_read_data(arch, buffer, bsiz);
+	uint8* buffer = new uint8[bsiz];
+	int64 size = archive_read_data(arch, buffer, bsiz);
 	return size < 0 ? nullptr : SDL_RWFromMem(buffer, size);
 }
 
@@ -299,8 +282,7 @@ SDL_Rect cropRect(SDL_Rect& rect, const SDL_Rect& frame) {
 		return rect = {0, 0, 0, 0};
 
 	// ends of each rect and frame
-	vec2i rend = rectEnd(rect);
-	vec2i fend = rectEnd(frame);
+	vec2i rend = rectEnd(rect), fend = rectEnd(frame);
 	if (rect.x > fend.x || rect.y > fend.y || rend.x < frame.x || rend.y < frame.y)	// if rect is out of frame
 		return rect = {0, 0, 0, 0};
 
@@ -335,8 +317,7 @@ SDL_Rect overlapRect(SDL_Rect rect, const SDL_Rect& frame) {
 		return {0, 0, 0, 0};
 
 	// ends of both rects
-	vec2i rend = rectEnd(rect);
-	vec2i fend = rectEnd(frame);
+	vec2i rend = rectEnd(rect), fend = rectEnd(frame);
 	if (rect.x > fend.x || rect.y > fend.y || rend.x < frame.x || rend.y < frame.y)	// if they don't overlap
 		return {0, 0, 0, 0};
 
@@ -355,7 +336,27 @@ SDL_Rect overlapRect(SDL_Rect rect, const SDL_Rect& frame) {
 		rect.h -= rend.y - fend.y;
 	return rect;
 }
+#ifdef _WIN32
+string wtos(const wstring& src) {
+	int len = WideCharToMultiByte(CP_UTF8, 0, src.c_str(), src.length() + 1, nullptr, 0, nullptr, nullptr);
+	if (len <= 1)
+		return "";
 
+	string dst(len - 1, '\0');
+	WideCharToMultiByte(CP_UTF8, 0, src.c_str(), src.length() + 1, dst.data(), len, nullptr, nullptr);
+	return dst;
+}
+
+wstring stow(const string& src) {
+	int len = MultiByteToWideChar(CP_UTF8, 0, src.c_str(), src.length() + 1, nullptr, 0);
+	if (len <= 1)
+		return L"";
+
+	wstring dst(len - 1, '\0');
+	MultiByteToWideChar(CP_UTF8, 0, src.c_str(), src.length() + 1, dst.data(), len);
+	return dst;
+}
+#endif
 uint8 jtStrToHat(const string& str) {
 	for (const pair<uint8, string>& it : Default::hatNames)
 		if (!strcicmp(it.second, str))

@@ -1,9 +1,9 @@
 #include "world.h"
 
 WindowSys::WindowSys() :
-	run(true),
+	window(nullptr),
 	dSec(0.f),
-	window(nullptr)
+	run(true)
 {}
 
 int WindowSys::start() {
@@ -28,16 +28,16 @@ void WindowSys::init() {
 
 	int flags = IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP);
 	if (!(flags & IMG_INIT_JPG))
-		std::cerr << "Couldn't initialize JPG:" << std::endl << IMG_GetError() << std::endl;
+		std::cerr << "Couldn't initialize JPG:\n" << IMG_GetError() << std::endl;
 	if (!(flags & IMG_INIT_PNG))
-		std::cerr << "Couldn't initialize PNG:" << std::endl << IMG_GetError() << std::endl;
+		std::cerr << "Couldn't initialize PNG:\n" << IMG_GetError() << std::endl;
 	if (!(flags & IMG_INIT_TIF))
-		std::cerr << "Couldn't initialize TIF:" << std::endl << IMG_GetError() << std::endl;
+		std::cerr << "Couldn't initialize TIF:\n" << IMG_GetError() << std::endl;
 	if (!(flags & IMG_INIT_WEBP))
-		std::cerr << "Couldn't initialize WEBP:" << std::endl << IMG_GetError() << std::endl;
+		std::cerr << "Couldn't initialize WEBP:\n" << IMG_GetError() << std::endl;
 
 	fileSys.reset(new FileSys);
-	sets.reset(fileSys->getSettings());
+	sets.reset(fileSys->loadSettings());
 	createWindow();
 	inputSys.reset(new InputSys);
 	scene.reset(new Scene);
@@ -47,22 +47,16 @@ void WindowSys::init() {
 
 void WindowSys::exec() {
 	// the loop :o
-	uint32 oldTime = SDL_GetTicks();
-	while (run) {
-		// get delta seconds
-		uint32 newTime = SDL_GetTicks();
-		dSec = float(newTime - oldTime) / 1000.f;
-		oldTime = newTime;
-
+	for (uint32 oldTime = SDL_GetTicks(); run;) {
+		setDSec(oldTime);
 		drawSys->drawWidgets();
 
 		// handle events
 		inputSys->tick(dSec);
 		scene->tick(dSec);
 
-		SDL_Event event;
 		uint32 timeout = SDL_GetTicks() + Default::eventCheckTimeout;
-		while (SDL_PollEvent(&event) && SDL_GetTicks() < timeout)
+		for (SDL_Event event; SDL_PollEvent(&event) && SDL_GetTicks() < timeout;)
 			handleEvent(event);
 	}
 	program->getState()->eventClosing();
@@ -92,17 +86,14 @@ void WindowSys::createWindow() {
 	if (sets->fullscreen)
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 
-	window = SDL_CreateWindow(Default::titleDefault, Default::windowPos.x, Default::windowPos.y, sets->resolution.x, sets->resolution.y, flags);
-	if (!window)
+	if (!(window = SDL_CreateWindow(Default::titleDefault, Default::windowPos.x, Default::windowPos.y, sets->resolution.x, sets->resolution.y, flags)))
 		throw std::runtime_error("Couldn't create window:\n" + string(SDL_GetError()));
 
 	// minor stuff
-	SDL_Surface* icon = IMG_Load(string(World::fileSys()->getDirExec() + Default::fileIcon).c_str());
-	if (icon) {
+	if (SDL_Surface* icon = IMG_Load(string(World::fileSys()->getDirExec() + Default::fileIcon).c_str())) {
 		SDL_SetWindowIcon(window, icon);
 		SDL_FreeSurface(icon);
 	}
-
 	drawSys.reset(new DrawSys(window, sets->getRendererIndex()));
 	SDL_SetWindowMinimumSize(window, Default::windowMinSize.x, Default::windowMinSize.y);	// for some reason this function has to be called after the renderer is created
 }
@@ -153,13 +144,9 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 
 void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 	if (winEvent.event == SDL_WINDOWEVENT_RESIZED) {
-		// update settings if needed
-		uint32 flags = SDL_GetWindowFlags(window);
-		if (!(flags & SDL_WINDOW_FULLSCREEN_DESKTOP)) {
-			sets->maximized = flags & SDL_WINDOW_MAXIMIZED;
-			if (!sets->maximized)
+		if (uint32 flags = SDL_GetWindowFlags(window); !(flags & SDL_WINDOW_FULLSCREEN_DESKTOP))	// update settings if needed
+			if (!(sets->maximized = flags & SDL_WINDOW_MAXIMIZED))
 				SDL_GetWindowSize(window, &sets->resolution.x, &sets->resolution.y);
-		}
 		scene->onResize();
 	} else if (winEvent.event == SDL_WINDOWEVENT_SIZE_CHANGED)
 		scene->onResize();
@@ -167,6 +154,12 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 		scene->onMouseLeave();
 	else if (winEvent.event == SDL_WINDOWEVENT_CLOSE)
 		close();
+}
+
+void WindowSys::setDSec(uint32& oldTicks) {
+	uint32 newTime = SDL_GetTicks();
+	dSec = float(newTime - oldTicks) / 1000.f;
+	oldTicks = newTime;
 }
 
 vec2i WindowSys::displayResolution() const {

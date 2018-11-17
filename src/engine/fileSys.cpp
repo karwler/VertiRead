@@ -1,5 +1,4 @@
 #include "world.h"
-#include <fstream>
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -66,16 +65,9 @@ IniLine::Type IniLine::setLine(const string& str) {
 	sizt i1 = str.find_first_of('[');
 	sizt i2 = str.find_first_of(']', i1);
 
-	if (i0 == string::npos) {
-		if (i2 != string::npos) {
-			prp = trim(str.substr(i1 + 1, i2 - i1 - 1));
-			key.clear();
-			val.clear();
-			return type = Type::title;
-		}
-	} else {
+	if (i0 != string::npos) {
 		val = str.substr(i0 + 1);
-		if (i2 < i0 && strchk(str, i2 + 1, i0 - i2 - 1, isSpace)) {
+		if (i2 < i0) {
 			prp = trim(str.substr(0, i1));
 			key = trim(str.substr(i1 + 1, i2 - i1 - 1));
 			return type = Type::prpKeyVal;
@@ -84,6 +76,11 @@ IniLine::Type IniLine::setLine(const string& str) {
 			key.clear();
 			return type = Type::prpVal;
 		}
+	} else if (i2 != string::npos) {
+		prp = trim(str.substr(i1 + 1, i2 - i1 - 1));
+		key.clear();
+		val.clear();
+		return type = Type::title;
 	}
 	prp.clear();
 	val.clear();
@@ -100,8 +97,8 @@ FileSys::FileSys() {
 	dirFonts = {dirExec, wgetenv("SystemDrive") + "\\Windows\\Fonts\\"};
 	dirSets = wgetenv("AppData") + dseps + Default::titleDefault + dseps;
 #else
-	dirFonts = {dirExec, "/usr/share/fonts/", string(std::getenv("HOME")) + "/.fonts/"};
-	dirSets = string(std::getenv("HOME")) + "/." + Default::titleExtra + dseps;
+	dirFonts = {dirExec, "/usr/share/fonts/", string(getenv("HOME")) + "/.fonts/"};
+	dirSets = string(getenv("HOME")) + "/." + Default::titleExtra + dseps;
 #endif
 	dirLangs = dirExec + Default::dirLanguages + dsep;
 	dirTexs = dirExec + Default::dirTextures + dsep;
@@ -120,26 +117,22 @@ FileSys::FileSys() {
 
 vector<string> FileSys::getAvailibleThemes() {
 	vector<string> themes;
-	for (string& line : readTextFile(dirExec + Default::fileThemes)) {
-		IniLine il(line);
-		if (il.getType() == IniLine::Type::title)
+	for (string& line : readTextFile(dirExec + Default::fileThemes))
+		if (IniLine il(line); il.getType() == IniLine::Type::title)
 			themes.push_back(il.getPrp());
-	}
 	return themes;
 }
 
-vector<SDL_Color> FileSys::getColors(const string& theme) {
+vector<SDL_Color> FileSys::loadColors(const string& theme) {
 	vector<SDL_Color> colors = Default::colors;
 	vector<string> lines = readTextFile(dirExec + Default::fileThemes);
 
 	// find title equal to theme
 	IniLine il;
 	sizt i = 0;
-	while (i < lines.size()) {
+	for (; i < lines.size(); i++)
 		if (il.setLine(lines[i]) == IniLine::Type::title && il.getPrp() == theme)
 			break;
-		i++;
-	}
 
 	// read colors until the end of the file or another title
 	while (++i < lines.size()) {
@@ -148,66 +141,58 @@ vector<SDL_Color> FileSys::getColors(const string& theme) {
 		if (il.getType() != IniLine::Type::prpVal)
 			continue;
 
-		sizt cid = strToEnum<sizt>(Default::colorNames, il.getPrp());
-		if (cid < colors.size()) {
+		if (sizt cid = strToEnum<sizt>(Default::colorNames, il.getPrp()); cid < colors.size()) {
 			vector<string> elems = getWords(il.getVal());
-			for (uint8 i = 0; i < elems.size() && i < 4; i++)
-				reinterpret_cast<uint8*>(&colors[cid])[i] = stoi(elems[i]);
+			for (sizt i = 0; i < elems.size() && i < 4; i++)
+				reinterpret_cast<uint8*>(&colors[cid])[i] = sstoul(elems[i]);
 		}
 	}
 	return colors;
 }
 
 vector<string> FileSys::getAvailibleLanguages() {
-	vector<string> files = {Default::language};
 	if (fileType(dirLangs) != FTYPE_DIR)
 		return {};
 
+	vector<string> files = {Default::language};
 	for (string& it : listDir(dirLangs, FTYPE_FILE))
 		files.push_back(delExt(it));
 	return files;
 }
 
-umap<string, string> FileSys::getTranslations(const string& language) {
+umap<string, string> FileSys::loadTranslations(const string& language) {
 	umap<string, string> translation;
-	for (string& line : readTextFile(dirLangs + language + ".ini", false)) {
-		IniLine il(line);
-		if (il.getType() == IniLine::Type::prpVal)
+	for (string& line : readTextFile(dirLangs + language + ".ini", false))
+		if (IniLine il(line); il.getType() == IniLine::Type::prpVal)
 			translation.insert(make_pair(il.getPrp(), il.getVal()));
-	}
 	return translation;
 }
 
 bool FileSys::getLastPage(const string& book, string& drc, string& fname) {
-	for (string& line : readTextFile(dirSets + Default::fileBooks, false)) {
-		vector<string> words = strUnenclose(line);
-		if (words.size() >= 2 && words[0] == book) {
+	for (string& line : readTextFile(dirSets + Default::fileBooks, false))
+		if (vector<string> words = strUnenclose(line); words.size() >= 2 && words[0] == book) {
 			drc = words[1];
 			fname = words.size() >= 3 ? words[2] : "";
 			return true;
 		}
-	}
 	return false;
 }
 
 bool FileSys::saveLastPage(const string& book, const string& drc, const string& fname) {
 	vector<string> lines = readTextFile(dirSets + Default::fileBooks, false);
 	sizt id = 0;
-	for (; id < lines.size(); id++) {
-		vector<string> words = strUnenclose(lines[id]);
-		if (words.size() >= 2 && words[0] == book)
+	for (; id < lines.size(); id++)
+		if (vector<string> words = strUnenclose(lines[id]); words.size() >= 2 && words[0] == book)
 			break;
-	}
 
-	string ilin = strEnclose(book) + ' ' + strEnclose(drc) + ' ' + strEnclose(fname);
-	if (id < lines.size())
+	if (string ilin = strEnclose(book) + ' ' + strEnclose(drc) + ' ' + strEnclose(fname); id < lines.size())
 		lines[id] = ilin;
 	else
 		lines.push_back(ilin);
 	return writeTextFile(dirSets + Default::fileBooks, lines);
 }
 
-Settings* FileSys::getSettings() {
+Settings* FileSys::loadSettings() {
 	Settings* sets = new Settings();
 	for (string& line : readTextFile(dirSets + Default::fileSettings, false)) {
 		IniLine il(line);
@@ -223,9 +208,9 @@ Settings* FileSys::getSettings() {
 		else if (il.getPrp() == Default::iniKeywordDirection)
 			sets->direction.set(il.getVal());
 		else if (il.getPrp() == Default::iniKeywordZoom)
-			sets->zoom = stof(il.getVal());
+			sets->zoom = sstof(il.getVal());
 		else if (il.getPrp() == Default::iniKeywordSpacing)
-			sets->spacing = stoi(il.getVal());
+			sets->spacing = sstoul(il.getVal().c_str());
 		else if (il.getPrp() == Default::iniKeywordFont)
 			sets->setFont(il.getVal());
 		else if (il.getPrp() == Default::iniKeywordLanguage)
@@ -239,7 +224,7 @@ Settings* FileSys::getSettings() {
 		else if (il.getPrp() == Default::iniKeywordScrollSpeed)
 			sets->setScrollSpeed(il.getVal());
 		else if (il.getPrp() == Default::iniKeywordDeadzone)
-			sets->setDeadzone(stoi(il.getVal()));
+			sets->setDeadzone(sstoul(il.getVal()));
 	}
 	return sets;
 }
@@ -250,15 +235,15 @@ bool FileSys::saveSettings(const Settings* sets) {
 		IniLine::line(Default::iniKeywordFullscreen, btos(sets->fullscreen)),
 		IniLine::line(Default::iniKeywordResolution, sets->getResolutionString()),
 		IniLine::line(Default::iniKeywordDirection, sets->direction.toString()),
-		IniLine::line(Default::iniKeywordZoom, ntos(sets->zoom)),
-		IniLine::line(Default::iniKeywordSpacing, ntos(sets->spacing)),
+		IniLine::line(Default::iniKeywordZoom, trimZero(to_string(sets->zoom))),
+		IniLine::line(Default::iniKeywordSpacing, to_string(sets->spacing)),
 		IniLine::line(Default::iniKeywordFont, sets->getFont()),
 		IniLine::line(Default::iniKeywordLanguage, sets->getLang()),
 		IniLine::line(Default::iniKeywordTheme, sets->getTheme()),
 		IniLine::line(Default::iniKeywordLibrary, sets->getDirLib()),
 		IniLine::line(Default::iniKeywordRenderer, sets->renderer),
 		IniLine::line(Default::iniKeywordScrollSpeed, sets->getScrollSpeedString()),
-		IniLine::line(Default::iniKeywordDeadzone, ntos(sets->getDeadzone()))
+		IniLine::line(Default::iniKeywordDeadzone, to_string(sets->getDeadzone()))
 	};
 	return writeTextFile(dirSets + Default::fileSettings, lines);
 }
@@ -277,33 +262,24 @@ vector<Binding> FileSys::getBindings() {
 		if (bid >= bindings.size())
 			continue;
 
-		switch (toupper(il.getVal()[0])) {
-		case 'K':	// keyboard key
+		if (char type = toupper(il.getVal()[0]); type == 'K')	// keyboard key
 			bindings[bid].setKey(SDL_GetScancodeFromName(il.getVal().substr(2).c_str()));
-			break;
-		case 'B':	// joystick button
-			bindings[bid].setJbutton(stoi(il.getVal().substr(2)));
-			break;
-		case 'H':	// joystick hat
+		else if (type == 'B')		// joystick button
+			bindings[bid].setJbutton(sstoul(il.getVal().substr(2)));
+		else if (type == 'H') {		// joystick hat
 			for (sizt i = 2; i < il.getVal().length(); i++)
 				if (il.getVal()[i] < '0' || il.getVal()[i] > '9') {
-					bindings[bid].setJhat(stoi(il.getVal().substr(2, i-2)), jtStrToHat(il.getVal().substr(i+1)));
+					bindings[bid].setJhat(sstoul(il.getVal().substr(2, i-2)), jtStrToHat(il.getVal().substr(i+1)));
 					break;
 				}
-			break;
-		case 'A':	// joystick axis
-			bindings[bid].setJaxis(stoi(il.getVal().substr(3)), (il.getVal()[2] != '-'));
-			break;
-		case 'G': {	// gamepad button
-			SDL_GameControllerButton cid = strToEnum<SDL_GameControllerButton>(Default::gbuttonNames, il.getVal().substr(2));
-			if (cid < SDL_CONTROLLER_BUTTON_MAX)
+		} else if (type ==  'A')	// joystick axis
+			bindings[bid].setJaxis(sstoul(il.getVal().substr(3)), (il.getVal()[2] != '-'));
+		else if (type == 'G') {		// gamepad button
+			if (SDL_GameControllerButton cid = strToEnum<SDL_GameControllerButton>(Default::gbuttonNames, il.getVal().substr(2)); cid < SDL_CONTROLLER_BUTTON_MAX)
 				bindings[bid].setGbutton(cid);
-			break; }
-		case 'X': {	// gamepad axis
-			SDL_GameControllerAxis cid = strToEnum<SDL_GameControllerAxis>(Default::gaxisNames, il.getVal().substr(3));
-			if (cid < SDL_CONTROLLER_AXIS_MAX)
+		} else if (type == 'X')		// gamepad axis
+			if (SDL_GameControllerAxis cid = strToEnum<SDL_GameControllerAxis>(Default::gaxisNames, il.getVal().substr(3)); cid < SDL_CONTROLLER_AXIS_MAX)
 				bindings[bid].setGaxis(cid, (il.getVal()[2] != '-'));
-		} }
 	}
 	return bindings;
 }
@@ -316,11 +292,11 @@ bool FileSys::saveBindings(const vector<Binding>& bindings) {
 			lines.push_back(IniLine::line(name, "K_" + string(SDL_GetScancodeName(bindings[i].getKey()))));
 
 		if (bindings[i].jbuttonAssigned())
-			lines.push_back(IniLine::line(name, "B_" + ntos(bindings[i].getJctID())));
+			lines.push_back(IniLine::line(name, "B_" + to_string(bindings[i].getJctID())));
 		else if (bindings[i].jhatAssigned())
-			lines.push_back(IniLine::line(name, "H_" + ntos(bindings[i].getJctID()) + "_" + jtHatToStr(bindings[i].getJhatVal())));
+			lines.push_back(IniLine::line(name, "H_" + to_string(bindings[i].getJctID()) + "_" + jtHatToStr(bindings[i].getJhatVal())));
 		else if (bindings[i].jaxisAssigned())
-			lines.push_back(IniLine::line(name, string(bindings[i].jposAxisAssigned() ? "A_+" : "A_-") + ntos(bindings[i].getJctID())));
+			lines.push_back(IniLine::line(name, string(bindings[i].jposAxisAssigned() ? "A_+" : "A_-") + to_string(bindings[i].getJctID())));
 
 		if (bindings[i].gbuttonAssigned())
 			lines.push_back(IniLine::line(name, "G_" + enumToStr(Default::gbuttonNames, bindings[i].getGbutton())));
@@ -331,26 +307,37 @@ bool FileSys::saveBindings(const vector<Binding>& bindings) {
 }
 
 vector<string> FileSys::readTextFile(const string& file, bool printMessage) {
-	vector<string> lines;
-	std::ifstream ifs(file.c_str());
-	if (ifs.good()) {
-		for (string line; readLine(ifs, line);)
-			if (line.size())		// skip empty lines
-				lines.push_back(line);
-	} else if (printMessage)
-		std::cerr << "Couldn't open file " << file << std::endl;
+	FILE* ifh = fopen(file.c_str(), "r");
+	if (!ifh) {
+		if (printMessage)
+			std::cerr << "Couldn't open file " << file << std::endl;
+		return {};
+	}
+
+	vector<string> lines(1);
+	for (int c = fgetc(ifh); c != EOF; c = fgetc(ifh)) {
+		if (c != '\n' && c != '\r')
+			lines.back() += c;
+		else if (lines.back().size())
+			lines.push_back("");
+	}
+	fclose(ifh);
+	if (lines.back().empty())
+		lines.pop_back();
 	return lines;
 }
 
 bool FileSys::writeTextFile(const string& file, const vector<string>& lines) {
-	std::ofstream ofs(file.c_str());
-	if (ofs.good()) {
-		for (const string& line : lines)
-			ofs << line << std::endl;
-		return true;	
+	FILE* ofh = fopen(file.c_str(), "w");
+	if (!ofh) {
+		std::cerr << "Couldn't write file " << file << std::endl;
+		return false;
 	}
-	std::cerr << "Couldn't write file " << file << std::endl;
-	return false;
+
+	for (const string& it : lines)
+		fputs((it + '\n').c_str(), ofh);
+	fclose(ofh);
+	return true;
 }
 
 bool FileSys::createDir(const string& path) {
@@ -464,12 +451,8 @@ pair<vector<string>, vector<string>> FileSys::listDirSeparate(const string& drc)
 		return make_pair(files, dirs);
 
 	do {
-		if (wcscmp(data.cFileName, L".") && wcscmp(data.cFileName, L"..")) {	// ignore . and ..
-			if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-				dirs.push_back(wtos(data.cFileName));
-			else
-				files.push_back(wtos(data.cFileName));
-		}
+		if (wcscmp(data.cFileName, L".") && wcscmp(data.cFileName, L".."))	// ignore . and ..
+			(data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? dirs : files).push_back(wtos(data.cFileName));
 	} while (FindNextFileW(hFind, &data));
 	FindClose(hFind);
 #else
@@ -478,12 +461,8 @@ pair<vector<string>, vector<string>> FileSys::listDirSeparate(const string& drc)
 		return make_pair(files, dirs);
 
 	while (dirent* data = readdir(directory))
-		if (strcmp(data->d_name, ".") && strcmp(data->d_name, "..")) {	// ignore . and ..
-			if (data->d_type == DT_DIR)
-				dirs.push_back(data->d_name);
-			else
-				files.push_back(data->d_name);
-		}
+		if (strcmp(data->d_name, ".") && strcmp(data->d_name, ".."))	// ignore . and ..
+			(data->d_type == DT_DIR ? dirs : files).push_back(data->d_name);
 	closedir(directory);
 #endif
 	std::sort(files.begin(), files.end(), strnatless);
@@ -522,8 +501,7 @@ bool FileSys::isPicture(const string& file) {
 
 bool FileSys::isArchive(const string& file) {
 	if (archive* arch = openArchive(file)) {
-		archive_entry* entry;
-		while (!archive_read_next_header(arch, &entry))
+		for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
 			if (SDL_RWops* io = readArchiveEntry(arch, entry))
 				if (SDL_Surface* surf = IMG_Load_RW(io, SDL_TRUE)) {
 					SDL_FreeSurface(surf);
@@ -543,31 +521,25 @@ bool FileSys::isFont(const string& file) {
 	return false;
 }
 #ifdef _WIN32
+string FileSys::wgetenv(const string& name) {
+	wstring var = stow(name);
+	DWORD len = GetEnvironmentVariableW(var.c_str(), nullptr, 0);
+	if (len <= 1)
+		return "";
+
+	wstring str(len - 1, '\0');
+	GetEnvironmentVariableW(var.c_str(), str.data(), len);
+	return wtos(str);
+}
+
 vector<char> FileSys::listDrives() {
 	vector<char> letters;
 	DWORD drives = GetLogicalDrives();
-	
+
 	for (char i = 0; i < 26; i++)
 		if (drives & (1 << i))
-			letters.push_back('A'+i);
+			letters.push_back('A' + i);
 	return letters;
-}
-
-string FileSys::wgetenv(const string& name) {
-	wchar* buffer = new wchar[Default::envBufferSize];
-	DWORD res = GetEnvironmentVariableW(stow(name).c_str(), buffer, Default::envBufferSize);
-	if (!res)
-		buffer[0] = L'\0';
-	else if (res >= Default::envBufferSize) {
-		delete[] buffer;
-		buffer = new wchar[res];
-		res = GetEnvironmentVariableW(stow(name).c_str(), buffer, res);
-		if (!res)
-			buffer[0] = L'\0';
-	}
-	string val = wtos(buffer);
-	delete[] buffer;
-	return val;
 }
 #endif
 string FileSys::getExecDir() {
@@ -580,6 +552,7 @@ string FileSys::getExecDir() {
 	ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
 	if (len < 0)
 		return getWorkingDir();
+
 	buffer[len] = '\0';
 	return parentPath(buffer);
 #endif
@@ -604,28 +577,4 @@ string FileSys::findFont(const string& font) {
 			if (!strcicmp(hasExt(it) ? delExt(filename(it)) : filename(it), font) && isFont(it))
 				return it;
 	return "";	// nothing found
-}
-
-std::istream& FileSys::readLine(std::istream& ifs, string& str) {
-	str.clear();
-	std::istream::sentry se(ifs, true);
-	std::streambuf* sbf = ifs.rdbuf();
-
-	while (true) {
-		int c = sbf->sbumpc();
-		switch (c) {
-		case '\n':
-			return ifs;
-		case '\r':
-			if (sbf->sgetc() == '\n')
-				sbf->sbumpc();
-			return ifs;
-		case EOF:
-			if (str.empty())
-				ifs.setstate(std::ios::eofbit);
-			return ifs;
-		default:
-			str += char(c);
-		}
-	}
 }
