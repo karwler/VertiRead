@@ -5,6 +5,24 @@
 #include <strings.h>
 #endif
 
+// extensions
+struct Rect : SDL_Rect {
+	Rect(int x = 0, int y = 0, int w = 0, int h = 0);
+	Rect(const vec2i& pos, const vec2i& size);
+
+	vec2i& pos() { return *reinterpret_cast<vec2i*>(this); }
+	const vec2i& pos() const { return *reinterpret_cast<const vec2i*>(this); }
+	vec2i& size() { return reinterpret_cast<vec2i*>(this)[1]; }
+	const vec2i& size() const { return reinterpret_cast<const vec2i*>(this)[1]; }
+	vec2i end() const;
+	vec2i back() const;
+
+	bool overlap(const vec2i& point) const;
+	bool overlap(const Rect& rect, vec2i& sback, vec2i& rback) const;
+	Rect crop(const Rect& frame);		// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
+	Rect getOverlap(const Rect& frame);	// same as above except it returns the overlap instead of the crop and it doesn't modify the rect
+};
+
 // files and strings
 int strnatcmp(const char* a, const char* b);	// natural string compare
 
@@ -40,9 +58,9 @@ inline bool isDriveLetter(char c) {
 }
 #endif
 bool strchk(const string& str, bool (*cmp)(char));
-vector<string> getWords(const string& line);
 string strEnclose(string str);
 vector<string> strUnenclose(const string& str);
+SDL_Color getColor(const string& line);
 archive* openArchive(const string& file);
 SDL_RWops* readArchiveEntry(archive* arch, archive_entry* entry);
 
@@ -55,17 +73,6 @@ inline bool isDigit(char c) {
 }
 
 // geometry?
-SDL_Rect cropRect(SDL_Rect& rect, const SDL_Rect& frame);	// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
-SDL_Rect overlapRect(SDL_Rect rect, const SDL_Rect& frame);	// same as above except it returns the overlap instead of the crop
-
-inline vec2i rectEnd(const SDL_Rect& rect) {
-	return vec2i(rect.x + rect.w - 1, rect.y + rect.h - 1);
-}
-
-inline bool inRect(const vec2i& point, const SDL_Rect& rect) {	// check if point is in rect
-	return point.x >= rect.x && point.x < rect.x + rect.w && point.y >= rect.y && point.y < rect.y + rect.h;
-}
-
 template <class T>
 bool inRange(T val, T min, T max) {
 	return val >= min && val <= max;
@@ -138,11 +145,11 @@ T strToEnum(const vector<string>& names, string str) {
 	return T(SIZE_MAX);
 }
 
-inline ulong sstol(const string& str, int base = 0) {
+inline long sstol(const string& str, int base = 0) {
 	return strtol(str.c_str(), nullptr, base);
 }
 
-inline ullong sstoll(const string& str, int base = 0) {
+inline llong sstoll(const string& str, int base = 0) {
 	return strtoll(str.c_str(), nullptr, base);
 }
 
@@ -159,11 +166,11 @@ inline float sstof(const string& str) {
 }
 
 inline double sstod(const string& str) {
-	return strtof(str.c_str(), nullptr);
+	return strtod(str.c_str(), nullptr);
 }
 
 inline ldouble sstold(const string& str) {
-	return strtof(str.c_str(), nullptr);
+	return strtold(str.c_str(), nullptr);
 }
 
 // container stuff

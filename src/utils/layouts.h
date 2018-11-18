@@ -30,7 +30,7 @@ public:
 	const uset<Widget*> getSelected() const { return selected; }
 	virtual vec2i position() const override;
 	virtual vec2i size() const override;
-	virtual SDL_Rect frame() const override;
+	virtual Rect frame() const override;
 	virtual vec2i wgtPosition(sizt id) const;
 	virtual vec2i wgtSize(sizt id) const;
 	void selectWidget(sizt id);
@@ -64,7 +64,7 @@ public:
 
 	virtual vec2i position() const override;
 	virtual vec2i size() const override;
-	virtual SDL_Rect frame() const override;
+	virtual Rect frame() const override;
 
 private:
 	Size sizeY;	// use Widget's relSize as sizeX
@@ -77,7 +77,7 @@ public:
 	virtual ~Overlay() override {}
 
 	virtual vec2i position() const override;
-	SDL_Rect actRect() const;
+	Rect actRect() const;
 
 	bool on;
 private:
@@ -108,11 +108,11 @@ public:
 	bool scrollToPrevious();			// scroll to previous widget (returns false if at scroll limit)
 	void scrollToLimit(bool start);		// scroll to start or end of the list relative to it's direction
 
-	virtual SDL_Rect frame() const override;
+	virtual Rect frame() const override;
 	virtual vec2i wgtPosition(sizt id) const override;
 	virtual vec2i wgtSize(sizt id) const override;
-	SDL_Rect barRect() const;
-	SDL_Rect sliderRect() const;
+	Rect barRect() const;
+	Rect sliderRect() const;
 	vec2t visibleWidgets() const;
 	void moveListPos(const vec2i& mov);
 	

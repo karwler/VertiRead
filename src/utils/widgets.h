@@ -53,8 +53,8 @@ public:
 	virtual vec2i position() const;
 	virtual vec2i size() const;
 	vec2i center() const;
-	SDL_Rect rect() const;			// the rectangle that is the widget
-	virtual SDL_Rect frame() const;	// the rectangle to restrain a widget's visibility (in Widget it returns the parent's frame and if in Layout, it returns a frame for it's children)
+	Rect rect() const;			// the rectangle that is the widget
+	virtual Rect frame() const;	// the rectangle to restrain a widget's visibility (in Widget it returns the parent's frame and if in Layout, it returns a frame for it's children)
 
 protected:
 	Layout* parent;	// every widget that isn't a Layout should have a parent
@@ -75,7 +75,7 @@ public:
 	
 	Color color();
 	vec2i texRes() const;
-	virtual SDL_Rect texRect() const;
+	virtual Rect texRect() const;
 
 	SDL_Texture* tex;
 	int margin;
@@ -93,7 +93,7 @@ public:
 	virtual void drawSelf() override;
 	virtual void onClick(const vec2i& mPos, uint8 mBut) override;
 
-	SDL_Rect boxRect() const;
+	Rect boxRect() const;
 	Color boxColor() const;
 
 	bool on;
@@ -114,8 +114,8 @@ public:
 	int getVal() const { return val; }
 	void setVal(int value);
 
-	SDL_Rect barRect() const;
-	SDL_Rect sliderRect() const;
+	Rect barRect() const;
+	Rect sliderRect() const;
 
 private:
 	int val, vmin, vmax;
@@ -142,9 +142,9 @@ public:
 
 	const string& getText() const { return text; }
 	virtual void setText(const string& str);
-	SDL_Rect textRect() const;
-	SDL_Rect textFrame() const;
-	virtual SDL_Rect texRect() const override;
+	Rect textRect() const;
+	Rect textFrame() const;
+	virtual Rect texRect() const override;
 	int textIconOffset() const;
 
 	Alignment align;	// text alignment
@@ -196,7 +196,7 @@ public:
 
 	const string& getOldText() const { return oldText; }
 	virtual void setText(const string& str) override;
-	SDL_Rect caretRect() const;	
+	Rect caretRect() const;
 
 	void confirm();
 	void cancel();

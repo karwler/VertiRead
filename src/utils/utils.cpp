@@ -1,5 +1,86 @@
 #include "engine/world.h"
+#ifdef _WIN32
 #include <windows.h>
+#endif
+
+Rect::Rect(int x, int y, int w, int h) :
+	SDL_Rect({x, y, w, h})
+{}
+
+Rect::Rect(const vec2i& pos, const vec2i& size) :
+	SDL_Rect({pos.x, pos.y, size.w, size.h})
+{}
+
+vec2i Rect::end() const {
+	return pos() + size();
+}
+
+vec2i Rect::back() const {
+	return vec2i(x + w - 1, y + h - 1);
+}
+
+bool Rect::overlap(const vec2i& point) const {
+	return point.x >= x && point.x < x + w && point.y >= y && point.y < y + h;
+}
+
+bool Rect::overlap(const Rect& rect, vec2i& sback, vec2i& rback) const {
+	if (w <= 0 || h <= 0 || rect.w <= 0 || rect.h <= 0)	// idfk
+		return false;
+
+	sback = back();
+	rback = rect.back();
+	return x < rback.x && y < rback.y && sback.x >= rect.x && sback.y >= rect.y;
+}
+
+Rect Rect::crop(const Rect& frame) {
+	vec2i rback, fback;
+	if (!overlap(frame, rback, fback))
+		return *this = Rect();
+
+	Rect crop;	// crop rect if it's boundaries are out of frame
+	if (x < frame.x) {	// left
+		crop.x = frame.x - x;
+		x = frame.x;
+		w -= crop.x;
+	}
+	if (rback.x > fback.x) {	// right
+		crop.w = rback.x - fback.x;
+		w -= crop.w;
+	}
+	if (y < frame.y) {	// top
+		crop.y = frame.y - y;
+		y = frame.y;
+		h -= crop.y;
+	}
+	if (rback.y > fback.y) {	// bottom
+		crop.h = rback.y - fback.y;
+		h -= crop.h;
+	}
+	crop.size() += crop.pos();	// get full width and height of crop
+	return crop;
+}
+
+Rect Rect::getOverlap(const Rect& frame) {
+	Rect rect = *this;
+	vec2i rend, fend;
+	if (!rect.overlap(frame, rend, fend))
+		return Rect();
+
+	// crop rect if it's boundaries are out of frame
+	if (rect.x < frame.x) {	// left
+		rect.w -= frame.x - rect.x;
+		rect.x = frame.x;
+	}
+	if (rend.x > fend.x)	// right
+		rect.w -= rend.x - fend.x;
+	if (rect.y < frame.y) {	// top
+		rect.h -= frame.y - rect.y;
+		rect.y = frame.y;
+	}
+	if (rend.y > fend.y)	// bottom
+		rect.h -= rend.y - fend.y;
+	return rect;
+}
 
 static int natCompareRight(const char* a, const char* b) {
 	for (int bias = 0;; a++, b++) {
@@ -200,20 +281,6 @@ bool strchk(const string& str, bool (*cmp)(char)) {
 	return true;
 }
 
-vector<string> getWords(const string& line) {
-	sizt i = 0;
-	for (; isSpace(line[i]); i++);
-
-	vector<string> words;
-	while (i < line.length()) {
-		sizt pos = i;
-		while (line[++i] > ' ');      // not space && i < line.length
-		words.push_back(line.substr(pos, i - pos));
-		for (; isSpace(line[i]); i++);
-	}
-	return words;
-}
-
 string strEnclose(string str) {
 	for (string::iterator it = str.begin(); it != str.end(); it++)
 		if (*it == '"')
@@ -255,6 +322,30 @@ vector<string> strUnenclose(const string& str) {
 	return words;
 }
 
+SDL_Color getColor(const string& line) {
+	SDL_Color color = {0, 0, 0, 255};
+	const char* pos = line.c_str();
+	for (; isSpace(*pos); pos++);
+
+	if (*pos == '#') {
+		while (*++pos == '#');
+		char* end;
+		if (uint32 num = strtoul(pos, &end, 16); end != pos) {
+			if (sizt mov = 32 - (end - pos) * 4)
+				num = (num << mov) + 255;
+			*reinterpret_cast<uint*>(&color) = num;
+		}
+	} else for (sizt i = 0; i < 4 && *pos;) {
+		char* end;
+		if (uint8 num = strtoul(pos, &end, 0); end != pos) {
+			reinterpret_cast<uchar*>(&color)[i++] = num;
+			for (pos = end; isSpace(*pos); pos++);
+		} else
+			pos++;
+	}
+	return color;
+}
+
 archive* openArchive(const string& file) {
 	archive* arch = archive_read_new();
 	archive_read_support_filter_all(arch);
@@ -275,66 +366,6 @@ SDL_RWops* readArchiveEntry(archive* arch, archive_entry* entry) {
 	uint8* buffer = new uint8[bsiz];
 	int64 size = archive_read_data(arch, buffer, bsiz);
 	return size < 0 ? nullptr : SDL_RWFromMem(buffer, size);
-}
-
-SDL_Rect cropRect(SDL_Rect& rect, const SDL_Rect& frame) {
-	if (rect.w <= 0 || rect.h <= 0 || frame.w <= 0 || frame.h <= 0)	// idfk
-		return rect = {0, 0, 0, 0};
-
-	// ends of each rect and frame
-	vec2i rend = rectEnd(rect), fend = rectEnd(frame);
-	if (rect.x > fend.x || rect.y > fend.y || rend.x < frame.x || rend.y < frame.y)	// if rect is out of frame
-		return rect = {0, 0, 0, 0};
-
-	// crop rect if it's boundaries are out of frame
-	SDL_Rect crop = {0, 0, 0, 0};
-	if (rect.x < frame.x) {	// left
-		crop.x = frame.x - rect.x;
-		rect.x = frame.x;
-		rect.w -= crop.x;
-	}
-	if (rend.x > fend.x) {	// right
-		crop.w = rend.x - fend.x;
-		rect.w -= crop.w;
-	}
-	if (rect.y < frame.y) {	// top
-		crop.y = frame.y - rect.y;
-		rect.y = frame.y;
-		rect.h -= crop.y;
-	}
-	if (rend.y > fend.y) {	// bottom
-		crop.h = rend.y - fend.y;
-		rect.h -= crop.h;
-	}
-	// get full width and height of crop
-	crop.w += crop.x;
-	crop.h += crop.y;
-	return crop;
-}
-
-SDL_Rect overlapRect(SDL_Rect rect, const SDL_Rect& frame) {
-	if (rect.w <= 0 || rect.h <= 0 || frame.w <= 0 || frame.h <= 0)		// idfk
-		return {0, 0, 0, 0};
-
-	// ends of both rects
-	vec2i rend = rectEnd(rect), fend = rectEnd(frame);
-	if (rect.x > fend.x || rect.y > fend.y || rend.x < frame.x || rend.y < frame.y)	// if they don't overlap
-		return {0, 0, 0, 0};
-
-	// crop rect if it's boundaries are out of frame
-	if (rect.x < frame.x) {	// left
-		rect.w -= frame.x - rect.x;
-		rect.x = frame.x;
-	}
-	if (rend.x > fend.x)	// right
-		rect.w -= rend.x - fend.x;
-	if (rect.y < frame.y) {	// top
-		rect.h -= frame.y - rect.y;
-		rect.y = frame.y;
-	}
-	if (rend.y > fend.y)	// bottom
-		rect.h -= rend.y - fend.y;
-	return rect;
 }
 #ifdef _WIN32
 string wtos(const wstring& src) {

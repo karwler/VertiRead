@@ -27,8 +27,7 @@ public:
 	DrawSys(SDL_Window* window, int driverIndex);
 	~DrawSys();
 
-	SDL_Rect viewport() const;
-	vec2i viewSize() const;
+	Rect viewport() const;
 	void setTheme(const string& name);
 	int textLength(const string& text, int height) { return fonts.length(text, height); }
 	void setFont(const string& font);
@@ -57,7 +56,7 @@ private:
 	umap<string, SDL_Texture*> texes;	// name, texture data
 	umap<string, string> trans;	// english keyword, translated word
 
-	void drawRect(const SDL_Rect& rect, Color color);
-	void drawText(SDL_Texture* tex, const SDL_Rect& rect, const SDL_Rect& frame);
-	void drawImage(SDL_Texture* tex, const SDL_Rect& rect, const SDL_Rect& frame);
+	void drawRect(const Rect& rect, Color color);
+	void drawText(SDL_Texture* tex, const Rect& rect, const Rect& frame);
+	void drawImage(SDL_Texture* tex, const Rect& rect, const Rect& frame);
 };

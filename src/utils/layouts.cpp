@@ -113,10 +113,10 @@ vec2i Layout::position() const {
 }
 
 vec2i Layout::size() const {
-	return parent ? parent->wgtSize(pcID) : World::drawSys()->viewSize();
+	return parent ? parent->wgtSize(pcID) : World::drawSys()->viewport().size();
 }
 
-SDL_Rect Layout::frame() const {
+Rect Layout::frame() const {
 	return parent ? parent->frame() : World::drawSys()->viewport();
 }
 
@@ -186,15 +186,15 @@ void Popup::drawSelf() {
 }
 
 vec2i Popup::position() const {
-	return (World::drawSys()->viewSize() - size()) / 2;
+	return (World::drawSys()->viewport().size() - size()) / 2;
 }
 
 vec2i Popup::size() const {
-	vec2f res = World::drawSys()->viewSize();
+	vec2f res = World::drawSys()->viewport().size();
 	return vec2i(relSize.usePix ? relSize.pix : relSize.prc * res.x, sizeY.usePix ? sizeY.pix : sizeY.prc * res.y);
 }
 
-SDL_Rect Popup::frame() const {
+Rect Popup::frame() const {
 	return World::drawSys()->viewport();
 }
 
@@ -209,15 +209,13 @@ Overlay::Overlay(const vec2s& position, const vec2s& relSize, const vec2s& activ
 {}
 
 vec2i Overlay::position() const {
-	vec2f res = World::drawSys()->viewSize();
+	vec2f res = World::drawSys()->viewport().size();
 	return vec2i(pos.x.usePix ? pos.x.pix : pos.x.prc * res.x, pos.y.usePix ? pos.y.pix : pos.y.prc * res.y);
 }
 
-SDL_Rect Overlay::actRect() const {
-	vec2f res = World::drawSys()->viewSize();
-	vec2i ps(actPos.x.usePix ? actPos.x.pix : actPos.x.prc * res.x, actPos.y.usePix ? actPos.y.pix : actPos.y.prc * res.y);
-	vec2i sz(actSize.x.usePix ? actSize.x.pix : actSize.x.prc * res.x, actSize.y.usePix ? actSize.y.pix : actSize.y.prc * res.y);
-	return {ps.x, ps.y, sz.x, sz.y};
+Rect Overlay::actRect() const {
+	vec2f res = World::drawSys()->viewport().size();
+	return Rect(actPos.x.usePix ? actPos.x.pix : actPos.x.prc * res.x, actPos.y.usePix ? actPos.y.pix : actPos.y.prc * res.y, actSize.x.usePix ? actSize.x.pix : actSize.x.prc * res.x, actSize.y.usePix ? actSize.y.pix : actSize.y.prc * res.y);
 }
 
 // SCROLL AREA
@@ -259,7 +257,7 @@ void ScrollArea::onHold(const vec2i& mPos, uint8 mBut) {
 
 	if (mBut == SDL_BUTTON_LEFT) {	// check scroll bar left click
 		World::scene()->capture = this;
-		if ((draggingSlider = inRect(mPos, barRect()))) {
+		if ((draggingSlider = barRect().overlap(mPos))) {
 			sizt di = direction.vertical();
 			if (int sp = sliderPos(), ss = sliderSize(); outRange(mPos[di], sp, sp + ss))	// if mouse outside of slider but inside bar
 				setSlider(mPos[di] - ss /2);
@@ -418,8 +416,8 @@ void ScrollArea::throttleMotion(float& mov, float dSec) {
 	}
 }
 
-SDL_Rect ScrollArea::frame() const {
-	return parent ? overlapRect(rect(), parent->frame()) : rect();
+Rect ScrollArea::frame() const {
+	return parent ? rect().getOverlap(parent->frame()) : rect();
 }
 
 vec2i ScrollArea::wgtPosition(sizt id) const {
@@ -430,16 +428,16 @@ vec2i ScrollArea::wgtSize(sizt id) const {
 	return Layout::wgtSize(id) - vec2i(barSize(), 0, direction.horizontal());
 }
 
-SDL_Rect ScrollArea::barRect() const {
+Rect ScrollArea::barRect() const {
 	int bs = barSize();
 	vec2i pos = position();
 	vec2i siz = size();
-	return direction.vertical() ? SDL_Rect({pos.x + siz.x - bs, pos.y, bs, siz.y}) : SDL_Rect({pos.x, pos.y + siz.y - bs, siz.x, bs});
+	return direction.vertical() ? Rect(pos.x + siz.x - bs, pos.y, bs, siz.y) : Rect(pos.x, pos.y + siz.y - bs, siz.x, bs);
 }
 
-SDL_Rect ScrollArea::sliderRect() const {
+Rect ScrollArea::sliderRect() const {
 	int bs = barSize();
-	return direction.vertical() ? SDL_Rect({position().x + size().x - bs, sliderPos(), bs, sliderSize()}) : SDL_Rect({sliderPos(), position().y + size().y - bs, sliderSize(), bs});
+	return direction.vertical() ? Rect(position().x + size().x - bs, sliderPos(), bs, sliderSize()) : Rect(sliderPos(), position().y + size().y - bs, sliderSize(), bs);
 }
 
 vec2t ScrollArea::visibleWidgets() const {
@@ -630,7 +628,7 @@ void ReaderBox::postInit() {
 void ReaderBox::onMouseMove(const vec2i& mPos, const vec2i& mMov) {
 	Layout::onMouseMove(mPos, mMov);
 
-	countDown = World::scene()->cursorDisableable() && inRect(mPos, rect()) && !showBar() && World::scene()->capture != this && cursorTimer > 0.f;
+	countDown = World::scene()->cursorDisableable() && rect().overlap(mPos) && !showBar() && World::scene()->capture != this && cursorTimer > 0.f;
 	if (cursorTimer < Default::menuHideTimeout) {
 		cursorTimer = Default::menuHideTimeout;
 		SDL_ShowCursor(SDL_ENABLE);
@@ -638,7 +636,7 @@ void ReaderBox::onMouseMove(const vec2i& mPos, const vec2i& mMov) {
 }
 
 bool ReaderBox::showBar() const {
-	return inRect(InputSys::mousePos(), barRect()) || draggingSlider;
+	return barRect().overlap(InputSys::mousePos()) || draggingSlider;
 }
 
 void ReaderBox::setZoom(float factor) {

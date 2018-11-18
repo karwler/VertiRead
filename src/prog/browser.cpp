@@ -53,7 +53,7 @@ Browser::Browser(const string& rootDirectory, const string& container, const str
 
 bool Browser::goTo(const string& path) {
 	if (isSubpath(path, rootDir))
-		if (FileType type = FileSys::fileType(path); type == FTYPE_FILE || type == FTYPE_DIR) {
+		if (FileType type = FileSys::fileType(path)) {
 			curDir = type == FTYPE_FILE ? parentPath(path) : path;
 			return true;
 		}

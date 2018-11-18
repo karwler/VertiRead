@@ -114,9 +114,9 @@ void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
 }
 
 void Scene::setSelected(const vec2i& mPos, Layout* box) {
-	SDL_Rect frame = box->frame();
+	Rect frame = box->frame();
 	for (Widget* it : box->getWidgets())
-		if (inRect(mPos, overlapRect(it->rect(), frame))) {
+		if (it->rect().getOverlap(frame).overlap(mPos)) {
 			if (Layout* lay = dynamic_cast<Layout*>(it))
 				setSelected(mPos, lay);
 			else
@@ -141,12 +141,12 @@ bool Scene::overlayFocused(const vec2i& mPos) {
 		return false;
 
 	if (overlay->on) {
-		if (inRect(mPos, overlay->rect()))
+		if (overlay->rect().overlap(mPos))
 			return true;
 		overlay->on = false;
 		return false;
 	}
-	if (inRect(mPos, overlay->actRect())) {
+	if (overlay->actRect().overlap(mPos)) {
 		overlay->on = true;
 		return true;
 	}

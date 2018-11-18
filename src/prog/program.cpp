@@ -37,8 +37,7 @@ void Program::eventOpenLastPage(Button* but) {
 }
 
 bool Program::openFile(const string& file) {
-	switch (FileSys::fileType(file)) {
-	case FTYPE_FILE:
+	if (FileType ftype = FileSys::fileType(file); ftype == FTYPE_FILE) {
 		try {
 			bool isPic = FileSys::isPicture(file);
 			browser.reset(new Browser(dseps, isPic ? parentPath(file) : file, isPic ? filename(file) : "", &Program::eventOpenBookList, false));
@@ -48,13 +47,12 @@ bool Program::openFile(const string& file) {
 			browser.reset();
 			return false;
 		}
-		return true;
-	case FTYPE_DIR:
+	} else if (ftype == FTYPE_DIR) {
 		browser.reset(new Browser(dseps, file, &Program::eventOpenBookList));
 		setState(new ProgPageBrowser);
-		return true;
-	}
-	return false;
+	} else
+		return false;
+	return true;
 }
 
 // BROWSER
@@ -188,7 +186,7 @@ void Program::eventSetRenderer(Button* but) {
 }
 
 void Program::eventSetScrollSpeed(Button* but) {
-	World::sets()->setScrollSpeed(static_cast<LineEdit*>(but)->getText());
+	World::sets()->scrollSpeed.set(static_cast<LineEdit*>(but)->getText(), strtof);
 }
 
 void Program::eventSetDeadzoneSL(Button* but) {

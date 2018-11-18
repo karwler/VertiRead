@@ -222,16 +222,6 @@ Settings::Settings(bool maximized, bool fullscreen, const vec2i& resolution, con
 	setDeadzone(deadzone);
 }
 
-string Settings::getResolutionString() const {
-	return to_string(resolution.x) + ' ' + to_string(resolution.y);
-}
-
-void Settings::setResolution(const string& line) {
-	vector<string> elems = getWords(line);
-	for (sizt i = 0; i < elems.size() && i < 2; i++)
-		resolution[i] = sstoul(elems[i]);
-}
-
 const string& Settings::setTheme(const string& name) {
 	vector<string> themes = World::fileSys()->getAvailibleThemes();
 	for (string& it : themes)
@@ -286,14 +276,12 @@ string Settings::getRendererName(int id) {
 	return info.name;
 }
 
-string Settings::getScrollSpeedString() const {
-	return trimZero(to_string(scrollSpeed.x)) + ' ' + trimZero(to_string(scrollSpeed.y));
+string Settings::getResolutionString() const {
+	return to_string(resolution.x) + ' ' + to_string(resolution.y);
 }
 
-void Settings::setScrollSpeed(const string& line) {
-	vector<string> elems = getWords(line);
-	for (sizt i = 0; i < elems.size() && i < 2; i++)
-		scrollSpeed[i] = sstof(elems[i].c_str());
+string Settings::getScrollSpeedString() const {
+	return trimZero(to_string(scrollSpeed.x)) + ' ' + trimZero(to_string(scrollSpeed.y));
 }
 
 void Settings::setDeadzone(int zone) {

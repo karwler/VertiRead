@@ -61,7 +61,7 @@ DrawSys::DrawSys(SDL_Window* window, int driverIndex) {
 		if (string file = World::fileSys()->getDirTexs() + it; SDL_Texture* tex = IMG_LoadTexture(renderer, file.c_str()))
 			texes.insert(make_pair(delExt(it), tex));
 		else
-			std::cerr << "Couldn't load texture " << file << '\n' << IMG_GetError << std::endl;
+			std::cerr << "Couldn't load texture " << file << '\n' << IMG_GetError() << std::endl;
 	}
 	setTheme(World::sets()->getTheme());
 	setFont(World::sets()->getFont());
@@ -74,16 +74,10 @@ DrawSys::~DrawSys() {
 	SDL_DestroyRenderer(renderer);
 }
 
-SDL_Rect DrawSys::viewport() const {
-	SDL_Rect view;
+Rect DrawSys::viewport() const {
+	Rect view;
 	SDL_RenderGetViewport(renderer, &view);
 	return view;
-}
-
-vec2i DrawSys::viewSize() const {
-	SDL_Rect view;
-	SDL_RenderGetViewport(renderer, &view);
-	return vec2i(view.w, view.h);
 }
 
 void DrawSys::setTheme(const string& name) {
@@ -124,7 +118,7 @@ void DrawSys::drawWidgets() {
 
 	// draw popup if exists and dim main widgets
 	if (World::scene()->getPopup()) {
-		SDL_Rect view = viewport();
+		Rect view = viewport();
 		SDL_SetRenderDrawColor(renderer, Default::colorPopupDim.r, Default::colorPopupDim.g, Default::colorPopupDim.b, Default::colorPopupDim.a);
 		SDL_RenderFillRect(renderer, &view);
 
@@ -140,26 +134,26 @@ void DrawSys::drawWidgets() {
 
 void DrawSys::drawButton(Button* wgt) {
 	if (wgt->showBG)
-		drawRect(overlapRect(wgt->rect(), wgt->frame()), wgt->color());
+		drawRect(wgt->rect().getOverlap(wgt->frame()), wgt->color());
 	if (wgt->tex)
 		drawImage(wgt->tex, wgt->texRect(), wgt->frame());
 }
 
 void DrawSys::drawCheckBox(CheckBox* wgt) {
-	SDL_Rect frame = wgt->frame();
+	Rect frame = wgt->frame();
 	drawButton(wgt);												// draw background
-	drawRect(overlapRect(wgt->boxRect(), frame), wgt->boxColor());	// draw checkbox
+	drawRect(wgt->boxRect().getOverlap(frame), wgt->boxColor());	// draw checkbox
 }
 
 void DrawSys::drawSlider(Slider* wgt) {
-	SDL_Rect frame = wgt->frame();
+	Rect frame = wgt->frame();
 	drawButton(wgt);												// draw background
-	drawRect(overlapRect(wgt->barRect(), frame), Color::dark);		// draw bar
-	drawRect(overlapRect(wgt->sliderRect(), frame), Color::light);	// draw slider
+	drawRect(wgt->barRect().getOverlap(frame), Color::dark);		// draw bar
+	drawRect(wgt->sliderRect().getOverlap(frame), Color::light);	// draw slider
 }
 
 void DrawSys::drawLabel(Label* wgt) {
-	SDL_Rect rect = overlapRect(wgt->rect(), wgt->frame());
+	Rect rect = wgt->rect().getOverlap(wgt->frame());
 	if (wgt->showBG)	// draw background
 		drawRect(rect, wgt->color());
 	if (wgt->tex)		// draw left icon
@@ -194,31 +188,31 @@ void DrawSys::drawPopup(Popup* box) {
 		it->drawSelf();
 }
 
-void DrawSys::drawRect(const SDL_Rect& rect, Color color) {
+void DrawSys::drawRect(const Rect& rect, Color color) {
 	SDL_Color clr = colors[static_cast<uint8>(color)];
 	SDL_SetRenderDrawColor(renderer, clr.r, clr.g, clr.b, clr.a);
 	SDL_RenderFillRect(renderer, &rect);
 }
 
-void DrawSys::drawText(SDL_Texture* tex, const SDL_Rect& rect, const SDL_Rect& frame) {
+void DrawSys::drawText(SDL_Texture* tex, const Rect& rect, const Rect& frame) {
 	// crop destination rect and original texture rect
-	SDL_Rect dst = rect;
-	SDL_Rect crop = cropRect(dst, frame);
-	SDL_Rect src = {crop.x, crop.y, rect.w - crop.w, rect.h - crop.h};
+	Rect dst = rect;
+	Rect crop = dst.crop(frame);
+	Rect src(crop.pos(), rect.size() - crop.size());
 
 	SDL_RenderCopy(renderer, tex, &src, &dst);
 }
 
-void DrawSys::drawImage(SDL_Texture* tex, const SDL_Rect& rect, const SDL_Rect& frame) {
+void DrawSys::drawImage(SDL_Texture* tex, const Rect& rect, const Rect& frame) {
 	// get destination rect and crop
-	SDL_Rect dst = rect;
-	SDL_Rect crop = cropRect(dst, frame);
+	Rect dst = rect;
+	Rect crop = dst.crop(frame);
 
 	// get cropped source rect
 	vec2i res;
 	SDL_QueryTexture(tex, nullptr, nullptr, &res.x, &res.y);
-	vec2f factor(float(res.x) / float(rect.w), float(res.y) / float(rect.h));
-	SDL_Rect src = {int(float(crop.x) * factor.x), int(float(crop.y) * factor.y), res.x - int(float(crop.w) * factor.x), res.y - int(float(crop.h) * factor.y)};
+	vec2f factor(vec2f(res) / vec2f(rect.size()));
+	Rect src(vec2f(crop.pos()) * factor, res - vec2i(vec2f(crop.size()) * factor));
 
 	SDL_RenderCopy(renderer, tex, &src, &dst);
 }

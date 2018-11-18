@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <string>
 
 template <class T>
 struct vec2 {
@@ -138,6 +139,22 @@ struct vec2 {
 		x--;
 		y--;
 		return t;
+	}
+
+	template <class F, class... A>
+	vec2 set(const std::string& str, F strtox, A... args) {
+		const char* pos = str.c_str();
+		for (; *pos > '\0' && *pos <= ' '; pos++);
+
+		for (size_t i = 0; *pos && i < 2; i++) {
+			char* end;
+			if (T num = strtox(pos, &end, args...); end != pos) {
+				(*this)[i] = num;
+				for (pos = end; *pos > '\0' && *pos <= ' '; pos++);
+			} else
+				pos++;
+		}
+		return *this;
 	}
 
 	bool has(const T& n) const {

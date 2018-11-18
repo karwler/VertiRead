@@ -138,14 +138,9 @@ vector<SDL_Color> FileSys::loadColors(const string& theme) {
 	while (++i < lines.size()) {
 		if (il.setLine(lines[i]) == IniLine::Type::title)
 			break;
-		if (il.getType() != IniLine::Type::prpVal)
-			continue;
-
-		if (sizt cid = strToEnum<sizt>(Default::colorNames, il.getPrp()); cid < colors.size()) {
-			vector<string> elems = getWords(il.getVal());
-			for (sizt i = 0; i < elems.size() && i < 4; i++)
-				reinterpret_cast<uint8*>(&colors[cid])[i] = sstoul(elems[i]);
-		}
+		if (il.getType() == IniLine::Type::prpVal)
+			if (sizt cid = strToEnum<sizt>(Default::colorNames, il.getPrp()); cid < colors.size())
+				colors[cid] = getColor(il.getVal());
 	}
 	return colors;
 }
@@ -204,13 +199,13 @@ Settings* FileSys::loadSettings() {
 		else if (il.getPrp() == Default::iniKeywordFullscreen)
 			sets->fullscreen = stob(il.getVal());
 		else if (il.getPrp() == Default::iniKeywordResolution)
-			sets->setResolution(il.getVal());
+			sets->resolution.set(il.getVal(), strtoul, 0);
 		else if (il.getPrp() == Default::iniKeywordDirection)
 			sets->direction.set(il.getVal());
 		else if (il.getPrp() == Default::iniKeywordZoom)
 			sets->zoom = sstof(il.getVal());
 		else if (il.getPrp() == Default::iniKeywordSpacing)
-			sets->spacing = sstoul(il.getVal().c_str());
+			sets->spacing = sstoul(il.getVal());
 		else if (il.getPrp() == Default::iniKeywordFont)
 			sets->setFont(il.getVal());
 		else if (il.getPrp() == Default::iniKeywordLanguage)
@@ -222,7 +217,7 @@ Settings* FileSys::loadSettings() {
 		else if (il.getPrp() == Default::iniKeywordRenderer)
 			sets->renderer = il.getVal();
 		else if (il.getPrp() == Default::iniKeywordScrollSpeed)
-			sets->setScrollSpeed(il.getVal());
+			sets->scrollSpeed.set(il.getVal(), strtof);
 		else if (il.getPrp() == Default::iniKeywordDeadzone)
 			sets->setDeadzone(sstoul(il.getVal()));
 	}
@@ -307,7 +302,7 @@ bool FileSys::saveBindings(const vector<Binding>& bindings) {
 }
 
 vector<string> FileSys::readTextFile(const string& file, bool printMessage) {
-	FILE* ifh = fopen(file.c_str(), "r");
+	FILE* ifh = fopen(file.c_str(), "rb");
 	if (!ifh) {
 		if (printMessage)
 			std::cerr << "Couldn't open file " << file << std::endl;
@@ -328,7 +323,7 @@ vector<string> FileSys::readTextFile(const string& file, bool printMessage) {
 }
 
 bool FileSys::writeTextFile(const string& file, const vector<string>& lines) {
-	FILE* ofh = fopen(file.c_str(), "w");
+	FILE* ofh = fopen(file.c_str(), "wb");
 	if (!ofh) {
 		std::cerr << "Couldn't write file " << file << std::endl;
 		return false;

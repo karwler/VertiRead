@@ -47,12 +47,11 @@ vec2i Widget::center() const {
 	return position() + size() / 2;
 }
 
-SDL_Rect Widget::rect() const {
-	vec2i pos = position(), siz = size();
-	return {pos.x, pos.y, siz.x, siz.y};
+Rect Widget::rect() const {
+	return Rect(position(), size());
 }
 
-SDL_Rect Widget::frame() const {
+Rect Widget::frame() const {
 	return parent->frame();
 }
 
@@ -107,9 +106,9 @@ vec2i Button::texRes() const {
 	return res;
 }
 
-SDL_Rect Button::texRect() const {
-	SDL_Rect rct = rect();
-	return {rct.x + margin, rct.y + margin, rct.w - margin*2, rct.h - margin*2};
+Rect Button::texRect() const {
+	Rect rct = rect();
+	return Rect(rct.pos() + margin, rct.size() - margin * 2);
 }
 
 // CHECK BOX
@@ -129,10 +128,10 @@ void CheckBox::onClick(const vec2i& mPos, uint8 mBut) {
 	Button::onClick(mPos, mBut);
 }
 
-SDL_Rect CheckBox::boxRect() const {
-	vec2i pos = position(), siz = size();
+Rect CheckBox::boxRect() const {
+	vec2i siz = size();
 	int margin = (siz.x > siz.y ? siz.y : siz.x) / 4;
-	return {pos.x+margin, pos.y+margin, siz.x-margin*2, siz.y-margin*2};
+	return Rect(position() + margin, siz - margin * 2);
 }
 
 Color CheckBox::boxColor() const {
@@ -185,15 +184,15 @@ void Slider::setVal(int value) {
 	val = bringIn(value, vmin, vmax);
 }
 
-SDL_Rect Slider::barRect() const {
-	vec2i pos = position(), siz = size();
-	int margin = siz.y / 4, height = siz.y / 2;
-	return {pos.x + margin, pos.y + margin, siz.x - height, height};
+Rect Slider::barRect() const {
+	vec2i siz = size();
+	int height = siz.y / 2;
+	return Rect(position() + siz.y / 4, vec2i(siz.x - height, height));
 }
 
-SDL_Rect Slider::sliderRect() const {
+Rect Slider::sliderRect() const {
 	vec2i pos = position(), siz = size();
-	return {sliderPos(), pos.y, Default::sbarSize, siz.y};
+	return Rect(sliderPos(), pos.y, Default::sbarSize, siz.y);
 }
 
 int Slider::sliderPos() const {
@@ -233,22 +232,21 @@ void Label::setText(const string& str) {
 	updateTex();
 }
 
-SDL_Rect Label::textRect() const {
-	vec2i pos = textPos(), siz = textSize();
-	return {pos.x, pos.y, siz.x, siz.y};
+Rect Label::textRect() const {
+	return Rect(textPos(), textSize());
 }
 
-SDL_Rect Label::textFrame() const {
-	SDL_Rect rct = rect();
+Rect Label::textFrame() const {
+	Rect rct = rect();
 	int ofs = textIconOffset();
-	return overlapRect({rct.x + ofs + textMargin, rct.y, rct.w - ofs - textMargin * 2, rct.h}, frame());
+	return Rect(rct.x + ofs + textMargin, rct.y, rct.w - ofs - textMargin * 2, rct.h).getOverlap(frame());
 }
 
-SDL_Rect Label::texRect() const {
-	SDL_Rect rct = rect();
+Rect Label::texRect() const {
+	Rect rct = rect();
 	rct.h -= margin * 2;
 	vec2i res = texRes();
-	return {rct.x + margin, rct.y + margin, int(float(rct.h * res.x) / float(res.y)), rct.h};
+	return Rect(rct.pos() + margin, vec2i(float(rct.h * res.x) / float(res.y), rct.h));
 }
 
 vec2i Label::textPos() const {
@@ -418,7 +416,7 @@ void LineEdit::setText(const string& str) {
 	setCPos(text.length());
 }
 
-SDL_Rect LineEdit::caretRect() const {
+Rect LineEdit::caretRect() const {
 	vec2i ps = position();
 	return {caretPos() + ps.x + margin, ps.y, Default::caretWidth, size().y};
 }

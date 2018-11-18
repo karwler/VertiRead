@@ -155,9 +155,6 @@ class Settings {
 public:
 	Settings(bool maximized = Default::maximized, bool fullscreen = Default::fullscreen, const vec2i& resolution = Default::resolution, const Direction& direction = Direction::down, float zoom = Default::zoom, int spacing = Default::spacing, const string& theme="", const string& font = Default::font, const string& language = Default::language, const string& library = "", const string& renderer = "", const vec2f& speed = Default::scrollSpeed, int16 deadzone = Default::controllerDeadzone);
 
-	string getResolutionString() const;
-	void setResolution(const string& line);
-
 	const string& getTheme() const { return theme; }
 	const string& setTheme(const string& name);
 	const string& getFont() const { return font; }
@@ -171,8 +168,8 @@ public:
 	static vector<string> getAvailibleRenderers();
 	static string getRendererName(int id);
 
+	string getResolutionString() const;
 	string getScrollSpeedString() const;
-	void setScrollSpeed(const string& line);
 	int getDeadzone() const { return deadzone; }
 	void setDeadzone(int zone);
 
