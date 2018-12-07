@@ -25,11 +25,9 @@ public:
 	int getAxisJ(uint8 jaxis) const;				// check if any of the joysticks' axis value is greater than 0
 	int getAxisG(SDL_GameControllerAxis gaxis) const;			// check if any of the gamepads' axis value is greater than 0
 
-	static bool isPressedM(uint8 mbutton);
-	static vec2i mousePos();
-	const vec2i& getMouseMove() const { return mouseMove; }
-	Binding& getBinding(Binding::Type type) { return bindings[static_cast<sizt>(type)]; }
-	const vector<Binding>& getBindings() const { return bindings; }
+	const vec2i& getMouseMove() const;
+	Binding& getBinding(Binding::Type type);
+	const vector<Binding>& getBindings() const;
 	void resetBindings();
 	void addController(int id);
 	void removeController(int id);
@@ -58,3 +56,23 @@ private:
 	int checkAxisValue(int value) const;	// check deadzone in axis value
 	static float axisToFloat(int axisValue);
 };
+
+inline bool InputSys::isPressed(Binding::Type type, float& amt) const {
+	return bindings[sizt(type)].isAxis() ? isPressed(bindings[sizt(type)], amt) : false;
+}
+
+inline const vec2i& InputSys::getMouseMove() const {
+	return mouseMove;
+}
+
+inline Binding& InputSys::getBinding(Binding::Type type) {
+	return bindings[sizt(type)];
+}
+
+inline const vector<Binding>& InputSys::getBindings() const {
+	return bindings;
+}
+
+inline float InputSys::axisToFloat(int axisValue) {
+	return float(axisValue) / float(Default::axisLimit);
+}

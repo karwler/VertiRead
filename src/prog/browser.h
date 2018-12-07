@@ -15,11 +15,11 @@ public:
 	bool selectFile(const string& fname);
 	void clearCurFile();
 
-	const string& getRootDir() const { return rootDir; }
-	const string& getCurDir() const { return curDir; }
-	const string& getCurFile() const { return curFile; }
-	string curFilepath() const { return childPath(curDir, curFile); }
-	bool getInArchive() const { return inArchive; }
+	const string& getRootDir() const;
+	const string& getCurDir() const;
+	const string& getCurFile() const;
+	string curFilepath() const;
+	bool getInArchive() const;
 
 	PCall exCall;	// gets called when goUp() fails, aka stepping out of rootDir into the previous menu
 private:
@@ -33,3 +33,23 @@ private:
 	bool nextDir(const string& dit, const string& pdir);
 	bool nextArchive(const string& ait, const string& pdir);
 };
+
+inline const string& Browser::getRootDir() const {
+	return rootDir;
+}
+
+inline const string& Browser::getCurDir() const {
+	return curDir;
+}
+
+inline const string& Browser::getCurFile() const {
+	return curFile;
+}
+
+inline string Browser::curFilepath() const {
+	return childPath(curDir, curFile);
+}
+
+inline bool Browser::getInArchive() const {
+	return inArchive;
+}

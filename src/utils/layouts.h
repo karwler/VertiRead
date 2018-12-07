@@ -20,14 +20,14 @@ public:
 	virtual void postInit() override;
 	virtual void onMouseMove(const vec2i& mPos, const vec2i& mMov) override;
 	virtual void onNavSelect(const Direction&) override {}
-	virtual bool navSelectable() const override { return widgets.size(); }
+	virtual bool navSelectable() const override;
 
 	virtual void navSelectNext(sizt id, int mid, const Direction& dir);
 	virtual void navSelectFrom(int mid, const Direction& dir);
 
-	Widget* getWidget(sizt id) const { return widgets[id]; }
-	const vector<Widget*>& getWidgets() const { return widgets; }
-	const uset<Widget*> getSelected() const { return selected; }
+	Widget* getWidget(sizt id) const;
+	const vector<Widget*>& getWidgets() const;
+	const uset<Widget*> getSelected() const;
 	virtual vec2i position() const override;
 	virtual vec2i size() const override;
 	virtual Rect frame() const override;
@@ -53,6 +53,18 @@ private:
 	void selectSingleWidget(sizt id);
 	vec2t findMinMaxSelectedID() const;
 };
+
+inline Widget* Layout::getWidget(sizt id) const {
+	return widgets[id];
+}
+
+inline const vector<Widget*>& Layout::getWidgets() const {
+	return widgets;
+}
+
+inline const uset<Widget*> Layout::getSelected() const {
+	return selected;
+}
 
 // layout with background with free position/size (shouldn't have a parent)
 class Popup : public Layout {
@@ -137,6 +149,14 @@ private:
 	static void throttleMotion(float& mov, float dSec);
 };
 
+inline void ScrollArea::moveListPos(const vec2i& mov) {
+	listPos = bringIn(listPos + mov, vec2i(0), listLim());
+}
+
+inline int ScrollArea::sliderLim() const {
+	return size()[direction.vertical()] - sliderSize();
+}
+
 // places items as tiles one after another
 class TileBox : public ScrollArea {
 public:
@@ -175,7 +195,7 @@ public:
 	virtual void onMouseMove(const vec2i& mPos, const vec2i& mMov) override;
 
 	bool showBar() const;
-	float getZoom() const { return zoom; }
+	float getZoom() const;
 	void setZoom(float factor);
 	void centerList();		// set listPos.x so that the view will be in the centter
 	string curPage() const;
@@ -183,7 +203,7 @@ public:
 	virtual vec2i wgtSize(sizt id) const override;
 
 private:
-	vector<pair<string, SDL_Texture*>> pics;
+	vector<Texture> pics;
 	float cursorTimer;		// time left until cursor/overlay disappeares
 	float zoom;
 	bool countDown;			// whether to decrease cursorTimer until cursor hide
@@ -191,6 +211,12 @@ private:
 	virtual vec2i listSize() const override;
 	virtual int wgtRPos(sizt id) const override;
 	virtual int wgtREnd(sizt id) const override;
-
-	vec2i texRes(sizt id) const;
 };
+
+inline bool ReaderBox::showBar() const {
+	return barRect().overlap(mousePos()) || draggingSlider;
+}
+
+inline float ReaderBox::getZoom() const {
+	return zoom;
+}

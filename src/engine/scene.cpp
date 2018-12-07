@@ -99,7 +99,7 @@ void Scene::resetLayouts() {
 	layout->postInit();
 	if (overlay)
 		overlay->postInit();
-	onMouseMove(InputSys::mousePos(), 0);
+	onMouseMove(mousePos(), 0);
 }
 
 void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
@@ -109,8 +109,8 @@ void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
 
 	capture = newCapture;
 	if (capture)
-		capture->onClick(InputSys::mousePos(), SDL_BUTTON_LEFT);
-	onMouseMove(InputSys::mousePos(), 0);
+		capture->onClick(mousePos(), SDL_BUTTON_LEFT);
+	onMouseMove(mousePos(), 0);
 }
 
 void Scene::setSelected(const vec2i& mPos, Layout* box) {
@@ -192,12 +192,4 @@ bool Scene::cursorDisableable() {
 	while (parent->getParent())
 		parent = parent->getParent();
 	return parent == layout.get();
-}
-
-bool Scene::cursorInClickRange(const vec2i& mPos, uint8 mBut) {
-	return vec2f(mPos - stamps[mBut].mPos).length() <= Default::clickThreshold;
-}
-
-Layout* Scene::topLayout(const vec2i& mPos) {
-	return popup ? popup.get() : overlayFocused(mPos) ? overlay.get() : layout.get();
 }

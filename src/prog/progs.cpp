@@ -48,6 +48,22 @@ void ProgState::eventSelect(const Direction& dir) {
 		World::scene()->selectFirst();
 }
 
+void ProgState::eventUp() {
+	eventSelect(Direction::up);
+}
+
+void ProgState::eventDown() {
+	eventSelect(Direction::down);
+}
+
+void ProgState::eventLeft() {
+	eventSelect(Direction::left);
+}
+
+void ProgState::eventRight() {
+	eventSelect(Direction::right);
+}
+
 void ProgState::eventCursorUp(float amt) {
 	World::winSys()->moveCursor(vec2i(-amt * Default::cursorMoveFactor * World::winSys()->getDSec(), 0));
 }
@@ -70,6 +86,14 @@ void ProgState::eventFullscreen() {
 
 void ProgState::eventRefresh() {
 	World::scene()->resetLayouts();
+}
+
+Layout* ProgState::createLayout() {
+	return nullptr;
+}
+
+Overlay* ProgState::createOverlay() {
+	return nullptr;
 }
 
 Popup* ProgState::createPopupMessage(const string& msg, const vec2<Size>& size) {
@@ -173,6 +197,22 @@ void ProgReader::eventEscape() {
 		World::program()->eventExitReader();
 }
 
+void ProgReader::eventUp() {
+	eventScrollUp(1.f);
+}
+
+void ProgReader::eventDown() {
+	eventScrollDown(1.f);
+}
+
+void ProgReader::eventLeft() {
+	eventScrollLeft(1.f);
+}
+
+void ProgReader::eventRight() {
+	eventScrollRight(1.f);
+}
+
 void ProgReader::eventScrollUp(float amt) {
 	World::scene()->getLayout()->onScroll(vec2i(0, -modifySpeed(amt * World::sets()->scrollSpeed.y)));
 }
@@ -259,12 +299,12 @@ Overlay* ProgReader::createOverlay() {
 	return new Overlay(vec2s(0), vec2s(picSize, picSize*int(menu.size())), vec2s(0), vec2s(picSize/2, picSize*int(menu.size())), menu, Direction::down, 0);
 }
 
-float ProgReader::modifySpeed(float value) {
+int ProgReader::modifySpeed(float value) {
 	if (float factor = 1.f; World::inputSys()->isPressed(Binding::Type::scrollFast, factor))
 		value *= Default::scrollFactor * factor;
 	else if (World::inputSys()->isPressed(Binding::Type::scrollSlow, factor))
 		value /= Default::scrollFactor * factor;
-	return value * World::winSys()->getDSec();
+	return int(value * World::winSys()->getDSec());
 }
 
 // PROG SETTINGS
@@ -330,7 +370,7 @@ Layout* ProgSettings::createLayout() {
 	vector<Widget*> lx[] = { {
 		new Label(descLength, txs[0]),
 		new SwitchBox(1.f, Default::directionNames, World::sets()->direction.toString(), &Program::eventSwitchDirection)
-	},{
+	}, {
 		new Label(descLength, txs[1]),
 		new LineEdit(1.f, trimZero(to_string(World::sets()->zoom)), &Program::eventSetZoom, nullptr, nullptr, LineEdit::TextType::uFloating)
 	}, {
@@ -339,7 +379,7 @@ Layout* ProgSettings::createLayout() {
 	}, {
 		new Label(descLength, txs[3]),
 		new CheckBox(lineHeight, World::sets()->fullscreen, &Program::eventSwitchFullscreen)
-	},{
+	}, {
 		new Label(descLength, txs[4]),
 		new Label(butts[0].length, butts[0].text, &Program::eventSetPortrait),
 		new Label(butts[1].length, butts[1].text, &Program::eventSetLandscape),
@@ -360,7 +400,7 @@ Layout* ProgSettings::createLayout() {
 		new Label(dots.length, dots.text, &Program::eventOpenLibDirBrowser, nullptr, nullptr, Label::Alignment::center)
 	}, {
 		new Label(descLength, txs[9]),
-		new SwitchBox(1.f, Settings::getAvailibleRenderers(), World::sets()->renderer, &Program::eventSetRenderer)
+		new SwitchBox(1.f, getAvailibleRenderers(), World::sets()->renderer, &Program::eventSetRenderer)
 	}, {
 		new Label(descLength, txs[10]),
 		new LineEdit(1.f, World::sets()->getScrollSpeedString(), &Program::eventSetScrollSpeed, nullptr, nullptr, LineEdit::TextType::sFloatingSpaced)
@@ -376,12 +416,11 @@ Layout* ProgSettings::createLayout() {
 	
 	// shortcut entries
 	for (sizt i = 0; i < bindings.size(); i++) {
-		Binding::Type type = static_cast<Binding::Type>(i);
 		vector<Widget*> lin {
 			new Label(descLength, txs[lcnt+i]),
-			new KeyGetter(1.f, KeyGetter::AcceptType::keyboard, type),
-			new KeyGetter(1.f, KeyGetter::AcceptType::joystick, type),
-			new KeyGetter(1.f, KeyGetter::AcceptType::gamepad, type)
+			new KeyGetter(1.f, KeyGetter::AcceptType::keyboard, Binding::Type(i)),
+			new KeyGetter(1.f, KeyGetter::AcceptType::joystick, Binding::Type(i)),
+			new KeyGetter(1.f, KeyGetter::AcceptType::gamepad, Binding::Type(i))
 		};
 		lns[lcnt+1+i] = new Layout(lineHeight, lin, Direction::right);
 	}

@@ -9,6 +9,34 @@ enum FileType : uint8 {
 	FTYPE_ANY  = 0xFF
 };
 
+inline FileType operator~(FileType a) {
+	return FileType(~uint8(a));
+}
+
+inline FileType operator&(FileType a, FileType b) {
+	return FileType(uint8(a) & uint8(b));
+}
+
+inline FileType operator&=(FileType& a, FileType b) {
+	return a = FileType(uint8(a) & uint8(b));
+}
+
+inline FileType operator^(FileType a, FileType b) {
+	return FileType(uint8(a) ^ uint8(b));
+}
+
+inline FileType operator^=(FileType& a, FileType b) {
+	return a = FileType(uint8(a) ^ uint8(b));
+}
+
+inline FileType operator|(FileType a, FileType b) {
+	return FileType(uint8(a) | uint8(b));
+}
+
+inline FileType operator|=(FileType& a, FileType b) {
+	return a = FileType(uint8(a) | uint8(b));
+}
+
 // for interpreting lines in ini files
 class IniLine {
 public:
@@ -26,10 +54,10 @@ public:
 	IniLine();
 	IniLine(const string& line);
 
-	Type getType() const { return type; }
-	const string& getPrp() const { return prp; }
-	const string& getKey() const { return key; }
-	const string& getVal() const { return val; }
+	Type getType() const;
+	const string& getPrp() const;
+	const string& getKey() const;
+	const string& getVal() const;
 
 	string line() const;	// get the actual INI line from prp, key and val
 	static string line(const string& title);
@@ -47,6 +75,42 @@ private:
 	string key;	// the thing between the brackets (empty if there are no brackets)
 	string val;	// value, aka. the thing after the equal sign
 };
+
+inline IniLine::IniLine() :
+	type(Type::empty)
+{}
+
+inline IniLine::IniLine(const string& line) {
+	setLine(line);
+}
+
+inline IniLine::Type IniLine::getType() const {
+	return type;
+}
+
+inline const string& IniLine::getPrp() const {
+	return prp;
+}
+
+inline const string& IniLine::getKey() const {
+	return key;
+}
+
+inline const string& IniLine::getVal() const {
+	return val;
+}
+
+inline string IniLine::line(const string& title) {
+	return '[' + title + ']';
+}
+
+inline string IniLine::line(const string& prp, const string& val) {
+	return prp + '=' + val;
+}
+
+inline string IniLine::line(const string& prp, const string& key, const string& val) {
+	return prp + '[' + key + "]=" + val;
+}
 
 // handles all filesystem interactions
 class FileSys {
@@ -77,11 +141,10 @@ public:
 #ifdef _WIN32
 	static string wgetenv(const string& name);
 #endif
-
-	const string& getDirExec() const { return dirExec; }
-	const string& getDirSets() const { return dirSets; }
-	const string& getDirLangs() const { return dirLangs; }
-	const string& getDirTexs() const { return dirTexs; }
+	const string& getDirExec() const;
+	const string& getDirSets() const;
+	const string& getDirLangs() const;
+	const string& getDirTexs() const;
 
 private:
 	static vector<string> readTextFile(const string& file, bool printMessage = true);
@@ -98,3 +161,19 @@ private:
 	string dirTexs;	// textures directory
 	vector<string> dirFonts;	// os's font directories
 };
+
+inline const string& FileSys::getDirExec() const {
+	return dirExec;
+}
+
+inline const string& FileSys::getDirSets() const {
+	return dirSets;
+}
+
+inline const string& FileSys::getDirLangs() const {
+	return dirLangs;
+}
+
+inline const string& FileSys::getDirTexs() const {
+	return dirTexs;
+}

@@ -9,10 +9,10 @@ public:
 
 	void eventEnter();
 	virtual void eventEscape() {}
-	virtual void eventUp() { eventSelect(Direction::up); }
-	virtual void eventDown() { eventSelect(Direction::down); }
-	virtual void eventLeft() { eventSelect(Direction::left); }
-	virtual void eventRight() { eventSelect(Direction::right); }
+	virtual void eventUp();
+	virtual void eventDown();
+	virtual void eventLeft();
+	virtual void eventRight();
 	virtual void eventScrollUp(float) {}
 	virtual void eventScrollDown(float) {}
 	virtual void eventScrollLeft(float) {}
@@ -36,8 +36,8 @@ public:
 	virtual void eventFileDrop(const string&) {}
 	virtual void eventClosing() {}
 	
-	virtual Layout* createLayout() { return nullptr; }
-	virtual Overlay* createOverlay() { return nullptr; }
+	virtual Layout* createLayout();
+	virtual Overlay* createOverlay();
 	static Popup* createPopupMessage(const string& msg, const vec2<Size>& size = messageSize);
 	
 protected:
@@ -86,10 +86,10 @@ public:
 	virtual ~ProgReader() override {}
 
 	virtual void eventEscape() override;
-	virtual void eventUp() override { eventScrollUp(1.f); }
-	virtual void eventDown() override { eventScrollDown(1.f); }
-	virtual void eventLeft() override { eventScrollLeft(1.f); }
-	virtual void eventRight() override { eventScrollRight(1.f); }
+	virtual void eventUp() override;
+	virtual void eventDown() override;
+	virtual void eventLeft() override;
+	virtual void eventRight() override;
 	virtual void eventScrollUp(float amt) override;
 	virtual void eventScrollDown(float amt) override;
 	virtual void eventScrollLeft(float amt) override;
@@ -110,7 +110,7 @@ public:
 	virtual Overlay* createOverlay() override;
 
 private:
-	float modifySpeed(float value);	// change scroll speed depending on pressed bindings
+	int modifySpeed(float value);	// change scroll speed depending on pressed bindings
 };
 
 class ProgSettings : public ProgState {

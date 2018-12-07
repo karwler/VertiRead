@@ -33,7 +33,7 @@ TTF_Font* FontSet::addSize(int size) {
 }
 
 TTF_Font* FontSet::getFont(int height) {
-	height = float(height) * heightScale;
+	height = int(float(height) * heightScale);
 	try {	// load font if it hasn't been loaded yet
 		return fonts.at(height);
 	} catch (const std::out_of_range&) {
@@ -59,7 +59,7 @@ DrawSys::DrawSys(SDL_Window* window, int driverIndex) {
 	// load default textures with colors and initialize fonts and translations
 	for (string& it : FileSys::listDir(World::fileSys()->getDirTexs(), FTYPE_FILE)) {
 		if (string file = World::fileSys()->getDirTexs() + it; SDL_Texture* tex = IMG_LoadTexture(renderer, file.c_str()))
-			texes.insert(make_pair(delExt(it), tex));
+			texes.insert(std::make_pair(delExt(it), tex));
 		else
 			std::cerr << "Couldn't load texture " << file << '\n' << IMG_GetError() << std::endl;
 	}
@@ -74,15 +74,9 @@ DrawSys::~DrawSys() {
 	SDL_DestroyRenderer(renderer);
 }
 
-Rect DrawSys::viewport() const {
-	Rect view;
-	SDL_RenderGetViewport(renderer, &view);
-	return view;
-}
-
 void DrawSys::setTheme(const string& name) {
 	colors = World::fileSys()->loadColors(World::sets()->setTheme(name));
-	SDL_Color clr = colors[static_cast<uint8>(Color::texture)];
+	SDL_Color clr = colors[uint8(Color::texture)];
 
 	for (const pair<string, SDL_Texture*>& it : texes) {
 		SDL_SetTextureColorMod(it.second, clr.r, clr.g, clr.b);
@@ -97,8 +91,17 @@ void DrawSys::setFont(const string& font) {
 string DrawSys::translation(const string& line, bool firstCapital) const {
 	string str = trans.count(line) ? trans.at(line) : line;
 	if (firstCapital && str.size())
-		str[0] = toupper(str[0]);
+		str[0] = char(toupper(str[0]));
 	return str;
+}
+
+SDL_Texture* DrawSys::texture(const string& name) const {
+	try {
+		return texes.at(name);
+	} catch (const std::out_of_range&) {
+		std::cerr << "Texture " << name << " doesn't exist." << std::endl;
+		return nullptr;
+	}
 }
 
 void DrawSys::setLanguage(const string& lang) {
@@ -107,7 +110,7 @@ void DrawSys::setLanguage(const string& lang) {
 
 void DrawSys::drawWidgets() {
 	// clear screen
-	SDL_Color bgcolor = colors[static_cast<uint8>(Color::background)];
+	SDL_Color bgcolor = colors[uint8(Color::background)];
 	SDL_SetRenderDrawColor(renderer, bgcolor.r, bgcolor.g, bgcolor.b, bgcolor.a);
 	SDL_RenderClear(renderer);
 
@@ -189,7 +192,7 @@ void DrawSys::drawPopup(Popup* box) {
 }
 
 void DrawSys::drawRect(const Rect& rect, Color color) {
-	SDL_Color clr = colors[static_cast<uint8>(color)];
+	SDL_Color clr = colors[uint8(color)];
 	SDL_SetRenderDrawColor(renderer, clr.r, clr.g, clr.b, clr.a);
 	SDL_RenderFillRect(renderer, &rect);
 }
@@ -209,8 +212,7 @@ void DrawSys::drawImage(SDL_Texture* tex, const Rect& rect, const Rect& frame) {
 	Rect crop = dst.crop(frame);
 
 	// get cropped source rect
-	vec2i res;
-	SDL_QueryTexture(tex, nullptr, nullptr, &res.x, &res.y);
+	vec2i res = texSize(tex);
 	vec2f factor(vec2f(res) / vec2f(rect.size()));
 	Rect src(vec2f(crop.pos()) * factor, res - vec2i(vec2f(crop.size()) * factor));
 
@@ -221,22 +223,22 @@ SDL_Texture* DrawSys::renderText(const string& text, int height) {
 	if (text.empty())
 		return nullptr;
 	
-	SDL_Surface* surf = TTF_RenderUTF8_Blended(fonts.getFont(height), text.c_str(), colors[static_cast<uint8>(Color::text)]);
+	SDL_Surface* surf = TTF_RenderUTF8_Blended(fonts.getFont(height), text.c_str(), colors[uint8(Color::text)]);
 	SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
 	SDL_FreeSurface(surf);
 	return tex;
 }
 
-vector<pair<string, SDL_Texture*>> DrawSys::loadTexturesDirectory(string drc) {
-	vector<pair<string, SDL_Texture*>> pics;
+vector<Texture> DrawSys::loadTexturesDirectory(string drc) {
+	vector<Texture> pics;
 	for (string& it : FileSys::listDir(drc, FTYPE_FILE))
 		if (SDL_Texture* tex = IMG_LoadTexture(renderer, childPath(drc, it).c_str()))
-			pics.push_back(make_pair(it, tex));
+			pics.push_back(Texture(it, tex));
 	return pics;
 }
 
-vector<pair<string, SDL_Texture*>> DrawSys::loadTexturesArchive(const string& arc) {
-	vector<pair<string, SDL_Texture*>> pics;
+vector<Texture> DrawSys::loadTexturesArchive(const string& arc) {
+	vector<Texture> pics;
 	archive* arch = openArchive(arc);
 	if (!arch)
 		return pics;
@@ -244,18 +246,9 @@ vector<pair<string, SDL_Texture*>> DrawSys::loadTexturesArchive(const string& ar
 	for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
 		if (SDL_RWops* io = readArchiveEntry(arch, entry))
 			if (SDL_Texture* tex = IMG_LoadTexture_RW(renderer, io, SDL_TRUE))
-				pics.push_back(std::make_pair(archive_entry_pathname(entry), tex));
+				pics.push_back(Texture(archive_entry_pathname(entry), tex));
 
 	archive_read_free(arch);
-	std::sort(pics.begin(), pics.end(), [](const pair<string, SDL_Texture*>& a, const pair<string, SDL_Texture*>& b) -> bool { return strnatless(a.first, b.first); });
+	std::sort(pics.begin(), pics.end(), [](const Texture& a, const Texture& b) -> bool { return strnatless(a.name, b.name); });
 	return pics;
-}
-
-SDL_Texture* DrawSys::texture(const string& name) const {
-	try {
-		return texes.at(name);
-	} catch (const std::out_of_range&) {
-		std::cerr << "Texture " << name << " doesn't exist." << std::endl;
-		return nullptr;
-	}
 }

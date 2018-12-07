@@ -2,155 +2,167 @@
 
 // BINDING
 
-Binding::Binding() :
-	asg(ASG_NONE)
-{}
-
 void Binding::setDefaultSelf(Type type) {
-	if (type == Type::enter) {
+	switch (type) {
+	case Type::enter:
 		setBcall(&ProgState::eventEnter);
 		setKey(Default::keyEnter);
 		setJbutton(Default::jbuttonEnter);
 		setGbutton(Default::gbuttonEnter);
-	} else if (type == Type::escape) {
+		break;
+	case Type::escape:
 		setBcall(&ProgState::eventEscape);
 		setKey(Default::keyEscape);
 		setJbutton(Default::jbuttonEscape);
 		setGbutton(Default::gbuttonEscape);
-	} else if (type == Type::up) {
+		break;
+	case Type::up:
 		setBcall(&ProgState::eventUp);
 		setKey(Default::keyUp);
 		setJhat(Default::jhatID, Default::jhatUp);
 		setGbutton(Default::gbuttonUp);
-	} else if (type == Type::down) {
+		break;
+	case Type::down:
 		setBcall(&ProgState::eventDown);
 		setKey(Default::keyDown);
 		setJhat(Default::jhatID, Default::jhatDown);
 		setGbutton(Default::gbuttonDown);
-	} else if (type == Type::left) {
+		break;
+	case Type::left:
 		setBcall(&ProgState::eventLeft);
 		setKey(Default::keyLeft);
 		setJhat(Default::jhatID, Default::jhatLeft);
 		setGbutton(Default::gbuttonLeft);
-	} else if (type == Type::right) {
+		break;
+	case Type::right:
 		setBcall(&ProgState::eventRight);
 		setKey(Default::keyRight);
 		setJhat(Default::jhatID, Default::jhatRight);
 		setGbutton(Default::gbuttonRight);
-	} else if (type == Type::scrollUp) {
+		break;
+	case Type::scrollUp:
 		setAcall(&ProgState::eventScrollUp);
 		setKey(Default::keyUp);
 		setJaxis(Default::jaxisScrollVertical, Default::axisDirUp);
 		setGaxis(Default::gaxisScrollVertical, Default::axisDirUp);
-	} else if (type == Type::scrollDown) {
+		break;
+	case Type::scrollDown:
 		setAcall(&ProgState::eventScrollDown);
 		setKey(Default::keyDown);
 		setJaxis(Default::jaxisScrollVertical, Default::axisDirDown);
 		setGaxis(Default::gaxisScrollVertical, Default::axisDirDown);
-	} else if (type == Type::scrollLeft) {
+		break;
+	case Type::scrollLeft:
 		setAcall(&ProgState::eventScrollLeft);
 		setKey(Default::keyLeft);
 		setJaxis(Default::jaxisScrollHorizontal, Default::axisDirLeft);
 		setGaxis(Default::gaxisScrollHorizontal, Default::axisDirLeft);
-	} else if (type == Type::scrollRight) {
+		break;
+	case Type::scrollRight:
 		setAcall(&ProgState::eventScrollRight);
 		setKey(Default::keyRight);
 		setJaxis(Default::jaxisScrollHorizontal, Default::axisDirRight);
 		setGaxis(Default::gaxisScrollHorizontal, Default::axisDirRight);
-	} else if (type == Type::cursorUp) {
+		break;
+	case Type::cursorUp:
 		setAcall(&ProgState::eventCursorUp);
 		setJaxis(Default::jaxisCursorVertical, Default::axisDirUp);
 		setGaxis(Default::gaxisCursorVertical, Default::axisDirUp);
-	} else if (type == Type::cursorDown) {
+		break;
+	case Type::cursorDown:
 		setAcall(&ProgState::eventCursorDown);
 		setJaxis(Default::jaxisCursorVertical, Default::axisDirDown);
 		setGaxis(Default::gaxisCursorVertical, Default::axisDirDown);
-	} else if (type == Type::cursorLeft) {
+		break;
+	case Type::cursorLeft:
 		setAcall(&ProgState::eventCursorLeft);
 		setJaxis(Default::jaxisCursorHorizontal, Default::axisDirLeft);
 		setGaxis(Default::gaxisCursorHorizontal, Default::axisDirLeft);
-	} else if (type == Type::cursorRight) {
+		break;
+	case Type::cursorRight:
 		setAcall(&ProgState::eventCursorRight);
 		setJaxis(Default::jaxisCursorHorizontal, Default::axisDirRight);
 		setGaxis(Default::gaxisCursorHorizontal, Default::axisDirRight);
-	} else if (type == Type::centerView) {
+		break;
+	case Type::centerView:
 		setBcall(&ProgState::eventCenterView);
 		setKey(Default::keyCenterView);
 		setJbutton(Default::jbuttonCenterView);
 		setGbutton(Default::gbuttonCenterView);
-	} else if (type == Type::scrollFast) {
+		break;
+	case Type::scrollFast:
 		setAcall(nullptr);
 		setKey(Default::keyScrollFast);
 		setJbutton(Default::jbuttonScrollFast);
 		setGbutton(Default::gbuttonScrollFast);
-	} else if (type == Type::scrollSlow) {
+		break;
+	case Type::scrollSlow:
 		setAcall(nullptr);
 		setKey(Default::keyScrollSlow);
 		setJbutton(Default::jbuttonScrollSlow);
 		setGbutton(Default::gbuttonScrollSlow);
-	} else if (type == Type::nextPage) {
+		break;
+	case Type::nextPage:
 		setBcall(&ProgState::eventNextPage);
 		setKey(Default::keyNextPage);
-	} else if (type == Type::prevPage) {
+		break;
+	case Type::prevPage:
 		setBcall(&ProgState::eventPrevPage);
 		setKey(Default::keyPrevPage);
-	} else if (type == Type::zoomIn) {
+		break;
+	case Type::zoomIn:
 		setBcall(&ProgState::eventZoomIn);
 		setKey(Default::keyZoomIn);
 		setJbutton(Default::jbuttonZoomIn);
 		setGbutton(Default::gbuttonZoomIn);
-	} else if (type == Type::zoomOut) {
+		break;
+	case Type::zoomOut:
 		setBcall(&ProgState::eventZoomOut);
 		setKey(Default::keyZoomOut);
 		setJbutton(Default::jbuttonZoomOut);
 		setGbutton(Default::gbuttonZoomOut);
-	} else if (type == Type::zoomReset) {
+		break;
+	case Type::zoomReset:
 		setBcall(&ProgState::eventZoomReset);
 		setKey(Default::keyZoomReset);
 		setJbutton(Default::jbuttonZoomReset);
 		setGbutton(Default::gbuttonZoomReset);
-	} else if (type == Type::toStart) {
+		break;
+	case Type::toStart:
 		setBcall(&ProgState::eventToStart);
 		setKey(Default::keyToStart);
-	} else if (type == Type::toEnd) {
+		break;
+	case Type::toEnd:
 		setBcall(&ProgState::eventToEnd);
 		setKey(Default::keyToEnd);
-	} else if (type == Type::nextDir) {
+		break;
+	case Type::nextDir:
 		setBcall(&ProgState::eventNextDir);
 		setKey(Default::keyNextDir);
 		setJbutton(Default::jbuttonNextDir);
 		setGaxis(Default::gaxisNextDir, true);
-	} else if (type == Type::prevDir) {
+		break;
+	case Type::prevDir:
 		setBcall(&ProgState::eventPrevDir);
 		setKey(Default::keyPrevDir);
 		setJbutton(Default::jbuttonPrevDir);
 		setGaxis(Default::gaxisPrevDir, true);
-	} else if (type == Type::fullscreen) {
+		break;
+	case Type::fullscreen:
 		setBcall(&ProgState::eventFullscreen);
 		setKey(Default::keyFullscreen);
 		setJbutton(Default::jbuttonFullscreen);
 		setGbutton(Default::gbuttonFullscreen);
-	} else if (type == Type::refresh) {
+		break;
+	case Type::refresh:
 		setBcall(&ProgState::eventRefresh);
 		setKey(Default::keyRefresh);
 	}
 }
 
-void Binding::clearAsgKey() {
-	asg &= ~ASG_KEY;
-}
-
 void Binding::setKey(SDL_Scancode kkey) {
 	key = kkey;
 	asg |= ASG_KEY;
-}
-
-bool Binding::jctAssigned() const {
-	return asg & (ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N);
-}
-
-void Binding::clearAsgJct() {
-	asg &= ~(ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N);
 }
 
 void Binding::setJbutton(uint8 but) {
@@ -175,19 +187,15 @@ void Binding::setJhat(uint8 hat, uint8 val) {
 	asg |= ASG_JHAT;
 }
 
-void Binding::clearAsgGct() {
-	asg &= ~(ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N);
-}
-
 void Binding::setGbutton(SDL_GameControllerButton but) {
-	gctID = but;
+	gctID = uint8(but);
 
 	clearAsgGct();
 	asg |= ASG_GBUTTON;
 }
 
 void Binding::setGaxis(SDL_GameControllerAxis axis, bool positive) {
-	gctID = axis;
+	gctID = uint8(axis);
 
 	clearAsgGct();
 	asg |= positive ? ASG_GAXIS_P : ASG_GAXIS_N;
@@ -261,27 +269,6 @@ int Settings::getRendererIndex() {
 			return i;
 	renderer = getRendererName(0);
 	return 0;
-}
-
-vector<string> Settings::getAvailibleRenderers() {
-	vector<string> renderers(SDL_GetNumRenderDrivers());
-	for (sizt i = 0; i < renderers.size(); i++)
-		renderers[i] = getRendererName(i);
-	return renderers;
-}
-
-string Settings::getRendererName(int id) {
-	SDL_RendererInfo info;
-	SDL_GetRenderDriverInfo(id, &info);
-	return info.name;
-}
-
-string Settings::getResolutionString() const {
-	return to_string(resolution.x) + ' ' + to_string(resolution.y);
-}
-
-string Settings::getScrollSpeedString() const {
-	return trimZero(to_string(scrollSpeed.x)) + ' ' + trimZero(to_string(scrollSpeed.y));
 }
 
 void Settings::setDeadzone(int zone) {

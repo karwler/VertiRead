@@ -79,9 +79,9 @@ void InputSys::eventJoystickAxis(const SDL_JoyAxisEvent& jaxis) {
 
 void InputSys::eventGamepadButton(const SDL_ControllerButtonEvent& gbutton) {
 	if (World::scene()->capture)
-		World::scene()->capture->onGButton(static_cast<SDL_GameControllerButton>(gbutton.button));
+		World::scene()->capture->onGButton(SDL_GameControllerButton(gbutton.button));
 	else
-		checkBindingsG(static_cast<SDL_GameControllerButton>(gbutton.button));
+		checkBindingsG(SDL_GameControllerButton(gbutton.button));
 }
 
 void InputSys::eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis) {
@@ -90,9 +90,9 @@ void InputSys::eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis) {
 		return;
 
 	if (World::scene()->capture)
-		World::scene()->capture->onGAxis(static_cast<SDL_GameControllerAxis>(gaxis.axis), (value > 0));
+		World::scene()->capture->onGAxis(SDL_GameControllerAxis(gaxis.axis), (value > 0));
 	else
-		checkBindingsX(static_cast<SDL_GameControllerAxis>(gaxis.axis), (value > 0));
+		checkBindingsX(SDL_GameControllerAxis(gaxis.axis), (value > 0));
 }
 
 void InputSys::tick(float) {
@@ -149,10 +149,6 @@ void InputSys::checkBindingsX(SDL_GameControllerAxis gaxis, bool positive) {
 			World::srun(it.getBcall());
 			break;
 		}
-}
-
-bool InputSys::isPressed(Binding::Type type, float& amt) const {
-	return bindings[sizt(type)].isAxis() ? isPressed(bindings[sizt(type)], amt) : false;
 }
 
 bool InputSys::isPressed(const Binding& abind, float& amt) const {
@@ -218,19 +214,9 @@ int InputSys::getAxisG(SDL_GameControllerAxis gaxis) const {
 	return 0;
 }
 
-bool InputSys::isPressedM(uint8 mbutton) {
-	return SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON(mbutton);
-}
-
-vec2i InputSys::mousePos() {
-	int px, py;
-	SDL_GetMouseState(&px, &py);
-	return vec2i(px, py);
-}
-
 void InputSys::resetBindings() {
 	for (sizt i = 0; i < bindings.size(); i++)
-		bindings[i].setDefaultSelf(static_cast<Binding::Type>(i));
+		bindings[i].setDefaultSelf(Binding::Type(i));
 }
 
 void InputSys::addController(int id) {
@@ -249,8 +235,4 @@ void InputSys::removeController(int id) {
 
 int InputSys::checkAxisValue(int value) const {
 	return abs(value) > World::sets()->getDeadzone() ? value : 0;
-}
-
-float InputSys::axisToFloat(int axisValue) {
-	return float(axisValue) / float(Default::axisLimit);
 }

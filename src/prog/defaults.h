@@ -7,18 +7,17 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
-
-// get rid of SDL's main
-#ifdef main
-#undef main
-#endif
-
 #include <algorithm>
 #include <iostream>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+// get rid of SDL's main
+#ifdef main
+#undef main
+#endif
 
 // to make life easier
 using std::string;
@@ -50,12 +49,9 @@ using vec2i = vec2<int>;
 using vec2f = vec2<float>;
 using vec2t = vec2<sizt>;
 
-template <class... T>
-using umap = std::unordered_map<T...>;
-template <class... T>
-using uset = std::unordered_set<T...>;
-template <class... T>
-using uptr = std::unique_ptr<T...>;
+template <class... T> using umap = std::unordered_map<T...>;
+template <class... T> using uset = std::unordered_set<T...>;
+template <class... T> using uptr = std::unique_ptr<T...>;
 
 // forward declaraions
 class Button;

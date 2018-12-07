@@ -5,25 +5,109 @@
 #include <strings.h>
 #endif
 
-// extensions
+// general wrappers
+
+inline vec2i texSize(SDL_Texture* tex) {
+	vec2i res;
+	SDL_QueryTexture(tex, nullptr, nullptr, &res.x, &res.y);
+	return res;
+}
+
+inline vec2i mousePos() {
+	int px, py;
+	SDL_GetMouseState(&px, &py);
+	return vec2i(px, py);
+}
+
+inline bool mousePressed(uint8 mbutton) {
+	return SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON(mbutton);
+}
+
+inline string getRendererName(int id) {
+	SDL_RendererInfo info;
+	SDL_GetRenderDriverInfo(id, &info);
+	return info.name;
+}
+
+vector<string> getAvailibleRenderers();
+
+// SDL_Rect wrapper
+
 struct Rect : SDL_Rect {
 	Rect(int x = 0, int y = 0, int w = 0, int h = 0);
 	Rect(const vec2i& pos, const vec2i& size);
 
-	vec2i& pos() { return *reinterpret_cast<vec2i*>(this); }
-	const vec2i& pos() const { return *reinterpret_cast<const vec2i*>(this); }
-	vec2i& size() { return reinterpret_cast<vec2i*>(this)[1]; }
-	const vec2i& size() const { return reinterpret_cast<const vec2i*>(this)[1]; }
+	vec2i& pos();
+	const vec2i& pos() const;
+	vec2i& size();
+	const vec2i& size() const;
 	vec2i end() const;
 	vec2i back() const;
 
 	bool overlap(const vec2i& point) const;
 	bool overlap(const Rect& rect, vec2i& sback, vec2i& rback) const;
 	Rect crop(const Rect& frame);		// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
-	Rect getOverlap(const Rect& frame);	// same as above except it returns the overlap instead of the crop and it doesn't modify the rect
+	Rect getOverlap(const Rect& frame) const;	// same as above except it returns the overlap instead of the crop and it doesn't modify the rect
 };
 
+inline Rect::Rect(int x, int y, int w, int h) :
+	SDL_Rect({x, y, w, h})
+{}
+
+inline Rect::Rect(const vec2i& pos, const vec2i& size) :
+	SDL_Rect({pos.x, pos.y, size.w, size.h})
+{}
+
+inline vec2i& Rect::pos() {
+	return *reinterpret_cast<vec2i*>(this);
+}
+
+inline const vec2i& Rect::pos() const {
+	return *reinterpret_cast<const vec2i*>(this);
+}
+
+inline vec2i& Rect::size() {
+	return reinterpret_cast<vec2i*>(this)[1];
+}
+
+inline const vec2i& Rect::size() const {
+	return reinterpret_cast<const vec2i*>(this)[1];
+}
+
+inline vec2i Rect::end() const {
+	return pos() + size();
+}
+
+inline vec2i Rect::back() const {
+	return vec2i(x + w - 1, y + h - 1);
+}
+
+inline bool Rect::overlap(const vec2i& point) const {
+	return point.x >= x && point.x < x + w && point.y >= y && point.y < y + h;
+}
+
+// SDL_Texture wrapper
+
+struct Texture {
+	Texture(const string& name = "", SDL_Texture* tex = nullptr);
+
+	vec2i res() const;
+
+	string name;
+	SDL_Texture* tex;
+};
+
+inline Texture::Texture(const string& name, SDL_Texture* tex) :
+	name(name),
+	tex(tex)
+{}
+
+inline vec2i Texture::res() const {
+	return texSize(tex);
+}
+
 // files and strings
+
 int strnatcmp(const char* a, const char* b);	// natural string compare
 
 inline bool strnatless(const string& a, const string& b) {
@@ -73,6 +157,7 @@ inline bool isDigit(char c) {
 }
 
 // geometry?
+
 template <class T>
 bool inRange(T val, T min, T max) {
 	return val >= min && val <= max;
@@ -114,6 +199,7 @@ vec2<T> bringOver(const vec2<T>& val, const vec2<T>& min) {
 }
 
 // conversions
+
 #ifdef _WIN32
 string wtos(const wstring& wstr);
 wstring stow(const string& str);
@@ -134,7 +220,7 @@ inline string btos(bool b) {
 
 template <class T>
 string enumToStr(const vector<string>& names, T id) {
-	return static_cast<sizt>(id) < names.size() ? names[static_cast<sizt>(id)] : "";
+	return sizt(id) < names.size() ? names[sizt(id)] : "";
 }
 
 template <class T>
@@ -142,7 +228,7 @@ T strToEnum(const vector<string>& names, string str) {
 	for (sizt i = 0; i < names.size(); i++)
 		if (!strcicmp(names[i], str))
 			return T(i);
-	return T(SIZE_MAX);
+	return T(-1);
 }
 
 inline long sstol(const string& str, int base = 0) {

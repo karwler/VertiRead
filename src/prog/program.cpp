@@ -2,10 +2,6 @@
 
 // BOOKS
 
-Program::Program() :
-	state(new ProgState)	// necessary as a placeholder to prevent nullptr exceptions
-{}
-
 void Program::start() {
 	if (!(World::getArgs().size() && openFile(World::getArg(0))))
 		eventOpenBookList();
@@ -124,12 +120,12 @@ void Program::eventSwitchDirection(Button* but) {
 	World::sets()->direction.set(static_cast<SwitchBox*>(but)->getText());
 }
 
-void Program::eventSetZoom(Button * but) {
+void Program::eventSetZoom(Button* but) {
 	World::sets()->zoom = sstof(static_cast<LineEdit*>(but)->getText());
 }
 
 void Program::eventSetSpacing(Button* but) {
-	World::sets()->spacing = sstoul(static_cast<LineEdit*>(but)->getText());
+	World::sets()->spacing = int(sstoul(static_cast<LineEdit*>(but)->getText()));
 }
 
 void Program::eventSwitchLanguage(Button* but) {
@@ -196,7 +192,7 @@ void Program::eventSetDeadzoneSL(Button* but) {
 
 void Program::eventSetDeadzoneLE(Button* but) {
 	LineEdit* le = static_cast<LineEdit*>(but);
-	World::sets()->setDeadzone(sstoul(le->getText()));
+	World::sets()->setDeadzone(int(sstoul(le->getText())));
 	le->setText(to_string(World::sets()->getDeadzone()));	// set text again in case the volume was out of range
 	static_cast<Slider*>(but->getParent()->getWidget(1))->setVal(World::sets()->getDeadzone());	// update slider
 }

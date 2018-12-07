@@ -22,15 +22,15 @@ public:
 	void onMouseUp(const vec2i& mPos, uint8 mBut);
 	void onMouseWheel(const vec2i& wMov);
 	void onMouseLeave();
-	void onText(const string& str) {capture->onText(str); }	// text input should only run if line edit is being captured, therefore a cast check isn't necessary
+	void onText(const string& str);	// text input should only run if line edit is being captured, therefore a cast check isn't necessary
 	void onResize();
 
 	void resetLayouts();
-	Layout* getLayout() { return layout.get(); }
-	Overlay* getOverlay() { return overlay.get(); }
-	Popup* getPopup() { return popup.get(); }
+	Layout* getLayout();
+	Overlay* getOverlay();
+	Popup* getPopup();
 	void setPopup(Popup* newPopup, Widget* newCapture = nullptr);
-	void setPopup(const pair<Popup*, Widget*>& popcap) { setPopup(popcap.first, popcap.second); }
+	void setPopup(const pair<Popup*, Widget*>& popcap);
 
 	void selectFirst();
 	sizt findSelectedID(Layout* box);	// get id of possibly select or select's parent in relation to box
@@ -50,3 +50,31 @@ private:
 	bool overlayFocused(const vec2i& mPos);
 	Layout* topLayout(const vec2i& mPos);
 };
+
+inline void Scene::onText(const string& str) {
+	capture->onText(str);
+}
+
+inline Layout* Scene::getLayout() {
+	return layout.get();
+}
+
+inline Overlay* Scene::getOverlay() {
+	return overlay.get();
+}
+
+inline Popup* Scene::getPopup() {
+	return popup.get();
+}
+
+inline void Scene::setPopup(const pair<Popup*, Widget*>& popcap) {
+	setPopup(popcap.first, popcap.second);
+}
+
+inline bool Scene::cursorInClickRange(const vec2i& mPos, uint8 mBut) {
+	return vec2f(mPos - stamps[mBut].mPos).length() <= Default::clickThreshold;
+}
+
+inline Layout* Scene::topLayout(const vec2i& mPos) {
+	return popup ? popup.get() : overlayFocused(mPos) ? overlay.get() : layout.get();
+}

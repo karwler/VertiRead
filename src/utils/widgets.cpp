@@ -1,27 +1,5 @@
 #include "engine/world.h"
 
-// SIZE
-
-Size::Size(int pixels) :
-	pix(pixels),
-	usePix(true)
-{}
-
-Size::Size(float percent) :
-	prc(percent),
-	usePix(false)
-{}
-
-void Size::set(int pixels) {
-	usePix = true;
-	pix = pixels;
-}
-
-void Size::set(float percent) {
-	usePix = false;
-	prc = percent;
-}
-
 // WIDGET
 
 Widget::Widget(const Size& relSize, Layout* parent, sizt id) :
@@ -29,6 +7,10 @@ Widget::Widget(const Size& relSize, Layout* parent, sizt id) :
 	pcID(id),
 	relSize(relSize)
 {}
+
+bool Widget::navSelectable() const {
+	return false;
+}
 
 void Widget::setParent(Layout* pnt, sizt id) {
 	parent = pnt;
@@ -41,14 +23,6 @@ vec2i Widget::position() const {
 
 vec2i Widget::size() const {
 	return parent->wgtSize(pcID);
-}
-
-vec2i Widget::center() const {
-	return position() + size() / 2;
-}
-
-Rect Widget::rect() const {
-	return Rect(position(), size());
 }
 
 Rect Widget::frame() const {
@@ -100,12 +74,6 @@ Color Button::color() {
 	return Color::normal;
 }
 
-vec2i Button::texRes() const {
-	vec2i res;
-	SDL_QueryTexture(tex, nullptr, nullptr, &res.x, &res.y);
-	return res;
-}
-
 Rect Button::texRect() const {
 	Rect rct = rect();
 	return Rect(rct.pos() + margin, rct.size() - margin * 2);
@@ -132,10 +100,6 @@ Rect CheckBox::boxRect() const {
 	vec2i siz = size();
 	int margin = (siz.x > siz.y ? siz.y : siz.x) / 4;
 	return Rect(position() + margin, siz - margin * 2);
-}
-
-Color CheckBox::boxColor() const {
-	return on ? Color::light : Color::dark;
 }
 
 // SLIDER
@@ -180,10 +144,6 @@ void Slider::setSlider(int xpos) {
 	World::prun(lcall, this);
 }
 
-void Slider::setVal(int value) {
-	val = bringIn(value, vmin, vmax);
-}
-
 Rect Slider::barRect() const {
 	vec2i siz = size();
 	int height = siz.y / 2;
@@ -193,10 +153,6 @@ Rect Slider::barRect() const {
 Rect Slider::sliderRect() const {
 	vec2i pos = position(), siz = size();
 	return Rect(sliderPos(), pos.y, Default::sbarSize, siz.y);
-}
-
-int Slider::sliderPos() const {
-	return position().x + size().y/4 + val * sliderLim() / vmax;
 }
 
 int Slider::sliderLim() const {
@@ -232,10 +188,6 @@ void Label::setText(const string& str) {
 	updateTex();
 }
 
-Rect Label::textRect() const {
-	return Rect(textPos(), textSize());
-}
-
 Rect Label::textFrame() const {
 	Rect rct = rect();
 	int ofs = textIconOffset();
@@ -245,7 +197,7 @@ Rect Label::textFrame() const {
 Rect Label::texRect() const {
 	Rect rct = rect();
 	rct.h -= margin * 2;
-	vec2i res = texRes();
+	vec2i res = texSize(tex);
 	return Rect(rct.pos() + margin, vec2i(float(rct.h * res.x) / float(res.y), rct.h));
 }
 
@@ -254,22 +206,16 @@ vec2i Label::textPos() const {
 	if (align == Alignment::left)
 		return vec2i(pos.x + textIconOffset() + textMargin, pos.y);
 	if (align == Alignment::center)
-		return vec2i(pos.x + textIconOffset() + (size().x - textSize().x)/2, pos.y);
-	return vec2i(pos.x + size().x - textSize().x - textMargin, pos.y);	// Alignment::right
+		return vec2i(pos.x + textIconOffset() + (size().x - texSize(textTex).x)/2, pos.y);
+	return vec2i(pos.x + size().x - texSize(textTex).x - textMargin, pos.y);	// Alignment::right
 }
 
 int Label::textIconOffset() const {
 	if (tex) {
-		vec2i res = texRes();
-		return float(size().y * res.x) / float(res.y);
+		vec2i res = texSize(tex);
+		return int(float(size().y * res.x) / float(res.y));
 	}
 	return 0;
-}
-
-vec2i Label::textSize() const {
-	vec2i res;
-	SDL_QueryTexture(textTex, nullptr, nullptr, &res.x, &res.y);
-	return res;
 }
 
 void Label::updateTex() {
@@ -301,7 +247,7 @@ void SwitchBox::onClick(const vec2i& mPos, uint8 mBut) {
 }
 
 void SwitchBox::shiftOption(int ofs) {
-	curOpt = (curOpt + ofs) % options.size();
+	curOpt = (curOpt + sizt(ofs)) % options.size();
 	setText(options[curOpt]);
 }
 
@@ -327,21 +273,24 @@ void LineEdit::onClick(const vec2i&, uint8 mBut) {
 }
 
 void LineEdit::onKeypress(const SDL_Keysym& key) {
-	if (key.scancode == SDL_SCANCODE_LEFT) {	// move caret left
+	switch (key.scancode) {
+	case SDL_SCANCODE_LEFT:	// move caret left
 		if (key.mod & KMOD_LALT)	// if holding alt skip word
 			setCPos(findWordStart());
 		else if (key.mod & KMOD_CTRL)	// if holding ctrl move to beginning
 			setCPos(0);
-		else if (cpos != 0)	// otherwise go left by one
+		else if (cpos > 0)	// otherwise go left by one
 			setCPos(cpos - 1);
-	} else if (key.scancode == SDL_SCANCODE_RIGHT) {	// move caret right
+		break;
+	case SDL_SCANCODE_RIGHT:	// move caret right
 		if (key.mod & KMOD_LALT)	// if holding alt skip word
 			setCPos(findWordEnd());
 		else if (key.mod & KMOD_CTRL)	// if holding ctrl go to end
 			setCPos(text.length());
-		else if (cpos != text.length())	// otherwise go right by one
+		else if (cpos < text.length())	// otherwise go right by one
 			setCPos(cpos + 1);
-	} else if (key.scancode == SDL_SCANCODE_BACKSPACE) {	// delete left
+		break;
+	case SDL_SCANCODE_BACKSPACE:	// delete left
 		if (key.mod & KMOD_LALT) {	// if holding alt delete left word
 			sizt id = findWordStart();
 			text.erase(id, cpos - id);
@@ -351,46 +300,56 @@ void LineEdit::onKeypress(const SDL_Keysym& key) {
 			text.erase(0, cpos);
 			updateTex();
 			setCPos(0);
-		} else if (cpos != 0) {	// otherwise delete left character
+		} else if (cpos > 0) {	// otherwise delete left character
 			text.erase(cpos - 1, 1);
 			updateTex();
 			setCPos(cpos - 1);
 		}
-	} else if (key.scancode == SDL_SCANCODE_DELETE) {	// delete right character
+		break;
+	case SDL_SCANCODE_DELETE:	// delete right character
 		if (key.mod & KMOD_LALT) {	// if holding alt delete right word
 			text.erase(cpos, findWordEnd() - cpos);
 			updateTex();
 		} else if (key.mod & KMOD_CTRL) {	// if holding ctrl delete line to right
 			text.erase(cpos, text.length() - cpos);
 			updateTex();
-		} else if (cpos != text.length()) {	// otherwise delete right character
+		} else if (cpos < text.length()) {	// otherwise delete right character
 			text.erase(cpos, 1);
 			updateTex();
 		}
-	} else if (key.scancode == SDL_SCANCODE_HOME)	// move caret to beginning
+		break;
+	case SDL_SCANCODE_HOME:	// move caret to beginning
 		setCPos(0);
-	else if (key.scancode == SDL_SCANCODE_END)	// move caret to end
+		break;
+	case SDL_SCANCODE_END:	// move caret to end
 		setCPos(text.length());
-	else if (key.scancode == SDL_SCANCODE_V) {	// paste text
+		break;
+	case SDL_SCANCODE_V:	// paste text
 		if (key.mod & KMOD_CTRL)
 			onText(SDL_GetClipboardText());
-	} else if (key.scancode == SDL_SCANCODE_C) {	// copy text
+		break;
+	case SDL_SCANCODE_C:	// copy text
 		if (key.mod & KMOD_CTRL)
 			SDL_SetClipboardText(text.c_str());
-	} else if (key.scancode == SDL_SCANCODE_X) {	// cut text
+		break;
+	case SDL_SCANCODE_X:	// cut text
 		if (key.mod & KMOD_CTRL) {
 			SDL_SetClipboardText(text.c_str());
 			setText("");
 		}
-	} else if (key.scancode == SDL_SCANCODE_Z || key.scancode == SDL_SCANCODE_Y) {	// set text to old text
+		break;
+	case SDL_SCANCODE_Z:	// set text to old text
 		if (key.mod & KMOD_CTRL) {
 			string newOldCopy = oldText;
 			setText(newOldCopy);
 		}
-	} else if (key.scancode == SDL_SCANCODE_RETURN)
+		break;
+	case SDL_SCANCODE_RETURN:
 		confirm();
-	else if (key.scancode == SDL_SCANCODE_ESCAPE)
+		break;
+	case SDL_SCANCODE_ESCAPE:
 		cancel();
+	}
 }
 
 void LineEdit::onText(const string& str) {
@@ -466,22 +425,31 @@ sizt LineEdit::findWordEnd() {
 }
 
 void LineEdit::cleanText() {
-	if (textType == TextType::sInteger)
+	switch (textType) {
+	case TextType::sInteger:
 		cleanUIntText(text[0] == '-');
-	else if (textType == TextType::sIntegerSpaced)
+		break;
+	case TextType::sIntegerSpaced:
 		cleanSIntSpacedText();
-	else if (textType == TextType::uInteger)
+		break;
+	case TextType::uInteger:
 		cleanUIntText();
-	else if (textType == TextType::uIntegerSpaced)
+		break;
+	case TextType::uIntegerSpaced:
 		cleanUIntSpacedText();
-	else if (textType == TextType::sFloating)
+		break;
+	case TextType::sFloating:
 		cleanUFloatText(text[0] == '-');
-	else if (textType == TextType::sFloatingSpaced)
+		break;
+	case TextType::sFloatingSpaced:
 		cleanSFloatSpacedText();
-	else if (textType == TextType::uFloating)
+		break;
+	case TextType::uFloating:
 		cleanUFloatText();
-	else if (textType == TextType::uFloatingSpaced)
+		break;
+	case TextType::uFloatingSpaced:
 		cleanUFloatSpacedText();
+	}
 }
 
 void LineEdit::cleanSIntSpacedText(sizt i) {
@@ -659,4 +627,8 @@ void KeyGetter::onGAxis(SDL_GameControllerAxis gaxis, bool positive) {
 		setText((positive ? "+" : "-") + enumToStr(Default::gaxisNames, gaxis));
 	}
 	World::scene()->capture = nullptr;
+}
+
+bool KeyGetter::navSelectable() const {
+	return true;
 }

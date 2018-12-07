@@ -107,68 +107,81 @@ void WindowSys::destroyWindow() {
 }
 
 void WindowSys::handleEvent(const SDL_Event& event) {
-	if (event.type == SDL_MOUSEMOTION)
+	switch (event.type) {
+	case SDL_MOUSEMOTION:
 		inputSys->eventMouseMotion(event.motion);
-	else if (event.type == SDL_MOUSEBUTTONDOWN)
+		break;
+	case SDL_MOUSEBUTTONDOWN:
 		scene->onMouseDown(vec2i(event.button.x, event.button.y), event.button.button, event.button.clicks);
-	else if (event.type == SDL_MOUSEBUTTONUP)
+		break;
+	case SDL_MOUSEBUTTONUP:
 		scene->onMouseUp(vec2i(event.button.x, event.button.y), event.button.button);
-	else if (event.type == SDL_MOUSEWHEEL)
+		break;
+	case SDL_MOUSEWHEEL:
 		scene->onMouseWheel(vec2i(event.wheel.x, -event.wheel.y));
-	else if (event.type == SDL_KEYDOWN)
+		break;
+	case SDL_KEYDOWN:
 		inputSys->eventKeypress(event.key);
-	else if (event.type == SDL_JOYBUTTONDOWN)
+		break;
+	case SDL_JOYBUTTONDOWN:
 		inputSys->eventJoystickButton(event.jbutton);
-	else if (event.type == SDL_JOYHATMOTION)
+		break;
+	case SDL_JOYHATMOTION:
 		inputSys->eventJoystickHat(event.jhat);
-	else if (event.type == SDL_JOYAXISMOTION)
+		break;
+	case SDL_JOYAXISMOTION:
 		inputSys->eventJoystickAxis(event.jaxis);
-	else if (event.type == SDL_CONTROLLERBUTTONDOWN)
+		break;
+	case SDL_CONTROLLERBUTTONDOWN:
 		inputSys->eventGamepadButton(event.cbutton);
-	else if (event.type == SDL_CONTROLLERAXISMOTION)
+		break;
+	case SDL_CONTROLLERAXISMOTION:
 		inputSys->eventGamepadAxis(event.caxis);
-	else if (event.type == SDL_TEXTINPUT)
+		break;
+	case SDL_TEXTINPUT:
 		scene->onText(event.text.text);
-	else if (event.type == SDL_WINDOWEVENT)
+		break;
+	case SDL_WINDOWEVENT:
 		eventWindow(event.window);
-	else if (event.type == SDL_DROPFILE) {
+		break;
+	case SDL_DROPFILE:
 		program->getState()->eventFileDrop(event.drop.file);
 		SDL_free(event.drop.file);
-	} else if (event.type == SDL_JOYDEVICEADDED)
+		break;
+	case SDL_JOYDEVICEADDED:
 		inputSys->addController(event.jdevice.which);
-	else if (event.type == SDL_JOYDEVICEREMOVED)
+		break;
+	case SDL_JOYDEVICEREMOVED:
 		inputSys->removeController(event.jdevice.which);
-	else if (event.type == SDL_QUIT)
+		break;
+	case SDL_QUIT:
 		close();
+	}
 }
 
 void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
-	if (winEvent.event == SDL_WINDOWEVENT_RESIZED) {
+	switch (winEvent.event) {
+	case SDL_WINDOWEVENT_RESIZED:
 		if (uint32 flags = SDL_GetWindowFlags(window); !(flags & SDL_WINDOW_FULLSCREEN_DESKTOP))	// update settings if needed
 			if (!(sets->maximized = flags & SDL_WINDOW_MAXIMIZED))
 				SDL_GetWindowSize(window, &sets->resolution.x, &sets->resolution.y);
 		scene->onResize();
-	} else if (winEvent.event == SDL_WINDOWEVENT_SIZE_CHANGED)
+		break;
+	case SDL_WINDOWEVENT_SIZE_CHANGED:
 		scene->onResize();
-	else if (winEvent.event == SDL_WINDOWEVENT_LEAVE)
+		break;
+	case SDL_WINDOWEVENT_LEAVE:
 		scene->onMouseLeave();
-	else if (winEvent.event == SDL_WINDOWEVENT_CLOSE)
+		break;
+	case SDL_WINDOWEVENT_CLOSE:
 		close();
+	}
 }
 
 void WindowSys::setDSec(uint32& oldTicks) {
 	uint32 newTime = SDL_GetTicks();
 	dSec = float(newTime - oldTicks) / 1000.f;
 	oldTicks = newTime;
-}
-
-vec2i WindowSys::displayResolution() const {
-	SDL_DisplayMode mode;
-	return SDL_GetDesktopDisplayMode(SDL_GetWindowDisplayIndex(window), &mode) ? 0 : vec2i(mode.w, mode.h);
-}
-
-void WindowSys::setWindowPos(const vec2i& pos) {
-	SDL_SetWindowPosition(window, pos.x, pos.y);
 }
 
 void WindowSys::moveCursor(const vec2i& mov) {
@@ -179,7 +192,7 @@ void WindowSys::moveCursor(const vec2i& mov) {
 
 void WindowSys::setFullscreen(bool on) {
 	sets->fullscreen = on;
-	SDL_SetWindowFullscreen(window, on ? SDL_GetWindowFlags(window) | SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_GetWindowFlags(window) & ~SDL_WINDOW_FULLSCREEN_DESKTOP);
+	SDL_SetWindowFullscreen(window, on ? SDL_GetWindowFlags(window) | SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_GetWindowFlags(window) & uint32(~SDL_WINDOW_FULLSCREEN_DESKTOP));
 }
 
 void WindowSys::setResolution(const vec2i& res) {

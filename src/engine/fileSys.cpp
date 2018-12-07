@@ -9,14 +9,6 @@
 
 // INI LINE
 
-IniLine::IniLine() :
-	type(Type::empty)
-{}
-
-IniLine::IniLine(const string& line) {
-	setLine(line);
-}
-
 string IniLine::line() const {
 	if (type == Type::prpVal)
 		return line(prp, val);
@@ -25,18 +17,6 @@ string IniLine::line() const {
 	if (type == Type::title)
 		return line(prp);
 	return "";
-}
-
-string IniLine::line(const string& title) {
-	return '[' + title + ']';
-}
-
-string IniLine::line(const string& prp, const string& val) {
-	return prp + '=' + val;
-}
-
-string IniLine::line(const string& prp, const string& key, const string& val) {
-	return prp + '[' + key + "]=" + val;
 }
 
 void IniLine::setVal(const string& property, const string& value) {
@@ -159,7 +139,7 @@ umap<string, string> FileSys::loadTranslations(const string& language) {
 	umap<string, string> translation;
 	for (string& line : readTextFile(dirLangs + language + ".ini", false))
 		if (IniLine il(line); il.getType() == IniLine::Type::prpVal)
-			translation.insert(make_pair(il.getPrp(), il.getVal()));
+			translation.insert(std::make_pair(il.getPrp(), il.getVal()));
 	return translation;
 }
 
@@ -205,7 +185,7 @@ Settings* FileSys::loadSettings() {
 		else if (il.getPrp() == Default::iniKeywordZoom)
 			sets->zoom = sstof(il.getVal());
 		else if (il.getPrp() == Default::iniKeywordSpacing)
-			sets->spacing = sstoul(il.getVal());
+			sets->spacing = int(sstoul(il.getVal()));
 		else if (il.getPrp() == Default::iniKeywordFont)
 			sets->setFont(il.getVal());
 		else if (il.getPrp() == Default::iniKeywordLanguage)
@@ -219,7 +199,7 @@ Settings* FileSys::loadSettings() {
 		else if (il.getPrp() == Default::iniKeywordScrollSpeed)
 			sets->scrollSpeed.set(il.getVal(), strtof);
 		else if (il.getPrp() == Default::iniKeywordDeadzone)
-			sets->setDeadzone(sstoul(il.getVal()));
+			sets->setDeadzone(int(sstoul(il.getVal())));
 	}
 	return sets;
 }
@@ -244,9 +224,9 @@ bool FileSys::saveSettings(const Settings* sets) {
 }
 
 vector<Binding> FileSys::getBindings() {
-	vector<Binding> bindings(static_cast<sizt>(Binding::Type::numBindings));
+	vector<Binding> bindings((sizt(Binding::Type::refresh)) + 1);
 	for (sizt i = 0; i < bindings.size(); i++)
-		bindings[i].setDefaultSelf(static_cast<Binding::Type>(i));
+		bindings[i].setDefaultSelf(Binding::Type(i));
 	
 	for (string& line : readTextFile(dirSets + Default::fileBindings, false)) {
 		IniLine il(line);
@@ -257,24 +237,31 @@ vector<Binding> FileSys::getBindings() {
 		if (bid >= bindings.size())
 			continue;
 
-		if (char type = toupper(il.getVal()[0]); type == 'K')	// keyboard key
+		switch (toupper(il.getVal()[0])) {
+		case 'K':	// keyboard key
 			bindings[bid].setKey(SDL_GetScancodeFromName(il.getVal().substr(2).c_str()));
-		else if (type == 'B')		// joystick button
-			bindings[bid].setJbutton(sstoul(il.getVal().substr(2)));
-		else if (type == 'H') {		// joystick hat
+			break;
+		case 'B':	// joystick button
+			bindings[bid].setJbutton(uint8(sstoul(il.getVal().substr(2))));
+			break;
+		case 'H':	// joystick hat
 			for (sizt i = 2; i < il.getVal().length(); i++)
 				if (il.getVal()[i] < '0' || il.getVal()[i] > '9') {
-					bindings[bid].setJhat(sstoul(il.getVal().substr(2, i-2)), jtStrToHat(il.getVal().substr(i+1)));
+					bindings[bid].setJhat(uint8(sstoul(il.getVal().substr(2, i-2))), uint8(jtStrToHat(il.getVal().substr(i+1))));
 					break;
 				}
-		} else if (type ==  'A')	// joystick axis
-			bindings[bid].setJaxis(sstoul(il.getVal().substr(3)), (il.getVal()[2] != '-'));
-		else if (type == 'G') {		// gamepad button
+			break;
+		case 'A':	// joystick axis
+			bindings[bid].setJaxis(uint8(sstoul(il.getVal().substr(3))), il.getVal()[2] != '-');
+			break;
+		case 'G':	// gamepad button
 			if (SDL_GameControllerButton cid = strToEnum<SDL_GameControllerButton>(Default::gbuttonNames, il.getVal().substr(2)); cid < SDL_CONTROLLER_BUTTON_MAX)
 				bindings[bid].setGbutton(cid);
-		} else if (type == 'X')		// gamepad axis
+			break;
+		case 'X':	// gamepad axis
 			if (SDL_GameControllerAxis cid = strToEnum<SDL_GameControllerAxis>(Default::gaxisNames, il.getVal().substr(3)); cid < SDL_CONTROLLER_AXIS_MAX)
 				bindings[bid].setGaxis(cid, (il.getVal()[2] != '-'));
+		}
 	}
 	return bindings;
 }
@@ -312,7 +299,7 @@ vector<string> FileSys::readTextFile(const string& file, bool printMessage) {
 	vector<string> lines(1);
 	for (int c = fgetc(ifh); c != EOF; c = fgetc(ifh)) {
 		if (c != '\n' && c != '\r')
-			lines.back() += c;
+			lines.back() += char(c);
 		else if (lines.back().size())
 			lines.push_back("");
 	}
@@ -437,13 +424,13 @@ pair<vector<string>, vector<string>> FileSys::listDirSeparate(const string& drc)
 		dirs.resize(letters.size());
 		for (sizt i = 0; i < dirs.size(); i++)
 			dirs[i] = letters[i] + string(":");
-		return make_pair(files, dirs);
+		return std::make_pair(files, dirs);
 	}
 
 	WIN32_FIND_DATAW data;
 	HANDLE hFind = FindFirstFileW(stow(appendDsep(drc) + "*").c_str(), &data);
 	if (hFind == INVALID_HANDLE_VALUE)
-		return make_pair(files, dirs);
+		return std::make_pair(files, dirs);
 
 	do {
 		if (wcscmp(data.cFileName, L".") && wcscmp(data.cFileName, L".."))	// ignore . and ..
@@ -462,7 +449,7 @@ pair<vector<string>, vector<string>> FileSys::listDirSeparate(const string& drc)
 #endif
 	std::sort(files.begin(), files.end(), strnatless);
 	std::sort(dirs.begin(), dirs.end(), strnatless);
-	return make_pair(files, dirs);
+	return std::make_pair(files, dirs);
 }
 
 FileType FileSys::fileType(const string& path) {

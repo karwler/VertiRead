@@ -9,7 +9,7 @@ vector<string> World::args;
 #ifdef _WIN32
 #ifdef _DEBUG
 void World::setArgs(int argc, wchar** argv) {
-	args.resize(argc - 1);
+	args.resize(sizt(argc - 1));
 	for (sizt i = 0; i < args.size(); i++)
 		args[i] = wtos(argv[i+1]);
 }
@@ -18,7 +18,7 @@ void World::setArgs(wchar* argstr) {
 	int argc;
 	LPWSTR* argv = CommandLineToArgvW(argstr, &argc);
 	
-	args.resize(argc - 1);
+	args.resize(sizt(argc - 1));
 	for (sizt i = 0; i < args.size(); i++)
 		args[i] = wtos(argv[i+1]);
 	LocalFree(argv);
@@ -26,7 +26,7 @@ void World::setArgs(wchar* argstr) {
 #endif
 #else
 void World::setArgs(int argc, char** argv) {
-	args.resize(argc - 1);
+	args.resize(sizt(argc - 1));
 	for (sizt i = 0; i < args.size(); i++)
 		args[i] = argv[i+1];
 }

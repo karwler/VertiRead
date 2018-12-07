@@ -18,6 +18,26 @@ struct Size {
 };
 using vec2s = vec2<Size>;
 
+inline Size::Size(int pixels) :
+	pix(pixels),
+	usePix(true)
+{}
+
+inline Size::Size(float percent) :
+	prc(percent),
+	usePix(false)
+{}
+
+inline void Size::set(int pixels) {
+	usePix = true;
+	pix = pixels;
+}
+
+inline void Size::set(float percent) {
+	usePix = false;
+	prc = percent;
+}
+
 // can be used as spacer
 class Widget {
 public:
@@ -43,13 +63,13 @@ public:
 	virtual void onGAxis(SDL_GameControllerAxis, bool) {}
 	virtual void onText(const string&) {}
 	virtual void onNavSelect(const Direction& dir);
-	virtual bool navSelectable() const { return false; }
+	virtual bool navSelectable() const;
 
-	sizt getID() const { return pcID; }
-	Layout* getParent() const { return parent; }
+	sizt getID() const;
+	Layout* getParent() const;
 	void setParent(Layout* pnt, sizt id);
 
-	const Size& getRelSize() const { return relSize; }
+	const Size& getRelSize() const;
 	virtual vec2i position() const;
 	virtual vec2i size() const;
 	vec2i center() const;
@@ -62,6 +82,26 @@ protected:
 	Size relSize;	// size relative to parent's parameters
 };
 
+inline sizt Widget::getID() const {
+	return pcID;
+}
+
+inline Layout* Widget::getParent() const {
+	return parent;
+}
+
+inline const Size& Widget::getRelSize() const {
+	return relSize;
+}
+
+inline vec2i Widget::center() const {
+	return position() + size() / 2;
+}
+
+inline Rect Widget::rect() const {
+	return Rect(position(), size());
+}
+
 // clickable widget with function calls for left and right click (it's rect is drawn so you can use it like a spacer with color)
 class Button : public Widget {
 public:
@@ -69,12 +109,11 @@ public:
 	virtual ~Button() override {}
 
 	virtual void drawSelf() override;
-	virtual void onClick(const vec2i&, uint8 mBut) override;
-	virtual void onDoubleClick(const vec2i&, uint8 mBut) override;
+	virtual void onClick(const vec2i& mPos, uint8 mBut) override;
+	virtual void onDoubleClick(const vec2i& mPos, uint8 mBut) override;
 	virtual bool navSelectable() const override;
 	
 	Color color();
-	vec2i texRes() const;
 	virtual Rect texRect() const;
 
 	SDL_Texture* tex;
@@ -99,6 +138,10 @@ public:
 	bool on;
 };
 
+inline Color CheckBox::boxColor() const {
+	return on ? Color::light : Color::dark;
+}
+
 // horizontal slider (maybe one day it'll be able to be vertical)
 class Slider : public Button {
 public:
@@ -106,12 +149,12 @@ public:
 	virtual ~Slider() override {}
 
 	virtual void drawSelf() override;
-	virtual void onClick(const vec2i&, uint8 mBut) override;
+	virtual void onClick(const vec2i& mPos, uint8 mBut) override;
 	virtual void onHold(const vec2i& mPos, uint8 mBut) override;
-	virtual void onDrag(const vec2i& mPos, const vec2i&) override;
+	virtual void onDrag(const vec2i& mPos, const vec2i& mBut) override;
 	virtual void onUndrag(uint8 mBut) override;
 
-	int getVal() const { return val; }
+	int getVal() const;
 	void setVal(int value);
 
 	Rect barRect() const;
@@ -126,6 +169,18 @@ private:
 	int sliderLim() const;
 };
 
+inline int Slider::getVal() const {
+	return val;
+}
+
+inline void Slider::setVal(int value) {
+	val = bringIn(value, vmin, vmax);
+}
+
+inline int Slider::sliderPos() const {
+	return position().x + size().y/4 + val * sliderLim() / vmax;
+}
+
 // it's a little ass backwards but labels (aka a line of text) are buttons
 class Label : public Button {
 public:
@@ -134,13 +189,14 @@ public:
 		center,
 		right
 	};
+
 	Label(const Size& relSize = Size(), const string& text = "", PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Alignment alignment = Alignment::left, SDL_Texture* background = nullptr, int textMargin = Default::textMargin, bool showBackground = true, int backgroundMargin = Default::iconMargin, Layout* parent = nullptr, sizt id = SIZE_MAX);
 	virtual ~Label() override;
 
 	virtual void drawSelf() override;
 	virtual void postInit() override;
 
-	const string& getText() const { return text; }
+	const string& getText() const;
 	virtual void setText(const string& str);
 	Rect textRect() const;
 	Rect textFrame() const;
@@ -154,9 +210,16 @@ protected:
 	int textMargin;
 
 	virtual vec2i textPos() const;
-	vec2i textSize() const;
 	void updateTex();
 };
+
+inline const string& Label::getText() const {
+	return text;
+}
+
+inline Rect Label::textRect() const {
+	return Rect(textPos(), texSize(textTex));
+}
 
 // for switching between multiple options (kinda like a dropdown menu except I was too lazy to make an actual one)
 class SwitchBox : public Label {
@@ -187,14 +250,15 @@ public:
 		uFloating,
 		uFloatingSpaced
 	};
+
 	LineEdit(const Size& relSize = Size(), const string& text = "", PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, TextType type = TextType::text, SDL_Texture* background = nullptr, int textMargin = Default::textMargin, bool showBackground = true, int backgroundMargin = Default::iconMargin, Layout* parent = nullptr, sizt id = SIZE_MAX);
 	virtual ~LineEdit() override {}
 
-	virtual void onClick(const vec2i&, uint8 mBut) override;
+	virtual void onClick(const vec2i& mPos, uint8 mBut) override;
 	virtual void onKeypress(const SDL_Keysym& key) override;
 	virtual void onText(const string& str) override;
 
-	const string& getOldText() const { return oldText; }
+	const string& getOldText() const;
 	virtual void setText(const string& str) override;
 	Rect caretRect() const;
 
@@ -222,6 +286,10 @@ private:
 	void cleanUFloatSpacedText();
 };
 
+inline const string& LineEdit::getOldText() const {
+	return oldText;
+}
+
 // for getting a key/button/axis
 class KeyGetter : public Label {
 public:
@@ -230,17 +298,18 @@ public:
 		joystick,
 		gamepad
 	};
-	KeyGetter(const Size& relSize = Size(), AcceptType type = AcceptType::keyboard, Binding::Type binding = Binding::Type::numBindings, Alignment alignment = Alignment::center, SDL_Texture* background = nullptr, int textMargin = Default::textMargin, bool showBackground = true, int backgroundMargin = Default::iconMargin, Layout* parent = nullptr, sizt id = SIZE_MAX);
+
+	KeyGetter(const Size& relSize = Size(), AcceptType type = AcceptType::keyboard, Binding::Type binding = Binding::Type(-1), Alignment alignment = Alignment::center, SDL_Texture* background = nullptr, int textMargin = Default::textMargin, bool showBackground = true, int backgroundMargin = Default::iconMargin, Layout* parent = nullptr, sizt id = SIZE_MAX);
 	virtual ~KeyGetter() override {}
 
-	virtual void onClick(const vec2i&, uint8 mBut) override;
+	virtual void onClick(const vec2i& mPos, uint8 mBut) override;
 	virtual void onKeypress(const SDL_Keysym& key) override;
 	virtual void onJButton(uint8 jbutton) override;
 	virtual void onJHat(uint8 jhat, uint8 value) override;
 	virtual void onJAxis(uint8 jaxis, bool positive) override;
 	virtual void onGButton(SDL_GameControllerButton gbutton) override;
 	virtual void onGAxis(SDL_GameControllerAxis gaxis, bool positive) override;
-	virtual bool navSelectable() const override { return true; }
+	virtual bool navSelectable() const override;
 
 private:
 	AcceptType acceptType;		// what kind of binding is being accepted

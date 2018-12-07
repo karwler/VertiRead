@@ -3,24 +3,11 @@
 #include <windows.h>
 #endif
 
-Rect::Rect(int x, int y, int w, int h) :
-	SDL_Rect({x, y, w, h})
-{}
-
-Rect::Rect(const vec2i& pos, const vec2i& size) :
-	SDL_Rect({pos.x, pos.y, size.w, size.h})
-{}
-
-vec2i Rect::end() const {
-	return pos() + size();
-}
-
-vec2i Rect::back() const {
-	return vec2i(x + w - 1, y + h - 1);
-}
-
-bool Rect::overlap(const vec2i& point) const {
-	return point.x >= x && point.x < x + w && point.y >= y && point.y < y + h;
+vector<string> getAvailibleRenderers() {
+	vector<string> renderers((sizt(SDL_GetNumRenderDrivers())));
+	for (sizt i = 0; i < renderers.size(); i++)
+		renderers[i] = getRendererName(int(i));
+	return renderers;
 }
 
 bool Rect::overlap(const Rect& rect, vec2i& sback, vec2i& rback) const {
@@ -60,7 +47,7 @@ Rect Rect::crop(const Rect& frame) {
 	return crop;
 }
 
-Rect Rect::getOverlap(const Rect& frame) {
+Rect Rect::getOverlap(const Rect& frame) const {
 	Rect rect = *this;
 	vec2i rend, fend;
 	if (!rect.overlap(frame, rend, fend))
@@ -330,15 +317,15 @@ SDL_Color getColor(const string& line) {
 	if (*pos == '#') {
 		while (*++pos == '#');
 		char* end;
-		if (uint32 num = strtoul(pos, &end, 16); end != pos) {
-			if (sizt mov = 32 - (end - pos) * 4)
+		if (uint32 num = uint32(strtoul(pos, &end, 16)); end != pos) {
+			if (uint32 mov = 32 - uint32(end - pos) * 4)
 				num = (num << mov) + 255;
-			*reinterpret_cast<uint*>(&color) = num;
+			*reinterpret_cast<uint32*>(&color) = num;
 		}
-	} else for (sizt i = 0; i < 4 && *pos;) {
+	} else for (uint i = 0; i < 4 && *pos;) {
 		char* end;
-		if (uint8 num = strtoul(pos, &end, 0); end != pos) {
-			reinterpret_cast<uchar*>(&color)[i++] = num;
+		if (uint8 num = uint8(strtoul(pos, &end, 0)); end != pos) {
+			reinterpret_cast<uint8*>(&color)[i++] = num;
 			for (pos = end; isSpace(*pos); pos++);
 		} else
 			pos++;
@@ -363,28 +350,28 @@ SDL_RWops* readArchiveEntry(archive* arch, archive_entry* entry) {
 	if (bsiz <= 0)
 		return nullptr;
 
-	uint8* buffer = new uint8[bsiz];
-	int64 size = archive_read_data(arch, buffer, bsiz);
-	return size < 0 ? nullptr : SDL_RWFromMem(buffer, size);
+	uint8* buffer = new uint8[sizt(bsiz)];
+	int64 size = archive_read_data(arch, buffer, sizt(bsiz));
+	return size < 0 ? nullptr : SDL_RWFromMem(buffer, int(size));
 }
 #ifdef _WIN32
 string wtos(const wstring& src) {
-	int len = WideCharToMultiByte(CP_UTF8, 0, src.c_str(), src.length() + 1, nullptr, 0, nullptr, nullptr);
+	int len = WideCharToMultiByte(CP_UTF8, 0, src.c_str(), int(src.length() + 1), nullptr, 0, nullptr, nullptr);
 	if (len <= 1)
 		return "";
 
 	string dst(len - 1, '\0');
-	WideCharToMultiByte(CP_UTF8, 0, src.c_str(), src.length() + 1, dst.data(), len, nullptr, nullptr);
+	WideCharToMultiByte(CP_UTF8, 0, src.c_str(), int(src.length() + 1), dst.data(), len, nullptr, nullptr);
 	return dst;
 }
 
 wstring stow(const string& src) {
-	int len = MultiByteToWideChar(CP_UTF8, 0, src.c_str(), src.length() + 1, nullptr, 0);
+	int len = MultiByteToWideChar(CP_UTF8, 0, src.c_str(), int(src.length() + 1), nullptr, 0);
 	if (len <= 1)
 		return L"";
 
 	wstring dst(len - 1, '\0');
-	MultiByteToWideChar(CP_UTF8, 0, src.c_str(), src.length() + 1, dst.data(), len);
+	MultiByteToWideChar(CP_UTF8, 0, src.c_str(), int(src.length() + 1), dst.data(), len);
 	return dst;
 }
 #endif
@@ -392,5 +379,5 @@ uint8 jtStrToHat(const string& str) {
 	for (const pair<uint8, string>& it : Default::hatNames)
 		if (!strcicmp(it.second, str))
 			return it.first;
-	return 0x10;
+	return 0;
 }

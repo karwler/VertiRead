@@ -29,9 +29,9 @@ public:
 
 	Rect viewport() const;
 	void setTheme(const string& name);
-	int textLength(const string& text, int height) { return fonts.length(text, height); }
+	int textLength(const string& text, int height);
 	void setFont(const string& font);
-	void clearFonts() { fonts.clear(); }
+	void clearFonts();
 	SDL_Texture* texture(const string& name) const;
 	string translation(const string& line, bool firstCapital = true) const;
 	void setLanguage(const string& lang);
@@ -46,8 +46,8 @@ public:
 	void drawPopup(Popup* box);
 
 	SDL_Texture* renderText(const string& text, int height);
-	vector<pair<string, SDL_Texture*>> loadTexturesDirectory(string drc);
-	vector<pair<string, SDL_Texture*>> loadTexturesArchive(const string& arc);
+	vector<Texture> loadTexturesDirectory(string drc);
+	vector<Texture> loadTexturesArchive(const string& arc);
 
 	SDL_Renderer* renderer;
 private:
@@ -60,3 +60,17 @@ private:
 	void drawText(SDL_Texture* tex, const Rect& rect, const Rect& frame);
 	void drawImage(SDL_Texture* tex, const Rect& rect, const Rect& frame);
 };
+
+inline Rect DrawSys::viewport() const {
+	Rect view;
+	SDL_RenderGetViewport(renderer, &view);
+	return view;
+}
+
+inline int DrawSys::textLength(const string& text, int height) {
+	return fonts.length(text, height);
+}
+
+inline void DrawSys::clearFonts() {
+	fonts.clear();
+}
