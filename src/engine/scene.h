@@ -4,15 +4,27 @@
 
 // saves what widget is being clicked on with what button at what position
 struct ClickStamp {
-	ClickStamp(Widget* widget = nullptr, ScrollArea* area = nullptr, const vec2i& mPos = 0);
-
 	Widget* widget;
 	ScrollArea* area;
 	vec2i mPos;
+
+	ClickStamp(Widget* widget = nullptr, ScrollArea* area = nullptr, const vec2i& mPos = 0);
 };
 
 // handles more backend UI interactions, works with widgets (UI elements), and contains Program and Library
 class Scene {
+public:
+	Widget* select;		// currently selected widget
+	Widget* capture;	// either pointer to widget currently hogging all keyboard input or ScrollArea whichs slider is currently being dragged. nullptr if nothing is being captured or dragged
+private:
+	uptr<Layout> layout;
+	uptr<Popup> popup;
+	uptr<Overlay> overlay;
+	array<ClickStamp, SDL_BUTTON_X2+1> stamps;	// data about last mouse click (indexes are mouse button numbers
+
+	static constexpr float clickThreshold = 8.f;
+	static constexpr int scrollFactorWheel = 140;
+
 public:
 	Scene();
 
@@ -33,18 +45,11 @@ public:
 	void setPopup(const pair<Popup*, Widget*>& popcap);
 
 	void selectFirst();
-	sizt findSelectedID(Layout* box);	// get id of possibly select or select's parent in relation to box
+	sizet findSelectedID(Layout* box);	// get id of possibly select or select's parent in relation to box
 	bool cursorDisableable();
 	bool cursorInClickRange(const vec2i& mPos, uint8 mBut);
 
-	Widget* select;		// currently selected widget
-	Widget* capture;	// either pointer to widget currently hogging all keyboard input or ScrollArea whichs slider is currently being dragged. nullptr if nothing is being captured or dragged
 private:
-	uptr<Layout> layout;
-	uptr<Popup> popup;
-	uptr<Overlay> overlay;
-	vector<ClickStamp> stamps;	// data about last mouse click (indexes are mouse button numbers
-
 	void setSelected(const vec2i& mPos, Layout* box);
 	ScrollArea* getSelectedScrollArea() const;
 	bool overlayFocused(const vec2i& mPos);
@@ -72,7 +77,7 @@ inline void Scene::setPopup(const pair<Popup*, Widget*>& popcap) {
 }
 
 inline bool Scene::cursorInClickRange(const vec2i& mPos, uint8 mBut) {
-	return vec2f(mPos - stamps[mBut].mPos).length() <= Default::clickThreshold;
+	return vec2f(mPos - stamps[mBut].mPos).length() <= clickThreshold;
 }
 
 inline Layout* Scene::topLayout(const vec2i& mPos) {

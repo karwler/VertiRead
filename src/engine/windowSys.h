@@ -8,11 +8,34 @@
 // handles window events and contains video settings
 class WindowSys {
 public:
+	static constexpr char title[] = "VertiRead";
+private:
+	static constexpr char fileIcon[] = "icon.ico";
+	static constexpr vec2i defaultWindowPos = {SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED};
+	static constexpr vec2i windowMinSize = {500, 300};
+	static constexpr uint32 windowFlags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN;
+	static constexpr uint32 eventCheckTimeout = 50;
+	static constexpr float ticksPerSec = 1000.f;
+	
+
+	uptr<FileSys> fileSys;
+	uptr<DrawSys> drawSys;
+	uptr<InputSys> inputSys;
+	uptr<Program> program;
+	uptr<Scene> scene;
+	uptr<Settings> sets;
+
+	SDL_Window* window;
+	float dSec;			// delta seconds, aka the time between each iteration of the above mentioned loop
+	bool run;			// whether the loop in which the program runs should continue
+
+public:
 	WindowSys();
 
 	int start();
 	void close();
 
+	void pushEvent(UserCode code, void* data1 = nullptr, void* data2 = nullptr) const;
 	float getDSec() const;
 	vec2i displayResolution() const;
 	void setWindowPos(const vec2i& pos);
@@ -30,17 +53,6 @@ public:
 	Settings* getSets();
 
 private:
-	uptr<FileSys> fileSys;
-	uptr<DrawSys> drawSys;
-	uptr<InputSys> inputSys;
-	uptr<Program> program;
-	uptr<Scene> scene;
-	uptr<Settings> sets;
-
-	SDL_Window* window;
-	float dSec;			// delta seconds, aka the time between each iteration of the above mentioned loop
-	bool run;			// whether the loop in which the program runs should continue
-
 	void init();
 	void exec();
 	void cleanup();
@@ -86,7 +98,7 @@ inline Settings* WindowSys::getSets() {
 
 inline vec2i WindowSys::displayResolution() const {
 	SDL_DisplayMode mode;
-	return SDL_GetDesktopDisplayMode(SDL_GetWindowDisplayIndex(window), &mode) ? 0 : vec2i(mode.w, mode.h);
+	return !SDL_GetDesktopDisplayMode(window ? SDL_GetWindowDisplayIndex(window) : 0, &mode) ? vec2i(mode.w, mode.h) : INT_MAX;
 }
 
 inline void WindowSys::setWindowPos(const vec2i& pos) {

@@ -22,7 +22,8 @@ void InputSys::Controller::close() {
 // INPUT SYS
 
 InputSys::InputSys() :
-	bindings(World::fileSys()->getBindings())
+	bindings(World::fileSys()->getBindings()),
+	mouseMove(0)
 {
 	for (int i = 0; i < SDL_NumJoysticks(); i++)
 		addController(i);
@@ -39,10 +40,9 @@ void InputSys::eventMouseMotion(const SDL_MouseMotionEvent& motion) {
 }
 
 void InputSys::eventKeypress(const SDL_KeyboardEvent& key) {
-	// different behaviour when capturing or not
-	if (World::scene()->capture)
+	if (World::scene()->capture)	// different behaviour when capturing or not
 		World::scene()->capture->onKeypress(key.keysym);
-	else if (!key.repeat)	// handle only once pressed keys
+	else if (!key.repeat)			// handle only once pressed keys
 		checkBindingsK(key.keysym.scancode);
 }
 
@@ -72,9 +72,9 @@ void InputSys::eventJoystickAxis(const SDL_JoyAxisEvent& jaxis) {
 		return;
 	
 	if (World::scene()->capture)
-		World::scene()->capture->onJAxis(jaxis.axis, (value > 0));
+		World::scene()->capture->onJAxis(jaxis.axis, value > 0);
 	else
-		checkBindingsA(jaxis.axis, (value > 0));
+		checkBindingsA(jaxis.axis, value > 0);
 }
 
 void InputSys::eventGamepadButton(const SDL_ControllerButtonEvent& gbutton) {
@@ -90,65 +90,46 @@ void InputSys::eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis) {
 		return;
 
 	if (World::scene()->capture)
-		World::scene()->capture->onGAxis(SDL_GameControllerAxis(gaxis.axis), (value > 0));
+		World::scene()->capture->onGAxis(SDL_GameControllerAxis(gaxis.axis), value > 0);
 	else
-		checkBindingsX(SDL_GameControllerAxis(gaxis.axis), (value > 0));
+		checkBindingsX(SDL_GameControllerAxis(gaxis.axis), value > 0);
 }
 
 void InputSys::tick(float) {
 	// handle keyhold
-	for (Binding& it : bindings)
-		if (it.isAxis())
-			if (float amt = 1.f; isPressed(it, amt))
-				World::srun(it.getAcall(), amt);
+	float amt = 1.f;
+	if (array<Binding, Binding::names.size()>::iterator it = std::find_if(bindings.begin(), bindings.end(), [this, &amt](const Binding& bi) -> bool { return bi.isAxis() && isPressed(bi, amt); }); it != bindings.end())
+		World::srun(it->getAcall(), amt);
 }
 
 void InputSys::checkBindingsK(SDL_Scancode key) {
-	for (Binding& it : bindings)	// find first binding with this key assigned to it
-		if (!it.isAxis() && it.keyAssigned() && it.getKey() == key) {
-			World::srun(it.getBcall());
-			break;
-		}
+	if (array<Binding, Binding::names.size()>::iterator it = std::find_if(bindings.begin(), bindings.end(), [key](const Binding& bi) -> bool { return !bi.isAxis() && bi.keyAssigned() && bi.getKey() == key; }); it != bindings.end())
+		World::srun(it->getBcall());
 }
 
 void InputSys::checkBindingsB(uint8 jbutton) {
-	for (Binding& it : bindings)
-		if (!it.isAxis() && it.jbuttonAssigned() && it.getJctID() == jbutton) {
-			World::srun(it.getBcall());
-			break;
-		}
+	if (array<Binding, Binding::names.size()>::iterator it = std::find_if(bindings.begin(), bindings.end(), [jbutton](const Binding& bi) -> bool { return !bi.isAxis() && bi.jbuttonAssigned() && bi.getJctID() == jbutton; }); it != bindings.end())
+		World::srun(it->getBcall());
 }
 
 void InputSys::checkBindingsH(uint8 jhat, uint8 val) {
-	for (Binding& it : bindings)
-		if (!it.isAxis() && it.jhatAssigned() && it.getJctID() == jhat && it.getJhatVal() == val) {
-			World::srun(it.getBcall());
-			break;
-		}
+	if (array<Binding, Binding::names.size()>::iterator it = std::find_if(bindings.begin(), bindings.end(), [jhat, val](const Binding& bi) -> bool { return !bi.isAxis() && bi.jhatAssigned() && bi.getJctID() == jhat && bi.getJhatVal() == val; }); it != bindings.end())
+		World::srun(it->getBcall());
 }
 
 void InputSys::checkBindingsA(uint8 jaxis, bool positive) {
-	for (Binding& it : bindings)
-		if (!it.isAxis() && ((it.jposAxisAssigned() && positive) || (it.jnegAxisAssigned() && !positive)) && it.getJctID() == jaxis) {
-			World::srun(it.getBcall());
-			break;
-		}
+	if (array<Binding, Binding::names.size()>::iterator it = std::find_if(bindings.begin(), bindings.end(), [jaxis, positive](const Binding& bi) -> bool { return !bi.isAxis() && ((bi.jposAxisAssigned() && positive) || (bi.jnegAxisAssigned() && !positive)) && bi.getJctID() == jaxis; }); it != bindings.end())
+		World::srun(it->getBcall());
 }
 
 void InputSys::checkBindingsG(SDL_GameControllerButton gbutton) {
-	for (Binding& it : bindings)
-		if (!it.isAxis() && it.gbuttonAssigned() && it.getGbutton() == gbutton) {
-			World::srun(it.getBcall());
-			break;
-		}
+	if (array<Binding, Binding::names.size()>::iterator it = std::find_if(bindings.begin(), bindings.end(), [gbutton](const Binding& bi) -> bool { return !bi.isAxis() && bi.gbuttonAssigned() && bi.getGbutton() == gbutton; }); it != bindings.end())
+		World::srun(it->getBcall());
 }
 
 void InputSys::checkBindingsX(SDL_GameControllerAxis gaxis, bool positive) {
-	for (Binding& it : bindings)
-		if (!it.isAxis() && ((it.gposAxisAssigned() && positive) || (it.gnegAxisAssigned() && !positive)) && it.getGaxis() == gaxis) {
-			World::srun(it.getBcall());
-			break;
-		}
+	if (array<Binding, Binding::names.size()>::iterator it = std::find_if(bindings.begin(), bindings.end(), [gaxis, positive](const Binding& bi) -> bool { return !bi.isAxis() && ((bi.gposAxisAssigned() && positive) || (bi.gnegAxisAssigned() && !positive)) && bi.getGaxis() == gaxis; }); it != bindings.end())
+		World::srun(it->getBcall());
 }
 
 bool InputSys::isPressed(const Binding& abind, float& amt) const {
@@ -165,27 +146,13 @@ bool InputSys::isPressed(const Binding& abind, float& amt) const {
 			return true;
 		}
 
-	if (abind.gbuttonAssigned() && isPressedG(abind.getGbutton()))	// check controller buttons
+	if (abind.gbuttonAssigned() && isPressedG(abind.getGbutton()))	// check gamepad buttons
 		return true;
 	if (abind.gaxisAssigned())	// check controller axes
 		if (int val = getAxisG(abind.getGaxis()); (abind.gposAxisAssigned() && val > 0) || (abind.gnegAxisAssigned() && val < 0)) {
 			amt = axisToFloat(abind.gposAxisAssigned() ? val : -val);
 			return true;
 		}
-	return false;
-}
-
-bool InputSys::isPressedB(uint8 jbutton) const {
-	for (const Controller& it : controllers)
-		if (!it.gamepad && SDL_JoystickGetButton(it.joystick, jbutton))
-			return true;
-	return false;
-}
-
-bool InputSys::isPressedG(SDL_GameControllerButton gbutton) const {
-	for (const Controller& it : controllers)
-		if (it.gamepad && SDL_GameControllerGetButton(it.gamepad, gbutton))
-			return true;
 	return false;
 }
 
@@ -215,24 +182,24 @@ int InputSys::getAxisG(SDL_GameControllerAxis gaxis) const {
 }
 
 void InputSys::resetBindings() {
-	for (sizt i = 0; i < bindings.size(); i++)
+	for (sizet i = 0; i < bindings.size(); i++)
 		bindings[i].setDefaultSelf(Binding::Type(i));
 }
 
 void InputSys::addController(int id) {
 	if (Controller ctr(id); ctr.index >= 0)
 		controllers.push_back(ctr);
+	else
+		ctr.close();
 }
 
 void InputSys::removeController(int id) {
-	for (vector<Controller>::iterator it = controllers.begin(); it != controllers.end(); it++)
-		if (it->index == id) {
-			it->close();
-			controllers.erase(it);
-			break;
-		}
+	if (vector<Controller>::iterator it = std::find_if(controllers.begin(), controllers.end(), [id](const Controller& ci) -> bool { return ci.index == id; }); it != controllers.end()) {
+		it->close();
+		controllers.erase(it);
+	}
 }
 
 int InputSys::checkAxisValue(int value) const {
-	return abs(value) > World::sets()->getDeadzone() ? value : 0;
+	return std::abs(value) > World::sets()->getDeadzone() ? value : 0;
 }

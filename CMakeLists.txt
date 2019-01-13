@@ -1,11 +1,7 @@
 # project properties
-cmake_minimum_required(VERSION 3.12.4)
+cmake_minimum_required(VERSION 3.10.2)
 project(VertiRead LANGUAGES CXX)
 set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
-
-if(NOT CMAKE_BUILD_TYPE OR NOT ${CMAKE_BUILD_TYPE} MATCHES "Debug")
-	set(CMAKE_BUILD_TYPE "Release")
-endif()
 
 # source files
 set(SRC_FILES
@@ -23,7 +19,8 @@ set(SRC_FILES
 	"src/engine/world.h"
 	"src/prog/browser.cpp"
 	"src/prog/browser.h"
-	"src/prog/defaults.h"
+	"src/prog/downloader.cpp"
+	"src/prog/downloader.h"
 	"src/prog/program.cpp"
 	"src/prog/program.h"
 	"src/prog/progs.cpp"
@@ -71,62 +68,67 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	add_definitions(-D_UNICODE -D_CRT_SECURE_NO_WARNINGS)
 endif()
 
-if(${CMAKE_BUILD_TYPE} MATCHES "Debug")
-	add_definitions(-D_DEBUG)
-else()
-	add_definitions(-DNDEBUG)
-endif()
-
 # set main target
-add_executable(VertiRead ${SRC_FILES})
-target_compile_features(VertiRead PUBLIC cxx_std_17)
+add_executable(${PROJECT_NAME} ${SRC_FILES})
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
 # include directories and link libraries
 include_directories("${CMAKE_SOURCE_DIR}/src")
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	include_directories("${CMAKE_SOURCE_DIR}/lib/include")
 endif()
-target_link_libraries(VertiRead SDL2 SDL2_image SDL2_ttf archive)
+
+target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image SDL2_ttf archive)
+if(${BUILD_DOWNLOADER})
+	add_definitions(-D_BUILD_DOWNLOADER)
+	include_directories("/usr/include/libxml2")
+	target_link_libraries(${PROJECT_NAME} curl xml2)
+endif()
 
 # target properties
 set(EXECUTABLE_OUTPUT_PATH "${CMAKE_BINARY_DIR}/bin")
-set_target_properties(VertiRead PROPERTIES
+set_target_properties(${PROJECT_NAME} PROPERTIES
 								RUNTIME_OUTPUT_DIRECTORY_DEBUG ${EXECUTABLE_OUTPUT_PATH}
 								RUNTIME_OUTPUT_DIRECTORY_RELEASE ${EXECUTABLE_OUTPUT_PATH})
 
-if(${CMAKE_CXX_COMPILER_ID} MATCHES "GNU" OR ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
-	if(${CMAKE_BUILD_TYPE} MATCHES "Debug")	# for some reason half of this shit doesn't work with set_target_properties
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -Wall -Wextra -Wpedantic")
-	else()
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
-	endif()
-	
+if((${CMAKE_CXX_COMPILER_ID} MATCHES "GNU") OR (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang"))
 	if(${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -no-pie")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -no-pie")
+	else()
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-covered-switch-default -Wno-exit-time-destructors -Wno-global-constructors")
 	endif()
+
+	if(${CMAKE_BUILD_TYPE} MATCHES "Debug")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+	else()
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -Wno-padded")
+	endif()
+
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-float-equal -Wno-parentheses -Wno-shadow -Wno-switch -Wno-switch-enum -Wno-unused-result")
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-	set_target_properties(VertiRead PROPERTIES
-									OUTPUT_NAME VertiRead
+	set_target_properties(${PROJECT_NAME} PROPERTIES
+									OUTPUT_NAME ${PROJECT_NAME}
 									LINK_FLAGS_DEBUG "/SUBSYSTEM:CONSOLE"
 									LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS")
 else()
-	set_target_properties(VertiRead PROPERTIES
-									OUTPUT_NAME vertiread)
+	string(TOLOWER ${PROJECT_NAME} PROJECT_NAME_LOWER)
+	set_target_properties(${PROJECT_NAME} PROPERTIES
+									OUTPUT_NAME ${PROJECT_NAME_LOWER})
 endif()
 
 # post buils commands
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	foreach(dll_file ${DLL_FILES})
-		add_custom_command(TARGET VertiRead POST_BUILD
+		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 						COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LIB_DIR}/${dll_file}" ${EXECUTABLE_OUTPUT_PATH})
 	endforeach()
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-	add_custom_command(TARGET VertiRead POST_BUILD
+	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 					COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/rsc/vertiread.desktop" ${EXECUTABLE_OUTPUT_PATH})
 endif()
-add_custom_command(TARGET VertiRead POST_BUILD
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 					COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/rsc/icon.ico" ${EXECUTABLE_OUTPUT_PATH}
 					COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/rsc/data" ${EXECUTABLE_OUTPUT_PATH})
 

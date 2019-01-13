@@ -1,11 +1,33 @@
 ﻿#pragma once
 
 #include "utils/layouts.h"
+#include "downloader.h"
 
 // for handling program state specific things that occur in all states
 class ProgState {
 public:
-	virtual ~ProgState() {}	// to keep the compiler happy
+	static const string dotStr;
+
+protected:
+	struct Text {
+		string text;
+		int length, height;
+
+		Text(const string& str, int height, int margin = Label::defaultTextMargin);
+	};
+	static int findMaxLength(const string* strs, sizet scnt, int height, int margin = Label::defaultTextMargin);
+
+	static constexpr int popupLineHeight = 40;
+	static constexpr int lineHeight = 30;
+	static constexpr int topHeight = 40;
+	static constexpr int topSpacing = 10;
+	static constexpr int picSize = 40;
+	static constexpr int picMargin = 4;
+private:
+	static constexpr float cursorMoveFactor = 10.f;
+
+public:
+	virtual ~ProgState() = default;	// to keep the compiler happy
 
 	void eventEnter();
 	virtual void eventEscape() {}
@@ -32,30 +54,17 @@ public:
 	virtual void eventNextDir() {}
 	virtual void eventPrevDir() {}
 	virtual void eventFullscreen();
+	virtual void eventHide();
 	void eventRefresh();
 	virtual void eventFileDrop(const string&) {}
 	virtual void eventClosing() {}
-	
+
 	virtual Layout* createLayout();
 	virtual Overlay* createOverlay();
-	static Popup* createPopupMessage(const string& msg, const vec2<Size>& size = messageSize);
-	
+	static Popup* createPopupMessage(const string& msg, PCall ccal, const string& ctxt = "Ok", Label::Alignment malign = Label::Alignment::left);
+	static Popup* createPopupChoice(const string& msg, PCall kcal, PCall ccal, Label::Alignment malign = Label::Alignment::left);
+
 protected:
-	struct Text {
-		Text(const string& str, int height, int margin = Default::textMargin);
-
-		string text;
-		int length;
-	};
-	static int findMaxLength(const vector<string>& strs, int height, int margin = Default::textMargin);
-
-	static const int lineHeight;
-	static const int topHeight;
-	static const int topSpacing;
-	static const int picSize;
-	static const int picMargin;
-	static const vec2s messageSize;
-
 	bool tryClosePopup();
 private:
 	void eventSelect(const Direction& dir);
@@ -63,9 +72,10 @@ private:
 
 class ProgBooks : public ProgState {
 public:
-	virtual ~ProgBooks() override {}
+	virtual ~ProgBooks() override = default;
 
 	virtual void eventEscape() override;
+	virtual void eventHide() override;
 	virtual void eventFileDrop(const string& file) override;
 
 	virtual Layout* createLayout() override;
@@ -76,6 +86,7 @@ public:
 	virtual ~ProgPageBrowser() override {}
 
 	virtual void eventEscape() override;
+	virtual void eventHide() override;
 	virtual void eventFileDrop(const string& file) override;
 
 	virtual Layout* createLayout() override;
@@ -83,7 +94,12 @@ public:
 
 class ProgReader : public ProgState {
 public:
-	virtual ~ProgReader() override {}
+	ReaderBox* reader;
+private:
+	static constexpr float scrollFactor = 2.f;
+
+public:
+	virtual ~ProgReader() override = default;
 
 	virtual void eventEscape() override;
 	virtual void eventUp() override;
@@ -104,6 +120,7 @@ public:
 	virtual void eventToEnd() override;
 	virtual void eventNextDir() override;
 	virtual void eventPrevDir() override;
+	virtual void eventHide() override;
 	virtual void eventClosing() override;
 
 	virtual Layout* createLayout() override;
@@ -112,13 +129,54 @@ public:
 private:
 	int modifySpeed(float value);	// change scroll speed depending on pressed bindings
 };
+#ifdef _BUILD_DOWNLOADER
+class ProgDownloader : public ProgState {
+public:
+	LabelEdit* query;
+	ScrollArea* results;
+	ScrollArea* chapters;
+	CheckBox* chaptersTick;
 
+	vector<string> resultUrls, chapterUrls;
+
+public:
+	virtual ~ProgDownloader() override {}
+
+	virtual void eventEscape() override;
+
+	virtual Layout* createLayout() override;
+	Comic curInfo() const;
+	void printResults(const vector<pairStr>& comics);
+	void printInfo(const vector<pairStr>& chaps);
+};
+
+class ProgDownloads : public ProgState {
+public:
+	ScrollArea* list;
+
+public:
+	virtual ~ProgDownloads() override {}
+
+	virtual void eventEscape() override;
+
+	virtual Layout* createLayout() override;
+};
+#endif
 class ProgSettings : public ProgState {
 public:
-	virtual ~ProgSettings() override {}
+	string oldPathBuffer;	// for keeping old library path between decisions
+	Slider* deadzoneSL;
+	LabelEdit* deadzoneLE;
+private:
+	CheckBox* fullscreen;
+	CheckBox* showHidden;
+
+public:
+	virtual ~ProgSettings() override = default;
 
 	virtual void eventEscape() override;
 	virtual void eventFullscreen() override;
+	virtual void eventHide() override;
 	virtual void eventFileDrop(const string& file) override;
 	
 	virtual Layout* createLayout() override;
@@ -126,9 +184,13 @@ public:
 
 class ProgSearchDir : public ProgState {
 public:
-	virtual ~ProgSearchDir() override {}
+	ScrollArea* list;
+
+public:
+	virtual ~ProgSearchDir() override = default;
 
 	virtual void eventEscape() override;
+	virtual void eventHide() override;
 
 	virtual Layout* createLayout() override;
 };

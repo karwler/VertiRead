@@ -9,8 +9,7 @@ enum class Color : uint8 {
 	light,
 	select,
 	text,
-	texture,
-	numColors
+	texture
 };
 
 class Direction {
@@ -21,7 +20,11 @@ public:
 		left,
 		right
 	};
+	static const array<string, right+1> names;
+private:
+	Dir dir;
 
+public:
 	Direction(Dir direction = Direction::up);
 
 	operator Dir() const;
@@ -30,12 +33,6 @@ public:
 	bool horizontal() const;
 	bool positive() const;
 	bool negative() const;
-
-	string toString() const;
-	void set(const string& str);
-
-private:
-	Dir dir;
 };
 
 inline Direction::Direction(Dir direction) :
@@ -47,27 +44,19 @@ inline Direction::operator Dir() const {
 }
 
 inline bool Direction::vertical() const {
-	return dir <= 1;
+	return dir <= down;
 }
 
 inline bool Direction::horizontal() const {
-	return dir >= 2;
+	return dir >= left;
 }
 
 inline bool Direction::positive() const {
-	return dir % 2;
+	return dir & 1;
 }
 
 inline bool Direction::negative() const {
 	return !positive();
-}
-
-inline string Direction::toString() const {
-	return enumToStr(Default::directionNames, dir);
-}
-
-inline void Direction::set(const string& str) {
-	dir = strToEnum<Dir>(Default::directionNames, str);
 }
 
 class Binding {
@@ -100,21 +89,36 @@ public:
 		nextDir,
 		prevDir,
 		fullscreen,
+		hide,
 		refresh
 	};
+	static const array<string, sizet(Type::refresh)+1> names;
 
-	enum Assignment {
-		ASG_NONE	= 0x0,
-		ASG_KEY     = 0x1,
-		ASG_JBUTTON = 0x2,
-		ASG_JHAT    = 0x4,
-		ASG_JAXIS_P = 0x8,	// use only positive values
+	enum Assignment : uint8 {
+		ASG_NONE	= 0x00,
+		ASG_KEY     = 0x01,
+		ASG_JBUTTON = 0x02,
+		ASG_JHAT    = 0x04,
+		ASG_JAXIS_P = 0x08,	// use only positive values
 		ASG_JAXIS_N = 0x10,	// use only negative values
 		ASG_GBUTTON = 0x20,
 		ASG_GAXIS_P = 0x40,
 		ASG_GAXIS_N = 0x80
 	};
+private:
+	SDL_Scancode key;	// keybord key
+	uint8 jctID;		// joystick control id
+	uint8 jHatVal;		// joystick hat value
+	uint8 gctID;		// gamepad control id
+	Assignment asg;		// stores data for checking whether key and/or button/axis are assigned
 
+	bool callAxis;
+	union {
+		SBCall bcall;
+		SACall acall;
+	};
+
+public:
 	Binding();
 	void setDefaultSelf(Type type);
 
@@ -158,19 +162,6 @@ public:
 	void setBcall(SBCall call);
 	SACall getAcall() const;
 	void setAcall(SACall call);
-
-private:
-	SDL_Scancode key;	// keybord key
-	uint8 jctID;		// joystick control id
-	uint8 jHatVal;		// joystick hat value
-	uint8 gctID;		// gamepad control id
-	Assignment asg;		// stores data for checking whether key and/or button/axis are assigned
-
-	bool callAxis;
-	union {
-		SBCall bcall;
-		SACall acall;
-	};
 };
 
 inline Binding::Assignment operator~(Binding::Assignment a) {
@@ -303,24 +294,13 @@ inline SACall Binding::getAcall() const {
 
 class Settings {
 public:
-	Settings(bool maximized = Default::maximized, bool fullscreen = Default::fullscreen, const vec2i& resolution = Default::resolution, const Direction& direction = Direction::down, float zoom = Default::zoom, int spacing = Default::spacing, const string& theme="", const string& font = Default::font, const string& language = Default::language, const string& library = "", const string& renderer = "", const vec2f& speed = Default::scrollSpeed, int16 deadzone = Default::controllerDeadzone);
-
-	const string& getTheme() const;
-	const string& setTheme(const string& name);
-	const string& getFont() const;
-	string setFont(const string& newFont);			// returns path to the font file, not the name
-	const string& getLang() const;
-	const string& setLang(const string& language);
-	const string& getDirLib() const;
-	const string& setDirLib(const string& drc);
-
-	int getRendererIndex();
-	string getResolutionString() const;
-	string getScrollSpeedString() const;
-	int getDeadzone() const;
-	void setDeadzone(int zone);
+	static constexpr float defaultZoom = 1.f;
+	static constexpr int defaultSpacing = 10;
+	static constexpr char defaultLanguage[] = "English";
+	static constexpr int axisLimit = 32768;
 
 	bool maximized, fullscreen;
+	bool showHidden;
 	Direction direction;
 	float zoom;
 	int spacing;
@@ -331,8 +311,26 @@ private:
 	int deadzone;
 	string theme;
 	string font;
-	string lang;
 	string dirLib;
+
+	static constexpr char defaultFont[] = "Arial";
+	static constexpr char defaultDirLib[] = "library";
+
+public:
+	Settings();
+
+	const string& getTheme() const;
+	const string& setTheme(const string& name);
+	const string& getFont() const;
+	const string& setFont(const string& newFont);
+	const string& getDirLib() const;
+	const string& setDirLib(const string& drc);
+
+	int getRendererIndex();
+	string resolutionString() const;
+	string scrollSpeedString() const;
+	int getDeadzone() const;
+	void setDeadzone(int zone);
 };
 
 inline const string& Settings::getTheme() const {
@@ -343,10 +341,6 @@ inline const string& Settings::getFont() const {
 	return font;
 }
 
-inline const string& Settings::getLang() const {
-	return lang;
-}
-
 inline const string& Settings::getDirLib() const {
 	return dirLib;
 }
@@ -355,10 +349,14 @@ inline int Settings::getDeadzone() const {
 	return deadzone;
 }
 
-inline string Settings::getResolutionString() const {
+inline string Settings::resolutionString() const {
 	return to_string(resolution.x) + ' ' + to_string(resolution.y);
 }
 
-inline string Settings::getScrollSpeedString() const {
+inline string Settings::scrollSpeedString() const {
 	return trimZero(to_string(scrollSpeed.x)) + ' ' + trimZero(to_string(scrollSpeed.y));
+}
+
+inline void Settings::setDeadzone(int zone) {
+	deadzone = std::clamp(zone, 0, axisLimit);
 }

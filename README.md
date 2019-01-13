@@ -4,14 +4,14 @@ It's basically just an image viewer that shows all pictures in a directory/archi
 Currently supported file formats are JPG, PNG, TIFF, WEBP and archives.  
 
 Used libraries are SDL2, SDL2_image, SDL2_ttf, libarchive and by extension libjpeg, libpng, libtiff, libwebp, FreeType and zlib.   
-The CMakeLists.txt is written for at least CMake 3.12.4 with Clang, GCC or MSVC which need to support C++17.  
+The CMakeLists.txt is written for at least CMake 3.10.2 with Clang, GCC or MSVC which need to support C++17.  
 You can create a Makefile for a debug build by running CMake with the "-DCMAKE_BUILD_TYPE=Debug" option. Otherwise it'll default to a release build.  
 
 ## Linux
 All dependencies need to be installed manually.  
 Installing the development packages for libsdl2 libsdl2-image libsdl2-ttf and libarchive should do the trick, assuming that all necessary dependencies are installed automatically.  
 The default font is set to "Arial", so you probably need to install some kind of ttf-ms-fonts package.  
-If you don't want to install any new fonts, you can change the default font in the "src/prog/defaults.h" file under "Default::font".  
+If you don't want to install any new fonts, you can change the default font in the "src/utils/settings.h" file under "Settings::defaultFont".  
 Settings files are being saved in "~/.vertiread".  
 
 There’s a pre-made launcher, which is copied to the build directory after compilation.  

@@ -127,11 +127,8 @@ oscrypto-ca-bundle.crt
 bh_unicode_properties.cache
 
 # VisualStudioCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+.vscode/
+.history
 
 # VisualStudio
 *.suo

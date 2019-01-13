@@ -5,6 +5,14 @@
 // logic for browsing files
 class Browser {
 public:
+	PCall exCall;	// gets called when goUp() fails, aka stepping out of rootDir into the previous menu
+private:
+	string rootDir;	// the top directory one can visit
+	string curDir;	// directory in which one currently is
+	string curFile;	// currently selected or temporarily saved file (name) in curDir
+	bool inArchive;	// whether curDir is an archive
+
+public:
 	Browser(const string& rootDirectory, const string& curDirectory, PCall exitCall);
 	Browser(const string& rootDirectory, const string& container, const string& file, PCall exitCall, bool checkFile);
 
@@ -21,13 +29,7 @@ public:
 	string curFilepath() const;
 	bool getInArchive() const;
 
-	PCall exCall;	// gets called when goUp() fails, aka stepping out of rootDir into the previous menu
 private:
-	string rootDir;	// the top directory one can visit
-	string curDir;	// directory in which one currently is
-	string curFile;	// currently selected or temporarily saved file (name) in curDir
-	bool inArchive;	// whether curDir is an archive
-
 	void shiftDir(bool fwd);
 	void shiftArchive(bool fwd);
 	bool nextDir(const string& dit, const string& pdir);

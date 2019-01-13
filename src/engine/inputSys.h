@@ -4,6 +4,20 @@
 
 // handles input events and contains controls settings
 class InputSys {
+private:
+	struct Controller {
+		SDL_Joystick* joystick;			// for direct input
+		SDL_GameController* gamepad;	// for xinput
+		int index;
+
+		Controller(int id);
+
+		void close();
+	};
+	vector<Controller> controllers;	// currently connected game controllers
+	array<Binding, Binding::names.size()> bindings;
+	vec2i mouseMove;				// last mouse motion
+
 public:
 	InputSys();
 	~InputSys();
@@ -27,25 +41,12 @@ public:
 
 	const vec2i& getMouseMove() const;
 	Binding& getBinding(Binding::Type type);
-	const vector<Binding>& getBindings() const;
+	const array<Binding, Binding::names.size()>& getBindings() const;
 	void resetBindings();
 	void addController(int id);
 	void removeController(int id);
 
 private:
-	struct Controller {
-		Controller(int id);
-
-		void close();
-
-		SDL_Joystick* joystick;			// for direct input
-		SDL_GameController* gamepad;	// for xinput
-		int index;
-	};
-	vector<Controller> controllers;	// currently connected game controllers
-	vector<Binding> bindings;
-	vec2i mouseMove;				// last mouse motion
-
 	void checkBindingsK(SDL_Scancode key);
 	void checkBindingsB(uint8 jbutton);
 	void checkBindingsH(uint8 jhat, uint8 val);
@@ -58,7 +59,15 @@ private:
 };
 
 inline bool InputSys::isPressed(Binding::Type type, float& amt) const {
-	return bindings[sizt(type)].isAxis() ? isPressed(bindings[sizt(type)], amt) : false;
+	return bindings[sizet(type)].isAxis() ? isPressed(bindings[sizet(type)], amt) : false;
+}
+
+inline bool InputSys::isPressedB(uint8 jbutton) const {
+	return std::find_if(controllers.begin(), controllers.end(), [jbutton](const Controller& it) -> bool { return !it.gamepad && SDL_JoystickGetButton(it.joystick, jbutton); }) != controllers.end();
+}
+
+inline bool InputSys::isPressedG(SDL_GameControllerButton gbutton) const {
+	return std::find_if(controllers.begin(), controllers.end(), [gbutton](const Controller& it) -> bool { return !it.gamepad && SDL_GameControllerGetButton(it.gamepad, gbutton); }) != controllers.end();
 }
 
 inline const vec2i& InputSys::getMouseMove() const {
@@ -66,13 +75,13 @@ inline const vec2i& InputSys::getMouseMove() const {
 }
 
 inline Binding& InputSys::getBinding(Binding::Type type) {
-	return bindings[sizt(type)];
+	return bindings[sizet(type)];
 }
 
-inline const vector<Binding>& InputSys::getBindings() const {
+inline const array<Binding, Binding::names.size()>& InputSys::getBindings() const {
 	return bindings;
 }
 
 inline float InputSys::axisToFloat(int axisValue) {
-	return float(axisValue) / float(Default::axisLimit);
+	return float(axisValue) / float(Settings::axisLimit);
 }

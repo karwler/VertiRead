@@ -1,162 +1,207 @@
 #include "engine/world.h"
 
+// DIRECTION
+
+const array<string, Direction::names.size()> Direction::names = {
+	"Up",
+	"Down",
+	"Left",
+	"Right"
+};
+
 // BINDING
+
+const array<string, Binding::names.size()> Binding::names = {
+	"enter",
+	"escape",
+	"up",
+	"down",
+	"left",
+	"right",
+	"scroll up",
+	"scroll down",
+	"scroll left",
+	"scroll right",
+	"cursor up",
+	"cursor down",
+	"cursor left",
+	"cursor right",
+	"center view",
+	"scroll fast",
+	"scroll slow",
+	"next page",
+	"prev page",
+	"zoom in",
+	"zoom out",
+	"zoom reset",
+	"to start",
+	"to end",
+	"next directory",
+	"prev directory",
+	"fullscreen",
+	"show hidden",
+	"refresh"
+};
 
 void Binding::setDefaultSelf(Type type) {
 	switch (type) {
 	case Type::enter:
 		setBcall(&ProgState::eventEnter);
-		setKey(Default::keyEnter);
-		setJbutton(Default::jbuttonEnter);
-		setGbutton(Default::gbuttonEnter);
+		setKey(SDL_SCANCODE_RETURN);
+		setJbutton(2);
+		setGbutton(SDL_CONTROLLER_BUTTON_A);
 		break;
 	case Type::escape:
 		setBcall(&ProgState::eventEscape);
-		setKey(Default::keyEscape);
-		setJbutton(Default::jbuttonEscape);
-		setGbutton(Default::gbuttonEscape);
+		setKey(SDL_SCANCODE_ESCAPE);
+		setJbutton(1);
+		setGbutton(SDL_CONTROLLER_BUTTON_B);
 		break;
 	case Type::up:
 		setBcall(&ProgState::eventUp);
-		setKey(Default::keyUp);
-		setJhat(Default::jhatID, Default::jhatUp);
-		setGbutton(Default::gbuttonUp);
+		setKey(SDL_SCANCODE_UP);
+		setJhat(0, SDL_HAT_UP);
+		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_UP);
 		break;
 	case Type::down:
 		setBcall(&ProgState::eventDown);
-		setKey(Default::keyDown);
-		setJhat(Default::jhatID, Default::jhatDown);
-		setGbutton(Default::gbuttonDown);
+		setKey(SDL_SCANCODE_DOWN);
+		setJhat(0, SDL_HAT_DOWN);
+		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_DOWN);
 		break;
 	case Type::left:
 		setBcall(&ProgState::eventLeft);
-		setKey(Default::keyLeft);
-		setJhat(Default::jhatID, Default::jhatLeft);
-		setGbutton(Default::gbuttonLeft);
+		setKey(SDL_SCANCODE_LEFT);
+		setJhat(0, SDL_HAT_LEFT);
+		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_LEFT);
 		break;
 	case Type::right:
 		setBcall(&ProgState::eventRight);
-		setKey(Default::keyRight);
-		setJhat(Default::jhatID, Default::jhatRight);
-		setGbutton(Default::gbuttonRight);
+		setKey(SDL_SCANCODE_RIGHT);
+		setJhat(0, SDL_HAT_RIGHT);
+		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
 		break;
 	case Type::scrollUp:
 		setAcall(&ProgState::eventScrollUp);
-		setKey(Default::keyUp);
-		setJaxis(Default::jaxisScrollVertical, Default::axisDirUp);
-		setGaxis(Default::gaxisScrollVertical, Default::axisDirUp);
+		setKey(SDL_SCANCODE_UP);
+		setJaxis(1, false);
+		setGaxis(SDL_CONTROLLER_AXIS_LEFTY, false);
 		break;
 	case Type::scrollDown:
 		setAcall(&ProgState::eventScrollDown);
-		setKey(Default::keyDown);
-		setJaxis(Default::jaxisScrollVertical, Default::axisDirDown);
-		setGaxis(Default::gaxisScrollVertical, Default::axisDirDown);
+		setKey(SDL_SCANCODE_DOWN);
+		setJaxis(1, true);
+		setGaxis(SDL_CONTROLLER_AXIS_LEFTY, true);
 		break;
 	case Type::scrollLeft:
 		setAcall(&ProgState::eventScrollLeft);
-		setKey(Default::keyLeft);
-		setJaxis(Default::jaxisScrollHorizontal, Default::axisDirLeft);
-		setGaxis(Default::gaxisScrollHorizontal, Default::axisDirLeft);
+		setKey(SDL_SCANCODE_LEFT);
+		setJaxis(0, false);
+		setGaxis(SDL_CONTROLLER_AXIS_LEFTX, false);
 		break;
 	case Type::scrollRight:
 		setAcall(&ProgState::eventScrollRight);
-		setKey(Default::keyRight);
-		setJaxis(Default::jaxisScrollHorizontal, Default::axisDirRight);
-		setGaxis(Default::gaxisScrollHorizontal, Default::axisDirRight);
+		setKey(SDL_SCANCODE_RIGHT);
+		setJaxis(0, true);
+		setGaxis(SDL_CONTROLLER_AXIS_LEFTX, true);
 		break;
 	case Type::cursorUp:
 		setAcall(&ProgState::eventCursorUp);
-		setJaxis(Default::jaxisCursorVertical, Default::axisDirUp);
-		setGaxis(Default::gaxisCursorVertical, Default::axisDirUp);
+		setJaxis(2, false);
+		setGaxis(SDL_CONTROLLER_AXIS_RIGHTY, false);
 		break;
 	case Type::cursorDown:
 		setAcall(&ProgState::eventCursorDown);
-		setJaxis(Default::jaxisCursorVertical, Default::axisDirDown);
-		setGaxis(Default::gaxisCursorVertical, Default::axisDirDown);
+		setJaxis(2, true);
+		setGaxis(SDL_CONTROLLER_AXIS_RIGHTY, true);
 		break;
 	case Type::cursorLeft:
 		setAcall(&ProgState::eventCursorLeft);
-		setJaxis(Default::jaxisCursorHorizontal, Default::axisDirLeft);
-		setGaxis(Default::gaxisCursorHorizontal, Default::axisDirLeft);
+		setJaxis(3, false);
+		setGaxis(SDL_CONTROLLER_AXIS_RIGHTX, false);
 		break;
 	case Type::cursorRight:
 		setAcall(&ProgState::eventCursorRight);
-		setJaxis(Default::jaxisCursorHorizontal, Default::axisDirRight);
-		setGaxis(Default::gaxisCursorHorizontal, Default::axisDirRight);
+		setJaxis(3, true);
+		setGaxis(SDL_CONTROLLER_AXIS_RIGHTX, true);
 		break;
 	case Type::centerView:
 		setBcall(&ProgState::eventCenterView);
-		setKey(Default::keyCenterView);
-		setJbutton(Default::jbuttonCenterView);
-		setGbutton(Default::gbuttonCenterView);
+		setKey(SDL_SCANCODE_C);
+		setJbutton(10);
+		setGbutton(SDL_CONTROLLER_BUTTON_LEFTSTICK);
 		break;
 	case Type::scrollFast:
 		setAcall(nullptr);
-		setKey(Default::keyScrollFast);
-		setJbutton(Default::jbuttonScrollFast);
-		setGbutton(Default::gbuttonScrollFast);
+		setKey(SDL_SCANCODE_X);
+		setJbutton(0);
+		setGbutton(SDL_CONTROLLER_BUTTON_Y);
 		break;
 	case Type::scrollSlow:
 		setAcall(nullptr);
-		setKey(Default::keyScrollSlow);
-		setJbutton(Default::jbuttonScrollSlow);
-		setGbutton(Default::gbuttonScrollSlow);
+		setKey(SDL_SCANCODE_Z);
+		setJbutton(3);
+		setGbutton(SDL_CONTROLLER_BUTTON_X);
 		break;
 	case Type::nextPage:
 		setBcall(&ProgState::eventNextPage);
-		setKey(Default::keyNextPage);
+		setKey(SDL_SCANCODE_PAGEDOWN);
 		break;
 	case Type::prevPage:
 		setBcall(&ProgState::eventPrevPage);
-		setKey(Default::keyPrevPage);
+		setKey(SDL_SCANCODE_PAGEUP);
 		break;
 	case Type::zoomIn:
 		setBcall(&ProgState::eventZoomIn);
-		setKey(Default::keyZoomIn);
-		setJbutton(Default::jbuttonZoomIn);
-		setGbutton(Default::gbuttonZoomIn);
+		setKey(SDL_SCANCODE_W);
+		setJbutton(5);
+		setGbutton(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
 		break;
 	case Type::zoomOut:
 		setBcall(&ProgState::eventZoomOut);
-		setKey(Default::keyZoomOut);
-		setJbutton(Default::jbuttonZoomOut);
-		setGbutton(Default::gbuttonZoomOut);
+		setKey(SDL_SCANCODE_S);
+		setJbutton(4);
+		setGbutton(SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
 		break;
 	case Type::zoomReset:
 		setBcall(&ProgState::eventZoomReset);
-		setKey(Default::keyZoomReset);
-		setJbutton(Default::jbuttonZoomReset);
-		setGbutton(Default::gbuttonZoomReset);
+		setKey(SDL_SCANCODE_R);
+		setJbutton(11);
+		setGbutton(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
 		break;
 	case Type::toStart:
 		setBcall(&ProgState::eventToStart);
-		setKey(Default::keyToStart);
+		setKey(SDL_SCANCODE_HOME);
 		break;
 	case Type::toEnd:
 		setBcall(&ProgState::eventToEnd);
-		setKey(Default::keyToEnd);
+		setKey(SDL_SCANCODE_END);
 		break;
 	case Type::nextDir:
 		setBcall(&ProgState::eventNextDir);
-		setKey(Default::keyNextDir);
-		setJbutton(Default::jbuttonNextDir);
-		setGaxis(Default::gaxisNextDir, true);
+		setKey(SDL_SCANCODE_N);
+		setJbutton(7);
+		setGaxis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT, true);
 		break;
 	case Type::prevDir:
 		setBcall(&ProgState::eventPrevDir);
-		setKey(Default::keyPrevDir);
-		setJbutton(Default::jbuttonPrevDir);
-		setGaxis(Default::gaxisPrevDir, true);
+		setKey(SDL_SCANCODE_B);
+		setJbutton(6);
+		setGaxis(SDL_CONTROLLER_AXIS_TRIGGERLEFT, true);
 		break;
 	case Type::fullscreen:
 		setBcall(&ProgState::eventFullscreen);
-		setKey(Default::keyFullscreen);
-		setJbutton(Default::jbuttonFullscreen);
-		setGbutton(Default::gbuttonFullscreen);
+		setKey(SDL_SCANCODE_F);
+		setJbutton(8);
+		setGbutton(SDL_CONTROLLER_BUTTON_BACK);
+		break;
+	case Type::hide:
+		setBcall(&ProgState::eventHide);
+		setKey(SDL_SCANCODE_H);
 		break;
 	case Type::refresh:
 		setBcall(&ProgState::eventRefresh);
-		setKey(Default::keyRefresh);
+		setKey(SDL_SCANCODE_F5);
 	}
 }
 
@@ -213,52 +258,41 @@ void Binding::setAcall(SACall call) {
 
 // SETTINGS
 
-Settings::Settings(bool maximized, bool fullscreen, const vec2i& resolution, const Direction& direction, float zoom, int spacing, const string& theme, const string& font, const string& language, const string& library, const string& renderer, const vec2f& speed, int16 deadzone) :
-	maximized(maximized),
-	fullscreen(fullscreen),
-	direction(direction),
-	zoom(zoom),
-	spacing(spacing),
-	resolution(resolution),
-	renderer(renderer),
-	scrollSpeed(speed)
+Settings::Settings() :
+	maximized(false),
+	fullscreen(false),
+	showHidden(true),
+	direction(Direction::down),
+	zoom(defaultZoom),
+	spacing(defaultSpacing),
+	resolution(800, 600),
+	renderer(emptyStr),
+	scrollSpeed(1600.f, 1600.f),
+	deadzone(256),
+	font(defaultFont),
+	dirLib(World::fileSys()->getDirSets() + defaultDirLib)
 {
-	setTheme(theme);
-	setFont(font);
-	setLang(language);
-	setDirLib(library);
-	setDeadzone(deadzone);
+	setTheme(emptyStr);
 }
 
 const string& Settings::setTheme(const string& name) {
 	vector<string> themes = World::fileSys()->getAvailibleThemes();
-	for (string& it : themes)
-		if (it == name)
-			return theme = name;
-	return theme = themes.empty() ? "" : themes[0];
+	if (vector<string>::iterator it = std::find(themes.begin(), themes.end(), name); it != themes.end())
+		return theme = name;
+	return theme = themes.empty() ? emptyStr : themes[0];
 }
 
-string Settings::setFont(const string& newFont) {
-	if (string path = World::fileSys()->findFont(newFont); FileSys::isFont(path)) {
-		font = newFont;
-		return path;
-	}
-	font = Default::font;
-	return World::fileSys()->findFont(font);
-}
-
-const string& Settings::setLang(const string& language) {
-	return lang = FileSys::fileType(World::fileSys()->getDirLangs() + language + ".ini") == FTYPE_FILE ? language : Default::language;
+const string& Settings::setFont(const string& newFont) {
+	if (string path = World::fileSys()->findFont(newFont); FileSys::isFont(path))
+		return font = newFont;
+	return font = defaultFont;
 }
 
 const string& Settings::setDirLib(const string& drc) {
 	dirLib = drc;
-	if (FileSys::fileType(dirLib) != FTYPE_DIR)
-		if (!FileSys::createDir(dirLib)) {
-			dirLib = World::fileSys()->getDirSets() + Default::dirLibrary;
-			if (FileSys::fileType(dirLib) != FTYPE_DIR)
-				FileSys::createDir(dirLib);
-		}
+	if (FileSys::fileType(dirLib) != FTYPE_DIR && !FileSys::createDir(dirLib))
+		if (dirLib = World::fileSys()->getDirSets() + defaultDirLib; FileSys::fileType(dirLib) != FTYPE_DIR)
+			FileSys::createDir(dirLib);
 	return dirLib;
 }
 
@@ -269,8 +303,4 @@ int Settings::getRendererIndex() {
 			return i;
 	renderer = getRendererName(0);
 	return 0;
-}
-
-void Settings::setDeadzone(int zone) {
-	deadzone = bringIn(zone, 0, Default::axisLimit);
 }

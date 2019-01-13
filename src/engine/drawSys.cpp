@@ -3,32 +3,36 @@
 // FONT SET
 
 FontSet::~FontSet() {
-	for (const pair<const int, TTF_Font*>& it : fonts)
-		TTF_CloseFont(it.second);
+	for (const auto& [size, font] : fonts)
+		TTF_CloseFont(font);
 }
 
 void FontSet::init(const string& path) {
 	clear();
 	file = path;
+	TTF_Font* tmp = TTF_OpenFont(file.c_str(), fontTestHeight);
+	if (!tmp)
+		throw std::runtime_error(TTF_GetError());
 
 	// get approximate height scale factor
 	int size;
-	TTF_Font* tmp = TTF_OpenFont(file.c_str(), Default::fontTestHeight);
-	TTF_SizeUTF8(tmp, Default::fontTestString, nullptr, &size);
-	heightScale = float(Default::fontTestHeight) / float(size);
+	TTF_SizeUTF8(tmp, fontTestString, nullptr, &size);
+	heightScale = float(fontTestHeight) / float(size);
 	TTF_CloseFont(tmp);
 }
 
 void FontSet::clear() {
-	for (const pair<const int, TTF_Font*>& it : fonts)
-		TTF_CloseFont(it.second);
+	for (const auto& [size, font] : fonts)
+		TTF_CloseFont(font);
 	fonts.clear();
 }
 
 TTF_Font* FontSet::addSize(int size) {
 	TTF_Font* font = TTF_OpenFont(file.c_str(), size);
 	if (font)
-		fonts.insert(std::make_pair(size, font));
+		fonts.emplace(size, font);
+	else
+		std::cerr << "failed to load font:\n" << TTF_GetError() << std::endl;
 	return font;
 }
 
@@ -36,9 +40,8 @@ TTF_Font* FontSet::getFont(int height) {
 	height = int(float(height) * heightScale);
 	try {	// load font if it hasn't been loaded yet
 		return fonts.at(height);
-	} catch (const std::out_of_range&) {
-		return addSize(height);
-	}
+	} catch (const std::out_of_range&) {}
+	return addSize(height);
 }
 
 int FontSet::length(const string& text, int height) {
@@ -50,27 +53,29 @@ int FontSet::length(const string& text, int height) {
 
 // DRAW SYS
 
-DrawSys::DrawSys(SDL_Window* window, int driverIndex) {
+DrawSys::DrawSys(SDL_Window* window, int driverIndex) :
+	rendLock(SDL_CreateMutex())
+{
 	// create and set up renderer
-	if (!(renderer = SDL_CreateRenderer(window, driverIndex, Default::rendererFlags)))
-		throw std::runtime_error("Couldn't create renderer:\n" + string(SDL_GetError()));
+	if (!(renderer = SDL_CreateRenderer(window, driverIndex, rendererFlags)))
+		throw std::runtime_error(string("Failed to create renderer:\n") + SDL_GetError());
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-	// load default textures with colors and initialize fonts and translations
-	for (string& it : FileSys::listDir(World::fileSys()->getDirTexs(), FTYPE_FILE)) {
-		if (string file = World::fileSys()->getDirTexs() + it; SDL_Texture* tex = IMG_LoadTexture(renderer, file.c_str()))
-			texes.insert(std::make_pair(delExt(it), tex));
+	// load default textures with colors and initialize fonts
+	for (const string& file : FileSys::listDir(FileSys::dirTexs, FTYPE_REG, true, false)) {
+		if (string path = FileSys::dirTexs + file; SDL_Texture* tex = IMG_LoadTexture(renderer, path.c_str()))
+			texes.emplace(delExt(file), tex);
 		else
-			std::cerr << "Couldn't load texture " << file << '\n' << IMG_GetError() << std::endl;
+			std::cerr << "failed to load texture " << file << '\n' << IMG_GetError() << std::endl;
 	}
 	setTheme(World::sets()->getTheme());
 	setFont(World::sets()->getFont());
-	setLanguage(World::sets()->getLang());
 }
 
 DrawSys::~DrawSys() {
-	for (const pair<string, SDL_Texture*>& it : texes)
-		SDL_DestroyTexture(it.second);
+	SDL_DestroyMutex(rendLock);
+	for (const auto& [name, tex] : texes)
+		SDL_DestroyTexture(tex);
 	SDL_DestroyRenderer(renderer);
 }
 
@@ -78,37 +83,28 @@ void DrawSys::setTheme(const string& name) {
 	colors = World::fileSys()->loadColors(World::sets()->setTheme(name));
 	SDL_Color clr = colors[uint8(Color::texture)];
 
-	for (const pair<string, SDL_Texture*>& it : texes) {
-		SDL_SetTextureColorMod(it.second, clr.r, clr.g, clr.b);
-		SDL_SetTextureAlphaMod(it.second, clr.a);
+	for (const auto& [name, tex] : texes) {
+		SDL_SetTextureColorMod(tex, clr.r, clr.g, clr.b);
+		SDL_SetTextureAlphaMod(tex, clr.a);
 	}
 }
 
 void DrawSys::setFont(const string& font) {
-	fonts.init(World::sets()->setFont(font));
-}
-
-string DrawSys::translation(const string& line, bool firstCapital) const {
-	string str = trans.count(line) ? trans.at(line) : line;
-	if (firstCapital && str.size())
-		str[0] = char(toupper(str[0]));
-	return str;
+	fonts.init(World::fileSys()->findFont(World::sets()->setFont(font)));
 }
 
 SDL_Texture* DrawSys::texture(const string& name) const {
 	try {
 		return texes.at(name);
 	} catch (const std::out_of_range&) {
-		std::cerr << "Texture " << name << " doesn't exist." << std::endl;
-		return nullptr;
+		std::cerr << "texture " << name << " doesn't exist" << std::endl;
 	}
-}
-
-void DrawSys::setLanguage(const string& lang) {
-	trans = World::fileSys()->loadTranslations(World::sets()->setLang(lang));
+	return nullptr;
 }
 
 void DrawSys::drawWidgets() {
+	while (SDL_TryLockMutex(rendLock));
+
 	// clear screen
 	SDL_Color bgcolor = colors[uint8(Color::background)];
 	SDL_SetRenderDrawColor(renderer, bgcolor.r, bgcolor.g, bgcolor.b, bgcolor.a);
@@ -122,61 +118,62 @@ void DrawSys::drawWidgets() {
 	// draw popup if exists and dim main widgets
 	if (World::scene()->getPopup()) {
 		Rect view = viewport();
-		SDL_SetRenderDrawColor(renderer, Default::colorPopupDim.r, Default::colorPopupDim.g, Default::colorPopupDim.b, Default::colorPopupDim.a);
+		SDL_SetRenderDrawColor(renderer, colorPopupDim.r, colorPopupDim.g, colorPopupDim.b, colorPopupDim.a);
 		SDL_RenderFillRect(renderer, &view);
 
 		World::scene()->getPopup()->drawSelf();
 	}
 
 	// draw caret if capturing LineEdit
-	if (LineEdit* let = dynamic_cast<LineEdit*>(World::scene()->capture))
+	if (LabelEdit* let = dynamic_cast<LabelEdit*>(World::scene()->capture))
 		drawRect(let->caretRect(), Color::light);
 
 	SDL_RenderPresent(renderer);
+	SDL_UnlockMutex(rendLock);
 }
 
-void DrawSys::drawButton(Button* wgt) {
+void DrawSys::drawPicture(const Picture* wgt) {
 	if (wgt->showBG)
 		drawRect(wgt->rect().getOverlap(wgt->frame()), wgt->color());
 	if (wgt->tex)
 		drawImage(wgt->tex, wgt->texRect(), wgt->frame());
 }
 
-void DrawSys::drawCheckBox(CheckBox* wgt) {
-	Rect frame = wgt->frame();
-	drawButton(wgt);												// draw background
-	drawRect(wgt->boxRect().getOverlap(frame), wgt->boxColor());	// draw checkbox
+void DrawSys::drawCheckBox(const CheckBox* wgt) {
+	drawPicture(wgt);													// draw background
+	drawRect(wgt->boxRect().getOverlap(wgt->frame()), wgt->boxColor());	// draw checkbox
 }
 
-void DrawSys::drawSlider(Slider* wgt) {
+void DrawSys::drawSlider(const Slider* wgt) {
 	Rect frame = wgt->frame();
-	drawButton(wgt);												// draw background
+	drawPicture(wgt);												// draw background
 	drawRect(wgt->barRect().getOverlap(frame), Color::dark);		// draw bar
 	drawRect(wgt->sliderRect().getOverlap(frame), Color::light);	// draw slider
 }
 
-void DrawSys::drawLabel(Label* wgt) {
-	Rect rect = wgt->rect().getOverlap(wgt->frame());
-	if (wgt->showBG)	// draw background
-		drawRect(rect, wgt->color());
-	if (wgt->tex)		// draw left icon
-		drawImage(wgt->tex, wgt->texRect(), rect);
-	if (wgt->textTex)	// draw text
+void DrawSys::drawProgressBar(const ProgressBar* wgt) {
+	drawRect(wgt->rect(), Color::normal);								// draw background
+	drawRect(wgt->barRect().getOverlap(wgt->frame()), Color::light);	// draw bar
+}
+
+void DrawSys::drawLabel(const Label* wgt) {
+	drawPicture(wgt);
+	if (wgt->textTex)
 		drawText(wgt->textTex, wgt->textRect(), wgt->textFrame());
 }
 
-void DrawSys::drawScrollArea(ScrollArea* box) {
+void DrawSys::drawScrollArea(const ScrollArea* box) {
 	vec2t vis = box->visibleWidgets();	// get index interval of items on screen and draw children
-	for (sizt i = vis.b; i < vis.t; i++)
+	for (sizet i = vis.b; i < vis.t; i++)
 		box->getWidget(i)->drawSelf();
 
 	drawRect(box->barRect(), Color::dark);		// draw scroll bar
 	drawRect(box->sliderRect(), Color::light);	// draw scroll slider
 }
 
-void DrawSys::drawReaderBox(ReaderBox* box) {
+void DrawSys::drawReaderBox(const ReaderBox* box) {
 	vec2t vis = box->visibleWidgets();
-	for (sizt i = vis.b; i < vis.t; i++)
+	for (sizet i = vis.b; i < vis.t; i++)
 		box->getWidget(i)->drawSelf();
 
 	if (box->showBar()) {
@@ -185,7 +182,7 @@ void DrawSys::drawReaderBox(ReaderBox* box) {
 	}
 }
 
-void DrawSys::drawPopup(Popup* box) {
+void DrawSys::drawPopup(const Popup* box) {
 	drawRect(box->rect(), Color::normal);	// draw background
 	for (Widget* it : box->getWidgets())	// draw children
 		it->drawSelf();
@@ -222,33 +219,95 @@ void DrawSys::drawImage(SDL_Texture* tex, const Rect& rect, const Rect& frame) {
 SDL_Texture* DrawSys::renderText(const string& text, int height) {
 	if (text.empty())
 		return nullptr;
-	
+
 	SDL_Surface* surf = TTF_RenderUTF8_Blended(fonts.getFont(height), text.c_str(), colors[uint8(Color::text)]);
 	SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
 	SDL_FreeSurface(surf);
 	return tex;
 }
 
-vector<Texture> DrawSys::loadTexturesDirectory(string drc) {
+vector<Texture> DrawSys::loadTexturesDirectory(const string& drc) {
 	vector<Texture> pics;
-	for (string& it : FileSys::listDir(drc, FTYPE_FILE))
-		if (SDL_Texture* tex = IMG_LoadTexture(renderer, childPath(drc, it).c_str()))
-			pics.push_back(Texture(it, tex));
+	for (string& it : FileSys::listDir(drc, FTYPE_REG, World::sets()->showHidden))
+		if (SDL_Texture* tex = IMG_LoadTexture(World::drawSys()->renderer, childPath(drc, it).c_str()))
+			pics.emplace_back(it, tex);
 	return pics;
 }
 
 vector<Texture> DrawSys::loadTexturesArchive(const string& arc) {
 	vector<Texture> pics;
-	archive* arch = openArchive(arc);
+	archive* arch = FileSys::openArchive(arc);
 	if (!arch)
 		return pics;
 
 	for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
-		if (SDL_RWops* io = readArchiveEntry(arch, entry))
-			if (SDL_Texture* tex = IMG_LoadTexture_RW(renderer, io, SDL_TRUE))
-				pics.push_back(Texture(archive_entry_pathname(entry), tex));
+		if (SDL_Texture* tex = loadArchiveTexture(arch, entry))
+			pics.emplace_back(archive_entry_pathname(entry), tex);
 
 	archive_read_free(arch);
 	std::sort(pics.begin(), pics.end(), [](const Texture& a, const Texture& b) -> bool { return strnatless(a.name, b.name); });
 	return pics;
+}
+
+int DrawSys::loadTexturesDirectoryThreaded(void* data) {
+	Thread* thread = static_cast<Thread*>(data);
+	string& drc = *static_cast<string*>(thread->data);
+	vector<Texture>* pics = new vector<Texture>;
+	vector<string> files = FileSys::listDir(drc, FTYPE_REG, World::sets()->showHidden);
+
+	for (sizet i = 0; i < files.size(); i++) {
+		if (!thread->getRun()) {
+			clearTexVec(*pics);
+			delete pics;
+			return 1;
+		}
+		while (SDL_TryLockMutex(World::drawSys()->rendLock));
+		if (SDL_Texture* tex = IMG_LoadTexture(World::drawSys()->renderer, childPath(drc, files[i]).c_str()))
+			pics->emplace_back(files[i], tex);
+
+		SDL_UnlockMutex(World::drawSys()->rendLock);
+		World::winSys()->pushEvent(UserCode::readerProgress, new vec2t(i, files.size()));
+	}
+	World::winSys()->pushEvent(UserCode::readerFinished, pics);
+	return 0;
+}
+
+int DrawSys::loadTexturesArchiveThreaded(void* data) {
+	Thread* thread = static_cast<Thread*>(data);
+	string& arc = *static_cast<string*>(thread->data);
+	archive* arch = FileSys::openArchive(arc);
+	if (!arch)
+		return 1;
+
+	sizet i = 0, numEntries = FileSys::archiveEntryCount(arc);
+	vector<Texture>* pics = new vector<Texture>;
+	for (archive_entry* entry; !archive_read_next_header(arch, &entry); i++) {
+		if (!thread->getRun()) {
+			clearTexVec(*pics);
+			delete pics;
+			archive_read_free(arch);
+			return 1;
+		}
+		while (SDL_TryLockMutex(World::drawSys()->rendLock));
+		if (SDL_Texture* tex = World::drawSys()->loadArchiveTexture(arch, entry))
+			pics->emplace_back(archive_entry_pathname(entry), tex);
+		SDL_UnlockMutex(World::drawSys()->rendLock);
+		World::winSys()->pushEvent(UserCode::readerProgress, new vec2t(i, numEntries));
+	}
+	archive_read_free(arch);
+	std::sort(pics->begin(), pics->end(), [](const Texture& a, const Texture& b) -> bool { return strnatless(a.name, b.name); });
+	World::winSys()->pushEvent(UserCode::readerFinished, pics);
+	return 0;
+}
+
+SDL_Texture* DrawSys::loadArchiveTexture(archive* arch, archive_entry* entry) {
+	int64 bsiz = archive_entry_size(entry);
+	if (bsiz <= 0)
+		return nullptr;
+
+	uint8* buffer = new uint8[sizet(bsiz)];
+	int64 size = archive_read_data(arch, buffer, sizet(bsiz));
+	SDL_Texture* tex = size > 0 ? IMG_LoadTexture_RW(renderer, SDL_RWFromMem(buffer, int(size)), SDL_TRUE) : nullptr;
+	delete[] buffer;
+	return tex;
 }

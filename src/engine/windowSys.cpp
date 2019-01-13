@@ -1,4 +1,4 @@
-#include "world.h"
+#include "windowSys.h"
 
 WindowSys::WindowSys() :
 	window(nullptr),
@@ -21,20 +21,20 @@ int WindowSys::start() {
 
 void WindowSys::init() {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER))
-		throw std::runtime_error("Couldn't initialize SDL:\n" + string(SDL_GetError()));
+		throw std::runtime_error(string("Failed to initialize SDL:\n") + SDL_GetError());
 	if (TTF_Init())
-		throw std::runtime_error("Couldn't initialize fonts:\n" + string(SDL_GetError()));
+		throw std::runtime_error(string("Failed to initialize fonts:\n") + SDL_GetError());
 	SDL_StopTextInput();	// for some reason TextInput is on
 
 	int flags = IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP);
 	if (!(flags & IMG_INIT_JPG))
-		std::cerr << "Couldn't initialize JPG:\n" << IMG_GetError() << std::endl;
+		std::cerr << "failed to initialize JPG:\n" << IMG_GetError() << std::endl;
 	if (!(flags & IMG_INIT_PNG))
-		std::cerr << "Couldn't initialize PNG:\n" << IMG_GetError() << std::endl;
+		std::cerr << "failed to initialize PNG:\n" << IMG_GetError() << std::endl;
 	if (!(flags & IMG_INIT_TIF))
-		std::cerr << "Couldn't initialize TIF:\n" << IMG_GetError() << std::endl;
+		std::cerr << "failed to initialize TIF:\n" << IMG_GetError() << std::endl;
 	if (!(flags & IMG_INIT_WEBP))
-		std::cerr << "Couldn't initialize WEBP:\n" << IMG_GetError() << std::endl;
+		std::cerr << "failed to initialize WEBP:\n" << IMG_GetError() << std::endl;
 
 	fileSys.reset(new FileSys);
 	sets.reset(fileSys->loadSettings());
@@ -55,7 +55,7 @@ void WindowSys::exec() {
 		inputSys->tick(dSec);
 		scene->tick(dSec);
 
-		uint32 timeout = SDL_GetTicks() + Default::eventCheckTimeout;
+		uint32 timeout = SDL_GetTicks() + eventCheckTimeout;
 		for (SDL_Event event; SDL_PollEvent(&event) && SDL_GetTicks() < timeout;)
 			handleEvent(event);
 	}
@@ -80,22 +80,17 @@ void WindowSys::createWindow() {
 	destroyWindow();	// make sure old window (if exists) is destroyed
 
 	// create new window
-	uint32 flags = Default::windowFlags;
-	if (sets->maximized)
-		flags |= SDL_WINDOW_MAXIMIZED;
-	if (sets->fullscreen)
-		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-
-	if (!(window = SDL_CreateWindow(Default::titleDefault, Default::windowPos.x, Default::windowPos.y, sets->resolution.x, sets->resolution.y, flags)))
-		throw std::runtime_error("Couldn't create window:\n" + string(SDL_GetError()));
+	sets->resolution = sets->resolution.clamp(windowMinSize, displayResolution());
+	if (!(window = SDL_CreateWindow(title, defaultWindowPos.x, defaultWindowPos.y, sets->resolution.x, sets->resolution.y, windowFlags | (sets->maximized ? SDL_WINDOW_MAXIMIZED : 0) | (sets->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0))))
+		throw std::runtime_error(string("Failed to create window:\n") + SDL_GetError());
 
 	// minor stuff
-	if (SDL_Surface* icon = IMG_Load(string(World::fileSys()->getDirExec() + Default::fileIcon).c_str())) {
+	if (SDL_Surface* icon = IMG_Load(fileIcon)) {
 		SDL_SetWindowIcon(window, icon);
 		SDL_FreeSurface(icon);
 	}
 	drawSys.reset(new DrawSys(window, sets->getRendererIndex()));
-	SDL_SetWindowMinimumSize(window, Default::windowMinSize.x, Default::windowMinSize.y);	// for some reason this function has to be called after the renderer is created
+	SDL_SetWindowMinimumSize(window, windowMinSize.x, windowMinSize.y);	// for some reason this function has to be called after the renderer is created
 }
 
 void WindowSys::destroyWindow() {
@@ -154,17 +149,19 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 	case SDL_JOYDEVICEREMOVED:
 		inputSys->removeController(event.jdevice.which);
 		break;
+	case SDL_USEREVENT:
+		program->eventUser(event.user);
+		break;
 	case SDL_QUIT:
-		close();
+		program->eventTryExit();
 	}
 }
 
 void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 	switch (winEvent.event) {
 	case SDL_WINDOWEVENT_RESIZED:
-		if (uint32 flags = SDL_GetWindowFlags(window); !(flags & SDL_WINDOW_FULLSCREEN_DESKTOP))	// update settings if needed
-			if (!(sets->maximized = flags & SDL_WINDOW_MAXIMIZED))
-				SDL_GetWindowSize(window, &sets->resolution.x, &sets->resolution.y);
+		if (uint32 flags = SDL_GetWindowFlags(window); !(flags & SDL_WINDOW_FULLSCREEN_DESKTOP) && !(sets->maximized = flags & SDL_WINDOW_MAXIMIZED))	// update settings if needed
+			SDL_GetWindowSize(window, &sets->resolution.x, &sets->resolution.y);
 		scene->onResize();
 		break;
 	case SDL_WINDOWEVENT_SIZE_CHANGED:
@@ -174,13 +171,19 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 		scene->onMouseLeave();
 		break;
 	case SDL_WINDOWEVENT_CLOSE:
-		close();
+		program->eventTryExit();
 	}
+}
+
+void WindowSys::pushEvent(UserCode code, void* data1, void* data2) const {
+	SDL_Event event;
+	event.user = {SDL_USEREVENT, SDL_GetTicks(), SDL_GetWindowID(window), int32(code), data1, data2};
+	SDL_PushEvent(&event);
 }
 
 void WindowSys::setDSec(uint32& oldTicks) {
 	uint32 newTime = SDL_GetTicks();
-	dSec = float(newTime - oldTicks) / 1000.f;
+	dSec = float(newTime - oldTicks) / ticksPerSec;
 	oldTicks = newTime;
 }
 
@@ -196,16 +199,18 @@ void WindowSys::setFullscreen(bool on) {
 }
 
 void WindowSys::setResolution(const vec2i& res) {
-	sets->resolution = res;
+	sets->resolution = res.clamp(windowMinSize, displayResolution());
 	SDL_SetWindowSize(window, res.x, res.y);
 }
 
 void WindowSys::setRenderer(const string& name) {
 	sets->renderer = name;
 	createWindow();
+	scene->resetLayouts();
 }
 
 void WindowSys::resetSettings() {
 	sets.reset(new Settings);
 	createWindow();
+	scene->resetLayouts();
 }

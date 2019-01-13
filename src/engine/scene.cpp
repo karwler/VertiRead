@@ -13,8 +13,7 @@ ClickStamp::ClickStamp(Widget* widget, ScrollArea* area, const vec2i& mPos) :
 Scene::Scene() :
 	select(nullptr),
 	capture(nullptr),
-	layout(new Layout(1.f, {})),	// dummy layout in case a function gets called preemptively
-	stamps(SDL_BUTTON_X2 + 1)
+	layout(new Layout)	// dummy layout in case a function gets called preemptively
 {}
 
 void Scene::tick(float dSec) {
@@ -39,9 +38,12 @@ void Scene::onMouseMove(const vec2i& mPos, const vec2i& mMov) {
 }
 
 void Scene::onMouseDown(const vec2i& mPos, uint8 mBut, uint8 mCnt) {
-	if (!popup)	// confirm entered text if such a thing exists unless it's in a popup (that thing handles itself)
-		if (LineEdit* box = dynamic_cast<LineEdit*>(capture))
-			box->confirm();
+	if (LabelEdit* box = dynamic_cast<LabelEdit*>(capture); !popup && box && box->unfocusConfirm)	// confirm entered text if such a thing exists and it wants to, unless it's in a popup (that thing handles itself)
+		box->confirm();
+	if (KeyGetter* box = dynamic_cast<KeyGetter*>(capture)) {	// cancel key getting process if necessary
+		box->restoreText();
+		capture = nullptr;
+	}
 	
 	setSelected(mPos, topLayout(mPos));	// update in case selection has changed through keys while cursor remained at the old position
 	if (mCnt == 1) {
@@ -50,7 +52,7 @@ void Scene::onMouseDown(const vec2i& mPos, uint8 mBut, uint8 mCnt) {
 			stamps[mBut].area->onHold(mPos, mBut);
 		if (stamps[mBut].widget != stamps[mBut].area)
 			stamps[mBut].widget->onHold(mPos, mBut);
-	} else if (mCnt == 2 && stamps[mBut].widget == select && cursorInClickRange(mPos, mBut))
+	} else if (mCnt == 2 && select && stamps[mBut].widget == select && cursorInClickRange(mPos, mBut))
 		select->onDoubleClick(mPos, mBut);
 }
 
@@ -64,9 +66,9 @@ void Scene::onMouseUp(const vec2i& mPos, uint8 mBut) {
 
 void Scene::onMouseWheel(const vec2i& wMov) {
 	if (ScrollArea* box = getSelectedScrollArea())
-		box->onScroll(wMov * Default::scrollFactorWheel);
+		box->onScroll(wMov * scrollFactorWheel);
 	else if (select)
-		select->onScroll(wMov * Default::scrollFactorWheel);
+		select->onScroll(wMov * scrollFactorWheel);
 }
 
 void Scene::onMouseLeave() {
@@ -115,15 +117,13 @@ void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
 
 void Scene::setSelected(const vec2i& mPos, Layout* box) {
 	Rect frame = box->frame();
-	for (Widget* it : box->getWidgets())
-		if (it->rect().getOverlap(frame).overlap(mPos)) {
-			if (Layout* lay = dynamic_cast<Layout*>(it))
-				setSelected(mPos, lay);
-			else
-				select = dynamic_cast<Button*>(it) ? it : box;
-			return;
-		}
-	select = box;
+	if (vector<Widget*>::const_iterator it = std::find_if(box->getWidgets().begin(), box->getWidgets().end(), [&frame, &mPos](const Widget* wi) -> bool { return wi->rect().getOverlap(frame).overlap(mPos); }); it != box->getWidgets().end()) {
+		if (Layout* lay = dynamic_cast<Layout*>(*it))
+			setSelected(mPos, lay);
+		else
+			select = (*it)->navSelectable() ? *it : box;
+	} else
+		select = box;
 }
 
 ScrollArea* Scene::getSelectedScrollArea() const {
@@ -140,17 +140,9 @@ bool Scene::overlayFocused(const vec2i& mPos) {
 	if (!overlay)
 		return false;
 
-	if (overlay->on) {
-		if (overlay->rect().overlap(mPos))
-			return true;
-		overlay->on = false;
-		return false;
-	}
-	if (overlay->actRect().overlap(mPos)) {
-		overlay->on = true;
-		return true;
-	}
-	return false;
+	if (overlay->on)
+		return overlay->rect().overlap(mPos) ? true : overlay->on = false;
+	return overlay->actRect().overlap(mPos) ? overlay->on = true : false;
 }
 
 void Scene::selectFirst() {
@@ -163,7 +155,7 @@ void Scene::selectFirst() {
 	else
 		lay = layout.get();
 
-	for (sizt id = 0; lay;) {
+	for (sizet id = 0; lay;) {
 		if (id >= lay->getWidgets().size()) {
 			id = lay->getID() + 1;
 			lay = lay->getParent();
@@ -177,7 +169,7 @@ void Scene::selectFirst() {
 	}
 }
 
-sizt Scene::findSelectedID(Layout* box) {
+sizet Scene::findSelectedID(Layout* box) {
 	Widget* child = select;
 	while (child->getParent() && child->getParent() != box)
 		child = child->getParent();

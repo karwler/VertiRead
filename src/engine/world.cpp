@@ -1,48 +1,66 @@
 #include "world.h"
-#ifdef _WIN32
-#include <windows.h>
-#endif
+#include <clocale>
+#include <locale>
 
 WindowSys World::windowSys;
-vector<string> World::args;
+vector<string> World::argVals;
+uset<string> World::argFlags;
+umap<string, string> World::argOpts;
 
-#ifdef _WIN32
-#ifdef _DEBUG
-void World::setArgs(int argc, wchar** argv) {
-	args.resize(sizt(argc - 1));
-	for (sizt i = 0; i < args.size(); i++)
-		args[i] = wtos(argv[i+1]);
-}
-#else
-void World::setArgs(wchar* argstr) {
+#if defined(_WIN32) && !defined(_DEBUG)
+void World::init(wchar* argstr) {
 	int argc;
 	LPWSTR* argv = CommandLineToArgvW(argstr, &argc);
-	
-	args.resize(sizt(argc - 1));
-	for (sizt i = 0; i < args.size(); i++)
-		args[i] = wtos(argv[i+1]);
+	setArgs(0, argc, argv);
 	LocalFree(argv);
 }
 #endif
+
+#ifdef _WIN32
+void World::setArgs(int i, int argc, wchar** argv) {
+	for (; i < argc; i++) {
+		if (argv[i][0] == '-') {
+			wchar* flg = argv[i] + (argv[i][1] == '-' ? 2 : 1);
+			if (int ni = i + 1; ni < argc && argv[ni][0] != '-')
+				argOpts.emplace(wtos(flg), wtos(argv[++i]));
+			else
+				argFlags.emplace(wtos(flg));
+		} else
+			argVals.emplace_back(wtos(argv[i]));
+	}
+}
 #else
-void World::setArgs(int argc, char** argv) {
-	args.resize(sizt(argc - 1));
-	for (sizt i = 0; i < args.size(); i++)
-		args[i] = argv[i+1];
+void World::setArgs(int i, int argc, char** argv) {
+	for (; i < argc; i++) {
+		if (argv[i][0] == '-') {
+			char* flg = argv[i] + (argv[i][1] == '-' ? 2 : 1);
+			if (int ni = i + 1; ni < argc && argv[ni][0] != '-')
+				argOpts.emplace(flg, argv[++i]);
+			else
+				argFlags.emplace(flg);
+		} else
+			argVals.emplace_back(argv[i]);
+	}
 }
 #endif
 
 #ifdef _WIN32
 #ifdef _DEBUG
 int wmain(int argc, wchar** argv) {
-	World::setArgs(argc, argv);
 #else
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
-	World::setArgs(pCmdLine);
 #endif
 #else
 int main(int argc, char** argv) {
-	World::setArgs(argc, argv);
+#endif
+	std::setlocale(LC_ALL, "");
+	std::locale::global(std::locale(""));
+	std::cout.imbue(std::locale());
+	std::cerr.imbue(std::locale());
+#if defined(_WIN32) && !defined(_DEBUG)
+	World::init(pCmdLine);
+#else
+	World::init(argc, argv);
 #endif
 	return World::winSys()->start();
 }

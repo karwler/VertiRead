@@ -5,10 +5,21 @@
 
 // handles the frontend
 class Program {
+private:
+	static constexpr float zoomFactor = 1.2f;
+	static constexpr float resModeBorder = 0.85f;
+	static constexpr float resModeRatio = 0.75f;
+
+	Downloader downloader;
+	uptr<ProgState> state;
+	uptr<Browser> browser;
+	uptr<Thread> thread;
+
 public:
 	Program();
 
 	void start();
+	void eventUser(const SDL_UserEvent& user);
 
 	// books
 	void eventOpenBookList(Button* but = nullptr);
@@ -24,6 +35,10 @@ public:
 	void eventExitBrowser(Button* but = nullptr);
 
 	// reader
+	void eventStartLoadingReader();
+	void eventReaderLoadingProgress(vec2t* prog);
+	void eventReaderLoadingCancelled(Button* but = nullptr);
+	void eventReaderLoadingFinished(vector<Texture>* pics);
 	void eventZoomIn(Button* but = nullptr);
 	void eventZoomOut(Button* but = nullptr);
 	void eventZoomReset(Button* but = nullptr);
@@ -31,17 +46,46 @@ public:
 	void eventNextDir(Button* but = nullptr);
 	void eventPrevDir(Button* but = nullptr);
 	void eventExitReader(Button* but = nullptr);
+#ifdef _BUILD_DOWNLOADER
+	// downloader
+	void eventOpenDownloader(Button* but = nullptr);
+	void eventSwitchSource(Button* but = nullptr);
+	void eventQuery(Button* but = nullptr);
+	void eventShowComicInfo(Button* but = nullptr);
+	void eventSelectAllChapters(Button* but);
+	void eventSelectChapter(Button* but);
+	void eventDownloadAllChapters(Button* but = nullptr);
+	void eventDownloadChapter(Button* but);
+	void eventDownloadComic(Button* but);
 
+	// downloads
+	void eventOpenDownloadList(Button* but = nullptr);
+	void eventDownloadListProgress();
+	void eventDownloadListNext();
+	void eventDownloadListFinish();
+	void eventDownloadDelete(Button* but);
+	void eventResumeDownloads(Button* but = nullptr);
+	void eventStopDownloads(Button* but = nullptr);
+	void eventClearDownloads(Button* but = nullptr);
+#else
+	void eventDownloadListProgress() {}
+	void eventDownloadListNext() {}
+	void eventDownloadListFinish() {}
+#endif
 	// settings
 	void eventOpenSettings(Button* but = nullptr);
 	void eventSwitchDirection(Button* but);
 	void eventSetZoom(Button* but);
 	void eventSetSpacing(Button* but);
-	void eventSwitchLanguage(Button* but);
 	void eventSetLibraryDirLE(Button* but);
 	void eventSetLibraryDirBW(Button* but);
 	void eventOpenLibDirBrowser(Button* but = nullptr);
-	void eventSwitchFullscreen(Button* but);
+	void eventMoveComics(Button* but = nullptr);
+	void eventDontMoveComics(Button* but = nullptr);
+	void eventMoveProgress(vec2t* prog);
+	void eventMoveFinished();
+	void eventSetFullscreen(Button* but);
+	void eventSetHide(Button* but);
 	void eventSetTheme(Button* but);
 	void eventSetFont(Button* but);
 	void eventSetRenderer(Button* but);
@@ -56,15 +100,15 @@ public:
 
 	// other
 	void eventClosePopup(Button* but = nullptr);
-	void eventExit(Button* but = nullptr);
+	void eventTryExit(Button* but = nullptr);
+	void eventForceExit(Button* but = nullptr);
 	
+	Downloader* getDownloader();
 	ProgState* getState();
 	Browser* getBrowser();
 
 private:
-	uptr<ProgState> state;
-	uptr<Browser> browser;
-
+	void offerMoveBooks(const string& oldLib);
 	void setState(ProgState* newState);
 	void reposizeWindow(const vec2i& dres, const vec2i& wsiz);
 };
@@ -87,4 +131,8 @@ inline ProgState* Program::getState() {
 
 inline Browser* Program::getBrowser() {
 	return browser.get();
+}
+
+inline Downloader* Program::getDownloader() {
+	return &downloader;
 }

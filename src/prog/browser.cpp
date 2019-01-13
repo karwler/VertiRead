@@ -1,4 +1,4 @@
-#include "browser.h"
+#include "engine/world.h"
 
 Browser::Browser(const string& rootDirectory, const string& curDirectory, PCall exitCall) :
 	exCall(exitCall),
@@ -7,7 +7,7 @@ Browser::Browser(const string& rootDirectory, const string& curDirectory, PCall 
 {
 	curDir = curDirectory.empty() ? rootDir : curDirectory;
 	if (FileSys::fileType(rootDir) != FTYPE_DIR || FileSys::fileType(curDir) != FTYPE_DIR || !isSubpath(curDir, rootDir))
-		throw std::runtime_error("Invalid file browser arguments");
+		throw std::runtime_error("invalid file browser arguments");
 }
 
 Browser::Browser(const string& rootDirectory, const string& container, const string& file, PCall exitCall, bool checkFile) :
@@ -17,14 +17,14 @@ Browser::Browser(const string& rootDirectory, const string& container, const str
 	curFile(file)
 {
 	if (FileSys::fileType(rootDir) != FTYPE_DIR || !isSubpath(curDir, rootDir))
-		throw std::runtime_error("Invalid archive browser arguments");
+		throw std::runtime_error("invalid archive browser arguments");
 
 	if (FileSys::fileType(curDir) == FTYPE_DIR) {
 		inArchive = false;
 		if (string path = childPath(curDir, curFile); checkFile && !FileSys::isPicture(path))
 			throw std::runtime_error(path + " isn't a valid picture or archive");
 	} else {
-		archive* arch = openArchive(curDir);
+		archive* arch = FileSys::openArchive(curDir);
 		if (!arch)
 			throw std::runtime_error(curDir + " isn't a directory or archive");
 
@@ -35,11 +35,10 @@ Browser::Browser(const string& rootDirectory, const string& container, const str
 				if (archive_entry_pathname(entry) != curFile)
 					archive_read_data_skip(arch);
 				else {
-					if (SDL_RWops* io = readArchiveEntry(arch, entry))
-						if (SDL_Surface* pic = IMG_Load_RW(io, SDL_TRUE)) {
-							SDL_FreeSurface(pic);
-							found = true;
-						}
+					if (SDL_Surface* pic = FileSys::loadArchivePicture(arch, entry)) {
+						SDL_FreeSurface(pic);
+						found = true;
+					}
 					break;
 				}
 			}
@@ -53,15 +52,19 @@ Browser::Browser(const string& rootDirectory, const string& container, const str
 
 bool Browser::goTo(const string& path) {
 	if (isSubpath(path, rootDir))
-		if (FileType type = FileSys::fileType(path)) {
-			curDir = type == FTYPE_FILE ? parentPath(path) : path;
+		switch (FileSys::fileType(path)) {
+		case FTYPE_REG:
+			curDir = parentPath(path);
+			return true;
+		case FTYPE_DIR:
+			curDir = path;
 			return true;
 		}
 	return false;
 }
 
 bool Browser::goIn(const string& dirname) {
-	if (string newPath = childPath(curDir, dirname); dirname.size() && FileSys::fileType(newPath) == FTYPE_DIR) {
+	if (string newPath = childPath(curDir, dirname); !dirname.empty() && FileSys::fileType(newPath) == FTYPE_DIR) {
 		curDir = newPath;
 		return true;
 	}
@@ -86,34 +89,28 @@ void Browser::goNext(bool fwd) {
 void Browser::shiftDir(bool fwd) {
 	// find id of current directory and set it to the path of the next valid directory in the parent directory
 	string dir = parentPath(curDir);
-	vector<string> dirs = FileSys::listDir(dir, FTYPE_DIR);
-	for (sizt i = 0; i < dirs.size(); i++)
-		if (pathCmp(childPath(dir, dirs[i]), curDir)) {
-			foreachAround(dirs, i, fwd, this, &Browser::nextDir, dir);
-			break;
-		}
+	vector<string> dirs = FileSys::listDir(dir, FTYPE_DIR, World::sets()->showHidden);
+	if (vector<string>::iterator di = std::find_if(dirs.begin(), dirs.end(), [this, &dir](const string& it) -> bool { return pathCmp(childPath(dir, it), curDir); }); di != dirs.end())
+		foreachAround(dirs, di, fwd, this, &Browser::nextDir, dir);
 	curFile.clear();
 }
 
 bool Browser::nextDir(const string& dit, const string& pdir) {
 	string idir = childPath(pdir, dit);
-	for (string& it : FileSys::listDir(idir, FTYPE_FILE))
-		if (FileSys::isPicture(childPath(idir, it))) {
-			curDir = idir;
-			return true;
-		}
+	vector<string> files = FileSys::listDir(idir, FTYPE_REG, World::sets()->showHidden);
+	if (vector<string>::iterator fi = std::find_if(files.begin(), files.end(), [&idir](const string& it) -> bool { return FileSys::isPicture(childPath(idir, it));}); fi != files.end()) {
+		curDir = idir;
+		return true;
+	}
 	return false;
 }
 
 void Browser::shiftArchive(bool fwd) {
 	// get list of archive files in the same directory and find id of the current file and select the next one
 	string dir = parentPath(curDir);
-	vector<string> files = FileSys::listDir(dir, FTYPE_FILE);
-	for (sizt i = 0; i < files.size(); i++)
-		if (curDir == childPath(dir, files[i])) {
-			foreachAround(files, i, fwd, this, &Browser::nextArchive, dir);
-			break;
-		}
+	vector<string> files = FileSys::listDir(dir, FTYPE_REG, World::sets()->showHidden);
+	if (vector<string>::iterator fi = std::find_if(files.begin(), files.end(), [this, &dir](const string& it) -> bool { return curDir == childPath(dir, it); }); fi != files.end())
+		foreachAround(files, fi, fwd, this, &Browser::nextArchive, dir);
 	curFile.clear();
 }
 
@@ -126,7 +123,7 @@ bool Browser::nextArchive(const string& ait, const string& pdir) {
 }
 
 bool Browser::selectFile(const string& fname) {
-	if (string path = childPath(curDir, fname);FileSys::isPicture(path))
+	if (string path = childPath(curDir, fname); FileSys::isPicture(path))
 		curFile = fname;
 	else if (FileSys::isArchive(path)) {
 		curDir = path;
