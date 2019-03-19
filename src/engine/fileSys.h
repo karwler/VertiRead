@@ -25,31 +25,31 @@ enum FileType : uint8 {
 	FTYPE_ANY = 0xFF
 };
 
-inline FileType operator~(FileType a) {
+inline constexpr FileType operator~(FileType a) {
 	return FileType(~uint8(a));
 }
 
-inline FileType operator&(FileType a, FileType b) {
+inline constexpr FileType operator&(FileType a, FileType b) {
 	return FileType(uint8(a) & uint8(b));
 }
 
-inline FileType operator&=(FileType& a, FileType b) {
+inline constexpr FileType operator&=(FileType& a, FileType b) {
 	return a = FileType(uint8(a) & uint8(b));
 }
 
-inline FileType operator^(FileType a, FileType b) {
+inline constexpr FileType operator^(FileType a, FileType b) {
 	return FileType(uint8(a) ^ uint8(b));
 }
 
-inline FileType operator^=(FileType& a, FileType b) {
+inline constexpr FileType operator^=(FileType& a, FileType b) {
 	return a = FileType(uint8(a) ^ uint8(b));
 }
 
-inline FileType operator|(FileType a, FileType b) {
+inline constexpr FileType operator|(FileType a, FileType b) {
 	return FileType(uint8(a) | uint8(b));
 }
 
-inline FileType operator|=(FileType& a, FileType b) {
+inline constexpr FileType operator|=(FileType& a, FileType b) {
 	return a = FileType(uint8(a) | uint8(b));
 }
 
@@ -146,11 +146,9 @@ private:
 #ifdef _WIN32
 	static const array<string, 22> takenFilenames;
 	static constexpr sizet drivesMax = 26;
-	static constexpr sizet pathMax = 32767;
 	static constexpr sizet fnameMax = 255;
 #else
 	static constexpr sizet fnameMax = NAME_MAX;
-	static constexpr char linkExe[] = "/proc/self/exe";
 #endif
 	static constexpr char fileThemes[] = "themes.ini";
 	static constexpr char fileSettings[] = "settings.ini";

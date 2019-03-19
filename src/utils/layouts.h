@@ -234,7 +234,7 @@ private:
 };
 
 inline bool ReaderBox::showBar() const {
-	return barRect().overlap(mousePos()) || draggingSlider;
+	return barRect().contain(mousePos()) || draggingSlider;
 }
 
 inline float ReaderBox::getZoom() const {

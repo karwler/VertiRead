@@ -274,7 +274,7 @@ void ScrollArea::onHold(const vec2i& mPos, uint8 mBut) {
 
 	if (mBut == SDL_BUTTON_LEFT) {	// check scroll bar left click
 		World::scene()->capture = this;
-		if (draggingSlider = barRect().overlap(mPos)) {
+		if (draggingSlider = barRect().contain(mPos)) {
 			sizet di = direction.vertical();
 			if (int sp = sliderPos(), ss = sliderSize(); outRange(mPos[di], sp, sp + ss))	// if mouse outside of slider but inside bar
 				setSlider(mPos[di] - ss /2);
@@ -386,7 +386,7 @@ void ScrollArea::scrollToLimit(bool start) {
 }
 
 Rect ScrollArea::frame() const {
-	return parent ? rect().getOverlap(parent->frame()) : rect();
+	return parent ? rect().intersect(parent->frame()) : rect();
 }
 
 vec2i ScrollArea::wgtPosition(sizet id) const {
@@ -625,7 +625,7 @@ void ReaderBox::postInit() {
 void ReaderBox::onMouseMove(const vec2i& mPos, const vec2i& mMov) {
 	Layout::onMouseMove(mPos, mMov);
 
-	countDown = World::scene()->cursorDisableable() && rect().overlap(mPos) && !showBar() && World::scene()->capture != this && cursorTimer > 0.f;
+	countDown = World::scene()->cursorDisableable() && rect().contain(mPos) && !showBar() && World::scene()->capture != this && cursorTimer > 0.f;
 	if (cursorTimer < menuHideTimeout) {
 		cursorTimer = menuHideTimeout;
 		SDL_ShowCursor(SDL_ENABLE);

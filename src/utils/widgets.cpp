@@ -207,6 +207,10 @@ void Label::drawSelf() const {
 	World::drawSys()->drawLabel(this);
 }
 
+void Label::onResize() {
+	updateTextTex();
+}
+
 void Label::postInit() {
 	updateTextTex();
 }
@@ -219,7 +223,7 @@ void Label::setText(const string& str) {
 Rect Label::textFrame() const {
 	Rect rct = rect();
 	int ofs = textIconOffset();
-	return Rect(rct.x + ofs + textMargin, rct.y, rct.w - ofs - textMargin * 2, rct.h).getOverlap(frame());
+	return Rect(rct.x + ofs + textMargin, rct.y, rct.w - ofs - textMargin * 2, rct.h).intersect(frame());
 }
 
 Rect Label::texRect() const {

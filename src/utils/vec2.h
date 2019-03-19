@@ -302,7 +302,7 @@ constexpr vec2<T> operator/(const vec2<T>& a, const T& b) {
 
 template <class T>
 constexpr vec2<T> operator/(const T& a, const vec2<T>& b) {
-	return vec2<T>(a % b.x, a % b.y);
+	return vec2<T>(a / b.x, a / b.y);
 }
 
 template <class T>

@@ -23,7 +23,7 @@ void WindowSys::init() {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER))
 		throw std::runtime_error(string("Failed to initialize SDL:\n") + SDL_GetError());
 	if (TTF_Init())
-		throw std::runtime_error(string("Failed to initialize fonts:\n") + SDL_GetError());
+		throw std::runtime_error(string("Failed to initialize fonts:\n") + TTF_GetError());
 	SDL_StopTextInput();	// for some reason TextInput is on
 
 	int flags = IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP);
@@ -191,6 +191,13 @@ void WindowSys::moveCursor(const vec2i& mov) {
 	int px, py;
 	SDL_GetMouseState(&px, &py);
 	SDL_WarpMouseInWindow(window, px + mov.x, py + mov.y);
+}
+
+void WindowSys::toggleOpacity() {
+	if (float val; !SDL_GetWindowOpacity(window, &val))
+		SDL_SetWindowOpacity(window, val < 1.f ? 1.f : 0.f);
+	else
+		SDL_MinimizeWindow(window);
 }
 
 void WindowSys::setFullscreen(bool on) {

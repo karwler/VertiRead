@@ -82,6 +82,10 @@ void ProgState::eventHide() {
 	World::sets()->showHidden = !World::sets()->showHidden;
 }
 
+void ProgState::eventBoss() {
+	World::winSys()->toggleOpacity();
+}
+
 void ProgState::eventRefresh() {
 	World::scene()->resetLayouts();
 }

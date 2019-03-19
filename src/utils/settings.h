@@ -25,37 +25,37 @@ private:
 	Dir dir;
 
 public:
-	Direction(Dir direction = Direction::up);
+	constexpr Direction(Dir direction = Direction::up);
 
-	operator Dir() const;
+	constexpr operator Dir() const;
 
-	bool vertical() const;
-	bool horizontal() const;
-	bool positive() const;
-	bool negative() const;
+	constexpr bool vertical() const;
+	constexpr bool horizontal() const;
+	constexpr bool positive() const;
+	constexpr bool negative() const;
 };
 
-inline Direction::Direction(Dir direction) :
+inline constexpr Direction::Direction(Dir direction) :
 	dir(direction)
 {}
 
-inline Direction::operator Dir() const {
+inline constexpr Direction::operator Dir() const {
 	return dir;
 }
 
-inline bool Direction::vertical() const {
+inline bool constexpr Direction::vertical() const {
 	return dir <= down;
 }
 
-inline bool Direction::horizontal() const {
+inline bool constexpr Direction::horizontal() const {
 	return dir >= left;
 }
 
-inline bool Direction::positive() const {
+inline bool constexpr Direction::positive() const {
 	return dir & 1;
 }
 
-inline bool Direction::negative() const {
+inline bool constexpr Direction::negative() const {
 	return !positive();
 }
 
@@ -90,6 +90,7 @@ public:
 		prevDir,
 		fullscreen,
 		hide,
+		boss,
 		refresh
 	};
 	static const array<string, sizet(Type::refresh)+1> names;
@@ -164,31 +165,31 @@ public:
 	void setAcall(SACall call);
 };
 
-inline Binding::Assignment operator~(Binding::Assignment a) {
+inline constexpr Binding::Assignment operator~(Binding::Assignment a) {
 	return Binding::Assignment(~uint8(a));
 }
 
-inline Binding::Assignment operator&(Binding::Assignment a, Binding::Assignment b) {
+inline constexpr Binding::Assignment operator&(Binding::Assignment a, Binding::Assignment b) {
 	return Binding::Assignment(uint8(a) & uint8(b));
 }
 
-inline Binding::Assignment operator&=(Binding::Assignment& a, Binding::Assignment b) {
+inline constexpr Binding::Assignment operator&=(Binding::Assignment& a, Binding::Assignment b) {
 	return a = Binding::Assignment(uint8(a) & uint8(b));
 }
 
-inline Binding::Assignment operator^(Binding::Assignment a, Binding::Assignment b) {
+inline constexpr Binding::Assignment operator^(Binding::Assignment a, Binding::Assignment b) {
 	return Binding::Assignment(uint8(a) ^ uint8(b));
 }
 
-inline Binding::Assignment operator^=(Binding::Assignment& a, Binding::Assignment b) {
+inline constexpr Binding::Assignment operator^=(Binding::Assignment& a, Binding::Assignment b) {
 	return a = Binding::Assignment(uint8(a) ^ uint8(b));
 }
 
-inline Binding::Assignment operator|(Binding::Assignment a, Binding::Assignment b) {
+inline constexpr Binding::Assignment operator|(Binding::Assignment a, Binding::Assignment b) {
 	return Binding::Assignment(uint8(a) | uint8(b));
 }
 
-inline Binding::Assignment operator|=(Binding::Assignment& a, Binding::Assignment b) {
+inline constexpr Binding::Assignment operator|=(Binding::Assignment& a, Binding::Assignment b) {
 	return a = Binding::Assignment(uint8(a) | uint8(b));
 }
 

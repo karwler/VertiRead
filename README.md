@@ -1,7 +1,7 @@
 # VertiRead
 A simple comic reader for Linux and Windows.  
 It's basically just an image viewer that shows all pictures in a directory/archive.  
-Currently supported file formats are JPG, PNG, TIFF, WEBP and archives.  
+Currently supported file formats are whatever SDL2_image and libarchive support.  
 
 Used libraries are SDL2, SDL2_image, SDL2_ttf, libarchive and by extension libjpeg, libpng, libtiff, libwebp, FreeType and zlib.   
 The CMakeLists.txt is written for at least CMake 3.10.2 with Clang, GCC or MSVC which need to support C++17.  
@@ -30,3 +30,7 @@ The reader has a hidden side panel on the left.
 The direction in which pictures in the reader are stacked can be set in the settings menu.  
 The program supports keyboard and controller bindings. DirectInput and XInput are handled separately. The bindings can be changed in the settings.  
 To reset certain settings, edit or delete the corresponding ini files in the settings directory or use the reset button in the settings menu to reset all settings.  
+
+## Supported files
+- images: bmp, gif, jpg, lbm, pcx, png, pnm, svg, tga, tiff, webp, xcf, xpm, xv
+- archives: 7z, ar, cab, cpio, empty, ISO9660, lha, lzh, mtree, pax, rar, raw, tar, xar, zip

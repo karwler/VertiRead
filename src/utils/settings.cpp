@@ -40,6 +40,7 @@ const array<string, Binding::names.size()> Binding::names = {
 	"prev directory",
 	"fullscreen",
 	"show hidden",
+	"boss",
 	"refresh"
 };
 
@@ -179,13 +180,13 @@ void Binding::setDefaultSelf(Type type) {
 		break;
 	case Type::nextDir:
 		setBcall(&ProgState::eventNextDir);
-		setKey(SDL_SCANCODE_N);
+		setKey(SDL_SCANCODE_D);
 		setJbutton(7);
 		setGaxis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT, true);
 		break;
 	case Type::prevDir:
 		setBcall(&ProgState::eventPrevDir);
-		setKey(SDL_SCANCODE_B);
+		setKey(SDL_SCANCODE_A);
 		setJbutton(6);
 		setGaxis(SDL_CONTROLLER_AXIS_TRIGGERLEFT, true);
 		break;
@@ -198,6 +199,10 @@ void Binding::setDefaultSelf(Type type) {
 	case Type::hide:
 		setBcall(&ProgState::eventHide);
 		setKey(SDL_SCANCODE_H);
+		break;
+	case Type::boss:
+		setBcall(&ProgState::eventBoss);
+		setKey(SDL_SCANCODE_B);
 		break;
 	case Type::refresh:
 		setBcall(&ProgState::eventRefresh);

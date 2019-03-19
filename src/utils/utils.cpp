@@ -10,63 +10,19 @@ vector<string> getAvailibleRenderers() {
 	return renderers;
 }
 
-bool Rect::overlap(const Rect& rect, vec2i& sback, vec2i& rback) const {
-	if (w <= 0 || h <= 0 || rect.w <= 0 || rect.h <= 0)	// idfk
-		return false;
-
-	sback = back();
-	rback = rect.back();
-	return x < rback.x && y < rback.y && sback.x >= rect.x && sback.y >= rect.y;
-}
-
-Rect Rect::crop(const Rect& frame) {
-	vec2i rback, fback;
-	if (!overlap(frame, rback, fback))
+Rect Rect::crop(const Rect& rect) {
+	Rect isct;
+	if (!SDL_IntersectRect(this, &rect, &isct))
 		return *this = Rect(0);
 
-	Rect crop(0);	// crop rect if it's boundaries are out of frame
-	if (x < frame.x) {	// left
-		crop.x = frame.x - x;
-		x = frame.x;
-		w -= crop.x;
-	}
-	if (rback.x > fback.x) {	// right
-		crop.w = rback.x - fback.x;
-		w -= crop.w;
-	}
-	if (y < frame.y) {	// top
-		crop.y = frame.y - y;
-		y = frame.y;
-		h -= crop.y;
-	}
-	if (rback.y > fback.y) {	// bottom
-		crop.h = rback.y - fback.y;
-		h -= crop.h;
-	}
-	crop.size() += crop.pos();	// get full width and height of crop
+	vec2i te = end(), ie = isct.end();
+	Rect crop;
+	crop.x = isct.x > x ? isct.x - x : 0;
+	crop.y = isct.y > y ? isct.y - y : 0;
+	crop.w = ie.x < te.x ? te.x - ie.x + crop.x : 0;
+	crop.h = ie.y < te.y ? te.y - ie.y + crop.y : 0;
+	*this = isct;
 	return crop;
-}
-
-Rect Rect::getOverlap(const Rect& frame) const {
-	Rect rect = *this;
-	vec2i rback, fback;
-	if (!rect.overlap(frame, rback, fback))
-		return Rect(0);
-
-	// crop rect if it's boundaries are out of frame
-	if (rect.x < frame.x) {	// left
-		rect.w -= frame.x - rect.x;
-		rect.x = frame.x;
-	}
-	if (rback.x > fback.x)	// right
-		rect.w -= rback.x - fback.x;
-	if (rect.y < frame.y) {	// top
-		rect.h -= frame.y - rect.y;
-		rect.y = frame.y;
-	}
-	if (rback.y > fback.y)	// bottom
-		rect.h -= rback.y - fback.y;
-	return rect;
 }
 
 Thread::Thread(int (*func)(void*), void* data) :
@@ -272,6 +228,17 @@ string wtos(const wstring& src) {
 	string dst;
 	dst.resize(len);
 	WideCharToMultiByte(CP_UTF8, 0, src.c_str(), int(src.length()), dst.data(), len, nullptr, nullptr);
+	return dst;
+}
+
+wstring stow(const char* src) {
+	int len = MultiByteToWideChar(CP_UTF8, 0, src, -1, nullptr, 0);
+	if (len <= 1)
+		return L"";
+
+	wstring dst;
+	dst.resize(len);
+	MultiByteToWideChar(CP_UTF8, 0, src, len, dst.data(), len);
 	return dst;
 }
 

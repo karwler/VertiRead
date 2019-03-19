@@ -103,32 +103,30 @@ vector<string> getAvailibleRenderers();
 
 struct Rect : SDL_Rect {
 	Rect() = default;
-	Rect(int n);
-	Rect(int x, int y, int w, int h);
-	Rect(const vec2i& pos, const vec2i& size);
+	constexpr Rect(int n);
+	constexpr Rect(int x, int y, int w, int h);
+	constexpr Rect(const vec2i& pos, const vec2i& size);
 
 	vec2i& pos();
-	const vec2i& pos() const;
+	constexpr vec2i pos() const;
 	vec2i& size();
-	const vec2i& size() const;
-	vec2i end() const;
-	vec2i back() const;
+	constexpr vec2i size() const;
+	constexpr vec2i end() const;
 
-	bool overlap(const vec2i& point) const;
-	bool overlap(const Rect& rect, vec2i& sback, vec2i& rback) const;
-	Rect crop(const Rect& frame);		// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
-	Rect getOverlap(const Rect& frame) const;	// same as above except it returns the overlap instead of the crop and it doesn't modify the rect
+	bool contain(const vec2i& point) const;
+	Rect crop(const Rect& frame);			// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
+	Rect intersect(const Rect& rect) const;	// same as above except it returns the overlap instead of the crop and it doesn't modify itself
 };
 
-inline Rect::Rect(int n) :
+inline constexpr Rect::Rect(int n) :
 	SDL_Rect({n, n, n, n})
 {}
 
-inline Rect::Rect(int x, int y, int w, int h) :
+inline constexpr Rect::Rect(int x, int y, int w, int h) :
 	SDL_Rect({x, y, w, h})
 {}
 
-inline Rect::Rect(const vec2i& pos, const vec2i& size) :
+inline constexpr Rect::Rect(const vec2i& pos, const vec2i& size) :
 	SDL_Rect({pos.x, pos.y, size.w, size.h})
 {}
 
@@ -136,28 +134,29 @@ inline vec2i& Rect::pos() {
 	return *reinterpret_cast<vec2i*>(this);
 }
 
-inline const vec2i& Rect::pos() const {
-	return *reinterpret_cast<const vec2i*>(this);
+inline constexpr vec2i Rect::pos() const {
+	return vec2i(x, y);
 }
 
 inline vec2i& Rect::size() {
 	return reinterpret_cast<vec2i*>(this)[1];
 }
 
-inline const vec2i& Rect::size() const {
-	return reinterpret_cast<const vec2i*>(this)[1];
+inline constexpr vec2i Rect::size() const {
+	return vec2i(w, h);
 }
 
-inline vec2i Rect::end() const {
+inline constexpr vec2i Rect::end() const {
 	return pos() + size();
 }
 
-inline vec2i Rect::back() const {
-	return end() - 1;
+inline bool Rect::contain(const vec2i& point) const {
+	return SDL_PointInRect(reinterpret_cast<const SDL_Point*>(&point), this);
 }
 
-inline bool Rect::overlap(const vec2i& point) const {
-	return point.x >= x && point.x < x + w && point.y >= y && point.y < y + h;
+inline Rect Rect::intersect(const Rect& rect) const {
+	Rect isct;
+	return SDL_IntersectRect(this, &rect, &isct) ? isct : Rect(0);
 }
 
 // SDL_Texture wrapper
@@ -343,6 +342,7 @@ vec2<T> clampLow(const vec2<T>& val, const vec2<T>& min) {
 #ifdef _WIN32
 string wtos(const wchar* wstr);
 string wtos(const wstring& wstr);
+wstring stow(const char* str);
 wstring stow(const string& str);
 #endif
 inline bool stob(const string& str) {

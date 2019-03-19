@@ -134,26 +134,26 @@ void DrawSys::drawWidgets() {
 
 void DrawSys::drawPicture(const Picture* wgt) {
 	if (wgt->showBG)
-		drawRect(wgt->rect().getOverlap(wgt->frame()), wgt->color());
+		drawRect(wgt->rect().intersect(wgt->frame()), wgt->color());
 	if (wgt->tex)
 		drawImage(wgt->tex, wgt->texRect(), wgt->frame());
 }
 
 void DrawSys::drawCheckBox(const CheckBox* wgt) {
 	drawPicture(wgt);													// draw background
-	drawRect(wgt->boxRect().getOverlap(wgt->frame()), wgt->boxColor());	// draw checkbox
+	drawRect(wgt->boxRect().intersect(wgt->frame()), wgt->boxColor());	// draw checkbox
 }
 
 void DrawSys::drawSlider(const Slider* wgt) {
 	Rect frame = wgt->frame();
 	drawPicture(wgt);												// draw background
-	drawRect(wgt->barRect().getOverlap(frame), Color::dark);		// draw bar
-	drawRect(wgt->sliderRect().getOverlap(frame), Color::light);	// draw slider
+	drawRect(wgt->barRect().intersect(frame), Color::dark);		// draw bar
+	drawRect(wgt->sliderRect().intersect(frame), Color::light);	// draw slider
 }
 
 void DrawSys::drawProgressBar(const ProgressBar* wgt) {
 	drawRect(wgt->rect(), Color::normal);								// draw background
-	drawRect(wgt->barRect().getOverlap(wgt->frame()), Color::light);	// draw bar
+	drawRect(wgt->barRect().intersect(wgt->frame()), Color::light);	// draw bar
 }
 
 void DrawSys::drawLabel(const Label* wgt) {
@@ -217,13 +217,12 @@ void DrawSys::drawImage(SDL_Texture* tex, const Rect& rect, const Rect& frame) {
 }
 
 SDL_Texture* DrawSys::renderText(const string& text, int height) {
-	if (text.empty())
-		return nullptr;
-
-	SDL_Surface* surf = TTF_RenderUTF8_Blended(fonts.getFont(height), text.c_str(), colors[uint8(Color::text)]);
-	SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-	SDL_FreeSurface(surf);
-	return tex;
+	if (SDL_Surface* surf = TTF_RenderUTF8_Blended(fonts.getFont(height), text.c_str(), colors[uint8(Color::text)])) {
+		SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+		SDL_FreeSurface(surf);
+		return tex;
+	}
+	return nullptr;
 }
 
 vector<Texture> DrawSys::loadTexturesDirectory(const string& drc) {

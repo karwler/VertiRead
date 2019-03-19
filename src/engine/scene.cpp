@@ -25,7 +25,7 @@ void Scene::tick(float dSec) {
 }
 
 void Scene::onMouseMove(const vec2i& mPos, const vec2i& mMov) {
-	setSelected(mPos, topLayout(mPos));
+	select = getSelected(mPos, topLayout(mPos));
 
 	if (capture)
 		capture->onDrag(mPos, mMov);
@@ -45,7 +45,7 @@ void Scene::onMouseDown(const vec2i& mPos, uint8 mBut, uint8 mCnt) {
 		capture = nullptr;
 	}
 	
-	setSelected(mPos, topLayout(mPos));	// update in case selection has changed through keys while cursor remained at the old position
+	select = getSelected(mPos, topLayout(mPos));	// update in case selection has changed through keys while cursor remained at the old position
 	if (mCnt == 1) {
 		stamps[mBut] = ClickStamp(select, getSelectedScrollArea(), mPos);
 		if (stamps[mBut].area)	// area goes first so widget can overwrite it's capture
@@ -115,15 +115,17 @@ void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
 	onMouseMove(mousePos(), 0);
 }
 
-void Scene::setSelected(const vec2i& mPos, Layout* box) {
-	Rect frame = box->frame();
-	if (vector<Widget*>::const_iterator it = std::find_if(box->getWidgets().begin(), box->getWidgets().end(), [&frame, &mPos](const Widget* wi) -> bool { return wi->rect().getOverlap(frame).overlap(mPos); }); it != box->getWidgets().end()) {
-		if (Layout* lay = dynamic_cast<Layout*>(*it))
-			setSelected(mPos, lay);
-		else
-			select = (*it)->navSelectable() ? *it : box;
-	} else
-		select = box;
+Widget* Scene::getSelected(const vec2i& mPos, Layout* box) {
+	for (;;) {
+		Rect frame = box->frame();
+		if (vector<Widget*>::const_iterator it = std::find_if(box->getWidgets().begin(), box->getWidgets().end(), [&frame, &mPos](const Widget* wi) -> bool { return wi->rect().intersect(frame).contain(mPos); }); it != box->getWidgets().end()) {
+			if (Layout* lay = dynamic_cast<Layout*>(*it))
+				box = lay;
+			else
+				return (*it)->navSelectable() ? *it : box;
+		} else
+			return box;
+	}
 }
 
 ScrollArea* Scene::getSelectedScrollArea() const {
@@ -141,8 +143,8 @@ bool Scene::overlayFocused(const vec2i& mPos) {
 		return false;
 
 	if (overlay->on)
-		return overlay->rect().overlap(mPos) ? true : overlay->on = false;
-	return overlay->actRect().overlap(mPos) ? overlay->on = true : false;
+		return overlay->rect().contain(mPos) ? true : overlay->on = false;
+	return overlay->actRect().contain(mPos) ? overlay->on = true : false;
 }
 
 void Scene::selectFirst() {

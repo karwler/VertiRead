@@ -50,7 +50,7 @@ public:
 	bool cursorInClickRange(const vec2i& mPos, uint8 mBut);
 
 private:
-	void setSelected(const vec2i& mPos, Layout* box);
+	Widget* getSelected(const vec2i& mPos, Layout* box);
 	ScrollArea* getSelectedScrollArea() const;
 	bool overlayFocused(const vec2i& mPos);
 	Layout* topLayout(const vec2i& mPos);

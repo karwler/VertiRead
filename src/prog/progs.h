@@ -55,6 +55,7 @@ public:
 	virtual void eventPrevDir() {}
 	virtual void eventFullscreen();
 	virtual void eventHide();
+	void eventBoss();
 	void eventRefresh();
 	virtual void eventFileDrop(const string&) {}
 	virtual void eventClosing() {}

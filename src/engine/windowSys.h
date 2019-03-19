@@ -40,6 +40,7 @@ public:
 	vec2i displayResolution() const;
 	void setWindowPos(const vec2i& pos);
 	void moveCursor(const vec2i& mov);
+	void toggleOpacity();
 	void setFullscreen(bool on);
 	void setResolution(const vec2i& res);
 	void setRenderer(const string& name);

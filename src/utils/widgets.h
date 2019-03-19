@@ -254,6 +254,7 @@ public:
 	virtual ~Label() override;
 
 	virtual void drawSelf() const override;
+	virtual void onResize() override;
 	virtual void postInit() override;
 
 	const string& getText() const;
