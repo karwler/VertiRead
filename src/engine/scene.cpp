@@ -2,10 +2,11 @@
 
 // CLICK STAMP
 
-ClickStamp::ClickStamp(Widget* widget, ScrollArea* area, const vec2i& mPos) :
+ClickStamp::ClickStamp(Widget* widget, ScrollArea* area, const vec2i& mPos, uint32 time) :
 	widget(widget),
 	area(area),
-	mPos(mPos)
+	mPos(mPos),
+	time(time)
 {}
 
 // SCENE
@@ -47,7 +48,7 @@ void Scene::onMouseDown(const vec2i& mPos, uint8 mBut, uint8 mCnt) {
 	
 	select = getSelected(mPos, topLayout(mPos));	// update in case selection has changed through keys while cursor remained at the old position
 	if (mCnt == 1) {
-		stamps[mBut] = ClickStamp(select, getSelectedScrollArea(), mPos);
+		stamps[mBut] = ClickStamp(select, getSelectedScrollArea(), mPos, SDL_GetTicks());
 		if (stamps[mBut].area)	// area goes first so widget can overwrite it's capture
 			stamps[mBut].area->onHold(mPos, mBut);
 		if (stamps[mBut].widget != stamps[mBut].area)
@@ -56,11 +57,13 @@ void Scene::onMouseDown(const vec2i& mPos, uint8 mBut, uint8 mCnt) {
 		select->onDoubleClick(mPos, mBut);
 }
 
-void Scene::onMouseUp(const vec2i& mPos, uint8 mBut) {
+void Scene::onMouseUp(const vec2i& mPos, uint8 mBut, uint8 mCnt) {
+	if (mCnt != 1)
+		return;
 	if (capture)
 		capture->onUndrag(mBut);
 
-	if (select && stamps[mBut].widget == select && cursorInClickRange(mPos, mBut))
+	if (select && stamps[mBut].widget == select && cursorInClickRange(mPos, mBut) && SDL_GetTicks() - stamps[mBut].time <= clickTimeThreshold)
 		stamps[mBut].widget->onClick(mPos, mBut);
 }
 

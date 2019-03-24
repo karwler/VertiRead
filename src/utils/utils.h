@@ -39,6 +39,7 @@ template <class... T> using uset = std::unordered_set<T...>;
 
 using sizet = size_t;
 using pdift = ptrdiff_t;
+using uptrt = uintptr_t;
 using pairStr = pair<string, string>;
 
 using vec2i = vec2<int>;
@@ -81,8 +82,13 @@ enum class UserCode : int32 {
 
 inline vec2i texSize(SDL_Texture* tex) {
 	vec2i s;
-	SDL_QueryTexture(tex, nullptr, nullptr, &s.x, &s.y);
-	return s;
+	return !SDL_QueryTexture(tex, nullptr, nullptr, &s.x, &s.y) ? s : 0;
+}
+
+inline uptrt texMemory(SDL_Texture* tex) {
+	uint32 format;
+	int width, height;
+	return !SDL_QueryTexture(tex, &format, nullptr, &width,&height) ? uptrt(width) * uptrt(height) * SDL_BYTESPERPIXEL(format) : 0;
 }
 
 inline vec2i mousePos() {
@@ -91,10 +97,13 @@ inline vec2i mousePos() {
 	return p;
 }
 
+inline void infiLock(SDL_mutex* mutex) {
+	while (SDL_TryLockMutex(mutex));
+}
+
 inline string getRendererName(int id) {
 	SDL_RendererInfo info;
-	SDL_GetRenderDriverInfo(id, &info);
-	return info.name;
+	return !SDL_GetRenderDriverInfo(id, &info) ? info.name : emptyStr;
 }
 
 vector<string> getAvailibleRenderers();
@@ -190,12 +199,20 @@ public:
 	bool getRun() const;
 	void interrupt();
 	int finish();
+	template <class T> T pop();
 
 	void* data;
 private:
 	SDL_Thread* proc;
 	bool run;
 };
+
+template <class T>
+T Thread::pop() {
+	T ret = *static_cast<T*>(data);
+	delete static_cast<T*>(data);
+	return ret;
+}
 
 inline Thread::~Thread() {
 	finish();
@@ -248,13 +265,14 @@ string getChild(const string& path, const string& parent);
 string filename(const string& path);	// get filename from path
 string strEnclose(string str);
 vector<string> strUnenclose(const string& str);
+vector<string> getWords(const string& str);
 
 inline bool isSpace(char c) {
-	return c > '\0' && c <= ' ';
+	return (c > '\0' && c <= ' ') || c == 0x7F;
 }
 
 inline bool notSpace(char c) {
-	return c <= '\0' || c > ' ';
+	return uchar(c) > ' ' && c != 0x7F;
 }
 
 inline bool isDigit(char c) {
@@ -304,6 +322,11 @@ inline string childPath(const string& parent, const string& child) {
 #else
 	return appDsep(parent) + child;
 #endif
+}
+
+inline string firstUpper(string str) {
+	str[0] = char(toupper(str[0]));
+	return str;
 }
 
 template <class T>
@@ -390,6 +413,11 @@ inline double sstod(const string& str) {
 
 inline ldouble sstold(const string& str) {
 	return strtold(str.c_str(), nullptr);
+}
+
+template <class T>
+T btom(bool b) {
+	return T(b) * T(2) - T(1);	// b needs to be 0 or 1
 }
 
 // container stuff

@@ -30,6 +30,7 @@ public:
 	virtual void onResize() override;
 	virtual void tick(float dSec) override;
 	virtual void postInit() override;
+
 	virtual void onMouseMove(const vec2i& mPos, const vec2i& mMov) override;
 	virtual void onNavSelect(const Direction&) override {}
 	virtual bool navSelectable() const override;
@@ -40,6 +41,7 @@ public:
 	Widget* getWidget(sizet id) const;
 	const vector<Widget*>& getWidgets() const;
 	void setWidgets(const vector<Widget*>& wgts);	// not suitable for using on a ReaderBox, use the overload
+	void replaceWidget(sizet id, Widget* widget);
 	void deleteWidget(sizet id);
 	const uset<Widget*> getSelected() const;
 	virtual vec2i position() const override;
@@ -222,6 +224,8 @@ public:
 	float getZoom() const;
 	void setZoom(float factor);
 	void centerList();		// set listPos.x so that the view will be in the centter
+	const string& firstPage() const;
+	const string& lastPage() const;
 	const string& curPage() const;
 	virtual vec2i wgtPosition(sizet id) const override;
 	virtual vec2i wgtSize(sizet id) const override;
@@ -239,6 +243,14 @@ inline bool ReaderBox::showBar() const {
 
 inline float ReaderBox::getZoom() const {
 	return zoom;
+}
+
+inline const string& ReaderBox::firstPage() const {
+	return !pics.empty() ? pics.front().name : emptyStr;
+}
+
+inline const string& ReaderBox::lastPage() const {
+	return !pics.empty() ? pics.back().name : emptyStr;
 }
 
 inline const string& ReaderBox::curPage() const {

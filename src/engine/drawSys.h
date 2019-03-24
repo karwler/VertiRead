@@ -61,12 +61,12 @@ public:
 	void drawPopup(const Popup* box);
 
 	SDL_Texture* renderText(const string& text, int height);
-	vector<Texture> loadTexturesDirectory(const string& drc);
-	vector<Texture> loadTexturesArchive(const string& arc);
 	static int loadTexturesDirectoryThreaded(void* data);
 	static int loadTexturesArchiveThreaded(void* data);
 private:
 	SDL_Texture* loadArchiveTexture(archive* arch, archive_entry* entry);
+	static bool initLoadLimits(vector<string>& files, Thread* thread, uptrt& lim, uptrt& mem);
+	static bool initLoadLimits(const vector<string>& files, umap<string, pair<sizet, uptrt>> pmap, Thread* thread, uptrt& start, uptrt& end, uptrt& lim, uptrt& mem);
 
 	void drawRect(const Rect& rect, Color color);
 	void drawText(SDL_Texture* tex, const Rect& rect, const Rect& frame);

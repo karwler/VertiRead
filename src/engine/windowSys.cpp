@@ -59,7 +59,6 @@ void WindowSys::exec() {
 		for (SDL_Event event; SDL_PollEvent(&event) && SDL_GetTicks() < timeout;)
 			handleEvent(event);
 	}
-	program->getState()->eventClosing();
 	fileSys->saveSettings(sets.get());
 	fileSys->saveBindings(inputSys->getBindings());
 }
@@ -110,7 +109,7 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 		scene->onMouseDown(vec2i(event.button.x, event.button.y), event.button.button, event.button.clicks);
 		break;
 	case SDL_MOUSEBUTTONUP:
-		scene->onMouseUp(vec2i(event.button.x, event.button.y), event.button.button);
+		scene->onMouseUp(vec2i(event.button.x, event.button.y), event.button.button, event.button.clicks);
 		break;
 	case SDL_MOUSEWHEEL:
 		scene->onMouseWheel(vec2i(event.wheel.x, -event.wheel.y));

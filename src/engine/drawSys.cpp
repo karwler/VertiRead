@@ -103,7 +103,7 @@ SDL_Texture* DrawSys::texture(const string& name) const {
 }
 
 void DrawSys::drawWidgets() {
-	while (SDL_TryLockMutex(rendLock));
+	infiLock(rendLock);
 
 	// clear screen
 	SDL_Color bgcolor = colors[uint8(Color::background)];
@@ -225,76 +225,70 @@ SDL_Texture* DrawSys::renderText(const string& text, int height) {
 	return nullptr;
 }
 
-vector<Texture> DrawSys::loadTexturesDirectory(const string& drc) {
-	vector<Texture> pics;
-	for (string& it : FileSys::listDir(drc, FTYPE_REG, World::sets()->showHidden))
-		if (SDL_Texture* tex = IMG_LoadTexture(World::drawSys()->renderer, childPath(drc, it).c_str()))
-			pics.emplace_back(it, tex);
-	return pics;
-}
-
-vector<Texture> DrawSys::loadTexturesArchive(const string& arc) {
-	vector<Texture> pics;
-	archive* arch = FileSys::openArchive(arc);
-	if (!arch)
-		return pics;
-
-	for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
-		if (SDL_Texture* tex = loadArchiveTexture(arch, entry))
-			pics.emplace_back(archive_entry_pathname(entry), tex);
-
-	archive_read_free(arch);
-	std::sort(pics.begin(), pics.end(), [](const Texture& a, const Texture& b) -> bool { return strnatless(a.name, b.name); });
-	return pics;
-}
-
 int DrawSys::loadTexturesDirectoryThreaded(void* data) {
 	Thread* thread = static_cast<Thread*>(data);
-	string& drc = *static_cast<string*>(thread->data);
+	vector<string> files = FileSys::listDir(World::browser()->getCurDir(), FTYPE_REG, World::sets()->showHidden);
+	uptrt lim, mem;	// picture count limit, picture size limit
+	bool fwd = initLoadLimits(files, thread, lim, mem);
 	vector<Texture>* pics = new vector<Texture>;
-	vector<string> files = FileSys::listDir(drc, FTYPE_REG, World::sets()->showHidden);
 
-	for (sizet i = 0; i < files.size(); i++) {
+	// iterate over files utils one of the limits is hit (it should be the one associated with the setting)
+	for (uptrt mov = btom<uptrt>(fwd), i = fwd ? 0 : files.size() - 1, c = 0, m = 0; i < files.size() && c < lim && m < mem; i += mov) {
 		if (!thread->getRun()) {
 			clearTexVec(*pics);
 			delete pics;
 			return 1;
 		}
-		while (SDL_TryLockMutex(World::drawSys()->rendLock));
-		if (SDL_Texture* tex = IMG_LoadTexture(World::drawSys()->renderer, childPath(drc, files[i]).c_str()))
-			pics->emplace_back(files[i], tex);
+		World::winSys()->pushEvent(UserCode::readerProgress, reinterpret_cast<void*>(World::sets()->picLim.type == PicLim::Type::none ? (fwd ? i : files.size() - i - 1) : World::sets()->picLim.type == PicLim::Type::count ? c : m / 1000000), reinterpret_cast<void*>(World::sets()->picLim.type != PicLim::Type::size ? lim : mem / 1000000));
 
+		infiLock(World::drawSys()->rendLock);
+		SDL_Texture* tex = IMG_LoadTexture(World::drawSys()->renderer, childPath(World::browser()->getCurDir(), files[i]).c_str());
 		SDL_UnlockMutex(World::drawSys()->rendLock);
-		World::winSys()->pushEvent(UserCode::readerProgress, new vec2t(i, files.size()));
+		if (tex) {
+			pics->emplace_back(files[i], tex);
+			m += texMemory(tex);
+			c++;
+		}
 	}
+	if (!fwd)
+		std::reverse(pics->begin(), pics->end());
+
 	World::winSys()->pushEvent(UserCode::readerFinished, pics);
 	return 0;
 }
 
 int DrawSys::loadTexturesArchiveThreaded(void* data) {
 	Thread* thread = static_cast<Thread*>(data);
-	string& arc = *static_cast<string*>(thread->data);
-	archive* arch = FileSys::openArchive(arc);
+	umap<string, pair<sizet, uptrt>> pmap;
+	vector<string> files = FileSys::listArchivePictures(World::browser()->getCurDir(), pmap);
+	uptrt start, end, lim, mem;	// start must be less than end (end does not get iterated over, unlike start)
+	initLoadLimits(files, pmap, thread, start, end, lim, mem);
+	archive* arch = FileSys::openArchive(World::browser()->getCurDir());
 	if (!arch)
-		return 1;
+		return -1;
 
-	sizet i = 0, numEntries = FileSys::archiveEntryCount(arc);
+	uptrt c = 0, m = 0;	// TODO: make all of this less of a clusterfuck
 	vector<Texture>* pics = new vector<Texture>;
-	for (archive_entry* entry; !archive_read_next_header(arch, &entry); i++) {
+	for (archive_entry* entry; !archive_read_next_header(arch, &entry) && c < lim && m < mem;) {
 		if (!thread->getRun()) {
 			clearTexVec(*pics);
 			delete pics;
 			archive_read_free(arch);
 			return 1;
 		}
-		while (SDL_TryLockMutex(World::drawSys()->rendLock));
-		if (SDL_Texture* tex = World::drawSys()->loadArchiveTexture(arch, entry))
-			pics->emplace_back(archive_entry_pathname(entry), tex);
-		SDL_UnlockMutex(World::drawSys()->rendLock);
-		World::winSys()->pushEvent(UserCode::readerProgress, new vec2t(i, numEntries));
+		World::winSys()->pushEvent(UserCode::readerProgress, reinterpret_cast<void*>(World::sets()->picLim.type != PicLim::Type::size ? c : m / 1000000), reinterpret_cast<void*>(World::sets()->picLim.type != PicLim::Type::size ? lim : mem / 1000000));
+
+		const char* ename = archive_entry_pathname(entry);
+		if (pair<sizet, uptrt>& ent = pmap[ename]; ent.first >= start && ent.first < end)
+			if (SDL_Texture* tex = World::drawSys()->loadArchiveTexture(arch, entry)) {
+				pics->emplace_back(ename, tex);
+				m += ent.second;
+				c++;
+			}
 	}
 	archive_read_free(arch);
-	std::sort(pics->begin(), pics->end(), [](const Texture& a, const Texture& b) -> bool { return strnatless(a.name, b.name); });
+	std::sort(pics->begin(), pics->end(), [&pmap](const Texture& a, const Texture& b) -> bool { return pmap[a.name].first < pmap[b.name].first; });
+
 	World::winSys()->pushEvent(UserCode::readerFinished, pics);
 	return 0;
 }
@@ -306,7 +300,70 @@ SDL_Texture* DrawSys::loadArchiveTexture(archive* arch, archive_entry* entry) {
 
 	uint8* buffer = new uint8[sizet(bsiz)];
 	int64 size = archive_read_data(arch, buffer, sizet(bsiz));
+	infiLock(rendLock);
 	SDL_Texture* tex = size > 0 ? IMG_LoadTexture_RW(renderer, SDL_RWFromMem(buffer, int(size)), SDL_TRUE) : nullptr;
+	SDL_UnlockMutex(rendLock);
 	delete[] buffer;
 	return tex;
+}
+
+bool DrawSys::initLoadLimits(vector<string>& files, Thread* thread, uptrt& lim, uptrt& mem) {
+	auto [first, fwd] = thread->pop<std::tuple<string, bool>>();
+	if (World::sets()->picLim.type != PicLim::Type::none)
+		if (vector<string>::iterator it = std::find(files.begin(), files.end(), first); it != files.end())
+			fwd ? files.erase(files.begin(), it) : files.erase(it + 1, files.end());
+
+	switch (World::sets()->picLim.type) {
+	case PicLim::Type::none:
+		mem = uptrt(-1);
+		lim = files.size();
+		break;
+	case PicLim::Type::count:
+		mem = uptrt(-1);
+		lim = World::sets()->picLim.getCount() <= files.size() ? World::sets()->picLim.getCount() : files.size();
+		break;
+	case PicLim::Type::size:
+		mem = uptrt(World::sets()->picLim.getSizeBytes());
+		lim = files.size();
+	}
+	return fwd;
+}
+
+bool DrawSys::initLoadLimits(const vector<string>& files, umap<string, pair<sizet, uptrt>> pmap, Thread* thread, uptrt& start, uptrt& end, uptrt& lim, uptrt& mem) {
+	auto [first, fwd] = thread->pop<std::tuple<string, bool>>();
+	start = 0;
+	if (World::sets()->picLim.type != PicLim::Type::none)
+		if (umap<string, pair<sizet, uptrt>>::iterator it = pmap.find(first); it != pmap.end())
+			start = it->second.first;
+
+	switch (World::sets()->picLim.type) {
+	case PicLim::Type::none:
+		mem = uptrt(-1);
+		lim = files.size();
+		end = lim;
+		break;
+	case PicLim::Type::count:
+		mem = uptrt(-1);
+		if (fwd) {
+			lim = World::sets()->picLim.getCount() + start <= files.size() ? World::sets()->picLim.getCount() : files.size() - start;
+			end = start + lim;
+		} else {
+			lim = World::sets()->picLim.getCount() <= start + 1 ? World::sets()->picLim.getCount() : start + 1;
+			end = start + 1;
+			if (start -= lim - 1; start > end)
+				start = 0;
+		}
+		break;
+	case PicLim::Type::size:
+		mem = uptrt(World::sets()->picLim.getSizeBytes());
+		lim = files.size();
+		if (fwd) {
+			end = start;
+			for (uptrt m = 0; end < lim && m < mem; end++, m += pmap[files[end]].second);
+		} else {
+			end = start + 1;
+			for (uptrt m = 0; start > 0 && m < mem; start--, m += pmap[files[start]].second);
+		}
+	}
+	return fwd;
 }

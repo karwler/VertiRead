@@ -96,7 +96,7 @@ int strnatcmp(const char* a, const char* b) {
 			} else if (int result = natCompareRight(a, b))
 				return result;
 		}
-		if (!ca && !cb)
+		if (!(ca || cb))
 			return 0;
 		if (ca < cb)
 			return -1;
@@ -123,18 +123,16 @@ static bool pathCompareLoop(const string& as, const string& bs, sizet& ai, sizet
 }
 
 bool pathCmp(const string& as, const string& bs) {
-	if (sizet ai = 0, bi = 0; pathCompareLoop(as, bs, ai, bi))
-		return ai >= as.length() && bi >= bs.length();	// check if both paths have reached their ends simultaneously
-	return false;
+	sizet ai = 0, bi = 0;	// check if both paths have reached their ends simultaneously
+	return pathCompareLoop(as, bs, ai, bi) ? ai >= as.length() && bi >= bs.length() : false;
 }
 
 bool isSubpath(const string& path, string parent) {
 	if (std::all_of(parent.begin(), parent.end(), [](char c) -> bool { return c == dsep; }))	// always true if parent is root
 		return true;
 
-	if (sizet ai = 0, bi = 0; pathCompareLoop(path, parent, ai, bi))
-		return bi >= parent.length();	// parent has to have reached it's end while path was still matching
-	return false;
+	sizet ai = 0, bi = 0;	// parent has to have reached it's end while path was still matching
+	return pathCompareLoop(path, parent, ai, bi) ? bi >= parent.length() : false;
 }
 
 string parentPath(const string& path) {
@@ -158,9 +156,8 @@ string getChild(const string& path, const string& parent) {
 	if (std::all_of(parent.begin(), parent.end(), [](char c) -> bool { return c == dsep; }))
 		return path;
 
-	if (sizet ai = 0, bi = 0; pathCompareLoop(path, parent, ai, bi) && bi >= parent.length())
-		return path.substr(ai);
-	return emptyStr;
+	sizet ai = 0, bi = 0;
+	return pathCompareLoop(path, parent, ai, bi) && bi >= parent.length() ? path.substr(ai) : emptyStr;
 }
 
 string filename(const string& path) {
@@ -207,6 +204,19 @@ vector<string> strUnenclose(const string& str) {
 	}
 	return words;
 }
+
+vector<string> getWords(const string& str) {
+	sizet i;
+	for (i = 0; isSpace(str[i]); i++);
+
+	vector<string> words;
+	for (sizet start; str[i];) {
+		for (start = i; notSpace(str[i]); i++);
+		words.emplace_back(str, start, i - start);
+		for (; isSpace(str[i]); i++);
+	}
+	return words;
+}
 #ifdef _WIN32
 string wtos(const wchar* src) {
 	int len = WideCharToMultiByte(CP_UTF8, 0, src, -1, nullptr, 0, nullptr, nullptr);
@@ -235,10 +245,11 @@ wstring stow(const char* src) {
 	int len = MultiByteToWideChar(CP_UTF8, 0, src, -1, nullptr, 0);
 	if (len <= 1)
 		return L"";
+	len--;
 
 	wstring dst;
 	dst.resize(len);
-	MultiByteToWideChar(CP_UTF8, 0, src, len, dst.data(), len);
+	MultiByteToWideChar(CP_UTF8, 0, src, -1, dst.data(), len);
 	return dst;
 }
 

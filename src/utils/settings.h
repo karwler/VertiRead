@@ -293,16 +293,81 @@ inline SACall Binding::getAcall() const {
 	return acall;
 }
 
+class PicLim {
+public:
+	enum class Type : uint8 {
+		none,
+		count,
+		size
+	};
+	static const array<string, sizet(Type::size)+1> names;
+	
+	Type type;
+private:
+	uint count, size;	// size in MB
+
+	static constexpr uint defaultCount = 128;
+
+public:
+	PicLim(Type type = Type::none, uint count = defaultCount);
+
+	uint getCount() const;
+	void setCount(const string& str);
+	uint getSize() const;
+	void setSize(const string& str);
+	uint getSizeBytes() const;
+	string getSizeString() const;
+	string getString() const;
+	void set(const string& str);
+
+private:
+	static uint toCount(const string& str);
+	static uint toSize(const string& str);
+	static uint defaultSize();
+};
+
+inline uint PicLim::getCount() const {
+	return count;
+}
+
+inline void PicLim::setCount(const string& str) {
+	count = toCount(str);
+}
+
+inline uint PicLim::getSize() const {
+	return size;
+}
+
+inline void PicLim::setSize(const string& str) {
+	size = toSize(str);
+}
+
+inline uint PicLim::getSizeBytes() const {
+	return size * 1000000;
+}
+
+inline string PicLim::getSizeString() const {
+	return to_string(size) + "MB";
+}
+
+inline string PicLim::getString() const {
+	return names[uint8(type)] + ' ' + to_string(count) + ' ' + to_string(size);
+}
+
+inline uint PicLim::defaultSize() {
+	return uint(SDL_GetSystemRAM()) / 2;
+}
+
 class Settings {
 public:
 	static constexpr float defaultZoom = 1.f;
 	static constexpr int defaultSpacing = 10;
-	static constexpr char defaultLanguage[] = "English";
-	static constexpr int axisLimit = 32768;
+	static constexpr int axisLimit = SHRT_MAX;
 
 	bool maximized, fullscreen;
 	bool showHidden;
 	Direction direction;
+	PicLim picLim;
 	float zoom;
 	int spacing;
 	vec2i resolution;
@@ -314,7 +379,7 @@ private:
 	string font;
 	string dirLib;
 
-	static constexpr char defaultFont[] = "Arial";
+	static constexpr char defaultFont[] = "BrisaSans";
 	static constexpr char defaultDirLib[] = "library";
 
 public:
@@ -331,7 +396,7 @@ public:
 	string resolutionString() const;
 	string scrollSpeedString() const;
 	int getDeadzone() const;
-	void setDeadzone(int zone);
+	void setDeadzone(int val);
 };
 
 inline const string& Settings::getTheme() const {
@@ -346,10 +411,6 @@ inline const string& Settings::getDirLib() const {
 	return dirLib;
 }
 
-inline int Settings::getDeadzone() const {
-	return deadzone;
-}
-
 inline string Settings::resolutionString() const {
 	return to_string(resolution.x) + ' ' + to_string(resolution.y);
 }
@@ -358,6 +419,10 @@ inline string Settings::scrollSpeedString() const {
 	return trimZero(to_string(scrollSpeed.x)) + ' ' + trimZero(to_string(scrollSpeed.y));
 }
 
-inline void Settings::setDeadzone(int zone) {
-	deadzone = std::clamp(zone, 0, axisLimit);
+inline int Settings::getDeadzone() const {
+	return deadzone;
+}
+
+inline void Settings::setDeadzone(int val) {
+	deadzone = std::clamp(val, 0, axisLimit);
 }

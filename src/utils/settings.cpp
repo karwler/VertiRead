@@ -261,6 +261,62 @@ void Binding::setAcall(SACall call) {
 	acall = call;
 }
 
+// PICTURE LIMIT
+
+const array<string, PicLim::names.size()> PicLim::names = {
+	"none",
+	"count",
+	"size"
+};
+
+PicLim::PicLim(Type type, uint count) :
+	type(type),
+	count(count),
+	size(defaultSize())
+{}
+
+void PicLim::set(const string& str) {
+	vector<string> elems = getWords(str);
+	type = elems.size() > 0 ? strToEnum<Type>(names, elems[0]) : Type::none;
+	count = elems.size() > 1 ? toCount(elems[1]) : defaultCount;
+	size = elems.size() > 2 ? toSize(elems[2]) : defaultSize();
+}
+
+uint PicLim::toCount(const string& str) {
+	uint cnt = uint(sstoul(str));
+	return cnt ? cnt : defaultCount;
+}
+
+uint PicLim::toSize(const string& str) {
+	const char* pos;
+	char* end;
+	for (pos = str.c_str(); notDigit(*pos) && *pos; pos++);
+	ullong mb = strtoull(pos, &end, 0);
+	if (!mb)
+		return defaultSize();
+
+	string::const_iterator mit = std::find_if(str.begin() + pdift(end - str.c_str()), str.end(), [](char c) -> bool { int ch = toupper(c); return ch == 'K' || ch == 'M' || ch == 'G' || ch == 'T'; });
+	bool majSized = mit != str.end();
+	if (majSized)
+		switch (*mit) {
+		case 'K':
+			mb /= 1000;
+			break;
+		case 'G':
+			mb *= 1000;
+			break;
+		case 'T':
+			mb *= 1000000;
+		}
+	if (string::const_iterator bit = std::find_if(mit, str.end(), [](char c) -> bool { return toupper(c) == 'B'; }); bit != str.end()) {
+		if (*bit == 'b')
+			mb /= 8;
+		if (!majSized)
+			mb /= 1000000;
+	}
+	return uint(mb);
+}
+
 // SETTINGS
 
 Settings::Settings() :
@@ -288,9 +344,8 @@ const string& Settings::setTheme(const string& name) {
 }
 
 const string& Settings::setFont(const string& newFont) {
-	if (string path = World::fileSys()->findFont(newFont); FileSys::isFont(path))
-		return font = newFont;
-	return font = defaultFont;
+	string path = World::fileSys()->findFont(newFont);
+	return font = FileSys::isFont(path) ? newFont : defaultFont;
 }
 
 const string& Settings::setDirLib(const string& drc) {

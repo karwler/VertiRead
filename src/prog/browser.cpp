@@ -30,24 +30,26 @@ Browser::Browser(const string& rootDirectory, const string& container, const str
 
 		inArchive = true;
 		if (checkFile) {
-			bool found = false;
-			for (archive_entry* entry; !archive_read_next_header(arch, &entry);) {
-				if (archive_entry_pathname(entry) != curFile)
-					archive_read_data_skip(arch);
-				else {
-					if (SDL_Surface* pic = FileSys::loadArchivePicture(arch, entry)) {
-						SDL_FreeSurface(pic);
-						found = true;
-					}
-					break;
-				}
-			}
+			bool found = validateStartFile(arch, curFile);
 			archive_read_free(arch);
 			if (!found)
 				throw std::runtime_error(curFile + " isn't a valid picture");
 		} else
 			archive_read_free(arch);
 	}
+}
+
+bool Browser::validateStartFile(archive* arch, const string& file) {
+	for (archive_entry* entry; !archive_read_next_header(arch, &entry);) {
+		if (archive_entry_pathname(entry) != file)
+			archive_read_data_skip(arch);
+		else if (SDL_Surface* pic = FileSys::loadArchivePicture(arch, entry)) {
+			SDL_FreeSurface(pic);
+			return true;
+		} else
+			return false;
+	}
+	return false;
 }
 
 bool Browser::goTo(const string& path) {
@@ -140,4 +142,36 @@ void Browser::clearCurFile() {
 		curDir = parentPath(curDir);
 		inArchive = false;
 	}
+}
+
+string Browser::nextDirFile(const string& file, bool fwd) const {
+	if (!file.empty()) {
+		vector<string> files = FileSys::listDir(curDir, FTYPE_REG, World::sets()->showHidden);
+		for (sizet mov = btom<sizet>(fwd), i = sizet(std::find(files.begin(), files.end(), file) - files.begin()) + mov; i < files.size(); i += mov)
+			if (FileSys::isPicture(childPath(curDir, files[i])))
+				return files[i];
+	}
+	return emptyStr;
+}
+
+string Browser::nextArchiveFile(const string& file, bool fwd) const {
+	if (file.empty())
+		return emptyStr;
+	archive* arch = FileSys::openArchive(curDir);
+	if (!arch)
+		return emptyStr;
+
+	// list loadable pictures in archive
+	vector<string> pics;
+	for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
+		if (SDL_Surface* pic = FileSys::loadArchivePicture(arch, entry)) {
+			SDL_FreeSurface(pic);
+			pics.emplace_back(archive_entry_pathname(entry));
+		}
+	archive_read_free(arch);
+	std::sort(pics.begin(), pics.end(), strnatless);
+
+	// get next picture if there's one
+	sizet i = sizet(std::find(pics.begin(), pics.end(), file) - pics.begin()) + btom<sizet>(fwd);
+	return i < pics.size() ? pics[i] : emptyStr;
 }

@@ -7,8 +7,9 @@ struct ClickStamp {
 	Widget* widget;
 	ScrollArea* area;
 	vec2i mPos;
+	uint32 time;
 
-	ClickStamp(Widget* widget = nullptr, ScrollArea* area = nullptr, const vec2i& mPos = 0);
+	ClickStamp(Widget* widget = nullptr, ScrollArea* area = nullptr, const vec2i& mPos = 0, uint32 time = 0);
 };
 
 // handles more backend UI interactions, works with widgets (UI elements), and contains Program and Library
@@ -22,7 +23,8 @@ private:
 	uptr<Overlay> overlay;
 	array<ClickStamp, SDL_BUTTON_X2+1> stamps;	// data about last mouse click (indexes are mouse button numbers
 
-	static constexpr float clickThreshold = 8.f;
+	static constexpr float clickMoveThreshold = 8.f;
+	static constexpr uint32 clickTimeThreshold = 200;
 	static constexpr int scrollFactorWheel = 140;
 
 public:
@@ -31,7 +33,7 @@ public:
 	void tick(float dSec);
 	void onMouseMove(const vec2i& mPos, const vec2i& mMov);
 	void onMouseDown(const vec2i& mPos, uint8 mBut, uint8 mCnt);
-	void onMouseUp(const vec2i& mPos, uint8 mBut);
+	void onMouseUp(const vec2i& mPos, uint8 mBut, uint8 mCnt);
 	void onMouseWheel(const vec2i& wMov);
 	void onMouseLeave();
 	void onText(const string& str);	// text input should only run if line edit is being captured, therefore a cast check isn't necessary
@@ -77,7 +79,7 @@ inline void Scene::setPopup(const pair<Popup*, Widget*>& popcap) {
 }
 
 inline bool Scene::cursorInClickRange(const vec2i& mPos, uint8 mBut) {
-	return vec2f(mPos - stamps[mBut].mPos).length() <= clickThreshold;
+	return vec2f(mPos - stamps[mBut].mPos).length() <= clickMoveThreshold;
 }
 
 inline Layout* Scene::topLayout(const vec2i& mPos) {

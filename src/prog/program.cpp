@@ -10,7 +10,7 @@ void Program::start() {
 void Program::eventUser(const SDL_UserEvent& user) {
 	switch (UserCode(user.code)) {
 	case UserCode::readerProgress:
-		eventReaderLoadingProgress(static_cast<vec2t*>(user.data1));
+		eventReaderLoadingProgress(uptrt(user.data1), uptrt(user.data2));
 		break;
 	case UserCode::readerFinished:
 		eventReaderLoadingFinished(static_cast<vector<Texture>*>(user.data1));
@@ -25,7 +25,7 @@ void Program::eventUser(const SDL_UserEvent& user) {
 		eventDownloadListFinish();
 		break;
 	case UserCode::moveProgress:
-		eventMoveProgress(static_cast<vec2t*>(user.data1));
+		eventMoveProgress(uptrt(user.data1), uptrt(user.data2));
 		break;
 	case UserCode::moveFinished:
 		eventClosePopup();
@@ -45,7 +45,7 @@ void Program::eventOpenPageBrowser(Button* but) {
 
 void Program::eventOpenReader(Button* but) {
 	if (browser->selectFile(static_cast<Label*>(but)->getText()))
-		eventStartLoadingReader();
+		eventStartLoadingReader(browser->getCurFile());
 }
 
 void Program::eventOpenLastPage(Button* but) {
@@ -53,7 +53,7 @@ void Program::eventOpenLastPage(Button* but) {
 	if (string drc, fname; World::fileSys()->getLastPage(lbl ? lbl->getText() : ProgState::dotStr, drc, fname)) {
 		try {
 			browser.reset(new Browser(lbl ? childPath(World::sets()->getDirLib(), lbl->getText()) : dseps, lbl ? childPath(World::sets()->getDirLib(), childPath(lbl->getText(), drc)) : drc, fname, &Program::eventOpenBookList, true));
-			eventStartLoadingReader();
+			eventStartLoadingReader(fname);
 		} catch (const std::runtime_error& e) {
 			std::cerr << e.what() << std::endl;
 			eventOpenPageBrowser(but);
@@ -68,7 +68,7 @@ bool Program::openFile(const string& file) {
 		try {
 			bool isPic = FileSys::isPicture(file);
 			browser.reset(new Browser(dseps, isPic ? parentPath(file) : file, isPic ? filename(file) : emptyStr, &Program::eventOpenBookList, false));
-			eventStartLoadingReader();
+			eventStartLoadingReader(file);
 		} catch (const std::runtime_error& e) {
 			std::cerr << e.what() << std::endl;
 			browser.reset();
@@ -114,14 +114,13 @@ void Program::eventExitBrowser(Button*) {
 
 // READER
 
-void Program::eventStartLoadingReader() {
+void Program::eventStartLoadingReader(const string& first, bool fwd) {
 	World::scene()->setPopup(ProgState::createPopupMessage("Loading...", &Program::eventReaderLoadingCancelled, "Cancel", Label::Alignment::center));
-	thread.reset(new Thread(World::browser()->getInArchive() ? &DrawSys::loadTexturesArchiveThreaded : &DrawSys::loadTexturesDirectoryThreaded, const_cast<string*>(&World::browser()->getCurDir())));
+	thread.reset(new Thread(World::browser()->getInArchive() ? &DrawSys::loadTexturesArchiveThreaded : &DrawSys::loadTexturesDirectoryThreaded, new std::tuple<string, bool>(first, fwd)));
 }
 
-void Program::eventReaderLoadingProgress(vec2t* prog) {
-	World::scene()->setPopup(ProgState::createPopupMessage("Loading " + to_string(prog->b) + '/' + to_string(prog->t), &Program::eventReaderLoadingCancelled, "Cancel", Label::Alignment::center));
-	delete prog;
+void Program::eventReaderLoadingProgress(uptrt prg, uptrt lim) {
+	World::scene()->setPopup(ProgState::createPopupMessage("Loading " + to_string(prg) + '/' + to_string(lim), &Program::eventReaderLoadingCancelled, "Cancel", Label::Alignment::center));
 }
 
 void Program::eventReaderLoadingCancelled(Button*) {
@@ -155,16 +154,25 @@ void Program::eventCenterView(Button*) {
 }
 
 void Program::eventNextDir(Button*) {
-	browser->goNext(true);
-	World::scene()->resetLayouts();
+	switchPictures(true, static_cast<ProgReader*>(state.get())->reader->lastPage());
 }
 
 void Program::eventPrevDir(Button*) {
-	browser->goNext(false);
-	World::scene()->resetLayouts();
+	switchPictures(false, static_cast<ProgReader*>(state.get())->reader->firstPage());
+}
+
+void Program::switchPictures(bool fwd, const string& picname) {
+	if (!picname.empty())
+		if (string file = World::browser()->nextFile(picname, fwd); !file.empty()) {
+			World::program()->eventStartLoadingReader(file, fwd);
+			return;
+		}
+	browser->goNext(fwd);
+	eventStartLoadingReader(emptyStr, fwd);
 }
 
 void Program::eventExitReader(Button*) {
+	state->eventClosing();
 	SDL_ShowCursor(SDL_ENABLE);
 	setState(new ProgPageBrowser);
 }
@@ -341,9 +349,8 @@ void Program::eventDontMoveComics(Button*) {
 	eventClosePopup();
 }
 
-void Program::eventMoveProgress(vec2t* prog) {
-	World::scene()->setPopup(ProgState::createPopupMessage("Moving " + to_string(prog->b) + '/' + to_string(prog->t), &Program::eventReaderLoadingCancelled, "Cancel", Label::Alignment::center));
-	delete prog;
+void Program::eventMoveProgress(uptrt prg, uptrt lim) {
+	World::scene()->setPopup(ProgState::createPopupMessage("Moving " + to_string(prg) + '/' + to_string(lim), &Program::eventReaderLoadingCancelled, "Cancel", Label::Alignment::center));
 }
 
 void Program::eventMoveFinished() {
@@ -428,6 +435,24 @@ void Program::eventSetFill(Button*) {
 	reposizeWindow(res, vec2f(res) * resModeBorder);
 }
 
+void Program::eventSetPicLimitType(Button* but) {
+	ProgSettings* ps = static_cast<ProgSettings*>(state.get());
+	World::sets()->picLim.type = strToEnum<PicLim::Type>(PicLim::names, static_cast<SwitchBox*>(but)->getText());
+	ps->limitLine->replaceWidget(ps->limitLine->getWidgets().size() - 1, ProgSettings::createLimitEdit());
+}
+
+void Program::eventSetPicLimCount(Button* but) {
+	LabelEdit* le = static_cast<LabelEdit*>(but);
+	World::sets()->picLim.setCount(le->getText());
+	le->setText(to_string(World::sets()->picLim.getCount()));
+}
+
+void Program::eventSetPicLimSize(Button* but) {
+	LabelEdit* le = static_cast<LabelEdit*>(but);
+	World::sets()->picLim.setSize(le->getText());
+	le->setText(World::sets()->picLim.getSizeString());
+}
+
 void Program::eventResetSettings(Button*) {
 	World::inputSys()->resetBindings();
 	World::winSys()->resetSettings();
@@ -462,7 +487,6 @@ void Program::eventForceExit(Button*) {
 }
 
 void Program::setState(ProgState* newState) {
-	state->eventClosing();
 	state.reset(newState);
 	World::scene()->resetLayouts();
 }

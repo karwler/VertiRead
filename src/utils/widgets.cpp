@@ -272,14 +272,15 @@ SwitchBox::SwitchBox(const Size& relSize, const string* opts, sizet ocnt, const 
 
 void SwitchBox::onClick(const vec2i& mPos, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT)
-		shiftOption(1);
+		shiftOption(true);
 	else if (mBut == SDL_BUTTON_RIGHT)
-		shiftOption(-1);
+		shiftOption(false);
 	Button::onClick(mPos, mBut);
 }
 
-void SwitchBox::shiftOption(int ofs) {
-	curOpt = (curOpt + sizet(ofs)) % options.size();
+void SwitchBox::shiftOption(bool fwd) {
+	if (curOpt += btom<sizet>(fwd); curOpt >= options.size())
+		curOpt = fwd ? 0 : options.size() - 1;
 	setText(options[curOpt]);
 }
 

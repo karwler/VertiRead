@@ -85,7 +85,7 @@ void Layout::navSelectFrom(int mid, const Direction& dir) {
 }
 
 void Layout::scanSequential(sizet id, int mid, const Direction& dir) {
-	for (sizet mov = dir.positive() ? 1 : sizet(-1); (id += mov) < widgets.size() && !widgets[id]->navSelectable(););
+	for (sizet mov = btom<sizet>(dir.positive()); (id += mov) < widgets.size() && !widgets[id]->navSelectable(););
 	if (id < widgets.size())
 		navSelectWidget(id, mid, dir);
 }
@@ -119,6 +119,13 @@ void Layout::initWidgets(const vector<Widget*>& wgts) {
 
 void Layout::setWidgets(const vector<Widget*>& wgts) {
 	initWidgets(wgts);
+	postInit();
+}
+
+void Layout::replaceWidget(sizet id, Widget* widget) {
+	delete widgets[id];
+	widgets[id] = widget;
+	widget->setParent(this, id);
 	postInit();
 }
 
@@ -521,7 +528,7 @@ void TileBox::scanVertically(sizet id, int mid, const Direction& dir) {
 }
 
 void TileBox::scanHorizontally(sizet id, int mid, const Direction& dir) {
-	for (sizet mov = dir.positive() ? 1 : sizet(-1); (id += mov) < widgets.size() && !widgets[id]->navSelectable(););
+	for (sizet mov = btom<sizet>(dir.positive()); (id += mov) < widgets.size() && !widgets[id]->navSelectable(););
 	if (id < widgets.size() && widgets[id]->center().y == mid)
 		navSelectWidget(id, mid, dir);
 	else if (parent)

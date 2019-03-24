@@ -166,6 +166,7 @@ public:
 class ProgSettings : public ProgState {
 public:
 	string oldPathBuffer;	// for keeping old library path between decisions
+	Layout* limitLine;
 	Slider* deadzoneSL;
 	LabelEdit* deadzoneLE;
 private:
@@ -181,6 +182,8 @@ public:
 	virtual void eventFileDrop(const string& file) override;
 	
 	virtual Layout* createLayout() override;
+
+	static Widget* createLimitEdit();
 };
 
 class ProgSearchDir : public ProgState {

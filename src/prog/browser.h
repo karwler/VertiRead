@@ -28,12 +28,18 @@ public:
 	const string& getCurFile() const;
 	string curFilepath() const;
 	bool getInArchive() const;
+	string nextFile(const string& file, bool fwd) const;
 
 private:
+	static bool validateStartFile(archive* arch, const string& file);
+
 	void shiftDir(bool fwd);
 	void shiftArchive(bool fwd);
 	bool nextDir(const string& dit, const string& pdir);
 	bool nextArchive(const string& ait, const string& pdir);
+
+	string nextDirFile(const string& file, bool fwd) const;
+	string nextArchiveFile(const string& file, bool fwd) const;
 };
 
 inline const string& Browser::getRootDir() const {
@@ -54,4 +60,8 @@ inline string Browser::curFilepath() const {
 
 inline bool Browser::getInArchive() const {
 	return inArchive;
+}
+
+inline string Browser::nextFile(const string& file, bool fwd) const {
+	return inArchive ? nextArchiveFile(file, fwd) : nextDirFile(file, fwd);
 }

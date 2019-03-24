@@ -153,7 +153,7 @@ private:
 	static constexpr char fileThemes[] = "themes.ini";
 	static constexpr char fileSettings[] = "settings.ini";
 	static constexpr char fileBindings[] = "bindings.ini";
-	static constexpr char fileBooks[] = "books.txt";
+	static constexpr char fileBooks[] = "books.dat";
 
 	static constexpr char iniKeywordMaximized[] = "maximized";
 	static constexpr char iniKeywordFullscreen[] = "fullscreen";
@@ -161,6 +161,7 @@ private:
 	static constexpr char iniKeywordDirection[] = "direction";
 	static constexpr char iniKeywordZoom[] = "zoom";
 	static constexpr char iniKeywordSpacing[] = "spacing";
+	static constexpr char iniKeywordPictureLimit[] = "picture_limit";
 	static constexpr char iniKeywordFont[] = "font";
 	static constexpr char iniKeywordTheme[] = "theme";
 	static constexpr char iniKeywordShowHidden[] = "show_hidden";
@@ -210,7 +211,7 @@ public:
 	static bool isArchive(const string& file);
 	static archive* openArchive(const string& file);
 	static SDL_Surface* loadArchivePicture(archive* arch, archive_entry* entry);
-	static sizet archiveEntryCount(const string& file);
+	static vector<string> listArchivePictures(const string& file, umap<string, pair<sizet, uptrt>>& pmap);
 	static int moveContentThreaded(void* data);	// moves files from one directory to another (data points to a thread and the thread's data is a pair of strings; src, dst)
 #ifdef _WIN32
 	static string wgetenv(const string& name);
@@ -224,7 +225,7 @@ private:
 	static bool writeTextFile(const string& file, const vector<string>& lines);
 	static SDL_Color readColor(const string& line);
 
-	static void setWorkingDir();
+	static int setWorkingDir();
 #ifdef _WIN32
 	static vector<char> listDrives();
 	static bool atrcmp(DWORD attrs, FileType filter);
@@ -245,7 +246,11 @@ inline bool FileSys::createDir(const string& path) {
 	return !mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 #endif
 }
-#ifndef _WIN32
+#ifdef _WIN32
+inline bool FileSys::atrcmp(DWORD attrs, FileType filter) {
+	return filter & (attrs & FILE_ATTRIBUTE_DIRECTORY ? FTYPE_DIR : FTYPE_REG);
+}
+#else
 inline FileType FileSys::fileType(const string& file, bool readLink) {
 	return stmtoft(file, readLink ? stat : lstat);
 }

@@ -68,7 +68,7 @@ void InputSys::eventJoystickHat(const SDL_JoyHatEvent& jhat) {
 
 void InputSys::eventJoystickAxis(const SDL_JoyAxisEvent& jaxis) {
 	int value = checkAxisValue(jaxis.value);
-	if (value == 0 || SDL_GameControllerFromInstanceID(jaxis.which))
+	if (!value || SDL_GameControllerFromInstanceID(jaxis.which))
 		return;
 	
 	if (World::scene()->capture)
@@ -86,7 +86,7 @@ void InputSys::eventGamepadButton(const SDL_ControllerButtonEvent& gbutton) {
 
 void InputSys::eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis) {
 	int value = checkAxisValue(gaxis.value);
-	if (value == 0)
+	if (!value)
 		return;
 
 	if (World::scene()->capture)
@@ -141,7 +141,7 @@ bool InputSys::isPressed(const Binding& abind, float& amt) const {
 	if (abind.jhatAssigned() && isPressedH(abind.getJctID(), abind.getJhatVal()))
 		return true;
 	if (abind.jaxisAssigned())	// check controller axes
-		if (int val = getAxisJ(abind.getJctID()); (abind.jposAxisAssigned() && val > 0) || (abind.jnegAxisAssigned() && val < 0)) {
+		if (int val = getAxisJ(abind.getJctID()); val && (val > 0 ? abind.jposAxisAssigned() : abind.jnegAxisAssigned())) {
 			amt = axisToFloat(abind.jposAxisAssigned() ? val : -val);
 			return true;
 		}
@@ -149,7 +149,7 @@ bool InputSys::isPressed(const Binding& abind, float& amt) const {
 	if (abind.gbuttonAssigned() && isPressedG(abind.getGbutton()))	// check gamepad buttons
 		return true;
 	if (abind.gaxisAssigned())	// check controller axes
-		if (int val = getAxisG(abind.getGaxis()); (abind.gposAxisAssigned() && val > 0) || (abind.gnegAxisAssigned() && val < 0)) {
+		if (int val = getAxisG(abind.getGaxis()); val && (val > 0 ? abind.gposAxisAssigned() : abind.gnegAxisAssigned())) {
 			amt = axisToFloat(abind.gposAxisAssigned() ? val : -val);
 			return true;
 		}
@@ -168,7 +168,7 @@ bool InputSys::isPressedH(uint8 jhat, uint8 val) const {
 int InputSys::getAxisJ(uint8 jaxis) const {
 	for (const Controller& it : controllers)	// get first axis that isn't 0
 		if (!it.gamepad)
-			if (int val = checkAxisValue(SDL_JoystickGetAxis(it.joystick, jaxis)); val != 0)
+			if (int val = checkAxisValue(SDL_JoystickGetAxis(it.joystick, jaxis)); val)
 				return val;
 	return 0;
 }
@@ -176,7 +176,7 @@ int InputSys::getAxisJ(uint8 jaxis) const {
 int InputSys::getAxisG(SDL_GameControllerAxis gaxis) const {
 	for (const Controller& it : controllers)	// get first axis that isn't 0
 		if (it.gamepad)
-			if (int val = checkAxisValue(SDL_GameControllerGetAxis(it.gamepad, gaxis)); val != 0)
+			if (int val = checkAxisValue(SDL_GameControllerGetAxis(it.gamepad, gaxis)); val)
 				return val;
 	return 0;
 }

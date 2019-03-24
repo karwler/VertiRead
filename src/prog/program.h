@@ -35,8 +35,8 @@ public:
 	void eventExitBrowser(Button* but = nullptr);
 
 	// reader
-	void eventStartLoadingReader();
-	void eventReaderLoadingProgress(vec2t* prog);
+	void eventStartLoadingReader(const string& first, bool fwd = true);
+	void eventReaderLoadingProgress(uptrt prg, uptrt lim);
 	void eventReaderLoadingCancelled(Button* but = nullptr);
 	void eventReaderLoadingFinished(vector<Texture>* pics);
 	void eventZoomIn(Button* but = nullptr);
@@ -82,7 +82,7 @@ public:
 	void eventOpenLibDirBrowser(Button* but = nullptr);
 	void eventMoveComics(Button* but = nullptr);
 	void eventDontMoveComics(Button* but = nullptr);
-	void eventMoveProgress(vec2t* prog);
+	void eventMoveProgress(uptrt prg, uptrt lim);
 	void eventMoveFinished();
 	void eventSetFullscreen(Button* but);
 	void eventSetHide(Button* but);
@@ -96,6 +96,9 @@ public:
 	void eventSetLandscape(Button* but);
 	void eventSetSquare(Button* but);
 	void eventSetFill(Button* but);
+	void eventSetPicLimitType(Button* but);
+	void eventSetPicLimCount(Button* but);
+	void eventSetPicLimSize(Button* but);
 	void eventResetSettings(Button* but);
 
 	// other
@@ -108,6 +111,7 @@ public:
 	Browser* getBrowser();
 
 private:
+	void switchPictures(bool fwd, const string& picname);
 	void offerMoveBooks(const string& oldLib);
 	void setState(ProgState* newState);
 	void reposizeWindow(const vec2i& dres, const vec2i& wsiz);

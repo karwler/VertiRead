@@ -290,7 +290,7 @@ public:
 
 	sizet getCurOpt() const;
 private:
-	void shiftOption(int ofs);
+	void shiftOption(bool fwd);
 };
 
 inline sizet SwitchBox::getCurOpt() const {

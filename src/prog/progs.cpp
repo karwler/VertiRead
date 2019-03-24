@@ -304,16 +304,16 @@ void ProgReader::eventPrevDir() {
 
 void ProgReader::eventHide() {
 	ProgState::eventHide();
-	World::program()->eventStartLoadingReader();
+	World::program()->eventStartLoadingReader(reader->firstPage());
 }
 
 void ProgReader::eventClosing() {
 	if (string rpath = getChild(World::browser()->getCurDir(), World::sets()->getDirLib()); rpath.empty())
-		World::fileSys()->saveLastPage(dotStr, World::browser()->getCurDir(), static_cast<ReaderBox*>(World::scene()->getLayout())->curPage());
+		World::fileSys()->saveLastPage(dotStr, World::browser()->getCurDir(), reader->curPage());
 	else {
 		sizet mid = rpath.find_first_of(dsep);
 		sizet nxt = rpath.find_first_not_of(dsep, mid);
-		World::fileSys()->saveLastPage(rpath.substr(0, mid), nxt < rpath.length() ? rpath.substr(nxt) : emptyStr, static_cast<ReaderBox*>(World::scene()->getLayout())->curPage());
+		World::fileSys()->saveLastPage(rpath.substr(0, mid), nxt < rpath.length() ? rpath.substr(nxt) : emptyStr, reader->curPage());
 	}
 	World::browser()->clearCurFile();
 }
@@ -332,7 +332,7 @@ Overlay* ProgReader::createOverlay() {
 		new Button(picSize, &Program::eventZoomReset, nullptr, nullptr, false, World::drawSys()->texture("circle"), picMargin),
 		new Button(picSize, &Program::eventCenterView, nullptr, nullptr, false, World::drawSys()->texture("square"), picMargin)
 	};
-	return new Overlay(vec2s(0), vec2s(picSize, picSize*int(menu.size())), vec2s(0), vec2s(picSize/2, picSize*int(menu.size())), menu, Direction::down, 0);
+	return new Overlay(vec2s(0), vec2s(picSize, picSize * int(menu.size())), vec2s(0), vec2s(picSize/2, picSize * int(menu.size())), menu, Direction::down, 0);
 }
 
 int ProgReader::modifySpeed(float value) {
@@ -536,6 +536,8 @@ Layout* ProgSettings::createLayout() {
 	};
 
 	// setting buttons and labels
+	Text tcnt("Count:", lineHeight);
+	Text tsiz("Size:", lineHeight);
 	vector<Text> butts = {
 		Text("Portrait", lineHeight),
 		Text("Landscape", lineHeight),
@@ -546,6 +548,7 @@ Layout* ProgSettings::createLayout() {
 		"Direction",
 		"Zoom",
 		"Spacing",
+		"Picture limit",
 		"Fullscreen",
 		"Size",
 		"Theme",
@@ -558,17 +561,14 @@ Layout* ProgSettings::createLayout() {
 	};
 	sizet lcnt = txs.size();
 	txs.resize(txs.size() + Binding::names.size());
-	for (sizet i = 0; i < Binding::names.size(); i++) {
-		string name = Binding::names[i];
-		name[0] = char(toupper(name[0]));
-		txs[lcnt+i] = name;
-	}
+	for (sizet i = 0; i < Binding::names.size(); i++)
+		txs[lcnt+i] = firstUpper(Binding::names[i]);
 	std::reverse(txs.begin(), txs.end());
+	int descLength = findMaxLength(txs.data(), txs.size(), lineHeight);
 	
 	// action fields for labels
 	vector<string> themes = World::fileSys()->getAvailibleThemes();
 	vector<string> renderers = getAvailibleRenderers();
-	int descLength = findMaxLength(txs.data(), txs.size(), lineHeight);
 	Text dots(KeyGetter::ellipsisStr, lineHeight);
 	Text dznum(to_string(Settings::axisLimit), lineHeight);
 	vector<Widget*> lx[] = { {
@@ -580,6 +580,10 @@ Layout* ProgSettings::createLayout() {
 	}, {
 		new Label(descLength, popBack(txs)),
 		new LabelEdit(1.f, to_string(World::sets()->spacing), &Program::eventSetSpacing, nullptr, nullptr, LabelEdit::TextType::uInt)
+	}, {
+		new Label(descLength, popBack(txs)),
+		new SwitchBox(findMaxLength(PicLim::names.data(), PicLim::names.size(), lineHeight), PicLim::names.data(), PicLim::names.size(), PicLim::names[uint8(World::sets()->picLim.type)], &Program::eventSetPicLimitType),
+		createLimitEdit()
 	}, {
 		new Label(descLength, popBack(txs)),
 		fullscreen = new CheckBox(lineHeight, World::sets()->fullscreen, &Program::eventSetFullscreen)
@@ -617,6 +621,7 @@ Layout* ProgSettings::createLayout() {
 	for (sizet i = 0; i < lcnt; i++)
 		lns[i] = new Layout(lineHeight, lx[i], Direction::right);
 	lns[lcnt] = new Widget(0);
+	limitLine = static_cast<Layout*>(lns[3]);
 	
 	// shortcut entries
 	for (sizet i = 0; i < Binding::names.size(); i++) {
@@ -641,6 +646,16 @@ Layout* ProgSettings::createLayout() {
 		new ScrollArea(1.f, lns)
 	};
 	return new Layout(1.f, cont, Direction::down, Layout::Select::none, topSpacing);
+}
+
+Widget* ProgSettings::createLimitEdit() {
+	switch (World::sets()->picLim.type) {
+	case PicLim::Type::count:
+		return new LabelEdit(1.f, to_string(World::sets()->picLim.getCount()), &Program::eventSetPicLimCount, nullptr, nullptr, LabelEdit::TextType::uInt);
+	case PicLim::Type::size:
+		return new LabelEdit(1.f, World::sets()->picLim.getSizeString(), &Program::eventSetPicLimSize);
+	}
+	return new Widget();
 }
 
 // PROG SEARCH DIR
