@@ -360,7 +360,10 @@ void LabelEdit::onKeypress(const SDL_Keysym& key) {
 		break;
 	case SDL_SCANCODE_V:	// paste text
 		if (key.mod & KMOD_CTRL)
-			onText(SDL_GetClipboardText());
+			if (char* ctxt = SDL_GetClipboardText()) {
+				onText(ctxt);
+				SDL_free(ctxt);
+			}
 		break;
 	case SDL_SCANCODE_C:	// copy text
 		if (key.mod & KMOD_CTRL)
@@ -408,7 +411,7 @@ void LabelEdit::setText(const string& str) {
 
 Rect LabelEdit::caretRect() const {
 	vec2i ps = position();
-	return {caretPos() + ps.x + textIconOffset() + textMargin, ps.y, caretWidth, size().y};
+	return { caretPos() + ps.x + textIconOffset() + textMargin, ps.y, caretWidth, size().y };
 }
 
 void LabelEdit::setCPos(sizet cp) {

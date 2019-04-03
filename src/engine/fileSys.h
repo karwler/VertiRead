@@ -196,7 +196,7 @@ public:
 	Settings* loadSettings();
 	bool saveSettings(const Settings* sets);
 	array<Binding, Binding::names.size()> getBindings();
-	bool saveBindings(const array<Binding, Binding::names.size()>& sets);
+	bool saveBindings(const array<Binding, Binding::names.size()>& bindings);
 	string findFont(const string& font);	// on success returns absolute path to font file, otherwise returns empty path
 
 	static vector<string> listDir(const string& drc, FileType filter = FTYPE_STD, bool showHidden = true, bool readLinks = true);
@@ -209,9 +209,14 @@ public:
 	static bool isPicture(const string& file);
 	static bool isFont(const string& file);
 	static bool isArchive(const string& file);
+	static bool isPictureArchive(const string& file);
+	static bool isArchivePicture(const string& file, const string& pname);
+	
 	static archive* openArchive(const string& file);
+	static vector<string> listArchive(const string& file);
+	static mapFiles listArchivePictures(const string& file, vector<string>& names);
 	static SDL_Surface* loadArchivePicture(archive* arch, archive_entry* entry);
-	static vector<string> listArchivePictures(const string& file, umap<string, pair<sizet, uptrt>>& pmap);
+
 	static int moveContentThreaded(void* data);	// moves files from one directory to another (data points to a thread and the thread's data is a pair of strings; src, dst)
 #ifdef _WIN32
 	static string wgetenv(const string& name);

@@ -16,12 +16,11 @@ public:
 	Browser(const string& rootDirectory, const string& curDirectory, PCall exitCall);
 	Browser(const string& rootDirectory, const string& container, const string& file, PCall exitCall, bool checkFile);
 
-	bool goTo(const string& path);
-	bool goIn(const string& dirname);
+	FileType goTo(const string& path);
+	bool goIn(const string& dname);
+	FileType goFile(const string& fname);
 	bool goUp();			// go to parent direcory if possible
 	void goNext(bool fwd);	// go to the next/previous archive or directory from the viewpoint of the parent directory
-	bool selectFile(const string& fname);
-	void clearCurFile();
 
 	const string& getRootDir() const;
 	const string& getCurDir() const;
@@ -29,10 +28,9 @@ public:
 	string curFilepath() const;
 	bool getInArchive() const;
 	string nextFile(const string& file, bool fwd) const;
+	pair<vector<string>, vector<string>> listCurDir() const;
 
 private:
-	static bool validateStartFile(archive* arch, const string& file);
-
 	void shiftDir(bool fwd);
 	void shiftArchive(bool fwd);
 	bool nextDir(const string& dit, const string& pdir);

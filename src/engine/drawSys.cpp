@@ -230,6 +230,8 @@ int DrawSys::loadTexturesDirectoryThreaded(void* data) {
 	vector<string> files = FileSys::listDir(World::browser()->getCurDir(), FTYPE_REG, World::sets()->showHidden);
 	uptrt lim, mem;	// picture count limit, picture size limit
 	bool fwd = initLoadLimits(files, thread, lim, mem);
+	sizet sizMag = memSizeMag(mem);
+	string limStr = limitToStr(lim, lim, mem, sizMag);
 	vector<Texture>* pics = new vector<Texture>;
 
 	// iterate over files utils one of the limits is hit (it should be the one associated with the setting)
@@ -239,7 +241,7 @@ int DrawSys::loadTexturesDirectoryThreaded(void* data) {
 			delete pics;
 			return 1;
 		}
-		World::winSys()->pushEvent(UserCode::readerProgress, reinterpret_cast<void*>(World::sets()->picLim.type == PicLim::Type::none ? (fwd ? i : files.size() - i - 1) : World::sets()->picLim.type == PicLim::Type::count ? c : m / 1000000), reinterpret_cast<void*>(World::sets()->picLim.type != PicLim::Type::size ? lim : mem / 1000000));
+		World::winSys()->pushEvent(UserCode::readerProgress, new string(limitToStr(fwd ? i : files.size() - i - 1, c, m, sizMag)), new string(limStr));
 
 		infiLock(World::drawSys()->rendLock);
 		SDL_Texture* tex = IMG_LoadTexture(World::drawSys()->renderer, childPath(World::browser()->getCurDir(), files[i]).c_str());
@@ -259,15 +261,15 @@ int DrawSys::loadTexturesDirectoryThreaded(void* data) {
 
 int DrawSys::loadTexturesArchiveThreaded(void* data) {
 	Thread* thread = static_cast<Thread*>(data);
-	umap<string, pair<sizet, uptrt>> pmap;
-	vector<string> files = FileSys::listArchivePictures(World::browser()->getCurDir(), pmap);
 	uptrt start, end, lim, mem;	// start must be less than end (end does not get iterated over, unlike start)
-	initLoadLimits(files, pmap, thread, start, end, lim, mem);
+	mapFiles files = initLoadLimits(thread, start, end, lim, mem);
+	sizet sizMag = memSizeMag(mem);
+	string limStr = limitToStr(lim, lim, mem, sizMag);
 	archive* arch = FileSys::openArchive(World::browser()->getCurDir());
 	if (!arch)
 		return -1;
 
-	uptrt c = 0, m = 0;	// TODO: make all of this less of a clusterfuck
+	uptrt c = 0, m = 0;
 	vector<Texture>* pics = new vector<Texture>;
 	for (archive_entry* entry; !archive_read_next_header(arch, &entry) && c < lim && m < mem;) {
 		if (!thread->getRun()) {
@@ -276,10 +278,10 @@ int DrawSys::loadTexturesArchiveThreaded(void* data) {
 			archive_read_free(arch);
 			return 1;
 		}
-		World::winSys()->pushEvent(UserCode::readerProgress, reinterpret_cast<void*>(World::sets()->picLim.type != PicLim::Type::size ? c : m / 1000000), reinterpret_cast<void*>(World::sets()->picLim.type != PicLim::Type::size ? lim : mem / 1000000));
+		World::winSys()->pushEvent(UserCode::readerProgress, new string(limitToStr(c, c, m, sizMag)), new string(limStr));
 
 		const char* ename = archive_entry_pathname(entry);
-		if (pair<sizet, uptrt>& ent = pmap[ename]; ent.first >= start && ent.first < end)
+		if (pair<sizet, uptrt>& ent = files[ename]; ent.first >= start && ent.first < end)
 			if (SDL_Texture* tex = World::drawSys()->loadArchiveTexture(arch, entry)) {
 				pics->emplace_back(ename, tex);
 				m += ent.second;
@@ -287,7 +289,7 @@ int DrawSys::loadTexturesArchiveThreaded(void* data) {
 			}
 	}
 	archive_read_free(arch);
-	std::sort(pics->begin(), pics->end(), [&pmap](const Texture& a, const Texture& b) -> bool { return pmap[a.name].first < pmap[b.name].first; });
+	std::sort(pics->begin(), pics->end(), [&files](const Texture& a, const Texture& b) -> bool { return files[a.name].first < files[b.name].first; });
 
 	World::winSys()->pushEvent(UserCode::readerFinished, pics);
 	return 0;
@@ -315,35 +317,37 @@ bool DrawSys::initLoadLimits(vector<string>& files, Thread* thread, uptrt& lim, 
 
 	switch (World::sets()->picLim.type) {
 	case PicLim::Type::none:
-		mem = uptrt(-1);
+		mem = UINT64_MAX;
 		lim = files.size();
 		break;
 	case PicLim::Type::count:
-		mem = uptrt(-1);
+		mem = UINT64_MAX;
 		lim = World::sets()->picLim.getCount() <= files.size() ? World::sets()->picLim.getCount() : files.size();
 		break;
 	case PicLim::Type::size:
-		mem = uptrt(World::sets()->picLim.getSizeBytes());
+		mem = World::sets()->picLim.getSize();
 		lim = files.size();
 	}
 	return fwd;
 }
 
-bool DrawSys::initLoadLimits(const vector<string>& files, umap<string, pair<sizet, uptrt>> pmap, Thread* thread, uptrt& start, uptrt& end, uptrt& lim, uptrt& mem) {
+mapFiles DrawSys::initLoadLimits(Thread* thread, uptrt& start, uptrt& end, uptrt& lim, uptrt& mem) {
+	vector<string> names;
+	mapFiles files = FileSys::listArchivePictures(World::browser()->getCurDir(), names);
 	auto [first, fwd] = thread->pop<std::tuple<string, bool>>();
 	start = 0;
 	if (World::sets()->picLim.type != PicLim::Type::none)
-		if (umap<string, pair<sizet, uptrt>>::iterator it = pmap.find(first); it != pmap.end())
+		if (mapFiles::iterator it = files.find(first); it != files.end())
 			start = it->second.first;
 
 	switch (World::sets()->picLim.type) {
 	case PicLim::Type::none:
-		mem = uptrt(-1);
+		mem = UINT64_MAX;
 		lim = files.size();
 		end = lim;
 		break;
 	case PicLim::Type::count:
-		mem = uptrt(-1);
+		mem = UINT64_MAX;
 		if (fwd) {
 			lim = World::sets()->picLim.getCount() + start <= files.size() ? World::sets()->picLim.getCount() : files.size() - start;
 			end = start + lim;
@@ -355,15 +359,27 @@ bool DrawSys::initLoadLimits(const vector<string>& files, umap<string, pair<size
 		}
 		break;
 	case PicLim::Type::size:
-		mem = uptrt(World::sets()->picLim.getSizeBytes());
+		mem = World::sets()->picLim.getSize();
 		lim = files.size();
 		if (fwd) {
 			end = start;
-			for (uptrt m = 0; end < lim && m < mem; end++, m += pmap[files[end]].second);
+			for (uptrt m = 0; end < lim && m < mem; m += files[names[end]].second, end++);
 		} else {
 			end = start + 1;
-			for (uptrt m = 0; start > 0 && m < mem; start--, m += pmap[files[start]].second);
+			for (uptrt m = 0; start > 0 && m < mem; m += files[names[start]].second, start--);
 		}
 	}
-	return fwd;
+	return files;
+}
+
+string DrawSys::limitToStr(uptrt i, uptrt c, uptrt m, sizet mag) {
+	switch (World::sets()->picLim.type) {
+	case PicLim::Type::none:
+		return to_string(i);
+	case PicLim::Type::count:
+		return to_string(c);
+	case PicLim::Type::size:
+		return memoryString(m, mag);
+	}
+	return emptyStr;
 }

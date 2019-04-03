@@ -24,19 +24,19 @@ public:
 	// books
 	void eventOpenBookList(Button* but = nullptr);
 	void eventOpenPageBrowser(Button* but);
-	void eventOpenReader(Button* but);
 	void eventOpenLastPage(Button* but);
 	bool openFile(const string& file);
 
 	// browser
 	void eventBrowserGoUp(Button* but = nullptr);
 	void eventBrowserGoIn(Button* but);
+	void eventBrowserGoFile(Button* but);
 	void eventBrowserGoTo(Button* but);
 	void eventExitBrowser(Button* but = nullptr);
 
 	// reader
 	void eventStartLoadingReader(const string& first, bool fwd = true);
-	void eventReaderLoadingProgress(uptrt prg, uptrt lim);
+	void eventReaderLoadingProgress(string* prg, string* lim);
 	void eventReaderLoadingCancelled(Button* but = nullptr);
 	void eventReaderLoadingFinished(vector<Texture>* pics);
 	void eventZoomIn(Button* but = nullptr);
@@ -102,6 +102,7 @@ public:
 	void eventResetSettings(Button* but);
 
 	// other
+	bool tryClosePopupThread();
 	void eventClosePopup(Button* but = nullptr);
 	void eventTryExit(Button* but = nullptr);
 	void eventForceExit(Button* but = nullptr);

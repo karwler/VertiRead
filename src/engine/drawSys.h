@@ -31,7 +31,8 @@ private:
 class DrawSys {
 private:
 	static constexpr uint32 rendererFlags = SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED;
-	static constexpr SDL_Color colorPopupDim = {0, 0, 0, 127};
+	static constexpr SDL_Color colorPopupDim = { 0, 0, 0, 127 };
+	static constexpr sizet numBuffSize = 23;
 
 	SDL_Renderer* renderer;
 	SDL_mutex* rendLock;									// lock before using renderer
@@ -66,7 +67,8 @@ public:
 private:
 	SDL_Texture* loadArchiveTexture(archive* arch, archive_entry* entry);
 	static bool initLoadLimits(vector<string>& files, Thread* thread, uptrt& lim, uptrt& mem);
-	static bool initLoadLimits(const vector<string>& files, umap<string, pair<sizet, uptrt>> pmap, Thread* thread, uptrt& start, uptrt& end, uptrt& lim, uptrt& mem);
+	static mapFiles initLoadLimits(Thread* thread, uptrt& start, uptrt& end, uptrt& lim, uptrt& mem);
+	static string limitToStr(uptrt i, uptrt c, uptrt m, sizet mag);
 
 	void drawRect(const Rect& rect, Color color);
 	void drawText(SDL_Texture* tex, const Rect& rect, const Rect& frame);

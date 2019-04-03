@@ -304,7 +304,7 @@ vector<pairStr> Nhentai::query(const string& text) {
 }
 
 vector<pairStr> Nhentai::getChapters(const string& url) {
-	return {pair("All", url)};
+	return { pair("All", url) };
 }
 
 DownloadState Nhentai::downloadPictures(const string& url, const string& drc) {

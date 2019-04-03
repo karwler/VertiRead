@@ -176,7 +176,7 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 
 void WindowSys::pushEvent(UserCode code, void* data1, void* data2) const {
 	SDL_Event event;
-	event.user = {SDL_USEREVENT, SDL_GetTicks(), SDL_GetWindowID(window), int32(code), data1, data2};
+	event.user = { SDL_USEREVENT, SDL_GetTicks(), SDL_GetWindowID(window), int32(code), data1, data2 };
 	SDL_PushEvent(&event);
 }
 

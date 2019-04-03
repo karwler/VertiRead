@@ -13,8 +13,8 @@ struct Size {
 	Size(int pixels);
 	Size(float percent = 1.f);
 
-	void set(int pxiels);
-	void set(float precent);
+	void set(int pixels);
+	void set(float percent);
 };
 using vec2s = vec2<Size>;
 

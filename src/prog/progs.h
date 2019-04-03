@@ -65,8 +65,6 @@ public:
 	static Popup* createPopupMessage(const string& msg, PCall ccal, const string& ctxt = "Ok", Label::Alignment malign = Label::Alignment::left);
 	static Popup* createPopupChoice(const string& msg, PCall kcal, PCall ccal, Label::Alignment malign = Label::Alignment::left);
 
-protected:
-	bool tryClosePopup();
 private:
 	void eventSelect(const Direction& dir);
 };

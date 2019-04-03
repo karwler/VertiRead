@@ -41,6 +41,7 @@ using sizet = size_t;
 using pdift = ptrdiff_t;
 using uptrt = uintptr_t;
 using pairStr = pair<string, string>;
+using mapFiles = umap<string, pair<sizet, uptrt>>;
 
 using vec2i = vec2<int>;
 using vec2f = vec2<float>;
@@ -67,6 +68,20 @@ const char dseps[] = "/";
 #endif
 const string emptyStr = "";
 const string invalidStr = "invalid";
+
+constexpr array<char, 4> sizeLetters = {
+	'B',
+	'K',
+	'M',
+	'G'
+};
+
+constexpr array<uptrt, 4> sizeFactors = {
+	1,
+	1'000,
+	1'000'000,
+	1'000'000'000
+};
 
 // general wrappers
 
@@ -123,20 +138,20 @@ struct Rect : SDL_Rect {
 	constexpr vec2i end() const;
 
 	bool contain(const vec2i& point) const;
-	Rect crop(const Rect& frame);			// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
+	Rect crop(const Rect& rect);			// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
 	Rect intersect(const Rect& rect) const;	// same as above except it returns the overlap instead of the crop and it doesn't modify itself
 };
 
 inline constexpr Rect::Rect(int n) :
-	SDL_Rect({n, n, n, n})
+	SDL_Rect({ n, n, n, n })
 {}
 
 inline constexpr Rect::Rect(int x, int y, int w, int h) :
-	SDL_Rect({x, y, w, h})
+	SDL_Rect({ x, y, w, h })
 {}
 
 inline constexpr Rect::Rect(const vec2i& pos, const vec2i& size) :
-	SDL_Rect({pos.x, pos.y, size.w, size.h})
+	SDL_Rect({ pos.x, pos.y, size.w, size.h })
 {}
 
 inline vec2i& Rect::pos() {
@@ -332,6 +347,21 @@ inline string firstUpper(string str) {
 template <class T>
 bool isDotName(const T& str) {
 	return str[0] == '.' && (str[1] == '\0' || (str[1] == '.' && str[2] == '\0'));
+}
+
+inline sizet memSizeMag(uptrt num) {
+	sizet m;
+	for (m = 0; m + 1 < sizeLetters.size() && (!(num % 1000) && (num /= 1000)); m++);
+	return m;
+}
+
+inline string memoryString(uptrt num, sizet mag) {
+	string str = to_string(num / sizeFactors[mag]);
+	return (mag ? str + sizeLetters[mag] : str) + sizeLetters[0];
+}
+
+inline string memoryString(uptrt num) {
+	return memoryString(num, memSizeMag(num));
 }
 
 // geometry?

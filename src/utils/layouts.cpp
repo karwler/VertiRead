@@ -167,7 +167,7 @@ vec2i Layout::listSize() const {
 void Layout::selectWidget(sizet id) {
 	switch (selection) {
 	case Select::one:
-		selected = {widgets[id]};
+		selected = { widgets[id] };
 		break;
 	case Select::any:
 		if (const uint8* keys = SDL_GetKeyboardState(nullptr); keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT]) {
@@ -183,7 +183,7 @@ void Layout::selectWidget(sizet id) {
 			else
 				selected.insert(widgets[id]);
 		} else
-			selected = {widgets[id]};
+			selected = { widgets[id] };
 	}
 }
 

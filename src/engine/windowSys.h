@@ -11,12 +11,11 @@ public:
 	static constexpr char title[] = "VertiRead";
 private:
 	static constexpr char fileIcon[] = "icon.ico";
-	static constexpr vec2i defaultWindowPos = {SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED};
-	static constexpr vec2i windowMinSize = {500, 300};
+	static constexpr vec2i defaultWindowPos = { SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED };
+	static constexpr vec2i windowMinSize = { 500, 300 };
 	static constexpr uint32 windowFlags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN;
 	static constexpr uint32 eventCheckTimeout = 50;
 	static constexpr float ticksPerSec = 1000.f;
-	
 
 	uptr<FileSys> fileSys;
 	uptr<DrawSys> drawSys;
@@ -61,7 +60,7 @@ private:
 	void createWindow();
 	void destroyWindow();
 	void handleEvent(const SDL_Event& event);	// pass events to their specific handlers
-	void eventWindow(const SDL_WindowEvent& window);
+	void eventWindow(const SDL_WindowEvent& winEvent);
 	void setDSec(uint32& oldTicks);
 };
 

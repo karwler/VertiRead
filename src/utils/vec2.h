@@ -231,8 +231,8 @@ vec2<T> vec2<T>::swap(bool yes) const {
 }
 
 template <class T>
-vec2<T> vec2<T>::swap(const T& x, const T& y, bool swap) {
-	return swap ? vec2(y, x) : vec2(x, y);
+vec2<T> vec2<T>::swap(const T& x, const T& y, bool yes) {
+	return yes ? vec2(y, x) : vec2(x, y);
 }
 
 template<class T>

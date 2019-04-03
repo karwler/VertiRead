@@ -7,9 +7,8 @@ struct ClickStamp {
 	Widget* widget;
 	ScrollArea* area;
 	vec2i mPos;
-	uint32 time;
 
-	ClickStamp(Widget* widget = nullptr, ScrollArea* area = nullptr, const vec2i& mPos = 0, uint32 time = 0);
+	ClickStamp(Widget* widget = nullptr, ScrollArea* area = nullptr, const vec2i& mPos = 0);
 };
 
 // handles more backend UI interactions, works with widgets (UI elements), and contains Program and Library
@@ -24,7 +23,6 @@ private:
 	array<ClickStamp, SDL_BUTTON_X2+1> stamps;	// data about last mouse click (indexes are mouse button numbers
 
 	static constexpr float clickMoveThreshold = 8.f;
-	static constexpr uint32 clickTimeThreshold = 200;
 	static constexpr int scrollFactorWheel = 140;
 
 public:

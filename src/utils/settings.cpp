@@ -269,7 +269,7 @@ const array<string, PicLim::names.size()> PicLim::names = {
 	"size"
 };
 
-PicLim::PicLim(Type type, uint count) :
+PicLim::PicLim(Type type, uptrt count) :
 	type(type),
 	count(count),
 	size(defaultSize())
@@ -282,39 +282,33 @@ void PicLim::set(const string& str) {
 	size = elems.size() > 2 ? toSize(elems[2]) : defaultSize();
 }
 
-uint PicLim::toCount(const string& str) {
-	uint cnt = uint(sstoul(str));
+uptrt PicLim::toCount(const string& str) {
+	uptrt cnt = uptrt(sstoull(str));
 	return cnt ? cnt : defaultCount;
 }
 
-uint PicLim::toSize(const string& str) {
+uptrt PicLim::toSize(const string& str) {
 	const char* pos;
 	char* end;
 	for (pos = str.c_str(); notDigit(*pos) && *pos; pos++);
-	ullong mb = strtoull(pos, &end, 0);
-	if (!mb)
+	uptrt num = uptrt(strtoull(pos, &end, 0));
+	if (!num)
 		return defaultSize();
 
-	string::const_iterator mit = std::find_if(str.begin() + pdift(end - str.c_str()), str.end(), [](char c) -> bool { int ch = toupper(c); return ch == 'K' || ch == 'M' || ch == 'G' || ch == 'T'; });
-	bool majSized = mit != str.end();
-	if (majSized)
-		switch (*mit) {
-		case 'K':
-			mb /= 1000;
+	string::const_iterator mit = std::find_if(str.begin() + pdift(end - str.c_str()), str.end(), [](char c) -> bool { return std::find(sizeLetters.begin(), sizeLetters.end(), toupper(c)) != sizeLetters.end(); });
+	if (mit != str.end())
+		switch (toupper(*mit)) {
+		case sizeLetters[1]:
+			num *= sizeFactors[1];
 			break;
-		case 'G':
-			mb *= 1000;
+		case sizeLetters[2]:
+			num *= sizeFactors[2];
 			break;
-		case 'T':
-			mb *= 1000000;
+		case sizeLetters[3]:
+			num *= sizeFactors[3];
 		}
-	if (string::const_iterator bit = std::find_if(mit, str.end(), [](char c) -> bool { return toupper(c) == 'B'; }); bit != str.end()) {
-		if (*bit == 'b')
-			mb /= 8;
-		if (!majSized)
-			mb /= 1000000;
-	}
-	return uint(mb);
+	mit = std::find_if(mit, str.end(), [](char c) -> bool { return toupper(c) == sizeLetters[0]; });
+	return mit == str.end() || *mit != 'b' ? num : num /= 8;
 }
 
 // SETTINGS

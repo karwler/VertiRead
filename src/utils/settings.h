@@ -43,19 +43,19 @@ inline constexpr Direction::operator Dir() const {
 	return dir;
 }
 
-inline bool constexpr Direction::vertical() const {
+inline constexpr bool Direction::vertical() const {
 	return dir <= down;
 }
 
-inline bool constexpr Direction::horizontal() const {
+inline constexpr bool Direction::horizontal() const {
 	return dir >= left;
 }
 
-inline bool constexpr Direction::positive() const {
+inline constexpr bool Direction::positive() const {
 	return dir & 1;
 }
 
-inline bool constexpr Direction::negative() const {
+inline constexpr bool Direction::negative() const {
 	return !positive();
 }
 
@@ -304,29 +304,27 @@ public:
 	
 	Type type;
 private:
-	uint count, size;	// size in MB
+	uptrt count, size;	// size in bytes
 
-	static constexpr uint defaultCount = 128;
+	static constexpr uptrt defaultCount = 128;
 
 public:
-	PicLim(Type type = Type::none, uint count = defaultCount);
+	PicLim(Type type = Type::none, uptrt count = defaultCount);
 
-	uint getCount() const;
+	uptrt getCount() const;
 	void setCount(const string& str);
-	uint getSize() const;
+	uptrt getSize() const;
 	void setSize(const string& str);
-	uint getSizeBytes() const;
-	string getSizeString() const;
 	string getString() const;
 	void set(const string& str);
 
 private:
-	static uint toCount(const string& str);
-	static uint toSize(const string& str);
-	static uint defaultSize();
+	static uptrt toCount(const string& str);
+	static uptrt toSize(const string& str);
+	static uptrt defaultSize();
 };
 
-inline uint PicLim::getCount() const {
+inline uptrt PicLim::getCount() const {
 	return count;
 }
 
@@ -334,7 +332,7 @@ inline void PicLim::setCount(const string& str) {
 	count = toCount(str);
 }
 
-inline uint PicLim::getSize() const {
+inline uptrt PicLim::getSize() const {
 	return size;
 }
 
@@ -342,20 +340,12 @@ inline void PicLim::setSize(const string& str) {
 	size = toSize(str);
 }
 
-inline uint PicLim::getSizeBytes() const {
-	return size * 1000000;
-}
-
-inline string PicLim::getSizeString() const {
-	return to_string(size) + "MB";
-}
-
 inline string PicLim::getString() const {
-	return names[uint8(type)] + ' ' + to_string(count) + ' ' + to_string(size);
+	return names[uint8(type)] + ' ' + to_string(count) + ' ' + memoryString(size);
 }
 
-inline uint PicLim::defaultSize() {
-	return uint(SDL_GetSystemRAM()) / 2;
+inline uptrt PicLim::defaultSize() {
+	return uptrt(uint(SDL_GetSystemRAM()) / 2) * 1'000'000;
 }
 
 class Settings {

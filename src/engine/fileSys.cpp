@@ -55,13 +55,13 @@ IniLine::Type IniLine::setLine(const string& str) {
 // FILE SYS
 
 const array<SDL_Color, FileSys::defaultColors.size()> FileSys::defaultColors = {
-	SDL_Color({10, 10, 10, 255}),		// background
-	SDL_Color({90, 90, 90, 255}),		// normal
-	SDL_Color({60, 60, 60, 255}),		// dark
-	SDL_Color({120, 120, 120, 255}),	// light
-	SDL_Color({105, 105, 105, 255}),	// select
-	SDL_Color({210, 210, 210, 255}),	// text
-	SDL_Color({210, 210, 210, 255})		// texture
+	SDL_Color({ 10, 10, 10, 255 }),		// background
+	SDL_Color({ 90, 90, 90, 255 }),		// normal
+	SDL_Color({ 60, 60, 60, 255 }),		// dark
+	SDL_Color({ 120, 120, 120, 255 }),	// light
+	SDL_Color({ 105, 105, 105, 255 }),	// select
+	SDL_Color({ 210, 210, 210, 255 }),	// text
+	SDL_Color({ 210, 210, 210, 255 })	// texture
 };
 
 const array<string, FileSys::colorNames.size()> FileSys::colorNames = {
@@ -75,28 +75,9 @@ const array<string, FileSys::colorNames.size()> FileSys::colorNames = {
 };
 #ifdef _WIN32
 const array<string, FileSys::takenFilenames.size()> FileSys::takenFilenames = {
-	"CON",
-	"PRN",
-	"AUX",
-	"NUL",
-	"COM1",
-	"COM2",
-	"COM3",
-	"COM4",
-	"COM5",
-	"COM6",
-	"COM7",
-	"COM8",
-	"COM9",
-	"LPT1",
-	"LPT2",
-	"LPT3",
-	"LPT4",
-	"LPT5",
-	"LPT6",
-	"LPT7",
-	"LPT8",
-	"LPT9"
+	"CON", "PRN", "AUX", "NUL",
+	"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+	"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
 };
 #endif
 FileSys::FileSys() {
@@ -104,10 +85,10 @@ FileSys::FileSys() {
 	if (setWorkingDir())
 		std::cerr << "failed to set working directory" << std::endl;
 #ifdef _WIN32
-	dirFonts = {"./", appDsep(wgetenv("SystemDrive")) + "Windows\\Fonts\\"};
+	dirFonts = { "./", appDsep(wgetenv("SystemDrive")) + "Windows\\Fonts\\" };
 	dirSets = appDsep(wgetenv("AppData")) + WindowSys::title + dseps;
 #else
-	dirFonts = {"./", "/usr/share/fonts/", appDsep(getenv("HOME")) + ".fonts/"};
+	dirFonts = { "./", "/usr/share/fonts/", appDsep(getenv("HOME")) + ".fonts/" };
 	dirSets = appDsep(getenv("HOME")) + ".vertiread/";
 #endif
 	// check if all (more or less) necessary files and directories exist
@@ -340,7 +321,7 @@ bool FileSys::writeTextFile(const string& file, const vector<string>& lines) {
 }
 
 SDL_Color FileSys::readColor(const string& line) {
-	SDL_Color color = {0, 0, 0, 255};
+	SDL_Color color = { 0, 0, 0, 255 };
 	const char* pos = line.c_str();
 	for (; isSpace(*pos); pos++);
 
@@ -373,7 +354,7 @@ vector<string> FileSys::listDir(const string& drc, FileType filter, bool showHid
 		vector<char> dcv = listDrives();
 		entries.resize(dcv.size());
 		for (sizet i = 0; i < dcv.size(); i++)
-			entries.push_back({dcv[i], ':'});
+			entries.push_back({ dcv[i], ':' });
 		return entries;
 	}
 
@@ -407,9 +388,9 @@ int FileSys::iterateDirRec(const string& drc, const std::function<int (string)>&
 	std::queue<wstring> dirs;
 	if (drc == dseps) {	// if in "root" directory, get drive letters and present them as directories
 		for (char dc : listDrives()) {
-			if (filter & FTYPE_DIR && (ret = call({dc, ':'})))
+			if (filter & FTYPE_DIR && (ret = call({ dc, ':' })))
 				return ret;
-			dirs.push({wchar(dc), ':', wchar(dsep)});
+			dirs.push({ wchar(dc), ':', wchar(dsep) });
 		}
 	} else
 		dirs.emplace(stow(appDsep(drc)));
@@ -461,7 +442,7 @@ pair<vector<string>, vector<string>> FileSys::listDirSep(const string& drc, File
 		vector<char> letters = listDrives();
 		dirs.resize(letters.size());
 		for (sizet i = 0; i < dirs.size(); i++)
-			dirs[i] = {letters[i], ':'};
+			dirs[i] = { letters[i], ':' };
 		return pair(filter & FTYPE_DIR ? dirs : files, dirs);
 	}
 
@@ -537,12 +518,34 @@ bool FileSys::isFont(const string& file) {
 
 bool FileSys::isArchive(const string& file) {
 	if (archive* arch = openArchive(file)) {
+		archive_read_free(arch);
+		return true;
+	}
+	return false;
+}
+
+bool FileSys::isPictureArchive(const string& file) {
+	if (archive* arch = openArchive(file)) {
 		for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
 			if (SDL_Surface* pic = loadArchivePicture(arch, entry)) {
 				SDL_FreeSurface(pic);
 				archive_read_free(arch);
 				return true;
 			}
+		archive_read_free(arch);
+	}
+	return false;
+}
+
+bool FileSys::isArchivePicture(const string& file, const string& pname) {
+	if (archive* arch = openArchive(file)) {
+		for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
+			if (archive_entry_pathname(entry) == pname)
+				if (SDL_Surface* img = loadArchivePicture(arch, entry)) {
+					SDL_FreeSurface(img);
+					archive_read_free(arch);
+					return true;
+				}
 		archive_read_free(arch);
 	}
 	return false;
@@ -560,6 +563,37 @@ archive* FileSys::openArchive(const string& file) {
 	return arch;
 }
 
+vector<string> FileSys::listArchive(const string& file) {
+	vector<string> entries;
+	if (archive* arch = openArchive(file)) {
+		for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
+			if (const char* ename = archive_entry_pathname(entry); *ename)
+				entries.emplace_back(ename);
+
+		archive_read_free(arch);
+		std::sort(entries.begin(), entries.end(), strnatless);
+	}
+	return entries;
+}
+
+mapFiles FileSys::listArchivePictures(const string& file, vector<string>& names) {
+	mapFiles files;
+	if (archive* arch = openArchive(file)) {
+		for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
+			if (const char* ename = archive_entry_pathname(entry); SDL_Surface* img = loadArchivePicture(arch, entry)) {
+				files.emplace(ename, pair(SIZE_MAX, uptrt(img->w) * uptrt(img->h) * img->format->BytesPerPixel));
+				names.emplace_back(ename);
+				SDL_FreeSurface(img);
+			}
+		archive_read_free(arch);
+
+		std::sort(names.begin(), names.end(), strnatless);
+		for (sizet i = 0; i < names.size(); i++)
+			files[names[i]].first = i;
+	}
+	return files;
+}
+
 SDL_Surface* FileSys::loadArchivePicture(archive* arch, archive_entry* entry) {
 	int64 bsiz = archive_entry_size(entry);
 	if (bsiz <= 0)
@@ -570,24 +604,6 @@ SDL_Surface* FileSys::loadArchivePicture(archive* arch, archive_entry* entry) {
 	SDL_Surface* pic = size > 0 ? IMG_Load_RW(SDL_RWFromMem(buffer, int(size)), SDL_TRUE) : nullptr;
 	delete[] buffer;
 	return pic;
-}
-
-vector<string> FileSys::listArchivePictures(const string& file, umap<string, pair<sizet, uptrt> >& pmap) {
-	vector<string> entries;
-	if (archive* arch = openArchive(file)) {
-		for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
-			if (SDL_Surface* img = loadArchivePicture(arch, entry)) {
-				entries.emplace_back(archive_entry_pathname(entry));
-				pmap.emplace(entries.back(), pair(0, img->w * img->h * img->format->BytesPerPixel));
-				SDL_FreeSurface(img);
-			}
-		archive_read_free(arch);
-
-		std::sort(entries.begin(), entries.end(), strnatless);
-		for (sizet i = 0; i < entries.size(); i++)
-			pmap[entries[i]].first = i;
-	}
-	return entries;
 }
 
 int FileSys::moveContentThreaded(void* data) {

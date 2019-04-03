@@ -65,7 +65,16 @@ endif()
 
 # definitions
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-	add_definitions(-D_UNICODE -D_CRT_SECURE_NO_WARNINGS)
+	add_definitions(-D_UNICODE -D_CRT_SECURE_NO_WARNINGS -DNOMINMAX)
+endif()
+
+if(CMAKE_CONFIGURATION_TYPES)
+	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG -D_DEBUG")
+	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DNDEBUG")
+elseif(${CMAKE_BUILD_TYPE} MATCHES "Debug")
+	add_definitions(-DDEBUG -D_DEBUG)
+else()
+	add_definitions(-DNDEBUG)
 endif()
 
 # set main target

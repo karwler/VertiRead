@@ -21,18 +21,8 @@ int ProgState::findMaxLength(const string* strs, sizet scnt, int height, int mar
 const string ProgState::dotStr = ".";
 
 void ProgState::eventEnter() {
-	if (World::scene()->getPopup())
-		World::program()->eventClosePopup();
-	else if (World::scene()->select)
+	if (!World::program()->tryClosePopupThread() && World::scene()->select)
 		World::scene()->select->onClick(World::scene()->select->position(), SDL_BUTTON_LEFT);
-}
-
-bool ProgState::tryClosePopup() {
-	if (World::scene()->getPopup()) {
-		World::program()->eventClosePopup();
-		return true;
-	}
-	return false;
 }
 
 void ProgState::eventSelect(const Direction& dir) {
@@ -129,7 +119,7 @@ Popup* ProgState::createPopupChoice(const string& msg, PCall kcal, PCall ccal, L
 // PROG BOOKS
 
 void ProgBooks::eventEscape() {
-	if (!tryClosePopup())
+	if (!World::program()->tryClosePopupThread())
 		World::program()->eventTryExit();
 }
 
@@ -175,7 +165,7 @@ Layout* ProgBooks::createLayout() {
 // PROG PAGE BROWSER
 
 void ProgPageBrowser::eventEscape() {
-	if (!tryClosePopup())
+	if (!World::program()->tryClosePopupThread())
 		World::program()->eventBrowserGoUp();
 }
 
@@ -200,12 +190,12 @@ Layout* ProgPageBrowser::createLayout() {
 	};
 
 	// list of files and directories
-	auto [files, dirs] = FileSys::listDirSep(World::browser()->getCurDir(), FTYPE_REG, World::sets()->showHidden);
+	auto [files, dirs] = World::browser()->listCurDir();
 	vector<Widget*> items(files.size() + dirs.size());
 	for (sizet i = 0; i < dirs.size(); i++)
 		items[i] = new Label(lineHeight, dirs[i], &Program::eventBrowserGoIn, nullptr, nullptr, Label::Alignment::left, World::drawSys()->texture("folder"));
 	for (sizet i = 0; i < files.size(); i++)
-		items[dirs.size()+i] = new Label(lineHeight, files[i], &Program::eventOpenReader, nullptr, nullptr, Label::Alignment::left, World::drawSys()->texture("file"));
+		items[dirs.size()+i] = new Label(lineHeight, files[i], &Program::eventBrowserGoFile, nullptr, nullptr, Label::Alignment::left, World::drawSys()->texture("file"));
 	
 	// main content
 	vector<Widget*> mid = {
@@ -224,7 +214,7 @@ Layout* ProgPageBrowser::createLayout() {
 // PROG READER
 
 void ProgReader::eventEscape() {
-	if (!tryClosePopup())
+	if (!World::program()->tryClosePopupThread())
 		World::program()->eventExitReader();
 }
 
@@ -315,7 +305,7 @@ void ProgReader::eventClosing() {
 		sizet nxt = rpath.find_first_not_of(dsep, mid);
 		World::fileSys()->saveLastPage(rpath.substr(0, mid), nxt < rpath.length() ? rpath.substr(nxt) : emptyStr, reader->curPage());
 	}
-	World::browser()->clearCurFile();
+	SDL_ShowCursor(SDL_ENABLE);
 }
 
 Layout* ProgReader::createLayout() {
@@ -346,7 +336,7 @@ int ProgReader::modifySpeed(float value) {
 // PROG DOWNLOADER
 #ifdef _BUILD_DOWNLOADER
 void ProgDownloader::eventEscape() {
-	if (!tryClosePopup())
+	if (!World::program()->tryClosePopupThread())
 		World::program()->eventOpenBookList();
 }
 
@@ -500,7 +490,7 @@ Layout* ProgDownloads::createLayout() {
 // PROG SETTINGS
 
 void ProgSettings::eventEscape() {
-	if (!tryClosePopup())
+	if (!World::program()->tryClosePopupThread())
 		World::program()->eventOpenBookList();
 }
 
@@ -638,7 +628,7 @@ Layout* ProgSettings::createLayout() {
 	// reset button
 	Text resbut("Reset", lineHeight);
 	lns[lcnt] = new Widget(0);
-	lns[lcnt+1] = new Layout(lineHeight, {new Label(resbut.length, resbut.text, &Program::eventResetSettings)}, Direction::right);
+	lns[lcnt+1] = new Layout(lineHeight, { new Label(resbut.length, resbut.text, &Program::eventResetSettings) }, Direction::right);
 
 	// root layout
 	vector<Widget*> cont = {
@@ -653,7 +643,7 @@ Widget* ProgSettings::createLimitEdit() {
 	case PicLim::Type::count:
 		return new LabelEdit(1.f, to_string(World::sets()->picLim.getCount()), &Program::eventSetPicLimCount, nullptr, nullptr, LabelEdit::TextType::uInt);
 	case PicLim::Type::size:
-		return new LabelEdit(1.f, World::sets()->picLim.getSizeString(), &Program::eventSetPicLimSize);
+		return new LabelEdit(1.f, memoryString(World::sets()->picLim.getSize()), &Program::eventSetPicLimSize);
 	}
 	return new Widget();
 }
@@ -661,7 +651,7 @@ Widget* ProgSettings::createLimitEdit() {
 // PROG SEARCH DIR
 
 void ProgSearchDir::eventEscape() {
-	if (!tryClosePopup())
+	if (!World::program()->tryClosePopupThread())
 		World::program()->eventBrowserGoUp();
 }
 
