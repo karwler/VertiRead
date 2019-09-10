@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "utils/layouts.h"
 #include "downloader.h"
@@ -6,14 +6,14 @@
 // for handling program state specific things that occur in all states
 class ProgState {
 public:
-	static const string dotStr;
+	static constexpr char dotStr[] = ".";
 
 protected:
 	struct Text {
 		string text;
-		int length, height;
+		int length;
 
-		Text(const string& str, int height, int margin = Label::defaultTextMargin);
+		Text(string str, int height, int margin = Label::defaultTextMargin);
 	};
 	static int findMaxLength(const string* strs, sizet scnt, int height, int margin = Label::defaultTextMargin);
 
@@ -62,11 +62,11 @@ public:
 
 	virtual Layout* createLayout();
 	virtual Overlay* createOverlay();
-	static Popup* createPopupMessage(const string& msg, PCall ccal, const string& ctxt = "Ok", Label::Alignment malign = Label::Alignment::left);
-	static Popup* createPopupChoice(const string& msg, PCall kcal, PCall ccal, Label::Alignment malign = Label::Alignment::left);
+	static Popup* createPopupMessage(string msg, PCall ccal, string ctxt = "Ok", Label::Alignment malign = Label::Alignment::left);
+	static Popup* createPopupChoice(string msg, PCall kcal, PCall ccal, Label::Alignment malign = Label::Alignment::left);
 
 private:
-	void eventSelect(const Direction& dir);
+	void eventSelect(Direction dir);
 };
 
 class ProgBooks : public ProgState {
@@ -82,7 +82,7 @@ public:
 
 class ProgPageBrowser : public ProgState {
 public:
-	virtual ~ProgPageBrowser() override {}
+	virtual ~ProgPageBrowser() override = default;
 
 	virtual void eventEscape() override;
 	virtual void eventHide() override;
@@ -128,7 +128,7 @@ public:
 private:
 	int modifySpeed(float value);	// change scroll speed depending on pressed bindings
 };
-#ifdef _BUILD_DOWNLOADER
+#ifdef BUILD_DOWNLOADER
 class ProgDownloader : public ProgState {
 public:
 	LabelEdit* query;
@@ -139,14 +139,14 @@ public:
 	vector<string> resultUrls, chapterUrls;
 
 public:
-	virtual ~ProgDownloader() override {}
+	virtual ~ProgDownloader() override = default;
 
 	virtual void eventEscape() override;
 
 	virtual Layout* createLayout() override;
 	Comic curInfo() const;
-	void printResults(const vector<pairStr>& comics);
-	void printInfo(const vector<pairStr>& chaps);
+	void printResults(vector<pairStr>&& comics);
+	void printInfo(vector<pairStr>&& chaps);
 };
 
 class ProgDownloads : public ProgState {
@@ -154,7 +154,7 @@ public:
 	ScrollArea* list;
 
 public:
-	virtual ~ProgDownloads() override {}
+	virtual ~ProgDownloads() override = default;
 
 	virtual void eventEscape() override;
 

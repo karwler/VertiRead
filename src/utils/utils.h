@@ -66,8 +66,6 @@ const char dseps[] = "\\";
 const char dsep = '/';
 const char dseps[] = "/";
 #endif
-const string emptyStr = "";
-const string invalidStr = "invalid";
 
 constexpr array<char, 4> sizeLetters = {
 	'B',
@@ -84,6 +82,29 @@ constexpr array<uptrt, 4> sizeFactors = {
 };
 
 // general wrappers
+
+#define ENUM_OPERATIONS(EType, IType) \
+	inline constexpr EType operator~(EType a) { \
+		return EType(~IType(a)); \
+	} \
+	inline constexpr EType operator&(EType a, EType b) { \
+		return EType(IType(a) & IType(b)); \
+	} \
+	inline constexpr EType operator&=(EType& a, EType b) { \
+		return a = EType(IType(a) & IType(b)); \
+	} \
+	inline constexpr EType operator|(EType a, EType b) { \
+		return EType(IType(a) | IType(b)); \
+	} \
+	inline constexpr EType operator|=(EType& a, EType b) { \
+		return a = EType(IType(a) | IType(b)); \
+	} \
+	inline constexpr EType operator^(EType a, EType b) { \
+		return EType(IType(a) ^ IType(b)); \
+	} \
+	inline constexpr EType operator^=(EType& a, EType b) { \
+		return a = EType(IType(a) ^ IType(b)); \
+	}
 
 enum class UserCode : int32 {
 	readerProgress,
@@ -118,7 +139,7 @@ inline void infiLock(SDL_mutex* mutex) {
 
 inline string getRendererName(int id) {
 	SDL_RendererInfo info;
-	return !SDL_GetRenderDriverInfo(id, &info) ? info.name : emptyStr;
+	return !SDL_GetRenderDriverInfo(id, &info) ? info.name : "";
 }
 
 vector<string> getAvailibleRenderers();
@@ -129,7 +150,7 @@ struct Rect : SDL_Rect {
 	Rect() = default;
 	constexpr Rect(int n);
 	constexpr Rect(int x, int y, int w, int h);
-	constexpr Rect(const vec2i& pos, const vec2i& size);
+	constexpr Rect(vec2i pos, vec2i size);
 
 	vec2i& pos();
 	constexpr vec2i pos() const;
@@ -137,7 +158,7 @@ struct Rect : SDL_Rect {
 	constexpr vec2i size() const;
 	constexpr vec2i end() const;
 
-	bool contain(const vec2i& point) const;
+	bool contain(vec2i point) const;
 	Rect crop(const Rect& rect);			// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
 	Rect intersect(const Rect& rect) const;	// same as above except it returns the overlap instead of the crop and it doesn't modify itself
 };
@@ -150,7 +171,7 @@ inline constexpr Rect::Rect(int x, int y, int w, int h) :
 	SDL_Rect({ x, y, w, h })
 {}
 
-inline constexpr Rect::Rect(const vec2i& pos, const vec2i& size) :
+inline constexpr Rect::Rect(vec2i pos, vec2i size) :
 	SDL_Rect({ pos.x, pos.y, size.w, size.h })
 {}
 
@@ -174,7 +195,7 @@ inline constexpr vec2i Rect::end() const {
 	return pos() + size();
 }
 
-inline bool Rect::contain(const vec2i& point) const {
+inline bool Rect::contain(vec2i point) const {
 	return SDL_PointInRect(reinterpret_cast<const SDL_Point*>(&point), this);
 }
 
@@ -189,13 +210,13 @@ struct Texture {
 	string name;
 	SDL_Texture* tex;
 
-	Texture(const string& name = emptyStr, SDL_Texture* tex = nullptr);
+	Texture(string name = string(), SDL_Texture* tex = nullptr);
 
 	vec2i res() const;
 };
 
-inline Texture::Texture(const string& name, SDL_Texture* tex) :
-	name(name),
+inline Texture::Texture(string name, SDL_Texture* tex) :
+	name(std::move(name)),
 	tex(tex)
 {}
 
@@ -264,17 +285,33 @@ inline int strncicmp(const string& a, const string& b, sizet n) {	// case insens
 	return strncasecmp(a.c_str(), b.c_str(), n);
 #endif
 }
+
+inline bool isDsep(char c) {
 #ifdef _WIN32
+	return c == '\\' || c == '/';
+#else
+	return c == '/';
+#endif
+}
+
+inline bool notDsep(char c) {
+#ifdef _WIN32
+	return c != '\\' && c != '/';
+#else
+	return c != '/';
+#endif
+}
+
 inline bool isDriveLetter(const string& path) {
-	return path.length() >= 2 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':' && std::all_of(path.begin() + 2, path.end(), [](char c) -> bool { return c == dsep; });
+	return path.length() >= 2 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':' && std::all_of(path.begin() + 2, path.end(), isDsep);
 }
 
 inline bool isDriveLetter(char c) {
 	return c >= 'A' && c <= 'Z';
 }
-#endif
+
 bool pathCmp(const string& as, const string& bs);
-bool isSubpath(const string& path, string parent);
+bool isSubpath(const string& path, const string& parent);
 string parentPath(const string& path);
 string getChild(const string& path, const string& parent);
 string filename(const string& path);	// get filename from path
@@ -309,31 +346,31 @@ inline string trimZero(const string& str) {
 }
 
 inline string getExt(const string& path) {
-	string::const_reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || c == dsep; });
-	return it != path.rend() && *it == '.' ? string(it.base(), path.end()) : emptyStr;
+	string::const_reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
+	return it != path.rend() && *it == '.' ? string(it.base(), path.end()) : string();
 }
 
 inline bool hasExt(const string& path) {
-	string::const_reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || c == dsep; });
+	string::const_reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
 	return it != path.rend() && *it == '.';
 }
 
 inline string delExt(const string& path) {
-	string::const_reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || c == dsep; });
-	return it != path.rend() && *it == '.' ? string(path.begin(), it.base() - 1) : emptyStr;
+	string::const_reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
+	return it != path.rend() && *it == '.' ? string(path.begin(), it.base() - 1) : string();
 }
 
 inline string appDsep(const string& path) {
-	return path.size() && path.back() == dsep ? path : path + dsep;
+	return !path.empty() && isDsep(path.back()) ? path : path + dsep;
 }
 #ifdef _WIN32
 inline wstring appDsep(const wstring& path) {
-	return path.size() && path.back() == dsep ? path : path + wchar(dsep);
+	return !path.empty() && path.back() == dsep ? path : path + wchar(dsep);
 }
 #endif
 inline string childPath(const string& parent, const string& child) {
 #ifdef _WIN32
-	return std::all_of(parent.begin(), parent.end(), [](char c) -> bool { return c == dsep; }) && isDriveLetter(child) ? child : appDsep(parent) + child;
+	return std::all_of(parent.begin(), parent.end(), isDsep) && isDriveLetter(child) ? child : appDsep(parent) + child;
 #else
 	return appDsep(parent) + child;
 #endif
@@ -393,11 +430,15 @@ vec2<T> clampLow(const vec2<T>& val, const vec2<T>& min) {
 
 // conversions
 #ifdef _WIN32
-string wtos(const wchar* wstr);
-string wtos(const wstring& wstr);
-wstring stow(const char* str);
-wstring stow(const string& str);
+string cwtos(const wchar* wstr);
+string swtos(const wstring& wstr);
+wstring cstow(const char* str);
+wstring sstow(const string& str);
 #endif
+inline string stos(const char* str) {	// dummy function for Arguments::setArgs
+	return str;
+}
+
 inline bool stob(const string& str) {
 	return str == "true" || str == "1";
 }
@@ -463,7 +504,7 @@ template <class T, class P, class F, class... A>
 bool foreachRAround(const vector<T>& vec, typename vector<T>::const_reverse_iterator start, P* parent, F func, A... args) {
 	if (std::find_if(start + 1, vec.rend(), [parent, func, args...](const T& it) -> bool { return (parent->*func)(it, args...); }) != vec.rend())
 		return true;
-	return vec.size() && std::find_if(vec.rbegin(), start, [parent, func, args...](const T& it) -> bool { return (parent->*func)(it, args...); }) != start;
+	return !vec.empty() && std::find_if(vec.rbegin(), start, [parent, func, args...](const T& it) -> bool { return (parent->*func)(it, args...); }) != start;
 }
 
 template <class T, class P, class F, class... A>
@@ -473,7 +514,7 @@ bool foreachAround(const vector<T>& vec, typename vector<T>::const_iterator star
 
 template <class T>
 T popBack(vector<T>& vec) {
-	T t = vec.back();
+	T t = std::move(vec.back());
 	vec.pop_back();
 	return t;
 }

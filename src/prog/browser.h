@@ -13,8 +13,8 @@ private:
 	bool inArchive;	// whether curDir is an archive
 
 public:
-	Browser(const string& rootDirectory, const string& curDirectory, PCall exitCall);
-	Browser(const string& rootDirectory, const string& container, const string& file, PCall exitCall, bool checkFile);
+	Browser(string rootDirectory, string curDirectory, PCall exitCall);
+	Browser(string rootDirectory, string container, string file, PCall exitCall, bool checkFile);
 
 	FileType goTo(const string& path);
 	bool goIn(const string& dname);

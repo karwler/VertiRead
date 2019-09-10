@@ -11,9 +11,7 @@ public:
 	static constexpr char title[] = "VertiRead";
 private:
 	static constexpr char fileIcon[] = "icon.ico";
-	static constexpr vec2i defaultWindowPos = { SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED };
 	static constexpr vec2i windowMinSize = { 500, 300 };
-	static constexpr uint32 windowFlags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN;
 	static constexpr uint32 eventCheckTimeout = 50;
 	static constexpr float ticksPerSec = 1000.f;
 
@@ -37,11 +35,11 @@ public:
 	void pushEvent(UserCode code, void* data1 = nullptr, void* data2 = nullptr) const;
 	float getDSec() const;
 	vec2i displayResolution() const;
-	void setWindowPos(const vec2i& pos);
-	void moveCursor(const vec2i& mov);
+	void setWindowPos(vec2i pos);
+	void moveCursor(vec2i mov);
 	void toggleOpacity();
 	void setFullscreen(bool on);
-	void setResolution(const vec2i& res);
+	void setResolution(vec2i res);
 	void setRenderer(const string& name);
 	void resetSettings();
 
@@ -61,7 +59,6 @@ private:
 	void destroyWindow();
 	void handleEvent(const SDL_Event& event);	// pass events to their specific handlers
 	void eventWindow(const SDL_WindowEvent& winEvent);
-	void setDSec(uint32& oldTicks);
 };
 
 inline void WindowSys::close() {
@@ -101,6 +98,6 @@ inline vec2i WindowSys::displayResolution() const {
 	return !SDL_GetDesktopDisplayMode(window ? SDL_GetWindowDisplayIndex(window) : 0, &mode) ? vec2i(mode.w, mode.h) : INT_MAX;
 }
 
-inline void WindowSys::setWindowPos(const vec2i& pos) {
+inline void WindowSys::setWindowPos(vec2i pos) {
 	SDL_SetWindowPosition(window, pos.x, pos.y);
 }

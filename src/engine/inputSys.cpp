@@ -36,20 +36,38 @@ InputSys::~InputSys() {
 
 void InputSys::eventMouseMotion(const SDL_MouseMotionEvent& motion) {
 	mouseMove = vec2i(motion.xrel, motion.yrel);
+	moveTime = motion.timestamp;
 	World::scene()->onMouseMove(vec2i(motion.x, motion.y), mouseMove);
+}
+
+void InputSys::eventMouseButtonDown(const SDL_MouseButtonEvent& button) {
+	if (button.button < SDL_BUTTON_X1)
+		World::scene()->onMouseDown(vec2i(button.x, button.y), button.button, button.clicks);
+	else switch (button.button) {
+	case SDL_BUTTON_X1:
+		World::srun(bindings[uint8(Binding::Type::enter)].bcall);
+		break;
+	case SDL_BUTTON_X2:
+		World::srun(bindings[uint8(Binding::Type::escape)].bcall);
+	}
+}
+
+void InputSys::eventMouseButtonUp(const SDL_MouseButtonEvent& button) {
+	if (button.button < SDL_BUTTON_X1)
+		World::scene()->onMouseUp(vec2i(button.x, button.y), button.button, button.clicks);
 }
 
 void InputSys::eventKeypress(const SDL_KeyboardEvent& key) {
 	if (World::scene()->capture)	// different behaviour when capturing or not
 		World::scene()->capture->onKeypress(key.keysym);
-	else if (!key.repeat)			// handle only once pressed keys
-		checkBindingsK(key.keysym.scancode);
+	else
+		checkBindingsK(key.keysym.scancode, key.repeat);
 }
 
 void InputSys::eventJoystickButton(const SDL_JoyButtonEvent& jbutton) {
 	if (SDL_GameControllerFromInstanceID(jbutton.which))	// don't execute if there can be a gamecontroller event
 		return;
-	
+
 	if (World::scene()->capture)
 		World::scene()->capture->onJButton(jbutton.button);
 	else
@@ -95,41 +113,48 @@ void InputSys::eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis) {
 		checkBindingsX(SDL_GameControllerAxis(gaxis.axis), value > 0);
 }
 
-void InputSys::tick(float) {
+void InputSys::tick() const {
 	// handle keyhold
 	float amt = 1.f;
-	if (array<Binding, Binding::names.size()>::iterator it = std::find_if(bindings.begin(), bindings.end(), [this, &amt](const Binding& bi) -> bool { return bi.isAxis() && isPressed(bi, amt); }); it != bindings.end())
-		World::srun(it->getAcall(), amt);
+	for (const Binding& it : bindings)
+		if (it.isHolder() && isPressed(it, amt))
+			World::srun(it.acall, amt);
 }
 
-void InputSys::checkBindingsK(SDL_Scancode key) {
-	if (array<Binding, Binding::names.size()>::iterator it = std::find_if(bindings.begin(), bindings.end(), [key](const Binding& bi) -> bool { return !bi.isAxis() && bi.keyAssigned() && bi.getKey() == key; }); it != bindings.end())
-		World::srun(it->getBcall());
+void InputSys::checkBindingsK(SDL_Scancode key, uint8 repeat) const {
+	for (const Binding& it : bindings)
+		if (!it.isHolder() && it.keyAssigned() && it.getKey() == key && it.canRepeat() >= repeat)
+			World::srun(it.bcall);
 }
 
-void InputSys::checkBindingsB(uint8 jbutton) {
-	if (array<Binding, Binding::names.size()>::iterator it = std::find_if(bindings.begin(), bindings.end(), [jbutton](const Binding& bi) -> bool { return !bi.isAxis() && bi.jbuttonAssigned() && bi.getJctID() == jbutton; }); it != bindings.end())
-		World::srun(it->getBcall());
+void InputSys::checkBindingsB(uint8 jbutton) const {
+	for (const Binding& it : bindings)
+		if (!it.isHolder() && it.jbuttonAssigned() && it.getJctID() == jbutton)
+			World::srun(it.bcall);
 }
 
-void InputSys::checkBindingsH(uint8 jhat, uint8 val) {
-	if (array<Binding, Binding::names.size()>::iterator it = std::find_if(bindings.begin(), bindings.end(), [jhat, val](const Binding& bi) -> bool { return !bi.isAxis() && bi.jhatAssigned() && bi.getJctID() == jhat && bi.getJhatVal() == val; }); it != bindings.end())
-		World::srun(it->getBcall());
+void InputSys::checkBindingsH(uint8 jhat, uint8 val) const {
+	for (const Binding& it : bindings)
+		if (!it.isHolder() && it.jhatAssigned() && it.getJctID() == jhat && it.getJhatVal() == val)
+			World::srun(it.bcall);
 }
 
-void InputSys::checkBindingsA(uint8 jaxis, bool positive) {
-	if (array<Binding, Binding::names.size()>::iterator it = std::find_if(bindings.begin(), bindings.end(), [jaxis, positive](const Binding& bi) -> bool { return !bi.isAxis() && ((bi.jposAxisAssigned() && positive) || (bi.jnegAxisAssigned() && !positive)) && bi.getJctID() == jaxis; }); it != bindings.end())
-		World::srun(it->getBcall());
+void InputSys::checkBindingsA(uint8 jaxis, bool positive) const {
+	for (const Binding& it : bindings)
+		if (!it.isHolder() && ((it.jposAxisAssigned() && positive) || (it.jnegAxisAssigned() && !positive)) && it.getJctID() == jaxis)
+			World::srun(it.bcall);
 }
 
-void InputSys::checkBindingsG(SDL_GameControllerButton gbutton) {
-	if (array<Binding, Binding::names.size()>::iterator it = std::find_if(bindings.begin(), bindings.end(), [gbutton](const Binding& bi) -> bool { return !bi.isAxis() && bi.gbuttonAssigned() && bi.getGbutton() == gbutton; }); it != bindings.end())
-		World::srun(it->getBcall());
+void InputSys::checkBindingsG(SDL_GameControllerButton gbutton) const {
+	for (const Binding& it : bindings)
+		if (!it.isHolder() && it.gbuttonAssigned() && it.getGbutton() == gbutton)
+			World::srun(it.bcall);
 }
 
-void InputSys::checkBindingsX(SDL_GameControllerAxis gaxis, bool positive) {
-	if (array<Binding, Binding::names.size()>::iterator it = std::find_if(bindings.begin(), bindings.end(), [gaxis, positive](const Binding& bi) -> bool { return !bi.isAxis() && ((bi.gposAxisAssigned() && positive) || (bi.gnegAxisAssigned() && !positive)) && bi.getGaxis() == gaxis; }); it != bindings.end())
-		World::srun(it->getBcall());
+void InputSys::checkBindingsX(SDL_GameControllerAxis gaxis, bool positive) const {
+	for (const Binding& it : bindings)
+		if (!it.isHolder() && ((it.gposAxisAssigned() && positive) || (it.gnegAxisAssigned() && !positive)) && it.getGaxis() == gaxis)
+			World::srun(it.bcall);
 }
 
 bool InputSys::isPressed(const Binding& abind, float& amt) const {
@@ -182,8 +207,8 @@ int InputSys::getAxisG(SDL_GameControllerAxis gaxis) const {
 }
 
 void InputSys::resetBindings() {
-	for (sizet i = 0; i < bindings.size(); i++)
-		bindings[i].setDefaultSelf(Binding::Type(i));
+	for (uint8 i = 0; i < bindings.size(); i++)
+		bindings[i].reset(Binding::Type(i));
 }
 
 void InputSys::addController(int id) {

@@ -57,7 +57,7 @@ DrawSys::DrawSys(SDL_Window* window, int driverIndex) :
 	rendLock(SDL_CreateMutex())
 {
 	// create and set up renderer
-	if (!(renderer = SDL_CreateRenderer(window, driverIndex, rendererFlags)))
+	if (!(renderer = SDL_CreateRenderer(window, driverIndex, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED)))
 		throw std::runtime_error(string("Failed to create renderer:\n") + SDL_GetError());
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
@@ -199,7 +199,6 @@ void DrawSys::drawText(SDL_Texture* tex, const Rect& rect, const Rect& frame) {
 	Rect dst = rect;
 	Rect crop = dst.crop(frame);
 	Rect src(crop.pos(), rect.size() - crop.size());
-
 	SDL_RenderCopy(renderer, tex, &src, &dst);
 }
 
@@ -212,7 +211,6 @@ void DrawSys::drawImage(SDL_Texture* tex, const Rect& rect, const Rect& frame) {
 	vec2i res = texSize(tex);
 	vec2f factor(vec2f(res) / vec2f(rect.size()));
 	Rect src(vec2f(crop.pos()) * factor, res - vec2i(vec2f(crop.size()) * factor));
-
 	SDL_RenderCopy(renderer, tex, &src, &dst);
 }
 
@@ -247,7 +245,7 @@ int DrawSys::loadTexturesDirectoryThreaded(void* data) {
 		SDL_Texture* tex = IMG_LoadTexture(World::drawSys()->renderer, childPath(World::browser()->getCurDir(), files[i]).c_str());
 		SDL_UnlockMutex(World::drawSys()->rendLock);
 		if (tex) {
-			pics->emplace_back(files[i], tex);
+			pics->emplace_back(std::move(files[i]), tex);
 			m += texMemory(tex);
 			c++;
 		}
@@ -317,11 +315,11 @@ bool DrawSys::initLoadLimits(vector<string>& files, Thread* thread, uptrt& lim, 
 
 	switch (World::sets()->picLim.type) {
 	case PicLim::Type::none:
-		mem = UINT64_MAX;
+		mem = UINTPTR_MAX;
 		lim = files.size();
 		break;
 	case PicLim::Type::count:
-		mem = UINT64_MAX;
+		mem = UINTPTR_MAX;
 		lim = World::sets()->picLim.getCount() <= files.size() ? World::sets()->picLim.getCount() : files.size();
 		break;
 	case PicLim::Type::size:
@@ -342,12 +340,12 @@ mapFiles DrawSys::initLoadLimits(Thread* thread, uptrt& start, uptrt& end, uptrt
 
 	switch (World::sets()->picLim.type) {
 	case PicLim::Type::none:
-		mem = UINT64_MAX;
+		mem = UINTPTR_MAX;
 		lim = files.size();
 		end = lim;
 		break;
 	case PicLim::Type::count:
-		mem = UINT64_MAX;
+		mem = UINTPTR_MAX;
 		if (fwd) {
 			lim = World::sets()->picLim.getCount() + start <= files.size() ? World::sets()->picLim.getCount() : files.size() - start;
 			end = start + lim;
@@ -381,5 +379,5 @@ string DrawSys::limitToStr(uptrt i, uptrt c, uptrt m, sizet mag) {
 	case PicLim::Type::size:
 		return memoryString(m, mag);
 	}
-	return emptyStr;
+	return string();
 }

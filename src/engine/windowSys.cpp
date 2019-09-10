@@ -12,8 +12,10 @@ int WindowSys::start() {
 		exec();
 	} catch (const std::runtime_error& e) {
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", e.what(), window);
+#ifdef NDEBUG
 	} catch (...) {
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Unknown error.", window);
+#endif
 	}
 	cleanup();
 	return 0;
@@ -24,6 +26,7 @@ void WindowSys::init() {
 		throw std::runtime_error(string("Failed to initialize SDL:\n") + SDL_GetError());
 	if (TTF_Init())
 		throw std::runtime_error(string("Failed to initialize fonts:\n") + TTF_GetError());
+	SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
 	SDL_StopTextInput();	// for some reason TextInput is on
 
 	int flags = IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP);
@@ -48,11 +51,12 @@ void WindowSys::init() {
 void WindowSys::exec() {
 	// the loop :o
 	for (uint32 oldTime = SDL_GetTicks(); run;) {
-		setDSec(oldTime);
-		drawSys->drawWidgets();
+		uint32 newTime = SDL_GetTicks();
+		dSec = float(newTime - oldTime) / ticksPerSec;
+		oldTime = newTime;
 
-		// handle events
-		inputSys->tick(dSec);
+		drawSys->drawWidgets();
+		inputSys->tick();
 		scene->tick(dSec);
 
 		uint32 timeout = SDL_GetTicks() + eventCheckTimeout;
@@ -80,10 +84,10 @@ void WindowSys::createWindow() {
 
 	// create new window
 	sets->resolution = sets->resolution.clamp(windowMinSize, displayResolution());
-	if (!(window = SDL_CreateWindow(title, defaultWindowPos.x, defaultWindowPos.y, sets->resolution.x, sets->resolution.y, windowFlags | (sets->maximized ? SDL_WINDOW_MAXIMIZED : 0) | (sets->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0))))
+	if (!(window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets->resolution.x, sets->resolution.y, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | (sets->maximized ? SDL_WINDOW_MAXIMIZED : 0) | (sets->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0))))
 		throw std::runtime_error(string("Failed to create window:\n") + SDL_GetError());
 
-	// minor stuff
+	// visual stuff
 	if (SDL_Surface* icon = IMG_Load(fileIcon)) {
 		SDL_SetWindowIcon(window, icon);
 		SDL_FreeSurface(icon);
@@ -106,10 +110,10 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 		inputSys->eventMouseMotion(event.motion);
 		break;
 	case SDL_MOUSEBUTTONDOWN:
-		scene->onMouseDown(vec2i(event.button.x, event.button.y), event.button.button, event.button.clicks);
+		inputSys->eventMouseButtonDown(event.button);
 		break;
 	case SDL_MOUSEBUTTONUP:
-		scene->onMouseUp(vec2i(event.button.x, event.button.y), event.button.button, event.button.clicks);
+		inputSys->eventMouseButtonUp(event.button);
 		break;
 	case SDL_MOUSEWHEEL:
 		scene->onMouseWheel(vec2i(event.wheel.x, -event.wheel.y));
@@ -180,13 +184,7 @@ void WindowSys::pushEvent(UserCode code, void* data1, void* data2) const {
 	SDL_PushEvent(&event);
 }
 
-void WindowSys::setDSec(uint32& oldTicks) {
-	uint32 newTime = SDL_GetTicks();
-	dSec = float(newTime - oldTicks) / ticksPerSec;
-	oldTicks = newTime;
-}
-
-void WindowSys::moveCursor(const vec2i& mov) {
+void WindowSys::moveCursor(vec2i mov) {
 	int px, py;
 	SDL_GetMouseState(&px, &py);
 	SDL_WarpMouseInWindow(window, px + mov.x, py + mov.y);
@@ -204,7 +202,7 @@ void WindowSys::setFullscreen(bool on) {
 	SDL_SetWindowFullscreen(window, on ? SDL_GetWindowFlags(window) | SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_GetWindowFlags(window) & uint32(~SDL_WINDOW_FULLSCREEN_DESKTOP));
 }
 
-void WindowSys::setResolution(const vec2i& res) {
+void WindowSys::setResolution(vec2i res) {
 	sets->resolution = res.clamp(windowMinSize, displayResolution());
 	SDL_SetWindowSize(window, res.x, res.y);
 }

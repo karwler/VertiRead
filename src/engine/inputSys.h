@@ -14,15 +14,21 @@ private:
 
 		void close();
 	};
+
+	static constexpr uint32 moveTimeout = 50;
+
 	vector<Controller> controllers;	// currently connected game controllers
 	array<Binding, Binding::names.size()> bindings;
 	vec2i mouseMove;				// last mouse motion
+	uint32 moveTime;				// timestamp of last recorded mouseMove
 
 public:
 	InputSys();
 	~InputSys();
 
 	void eventMouseMotion(const SDL_MouseMotionEvent& motion);
+	void eventMouseButtonDown(const SDL_MouseButtonEvent& button);
+	void eventMouseButtonUp(const SDL_MouseButtonEvent& button);
 	void eventKeypress(const SDL_KeyboardEvent& key);
 	void eventJoystickButton(const SDL_JoyButtonEvent& jbutton);
 	void eventJoystickHat(const SDL_JoyHatEvent& jhat);
@@ -30,7 +36,7 @@ public:
 	void eventGamepadButton(const SDL_ControllerButtonEvent& gbutton);
 	void eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis);
 
-	void tick(float);
+	void tick() const;
 	bool isPressed(Binding::Type type, float& amt) const;	// looks through axis bindings (aka holders) in controls settings (amt will only be changed if the binding is an active axis)
 	bool isPressed(const Binding& abind, float& amt) const;
 	bool isPressedB(uint8 jbutton) const;			// check if any of the joysticks' button is pressed
@@ -39,7 +45,7 @@ public:
 	int getAxisJ(uint8 jaxis) const;				// check if any of the joysticks' axis value is greater than 0
 	int getAxisG(SDL_GameControllerAxis gaxis) const;			// check if any of the gamepads' axis value is greater than 0
 
-	const vec2i& getMouseMove() const;
+	vec2i getMouseMove() const;
 	Binding& getBinding(Binding::Type type);
 	const array<Binding, Binding::names.size()>& getBindings() const;
 	void resetBindings();
@@ -47,19 +53,19 @@ public:
 	void removeController(int id);
 
 private:
-	void checkBindingsK(SDL_Scancode key);
-	void checkBindingsB(uint8 jbutton);
-	void checkBindingsH(uint8 jhat, uint8 val);
-	void checkBindingsA(uint8 jaxis, bool positive);
-	void checkBindingsG(SDL_GameControllerButton gbutton);
-	void checkBindingsX(SDL_GameControllerAxis gaxis, bool positive);
+	void checkBindingsK(SDL_Scancode key, uint8 repeat) const;
+	void checkBindingsB(uint8 jbutton) const;
+	void checkBindingsH(uint8 jhat, uint8 val) const;
+	void checkBindingsA(uint8 jaxis, bool positive) const;
+	void checkBindingsG(SDL_GameControllerButton gbutton) const;
+	void checkBindingsX(SDL_GameControllerAxis gaxis, bool positive) const;
 
 	int checkAxisValue(int value) const;	// check deadzone in axis value
 	static float axisToFloat(int axisValue);
 };
 
 inline bool InputSys::isPressed(Binding::Type type, float& amt) const {
-	return bindings[sizet(type)].isAxis() ? isPressed(bindings[sizet(type)], amt) : false;
+	return bindings[sizet(type)].isHolder() ? isPressed(bindings[sizet(type)], amt) : false;
 }
 
 inline bool InputSys::isPressedB(uint8 jbutton) const {
@@ -70,8 +76,8 @@ inline bool InputSys::isPressedG(SDL_GameControllerButton gbutton) const {
 	return std::find_if(controllers.begin(), controllers.end(), [gbutton](const Controller& it) -> bool { return !it.gamepad && SDL_GameControllerGetButton(it.gamepad, gbutton); }) != controllers.end();
 }
 
-inline const vec2i& InputSys::getMouseMove() const {
-	return mouseMove;
+inline vec2i InputSys::getMouseMove() const {
+	return SDL_GetTicks() - moveTime < moveTimeout ? mouseMove : 0;
 }
 
 inline Binding& InputSys::getBinding(Binding::Type type) {

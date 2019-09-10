@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef _BUILD_DOWNLOADERz
+#ifdef BUILD_DOWNLOADER
 #include "utils/utils.h"
 #include <curl/curl.h>
 #include <libxml/HTMLparser.h>
@@ -20,7 +20,7 @@ struct Comic {
 	string title;
 	vector<pairStr> chapters;	// name, url
 
-	Comic(const string& title = emptyStr, const vector<pairStr>& chapters = {});
+	Comic(string title = string(), vector<pairStr> chapters = {});
 };
 
 class WebSource {
@@ -38,11 +38,11 @@ public:
 
 public:
 	WebSource(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile);
-	virtual ~WebSource();
+	virtual ~WebSource() = default;
 
 	const string& name() const;
 	const string& baseUrl() const;
-	virtual Type source() const = 0;
+	virtual Type source() const;	// dummy function
 
 	virtual vector<pairStr> query(const string& text) = 0;
 	virtual vector<pairStr> getChapters(const string& url) = 0;	// url needs to be of the comic's main info page; returned chapter lit has pairs of first name, secod url
@@ -64,11 +64,11 @@ protected:
 };
 
 inline const string& WebSource::name() const {
-	return enumToStr(sourceNames, source());
+	return sourceNames[source()];
 }
 
 inline const string& WebSource::baseUrl() const {
-	return enumToStr(sourceUrls, source());
+	return sourceUrls[source()];
 }
 
 inline bool WebSource::namecmp(const xmlChar* name, const char* str) {
@@ -78,7 +78,7 @@ inline bool WebSource::namecmp(const xmlChar* name, const char* str) {
 class Mangahere : public WebSource {
 public:
 	Mangahere(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile);
-	virtual ~Mangahere() override;
+	virtual ~Mangahere() override = default;
 
 	virtual Type source() const override;
 	virtual vector<pairStr> query(const string& text) override;
@@ -90,14 +90,10 @@ inline Mangahere::Mangahere(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile)
 	WebSource(curlMain, mainLock, curlFile)
 {}
 
-inline WebSource::Type Mangahere::source() const {
-	return MANGAHERE;
-}
-
 class Mangamaster : public WebSource {
 public:
 	Mangamaster(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile);
-	virtual ~Mangamaster() override;
+	virtual ~Mangamaster() override = default;
 
 	virtual Type source() const override;
 	virtual vector<pairStr> query(const string& text) override;
@@ -109,14 +105,10 @@ inline Mangamaster::Mangamaster(CURL* curlMain, SDL_mutex* mainLock, CURL* curlF
 	WebSource(curlMain, mainLock, curlFile)
 {}
 
-inline WebSource::Type Mangamaster::source() const {
-	return MANGAMASTER;
-}
-
 class Nhentai : public WebSource {
 public:
 	Nhentai(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile);
-	virtual ~Nhentai() override;
+	virtual ~Nhentai() override = default;
 
 	virtual Type source() const override;
 	virtual vector<pairStr> query(const string& text) override;
@@ -130,10 +122,6 @@ private:
 inline Nhentai::Nhentai(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile) :
 	WebSource(curlMain, mainLock, curlFile)
 {}
-
-inline WebSource::Type Nhentai::source() const {
-	return NHENTAI;
-}
 
 class Downloader {
 public:
@@ -183,7 +171,6 @@ inline DownloadState Downloader::getDlState() {
 inline const vec2t& Downloader::getDlProg() const {
 	return dlProg;
 }
-
 #else
 class Downloader {
 public:

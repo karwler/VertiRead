@@ -1,7 +1,9 @@
 # project properties
 cmake_minimum_required(VERSION 3.10.2)
 project(VertiRead LANGUAGES CXX)
-set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
+if(CMAKE_CONFIGURATION_TYPES)
+	set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
+endif()
 
 # source files
 set(SRC_FILES
@@ -34,7 +36,7 @@ set(SRC_FILES
 	"src/utils/vec2.h"
 	"src/utils/widgets.cpp"
 	"src/utils/widgets.h")
-	
+
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	list(APPEND SRC_FILES "rsc/resource.rc")
 endif()
@@ -89,7 +91,7 @@ endif()
 
 target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image SDL2_ttf archive)
 if(${BUILD_DOWNLOADER})
-	add_definitions(-D_BUILD_DOWNLOADER)
+	add_definitions(-DBUILD_DOWNLOADER)
 	include_directories("/usr/include/libxml2")
 	target_link_libraries(${PROJECT_NAME} curl xml2)
 endif()
@@ -110,7 +112,7 @@ if((${CMAKE_CXX_COMPILER_ID} MATCHES "GNU") OR (${CMAKE_CXX_COMPILER_ID} MATCHES
 	if(${CMAKE_BUILD_TYPE} MATCHES "Debug")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 	else()
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -Wno-padded")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -s -Wno-padded")
 	endif()
 
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-float-equal -Wno-parentheses -Wno-shadow -Wno-switch -Wno-switch-enum -Wno-unused-result")

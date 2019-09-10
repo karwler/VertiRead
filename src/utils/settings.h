@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "utils.h"
 
@@ -25,7 +25,7 @@ private:
 	Dir dir;
 
 public:
-	constexpr Direction(Dir direction = Direction::up);
+	constexpr Direction(Dir direction);
 
 	constexpr operator Dir() const;
 
@@ -68,17 +68,7 @@ public:
 		down,
 		left,
 		right,
-		scrollUp,
-		scrollDown,
-		scrollLeft,
-		scrollRight,
-		cursorUp,
-		cursorDown,
-		cursorLeft,
-		cursorRight,
 		centerView,
-		scrollFast,
-		scrollSlow,
 		nextPage,
 		prevPage,
 		zoomIn,
@@ -91,9 +81,19 @@ public:
 		fullscreen,
 		hide,
 		boss,
-		refresh
+		refresh,
+		scrollUp,	// axis (hold down) bindings start here
+		scrollDown,
+		scrollLeft,
+		scrollRight,
+		cursorUp,
+		cursorDown,
+		cursorLeft,
+		cursorRight,
+		scrollFast,
+		scrollSlow
 	};
-	static const array<string, sizet(Type::refresh)+1> names;
+	static const array<string, sizet(Type::scrollSlow)+1> names;
 
 	enum Assignment : uint8 {
 		ASG_NONE	= 0x00,
@@ -106,22 +106,25 @@ public:
 		ASG_GAXIS_P = 0x40,
 		ASG_GAXIS_N = 0x80
 	};
+
+	union {
+		SBCall bcall;
+		SACall acall;
+	};
 private:
 	SDL_Scancode key;	// keybord key
 	uint8 jctID;		// joystick control id
 	uint8 jHatVal;		// joystick hat value
 	uint8 gctID;		// gamepad control id
 	Assignment asg;		// stores data for checking whether key and/or button/axis are assigned
-
-	bool callAxis;
-	union {
-		SBCall bcall;
-		SACall acall;
-	};
+	Type type;
 
 public:
 	Binding();
-	void setDefaultSelf(Type type);
+
+	void reset(Type newType);
+	bool isHolder() const;
+	uint8 canRepeat() const;
 
 	SDL_Scancode getKey() const;
 	bool keyAssigned() const;
@@ -157,45 +160,20 @@ public:
 	bool gposAxisAssigned() const;
 	bool gnegAxisAssigned() const;
 	void setGaxis(SDL_GameControllerAxis axis, bool positive);
-	
-	bool isAxis() const;
-	SBCall getBcall() const;
-	void setBcall(SBCall call);
-	SACall getAcall() const;
-	void setAcall(SACall call);
 };
-
-inline constexpr Binding::Assignment operator~(Binding::Assignment a) {
-	return Binding::Assignment(~uint8(a));
-}
-
-inline constexpr Binding::Assignment operator&(Binding::Assignment a, Binding::Assignment b) {
-	return Binding::Assignment(uint8(a) & uint8(b));
-}
-
-inline constexpr Binding::Assignment operator&=(Binding::Assignment& a, Binding::Assignment b) {
-	return a = Binding::Assignment(uint8(a) & uint8(b));
-}
-
-inline constexpr Binding::Assignment operator^(Binding::Assignment a, Binding::Assignment b) {
-	return Binding::Assignment(uint8(a) ^ uint8(b));
-}
-
-inline constexpr Binding::Assignment operator^=(Binding::Assignment& a, Binding::Assignment b) {
-	return a = Binding::Assignment(uint8(a) ^ uint8(b));
-}
-
-inline constexpr Binding::Assignment operator|(Binding::Assignment a, Binding::Assignment b) {
-	return Binding::Assignment(uint8(a) | uint8(b));
-}
-
-inline constexpr Binding::Assignment operator|=(Binding::Assignment& a, Binding::Assignment b) {
-	return a = Binding::Assignment(uint8(a) | uint8(b));
-}
+ENUM_OPERATIONS(Binding::Assignment, uint8)
 
 inline Binding::Binding() :
 	asg(ASG_NONE)
 {}
+
+inline bool Binding::isHolder() const {
+	return type >= Type::scrollUp;
+}
+
+inline uint8 Binding::canRepeat() const {
+	return type >= Type::up && type <= Type::right;
+}
 
 inline SDL_Scancode Binding::getKey() const {
 	return key;
@@ -279,18 +257,6 @@ inline bool Binding::gposAxisAssigned() const {
 
 inline bool Binding::gnegAxisAssigned() const {
 	return asg & ASG_GAXIS_N;
-}
-
-inline bool Binding::isAxis() const {
-	return callAxis;
-}
-
-inline SBCall Binding::getBcall() const {
-	return bcall;
-}
-
-inline SACall Binding::getAcall() const {
-	return acall;
 }
 
 class PicLim {

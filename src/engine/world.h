@@ -2,13 +2,16 @@
 
 #include "windowSys.h"
 
-// class that makes accessing stuff easier
+// class that makes accessing stuff easier and holds command line arguments
 class World {
 private:
 	static WindowSys windowSys;			// the thing on which everything runs
-	static vector<string> argVals;
-	static uset<string> argFlags;
-	static umap<string, string> argOpts;
+	static vector<string> vals;
+	static uset<string> flags;
+	static umap<string, string> opts;
+
+	static const uset<string> checkFlags;
+	static const umap<string, string> checkOpts;
 
 public:
 	static FileSys* fileSys();
@@ -22,30 +25,15 @@ public:
 	static Browser* browser();
 	static Settings* sets();
 
-	static const vector<string>& getArgVals();
-	static const uset<string>& getArgFlags();
-	static const umap<string, string>& getArgOpts();
-
-#ifdef _WIN32
-#ifdef _DEBUG
-	static void init(int argc, wchar** argv);
-#else
-	static void init(wchar* argstr);
-#endif
-#else
-	static void init(int argc, char** argv);
-#endif
+	static const vector<string>& getVals();
+	static bool hasFlag(const char* key);
+	static const char* getOpt(const char* key);
+	template <class C, class F> static void setArgs(int argc, C** argv, F conv);
 
 	template <class F, class... A> static void prun(F func, A... args);
 	template <class F, class... A> static void srun(F func, A... args);
 private:
 	template <class C, class F, class... A> static void run(C* obj, F func, A... args);
-
-#ifdef _WIN32
-	static void setArgs(int i, int argc, wchar** argv);
-#else
-	static void setArgs(int i, int argc, char** argv);
-#endif
 };
 
 inline FileSys* World::fileSys() {
@@ -88,16 +76,33 @@ inline Settings* World::sets() {
 	return windowSys.getSets();
 }
 
-inline const vector<string>&World::getArgVals() {
-	return argVals;
+inline const vector<string>& World::getVals() {
+	return vals;
 }
 
-inline const uset<string>&World::getArgFlags() {
-	return argFlags;
+inline bool World::hasFlag(const char* key) {
+	return flags.count(key);
 }
 
-inline const umap<string, string>&World::getArgOpts() {
-	return argOpts;
+inline const char* World::getOpt(const char* key) {
+	umap<string, string>::const_iterator it = opts.find(key);
+	return it != opts.end() ? it->second.c_str() : nullptr;
+}
+
+template <class C, class F>
+void World::setArgs(int argc, C** argv, F conv) {
+	for (int i = 0; i < argc; i++) {
+		if (argv[i][0] == '-') {
+			if (string key = conv(argv[i] + 1); checkOpts.count(key) && i + 1 < argc)
+				opts.emplace(key, conv(argv[++i]));
+			else if (checkFlags.count(key))
+				flags.insert(key);
+			else
+				vals.push_back(conv(argv[i]));
+		} else
+			vals.push_back(conv(argv[i]));
+	}
+	vals.shrink_to_fit();
 }
 
 template <class F, class... A>
@@ -115,12 +120,3 @@ void World::run(C* obj, F func, A... args) {
 	if (func)
 		(obj->*func)(args...);
 }
-#if defined(_WIN32) && defined(_DEBUG)
-inline void World::init(int argc, wchar** argv) {
-	setArgs(1, argc, argv);
-}
-#elif !defined(_WIN32)
-inline void World::init(int argc, char** argv) {
-	setArgs(1, argc, argv);
-}
-#endif

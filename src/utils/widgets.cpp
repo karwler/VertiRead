@@ -12,6 +12,10 @@ bool Widget::navSelectable() const {
 	return false;
 }
 
+bool Widget::hasDoubleclick() const {
+	return false;
+}
+
 void Widget::setParent(Layout* pnt, sizet id) {
 	parent = pnt;
 	pcID = id;
@@ -29,7 +33,7 @@ Rect Widget::frame() const {
 	return parent->frame();
 }
 
-void Widget::onNavSelect(const Direction& dir) {
+void Widget::onNavSelect(Direction dir) {
 	parent->navSelectNext(pcID, dir.vertical() ? center().x : center().y, dir);
 }
 
@@ -64,21 +68,27 @@ Button::Button(const Size& relSize, PCall leftCall, PCall rightCall, PCall doubl
 	dcall(doubleCall)
 {}
 
-void Button::onClick(const vec2i&, uint8 mBut) {
+void Button::onClick(vec2i, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		parent->selectWidget(pcID);
 		World::prun(lcall, this);
-	} else if (mBut == SDL_BUTTON_RIGHT)
+	} else if (mBut == SDL_BUTTON_RIGHT) {
+		parent->deselectWidget(pcID);
 		World::prun(rcall, this);
+	}
 }
 
-void Button::onDoubleClick(const vec2i&, uint8 mBut) {
+void Button::onDoubleClick(vec2i, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT)
 		World::prun(dcall, this);
 }
 
 bool Button::navSelectable() const {
 	return lcall || rcall || dcall;
+}
+
+bool Button::hasDoubleclick() const {
+	return dcall;
 }
 
 Color Button::color() const {
@@ -100,7 +110,7 @@ void CheckBox::drawSelf() const {
 	World::drawSys()->drawCheckBox(this);
 }
 
-void CheckBox::onClick(const vec2i& mPos, uint8 mBut) {
+void CheckBox::onClick(vec2i mPos, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT || mBut == SDL_BUTTON_RIGHT)
 		toggle();
 	Button::onClick(mPos, mBut);
@@ -126,12 +136,12 @@ void Slider::drawSelf() const {
 	World::drawSys()->drawSlider(this);
 }
 
-void Slider::onClick(const vec2i&, uint8 mBut) {
+void Slider::onClick(vec2i, uint8 mBut) {
 	if (mBut == SDL_BUTTON_RIGHT)
 		World::prun(rcall, this);
 }
 
-void Slider::onHold(const vec2i& mPos, uint8 mBut) {
+void Slider::onHold(vec2i mPos, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		World::scene()->capture = this;
 		if (int sp = sliderPos(); outRange(mPos.x, sp, sp + barSize))	// if mouse outside of slider
@@ -140,7 +150,7 @@ void Slider::onHold(const vec2i& mPos, uint8 mBut) {
 	}
 }
 
-void Slider::onDrag(const vec2i& mPos, const vec2i&) {
+void Slider::onDrag(vec2i mPos, vec2i) {
 	setSlider(mPos.x - diffSliderMouse);
 }
 
@@ -191,10 +201,10 @@ Rect ProgressBar::barRect() const {
 
 // LABEL
 
-Label::Label(const Size& relSize, const string& text, PCall leftCall, PCall rightCall, PCall doubleCall, Alignment alignment, SDL_Texture* tex, bool showBG, int textMargin, int texMargin, Layout* parent, sizet id) :
+Label::Label(const Size& relSize, string text, PCall leftCall, PCall rightCall, PCall doubleCall, Alignment alignment, SDL_Texture* tex, bool showBG, int textMargin, int texMargin, Layout* parent, sizet id) :
 	Button(relSize, leftCall, rightCall, doubleCall, showBG, tex, texMargin, parent, id),
 	textTex(nullptr),
-	text(text),
+	text(std::move(text)),
 	textMargin(textMargin),
 	align(alignment)
 {}
@@ -215,8 +225,8 @@ void Label::postInit() {
 	updateTextTex();
 }
 
-void Label::setText(const string& str) {
-	text = str;
+void Label::setText(string str) {
+	text = std::move(str);
 	updateTextTex();
 }
 
@@ -262,7 +272,7 @@ void Label::updateTextTex() {
 // SWITCH BOX
 
 SwitchBox::SwitchBox(const Size& relSize, const string* opts, sizet ocnt, const string& curOption, PCall call, Alignment alignment, SDL_Texture* tex, bool showBG, int textMargin, int texMargin, Layout* parent, sizet id) :
-	Label(relSize, curOption, call, call, nullptr, alignment, tex, showBG, textMargin, texMargin, parent, id),
+	Label(relSize, std::move(curOption), call, call, nullptr, alignment, tex, showBG, textMargin, texMargin, parent, id),
 	options(opts, opts + ocnt),
 	curOpt(sizet(std::find(options.begin(), options.end(), curOption) - options.begin()))
 {
@@ -270,7 +280,7 @@ SwitchBox::SwitchBox(const Size& relSize, const string* opts, sizet ocnt, const 
 		curOpt = 0;
 }
 
-void SwitchBox::onClick(const vec2i& mPos, uint8 mBut) {
+void SwitchBox::onClick(vec2i mPos, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT)
 		shiftOption(true);
 	else if (mBut == SDL_BUTTON_RIGHT)
@@ -286,8 +296,8 @@ void SwitchBox::shiftOption(bool fwd) {
 
 // LABEL EDIT
 
-LabelEdit::LabelEdit(const Size& relSize, const string& text, PCall leftCall, PCall rightCall, PCall doubleCall, TextType type, bool unfocusConfirm, SDL_Texture* tex, bool showBG, int textMargin, int texMargin, Layout* parent, sizet id) :
-	Label(relSize, text, leftCall, rightCall, doubleCall, Alignment::left, tex, showBG, textMargin, texMargin, parent, id),
+LabelEdit::LabelEdit(const Size& relSize, string line, PCall leftCall, PCall rightCall, PCall doubleCall, TextType type, bool unfocusConfirm, SDL_Texture* tex, bool showBG, int textMargin, int texMargin, Layout* parent, sizet id) :
+	Label(relSize, std::move(line), leftCall, rightCall, doubleCall, Alignment::left, tex, showBG, textMargin, texMargin, parent, id),
 	unfocusConfirm(unfocusConfirm),
 	textType(type),
 	textOfs(0),
@@ -297,11 +307,11 @@ LabelEdit::LabelEdit(const Size& relSize, const string& text, PCall leftCall, PC
 	cleanText();
 }
 
-void LabelEdit::onClick(const vec2i&, uint8 mBut) {
+void LabelEdit::onClick(vec2i, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		World::scene()->capture = this;
 		SDL_StartTextInput();
-		setCPos(text.length());
+		setCPos(uint(text.length()));
 	} else if (mBut == SDL_BUTTON_RIGHT)
 		World::prun(rcall, this);
 }
@@ -320,13 +330,13 @@ void LabelEdit::onKeypress(const SDL_Keysym& key) {
 		if (key.mod & KMOD_LALT)	// if holding alt skip word
 			setCPos(findWordEnd());
 		else if (key.mod & KMOD_CTRL)	// if holding ctrl go to end
-			setCPos(text.length());
+			setCPos(uint(text.length()));
 		else if (cpos < text.length())	// otherwise go right by one
 			setCPos(cpos + 1);
 		break;
 	case SDL_SCANCODE_BACKSPACE:	// delete left
 		if (key.mod & KMOD_LALT) {	// if holding alt delete left word
-			sizet id = findWordStart();
+			uint id = findWordStart();
 			text.erase(id, cpos - id);
 			updateTextTex();
 			setCPos(id);
@@ -356,7 +366,7 @@ void LabelEdit::onKeypress(const SDL_Keysym& key) {
 		setCPos(0);
 		break;
 	case SDL_SCANCODE_END:	// move caret to end
-		setCPos(text.length());
+		setCPos(uint(text.length()));
 		break;
 	case SDL_SCANCODE_V:	// paste text
 		if (key.mod & KMOD_CTRL)
@@ -372,12 +382,12 @@ void LabelEdit::onKeypress(const SDL_Keysym& key) {
 	case SDL_SCANCODE_X:	// cut text
 		if (key.mod & KMOD_CTRL) {
 			SDL_SetClipboardText(text.c_str());
-			setText(emptyStr);
+			setText(string());
 		}
 		break;
 	case SDL_SCANCODE_Z:	// set text to old text
 		if (key.mod & KMOD_CTRL)
-			setText(string(oldText));
+			setText(std::move(oldText));
 		break;
 	case SDL_SCANCODE_RETURN:
 		confirm();
@@ -392,7 +402,7 @@ void LabelEdit::onText(const string& str) {
 	text.insert(cpos, str);
 	cleanText();
 	updateTextTex();
-	setCPos(cpos + (text.length() - olen));
+	setCPos(cpos + uint(text.length() - olen));
 }
 
 vec2i LabelEdit::textPos() const {
@@ -400,13 +410,13 @@ vec2i LabelEdit::textPos() const {
 	return vec2i(pos.x + textOfs + textIconOffset() + textMargin, pos.y);
 }
 
-void LabelEdit::setText(const string& str) {
-	oldText = text;
-	text = str;
+void LabelEdit::setText(string str) {
+	oldText = std::move(text);
+	text = std::move(str);
 
 	cleanText();
 	updateTextTex();
-	setCPos(text.length());
+	setCPos(uint(text.length()));
 }
 
 Rect LabelEdit::caretRect() const {
@@ -414,7 +424,7 @@ Rect LabelEdit::caretRect() const {
 	return { caretPos() + ps.x + textIconOffset() + textMargin, ps.y, caretWidth, size().y };
 }
 
-void LabelEdit::setCPos(sizet cp) {
+void LabelEdit::setCPos(uint cp) {
 	cpos = cp;
 	if (int cl = caretPos(); cl < 0)
 		textOfs -= cl;
@@ -442,8 +452,8 @@ void LabelEdit::cancel() {
 	SDL_StopTextInput();
 }
 
-sizet LabelEdit::findWordStart() {
-	sizet i = cpos;
+uint LabelEdit::findWordStart() {
+	uint i = cpos;
 	if (notSpace(text[i]) && i > 0 && isSpace(text[i-1]))	// skip if first letter of word
 		i--;
 	for (; isSpace(text[i]) && i > 0; i--);		// skip first spaces
@@ -451,8 +461,8 @@ sizet LabelEdit::findWordStart() {
 	return i == 0 ? i : i + 1;			// correct position if necessary
 }
 
-sizet LabelEdit::findWordEnd() {
-	sizet i = cpos;
+uint LabelEdit::findWordEnd() {
+	uint i = cpos;
 	for (; isSpace(text[i]) && i < text.length(); i++);		// skip first spaces
 	for (; notSpace(text[i]) && i < text.length(); i++);	// skip word
 	return i;
@@ -594,8 +604,6 @@ void LabelEdit::cleanUFloatSpacedText() {
 
 // KEY GETTER
 
-const string KeyGetter::ellipsisStr = "...";
-
 const umap<uint8, string> KeyGetter::hatNames = {
 	pair(SDL_HAT_CENTERED, "Center"),
 	pair(SDL_HAT_UP, "Up"),
@@ -641,7 +649,7 @@ KeyGetter::KeyGetter(const Size& relSize, AcceptType type, Binding::Type binding
 	bindingType(binding)
 {}
 
-void KeyGetter::onClick(const vec2i&, uint8 mBut) {
+void KeyGetter::onClick(vec2i, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		World::scene()->capture = this;
 		setText(ellipsisStr);
@@ -720,7 +728,7 @@ void KeyGetter::clearBinding() {
 	case AcceptType::gamepad:
 		World::inputSys()->getBinding(bindingType).clearAsgGct();
 	}
-	setText(emptyStr);
+	setText(string());
 }
 
 string KeyGetter::bindingText(Binding::Type binding, KeyGetter::AcceptType accept) {
@@ -743,5 +751,5 @@ string KeyGetter::bindingText(Binding::Type binding, KeyGetter::AcceptType accep
 		else if (bind.gaxisAssigned())
 			return (bind.gposAxisAssigned() ? prefAxisPos : prefAxisNeg) + gaxisNames[uint8(bind.getGaxis())];
 	}
-	return emptyStr;
+	return string();
 }

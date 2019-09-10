@@ -24,34 +24,7 @@ enum FileType : uint8 {
 	FTYPE_STD = 0x03,	// REG | DIR
 	FTYPE_ANY = 0xFF
 };
-
-inline constexpr FileType operator~(FileType a) {
-	return FileType(~uint8(a));
-}
-
-inline constexpr FileType operator&(FileType a, FileType b) {
-	return FileType(uint8(a) & uint8(b));
-}
-
-inline constexpr FileType operator&=(FileType& a, FileType b) {
-	return a = FileType(uint8(a) & uint8(b));
-}
-
-inline constexpr FileType operator^(FileType a, FileType b) {
-	return FileType(uint8(a) ^ uint8(b));
-}
-
-inline constexpr FileType operator^=(FileType& a, FileType b) {
-	return a = FileType(uint8(a) ^ uint8(b));
-}
-
-inline constexpr FileType operator|(FileType a, FileType b) {
-	return FileType(uint8(a) | uint8(b));
-}
-
-inline constexpr FileType operator|=(FileType& a, FileType b) {
-	return a = FileType(uint8(a) | uint8(b));
-}
+ENUM_OPERATIONS(FileType, uint8)
 
 /* For interpreting lines in ini files:
    The first equal sign to be read splits the line into property and value, therefore titles can't contain equal signs.
@@ -199,9 +172,9 @@ public:
 	bool saveBindings(const array<Binding, Binding::names.size()>& bindings);
 	string findFont(const string& font);	// on success returns absolute path to font file, otherwise returns empty path
 
-	static vector<string> listDir(const string& drc, FileType filter = FTYPE_STD, bool showHidden = true, bool readLinks = true);
+	static vector<string> listDir(string drc, FileType filter = FTYPE_STD, bool showHidden = true, bool readLinks = true);
 	static int iterateDirRec(const string& drc, const std::function<int (string)>& call, FileType filter = FTYPE_STD, bool readLinks = true, bool followLinks = false);
-	static pair<vector<string>, vector<string>> listDirSep(const string& drc, FileType filter = FTYPE_REG, bool showHidden = true, bool readLinks = true);	// first is list of files, second is list of directories
+	static pair<vector<string>, vector<string>> listDirSep(string drc, FileType filter = FTYPE_REG, bool showHidden = true, bool readLinks = true);	// first is list of files, second is list of directories
 
 	static string validateFilename(string file);
 	static bool createDir(const string& path);
@@ -218,9 +191,6 @@ public:
 	static SDL_Surface* loadArchivePicture(archive* arch, archive_entry* entry);
 
 	static int moveContentThreaded(void* data);	// moves files from one directory to another (data points to a thread and the thread's data is a pair of strings; src, dst)
-#ifdef _WIN32
-	static string wgetenv(const string& name);
-#endif
 	const string& getDirSets() const;
 
 private:
@@ -246,7 +216,7 @@ inline const string& FileSys::getDirSets() const {
 
 inline bool FileSys::createDir(const string& path) {
 #ifdef _WIN32
-	return CreateDirectoryW(stow(path).c_str(), 0);
+	return CreateDirectoryW(sstow(path).c_str(), 0);
 #else
 	return !mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 #endif

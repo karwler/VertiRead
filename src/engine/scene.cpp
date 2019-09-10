@@ -2,7 +2,7 @@
 
 // CLICK STAMP
 
-ClickStamp::ClickStamp(Widget* widget, ScrollArea* area, const vec2i& mPos) :
+ClickStamp::ClickStamp(Widget* widget, ScrollArea* area, vec2i mPos) :
 	widget(widget),
 	area(area),
 	mPos(mPos)
@@ -24,9 +24,8 @@ void Scene::tick(float dSec) {
 		overlay->tick(dSec);
 }
 
-void Scene::onMouseMove(const vec2i& mPos, const vec2i& mMov) {
+void Scene::onMouseMove(vec2i mPos, vec2i mMov) {
 	select = getSelected(mPos, topLayout(mPos));
-
 	if (capture)
 		capture->onDrag(mPos, mMov);
 
@@ -37,36 +36,33 @@ void Scene::onMouseMove(const vec2i& mPos, const vec2i& mMov) {
 		overlay->onMouseMove(mPos, mMov);
 }
 
-void Scene::onMouseDown(const vec2i& mPos, uint8 mBut, uint8 mCnt) {
+void Scene::onMouseDown(vec2i mPos, uint8 mBut, uint8 mCnt) {
 	if (LabelEdit* box = dynamic_cast<LabelEdit*>(capture); !popup && box && box->unfocusConfirm)	// confirm entered text if such a thing exists and it wants to, unless it's in a popup (that thing handles itself)
 		box->confirm();
 	if (KeyGetter* box = dynamic_cast<KeyGetter*>(capture)) {	// cancel key getting process if necessary
 		box->restoreText();
 		capture = nullptr;
 	}
-	
+
 	select = getSelected(mPos, topLayout(mPos));	// update in case selection has changed through keys while cursor remained at the old position
-	if (mCnt == 1) {
-		stamps[mBut] = ClickStamp(select, getSelectedScrollArea(), mPos);
-		if (stamps[mBut].area)	// area goes first so widget can overwrite it's capture
-			stamps[mBut].area->onHold(mPos, mBut);
-		if (stamps[mBut].widget != stamps[mBut].area)
-			stamps[mBut].widget->onHold(mPos, mBut);
-	} else if (mCnt == 2 && select && stamps[mBut].widget == select && cursorInClickRange(mPos, mBut))
+	if (uint8 bid = mBut - 1; mCnt == 1) {
+		stamps[mBut-1] = ClickStamp(select, getSelectedScrollArea(), mPos);
+		if (stamps[bid].area)	// area goes first so widget can overwrite it's capture
+			stamps[bid].area->onHold(mPos, mBut);
+		if (stamps[bid].widget != stamps[bid].area)
+			stamps[bid].widget->onHold(mPos, mBut);
+	} else if (mCnt == 2 && select && stamps[bid].widget == select && cursorInClickRange(mPos, mBut))
 		select->onDoubleClick(mPos, mBut);
 }
 
-void Scene::onMouseUp(const vec2i& mPos, uint8 mBut, uint8 mCnt) {
-	if (mCnt != 1)
-		return;
-	
-	if (capture)
+void Scene::onMouseUp(vec2i mPos, uint8 mBut, uint8 mCnt) {
+	if (capture && mCnt == 1)
 		capture->onUndrag(mBut);
-	if (select && stamps[mBut].widget == select && cursorInClickRange(mPos, mBut))
-		stamps[mBut].widget->onClick(mPos, mBut);
+	if (select && stamps[mBut-1].widget == select && cursorInClickRange(mPos, mBut) && !(mCnt != 1 && select->hasDoubleclick()))
+		select->onClick(mPos, mBut);
 }
 
-void Scene::onMouseWheel(const vec2i& wMov) {
+void Scene::onMouseWheel(vec2i wMov) {
 	if (ScrollArea* box = getSelectedScrollArea())
 		box->onScroll(wMov * scrollFactorWheel);
 	else if (select)
@@ -74,10 +70,8 @@ void Scene::onMouseWheel(const vec2i& wMov) {
 }
 
 void Scene::onMouseLeave() {
-	for (ClickStamp& it : stamps) {
-		it.widget = nullptr;
-		it.area = nullptr;
-	}
+	for (ClickStamp& it : stamps)
+		it.widget = it.area = nullptr;
 }
 
 void Scene::onResize() {
@@ -117,7 +111,7 @@ void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
 	onMouseMove(mousePos(), 0);
 }
 
-Widget* Scene::getSelected(const vec2i& mPos, Layout* box) {
+Widget* Scene::getSelected(vec2i mPos, Layout* box) {
 	for (;;) {
 		Rect frame = box->frame();
 		if (vector<Widget*>::const_iterator it = std::find_if(box->getWidgets().begin(), box->getWidgets().end(), [&frame, &mPos](const Widget* wi) -> bool { return wi->rect().intersect(frame).contain(mPos); }); it != box->getWidgets().end()) {
@@ -140,7 +134,7 @@ ScrollArea* Scene::getSelectedScrollArea() const {
 	return dynamic_cast<ScrollArea*>(parent);
 }
 
-bool Scene::overlayFocused(const vec2i& mPos) {
+bool Scene::overlayFocused(vec2i mPos) {
 	if (!overlay)
 		return false;
 
@@ -153,17 +147,13 @@ void Scene::selectFirst() {
 	if (popup || overlay)
 		return;
 
-	Layout* lay;
-	if (Layout* next = dynamic_cast<Layout*>(select))
-		lay = next;
-	else
-		lay = layout.get();
-
+	Layout* next = dynamic_cast<Layout*>(select);
+	Layout* lay = next ? next : layout.get();
 	for (sizet id = 0; lay;) {
 		if (id >= lay->getWidgets().size()) {
 			id = lay->getID() + 1;
 			lay = lay->getParent();
-		} else if (Layout* next = dynamic_cast<Layout*>(lay->getWidget(id)))
+		} else if (next = dynamic_cast<Layout*>(lay->getWidget(id)))
 			lay = next;
 		else if (lay->getWidget(id)->navSelectable()) {
 			select = lay->getWidget(0);

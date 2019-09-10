@@ -1,20 +1,20 @@
 #include "engine/world.h"
 
-Browser::Browser(const string& rootDirectory, const string& curDirectory, PCall exitCall) :
+Browser::Browser(string rootDirectory, string curDirectory, PCall exitCall) :
 	exCall(exitCall),
-	rootDir(rootDirectory),
+	rootDir(std::move(rootDirectory)),
+	curDir(curDirectory.empty() ? rootDir : std::move(curDirectory)),
 	inArchive(false)
 {
-	curDir = curDirectory.empty() ? rootDir : curDirectory;
 	if (FileSys::fileType(rootDir) != FTYPE_DIR || FileSys::fileType(curDir) != FTYPE_DIR || !isSubpath(curDir, rootDir))
 		throw std::runtime_error("invalid file browser arguments");
 }
 
-Browser::Browser(const string& rootDirectory, const string& container, const string& file, PCall exitCall, bool checkFile) :
+Browser::Browser(string rootDirectory, string container, string file, PCall exitCall, bool checkFile) :
 	exCall(exitCall),
-	rootDir(rootDirectory),
-	curDir(container),
-	curFile(file)
+	rootDir(std::move(rootDirectory)),
+	curDir(std::move(container)),
+	curFile(std::move(file))
 {
 	if (FileSys::fileType(rootDir) != FTYPE_DIR || !isSubpath(curDir, rootDir))
 		throw std::runtime_error("invalid archive browser arguments");
@@ -134,15 +134,15 @@ string Browser::nextDirFile(const string& file, bool fwd) const {
 			if (FileSys::isPicture(childPath(curDir, files[i])))
 				return files[i];
 	}
-	return emptyStr;
+	return string();
 }
 
 string Browser::nextArchiveFile(const string& file, bool fwd) const {
 	if (file.empty())
-		return emptyStr;
+		return string();
 	archive* arch = FileSys::openArchive(curDir);
 	if (!arch)
-		return emptyStr;
+		return string();
 
 	// list loadable pictures in archive
 	vector<string> pics;
@@ -156,7 +156,7 @@ string Browser::nextArchiveFile(const string& file, bool fwd) const {
 
 	// get next picture if there's one
 	sizet i = sizet(std::find(pics.begin(), pics.end(), file) - pics.begin()) + btom<sizet>(fwd);
-	return i < pics.size() ? pics[i] : emptyStr;
+	return i < pics.size() ? pics[i] : string();
 }
 
 pair<vector<string>, vector<string>> Browser::listCurDir() const {

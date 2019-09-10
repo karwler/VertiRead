@@ -3,7 +3,7 @@
 // PROGRAM
 
 void Program::start() {
-	if (!(!World::getArgVals().empty() && openFile(World::getArgVals()[0])))
+	if (!(!World::getVals().empty() && openFile(World::getVals()[0])))
 		eventOpenBookList();
 }
 
@@ -39,7 +39,7 @@ void Program::eventUser(const SDL_UserEvent& user) {
 
 void Program::eventOpenPageBrowser(Button* but) {
 	Label* lbl = dynamic_cast<Label*>(but);
-	browser.reset(new Browser(lbl ? childPath(World::sets()->getDirLib(), lbl->getText()) : dseps, emptyStr, &Program::eventOpenBookList));
+	browser.reset(new Browser(lbl ? childPath(World::sets()->getDirLib(), lbl->getText()) : dseps, "", &Program::eventOpenBookList));
 	setState(new ProgPageBrowser);
 }
 
@@ -62,7 +62,7 @@ bool Program::openFile(const string& file) {
 	case FTYPE_REG:
 		try {
 			bool isPic = FileSys::isPicture(file);
-			browser.reset(new Browser(dseps, isPic ? parentPath(file) : file, isPic ? filename(file) : emptyStr, &Program::eventOpenBookList, false));
+			browser.reset(new Browser(dseps, isPic ? parentPath(file) : file, isPic ? filename(file) : string(), &Program::eventOpenBookList, false));
 			eventStartLoadingReader(file);
 		} catch (const std::runtime_error& e) {
 			std::cerr << e.what() << std::endl;
@@ -103,7 +103,7 @@ void Program::eventBrowserGoFile(Button* but) {
 }
 
 void Program::eventBrowserGoTo(Button* but) {
-	switch (LabelEdit* le = static_cast<LabelEdit*>(but); browser->goTo(browser->getRootDir() == dseps ? le->getText() : childPath(World::sets()->getDirLib(), le->getText()))) {
+	switch (LabelEdit* le = static_cast<LabelEdit*>(but); browser->goTo(std::all_of(browser->getRootDir().begin(), browser->getRootDir().end(), isDsep) ? le->getText() : childPath(World::sets()->getDirLib(), le->getText()))) {
 	case FTYPE_DIR:
 		World::scene()->resetLayouts();
 		break;
@@ -180,7 +180,7 @@ void Program::switchPictures(bool fwd, const string& picname) {
 			return;
 		}
 	browser->goNext(fwd);
-	eventStartLoadingReader(emptyStr, fwd);
+	eventStartLoadingReader(string(), fwd);
 }
 
 void Program::eventExitReader(Button*) {
@@ -189,7 +189,7 @@ void Program::eventExitReader(Button*) {
 }
 
 // DOWNLOADER
-#ifdef _BUILD_DOWNLOADER
+#ifdef BUILD_DOWNLOADER
 void Program::eventOpenDownloader(Button*) {
 	setState(new ProgDownloader);
 }
@@ -211,8 +211,7 @@ void Program::eventShowComicInfo(Button* but) {
 	ProgDownloader* pd = static_cast<ProgDownloader*>(state.get());
 	WebSource* wsrc = downloader.getSource();
 	string url = pd->resultUrls[but->getID()];
-	vector<pairStr> chaps = wsrc->getChapters(url);
-	pd->printInfo(chaps);
+	pd->printInfo(wsrc->getChapters(url));
 }
 
 void Program::eventSelectAllChapters(Button* but) {
@@ -260,7 +259,7 @@ void Program::eventDownloadListProgress() {
 void Program::eventDownloadListNext() {
 	if (ProgDownloads* pd = dynamic_cast<ProgDownloads*>(state.get())) {
 		pd->list->deleteWidget(0);
-		if (pd->list->getWidgets().size()) {
+		if (!pd->list->getWidgets().empty()) {
 			Label* lb = static_cast<Label*>(static_cast<Layout*>(pd->list->getWidget(0))->getWidget(0));
 			lb->setText(lb->getText() + " - preparing");
 		}
@@ -308,7 +307,7 @@ void Program::eventSetSpacing(Button* but) {
 
 void Program::eventSetLibraryDirLE(Button* but) {
 	string oldLib = World::sets()->getDirLib();
-#ifdef _BUILD_DOWNLOADER
+#ifdef BUILD_DOWNLOADER
 	if (downloader.getDlState() != DownloadState::stop) {
 		World::scene()->setPopup(ProgState::createPopupMessage("Can't change while downloading.", &Program::eventClosePopup));
 		return;
@@ -340,9 +339,9 @@ void Program::offerMoveBooks(const string& oldLib) {
 
 void Program::eventOpenLibDirBrowser(Button*) {
 #ifdef _WIN32
-	browser.reset(new Browser(dseps, FileSys::wgetenv("UserProfile"), &Program::eventOpenSettings));
+	browser.reset(new Browser(dseps, SDL_getenv("UserProfile"), &Program::eventOpenSettings));
 #else
-	browser.reset(new Browser(dseps, getenv("HOME"), &Program::eventOpenSettings));
+	browser.reset(new Browser(dseps, SDL_getenv("HOME"), &Program::eventOpenSettings));
 #endif
 	setState(new ProgSearchDir);
 }
@@ -469,7 +468,7 @@ void Program::eventResetSettings(Button*) {
 	World::winSys()->resetSettings();
 }
 
-void Program::reposizeWindow(const vec2i& dres, const vec2i& wsiz) {
+void Program::reposizeWindow(vec2i dres, vec2i wsiz) {
 	World::winSys()->setWindowPos((dres - wsiz) / 2);
 	World::winSys()->setResolution(wsiz);
 }
@@ -491,7 +490,7 @@ void Program::eventClosePopup(Button*) {
 }
 
 void Program::eventTryExit(Button*) {
-#ifdef _BUILD_DOWNLOADER
+#ifdef BUILD_DOWNLOADER
 	if (downloader.getDlState() == DownloadState::stop)
 		eventForceExit();
 	else

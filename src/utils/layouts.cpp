@@ -2,13 +2,13 @@
 
 // LAYOUT
 
-Layout::Layout(const Size& relSize, const vector<Widget*>& children, const Direction& direction, Select select, int spacing, Layout* parent, sizet id) :
+Layout::Layout(const Size& relSize, vector<Widget*> children, Direction direction, Select select, int spacing, Layout* parent, sizet id) :
 	Widget(relSize, parent, id),
+	spacing(spacing),
 	selection(select),
-	direction(direction),
-	spacing(spacing)
+	direction(direction)
 {
-	initWidgets(children);
+	initWidgets(std::move(children));
 }
 
 Layout::~Layout() {
@@ -57,7 +57,7 @@ void Layout::postInit() {
 		it->postInit();
 }
 
-void Layout::onMouseMove(const vec2i& mPos, const vec2i& mMov) {
+void Layout::onMouseMove(vec2i mPos, vec2i mMov) {
 	for (Widget* it : widgets)
 		it->onMouseMove(mPos, mMov);
 }
@@ -66,7 +66,7 @@ bool Layout::navSelectable() const {
 	return !widgets.empty();
 }
 
-void Layout::navSelectNext(sizet id, int mid, const Direction& dir) {
+void Layout::navSelectNext(sizet id, int mid, Direction dir) {
 	if (dir.vertical() == direction.vertical()) {
 		if (dir.positive() ? id >= widgets.size()-1 : id == 0) {
 			if (parent)
@@ -77,20 +77,20 @@ void Layout::navSelectNext(sizet id, int mid, const Direction& dir) {
 		parent->navSelectNext(pcID, mid, dir);
 }
 
-void Layout::navSelectFrom(int mid, const Direction& dir) {
+void Layout::navSelectFrom(int mid, Direction dir) {
 	if (dir.vertical() == direction.vertical())
 		scanSequential(dir.positive() ? SIZE_MAX : widgets.size(), mid, dir);
 	else
 		scanPerpendicular(mid, dir);
 }
 
-void Layout::scanSequential(sizet id, int mid, const Direction& dir) {
+void Layout::scanSequential(sizet id, int mid, Direction dir) {
 	for (sizet mov = btom<sizet>(dir.positive()); (id += mov) < widgets.size() && !widgets[id]->navSelectable(););
 	if (id < widgets.size())
 		navSelectWidget(id, mid, dir);
 }
 
-void Layout::scanPerpendicular(int mid, const Direction& dir) {
+void Layout::scanPerpendicular(int mid, Direction dir) {
 	sizet id = 0;
 	for (uint hori = dir.horizontal(); id < widgets.size() && (!widgets[id]->navSelectable() || (wgtPosition(id)[hori] + wgtSize(id)[hori] < mid)); id++);
 
@@ -99,16 +99,16 @@ void Layout::scanPerpendicular(int mid, const Direction& dir) {
 	navSelectWidget(id, mid, dir);
 }
 
-void Layout::navSelectWidget(sizet id, int mid, const Direction& dir) {
+void Layout::navSelectWidget(sizet id, int mid, Direction dir) {
 	if (Layout* lay = dynamic_cast<Layout*>(widgets[id]))
 		lay->navSelectFrom(mid, dir);
 	else if (widgets[id]->navSelectable())
 		World::scene()->select = widgets[id];
 }
 
-void Layout::initWidgets(const vector<Widget*>& wgts) {
+void Layout::initWidgets(vector<Widget*> wgts) {
 	clear(widgets);
-	widgets = wgts;
+	widgets = std::move(wgts);
 	positions.resize(widgets.size() + 1);
 
 	if (direction.negative())
@@ -117,8 +117,8 @@ void Layout::initWidgets(const vector<Widget*>& wgts) {
 		widgets[i]->setParent(this, i);
 }
 
-void Layout::setWidgets(const vector<Widget*>& wgts) {
-	initWidgets(wgts);
+void Layout::setWidgets(vector<Widget*> wgts) {
+	initWidgets(std::move(wgts));
 	postInit();
 }
 
@@ -200,8 +200,8 @@ vec2t Layout::findMinMaxSelectedID() const {
 
 // POPUP
 
-Popup::Popup(const vec2s& relSize, const vector<Widget*>& children, const Direction& direction, int spacing) :
-	Layout(relSize.x, children, direction, Select::none, spacing, nullptr, SIZE_MAX),
+Popup::Popup(const vec2s& relSize, vector<Widget*> children, Direction direction, int spacing) :
+	Layout(relSize.x, std::move(children), direction, Select::none, spacing),
 	sizeY(relSize.y)
 {}
 
@@ -224,8 +224,8 @@ Rect Popup::frame() const {
 
 // OVERLAY
 
-Overlay::Overlay(const vec2s& position, const vec2s& relSize, const vec2s& activationPos, const vec2s& activationSize, const vector<Widget*>& children, const Direction& direction, int spacing) :
-	Popup(relSize, children, direction, spacing),
+Overlay::Overlay(const vec2s& position, const vec2s& relSize, const vec2s& activationPos, const vec2s& activationSize, vector<Widget*> children, Direction direction, int spacing) :
+	Popup(relSize, std::move(children), direction, spacing),
 	on(false),
 	pos(position),
 	actPos(activationPos),
@@ -244,8 +244,8 @@ Rect Overlay::actRect() const {
 
 // SCROLL AREA
 
-ScrollArea::ScrollArea(const Size& relSize, const vector<Widget*>& children, const Direction& direction, Select select, int spacing, Layout* parent, sizet id) :
-	Layout(relSize, children, direction, select, spacing, parent, id),
+ScrollArea::ScrollArea(const Size& relSize, vector<Widget*> children, Direction direction, Select select, int spacing, Layout* parent, sizet id) :
+	Layout(relSize, std::move(children), direction, select, spacing, parent, id),
 	draggingSlider(false),
 	listPos(0),
 	motion(0.f),
@@ -276,7 +276,7 @@ void ScrollArea::postInit() {
 	listPos = direction.positive() ? 0 : listLim();
 }
 
-void ScrollArea::onHold(const vec2i& mPos, uint8 mBut) {
+void ScrollArea::onHold(vec2i mPos, uint8 mBut) {
 	motion = 0.f;	// get rid of scroll motion
 
 	if (mBut == SDL_BUTTON_LEFT) {	// check scroll bar left click
@@ -290,7 +290,7 @@ void ScrollArea::onHold(const vec2i& mPos, uint8 mBut) {
 	}
 }
 
-void ScrollArea::onDrag(const vec2i& mPos, const vec2i& mMov) {
+void ScrollArea::onDrag(vec2i mPos, vec2i mMov) {
 	if (draggingSlider)
 		setSlider(mPos.y - diffSliderMouse);
 	else if (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON(SDL_BUTTON_RIGHT))
@@ -309,17 +309,17 @@ void ScrollArea::onUndrag(uint8 mBut) {
 	}
 }
 
-void ScrollArea::onScroll(const vec2i& wMov) {
+void ScrollArea::onScroll(vec2i wMov) {
 	moveListPos(wMov.swap(direction.horizontal()));
 	motion = 0.f;
 }
 
-void ScrollArea::navSelectNext(sizet id, int mid, const Direction& dir) {
+void ScrollArea::navSelectNext(sizet id, int mid, Direction dir) {
 	Layout::navSelectNext(id, mid, dir);
 	scrollToSelected();
 }
 
-void ScrollArea::navSelectFrom(int mid, const Direction& dir) {
+void ScrollArea::navSelectFrom(int mid, Direction dir) {
 	Layout::navSelectFrom(mid, dir);
 	scrollToSelected();
 }
@@ -478,8 +478,8 @@ vec2t ScrollArea::visibleWidgets() const {
 
 // TILE BOX
 
-TileBox::TileBox(const Size& relSize, const vector<Widget*>& children, int childHeight, const Direction& direction, Select select, int spacing, Layout* parent, sizet id) :
-	ScrollArea(relSize, children, direction, select, spacing, parent, id),
+TileBox::TileBox(const Size& relSize, vector<Widget*> children, int childHeight, Direction direction, Select select, int spacing, Layout* parent, sizet id) :
+	ScrollArea(relSize, std::move(children), direction, select, spacing, parent, id),
 	wheight(childHeight)
 {}
 
@@ -503,7 +503,7 @@ void TileBox::onResize() {
 		it->onResize();
 }
 
-void TileBox::navSelectNext(sizet id, int mid, const Direction& dir) {
+void TileBox::navSelectNext(sizet id, int mid, Direction dir) {
 	if (dir.vertical())
 		scanVertically(id, mid, dir);
 	else
@@ -511,7 +511,7 @@ void TileBox::navSelectNext(sizet id, int mid, const Direction& dir) {
 	scrollToSelected();
 }
 
-void TileBox::navSelectFrom(int mid, const Direction& dir) {
+void TileBox::navSelectFrom(int mid, Direction dir) {
 	if (dir.positive())
 		scanFromStart(mid, dir);
 	else
@@ -519,7 +519,7 @@ void TileBox::navSelectFrom(int mid, const Direction& dir) {
 	scrollToSelected();
 }
 
-void TileBox::scanVertically(sizet id, int mid, const Direction& dir) {
+void TileBox::scanVertically(sizet id, int mid, Direction dir) {
 	if (int ypos = widgets[id]->position().y; dir.positive())
 		while (++id < widgets.size() && (!widgets[id]->navSelectable() || widgets[id]->position().y == ypos || widgets[id]->position().x + widgets[id]->size().x < mid));
 	else
@@ -527,7 +527,7 @@ void TileBox::scanVertically(sizet id, int mid, const Direction& dir) {
 	navSelectIfInRange(id, mid, dir);
 }
 
-void TileBox::scanHorizontally(sizet id, int mid, const Direction& dir) {
+void TileBox::scanHorizontally(sizet id, int mid, Direction dir) {
 	for (sizet mov = btom<sizet>(dir.positive()); (id += mov) < widgets.size() && !widgets[id]->navSelectable(););
 	if (id < widgets.size() && widgets[id]->center().y == mid)
 		navSelectWidget(id, mid, dir);
@@ -535,19 +535,19 @@ void TileBox::scanHorizontally(sizet id, int mid, const Direction& dir) {
 		parent->navSelectNext(pcID, mid, dir);
 }
 
-void TileBox::scanFromStart(int mid, const Direction& dir) {
+void TileBox::scanFromStart(int mid, Direction dir) {
 	sizet id = 0;
 	for (uint di = dir != Direction::down; id < widgets.size() && (!widgets[id]->navSelectable() || widgets[id]->position()[di] + widgets[id]->size()[di] < mid); id++);
 	navSelectIfInRange(id, mid, dir);
 }
 
-void TileBox::scanFromEnd(int mid, const Direction& dir) {
+void TileBox::scanFromEnd(int mid, Direction dir) {
 	sizet id = widgets.size() - 1;
 	for (uint di = dir != Direction::up; id < widgets.size() && (!widgets[id]->navSelectable() || widgets[id]->position()[di] > mid); id--);
 	navSelectIfInRange(id, mid, dir);
 }
 
-void TileBox::navSelectIfInRange(sizet id, int mid, const Direction& dir) {
+void TileBox::navSelectIfInRange(sizet id, int mid, Direction dir) {
 	if (id < widgets.size())
 		navSelectWidget(id, mid, dir);
 	else if (parent)
@@ -564,13 +564,15 @@ int TileBox::wgtREnd(sizet id) const {
 
 // READER BOX
 
-ReaderBox::ReaderBox(const Size& relSize, const vector<Texture>& imgs, const Direction& direction, float zoom, int spacing, Layout* parent, sizet id) :
+const string ReaderBox::emptyFile;
+
+ReaderBox::ReaderBox(const Size& relSize, vector<Texture> imgs, Direction direction, float zoom, int spacing, Layout* parent, sizet id) :
 	ScrollArea(relSize, {}, direction, Select::none, spacing, parent, id),
 	cursorTimer(menuHideTimeout),
 	zoom(zoom),
 	countDown(true)
 {
-	initWidgets(imgs);
+	initWidgets(std::move(imgs));
 }
 
 ReaderBox::~ReaderBox() {
@@ -629,7 +631,7 @@ void ReaderBox::postInit() {
 	centerList();
 }
 
-void ReaderBox::onMouseMove(const vec2i& mPos, const vec2i& mMov) {
+void ReaderBox::onMouseMove(vec2i mPos, vec2i mMov) {
 	Layout::onMouseMove(mPos, mMov);
 
 	countDown = World::scene()->cursorDisableable() && rect().contain(mPos) && !showBar() && World::scene()->capture != this && cursorTimer > 0.f;
@@ -639,11 +641,11 @@ void ReaderBox::onMouseMove(const vec2i& mPos, const vec2i& mMov) {
 	}
 }
 
-void ReaderBox::initWidgets(const vector<Texture>& imgs) {
+void ReaderBox::initWidgets(vector<Texture> imgs) {
 	clearTexVec(pics);
 	clear(widgets);
 
-	pics = imgs;
+	pics = std::move(imgs);
 	widgets.resize(pics.size());
 	positions.resize(pics.size()+1);
 
@@ -653,8 +655,8 @@ void ReaderBox::initWidgets(const vector<Texture>& imgs) {
 		widgets[i] = new Picture(0, false, pics[i].tex, 0, this, i);
 }
 
-void ReaderBox::setWidgets(const vector<Texture>& imgs) {
-	initWidgets(imgs);
+void ReaderBox::setWidgets(vector<Texture> imgs) {
+	initWidgets(std::move(imgs));
 	postInit();
 }
 

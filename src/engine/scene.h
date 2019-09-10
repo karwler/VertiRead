@@ -8,7 +8,7 @@ struct ClickStamp {
 	ScrollArea* area;
 	vec2i mPos;
 
-	ClickStamp(Widget* widget = nullptr, ScrollArea* area = nullptr, const vec2i& mPos = 0);
+	ClickStamp(Widget* widget = nullptr, ScrollArea* area = nullptr, vec2i mPos = 0);
 };
 
 // handles more backend UI interactions, works with widgets (UI elements), and contains Program and Library
@@ -20,7 +20,7 @@ private:
 	uptr<Layout> layout;
 	uptr<Popup> popup;
 	uptr<Overlay> overlay;
-	array<ClickStamp, SDL_BUTTON_X2+1> stamps;	// data about last mouse click (indexes are mouse button numbers
+	array<ClickStamp, SDL_BUTTON_RIGHT> stamps;	// data about last mouse click (indexes are mouse button numbers
 
 	static constexpr float clickMoveThreshold = 8.f;
 	static constexpr int scrollFactorWheel = 140;
@@ -29,10 +29,10 @@ public:
 	Scene();
 
 	void tick(float dSec);
-	void onMouseMove(const vec2i& mPos, const vec2i& mMov);
-	void onMouseDown(const vec2i& mPos, uint8 mBut, uint8 mCnt);
-	void onMouseUp(const vec2i& mPos, uint8 mBut, uint8 mCnt);
-	void onMouseWheel(const vec2i& wMov);
+	void onMouseMove(vec2i mPos, vec2i mMov);
+	void onMouseDown(vec2i mPos, uint8 mBut, uint8 mCnt);
+	void onMouseUp(vec2i mPos, uint8 mBut, uint8 mCnt);
+	void onMouseWheel(vec2i wMov);
 	void onMouseLeave();
 	void onText(const string& str);	// text input should only run if line edit is being captured, therefore a cast check isn't necessary
 	void onResize();
@@ -47,13 +47,13 @@ public:
 	void selectFirst();
 	sizet findSelectedID(Layout* box);	// get id of possibly select or select's parent in relation to box
 	bool cursorDisableable();
-	bool cursorInClickRange(const vec2i& mPos, uint8 mBut);
+	bool cursorInClickRange(vec2i mPos, uint8 mBut);
 
 private:
-	Widget* getSelected(const vec2i& mPos, Layout* box);
+	Widget* getSelected(vec2i mPos, Layout* box);
 	ScrollArea* getSelectedScrollArea() const;
-	bool overlayFocused(const vec2i& mPos);
-	Layout* topLayout(const vec2i& mPos);
+	bool overlayFocused(vec2i mPos);
+	Layout* topLayout(vec2i mPos);
 };
 
 inline void Scene::onText(const string& str) {
@@ -76,10 +76,10 @@ inline void Scene::setPopup(const pair<Popup*, Widget*>& popcap) {
 	setPopup(popcap.first, popcap.second);
 }
 
-inline bool Scene::cursorInClickRange(const vec2i& mPos, uint8 mBut) {
-	return vec2f(mPos - stamps[mBut].mPos).length() <= clickMoveThreshold;
+inline bool Scene::cursorInClickRange(vec2i mPos, uint8 mBut) {
+	return vec2f(mPos - stamps[mBut-1].mPos).length() <= clickMoveThreshold;
 }
 
-inline Layout* Scene::topLayout(const vec2i& mPos) {
+inline Layout* Scene::topLayout(vec2i mPos) {
 	return popup ? popup.get() : overlayFocused(mPos) ? overlay.get() : layout.get();
 }

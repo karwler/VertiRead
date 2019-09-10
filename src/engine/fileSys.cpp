@@ -85,11 +85,11 @@ FileSys::FileSys() {
 	if (setWorkingDir())
 		std::cerr << "failed to set working directory" << std::endl;
 #ifdef _WIN32
-	dirFonts = { "./", appDsep(wgetenv("SystemDrive")) + "Windows\\Fonts\\" };
-	dirSets = appDsep(wgetenv("AppData")) + WindowSys::title + dseps;
+	dirFonts = { "./", appDsep(SDL_getenv("SystemDrive")) + "Windows\\Fonts\\" };
+	dirSets = appDsep(SDL_getenv("AppData")) + WindowSys::title + dseps;
 #else
-	dirFonts = { "./", "/usr/share/fonts/", appDsep(getenv("HOME")) + ".fonts/" };
-	dirSets = appDsep(getenv("HOME")) + ".vertiread/";
+	dirFonts = { "./", "/usr/share/fonts/", appDsep(SDL_getenv("HOME")) + ".fonts/" };
+	dirSets = appDsep(SDL_getenv("HOME")) + ".vertiread/";
 #endif
 	// check if all (more or less) necessary files and directories exist
 	if (fileType(dirSets) != FTYPE_DIR && !createDir(dirSets))
@@ -102,7 +102,7 @@ FileSys::FileSys() {
 
 vector<string> FileSys::getAvailibleThemes() {
 	vector<string> themes;
-	for (IniLine il : readFileLines(fileThemes))
+	for (const IniLine il : readFileLines(fileThemes))
 		if (il.getType() == IniLine::Type::title)
 			themes.push_back(il.getPrp());
 	return themes;
@@ -131,7 +131,7 @@ bool FileSys::getLastPage(const string& book, string& drc, string& fname) {
 	for (const string& line : readFileLines(dirSets + fileBooks, false))
 		if (vector<string> words = strUnenclose(line); words.size() >= 2 && words[0] == book) {
 			drc = words[1];
-			fname = words.size() >= 3 ? words[2] : emptyStr;
+			fname = words.size() >= 3 ? words[2] : string();
 			return true;
 		}
 	return false;
@@ -142,15 +142,15 @@ bool FileSys::saveLastPage(const string& book, const string& drc, const string& 
 	vector<string>::iterator li = std::find_if(lines.begin(), lines.end(), [book](const string& it) -> bool { vector<string> words = strUnenclose(it); return words.size() >= 2 && words[0] == book; });
 
 	if (string ilin = strEnclose(book) + ' ' + strEnclose(drc) + ' ' + strEnclose(fname); li != lines.end())
-		*li = ilin;
+		*li = std::move(ilin);
 	else
-		lines.push_back(ilin);
+		lines.push_back(std::move(ilin));
 	return writeTextFile(dirSets + fileBooks, lines);
 }
 
 Settings* FileSys::loadSettings() {
 	Settings* sets = new Settings;
-	for (IniLine il : readFileLines(dirSets + fileSettings, false)) {
+	for (const IniLine il : readFileLines(dirSets + fileSettings, false)) {
 		if (il.getType() != IniLine::Type::prpVal)
 			continue;
 
@@ -208,9 +208,9 @@ bool FileSys::saveSettings(const Settings* sets) {
 array<Binding, Binding::names.size()> FileSys::getBindings() {
 	array<Binding, Binding::names.size()> bindings;
 	for (sizet i = 0; i < bindings.size(); i++)
-		bindings[i].setDefaultSelf(Binding::Type(i));
+		bindings[i].reset(Binding::Type(i));
 	
-	for (IniLine il : readFileLines(dirSets + fileBindings, false)) {
+	for (const IniLine il : readFileLines(dirSets + fileBindings, false)) {
 		if (il.getType() != IniLine::Type::prpVal || il.getVal().length() < 3)
 			continue;
 		sizet bid = strToEnum<sizet>(Binding::names, il.getPrp());
@@ -271,7 +271,7 @@ vector<string> FileSys::readFileLines(const string& file, bool printMessage) {
 		if (c != '\n' && c != '\r')
 			lines.back() += char(c);
 		else if (!lines.back().empty())
-			lines.push_back(emptyStr);
+			lines.emplace_back();
 	}
 	if (lines.back().empty())
 		lines.pop_back();
@@ -279,20 +279,19 @@ vector<string> FileSys::readFileLines(const string& file, bool printMessage) {
 }
 
 string FileSys::readTextFile(const string& file, bool printMessage) {
+	string text;
 	FILE* ifh = fopen(file.c_str(), defaultFrMode);
 	if (!ifh) {
 		if (printMessage)
 			std::cerr << "failed to open file " << file << std::endl;
-		return "";
+		return text;
 	}
 	fseek(ifh, 0, SEEK_END);
-	sizet len = sizet(ftell(ifh));
+	text.resize(sizet(ftell(ifh)));
 	fseek(ifh, 0, SEEK_SET);
 
-	string text;
-	text.resize(len);
-	fread(text.data(), sizeof(char), len, ifh);
-
+	if (sizet read = fread(text.data(), sizeof(*text.data()), text.length(), ifh); read < text.length())
+		text.resize(read);
 	fclose(ifh);
 	return text;
 }
@@ -329,7 +328,7 @@ SDL_Color FileSys::readColor(const string& line) {
 		while (*++pos == '#');
 		char* end;
 		if (uint32 num = uint32(strtoul(pos, &end, 0x10)); end != pos) {
-			if (uint32 mov = (8 - uint32(end - pos)) * sizeof(uint32))
+			if (uint8 mov = (8 - uint8(end - pos)) * 4)
 				num = (num << mov) + UINT8_MAX;
 			*reinterpret_cast<uint32*>(&color) = num;
 		}
@@ -344,10 +343,11 @@ SDL_Color FileSys::readColor(const string& line) {
 	return color;
 }
 
-vector<string> FileSys::listDir(const string& drc, FileType filter, bool showHidden, bool readLinks) {
+vector<string> FileSys::listDir(string drc, FileType filter, bool showHidden, bool readLinks) {
+	drc = appDsep(drc);
 	vector<string> entries;
 #ifdef _WIN32
-	if (drc == dseps) {	// if in "root" directory, get drive letters and present them as directories
+	if (std::all_of(drc.begin(), drc.end(), isDsep)) {	// if in "root" directory, get drive letters and present them as directories
 		if (!(filter & FTYPE_DIR))
 			return entries;
 
@@ -359,13 +359,13 @@ vector<string> FileSys::listDir(const string& drc, FileType filter, bool showHid
 	}
 
 	WIN32_FIND_DATAW data;
-	HANDLE hFind = FindFirstFileW(stow(appDsep(drc) + "*").c_str(), &data);
+	HANDLE hFind = FindFirstFileW(sstow(appDsep(drc) + "*").c_str(), &data);
 	if (hFind == INVALID_HANDLE_VALUE)
 		return entries;
 
 	do {
 		if (!isDotName(data.cFileName) && (showHidden || !(data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) && atrcmp(data.dwFileAttributes, filter))
-			entries.emplace_back(wtos(data.cFileName));
+			entries.push_back(cwtos(data.cFileName));
 	} while (FindNextFileW(hFind, &data));
 	FindClose(hFind);
 #else
@@ -386,14 +386,14 @@ int FileSys::iterateDirRec(const string& drc, const std::function<int (string)>&
 	int ret = 0;
 #ifdef _WIN32
 	std::queue<wstring> dirs;
-	if (drc == dseps) {	// if in "root" directory, get drive letters and present them as directories
+	if (std::all_of(drc.begin(), drc.end(), isDsep)) {	// if in "root" directory, get drive letters and present them as directories
 		for (char dc : listDrives()) {
 			if (filter & FTYPE_DIR && (ret = call({ dc, ':' })))
 				return ret;
 			dirs.push({ wchar(dc), ':', wchar(dsep) });
 		}
 	} else
-		dirs.emplace(stow(appDsep(drc)));
+		dirs.push(sstow(appDsep(drc)));
 
 	do {
 		WIN32_FIND_DATAW data;
@@ -402,18 +402,18 @@ int FileSys::iterateDirRec(const string& drc, const std::function<int (string)>&
 				if (isDotName(data.cFileName))
 					continue;
 
-				if (atrcmp(data.dwFileAttributes, filter) && (ret = call(wtos(dirs.front() + data.cFileName)))) {
+				if (atrcmp(data.dwFileAttributes, filter) && (ret = call(swtos(dirs.front() + data.cFileName)))) {
 					FindClose(hFind);
 					return ret;
 				}
 				if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-					dirs.emplace(appDsep(dirs.front() + data.cFileName));
+					dirs.push(appDsep(dirs.front() + data.cFileName));
 			} while (FindNextFileW(hFind, &data));
 			FindClose(hFind);
 		}
 #else
 	std::queue<string> dirs;
-	dirs.emplace(appDsep(drc));
+	dirs.push(appDsep(drc));
 	do {
 		if (DIR* directory = opendir(dirs.front().c_str())) {
 			while (dirent* entry = readdir(directory)) {
@@ -425,7 +425,7 @@ int FileSys::iterateDirRec(const string& drc, const std::function<int (string)>&
 					return ret;
 				}
 				if (dtycmp(dirs.front(), entry, FTYPE_DIR, followLinks))
-					dirs.emplace(appDsep(dirs.front() + entry->d_name));
+					dirs.push(appDsep(dirs.front() + entry->d_name));
 			}
 			closedir(directory);
 		}
@@ -435,53 +435,54 @@ int FileSys::iterateDirRec(const string& drc, const std::function<int (string)>&
 	return ret;
 }
 
-pair<vector<string>, vector<string>> FileSys::listDirSep(const string& drc, FileType filter, bool showHidden, bool readLinks) {
+pair<vector<string>, vector<string>> FileSys::listDirSep(string drc, FileType filter, bool showHidden, bool readLinks) {
+	drc = appDsep(drc);
 	vector<string> files, dirs;
 #ifdef _WIN32
-	if (drc == dseps) {	// if in "root" directory, get drive letters and present them as directories
+	if (std::all_of(drc.begin(), drc.end(), isDsep)) {	// if in "root" directory, get drive letters and present them as directories
 		vector<char> letters = listDrives();
 		dirs.resize(letters.size());
 		for (sizet i = 0; i < dirs.size(); i++)
 			dirs[i] = { letters[i], ':' };
-		return pair(filter & FTYPE_DIR ? dirs : files, dirs);
+		return pair(std::move(filter & FTYPE_DIR ? dirs : files), std::move(dirs));
 	}
 
 	WIN32_FIND_DATAW data;
-	HANDLE hFind = FindFirstFileW(stow(appDsep(drc) + "*").c_str(), &data);
+	HANDLE hFind = FindFirstFileW(sstow(appDsep(drc) + "*").c_str(), &data);
 	if (hFind == INVALID_HANDLE_VALUE)
-		return pair(files, dirs);
+		return pair(std::move(files), std::move(dirs));
 
 	do {
 		if (!isDotName(data.cFileName) && (showHidden || !(data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN))) {
 			if (atrcmp(data.dwFileAttributes, filter))
-				files.emplace_back(wtos(data.cFileName));
+				files.push_back(cwtos(data.cFileName));
 			if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-				dirs.emplace_back(wtos(data.cFileName));
+				dirs.push_back(cwtos(data.cFileName));
 		}
 	} while (FindNextFileW(hFind, &data));
 	FindClose(hFind);
 #else
 	DIR* directory = opendir(drc.c_str());
 	if (!directory)
-		return pair(files, dirs);
+		return pair(std::move(files), std::move(dirs));
 
 	while (dirent* entry = readdir(directory))
 		if (!isDotName(entry->d_name) && (showHidden || entry->d_name[0] != '.')) {
-			if (dtycmp(dirs.front(), entry, filter, readLinks))
+			if (dtycmp(drc, entry, filter, readLinks))
 				files.emplace_back(entry->d_name);
-			if (dtycmp(dirs.front(), entry, FTYPE_DIR, readLinks))
+			if (dtycmp(drc, entry, FTYPE_DIR, readLinks))
 				dirs.emplace_back(entry->d_name);
 		}
 	closedir(directory);
 #endif
 	std::sort(files.begin(), files.end(), strnatless);
 	std::sort(dirs.begin(), dirs.end(), strnatless);
-	return pair(files, dirs);
+	return pair(std::move(files), std::move(dirs));
 }
 
 string FileSys::validateFilename(string file) {
 	if (isDotName(file))
-		return emptyStr;
+		return string();
 #ifdef _WIN32
 	for (const string& it : takenFilenames)
 		if (!strncicmp(file, it, it.length()))
@@ -493,7 +494,7 @@ string FileSys::validateFilename(string file) {
 	while (file.back() == ' ' || file.back() == '.')
 		file.erase(file.find_last_not_of(file.back() == ' ' ? ' ' : '.'));
 #else
-	file.erase(std::remove(file.begin(), file.end(), dsep), file.end());
+	file.erase(std::remove_if(file.begin(), file.end(), isDsep), file.end());
 #endif
 	if (file.length() > fnameMax)
 		file.resize(fnameMax);
@@ -616,7 +617,8 @@ int FileSys::moveContentThreaded(void* data) {
 			break;
 
 		World::winSys()->pushEvent(UserCode::moveProgress, reinterpret_cast<void*>(i), reinterpret_cast<void*>(lim));
-		rename(childPath(locs.first, files[i]).c_str(), childPath(locs.second, files[i]).c_str());
+		if (string path = childPath(locs.first, files[i]); rename(path.c_str(), childPath(locs.second, files[i]).c_str()))
+			std::cerr << "failed no move " << path << std::endl;
 	}
 	World::winSys()->pushEvent(UserCode::moveFinished);
 	return 0;
@@ -627,7 +629,7 @@ int FileSys::setWorkingDir() {
 	if (!path)
 		return 1;
 #ifdef _WIN32
-	int err = _wchdir(stow(path).c_str());
+	int err = _wchdir(cstow(path).c_str());
 #else
 	int err = chdir(path);
 #endif
@@ -648,40 +650,28 @@ string FileSys::findFont(const string& font) {
 				return 0;
 			}, FTYPE_REG, false, false))
 			return path;
-	return emptyStr;	// nothing found
+	return string();	// nothing found
 }
 #ifdef _WIN32
-string FileSys::wgetenv(const string& name) {
-	wstring var = stow(name);
-	DWORD len = GetEnvironmentVariableW(var.c_str(), nullptr, 0);
-	if (len <= 1)
-		return emptyStr;
-
-	wstring str;
-	str.resize(len - 1);
-	GetEnvironmentVariableW(var.c_str(), str.data(), len);
-	return wtos(str);
-}
-
 vector<char> FileSys::listDrives() {
 	vector<char> letters;
 	DWORD drives = GetLogicalDrives();
 
 	for (char i = 0; i < drivesMax; i++)
 		if (drives & (1 << i))
-			letters.emplace_back('A' + i);
+			letters.push_back('A' + i);
 	return letters;
 }
 
 FileType FileSys::fileType(const string& file, bool readLink) {
-	if (file == dseps)
+	if (std::all_of(file.begin(), file.end(), isDsep))
 		return FTYPE_DIR;
 	if (isDriveLetter(file)) {
 		vector<char> letters = FileSys::listDrives();
 		return std::find(letters.begin(), letters.end(), file[0]) != letters.end() ? FTYPE_DIR : FTYPE_NON;
 	}
 
-	DWORD attrib = GetFileAttributesW(stow(file).c_str());
+	DWORD attrib = GetFileAttributesW(sstow(file).c_str());
 	if (attrib == INVALID_FILE_ATTRIBUTES)
 		return FTYPE_NON;
 	if (attrib & FILE_ATTRIBUTE_DIRECTORY)

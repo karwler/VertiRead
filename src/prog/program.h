@@ -46,7 +46,7 @@ public:
 	void eventNextDir(Button* but = nullptr);
 	void eventPrevDir(Button* but = nullptr);
 	void eventExitReader(Button* but = nullptr);
-#ifdef _BUILD_DOWNLOADER
+#ifdef BUILD_DOWNLOADER
 	// downloader
 	void eventOpenDownloader(Button* but = nullptr);
 	void eventSwitchSource(Button* but = nullptr);
@@ -115,7 +115,7 @@ private:
 	void switchPictures(bool fwd, const string& picname);
 	void offerMoveBooks(const string& oldLib);
 	void setState(ProgState* newState);
-	void reposizeWindow(const vec2i& dres, const vec2i& wsiz);
+	void reposizeWindow(vec2i dres, vec2i wsiz);
 };
 
 inline Program::Program() :

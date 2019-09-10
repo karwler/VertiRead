@@ -30,9 +30,7 @@ private:
 // handles the drawing
 class DrawSys {
 private:
-	static constexpr uint32 rendererFlags = SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED;
 	static constexpr SDL_Color colorPopupDim = { 0, 0, 0, 127 };
-	static constexpr sizet numBuffSize = 23;
 
 	SDL_Renderer* renderer;
 	SDL_mutex* rendLock;									// lock before using renderer

@@ -47,27 +47,15 @@ int Thread::finish() {
 	return res;
 }
 
-static inline int natCompareRight(const char* a, const char* b) {
-	for (int bias = 0;; a++, b++) {
-		bool nad = notDigit(*a), nbd = notDigit(*b);
-		if (nad && nbd)
-			return bias;
-		if (nad)
-			return -1;
-		if (nbd)
-			return 1;
-		if (*a < *b) {
-			if (!bias)
-				bias = -1;
-		} else if (*a > *b) {
-			if (!bias)
-				bias = 1;
-		} else if (!(*a || *b))
-			return bias;
+static int natCmpLetter(int a, int b) {
+	if (a != b) {
+		int au = toupper(a), bu = toupper(b);
+		return au != bu ? au - bu : b - a;
 	}
+	return 0;
 }
 
-static inline int natCompareLeft(const char* a, const char* b) {
+static int natCmpLeft(const char* a, const char* b) {
 	for (;; a++, b++) {
 		bool nad = notDigit(*a), nbd = notDigit(*b);
 		if (nad && nbd)
@@ -76,10 +64,24 @@ static inline int natCompareLeft(const char* a, const char* b) {
 			return -1;
 		if (nbd)
 			return 1;
-		if (*a < *b)
+		if (int dif = natCmpLetter(*a, *b))
+			return dif;
+	}
+}
+
+static int natCmpRight(const char* a, const char* b) {
+	for (int bias = 0;; a++, b++) {
+		bool nad = notDigit(*a), nbd = notDigit(*b);
+		if (nad && nbd)
+			return bias;
+		if (nad)
 			return -1;
-		if (*a > *b)
+		if (nbd)
 			return 1;
+		if (!(*a || *b))
+			return bias;
+		if (int dif = natCmpLetter(*a, *b); dif && !bias)
+			bias = dif;
 	}
 }
 
@@ -89,50 +91,42 @@ int strnatcmp(const char* a, const char* b) {
 		for (; isSpace(ca); ca = *++a);
 		for (; isSpace(cb); cb = *++b);
 
-		if (isDigit(ca) && isDigit(cb)) {
-			if (ca == '0' || cb == '0') {
-				if (int result = natCompareLeft(a, b))
-					return result;
-			} else if (int result = natCompareRight(a, b))
-				return result;
-		}
+		if (isDigit(ca) && isDigit(cb))
+			if (int dif = ca == '0' || cb == '0' ? natCmpLeft(a, b) : natCmpRight(a, b))
+				return dif;
 		if (!(ca || cb))
 			return 0;
-		if (ca < cb)
-			return -1;
-		if (ca > cb)
-			return 1;
+		if (int dif = natCmpLetter(*a, *b))
+			return dif;
 	}
 }
 
-static bool pathCompareLoop(const string& as, const string& bs, sizet& ai, sizet& bi) {
+static bool pathCompareLoop(const string& as, const string& bs, string::const_iterator& ai, string::const_iterator& bi) {
 	do {
 		// comparee names of next entry
-		sizet an = as.find_first_of(dsep, ai);
-		sizet bn = bs.find_first_of(dsep, bi);
-		if (as.compare(ai, an - ai, bs, bi, bn - bi))
+		string::const_iterator an = std::find_if(ai, as.end(), isDsep);
+		string::const_iterator bn = std::find_if(bi, bs.end(), isDsep);
+		if (!std::equal(ai, an, bi, bn))
 			return false;
-		ai = an;
-		bi = bn;
 
 		// skip directory separators
-		ai = as.find_first_not_of(dsep, ai);
-		bi = bs.find_first_not_of(dsep, bi);
-	} while (ai < as.length() && bi < bs.length());
+		ai = std::find_if(an, as.end(), notDsep);
+		bi = std::find_if(bn, bs.end(), notDsep);
+	} while (ai != as.end() && bi != bs.end());
 	return true;	// one has reached it's end so don't forget to check later which one (paths are equal if both have ended)
 }
 
 bool pathCmp(const string& as, const string& bs) {
-	sizet ai = 0, bi = 0;	// check if both paths have reached their ends simultaneously
-	return pathCompareLoop(as, bs, ai, bi) ? ai >= as.length() && bi >= bs.length() : false;
+	string::const_iterator ai = as.begin(), bi = bs.begin();	// check if both paths have reached their ends simultaneously
+	return pathCompareLoop(as, bs, ai, bi) && ai == as.end() && bi == bs.end();
 }
 
-bool isSubpath(const string& path, string parent) {
-	if (std::all_of(parent.begin(), parent.end(), [](char c) -> bool { return c == dsep; }))	// always true if parent is root
+bool isSubpath(const string& path, const string& parent) {
+	if (std::all_of(parent.begin(), parent.end(), isDsep))	// always true if parent is root
 		return true;
 
-	sizet ai = 0, bi = 0;	// parent has to have reached it's end while path was still matching
-	return pathCompareLoop(path, parent, ai, bi) ? bi >= parent.length() : false;
+	string::const_iterator ai = path.begin(), bi = parent.begin();	// parent has to have reached it's end while path was still matching
+	return pathCompareLoop(path, parent, ai, bi) && bi == parent.end();
 }
 
 string parentPath(const string& path) {
@@ -140,33 +134,35 @@ string parentPath(const string& path) {
 	if (isDriveLetter(path))
 		return dseps;
 #endif
-	sizet end = path.find_last_not_of(dsep);	// skip initial separators
-	if (end == string::npos)					// if the entire path is separators, return root
+	string::const_reverse_iterator end = std::find_if(path.rbegin(), path.rend(), notDsep);	// skip initial separators
+	if (end == path.rend())					// if the entire path is separators, return root
 		return dseps;
 
-	sizet pos = path.find_last_of(dsep, end);	// skip to separators between parent and child
-	if (pos == string::npos)					// if there are none, just cut off child
-		return path.substr(0, end + 1);
+	string::const_reverse_iterator pos = std::find_if(end, path.rend(), isDsep);	// skip to separators between parent and child
+	if (pos == path.rend())					// if there are none, just cut off child
+		return string(path.begin(), end.base());
 
-	pos = path.find_last_not_of(dsep, pos);		// skip separators to get to the parent entry
-	return pos == string::npos ? dseps : path.substr(0, pos + 1);	// cut off child
+	pos = std::find_if(pos, path.rend(), notDsep);	// skip separators to get to the parent entry
+	return pos != path.rend() ? string(path.begin(), pos.base()) : dseps;	// cut off child
 }
 
 string getChild(const string& path, const string& parent) {
-	if (std::all_of(parent.begin(), parent.end(), [](char c) -> bool { return c == dsep; }))
+	if (std::all_of(parent.begin(), parent.end(), isDsep))
 		return path;
 
-	sizet ai = 0, bi = 0;
-	return pathCompareLoop(path, parent, ai, bi) && bi >= parent.length() ? path.substr(ai) : emptyStr;
+	string::const_iterator ai = path.begin(), bi = parent.begin();
+	return pathCompareLoop(path, parent, ai, bi) && bi == parent.end() ? string(ai, path.end()) : string();
 }
 
 string filename(const string& path) {
-	if (path.empty() || path == dseps)
-		return emptyStr;
+	if (path.empty())
+		return path;
+	if (std::all_of(path.begin(), path.end(), isDsep))
+		return dseps;
 
-	sizet end = path.back() == dsep ? path.length() - 1 : path.length();
-	sizet pos = path.find_last_of(dsep, end - 1);
-	return pos == string::npos ? path.substr(0, end) : path.substr(pos + 1, end-pos - 1);
+	string::const_reverse_iterator end = notDsep(path.back()) ? path.rbegin() : std::find_if(path.rbegin() + 1, path.rend(), notDsep);
+	string::const_reverse_iterator pos = std::find_if(end, path.rend(), isDsep);
+	return pos != path.rend() ? string(pos.base(), end.base()) : string(path.begin(), end.base());
 }
 
 string strEnclose(string str) {
@@ -199,7 +195,7 @@ vector<string> strUnenclose(const string& str) {
 		for (sizet i = quote.find_first_of('\\'); i < quote.length(); i = quote.find_first_of('\\', i + 1))
 			if (quote[i+1] == '"')
 				quote.erase(i, 1);
-		words.push_back(quote);
+		words.push_back(std::move(quote));
 		pos = end + 1;
 	}
 	return words;
@@ -218,10 +214,10 @@ vector<string> getWords(const string& str) {
 	return words;
 }
 #ifdef _WIN32
-string wtos(const wchar* src) {
+string cwtos(const wchar* src) {
 	int len = WideCharToMultiByte(CP_UTF8, 0, src, -1, nullptr, 0, nullptr, nullptr);
 	if (len <= 1)
-		return emptyStr;
+		return string();
 	len--;
 	
 	string dst;
@@ -230,10 +226,10 @@ string wtos(const wchar* src) {
 	return dst;
 }
 
-string wtos(const wstring& src) {
+string swtos(const wstring& src) {
 	int len = WideCharToMultiByte(CP_UTF8, 0, src.c_str(), int(src.length()), nullptr, 0, nullptr, nullptr);
 	if (len <= 0)
-		return emptyStr;
+		return string();
 
 	string dst;
 	dst.resize(len);
@@ -241,10 +237,10 @@ string wtos(const wstring& src) {
 	return dst;
 }
 
-wstring stow(const char* src) {
+wstring cstow(const char* src) {
 	int len = MultiByteToWideChar(CP_UTF8, 0, src, -1, nullptr, 0);
 	if (len <= 1)
-		return L"";
+		return wstring();
 	len--;
 
 	wstring dst;
@@ -253,10 +249,10 @@ wstring stow(const char* src) {
 	return dst;
 }
 
-wstring stow(const string& src) {
+wstring sstow(const string& src) {
 	int len = MultiByteToWideChar(CP_UTF8, 0, src.c_str(), int(src.length()), nullptr, 0);
 	if (len <= 0)
-		return L"";
+		return wstring();
 
 	wstring dst;
 	dst.resize(len);

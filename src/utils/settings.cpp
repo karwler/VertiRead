@@ -18,17 +18,7 @@ const array<string, Binding::names.size()> Binding::names = {
 	"down",
 	"left",
 	"right",
-	"scroll up",
-	"scroll down",
-	"scroll left",
-	"scroll right",
-	"cursor up",
-	"cursor down",
-	"cursor left",
-	"cursor right",
 	"center view",
-	"scroll fast",
-	"scroll slow",
 	"next page",
 	"prev page",
 	"zoom in",
@@ -41,172 +31,182 @@ const array<string, Binding::names.size()> Binding::names = {
 	"fullscreen",
 	"show hidden",
 	"boss",
-	"refresh"
+	"refresh",
+	"scroll up",
+	"scroll down",
+	"scroll left",
+	"scroll right",
+	"cursor up",
+	"cursor down",
+	"cursor left",
+	"cursor right",
+	"scroll fast",
+	"scroll slow"
 };
 
-void Binding::setDefaultSelf(Type type) {
-	switch (type) {
+void Binding::reset(Type newType) {
+	switch (asg = ASG_NONE; type = newType) {
 	case Type::enter:
-		setBcall(&ProgState::eventEnter);
+		bcall = &ProgState::eventEnter;
 		setKey(SDL_SCANCODE_RETURN);
 		setJbutton(2);
 		setGbutton(SDL_CONTROLLER_BUTTON_A);
 		break;
 	case Type::escape:
-		setBcall(&ProgState::eventEscape);
+		bcall = &ProgState::eventEscape;
 		setKey(SDL_SCANCODE_ESCAPE);
 		setJbutton(1);
 		setGbutton(SDL_CONTROLLER_BUTTON_B);
 		break;
 	case Type::up:
-		setBcall(&ProgState::eventUp);
+		bcall = &ProgState::eventUp;
 		setKey(SDL_SCANCODE_UP);
 		setJhat(0, SDL_HAT_UP);
 		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_UP);
 		break;
 	case Type::down:
-		setBcall(&ProgState::eventDown);
+		bcall = &ProgState::eventDown;
 		setKey(SDL_SCANCODE_DOWN);
 		setJhat(0, SDL_HAT_DOWN);
 		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_DOWN);
 		break;
 	case Type::left:
-		setBcall(&ProgState::eventLeft);
+		bcall = &ProgState::eventLeft;
 		setKey(SDL_SCANCODE_LEFT);
 		setJhat(0, SDL_HAT_LEFT);
 		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_LEFT);
 		break;
 	case Type::right:
-		setBcall(&ProgState::eventRight);
+		bcall = &ProgState::eventRight;
 		setKey(SDL_SCANCODE_RIGHT);
 		setJhat(0, SDL_HAT_RIGHT);
 		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
 		break;
-	case Type::scrollUp:
-		setAcall(&ProgState::eventScrollUp);
-		setKey(SDL_SCANCODE_UP);
-		setJaxis(1, false);
-		setGaxis(SDL_CONTROLLER_AXIS_LEFTY, false);
-		break;
-	case Type::scrollDown:
-		setAcall(&ProgState::eventScrollDown);
-		setKey(SDL_SCANCODE_DOWN);
-		setJaxis(1, true);
-		setGaxis(SDL_CONTROLLER_AXIS_LEFTY, true);
-		break;
-	case Type::scrollLeft:
-		setAcall(&ProgState::eventScrollLeft);
-		setKey(SDL_SCANCODE_LEFT);
-		setJaxis(0, false);
-		setGaxis(SDL_CONTROLLER_AXIS_LEFTX, false);
-		break;
-	case Type::scrollRight:
-		setAcall(&ProgState::eventScrollRight);
-		setKey(SDL_SCANCODE_RIGHT);
-		setJaxis(0, true);
-		setGaxis(SDL_CONTROLLER_AXIS_LEFTX, true);
-		break;
-	case Type::cursorUp:
-		setAcall(&ProgState::eventCursorUp);
-		setJaxis(2, false);
-		setGaxis(SDL_CONTROLLER_AXIS_RIGHTY, false);
-		break;
-	case Type::cursorDown:
-		setAcall(&ProgState::eventCursorDown);
-		setJaxis(2, true);
-		setGaxis(SDL_CONTROLLER_AXIS_RIGHTY, true);
-		break;
-	case Type::cursorLeft:
-		setAcall(&ProgState::eventCursorLeft);
-		setJaxis(3, false);
-		setGaxis(SDL_CONTROLLER_AXIS_RIGHTX, false);
-		break;
-	case Type::cursorRight:
-		setAcall(&ProgState::eventCursorRight);
-		setJaxis(3, true);
-		setGaxis(SDL_CONTROLLER_AXIS_RIGHTX, true);
-		break;
 	case Type::centerView:
-		setBcall(&ProgState::eventCenterView);
+		bcall = &ProgState::eventCenterView;
 		setKey(SDL_SCANCODE_C);
 		setJbutton(10);
 		setGbutton(SDL_CONTROLLER_BUTTON_LEFTSTICK);
 		break;
-	case Type::scrollFast:
-		setAcall(nullptr);
-		setKey(SDL_SCANCODE_X);
-		setJbutton(0);
-		setGbutton(SDL_CONTROLLER_BUTTON_Y);
-		break;
-	case Type::scrollSlow:
-		setAcall(nullptr);
-		setKey(SDL_SCANCODE_Z);
-		setJbutton(3);
-		setGbutton(SDL_CONTROLLER_BUTTON_X);
-		break;
 	case Type::nextPage:
-		setBcall(&ProgState::eventNextPage);
+		bcall = &ProgState::eventNextPage;
 		setKey(SDL_SCANCODE_PAGEDOWN);
 		break;
 	case Type::prevPage:
-		setBcall(&ProgState::eventPrevPage);
+		bcall = &ProgState::eventPrevPage;
 		setKey(SDL_SCANCODE_PAGEUP);
 		break;
 	case Type::zoomIn:
-		setBcall(&ProgState::eventZoomIn);
+		bcall = &ProgState::eventZoomIn;
 		setKey(SDL_SCANCODE_W);
 		setJbutton(5);
 		setGbutton(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
 		break;
 	case Type::zoomOut:
-		setBcall(&ProgState::eventZoomOut);
+		bcall = &ProgState::eventZoomOut;
 		setKey(SDL_SCANCODE_S);
 		setJbutton(4);
 		setGbutton(SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
 		break;
 	case Type::zoomReset:
-		setBcall(&ProgState::eventZoomReset);
+		bcall = &ProgState::eventZoomReset;
 		setKey(SDL_SCANCODE_R);
 		setJbutton(11);
 		setGbutton(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
 		break;
 	case Type::toStart:
-		setBcall(&ProgState::eventToStart);
+		bcall = &ProgState::eventToStart;
 		setKey(SDL_SCANCODE_HOME);
 		break;
 	case Type::toEnd:
-		setBcall(&ProgState::eventToEnd);
+		bcall = &ProgState::eventToEnd;
 		setKey(SDL_SCANCODE_END);
 		break;
 	case Type::nextDir:
-		setBcall(&ProgState::eventNextDir);
+		bcall = &ProgState::eventNextDir;
 		setKey(SDL_SCANCODE_D);
 		setJbutton(7);
 		setGaxis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT, true);
 		break;
 	case Type::prevDir:
-		setBcall(&ProgState::eventPrevDir);
+		bcall = &ProgState::eventPrevDir;
 		setKey(SDL_SCANCODE_A);
 		setJbutton(6);
 		setGaxis(SDL_CONTROLLER_AXIS_TRIGGERLEFT, true);
 		break;
 	case Type::fullscreen:
-		setBcall(&ProgState::eventFullscreen);
+		bcall = &ProgState::eventFullscreen;
 		setKey(SDL_SCANCODE_F);
 		setJbutton(8);
 		setGbutton(SDL_CONTROLLER_BUTTON_BACK);
 		break;
 	case Type::hide:
-		setBcall(&ProgState::eventHide);
+		bcall = &ProgState::eventHide;
 		setKey(SDL_SCANCODE_H);
 		break;
 	case Type::boss:
-		setBcall(&ProgState::eventBoss);
+		bcall = &ProgState::eventBoss;
 		setKey(SDL_SCANCODE_B);
 		break;
 	case Type::refresh:
-		setBcall(&ProgState::eventRefresh);
+		bcall = &ProgState::eventRefresh;
 		setKey(SDL_SCANCODE_F5);
+		break;
+	case Type::scrollUp:
+		acall = &ProgState::eventScrollUp;
+		setKey(SDL_SCANCODE_UP);
+		setJaxis(1, false);
+		setGaxis(SDL_CONTROLLER_AXIS_LEFTY, false);
+		break;
+	case Type::scrollDown:
+		acall = &ProgState::eventScrollDown;
+		setKey(SDL_SCANCODE_DOWN);
+		setJaxis(1, true);
+		setGaxis(SDL_CONTROLLER_AXIS_LEFTY, true);
+		break;
+	case Type::scrollLeft:
+		acall = &ProgState::eventScrollLeft;
+		setKey(SDL_SCANCODE_LEFT);
+		setJaxis(0, false);
+		setGaxis(SDL_CONTROLLER_AXIS_LEFTX, false);
+		break;
+	case Type::scrollRight:
+		acall = &ProgState::eventScrollRight;
+		setKey(SDL_SCANCODE_RIGHT);
+		setJaxis(0, true);
+		setGaxis(SDL_CONTROLLER_AXIS_LEFTX, true);
+		break;
+	case Type::cursorUp:
+		acall = &ProgState::eventCursorUp;
+		setJaxis(2, false);
+		setGaxis(SDL_CONTROLLER_AXIS_RIGHTY, false);
+		break;
+	case Type::cursorDown:
+		acall = &ProgState::eventCursorDown;
+		setJaxis(2, true);
+		setGaxis(SDL_CONTROLLER_AXIS_RIGHTY, true);
+		break;
+	case Type::cursorLeft:
+		acall = &ProgState::eventCursorLeft;
+		setJaxis(3, false);
+		setGaxis(SDL_CONTROLLER_AXIS_RIGHTX, false);
+		break;
+	case Type::cursorRight:
+		acall = &ProgState::eventCursorRight;
+		setJaxis(3, true);
+		setGaxis(SDL_CONTROLLER_AXIS_RIGHTX, true);
+		break;
+	case Type::scrollFast:
+		acall = nullptr;
+		setKey(SDL_SCANCODE_X);
+		setJbutton(0);
+		setGbutton(SDL_CONTROLLER_BUTTON_Y);
+		break;
+	case Type::scrollSlow:
+		acall = nullptr;
+		setKey(SDL_SCANCODE_Z);
+		setJbutton(3);
+		setGbutton(SDL_CONTROLLER_BUTTON_X);
 	}
 }
 
@@ -251,16 +251,6 @@ void Binding::setGaxis(SDL_GameControllerAxis axis, bool positive) {
 	asg |= positive ? ASG_GAXIS_P : ASG_GAXIS_N;
 }
 
-void Binding::setBcall(SBCall call) {
-	callAxis = false;
-	bcall = call;
-}
-
-void Binding::setAcall(SACall call) {
-	callAxis = true;
-	acall = call;
-}
-
 // PICTURE LIMIT
 
 const array<string, PicLim::names.size()> PicLim::names = {
@@ -277,7 +267,7 @@ PicLim::PicLim(Type type, uptrt count) :
 
 void PicLim::set(const string& str) {
 	vector<string> elems = getWords(str);
-	type = elems.size() > 0 ? strToEnum<Type>(names, elems[0]) : Type::none;
+	type = !elems.empty() ? strToEnum<Type>(names, elems[0]) : Type::none;
 	count = elems.size() > 1 ? toCount(elems[1]) : defaultCount;
 	size = elems.size() > 2 ? toSize(elems[2]) : defaultSize();
 }
@@ -321,20 +311,20 @@ Settings::Settings() :
 	zoom(defaultZoom),
 	spacing(defaultSpacing),
 	resolution(800, 600),
-	renderer(emptyStr),
+	renderer(string()),
 	scrollSpeed(1600.f, 1600.f),
 	deadzone(256),
 	font(defaultFont),
 	dirLib(World::fileSys()->getDirSets() + defaultDirLib)
 {
-	setTheme(emptyStr);
+	setTheme(string());
 }
 
 const string& Settings::setTheme(const string& name) {
 	vector<string> themes = World::fileSys()->getAvailibleThemes();
 	if (vector<string>::iterator it = std::find(themes.begin(), themes.end(), name); it != themes.end())
 		return theme = name;
-	return theme = themes.empty() ? emptyStr : themes[0];
+	return theme = themes.empty() ? string() : themes[0];
 }
 
 const string& Settings::setFont(const string& newFont) {
