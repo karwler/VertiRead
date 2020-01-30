@@ -31,7 +31,7 @@ Browser::Browser(string rootDirectory, string container, string file, PCall exit
 FileType Browser::goTo(const string& path) {
 	if (!isSubpath(path, rootDir))
 		return FTYPE_NON;
-	
+
 	if (FileSys::fileType(path) == FTYPE_DIR) {
 		curDir = path;
 		inArchive = false;
@@ -134,7 +134,7 @@ string Browser::nextDirFile(const string& file, bool fwd) const {
 			if (FileSys::isPicture(childPath(curDir, files[i])))
 				return files[i];
 	}
-	return string();
+	return "";
 }
 
 string Browser::nextArchiveFile(const string& file, bool fwd) const {
@@ -142,7 +142,7 @@ string Browser::nextArchiveFile(const string& file, bool fwd) const {
 		return string();
 	archive* arch = FileSys::openArchive(curDir);
 	if (!arch)
-		return string();
+		return "";
 
 	// list loadable pictures in archive
 	vector<string> pics;
@@ -156,7 +156,7 @@ string Browser::nextArchiveFile(const string& file, bool fwd) const {
 
 	// get next picture if there's one
 	sizet i = sizet(std::find(pics.begin(), pics.end(), file) - pics.begin()) + btom<sizet>(fwd);
-	return i < pics.size() ? pics[i] : string();
+	return i < pics.size() ? pics[i] : "";
 }
 
 pair<vector<string>, vector<string>> Browser::listCurDir() const {

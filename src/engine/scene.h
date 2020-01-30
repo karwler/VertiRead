@@ -17,7 +17,7 @@ public:
 	Widget* select;		// currently selected widget
 	Widget* capture;	// either pointer to widget currently hogging all keyboard input or ScrollArea whichs slider is currently being dragged. nullptr if nothing is being captured or dragged
 private:
-	uptr<Layout> layout;
+	uptr<RootLayout> layout;
 	uptr<Popup> popup;
 	uptr<Overlay> overlay;
 	array<ClickStamp, SDL_BUTTON_RIGHT> stamps;	// data about last mouse click (indexes are mouse button numbers
@@ -34,11 +34,11 @@ public:
 	void onMouseUp(vec2i mPos, uint8 mBut, uint8 mCnt);
 	void onMouseWheel(vec2i wMov);
 	void onMouseLeave();
-	void onText(const string& str);	// text input should only run if line edit is being captured, therefore a cast check isn't necessary
+	void onText(const char* str);	// text input should only run if line edit is being captured, therefore a cast check isn't necessary
 	void onResize();
 
 	void resetLayouts();
-	Layout* getLayout();
+	RootLayout* getLayout();
 	Overlay* getOverlay();
 	Popup* getPopup();
 	void setPopup(Popup* newPopup, Widget* newCapture = nullptr);
@@ -56,11 +56,7 @@ private:
 	Layout* topLayout(vec2i mPos);
 };
 
-inline void Scene::onText(const string& str) {
-	capture->onText(str);
-}
-
-inline Layout* Scene::getLayout() {
+inline RootLayout* Scene::getLayout() {
 	return layout.get();
 }
 

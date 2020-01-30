@@ -88,7 +88,7 @@ void InputSys::eventJoystickAxis(const SDL_JoyAxisEvent& jaxis) {
 	int value = checkAxisValue(jaxis.value);
 	if (!value || SDL_GameControllerFromInstanceID(jaxis.which))
 		return;
-	
+
 	if (World::scene()->capture)
 		World::scene()->capture->onJAxis(jaxis.axis, value > 0);
 	else

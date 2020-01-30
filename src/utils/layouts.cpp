@@ -2,7 +2,7 @@
 
 // LAYOUT
 
-Layout::Layout(const Size& relSize, vector<Widget*> children, Direction direction, Select select, int spacing, Layout* parent, sizet id) :
+Layout::Layout(const Size& relSize, vector<Widget*>&& children, Direction direction, Select select, int spacing, Layout* parent, sizet id) :
 	Widget(relSize, parent, id),
 	spacing(spacing),
 	selection(select),
@@ -106,7 +106,7 @@ void Layout::navSelectWidget(sizet id, int mid, Direction dir) {
 		World::scene()->select = widgets[id];
 }
 
-void Layout::initWidgets(vector<Widget*> wgts) {
+void Layout::initWidgets(vector<Widget*>&& wgts) {
 	clear(widgets);
 	widgets = std::move(wgts);
 	positions.resize(widgets.size() + 1);
@@ -117,7 +117,7 @@ void Layout::initWidgets(vector<Widget*> wgts) {
 		widgets[i]->setParent(this, i);
 }
 
-void Layout::setWidgets(vector<Widget*> wgts) {
+void Layout::setWidgets(vector<Widget*>&& wgts) {
 	initWidgets(std::move(wgts));
 	postInit();
 }
@@ -137,18 +137,6 @@ void Layout::deleteWidget(sizet id) {
 	for (sizet i = id; i < widgets.size(); i++)
 		widgets[i]->setParent(this, i);
 	postInit();
-}
-
-vec2i Layout::position() const {
-	return parent ? parent->wgtPosition(pcID) : 0;
-}
-
-vec2i Layout::size() const {
-	return parent ? parent->wgtSize(pcID) : World::drawSys()->viewport().size();
-}
-
-Rect Layout::frame() const {
-	return parent ? parent->frame() : World::drawSys()->viewport();
 }
 
 vec2i Layout::wgtPosition(sizet id) const {
@@ -198,10 +186,28 @@ vec2t Layout::findMinMaxSelectedID() const {
 	return idm;
 }
 
+// ROOT LAYOUT
+
+RootLayout::RootLayout(const Size& relSize, vector<Widget*>&& children, Direction direction, Select select, int spacing) :
+	Layout(relSize, std::move(children), direction, select, spacing)
+{}
+
+vec2i RootLayout::position() const {
+	return 0;
+}
+
+vec2i RootLayout::size() const {
+	return World::drawSys()->viewport().size();
+}
+
+Rect RootLayout::frame() const {
+	return World::drawSys()->viewport();
+}
+
 // POPUP
 
-Popup::Popup(const vec2s& relSize, vector<Widget*> children, Direction direction, int spacing) :
-	Layout(relSize.x, std::move(children), direction, Select::none, spacing),
+Popup::Popup(const vec2s& relSize, vector<Widget*>&& children, Direction direction, int spacing) :
+	RootLayout(relSize.x, std::move(children), direction, Select::none, spacing),
 	sizeY(relSize.y)
 {}
 
@@ -218,13 +224,9 @@ vec2i Popup::size() const {
 	return vec2i(relSize.usePix ? relSize.pix : relSize.prc * res.x, sizeY.usePix ? sizeY.pix : sizeY.prc * res.y);
 }
 
-Rect Popup::frame() const {
-	return World::drawSys()->viewport();
-}
-
 // OVERLAY
 
-Overlay::Overlay(const vec2s& position, const vec2s& relSize, const vec2s& activationPos, const vec2s& activationSize, vector<Widget*> children, Direction direction, int spacing) :
+Overlay::Overlay(const vec2s& position, const vec2s& relSize, const vec2s& activationPos, const vec2s& activationSize, vector<Widget*>&& children, Direction direction, int spacing) :
 	Popup(relSize, std::move(children), direction, spacing),
 	on(false),
 	pos(position),
@@ -244,7 +246,7 @@ Rect Overlay::actRect() const {
 
 // SCROLL AREA
 
-ScrollArea::ScrollArea(const Size& relSize, vector<Widget*> children, Direction direction, Select select, int spacing, Layout* parent, sizet id) :
+ScrollArea::ScrollArea(const Size& relSize, vector<Widget*>&& children, Direction direction, Select select, int spacing, Layout* parent, sizet id) :
 	Layout(relSize, std::move(children), direction, select, spacing, parent, id),
 	draggingSlider(false),
 	listPos(0),
@@ -258,7 +260,7 @@ void ScrollArea::drawSelf() const {
 
 void ScrollArea::onResize() {
 	Layout::onResize();
-	listPos = clampHigh(listPos, listLim());
+	listPos = listPos.min(listLim());
 }
 
 void ScrollArea::tick(float dSec) {
@@ -338,19 +340,19 @@ void ScrollArea::scrollToSelected() {
 
 void ScrollArea::scrollToWidgetPos(sizet id) {
 	sizet di = direction.vertical();
-	listPos[di] = clampHigh(wgtRPos(id), listLim()[di]);
+	listPos[di] = std::min(wgtRPos(id), listLim()[di]);
 }
 
 void ScrollArea::scrollToWidgetEnd(sizet id) {
 	sizet di = direction.vertical();
-	listPos[di] = clampLow(wgtREnd(id) - size()[di], 0);
+	listPos[di] = std::max(wgtREnd(id) - size()[di], 0);
 }
 
 bool ScrollArea::scrollToNext() {
 	bool dp = direction.positive();
 	if (sizet dv = direction.vertical(); dp ? listPos[dv] >= listLim()[dv] : listPos[dv] <= 0)
 		return false;
-	
+
 	scrollToFollowing(dp ? visibleWidgets().b + 1 : visibleWidgets().t - 2, false);
 	return true;
 }
@@ -478,7 +480,7 @@ vec2t ScrollArea::visibleWidgets() const {
 
 // TILE BOX
 
-TileBox::TileBox(const Size& relSize, vector<Widget*> children, int childHeight, Direction direction, Select select, int spacing, Layout* parent, sizet id) :
+TileBox::TileBox(const Size& relSize, vector<Widget*>&& children, int childHeight, Direction direction, Select select, int spacing, Layout* parent, sizet id) :
 	ScrollArea(relSize, std::move(children), direction, select, spacing, parent, id),
 	wheight(childHeight)
 {}
@@ -497,7 +499,7 @@ void TileBox::onResize() {
 		}
 	}
 	positions.back() = vec2i(wsiz, pos.y + wheight) + spacing;
-	listPos = clampHigh(listPos, listLim());
+	listPos = listPos.min(listLim());
 
 	for (Widget* it : widgets)
 		it->onResize();
@@ -564,9 +566,7 @@ int TileBox::wgtREnd(sizet id) const {
 
 // READER BOX
 
-const string ReaderBox::emptyFile;
-
-ReaderBox::ReaderBox(const Size& relSize, vector<Texture> imgs, Direction direction, float zoom, int spacing, Layout* parent, sizet id) :
+ReaderBox::ReaderBox(const Size& relSize, vector<Texture>&& imgs, Direction direction, float zoom, int spacing, Layout* parent, sizet id) :
 	ScrollArea(relSize, {}, direction, Select::none, spacing, parent, id),
 	cursorTimer(menuHideTimeout),
 	zoom(zoom),
@@ -599,7 +599,7 @@ void ReaderBox::onResize() {
 		rpos += psz[!hi];
 	}
 	positions.back() = vec2i::swap(maxRSiz, rpos, hi);
-	listPos = clampHigh(listPos, listLim());
+	listPos = listPos.min(listLim());
 
 	// for good measure?
 	for (Widget* it : widgets)
@@ -641,7 +641,7 @@ void ReaderBox::onMouseMove(vec2i mPos, vec2i mMov) {
 	}
 }
 
-void ReaderBox::initWidgets(vector<Texture> imgs) {
+void ReaderBox::initWidgets(vector<Texture>&& imgs) {
 	clearTexVec(pics);
 	clear(widgets);
 
@@ -655,7 +655,7 @@ void ReaderBox::initWidgets(vector<Texture> imgs) {
 		widgets[i] = new Picture(0, false, pics[i].tex, 0, this, i);
 }
 
-void ReaderBox::setWidgets(vector<Texture> imgs) {
+void ReaderBox::setWidgets(vector<Texture>&& imgs) {
 	initWidgets(std::move(imgs));
 	postInit();
 }
@@ -663,7 +663,7 @@ void ReaderBox::setWidgets(vector<Texture> imgs) {
 void ReaderBox::setZoom(float factor) {
 	vec2i sh = size() / 2;
 	zoom *= factor;
-	listPos = vec2i(vec2i(vec2f(listPos + sh) * factor) - sh).clamp(0, listLim());
+	listPos = (vec2i(vec2f(listPos + sh) * factor) - sh).clamp(0, listLim());
 	onResize();
 }
 

@@ -47,7 +47,7 @@ int Thread::finish() {
 	return res;
 }
 
-static int natCmpLetter(int a, int b) {
+static inline int natCmpLetter(int a, int b) {
 	if (a != b) {
 		int au = toupper(a), bu = toupper(b);
 		return au != bu ? au - bu : b - a;
@@ -55,9 +55,9 @@ static int natCmpLetter(int a, int b) {
 	return 0;
 }
 
-static int natCmpLeft(const char* a, const char* b) {
+static inline int natCmpLeft(const char* a, const char* b) {
 	for (;; a++, b++) {
-		bool nad = notDigit(*a), nbd = notDigit(*b);
+		bool nad = !isdigit(*a), nbd = !isdigit(*b);
 		if (nad && nbd)
 			return 0;
 		if (nad)
@@ -69,9 +69,9 @@ static int natCmpLeft(const char* a, const char* b) {
 	}
 }
 
-static int natCmpRight(const char* a, const char* b) {
+static inline int natCmpRight(const char* a, const char* b) {
 	for (int bias = 0;; a++, b++) {
-		bool nad = notDigit(*a), nbd = notDigit(*b);
+		bool nad = !isdigit(*a), nbd = !isdigit(*b);
 		if (nad && nbd)
 			return bias;
 		if (nad)
@@ -91,7 +91,7 @@ int strnatcmp(const char* a, const char* b) {
 		for (; isSpace(ca); ca = *++a);
 		for (; isSpace(cb); cb = *++b);
 
-		if (isDigit(ca) && isDigit(cb))
+		if (isdigit(ca) && isdigit(cb))
 			if (int dif = ca == '0' || cb == '0' ? natCmpLeft(a, b) : natCmpRight(a, b))
 				return dif;
 		if (!(ca || cb))
@@ -151,7 +151,7 @@ string getChild(const string& path, const string& parent) {
 		return path;
 
 	string::const_iterator ai = path.begin(), bi = parent.begin();
-	return pathCompareLoop(path, parent, ai, bi) && bi == parent.end() ? string(ai, path.end()) : string();
+	return pathCompareLoop(path, parent, ai, bi) && bi == parent.end() ? string(ai, path.end()) : "";
 }
 
 string filename(const string& path) {
@@ -217,9 +217,9 @@ vector<string> getWords(const string& str) {
 string cwtos(const wchar* src) {
 	int len = WideCharToMultiByte(CP_UTF8, 0, src, -1, nullptr, 0, nullptr, nullptr);
 	if (len <= 1)
-		return string();
+		return "";
 	len--;
-	
+
 	string dst;
 	dst.resize(len);
 	WideCharToMultiByte(CP_UTF8, 0, src, -1, dst.data(), len, nullptr, nullptr);
@@ -229,7 +229,7 @@ string cwtos(const wchar* src) {
 string swtos(const wstring& src) {
 	int len = WideCharToMultiByte(CP_UTF8, 0, src.c_str(), int(src.length()), nullptr, 0, nullptr, nullptr);
 	if (len <= 0)
-		return string();
+		return "";
 
 	string dst;
 	dst.resize(len);
@@ -240,7 +240,7 @@ string swtos(const wstring& src) {
 wstring cstow(const char* src) {
 	int len = MultiByteToWideChar(CP_UTF8, 0, src, -1, nullptr, 0);
 	if (len <= 1)
-		return wstring();
+		return L"";
 	len--;
 
 	wstring dst;
@@ -252,7 +252,7 @@ wstring cstow(const char* src) {
 wstring sstow(const string& src) {
 	int len = MultiByteToWideChar(CP_UTF8, 0, src.c_str(), int(src.length()), nullptr, 0);
 	if (len <= 0)
-		return wstring();
+		return L"";
 
 	wstring dst;
 	dst.resize(len);

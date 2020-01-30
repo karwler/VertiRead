@@ -7,18 +7,31 @@ WindowSys::WindowSys() :
 {}
 
 int WindowSys::start() {
+	int rc = EXIT_SUCCESS;
 	try {
 		init();
 		exec();
 	} catch (const std::runtime_error& e) {
+		std::cerr << e.what() << std::endl;
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", e.what(), window);
+		rc = EXIT_FAILURE;
 #ifdef NDEBUG
 	} catch (...) {
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Unknown error.", window);
+		std::cerr << "unknown error" << std::endl;
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "unknown error", window);
+		rc = EXIT_FAILURE;
 #endif
 	}
-	cleanup();
-	return 0;
+	program.reset();
+	scene.reset();
+	inputSys.reset();
+	destroyWindow();
+	fileSys.reset();
+
+	IMG_Quit();
+	TTF_Quit();
+	SDL_Quit();
+	return rc;
 }
 
 void WindowSys::init() {
@@ -26,9 +39,6 @@ void WindowSys::init() {
 		throw std::runtime_error(string("Failed to initialize SDL:\n") + SDL_GetError());
 	if (TTF_Init())
 		throw std::runtime_error(string("Failed to initialize fonts:\n") + TTF_GetError());
-	SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
-	SDL_StopTextInput();	// for some reason TextInput is on
-
 	int flags = IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP);
 	if (!(flags & IMG_INIT_JPG))
 		std::cerr << "failed to initialize JPG:\n" << IMG_GetError() << std::endl;
@@ -38,6 +48,29 @@ void WindowSys::init() {
 		std::cerr << "failed to initialize TIF:\n" << IMG_GetError() << std::endl;
 	if (!(flags & IMG_INIT_WEBP))
 		std::cerr << "failed to initialize WEBP:\n" << IMG_GetError() << std::endl;
+
+	SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
+	SDL_EventState(SDL_TEXTEDITING, SDL_DISABLE);
+	SDL_EventState(SDL_KEYMAPCHANGED, SDL_DISABLE);
+	SDL_EventState(SDL_JOYBALLMOTION, SDL_DISABLE);
+	SDL_EventState(SDL_JOYDEVICEREMOVED, SDL_DISABLE);
+	SDL_EventState(SDL_CONTROLLERDEVICEADDED, SDL_DISABLE);
+	SDL_EventState(SDL_CONTROLLERDEVICEREMOVED, SDL_DISABLE);
+	SDL_EventState(SDL_CONTROLLERDEVICEREMAPPED, SDL_DISABLE);
+	SDL_EventState(SDL_FINGERDOWN, SDL_DISABLE);
+	SDL_EventState(SDL_FINGERUP, SDL_DISABLE);
+	SDL_EventState(SDL_FINGERMOTION, SDL_DISABLE);
+	SDL_EventState(SDL_DOLLARGESTURE, SDL_DISABLE);
+	SDL_EventState(SDL_DOLLARRECORD, SDL_DISABLE);
+	SDL_EventState(SDL_MULTIGESTURE, SDL_DISABLE);
+	SDL_EventState(SDL_CLIPBOARDUPDATE, SDL_DISABLE);
+	SDL_EventState(SDL_DROPBEGIN, SDL_DISABLE);
+	SDL_EventState(SDL_DROPCOMPLETE, SDL_DISABLE);
+	SDL_EventState(SDL_AUDIODEVICEADDED, SDL_DISABLE);
+	SDL_EventState(SDL_AUDIODEVICEREMOVED, SDL_DISABLE);
+	SDL_EventState(SDL_RENDER_TARGETS_RESET, SDL_DISABLE);
+	SDL_EventState(SDL_RENDER_DEVICE_RESET, SDL_DISABLE);
+	SDL_StopTextInput();
 
 	fileSys.reset(new FileSys);
 	sets.reset(fileSys->loadSettings());
@@ -49,7 +82,6 @@ void WindowSys::init() {
 }
 
 void WindowSys::exec() {
-	// the loop :o
 	for (uint32 oldTime = SDL_GetTicks(); run;) {
 		uint32 newTime = SDL_GetTicks();
 		dSec = float(newTime - oldTime) / ticksPerSec;
@@ -65,18 +97,6 @@ void WindowSys::exec() {
 	}
 	fileSys->saveSettings(sets.get());
 	fileSys->saveBindings(inputSys->getBindings());
-}
-
-void WindowSys::cleanup() {
-	program.reset();
-	scene.reset();
-	inputSys.reset();
-	destroyWindow();
-	fileSys.reset();
-
-	IMG_Quit();
-	TTF_Quit();
-	SDL_Quit();
 }
 
 void WindowSys::createWindow() {
@@ -144,6 +164,10 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 		break;
 	case SDL_DROPFILE:
 		program->getState()->eventFileDrop(event.drop.file);
+		SDL_free(event.drop.file);
+		break;
+	case SDL_DROPTEXT:
+		scene->onText(event.drop.file);
 		SDL_free(event.drop.file);
 		break;
 	case SDL_JOYDEVICEADDED:

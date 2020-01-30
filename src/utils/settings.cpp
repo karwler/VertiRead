@@ -1,48 +1,6 @@
 #include "engine/world.h"
 
-// DIRECTION
-
-const array<string, Direction::names.size()> Direction::names = {
-	"Up",
-	"Down",
-	"Left",
-	"Right"
-};
-
 // BINDING
-
-const array<string, Binding::names.size()> Binding::names = {
-	"enter",
-	"escape",
-	"up",
-	"down",
-	"left",
-	"right",
-	"center view",
-	"next page",
-	"prev page",
-	"zoom in",
-	"zoom out",
-	"zoom reset",
-	"to start",
-	"to end",
-	"next directory",
-	"prev directory",
-	"fullscreen",
-	"show hidden",
-	"boss",
-	"refresh",
-	"scroll up",
-	"scroll down",
-	"scroll left",
-	"scroll right",
-	"cursor up",
-	"cursor down",
-	"cursor left",
-	"cursor right",
-	"scroll fast",
-	"scroll slow"
-};
 
 void Binding::reset(Type newType) {
 	switch (asg = ASG_NONE; type = newType) {
@@ -253,12 +211,6 @@ void Binding::setGaxis(SDL_GameControllerAxis axis, bool positive) {
 
 // PICTURE LIMIT
 
-const array<string, PicLim::names.size()> PicLim::names = {
-	"none",
-	"count",
-	"size"
-};
-
 PicLim::PicLim(Type type, uptrt count) :
 	type(type),
 	count(count),
@@ -280,12 +232,12 @@ uptrt PicLim::toCount(const string& str) {
 uptrt PicLim::toSize(const string& str) {
 	const char* pos;
 	char* end;
-	for (pos = str.c_str(); notDigit(*pos) && *pos; pos++);
+	for (pos = str.c_str(); !isdigit(*pos) && *pos; pos++);
 	uptrt num = uptrt(strtoull(pos, &end, 0));
 	if (!num)
 		return defaultSize();
 
-	string::const_iterator mit = std::find_if(str.begin() + pdift(end - str.c_str()), str.end(), [](char c) -> bool { return std::find(sizeLetters.begin(), sizeLetters.end(), toupper(c)) != sizeLetters.end(); });
+	string::const_iterator mit = std::find_if(str.begin() + (end - str.c_str()), str.end(), [](char c) -> bool { return std::find(sizeLetters.begin(), sizeLetters.end(), toupper(c)) != sizeLetters.end(); });
 	if (mit != str.end())
 		switch (toupper(*mit)) {
 		case sizeLetters[1]:
@@ -311,13 +263,12 @@ Settings::Settings() :
 	zoom(defaultZoom),
 	spacing(defaultSpacing),
 	resolution(800, 600),
-	renderer(string()),
 	scrollSpeed(1600.f, 1600.f),
 	deadzone(256),
 	font(defaultFont),
 	dirLib(World::fileSys()->getDirSets() + defaultDirLib)
 {
-	setTheme(string());
+	setTheme("");
 }
 
 const string& Settings::setTheme(const string& name) {

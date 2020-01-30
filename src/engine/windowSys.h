@@ -53,7 +53,6 @@ public:
 private:
 	void init();
 	void exec();
-	void cleanup();
 
 	void createWindow();
 	void destroyWindow();

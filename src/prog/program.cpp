@@ -62,7 +62,7 @@ bool Program::openFile(const string& file) {
 	case FTYPE_REG:
 		try {
 			bool isPic = FileSys::isPicture(file);
-			browser.reset(new Browser(dseps, isPic ? parentPath(file) : file, isPic ? filename(file) : string(), &Program::eventOpenBookList, false));
+			browser.reset(new Browser(dseps, isPic ? parentPath(file) : file, isPic ? filename(file) : "", &Program::eventOpenBookList, false));
 			eventStartLoadingReader(file);
 		} catch (const std::runtime_error& e) {
 			std::cerr << e.what() << std::endl;
@@ -144,7 +144,7 @@ void Program::eventReaderLoadingFinished(vector<Texture>* pics) {
 	thread.reset();
 	setState(new ProgReader);
 
-	static_cast<ProgReader*>(state.get())->reader->setWidgets(*pics);
+	static_cast<ProgReader*>(state.get())->reader->setWidgets(std::move(*pics));
 	delete pics;
 }
 
@@ -180,7 +180,7 @@ void Program::switchPictures(bool fwd, const string& picname) {
 			return;
 		}
 	browser->goNext(fwd);
-	eventStartLoadingReader(string(), fwd);
+	eventStartLoadingReader("", fwd);
 }
 
 void Program::eventExitReader(Button*) {
@@ -331,7 +331,7 @@ void Program::eventSetLibraryDirBW(Button*) {
 }
 
 void Program::offerMoveBooks(const string& oldLib) {
-	if (World::sets()->getDirLib() != oldLib) {
+	if (appDsep(World::sets()->getDirLib()) != appDsep(oldLib)) {
 		static_cast<ProgSettings*>(state.get())->oldPathBuffer = oldLib;
 		World::scene()->setPopup(ProgState::createPopupChoice("Move comics to new location?", &Program::eventMoveComics, &Program::eventClosePopup));
 	}

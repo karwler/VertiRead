@@ -3,6 +3,7 @@
 #include "utils/settings.h"
 #include <archive.h>
 #include <archive_entry.h>
+#include <fstream>
 #include <functional>
 #ifdef _WIN32
 #include <windows.h>
@@ -24,7 +25,6 @@ enum FileType : uint8 {
 	FTYPE_STD = 0x03,	// REG | DIR
 	FTYPE_ANY = 0xFF
 };
-ENUM_OPERATIONS(FileType, uint8)
 
 /* For interpreting lines in ini files:
    The first equal sign to be read splits the line into property and value, therefore titles can't contain equal signs.
@@ -59,9 +59,9 @@ public:
 	void setTitle(const string& title);
 	Type setLine(const string& str);
 
-	static string get(const string& title);
-	static string get(const string& prp, const string& val);
-	static string get(const string& prp, const string& key, const string& val);
+	template <class... T> static void writeTitle(std::ofstream& ss, T&&... title);
+	template <class P, class... T> static void writeVal(std::ofstream& ss, P&& prp, T&&... val);
+	template <class P, class K, class... T> static void writeKeyVal(std::ofstream& ss, P&& prp, K&& key, T&&... val);
 };
 
 inline IniLine::IniLine() :
@@ -88,23 +88,42 @@ inline const string& IniLine::getVal() const {
 	return val;
 }
 
-inline string IniLine::get(const string& title) {
-	return '[' + title + "]\n";
+template <class... T>
+void IniLine::writeTitle(std::ofstream& ss, T&&... title) {
+	((ss << '[') << ... << std::forward<T>(title)) << "]\n";
 }
 
-inline string IniLine::get(const string& prp, const string& val) {
-	return prp + '=' + val + '\n';
+template <class P, class... T>
+void IniLine::writeVal(std::ofstream& ss, P&& prp, T&&... val) {
+	((ss << std::forward<P>(prp) << '=') << ... << std::forward<T>(val)) << '\n';
 }
 
-inline string IniLine::get(const string& prp, const string& key, const string& val) {
-	return prp + '[' + key + "]=" + val + '\n';
+template <class P, class K, class... T>
+void IniLine::writeKeyVal(std::ofstream& ss, P&& prp, K&& key, T&&... val) {
+	((ss << std::forward<P>(prp) << '[' << std::forward<K>(key) << "]=") << ... << std::forward<T>(val)) << '\n';
 }
 
 // handles all filesystem interactions
 class FileSys {
 public:
-	static const array<SDL_Color, sizet(Color::texture)+1> defaultColors;
-	static const array<string, defaultColors.size()> colorNames;
+	static constexpr array<SDL_Color, sizet(Color::texture)+1> defaultColors = {
+		SDL_Color{ 10, 10, 10, 255 },		// background
+		SDL_Color{ 90, 90, 90, 255 },		// normal
+		SDL_Color{ 60, 60, 60, 255 },		// dark
+		SDL_Color{ 120, 120, 120, 255 },	// light
+		SDL_Color{ 105, 105, 105, 255 },	// select
+		SDL_Color{ 210, 210, 210, 255 },	// text
+		SDL_Color{ 210, 210, 210, 255 }		// texture
+	};
+	static constexpr array<const char*, defaultColors.size()> colorNames = {
+		"background",
+		"normal",
+		"dark",
+		"light",
+		"select",
+		"text",
+		"texture"
+	};
 
 #ifdef _WIN32
 	static constexpr char dirTexs[] = "textures\\";
@@ -117,7 +136,11 @@ private:
 	static constexpr char defaultFwMode[] = "wb";
 	static constexpr sizet archiveReadBlockSize = 10240;
 #ifdef _WIN32
-	static const array<string, 22> takenFilenames;
+	static constexpr array<const char*, 22> takenFilenames = {
+		"CON", "PRN", "AUX", "NUL",
+		"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+		"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+	};
 	static constexpr sizet drivesMax = 26;
 	static constexpr sizet fnameMax = 255;
 #else
@@ -167,13 +190,13 @@ public:
 	bool getLastPage(const string& book, string& drc, string& fname);
 	bool saveLastPage(const string& book, const string& drc, const string& fname);
 	Settings* loadSettings();
-	bool saveSettings(const Settings* sets);
+	void saveSettings(const Settings* sets);
 	array<Binding, Binding::names.size()> getBindings();
-	bool saveBindings(const array<Binding, Binding::names.size()>& bindings);
+	void saveBindings(const array<Binding, Binding::names.size()>& bindings);
 	string findFont(const string& font);	// on success returns absolute path to font file, otherwise returns empty path
 
 	static vector<string> listDir(string drc, FileType filter = FTYPE_STD, bool showHidden = true, bool readLinks = true);
-	static int iterateDirRec(const string& drc, const std::function<int (string)>& call, FileType filter = FTYPE_STD, bool readLinks = true, bool followLinks = false);
+	static int iterateDirRec(const string& drc, const std::function<int (const string&)>& call, FileType filter = FTYPE_STD, bool readLinks = true, bool followLinks = false);
 	static pair<vector<string>, vector<string>> listDirSep(string drc, FileType filter = FTYPE_REG, bool showHidden = true, bool readLinks = true);	// first is list of files, second is list of directories
 
 	static string validateFilename(string file);
@@ -196,7 +219,6 @@ public:
 private:
 	static vector<string> readFileLines(const string& file, bool printMessage = true);
 	static string readTextFile(const string& file, bool printMessage = true);
-	static bool writeTextFile(const string& file, const string& text);
 	static bool writeTextFile(const string& file, const vector<string>& lines);
 	static SDL_Color readColor(const string& line);
 

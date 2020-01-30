@@ -16,8 +16,6 @@ private:
 	uptr<Thread> thread;
 
 public:
-	Program();
-
 	void start();
 	void eventUser(const SDL_UserEvent& user);
 
@@ -106,7 +104,7 @@ public:
 	void eventClosePopup(Button* but = nullptr);
 	void eventTryExit(Button* but = nullptr);
 	void eventForceExit(Button* but = nullptr);
-	
+
 	Downloader* getDownloader();
 	ProgState* getState();
 	Browser* getBrowser();
@@ -117,10 +115,6 @@ private:
 	void setState(ProgState* newState);
 	void reposizeWindow(vec2i dres, vec2i wsiz);
 };
-
-inline Program::Program() :
-	state(new ProgState)	// necessary as a placeholder to prevent nullptr exceptions
-{}
 
 inline void Program::eventOpenBookList(Button*) {
 	setState(new ProgBooks);

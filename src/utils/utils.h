@@ -83,29 +83,6 @@ constexpr array<uptrt, 4> sizeFactors = {
 
 // general wrappers
 
-#define ENUM_OPERATIONS(EType, IType) \
-	inline constexpr EType operator~(EType a) { \
-		return EType(~IType(a)); \
-	} \
-	inline constexpr EType operator&(EType a, EType b) { \
-		return EType(IType(a) & IType(b)); \
-	} \
-	inline constexpr EType operator&=(EType& a, EType b) { \
-		return a = EType(IType(a) & IType(b)); \
-	} \
-	inline constexpr EType operator|(EType a, EType b) { \
-		return EType(IType(a) | IType(b)); \
-	} \
-	inline constexpr EType operator|=(EType& a, EType b) { \
-		return a = EType(IType(a) | IType(b)); \
-	} \
-	inline constexpr EType operator^(EType a, EType b) { \
-		return EType(IType(a) ^ IType(b)); \
-	} \
-	inline constexpr EType operator^=(EType& a, EType b) { \
-		return a = EType(IType(a) ^ IType(b)); \
-	}
-
 enum class UserCode : int32 {
 	readerProgress,
 	readerFinished,
@@ -115,6 +92,46 @@ enum class UserCode : int32 {
 	moveProgress,
 	moveFinished
 };
+
+template <class T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
+constexpr T operator~(T a) {
+	return T(~std::underlying_type_t<T>(a));
+}
+
+template <class T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
+constexpr T operator&(T a, T b) {
+	return T(std::underlying_type_t<T>(a) & std::underlying_type_t<T>(b));
+}
+
+template <class T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
+constexpr T operator&=(T& a, T b) {
+	return a = T(std::underlying_type_t<T>(a) & std::underlying_type_t<T>(b));
+}
+
+template <class T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
+constexpr T operator|(T a, T b) {
+	return T(std::underlying_type_t<T>(a) | std::underlying_type_t<T>(b));
+}
+
+template <class T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
+constexpr T operator|=(T& a, T b) {
+	return a = T(std::underlying_type_t<T>(a) | std::underlying_type_t<T>(b));
+}
+
+template <class T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
+constexpr T operator^(T a, T b) {
+	return T(std::underlying_type_t<T>(a) ^ std::underlying_type_t<T>(b));
+}
+
+template <class T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
+constexpr T operator^=(T& a, T b) {
+	return a = T(std::underlying_type_t<T>(a) ^ std::underlying_type_t<T>(b));
+}
+
+template <class T, std::enable_if_t<std::is_integral_v<T> || std::is_floating_point_v<T>, int> = 0>
+constexpr bool outRange(T val, T min, T max) {
+	return val < min || val > max;
+}
 
 inline vec2i texSize(SDL_Texture* tex) {
 	vec2i s;
@@ -158,7 +175,7 @@ struct Rect : SDL_Rect {
 	constexpr vec2i size() const;
 	constexpr vec2i end() const;
 
-	bool contain(vec2i point) const;
+	bool contain(const vec2i& point) const;
 	Rect crop(const Rect& rect);			// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
 	Rect intersect(const Rect& rect) const;	// same as above except it returns the overlap instead of the crop and it doesn't modify itself
 };
@@ -195,7 +212,7 @@ inline constexpr vec2i Rect::end() const {
 	return pos() + size();
 }
 
-inline bool Rect::contain(vec2i point) const {
+inline bool Rect::contain(const vec2i& point) const {
 	return SDL_PointInRect(reinterpret_cast<const SDL_Point*>(&point), this);
 }
 
@@ -210,7 +227,7 @@ struct Texture {
 	string name;
 	SDL_Texture* tex;
 
-	Texture(string name = string(), SDL_Texture* tex = nullptr);
+	Texture(string name = "", SDL_Texture* tex = nullptr);
 
 	vec2i res() const;
 };
@@ -303,11 +320,7 @@ inline bool notDsep(char c) {
 }
 
 inline bool isDriveLetter(const string& path) {
-	return path.length() >= 2 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':' && std::all_of(path.begin() + 2, path.end(), isDsep);
-}
-
-inline bool isDriveLetter(char c) {
-	return c >= 'A' && c <= 'Z';
+	return path.length() >= 2 && isalnum(path[0]) && path[1] == ':' && std::all_of(path.begin() + 2, path.end(), isDsep);
 }
 
 bool pathCmp(const string& as, const string& bs);
@@ -327,17 +340,9 @@ inline bool notSpace(char c) {
 	return uchar(c) > ' ' && c != 0x7F;
 }
 
-inline bool isDigit(char c) {
-	return c >= '0' && c <= '9';
-}
-
-inline bool notDigit(char c) {
-	return c < '0' || c > '9';
-}
-
 inline string trim(const string& str) {
-	string::const_iterator pos = std::find_if(str.begin(), str.end(), [](char c) -> bool { return uchar(c) > ' '; });
-	return string(pos, std::find_if(str.rbegin(), std::make_reverse_iterator(pos), [](char c) -> bool { return uchar(c) > ' '; }).base());
+	string::const_iterator pos = std::find_if(str.begin(), str.end(), notSpace);
+	return string(pos, std::find_if(str.rbegin(), std::make_reverse_iterator(pos), notSpace).base());
 }
 
 inline string trimZero(const string& str) {
@@ -347,7 +352,7 @@ inline string trimZero(const string& str) {
 
 inline string getExt(const string& path) {
 	string::const_reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
-	return it != path.rend() && *it == '.' ? string(it.base(), path.end()) : string();
+	return it != path.rend() && *it == '.' ? string(it.base(), path.end()) : "";
 }
 
 inline bool hasExt(const string& path) {
@@ -357,7 +362,7 @@ inline bool hasExt(const string& path) {
 
 inline string delExt(const string& path) {
 	string::const_reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
-	return it != path.rend() && *it == '.' ? string(path.begin(), it.base() - 1) : string();
+	return it != path.rend() && *it == '.' ? string(path.begin(), it.base() - 1) : "";
 }
 
 inline string appDsep(const string& path) {
@@ -401,33 +406,6 @@ inline string memoryString(uptrt num) {
 	return memoryString(num, memSizeMag(num));
 }
 
-// geometry?
-
-template <class T>
-bool outRange(const T& val, const T& min, const T& max) {
-	return val < min || val > max;
-}
-
-template <class T>
-const T& clampHigh(const T& val, const T& max) {
-	return (val > max) ? max : val;
-}
-
-template <class T>
-vec2<T> clampHigh(const vec2<T>& val, const vec2<T>& max) {
-	return vec2<T>(clampHigh(val.x, max.x), clampHigh(val.y, max.y));
-}
-
-template <class T>
-const T& clampLow(const T& val, const T& min) {
-	return (val < min) ? min : val;
-}
-
-template <class T>
-vec2<T> clampLow(const vec2<T>& val, const vec2<T>& min) {
-	return vec2<T>(clampLow(val.x, min.x), clampLow(val.y, min.y));
-}
-
 // conversions
 #ifdef _WIN32
 string cwtos(const wchar* wstr);
@@ -443,18 +421,18 @@ inline bool stob(const string& str) {
 	return str == "true" || str == "1";
 }
 
-inline string btos(bool b) {
+inline const char* btos(bool b) {
 	return b ? "true" : "false";
 }
 
 template <class T, sizet N>
-T strToEnum(const array<string, N>& names, const string& str) {
+T strToEnum(const array<const char*, N>& names, const string& str) {
 	return T(std::find_if(names.begin(), names.end(), [str](const string& it) -> bool { return !strcicmp(it, str); }) - names.begin());
 }
 
 template <class T>
-T strToVal(const umap<T, string>& names, const string& str) {
-	umap<uint8, string>::const_iterator it = std::find_if(names.begin(), names.end(), [str](const pair<T, string>& it) -> bool { return !strcicmp(it.second, str); });
+T strToVal(const umap<T, const char*>& names, const string& str) {
+	umap<uint8, const char*>::const_iterator it = std::find_if(names.begin(), names.end(), [str](const pair<T, const char*>& it) -> bool { return !strcicmp(it.second, str); });
 	return it != names.end() ? it->first : T(0);
 }
 

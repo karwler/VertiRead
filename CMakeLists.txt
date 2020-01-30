@@ -4,6 +4,9 @@ project(VertiRead LANGUAGES CXX)
 if(CMAKE_CONFIGURATION_TYPES)
 	set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
 endif()
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # source files
 set(SRC_FILES
@@ -50,7 +53,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 			set(LIB_DIR "${CMAKE_SOURCE_DIR}/lib/msvc32")
 		endif()
 	endif()
-	
+
 	link_directories(${LIB_DIR})
 	set(DLL_FILES
 		"archive.dll"
@@ -62,7 +65,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 		"SDL2.dll"
 		"SDL2_image.dll"
 		"SDL2_ttf.dll"
-		"zlib1.dll")	
+		"zlib1.dll")
 endif()
 
 # definitions
@@ -81,7 +84,6 @@ endif()
 
 # set main target
 add_executable(${PROJECT_NAME} ${SRC_FILES})
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
 
 # include directories and link libraries
 include_directories("${CMAKE_SOURCE_DIR}/src")
@@ -103,19 +105,27 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 								RUNTIME_OUTPUT_DIRECTORY_RELEASE ${EXECUTABLE_OUTPUT_PATH})
 
 if((${CMAKE_CXX_COMPILER_ID} MATCHES "GNU") OR (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang"))
-	if(${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -no-pie")
+	set(CXX_FLG_ANY "-Wall -Wextra -pedantic-errors -Wdouble-promotion -Wformat=2 -Wmissing-declarations -Wold-style-cast -Woverlength-strings -Wunreachable-code -Wno-implicit-fallthrough -Wno-parentheses -Wno-switch")
+	set(FLG_DEBUG "-g")
+	set(FLG_RELEASE "-O3")
+	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+		set(FLG_RELEASE "${FLG_RELEASE} -s")
+		set(CXX_FLG_ANY "${CXX_FLG_ANY} -Wcast-align=strict -Wduplicated-branches -Wduplicated-cond -Wlogical-op -Wuseless-cast")
 	else()
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-covered-switch-default -Wno-exit-time-destructors -Wno-global-constructors")
+		set(CXX_FLG_ANY "${CXX_FLG_ANY} -Wcast-align -Wnull-dereference")
 	endif()
+elseif(MSVC)
+	set(FLG_DEBUG "/Od /Ob0")
+	set(FLG_RELEASE "/O2 /Ob2 /Oi /Ot /GL")
+endif()
 
-	if(${CMAKE_BUILD_TYPE} MATCHES "Debug")
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
-	else()
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -s -Wno-padded")
-	endif()
-
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-float-equal -Wno-parentheses -Wno-shadow -Wno-switch -Wno-switch-enum -Wno-unused-result")
+if(CMAKE_CONFIGURATION_TYPES)
+	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_FLG_ANY} ${FLG_DEBUG}")
+	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${CXX_FLG_ANY} ${FLG_RELEASE}")
+elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_FLG_ANY} ${FLG_DEBUG}")
+else()
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_FLG_ANY} ${FLG_RELEASE}")
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
@@ -143,18 +153,15 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 					COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/rsc/icon.ico" ${EXECUTABLE_OUTPUT_PATH}
 					COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/rsc/data" ${EXECUTABLE_OUTPUT_PATH})
 
-# filter file for ms visual studio
-foreach(source IN LISTS SRC_FILES)
-	get_filename_component(source_dir ${source} PATH)
-	string(REPLACE "/" ";" dirs "${source_dir}")
-	list(GET dirs 0 dir0)
-	
-	if(${dir0} MATCHES "rsc")
-		set(filter_path "Source")
+# group files
+foreach(FSRC IN LISTS SRC_FILES)
+	get_filename_component(FGRP "${FSRC}" DIRECTORY)
+	string(REPLACE "/" ";" FGRP "${FGRP}")
+	list(REMOVE_AT FGRP 0)
+	if(MSVC)
+		string(REPLACE ";" "\\" FGRP "${FGRP}")
 	else()
-		list(REMOVE_AT dirs 0)
-		list(INSERT dirs 0 "Source")
-		string(REPLACE ";" "\\" filter_path "${dirs}")
+		string(REPLACE ";" "/" FGRP "${FGRP}")
 	endif()
-	source_group("${filter_path}" FILES ${source})
+	source_group("${FGRP}" FILES "${FSRC}")
 endforeach()

@@ -60,7 +60,7 @@ public:
 	virtual void eventFileDrop(const string&) {}
 	virtual void eventClosing() {}
 
-	virtual Layout* createLayout();
+	virtual RootLayout* createLayout();
 	virtual Overlay* createOverlay();
 	static Popup* createPopupMessage(string msg, PCall ccal, string ctxt = "Ok", Label::Alignment malign = Label::Alignment::left);
 	static Popup* createPopupChoice(string msg, PCall kcal, PCall ccal, Label::Alignment malign = Label::Alignment::left);
@@ -77,7 +77,7 @@ public:
 	virtual void eventHide() override;
 	virtual void eventFileDrop(const string& file) override;
 
-	virtual Layout* createLayout() override;
+	virtual RootLayout* createLayout() override;
 };
 
 class ProgPageBrowser : public ProgState {
@@ -88,7 +88,7 @@ public:
 	virtual void eventHide() override;
 	virtual void eventFileDrop(const string& file) override;
 
-	virtual Layout* createLayout() override;
+	virtual RootLayout* createLayout() override;
 };
 
 class ProgReader : public ProgState {
@@ -122,7 +122,7 @@ public:
 	virtual void eventHide() override;
 	virtual void eventClosing() override;
 
-	virtual Layout* createLayout() override;
+	virtual RootLayout* createLayout() override;
 	virtual Overlay* createOverlay() override;
 
 private:
@@ -143,7 +143,7 @@ public:
 
 	virtual void eventEscape() override;
 
-	virtual Layout* createLayout() override;
+	virtual RootLayout* createLayout() override;
 	Comic curInfo() const;
 	void printResults(vector<pairStr>&& comics);
 	void printInfo(vector<pairStr>&& chaps);
@@ -158,7 +158,7 @@ public:
 
 	virtual void eventEscape() override;
 
-	virtual Layout* createLayout() override;
+	virtual RootLayout* createLayout() override;
 };
 #endif
 class ProgSettings : public ProgState {
@@ -178,8 +178,8 @@ public:
 	virtual void eventFullscreen() override;
 	virtual void eventHide() override;
 	virtual void eventFileDrop(const string& file) override;
-	
-	virtual Layout* createLayout() override;
+
+	virtual RootLayout* createLayout() override;
 
 	static Widget* createLimitEdit();
 };
@@ -194,5 +194,5 @@ public:
 	virtual void eventEscape() override;
 	virtual void eventHide() override;
 
-	virtual Layout* createLayout() override;
+	virtual RootLayout* createLayout() override;
 };

@@ -20,7 +20,7 @@ struct Comic {
 	string title;
 	vector<pairStr> chapters;	// name, url
 
-	Comic(string title = string(), vector<pairStr> chapters = {});
+	Comic(string title = "", vector<pairStr>&& chapters = {});
 };
 
 class WebSource {
@@ -30,7 +30,16 @@ public:
 		MANGAMASTER,
 		NHENTAI
 	};
-	static const array<string, NHENTAI+1> sourceNames, sourceUrls;
+	static constexpr array<const char*, NHENTAI+1> sourceNames = {
+		"MangaHere",
+		"MangaMaster",
+		"nhentai"
+	};
+	static constexpr array<const char*, NHENTAI+1> sourceUrls = {
+		"https://www.mangahere.cc",
+		"http://www.mangamaster.net",
+		"https://nhentai.net"
+	};
 
 	CURL* curlMain;			// for downloading html
 	SDL_mutex* mainLock;	// lock before using curlMain
@@ -40,8 +49,8 @@ public:
 	WebSource(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile);
 	virtual ~WebSource() = default;
 
-	const string& name() const;
-	const string& baseUrl() const;
+	const char* name() const;
+	const char* baseUrl() const;
 	virtual Type source() const;	// dummy function
 
 	virtual vector<pairStr> query(const string& text) = 0;
@@ -63,11 +72,11 @@ protected:
 	static bool namecmp(const xmlChar* name, const char* str);
 };
 
-inline const string& WebSource::name() const {
+inline const char* WebSource::name() const {
 	return sourceNames[source()];
 }
 
-inline const string& WebSource::baseUrl() const {
+inline const char* WebSource::baseUrl() const {
 	return sourceUrls[source()];
 }
 

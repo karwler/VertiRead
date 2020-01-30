@@ -77,7 +77,7 @@ void ProgState::eventRefresh() {
 	World::scene()->resetLayouts();
 }
 
-Layout* ProgState::createLayout() {
+RootLayout* ProgState::createLayout() {
 	return nullptr;
 }
 
@@ -129,7 +129,7 @@ void ProgBooks::eventFileDrop(const string& file) {
 	World::program()->openFile(file);
 }
 
-Layout* ProgBooks::createLayout() {
+RootLayout* ProgBooks::createLayout() {
 	// top bar
 	Text download("Download", topHeight);
 	Text settings("Settings", topHeight);
@@ -154,9 +154,9 @@ Layout* ProgBooks::createLayout() {
 	// root layout
 	vector<Widget*> cont = {
 		new Layout(topHeight, std::move(top), Direction::right, Layout::Select::none, topSpacing),
-		new TileBox(1.f, tiles)
+		new TileBox(1.f, std::move(tiles))
 	};
-	return new Layout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
+	return new RootLayout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
 }
 
 // PROG PAGE BROWSER
@@ -175,7 +175,7 @@ void ProgPageBrowser::eventFileDrop(const string& file) {
 	World::program()->openFile(file);
 }
 
-Layout* ProgPageBrowser::createLayout() {
+RootLayout* ProgPageBrowser::createLayout() {
 	// sidebar
 	vector<string> txs = {
 		"Back",
@@ -194,7 +194,7 @@ Layout* ProgPageBrowser::createLayout() {
 		items[i] = new Label(lineHeight, std::move(dirs[i]), &Program::eventBrowserGoIn, nullptr, nullptr, Label::Alignment::left, World::drawSys()->texture("folder"));
 	for (sizet i = 0; i < files.size(); i++)
 		items[dirs.size()+i] = new Label(lineHeight, std::move(files[i]), &Program::eventBrowserGoFile, nullptr, nullptr, Label::Alignment::left, World::drawSys()->texture("file"));
-	
+
 	// main content
 	vector<Widget*> mid = {
 		new Layout(txsWidth, std::move(bar)),
@@ -206,7 +206,7 @@ Layout* ProgPageBrowser::createLayout() {
 		new LabelEdit(lineHeight, std::all_of(World::browser()->getRootDir().begin(), World::browser()->getRootDir().end(), isDsep) ? World::browser()->getCurDir() : World::browser()->getCurDir().substr(appDsep(World::sets()->getDirLib()).length()), &Program::eventBrowserGoTo),
 		new Layout(1.f, std::move(mid), Direction::right, Layout::Select::none, topSpacing)
 	};
-	return new Layout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
+	return new RootLayout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
 }
 
 // PROG READER
@@ -301,13 +301,14 @@ void ProgReader::eventClosing() {
 	else {
 		string::iterator mid = std::find_if(rpath.begin(), rpath.end(), isDsep);
 		string::iterator nxt = std::find_if(mid, rpath.end(), notDsep);
-		World::fileSys()->saveLastPage(string(rpath.begin(), mid), nxt != rpath.end() ? string(nxt, rpath.end()) : string(), reader->curPage());
+		World::fileSys()->saveLastPage(string(rpath.begin(), mid), nxt != rpath.end() ? string(nxt, rpath.end()) : "", reader->curPage());
 	}
 	SDL_ShowCursor(SDL_ENABLE);
 }
 
-Layout* ProgReader::createLayout() {
-	return reader = new ReaderBox(1.f, {}, World::sets()->direction, World::sets()->zoom, World::sets()->spacing);
+RootLayout* ProgReader::createLayout() {
+	vector<Widget*> cont = { reader = new ReaderBox(1.f, {}, World::sets()->direction, World::sets()->zoom, World::sets()->spacing) };
+	return new RootLayout(1.f, std::move(cont), Direction::right, Layout::Select::none, 0);
 }
 
 Overlay* ProgReader::createOverlay() {
@@ -339,8 +340,9 @@ void ProgDownloader::eventEscape() {
 		World::program()->eventOpenBookList();
 }
 
-Layout* ProgDownloader::createLayout() {
+RootLayout* ProgDownloader::createLayout() {
 	// top bar
+	vector<string> wsrcs(WebSource::sourceNames.begin(), WebSource::sourceNames.end());
 	Text books("Library", topHeight);
 	Text settings("Settings", topHeight);
 	Text exit("Exit", topHeight);
@@ -351,7 +353,7 @@ Layout* ProgDownloader::createLayout() {
 		new Label(exit.length, std::move(exit.text), &Program::eventTryExit),
 		new Widget(),
 		new Label(downloads.length, std::move(downloads.text), &Program::eventOpenDownloadList),
-		new SwitchBox(findMaxLength(WebSource::sourceNames.data(), WebSource::sourceNames.size(), topHeight), WebSource::sourceNames.data(), WebSource::sourceNames.size(), World::downloader()->getSource()->name(), &Program::eventSwitchSource, Label::Alignment::center)
+		new SwitchBox(findMaxLength(wsrcs.data(), wsrcs.size(), topHeight), wsrcs.data(), wsrcs.size(), World::downloader()->getSource()->name(), &Program::eventSwitchSource, Label::Alignment::center)
 	};
 
 	// downlaod button and bar
@@ -370,7 +372,7 @@ Layout* ProgDownloader::createLayout() {
 	// search bar children
 	Text search("Search", lineHeight);
 	vector<Widget*> nav = {
-		query = new LabelEdit(0.8f, string(), &Program::eventQuery, nullptr, nullptr, LabelEdit::TextType::text, false),
+		query = new LabelEdit(0.8f, "", &Program::eventQuery, nullptr, nullptr, LabelEdit::TextType::text, false),
 		new Label(search.length, std::move(search.text), &Program::eventQuery)
 	};
 
@@ -391,7 +393,7 @@ Layout* ProgDownloader::createLayout() {
 		new Layout(topHeight, std::move(top), Direction::right, Layout::Select::none, topSpacing),
 		new Layout(1.f, std::move(mid), Direction::right, Layout::Select::none, topSpacing)
 	};
-	return new Layout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
+	return new RootLayout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
 }
 
 Comic ProgDownloader::curInfo() const {
@@ -433,7 +435,7 @@ void ProgDownloads::eventEscape() {
 		World::program()->eventOpenDownloader();
 }
 
-Layout* ProgDownloads::createLayout() {
+RootLayout* ProgDownloads::createLayout() {
 	// top bar
 	Text books("Library", topHeight);
 	Text download("Download", topHeight);
@@ -484,7 +486,7 @@ Layout* ProgDownloads::createLayout() {
 		new Layout(topHeight, std::move(top), Direction::right, Layout::Select::none, topSpacing),
 		new Layout(1.f, std::move(mid), Direction::right)
 	};
-	return new Layout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
+	return new RootLayout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
 }
 #endif
 // PROG SETTINGS
@@ -512,7 +514,7 @@ void ProgSettings::eventFileDrop(const string& file) {
 		World::sets()->setDirLib(file);
 }
 
-Layout* ProgSettings::createLayout() {
+RootLayout* ProgSettings::createLayout() {
 	// top bar
 	Text books("Library", topHeight);
 	Text download("Download", topHeight);
@@ -555,15 +557,17 @@ Layout* ProgSettings::createLayout() {
 		txs[lcnt+i] = firstUpper(Binding::names[i]);
 	std::reverse(txs.begin(), txs.end());
 	int descLength = findMaxLength(txs.data(), txs.size(), lineHeight);
-	
+
 	// action fields for labels
 	vector<string> themes = World::fileSys()->getAvailibleThemes();
 	vector<string> renderers = getAvailibleRenderers();
+	vector<string> directs(Direction::names.begin(), Direction::names.end());
+	vector<string> plims(PicLim::names.begin(), PicLim::names.end());
 	Text dots(KeyGetter::ellipsisStr, lineHeight);
 	Text dznum(to_string(Settings::axisLimit), lineHeight);
 	vector<Widget*> lx[] = { {
 		new Label(descLength, popBack(txs)),
-		new SwitchBox(1.f, Direction::names.data(), Direction::names.size(), Direction::names[uint8(World::sets()->direction)], &Program::eventSwitchDirection)
+		new SwitchBox(1.f, directs.data(), directs.size(), directs[uint8(World::sets()->direction)], &Program::eventSwitchDirection)
 	}, {
 		new Label(descLength, popBack(txs)),
 		new LabelEdit(1.f, trimZero(to_string(World::sets()->zoom)), &Program::eventSetZoom, nullptr, nullptr, LabelEdit::TextType::uFloat)
@@ -572,7 +576,7 @@ Layout* ProgSettings::createLayout() {
 		new LabelEdit(1.f, to_string(World::sets()->spacing), &Program::eventSetSpacing, nullptr, nullptr, LabelEdit::TextType::uInt)
 	}, {
 		new Label(descLength, popBack(txs)),
-		new SwitchBox(findMaxLength(PicLim::names.data(), PicLim::names.size(), lineHeight), PicLim::names.data(), PicLim::names.size(), PicLim::names[uint8(World::sets()->picLim.type)], &Program::eventSetPicLimitType),
+		new SwitchBox(findMaxLength(plims.data(), plims.size(), lineHeight), plims.data(), plims.size(), plims[uint8(World::sets()->picLim.type)], &Program::eventSetPicLimitType),
 		createLimitEdit()
 	}, {
 		new Label(descLength, popBack(txs)),
@@ -635,7 +639,7 @@ Layout* ProgSettings::createLayout() {
 		new Layout(topHeight, std::move(top), Direction::right, Layout::Select::none, topSpacing),
 		new ScrollArea(1.f, std::move(lns))
 	};
-	return new Layout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
+	return new RootLayout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
 }
 
 Widget* ProgSettings::createLimitEdit() {
@@ -660,7 +664,7 @@ void ProgSearchDir::eventHide() {
 	eventRefresh();
 }
 
-Layout* ProgSearchDir::createLayout() {
+RootLayout* ProgSearchDir::createLayout() {
 	// sidebar
 	vector<string> txs = {
 		"Back",
@@ -691,5 +695,5 @@ Layout* ProgSearchDir::createLayout() {
 		new LabelEdit(lineHeight, World::browser()->getCurDir(), &Program::eventBrowserGoTo),
 		new Layout(1.f, std::move(mid), Direction::right, Layout::Select::none, topSpacing)
 	};
-	return new Layout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
+	return new RootLayout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
 }

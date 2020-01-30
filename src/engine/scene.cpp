@@ -12,8 +12,7 @@ ClickStamp::ClickStamp(Widget* widget, ScrollArea* area, vec2i mPos) :
 
 Scene::Scene() :
 	select(nullptr),
-	capture(nullptr),
-	layout(new Layout)	// dummy layout in case a function gets called preemptively
+	capture(nullptr)
 {}
 
 void Scene::tick(float dSec) {
@@ -72,6 +71,11 @@ void Scene::onMouseWheel(vec2i wMov) {
 void Scene::onMouseLeave() {
 	for (ClickStamp& it : stamps)
 		it.widget = it.area = nullptr;
+}
+
+void Scene::onText(const char* str) {
+	if (capture)
+		capture->onText(str);
 }
 
 void Scene::onResize() {

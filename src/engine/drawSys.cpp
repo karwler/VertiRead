@@ -379,5 +379,5 @@ string DrawSys::limitToStr(uptrt i, uptrt c, uptrt m, sizet mag) {
 	case PicLim::Type::size:
 		return memoryString(m, mag);
 	}
-	return string();
+	return "";
 }

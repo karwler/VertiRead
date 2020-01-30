@@ -66,7 +66,7 @@ public:
 	virtual void onJAxis(uint8, bool) {}
 	virtual void onGButton(SDL_GameControllerButton) {}
 	virtual void onGAxis(SDL_GameControllerAxis, bool) {}
-	virtual void onText(const string&) {}
+	virtual void onText(const char*) {}
 	virtual void onNavSelect(Direction dir);
 	virtual bool navSelectable() const;
 	virtual bool hasDoubleclick() const;
@@ -136,7 +136,7 @@ public:
 	virtual void onDoubleClick(vec2i mPos, uint8 mBut) override;
 	virtual bool navSelectable() const override;
 	virtual bool hasDoubleclick() const override;
-	
+
 	virtual Color color() const override;
 };
 
@@ -252,7 +252,7 @@ protected:
 	Alignment align;	// text alignment
 
 public:
-	Label(const Size& relSize = Size(), string text = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Alignment alignment = Alignment::left, SDL_Texture* tex = nullptr, bool showBG = true, int textMargin = defaultTextMargin, int texMargin = defaultIconMargin, Layout* parent = nullptr, sizet id = SIZE_MAX);
+	Label(const Size& relSize = Size(), string text = "", PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Alignment alignment = Alignment::left, SDL_Texture* tex = nullptr, bool showBG = true, int textMargin = defaultTextMargin, int texMargin = defaultIconMargin, Layout* parent = nullptr, sizet id = SIZE_MAX);
 	virtual ~Label() override;
 
 	virtual void drawSelf() const override;
@@ -260,7 +260,8 @@ public:
 	virtual void postInit() override;
 
 	const string& getText() const;
-	virtual void setText(string str);
+	virtual void setText(const string& str);
+	virtual void setText(string&& str);
 	Rect textRect() const;
 	Rect textFrame() const;
 	virtual Rect texRect() const override;
@@ -285,7 +286,7 @@ private:
 	sizet curOpt;
 
 public:
-	SwitchBox(const Size& relSize = Size(), const string* opts = nullptr, sizet ocnt = 0, const string& curOption = string(), PCall call = nullptr, Alignment alignment = Alignment::left, SDL_Texture* tex = nullptr, bool showBG = true, int textMargin = defaultTextMargin, int texMargin = defaultIconMargin, Layout* parent = nullptr, sizet id = SIZE_MAX);
+	SwitchBox(const Size& relSize = Size(), const string* opts = nullptr, sizet ocnt = 0, string curOption = "", PCall call = nullptr, Alignment alignment = Alignment::left, SDL_Texture* tex = nullptr, bool showBG = true, int textMargin = defaultTextMargin, int texMargin = defaultIconMargin, Layout* parent = nullptr, sizet id = SIZE_MAX);
 	virtual ~SwitchBox() override = default;
 
 	virtual void onClick(vec2i mPos, uint8 mBut) override;
@@ -319,30 +320,36 @@ public:
 	bool unfocusConfirm;
 private:
 	TextType textType;
-	int textOfs;		// text's horizontal offset
+	int textOfs;	// text's horizontal offset
 	uint cpos;		// caret position
 	string oldText;
 
 public:
-	LabelEdit(const Size& relSize = Size(), string line = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, TextType type = TextType::text, bool unfocusConfirm = true, SDL_Texture* tex = nullptr, bool showBG = true, int textMargin = defaultTextMargin, int texMargin = defaultIconMargin, Layout* parent = nullptr, sizet id = SIZE_MAX);
+	LabelEdit(const Size& relSize = Size(), string line = "", PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, TextType type = TextType::text, bool unfocusConfirm = true, SDL_Texture* tex = nullptr, bool showBG = true, int textMargin = defaultTextMargin, int texMargin = defaultIconMargin, Layout* parent = nullptr, sizet id = SIZE_MAX);
 	virtual ~LabelEdit() override = default;
 
 	virtual void onClick(vec2i mPos, uint8 mBut) override;
 	virtual void onKeypress(const SDL_Keysym& key) override;
-	virtual void onText(const string& str) override;
+	virtual void onText(const char* str) override;
 
 	const string& getOldText() const;
-	virtual void setText(string str) override;
+	virtual void setText(const string& str) override;
+	virtual void setText(string&& str) override;
 	Rect caretRect() const;
 
 	void confirm();
 	void cancel();
 
 private:
+	void onTextReset();
 	virtual vec2i textPos() const override;
 	int caretPos() const;	// caret's relative x position
 	void setCPos(uint cp);
 
+	static bool kmodCtrl(uint16 mod);
+	static bool kmodAlt(uint16 mod);
+	uint jumpCharB(uint i);
+	uint jumpCharF(uint i);
 	uint findWordStart();	// returns index of first character of word before cpos
 	uint findWordEnd();		// returns index of character after last character of word after cpos
 	void cleanText();
@@ -358,6 +365,14 @@ inline const string& LabelEdit::getOldText() const {
 	return oldText;
 }
 
+inline bool LabelEdit::kmodCtrl(uint16 mod) {
+	return mod & KMOD_CTRL && !(mod & (KMOD_SHIFT | KMOD_ALT));
+}
+
+inline bool LabelEdit::kmodAlt(uint16 mod) {
+	return mod & KMOD_ALT && !(mod & (KMOD_SHIFT | KMOD_CTRL));
+}
+
 // for getting a key/button/axis
 class KeyGetter : public Label {
 public:
@@ -367,9 +382,43 @@ public:
 		gamepad
 	};
 
-	static const umap<uint8, string> hatNames;
-	static const array<string, SDL_CONTROLLER_BUTTON_MAX> gbuttonNames;
-	static const array<string, SDL_CONTROLLER_AXIS_MAX> gaxisNames;
+	static inline const umap<uint8, const char*> hatNames = {
+		pair(SDL_HAT_CENTERED, "Center"),
+		pair(SDL_HAT_UP, "Up"),
+		pair(SDL_HAT_RIGHT, "Right"),
+		pair(SDL_HAT_DOWN, "Down"),
+		pair(SDL_HAT_LEFT, "Left"),
+		pair(SDL_HAT_RIGHTUP, "Right-Up"),
+		pair(SDL_HAT_RIGHTDOWN, "Right-Down"),
+		pair(SDL_HAT_LEFTDOWN, "Left-Down"),
+		pair(SDL_HAT_LEFTUP, "Left-Up")
+	};
+	static constexpr array<const char*, SDL_CONTROLLER_BUTTON_MAX> gbuttonNames = {
+		"A",
+		"B",
+		"X",
+		"Y",
+		"Back",
+		"Guide",
+		"Start",
+		"LS",
+		"RS",
+		"LB",
+		"RB",
+		"Up",
+		"Down",
+		"Left",
+		"Right"
+	};
+	static constexpr array<const char*, SDL_CONTROLLER_AXIS_MAX> gaxisNames = {
+		"LX",
+		"LY",
+		"RX",
+		"RY",
+		"LT",
+		"RT"
+	};
+
 	static constexpr char ellipsisStr[] = "...";
 private:
 	static constexpr char prefButton[] = "B ";

@@ -225,7 +225,12 @@ void Label::postInit() {
 	updateTextTex();
 }
 
-void Label::setText(string str) {
+void Label::setText(const string& str) {
+	text = str;
+	updateTextTex();
+}
+
+void Label::setText(string&& str) {
 	text = std::move(str);
 	updateTextTex();
 }
@@ -271,10 +276,10 @@ void Label::updateTextTex() {
 
 // SWITCH BOX
 
-SwitchBox::SwitchBox(const Size& relSize, const string* opts, sizet ocnt, const string& curOption, PCall call, Alignment alignment, SDL_Texture* tex, bool showBG, int textMargin, int texMargin, Layout* parent, sizet id) :
+SwitchBox::SwitchBox(const Size& relSize, const string* opts, sizet ocnt, string curOption, PCall call, Alignment alignment, SDL_Texture* tex, bool showBG, int textMargin, int texMargin, Layout* parent, sizet id) :
 	Label(relSize, std::move(curOption), call, call, nullptr, alignment, tex, showBG, textMargin, texMargin, parent, id),
 	options(opts, opts + ocnt),
-	curOpt(sizet(std::find(options.begin(), options.end(), curOption) - options.begin()))
+	curOpt(sizet(std::find(options.begin(), options.end(), text) - options.begin()))
 {
 	if (curOpt >= options.size())
 		curOpt = 0;
@@ -319,46 +324,47 @@ void LabelEdit::onClick(vec2i, uint8 mBut) {
 void LabelEdit::onKeypress(const SDL_Keysym& key) {
 	switch (key.scancode) {
 	case SDL_SCANCODE_LEFT:	// move caret left
-		if (key.mod & KMOD_LALT)	// if holding alt skip word
+		if (kmodAlt(key.mod))	// if holding alt skip word
 			setCPos(findWordStart());
-		else if (key.mod & KMOD_CTRL)	// if holding ctrl move to beginning
+		else if (kmodCtrl(key.mod))	// if holding ctrl move to beginning
 			setCPos(0);
 		else if (cpos > 0)	// otherwise go left by one
-			setCPos(cpos - 1);
+			setCPos(jumpCharB(cpos));
 		break;
 	case SDL_SCANCODE_RIGHT:	// move caret right
-		if (key.mod & KMOD_LALT)	// if holding alt skip word
+		if (kmodAlt(key.mod))	// if holding alt skip word
 			setCPos(findWordEnd());
-		else if (key.mod & KMOD_CTRL)	// if holding ctrl go to end
+		else if (kmodCtrl(key.mod))	// if holding ctrl go to end
 			setCPos(uint(text.length()));
 		else if (cpos < text.length())	// otherwise go right by one
-			setCPos(cpos + 1);
+			setCPos(jumpCharF(cpos));
 		break;
 	case SDL_SCANCODE_BACKSPACE:	// delete left
-		if (key.mod & KMOD_LALT) {	// if holding alt delete left word
+		if (kmodAlt(key.mod)) {	// if holding alt delete left word
 			uint id = findWordStart();
 			text.erase(id, cpos - id);
 			updateTextTex();
 			setCPos(id);
-		} else if (key.mod & KMOD_CTRL) {	// if holding ctrl delete line to left
+		} else if (kmodCtrl(key.mod)) {	// if holding ctrl delete line to left
 			text.erase(0, cpos);
 			updateTextTex();
 			setCPos(0);
 		} else if (cpos > 0) {	// otherwise delete left character
-			text.erase(cpos - 1, 1);
+			uint id = jumpCharB(cpos);
+			text.erase(id, cpos - id);
 			updateTextTex();
-			setCPos(cpos - 1);
+			setCPos(id);
 		}
 		break;
 	case SDL_SCANCODE_DELETE:	// delete right character
-		if (key.mod & KMOD_LALT) {	// if holding alt delete right word
+		if (kmodAlt(key.mod)) {	// if holding alt delete right word
 			text.erase(cpos, findWordEnd() - cpos);
 			updateTextTex();
-		} else if (key.mod & KMOD_CTRL) {	// if holding ctrl delete line to right
+		} else if (kmodCtrl(key.mod)) {	// if holding ctrl delete line to right
 			text.erase(cpos, text.length() - cpos);
 			updateTextTex();
 		} else if (cpos < text.length()) {	// otherwise delete right character
-			text.erase(cpos, 1);
+			text.erase(cpos, jumpCharF(cpos) - cpos);
 			updateTextTex();
 		}
 		break;
@@ -369,27 +375,27 @@ void LabelEdit::onKeypress(const SDL_Keysym& key) {
 		setCPos(uint(text.length()));
 		break;
 	case SDL_SCANCODE_V:	// paste text
-		if (key.mod & KMOD_CTRL)
+		if (kmodCtrl(key.mod))
 			if (char* ctxt = SDL_GetClipboardText()) {
 				onText(ctxt);
 				SDL_free(ctxt);
 			}
 		break;
 	case SDL_SCANCODE_C:	// copy text
-		if (key.mod & KMOD_CTRL)
+		if (kmodCtrl(key.mod))
 			SDL_SetClipboardText(text.c_str());
 		break;
 	case SDL_SCANCODE_X:	// cut text
-		if (key.mod & KMOD_CTRL) {
+		if (kmodCtrl(key.mod)) {
 			SDL_SetClipboardText(text.c_str());
-			setText(string());
+			setText("");
 		}
 		break;
 	case SDL_SCANCODE_Z:	// set text to old text
-		if (key.mod & KMOD_CTRL)
+		if (kmodCtrl(key.mod))
 			setText(std::move(oldText));
 		break;
-	case SDL_SCANCODE_RETURN:
+	case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER:
 		confirm();
 		break;
 	case SDL_SCANCODE_ESCAPE:
@@ -397,7 +403,7 @@ void LabelEdit::onKeypress(const SDL_Keysym& key) {
 	}
 }
 
-void LabelEdit::onText(const string& str) {
+void LabelEdit::onText(const char* str) {
 	sizet olen = text.length();
 	text.insert(cpos, str);
 	cleanText();
@@ -410,10 +416,19 @@ vec2i LabelEdit::textPos() const {
 	return vec2i(pos.x + textOfs + textIconOffset() + textMargin, pos.y);
 }
 
-void LabelEdit::setText(string str) {
+void LabelEdit::setText(const string& str) {
+	oldText = std::move(text);
+	text = str;
+	onTextReset();
+}
+
+void LabelEdit::setText(string&& str) {
 	oldText = std::move(text);
 	text = std::move(str);
+	onTextReset();
+}
 
+void LabelEdit::onTextReset() {
 	cleanText();
 	updateTextTex();
 	setCPos(uint(text.length()));
@@ -452,13 +467,26 @@ void LabelEdit::cancel() {
 	SDL_StopTextInput();
 }
 
+uint LabelEdit::jumpCharB(uint i) {
+	while (--i && (text[i] & 0xC0) == 0x80);
+	return i;
+}
+
+uint LabelEdit::jumpCharF(uint i) {
+	while (++i < text.length() && (text[i] & 0xC0) == 0x80);
+	return i;
+}
+
 uint LabelEdit::findWordStart() {
 	uint i = cpos;
-	if (notSpace(text[i]) && i > 0 && isSpace(text[i-1]))	// skip if first letter of word
+	if (i == text.length())
 		i--;
-	for (; isSpace(text[i]) && i > 0; i--);		// skip first spaces
-	for (; notSpace(text[i]) && i > 0; i--);	// skip word
-	return i == 0 ? i : i + 1;			// correct position if necessary
+	else if (notSpace(text[i]) && i)
+		if (uint n = jumpCharB(i); isSpace(text[n]))	// skip if first letter of word
+			i = n;
+	for (; isSpace(text[i]) && i; i--);		// skip first spaces
+	for (; notSpace(text[i]) && i; i--);	// skip word
+	return i ? i + 1 : i;			// correct position if necessary
 }
 
 uint LabelEdit::findWordEnd() {
@@ -469,17 +497,15 @@ uint LabelEdit::findWordEnd() {
 }
 
 void LabelEdit::cleanText() {
-	text.erase(std::remove_if(text.begin(), text.end(), [](char c) -> bool { return uchar(c) < ' '; }), text.end());
 	switch (textType) {
 	case TextType::sInt:
-		text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
-		text.erase(std::remove_if(text.begin() + pdift(text[0] == '-'), text.end(), notDigit), text.end());
+		text.erase(std::remove_if(text.begin() + pdift(text[0] == '-'), text.end(), [](char c) -> bool { return !isdigit(c); }), text.end());
 		break;
 	case TextType::sIntSpaced:
 		cleanSIntSpacedText();
 		break;
 	case TextType::uInt:
-		text.erase(std::remove_if(text.begin(), text.end(), notDigit), text.end());
+		text.erase(std::remove_if(text.begin(), text.end(), [](char c) -> bool { return !isdigit(c); }), text.end());
 		break;
 	case TextType::uIntSpaced:
 		cleanUIntSpacedText();
@@ -501,14 +527,14 @@ void LabelEdit::cleanText() {
 void LabelEdit::cleanSIntSpacedText() {
 	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
 	for (string::iterator it = text.begin() + pdift(text[0] == '-'); it != text.end();) {
-		if (isDigit(*it))
-			it = std::find_if(it + 1, text.end(), notDigit);
+		if (isdigit(*it))
+			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
 		else if (*it == ' ') {
 			if (it = std::find_if(it + 1, text.end(), [](char c) -> bool { return c != ' '; }); it != text.end() && *it == '-')
 				it++;
 		} else {
 			pdift ofs = it - text.begin();
-			text.erase(it, std::find_if(it + 1, text.end(), [](char c) -> bool { return isDigit(c) || c == ' '; }));
+			text.erase(it, std::find_if(it + 1, text.end(), [](char c) -> bool { return isdigit(c) || c == ' '; }));
 			it = text.begin() + ofs;
 		}
 	}
@@ -517,13 +543,13 @@ void LabelEdit::cleanSIntSpacedText() {
 void LabelEdit::cleanUIntSpacedText() {
 	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
 	for (string::iterator it = text.begin(); it != text.end();) {
-		if (isDigit(*it))
-			it = std::find_if(it + 1, text.end(), notDigit);
+		if (isdigit(*it))
+			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
 		else if (*it == ' ')
 			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return c != ' '; });
 		else {
 			pdift ofs = it - text.begin();
-			text.erase(it, std::find_if(it + 1, text.end(), [](char c) -> bool { return isDigit(c) || c == ' '; }));
+			text.erase(it, std::find_if(it + 1, text.end(), [](char c) -> bool { return isdigit(c) || c == ' '; }));
 			it = text.begin() + ofs;
 		}
 	}
@@ -533,14 +559,14 @@ void LabelEdit::cleanSFloatText() {
 	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
 	bool dot = false;
 	for (string::iterator it = text.begin() + pdift(text[0] == '-'); it != text.end();) {
-		if (isDigit(*it))
-			it = std::find_if(it + 1, text.end(), notDigit);
+		if (isdigit(*it))
+			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
 		else if (*it == '.'  && !dot) {
 			dot = true;
 			it++;
 		} else {
 			pdift ofs = it - text.begin();
-			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isDigit(c) || (c == '.' && !dot); }));
+			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isdigit(c) || (c == '.' && !dot); }));
 			it = text.begin() + ofs;
 		}
 	}
@@ -550,8 +576,8 @@ void LabelEdit::cleanSFloatSpacedText() {
 	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
 	bool dot = false;
 	for (string::iterator it = text.begin() + pdift(text[0] == '-'); it != text.end();) {
-		if (isDigit(*it))
-			it = std::find_if(it + 1, text.end(), notDigit);
+		if (isdigit(*it))
+			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
 		else if (*it == ' ') {
 			if (it = std::find_if(it + 1, text.end(), [](char c) -> bool { return c != ' '; }); it != text.end() && *it == '-')
 				it++;
@@ -560,7 +586,7 @@ void LabelEdit::cleanSFloatSpacedText() {
 			it++;
 		} else {
 			pdift ofs = it - text.begin();
-			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isDigit(c) || c == ' ' || (c == '.' && !dot); }));
+			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isdigit(c) || c == ' ' || (c == '.' && !dot); }));
 			it = text.begin() + ofs;
 		}
 	}
@@ -570,14 +596,14 @@ void LabelEdit::cleanUFloatText() {
 	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
 	bool dot = false;
 	for (string::iterator it = text.begin(); it != text.end();) {
-		if (isDigit(*it))
-			it = std::find_if(it + 1, text.end(), notDigit);
+		if (isdigit(*it))
+			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
 		else if (*it == '.'  && !dot) {
 			dot = true;
 			it++;
 		} else {
 			pdift ofs = it - text.begin();
-			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isDigit(c) || (c == '.' && !dot); }));
+			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isdigit(c) || (c == '.' && !dot); }));
 			it = text.begin() + ofs;
 		}
 	}
@@ -587,8 +613,8 @@ void LabelEdit::cleanUFloatSpacedText() {
 	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
 	bool dot = false;
 	for (string::iterator it = text.begin(); it != text.end();) {
-		if (isDigit(*it))
-			it = std::find_if(it + 1, text.end(), notDigit);
+		if (isdigit(*it))
+			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
 		else if (*it == ' ')
 			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return c != ' '; });
 		else if (*it == '.' && !dot) {
@@ -596,52 +622,13 @@ void LabelEdit::cleanUFloatSpacedText() {
 			it++;
 		} else {
 			pdift ofs = it - text.begin();
-			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isDigit(c) || c == ' ' || (c == '.' && !dot); }));
+			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isdigit(c) || c == ' ' || (c == '.' && !dot); }));
 			it = text.begin() + ofs;
 		}
 	}
 }
 
 // KEY GETTER
-
-const umap<uint8, string> KeyGetter::hatNames = {
-	pair(SDL_HAT_CENTERED, "Center"),
-	pair(SDL_HAT_UP, "Up"),
-	pair(SDL_HAT_RIGHT, "Right"),
-	pair(SDL_HAT_DOWN, "Down"),
-	pair(SDL_HAT_LEFT, "Left"),
-	pair(SDL_HAT_RIGHTUP, "Right-Up"),
-	pair(SDL_HAT_RIGHTDOWN, "Right-Down"),
-	pair(SDL_HAT_LEFTDOWN, "Left-Down"),
-	pair(SDL_HAT_LEFTUP, "Left-Up")
-};
-
-const array<string, KeyGetter::gbuttonNames.size()> KeyGetter::gbuttonNames = {
-	"A",
-	"B",
-	"X",
-	"Y",
-	"Back",
-	"Guide",
-	"Start",
-	"LS",
-	"RS",
-	"LB",
-	"RB",
-	"Up",
-	"Down",
-	"Left",
-	"Right"
-};
-
-const array<string, KeyGetter::gaxisNames.size()> KeyGetter::gaxisNames = {
-	"LX",
-	"LY",
-	"RX",
-	"RY",
-	"LT",
-	"RT"
-};
 
 KeyGetter::KeyGetter(const Size& relSize, AcceptType type, Binding::Type binding, Alignment alignment, SDL_Texture* tex, bool showBG, int textMargin, int texMargin, Layout* parent, sizet id) :
 	Label(relSize, bindingText(binding, type), nullptr, nullptr, nullptr, alignment, tex, showBG, textMargin, texMargin, parent, id),
@@ -708,7 +695,7 @@ void KeyGetter::onGButton(SDL_GameControllerButton gbutton) {
 void KeyGetter::onGAxis(SDL_GameControllerAxis gaxis, bool positive) {
 	if (acceptType == AcceptType::gamepad) {
 		World::inputSys()->getBinding(bindingType).setGaxis(gaxis, positive);
-		setText((positive ? prefAxisPos : prefAxisNeg) + gaxisNames[uint8(gaxis)]);
+		setText(string(1, (positive ? prefAxisPos : prefAxisNeg)) + gaxisNames[uint8(gaxis)]);
 	}
 	World::scene()->capture = nullptr;
 }
@@ -728,7 +715,7 @@ void KeyGetter::clearBinding() {
 	case AcceptType::gamepad:
 		World::inputSys()->getBinding(bindingType).clearAsgGct();
 	}
-	setText(string());
+	setText("");
 }
 
 string KeyGetter::bindingText(Binding::Type binding, KeyGetter::AcceptType accept) {
@@ -749,7 +736,7 @@ string KeyGetter::bindingText(Binding::Type binding, KeyGetter::AcceptType accep
 		if (bind.gbuttonAssigned())
 			return gbuttonNames[uint8(bind.getGbutton())];
 		else if (bind.gaxisAssigned())
-			return (bind.gposAxisAssigned() ? prefAxisPos : prefAxisNeg) + gaxisNames[uint8(bind.getGaxis())];
+			return string(1, (bind.gposAxisAssigned() ? prefAxisPos : prefAxisNeg)) + gaxisNames[uint8(bind.getGaxis())];
 	}
-	return string();
+	return "";
 }

@@ -3,24 +3,12 @@
 
 // COMIC
 
-Comic::Comic(string title, vector<pairStr> chapters) :
+Comic::Comic(string title, vector<pairStr>&& chapters) :
 	title(std::move(title)),
 	chapters(std::move(chapters))
 {}
 
 // WEB SOURCE
-
-const array<string, WebSource::sourceNames.size()> WebSource::sourceNames = {
-	"MangaHere",
-	"MangaMaster",
-	"nhentai"
-};
-
-const array<string, WebSource::sourceUrls.size()> WebSource::sourceUrls = {
-	"https://www.mangahere.cc",
-	"http://www.mangamaster.net",
-	"https://nhentai.net"
-};
 
 WebSource::WebSource(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile) :
 	curlMain(curlMain),
@@ -74,7 +62,7 @@ string WebSource::toUrl(string str) {
 		curl_free(ret);
 		return str;
 	}
-	return string();
+	return "";
 }
 
 xmlNode* WebSource::findElement(xmlNode* node, const char* tag) {
@@ -133,7 +121,7 @@ string WebSource::getAttr(xmlNode* node, const char* attr) {
 		xmlFree(prop);
 		return ret;
 	}
-	return string();
+	return "";
 }
 
 bool WebSource::hasAttr(xmlNode* node, const char* attr, const char* val) {
@@ -153,7 +141,7 @@ WebSource::Type Mangahere::source() const {
 
 vector<pairStr> Mangahere::query(const string& text) {
 	vector<pairStr> results;
-	for (string link = baseUrl() + "/search?title=" + toUrl(text); !link.empty();) {
+	for (string link = string(baseUrl()) + "/search?title=" + toUrl(text); !link.empty();) {
 		xmlDoc* doc = downloadHtml(link);
 		xmlNode* root = xmlDocGetRootElement(doc);
 		if (!root)
@@ -229,7 +217,7 @@ WebSource::Type Mangamaster::source() const {
 
 vector<pairStr> Mangamaster::query(const string& text) {
 	vector<pairStr> results;
-	for (string link = baseUrl() + "/comics?q[name_cont]=" + toUrl(text); !link.empty();) {
+	for (string link = string(baseUrl()) + "/comics?q[name_cont]=" + toUrl(text); !link.empty();) {
 		xmlDoc* doc = downloadHtml(link);
 		xmlNode* root = xmlDocGetRootElement(doc);
 		if (!root)
@@ -289,7 +277,7 @@ WebSource::Type Nhentai::source() const {
 
 vector<pairStr> Nhentai::query(const string& text) {
 	vector<pairStr> results;
-	for (string link = baseUrl() + "/search/?q=" + toUrl(text); !link.empty();) {
+	for (string link = string(baseUrl()) + "/search/?q=" + toUrl(text); !link.empty();) {
 		xmlDoc* doc = downloadHtml(link);
 		xmlNode* root = xmlDocGetRootElement(doc);
 		if (!root)
@@ -305,7 +293,7 @@ vector<pairStr> Nhentai::query(const string& text) {
 		link.clear();
 		if (xmlNode* next = findElement(root, "a", "class", "next"))
 			if (string page = getAttr(next, "href"); !page.empty())
-				link = baseUrl() + "/search/" + page;
+				link = string(baseUrl()) + "/search/" + page;
 		xmlFreeDoc(doc);
 	}
 	return results;
@@ -392,7 +380,7 @@ void Downloader::setSource(WebSource::Type type) {
 		source.reset(new Mangamaster(source->curlMain, source->mainLock, source->curlFile));
 		break;
 	case WebSource::NHENTAI:
-		source.reset(new Nhentai(source->curlMain, source->mainLock, source->curlFile));	
+		source.reset(new Nhentai(source->curlMain, source->mainLock, source->curlFile));
 	}
 }
 

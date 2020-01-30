@@ -54,32 +54,6 @@ IniLine::Type IniLine::setLine(const string& str) {
 
 // FILE SYS
 
-const array<SDL_Color, FileSys::defaultColors.size()> FileSys::defaultColors = {
-	SDL_Color({ 10, 10, 10, 255 }),		// background
-	SDL_Color({ 90, 90, 90, 255 }),		// normal
-	SDL_Color({ 60, 60, 60, 255 }),		// dark
-	SDL_Color({ 120, 120, 120, 255 }),	// light
-	SDL_Color({ 105, 105, 105, 255 }),	// select
-	SDL_Color({ 210, 210, 210, 255 }),	// text
-	SDL_Color({ 210, 210, 210, 255 })	// texture
-};
-
-const array<string, FileSys::colorNames.size()> FileSys::colorNames = {
-	"background",
-	"normal",
-	"dark",
-	"light",
-	"select",
-	"text",
-	"texture"
-};
-#ifdef _WIN32
-const array<string, FileSys::takenFilenames.size()> FileSys::takenFilenames = {
-	"CON", "PRN", "AUX", "NUL",
-	"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-	"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
-};
-#endif
 FileSys::FileSys() {
 	// set up file/directory path constants
 	if (setWorkingDir())
@@ -102,7 +76,7 @@ FileSys::FileSys() {
 
 vector<string> FileSys::getAvailibleThemes() {
 	vector<string> themes;
-	for (const IniLine il : readFileLines(fileThemes))
+	for (IniLine il : readFileLines(fileThemes))
 		if (il.getType() == IniLine::Type::title)
 			themes.push_back(il.getPrp());
 	return themes;
@@ -131,7 +105,7 @@ bool FileSys::getLastPage(const string& book, string& drc, string& fname) {
 	for (const string& line : readFileLines(dirSets + fileBooks, false))
 		if (vector<string> words = strUnenclose(line); words.size() >= 2 && words[0] == book) {
 			drc = words[1];
-			fname = words.size() >= 3 ? words[2] : string();
+			fname = words.size() >= 3 ? words[2] : "";
 			return true;
 		}
 	return false;
@@ -150,7 +124,7 @@ bool FileSys::saveLastPage(const string& book, const string& drc, const string& 
 
 Settings* FileSys::loadSettings() {
 	Settings* sets = new Settings;
-	for (const IniLine il : readFileLines(dirSets + fileSettings, false)) {
+	for (IniLine il : readFileLines(dirSets + fileSettings, false)) {
 		if (il.getType() != IniLine::Type::prpVal)
 			continue;
 
@@ -186,23 +160,27 @@ Settings* FileSys::loadSettings() {
 	return sets;
 }
 
-bool FileSys::saveSettings(const Settings* sets) {
-	string text;
-	text += IniLine::get(iniKeywordMaximized, btos(sets->maximized));
-	text += IniLine::get(iniKeywordFullscreen, btos(sets->fullscreen));
-	text += IniLine::get(iniKeywordResolution, sets->resolutionString());
-	text += IniLine::get(iniKeywordZoom, trimZero(to_string(sets->zoom)));
-	text += IniLine::get(iniKeywordPictureLimit, sets->picLim.getString());
-	text += IniLine::get(iniKeywordSpacing, to_string(sets->spacing));
-	text += IniLine::get(iniKeywordDirection, Direction::names[uint8(sets->direction)]);
-	text += IniLine::get(iniKeywordFont, sets->getFont());
-	text += IniLine::get(iniKeywordTheme, sets->getTheme());
-	text += IniLine::get(iniKeywordShowHidden, btos(sets->showHidden));
-	text += IniLine::get(iniKeywordLibrary, sets->getDirLib());
-	text += IniLine::get(iniKeywordRenderer, sets->renderer);
-	text += IniLine::get(iniKeywordScrollSpeed, sets->scrollSpeedString());
-	text += IniLine::get(iniKeywordDeadzone, to_string(sets->getDeadzone()));
-	return writeTextFile(dirSets + fileSettings, text);
+void FileSys::saveSettings(const Settings* sets) {
+	string path = dirSets + fileSettings;
+	std::ofstream ofh(path);
+	if (!ofh.good()) {
+		std::cerr << "failed to write settings file " << path << std::endl;
+		return;
+	}
+	IniLine::writeVal(ofh, iniKeywordMaximized, btos(sets->maximized));
+	IniLine::writeVal(ofh, iniKeywordFullscreen, btos(sets->fullscreen));
+	IniLine::writeVal(ofh, iniKeywordResolution, sets->resolution.x, ' ', sets->resolution.y);
+	IniLine::writeVal(ofh, iniKeywordZoom, sets->zoom);
+	IniLine::writeVal(ofh, iniKeywordPictureLimit, PicLim::names[uint8(sets->picLim.type)], ' ', sets->picLim.getCount(), ' ', memoryString(sets->picLim.getSize()));
+	IniLine::writeVal(ofh, iniKeywordSpacing, sets->spacing);
+	IniLine::writeVal(ofh, iniKeywordDirection, Direction::names[uint8(sets->direction)]);
+	IniLine::writeVal(ofh, iniKeywordFont, sets->getFont());
+	IniLine::writeVal(ofh, iniKeywordTheme, sets->getTheme());
+	IniLine::writeVal(ofh, iniKeywordShowHidden, btos(sets->showHidden));
+	IniLine::writeVal(ofh, iniKeywordLibrary, sets->getDirLib());
+	IniLine::writeVal(ofh, iniKeywordRenderer, sets->renderer);
+	IniLine::writeVal(ofh, iniKeywordScrollSpeed, sets->scrollSpeed.x, ' ', sets->scrollSpeed.y);
+	IniLine::writeVal(ofh, iniKeywordDeadzone, sets->getDeadzone());
 }
 
 array<Binding, Binding::names.size()> FileSys::getBindings() {
@@ -210,7 +188,7 @@ array<Binding, Binding::names.size()> FileSys::getBindings() {
 	for (sizet i = 0; i < bindings.size(); i++)
 		bindings[i].reset(Binding::Type(i));
 	
-	for (const IniLine il : readFileLines(dirSets + fileBindings, false)) {
+	for (IniLine il : readFileLines(dirSets + fileBindings, false)) {
 		if (il.getType() != IniLine::Type::prpVal || il.getVal().length() < 3)
 			continue;
 		sizet bid = strToEnum<sizet>(Binding::names, il.getPrp());
@@ -225,8 +203,8 @@ array<Binding, Binding::names.size()> FileSys::getBindings() {
 			bindings[bid].setJbutton(uint8(sstoul(il.getVal().substr(2))));
 			break;
 		case keyHat[0]:			// joystick hat
-			if (sizet id = sizet(std::find_if(il.getVal().begin() + 2, il.getVal().end(), notDigit) - il.getVal().begin()); id < il.getVal().size())
-				bindings[bid].setJhat(uint8(sstoul(il.getVal().substr(2, id-2))), uint8(strToVal(KeyGetter::hatNames, il.getVal().substr(id+1))));
+			if (sizet id = sizet(std::find_if(il.getVal().begin() + 2, il.getVal().end(), [](char c) -> bool { return !isdigit(c); }) - il.getVal().begin()); id < il.getVal().size())
+				bindings[bid].setJhat(uint8(sstoul(il.getVal().substr(2, id-2))), strToVal(KeyGetter::hatNames, il.getVal().substr(id+1)));
 			break;
 		case keyAxisPos[0]:		// joystick axis
 			bindings[bid].setJaxis(uint8(sstoul(il.getVal().substr(3))), il.getVal()[2] != keyAxisNeg[2]);
@@ -243,74 +221,71 @@ array<Binding, Binding::names.size()> FileSys::getBindings() {
 	return bindings;
 }
 
-bool FileSys::saveBindings(const array<Binding, Binding::names.size()>& bindings) {
-	string text;
+void FileSys::saveBindings(const array<Binding, Binding::names.size()>& bindings) {
+	string path = dirSets + fileBindings;
+	std::ofstream ofh(path);
+	if (!ofh.good()) {
+		std::cerr << "failed to write bindings file " << path << std::endl;
+		return;
+	}
 	for (sizet i = 0; i < bindings.size(); i++) {
-		const string& name = Binding::names[i];
+		const char* name = Binding::names[i];
 		if (bindings[i].keyAssigned())
-			text += IniLine::get(name, keyKey + string(SDL_GetScancodeName(bindings[i].getKey())));
+			IniLine::writeVal(ofh, name, keyKey, SDL_GetScancodeName(bindings[i].getKey()));
 
 		if (bindings[i].jbuttonAssigned())
-			text += IniLine::get(name, keyButton + to_string(bindings[i].getJctID()));
+			IniLine::writeVal(ofh, name, keyButton, uint(bindings[i].getJctID()));
 		else if (bindings[i].jhatAssigned())
-			text += IniLine::get(name, keyHat + to_string(bindings[i].getJctID()) + keySep + KeyGetter::hatNames.at(bindings[i].getJhatVal()));
+			IniLine::writeVal(ofh, name, keyHat, uint(bindings[i].getJctID()), keySep, KeyGetter::hatNames.at(bindings[i].getJhatVal()));
 		else if (bindings[i].jaxisAssigned())
-			text += IniLine::get(name, (bindings[i].jposAxisAssigned() ? keyAxisPos : keyAxisNeg) + to_string(bindings[i].getJctID()));
+			IniLine::writeVal(ofh, name, (bindings[i].jposAxisAssigned() ? keyAxisPos : keyAxisNeg), uint(bindings[i].getJctID()));
 
 		if (bindings[i].gbuttonAssigned())
-			text += IniLine::get(name, keyGButton + KeyGetter::gbuttonNames[uint8(bindings[i].getGbutton())]);
+			IniLine::writeVal(ofh, name, keyGButton, KeyGetter::gbuttonNames[uint8(bindings[i].getGbutton())]);
 		else if (bindings[i].gbuttonAssigned())
-			text += IniLine::get(name, (bindings[i].gposAxisAssigned() ? keyGAxisPos : keyGAxisNeg) + KeyGetter::gaxisNames[uint8(bindings[i].getGaxis())]);
+			IniLine::writeVal(ofh, name, (bindings[i].gposAxisAssigned() ? keyGAxisPos : keyGAxisNeg), KeyGetter::gaxisNames[uint8(bindings[i].getGaxis())]);
 	}
-	return writeTextFile(dirSets + fileBindings, text);
 }
 
 vector<string> FileSys::readFileLines(const string& file, bool printMessage) {
-	vector<string> lines(1);
-	for (char c : readTextFile(file, printMessage)) {
-		if (c != '\n' && c != '\r')
-			lines.back() += char(c);
-		else if (!lines.back().empty())
-			lines.emplace_back();
-	}
-	if (lines.back().empty())
-		lines.pop_back();
+	vector<string> lines;
+	constexpr char nl[] = "\n\r";
+	string text = readTextFile(file, printMessage);
+	for (sizet e, p = text.find_first_not_of(nl); p < text.length(); p = text.find_first_not_of(nl, e))
+		if (e = text.find_first_of(nl, p); sizet len = e - p)
+			lines.push_back(text.substr(p, len));
 	return lines;
 }
 
 string FileSys::readTextFile(const string& file, bool printMessage) {
 	string text;
-	FILE* ifh = fopen(file.c_str(), defaultFrMode);
-	if (!ifh) {
+	try {
+		SDL_RWops* ifh = SDL_RWFromFile(file.c_str(), defaultFrMode);
+		if (!ifh)
+			throw ifh;
+		int64 len = SDL_RWsize(ifh);
+		if (len == -1)
+			throw ifh;
+
+		text.resize(sizet(len));
+		if (sizet read = SDL_RWread(ifh, text.data(), sizeof(*text.data()), text.length()); read < text.length())
+			text.resize(read);
+		SDL_RWclose(ifh);
+	} catch (SDL_RWops* ifh) {
+		if (ifh)
+			SDL_RWclose(ifh);
 		if (printMessage)
 			std::cerr << "failed to open file " << file << std::endl;
-		return text;
 	}
-	fseek(ifh, 0, SEEK_END);
-	text.resize(sizet(ftell(ifh)));
-	fseek(ifh, 0, SEEK_SET);
-
-	if (sizet read = fread(text.data(), sizeof(*text.data()), text.length(), ifh); read < text.length())
-		text.resize(read);
-	fclose(ifh);
 	return text;
-}
-
-bool FileSys::writeTextFile(const string& file, const string& text) {
-	if (FILE* ofh = fopen(file.c_str(), defaultFwMode)) {
-		fwrite(text.c_str(), sizeof(char), text.length(), ofh);
-		fclose(ofh);
-	} else {
-		std::cerr << "failed to write file " << file << std::endl;
-		return false;
-	}
-	return true;
 }
 
 bool FileSys::writeTextFile(const string& file, const vector<string>& lines) {
 	if (FILE* ofh = fopen(file.c_str(), defaultFwMode)) {
-		for (const string& it : lines)
-			fputs(string(it + '\n').c_str(), ofh);
+		for (const string& it : lines) {
+			fwrite(it.c_str(), sizeof(char), it.length(), ofh);
+			fputc('\n', ofh);
+		}
 		fclose(ofh);
 	} else {
 		std::cerr << "failed to write file " << file << std::endl;
@@ -330,7 +305,7 @@ SDL_Color FileSys::readColor(const string& line) {
 		if (uint32 num = uint32(strtoul(pos, &end, 0x10)); end != pos) {
 			if (uint8 mov = (8 - uint8(end - pos)) * 4)
 				num = (num << mov) + UINT8_MAX;
-			*reinterpret_cast<uint32*>(&color) = num;
+			memcpy(&color, &num, sizeof(uint32));
 		}
 	} else for (uint i = 0; i < 4 && *pos;) {
 		char* end;
@@ -382,7 +357,7 @@ vector<string> FileSys::listDir(string drc, FileType filter, bool showHidden, bo
 	return entries;
 }
 
-int FileSys::iterateDirRec(const string& drc, const std::function<int (string)>& call, FileType filter, bool readLinks, bool followLinks) {
+int FileSys::iterateDirRec(const string& drc, const std::function<int (const string&)>& call, FileType filter, bool readLinks, bool followLinks) {
 	int ret = 0;
 #ifdef _WIN32
 	std::queue<wstring> dirs;
@@ -482,11 +457,11 @@ pair<vector<string>, vector<string>> FileSys::listDirSep(string drc, FileType fi
 
 string FileSys::validateFilename(string file) {
 	if (isDotName(file))
-		return string();
+		return "";
 #ifdef _WIN32
-	for (const string& it : takenFilenames)
-		if (!strncicmp(file, it, it.length()))
-			file.erase(0, it.length());
+	for (const char* it : takenFilenames)
+		if (sizet len = strlen(it); !strncicmp(file, it, len))
+			file.erase(0, len);
 	file.erase(std::remove_if(file.begin(), file.end(), [](char c) -> bool { return c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*' || uchar(c) < ' '; }), file.end());
 
 	if (file[0] == ' ')
@@ -642,7 +617,7 @@ string FileSys::findFont(const string& font) {
 		return font;
 
 	for (const string& drc : dirFonts)	// check font directories
-		if (string path; iterateDirRec(drc, [&font, &path](string file) -> int {
+		if (string path; iterateDirRec(drc, [&font, &path](const string& file) -> int {
 				if (!strcicmp(hasExt(file) ? delExt(filename(file)) : filename(file), font) && isFont(file)) {
 					path = file;
 					return 1;
@@ -650,7 +625,7 @@ string FileSys::findFont(const string& font) {
 				return 0;
 			}, FTYPE_REG, false, false))
 			return path;
-	return string();	// nothing found
+	return "";	// nothing found
 }
 #ifdef _WIN32
 vector<char> FileSys::listDrives() {

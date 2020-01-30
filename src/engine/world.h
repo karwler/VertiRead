@@ -5,13 +5,13 @@
 // class that makes accessing stuff easier and holds command line arguments
 class World {
 private:
-	static WindowSys windowSys;			// the thing on which everything runs
-	static vector<string> vals;
-	static uset<string> flags;
-	static umap<string, string> opts;
+	static inline WindowSys windowSys;			// the thing on which everything runs
+	static inline vector<string> vals;
+	static inline uset<string> flags;
+	static inline umap<string, string> opts;
 
-	static const uset<string> checkFlags;
-	static const umap<string, string> checkOpts;
+	static inline const uset<string> checkFlags;
+	static inline const umap<string, string> checkOpts;
 
 public:
 	static FileSys* fileSys();

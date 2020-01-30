@@ -20,7 +20,13 @@ public:
 		left,
 		right
 	};
-	static const array<string, right+1> names;
+	static constexpr array<const char*, right+1> names = {
+		"Up",
+		"Down",
+		"Left",
+		"Right"
+	};
+
 private:
 	Dir dir;
 
@@ -93,7 +99,38 @@ public:
 		scrollFast,
 		scrollSlow
 	};
-	static const array<string, sizet(Type::scrollSlow)+1> names;
+	static constexpr array<const char*, sizet(Type::scrollSlow)+1> names = {
+		"enter",
+		"escape",
+		"up",
+		"down",
+		"left",
+		"right",
+		"center view",
+		"next page",
+		"prev page",
+		"zoom in",
+		"zoom out",
+		"zoom reset",
+		"to start",
+		"to end",
+		"next directory",
+		"prev directory",
+		"fullscreen",
+		"show hidden",
+		"boss",
+		"refresh",
+		"scroll up",
+		"scroll down",
+		"scroll left",
+		"scroll right",
+		"cursor up",
+		"cursor down",
+		"cursor left",
+		"cursor right",
+		"scroll fast",
+		"scroll slow"
+	};
 
 	enum Assignment : uint8 {
 		ASG_NONE	= 0x00,
@@ -137,7 +174,7 @@ public:
 
 	bool jbuttonAssigned() const;
 	void setJbutton(uint8 but);
-	
+
 	bool jaxisAssigned() const;
 	bool jposAxisAssigned() const;
 	bool jnegAxisAssigned() const;
@@ -161,7 +198,6 @@ public:
 	bool gnegAxisAssigned() const;
 	void setGaxis(SDL_GameControllerAxis axis, bool positive);
 };
-ENUM_OPERATIONS(Binding::Assignment, uint8)
 
 inline Binding::Binding() :
 	asg(ASG_NONE)
@@ -266,8 +302,12 @@ public:
 		count,
 		size
 	};
-	static const array<string, sizet(Type::size)+1> names;
-	
+	static constexpr array<const char*, sizet(Type::size)+1> names = {
+		"none",
+		"count",
+		"size"
+	};
+
 	Type type;
 private:
 	uptrt count, size;	// size in bytes
@@ -281,7 +321,6 @@ public:
 	void setCount(const string& str);
 	uptrt getSize() const;
 	void setSize(const string& str);
-	string getString() const;
 	void set(const string& str);
 
 private:
@@ -304,10 +343,6 @@ inline uptrt PicLim::getSize() const {
 
 inline void PicLim::setSize(const string& str) {
 	size = toSize(str);
-}
-
-inline string PicLim::getString() const {
-	return names[uint8(type)] + ' ' + to_string(count) + ' ' + memoryString(size);
 }
 
 inline uptrt PicLim::defaultSize() {
@@ -349,7 +384,6 @@ public:
 	const string& setDirLib(const string& drc);
 
 	int getRendererIndex();
-	string resolutionString() const;
 	string scrollSpeedString() const;
 	int getDeadzone() const;
 	void setDeadzone(int val);
@@ -365,10 +399,6 @@ inline const string& Settings::getFont() const {
 
 inline const string& Settings::getDirLib() const {
 	return dirLib;
-}
-
-inline string Settings::resolutionString() const {
-	return to_string(resolution.x) + ' ' + to_string(resolution.y);
 }
 
 inline string Settings::scrollSpeedString() const {
