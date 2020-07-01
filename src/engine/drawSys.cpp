@@ -1,4 +1,5 @@
-#include "world.h"
+#include "drawSys.h"
+#include "scene.h"
 
 // FONT SET
 
@@ -7,10 +8,10 @@ FontSet::~FontSet() {
 		TTF_CloseFont(font);
 }
 
-void FontSet::init(const string& path) {
+void FontSet::init(const fs::path& path) {
 	clear();
 	file = path;
-	TTF_Font* tmp = TTF_OpenFont(file.c_str(), fontTestHeight);
+	TTF_Font* tmp = TTF_OpenFont(file.u8string().c_str(), fontTestHeight);
 	if (!tmp)
 		throw std::runtime_error(TTF_GetError());
 
@@ -28,7 +29,7 @@ void FontSet::clear() {
 }
 
 TTF_Font* FontSet::addSize(int size) {
-	TTF_Font* font = TTF_OpenFont(file.c_str(), size);
+	TTF_Font* font = TTF_OpenFont(file.u8string().c_str(), size);
 	if (font)
 		fonts.emplace(size, font);
 	else
@@ -44,16 +45,39 @@ TTF_Font* FontSet::getFont(int height) {
 	return addSize(height);
 }
 
-int FontSet::length(const string& text, int height) {
+int FontSet::length(const char* text, int height) {
 	int len = 0;
 	if (TTF_Font* font = getFont(height))
-		TTF_SizeUTF8(font, text.c_str(), &len, nullptr);
+		TTF_SizeUTF8(font, text, &len, nullptr);
 	return len;
+}
+
+// PICTURE LOADER
+
+PictureLoader::PictureLoader(DrawSys* drawer, fs::path cdrc, string pfirst, const PicLim& plim, bool forward, bool hidden) :
+	drawSys(drawer),
+	curDir(std::move(cdrc)),
+	firstPic(std::move(pfirst)),
+	picLim(plim),
+	fwd(forward),
+	showHidden(hidden)
+{}
+
+string PictureLoader::limitToStr(uptrt i, uptrt c, uptrt m, sizet mag) const {
+	switch (picLim.type) {
+	case PicLim::Type::none:
+		return to_string(i);
+	case PicLim::Type::count:
+		return to_string(c);
+	case PicLim::Type::size:
+		return memoryString(m, mag);
+	}
+	return string();
 }
 
 // DRAW SYS
 
-DrawSys::DrawSys(SDL_Window* window, int driverIndex) :
+DrawSys::DrawSys(SDL_Window* window, int driverIndex, Settings* sets, const FileSys* fileSys) :
 	rendLock(SDL_CreateMutex())
 {
 	// create and set up renderer
@@ -62,14 +86,14 @@ DrawSys::DrawSys(SDL_Window* window, int driverIndex) :
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
 	// load default textures with colors and initialize fonts
-	for (const string& file : FileSys::listDir(FileSys::dirTexs, FTYPE_REG, true, false)) {
-		if (string path = FileSys::dirTexs + file; SDL_Texture* tex = IMG_LoadTexture(renderer, path.c_str()))
-			texes.emplace(delExt(file), tex);
+	for (const fs::path& file : FileSys::listDir(FileSys::dirTexs, true, false)) {
+		if (fs::path path = FileSys::dirTexs / file; SDL_Texture* tex = IMG_LoadTexture(renderer, path.u8string().c_str()))
+			texes.emplace(file.stem().u8string(), tex);
 		else
 			std::cerr << "failed to load texture " << file << '\n' << IMG_GetError() << std::endl;
 	}
-	setTheme(World::sets()->getTheme());
-	setFont(World::sets()->getFont());
+	setTheme(sets->getTheme(), sets, fileSys);
+	setFont(sets->font, sets, fileSys);
 }
 
 DrawSys::~DrawSys() {
@@ -79,18 +103,25 @@ DrawSys::~DrawSys() {
 	SDL_DestroyRenderer(renderer);
 }
 
-void DrawSys::setTheme(const string& name) {
-	colors = World::fileSys()->loadColors(World::sets()->setTheme(name));
+void DrawSys::setTheme(const string& name, Settings* sets, const FileSys* fileSys) {
+	colors = fileSys->loadColors(sets->setTheme(name, fileSys->getAvailableThemes()));
 	SDL_Color clr = colors[uint8(Color::texture)];
 
-	for (const auto& [name, tex] : texes) {
+	for (const auto& [ts, tex] : texes) {
 		SDL_SetTextureColorMod(tex, clr.r, clr.g, clr.b);
 		SDL_SetTextureAlphaMod(tex, clr.a);
 	}
 }
 
-void DrawSys::setFont(const string& font) {
-	fonts.init(World::fileSys()->findFont(World::sets()->setFont(font)));
+void DrawSys::setFont(const string& font, Settings* sets, const FileSys* fileSys) {
+	fs::path path = fileSys->findFont(font);
+	if (FileSys::isFont(path))
+		sets->font = font;
+	else {
+		sets->font = Settings::defaultFont;
+		path = fileSys->findFont(Settings::defaultFont);
+	}
+	fonts.init(path);
 }
 
 SDL_Texture* DrawSys::texture(const string& name) const {
@@ -102,8 +133,8 @@ SDL_Texture* DrawSys::texture(const string& name) const {
 	return nullptr;
 }
 
-void DrawSys::drawWidgets() {
-	infiLock(rendLock);
+void DrawSys::drawWidgets(Scene* scene, bool mouseLast) {
+	SDL_LockMutex(rendLock);
 
 	// clear screen
 	SDL_Color bgcolor = colors[uint8(Color::background)];
@@ -111,22 +142,24 @@ void DrawSys::drawWidgets() {
 	SDL_RenderClear(renderer);
 
 	// draw main widgets and visible overlays
-	World::scene()->getLayout()->drawSelf();
-	if (World::scene()->getOverlay() && World::scene()->getOverlay()->on)
-		World::scene()->getOverlay()->drawSelf();
+	scene->getLayout()->drawSelf();
+	if (scene->getOverlay() && scene->getOverlay()->on)
+		scene->getOverlay()->drawSelf();
 
 	// draw popup if exists and dim main widgets
-	if (World::scene()->getPopup()) {
+	if (scene->getPopup()) {
 		Rect view = viewport();
 		SDL_SetRenderDrawColor(renderer, colorPopupDim.r, colorPopupDim.g, colorPopupDim.b, colorPopupDim.a);
 		SDL_RenderFillRect(renderer, &view);
 
-		World::scene()->getPopup()->drawSelf();
+		scene->getPopup()->drawSelf();
 	}
 
 	// draw caret if capturing LineEdit
-	if (LabelEdit* let = dynamic_cast<LabelEdit*>(World::scene()->capture))
+	if (LabelEdit* let = dynamic_cast<LabelEdit*>(scene->capture))
 		drawRect(let->caretRect(), Color::light);
+	if (Button* but = dynamic_cast<Button*>(scene->select); mouseLast && but && but->getTooltip())
+		drawTooltip(but);
 
 	SDL_RenderPresent(renderer);
 	SDL_UnlockMutex(rendLock);
@@ -146,13 +179,13 @@ void DrawSys::drawCheckBox(const CheckBox* wgt) {
 
 void DrawSys::drawSlider(const Slider* wgt) {
 	Rect frame = wgt->frame();
-	drawPicture(wgt);												// draw background
+	drawPicture(wgt);											// draw background
 	drawRect(wgt->barRect().intersect(frame), Color::dark);		// draw bar
 	drawRect(wgt->sliderRect().intersect(frame), Color::light);	// draw slider
 }
 
 void DrawSys::drawProgressBar(const ProgressBar* wgt) {
-	drawRect(wgt->rect(), Color::normal);								// draw background
+	drawRect(wgt->rect(), Color::normal);							// draw background
 	drawRect(wgt->barRect().intersect(wgt->frame()), Color::light);	// draw bar
 }
 
@@ -163,8 +196,8 @@ void DrawSys::drawLabel(const Label* wgt) {
 }
 
 void DrawSys::drawScrollArea(const ScrollArea* box) {
-	vec2t vis = box->visibleWidgets();	// get index interval of items on screen and draw children
-	for (sizet i = vis.b; i < vis.t; i++)
+	mvec2 vis = box->visibleWidgets();	// get index interval of items on screen and draw children
+	for (sizet i = vis.x; i < vis.y; i++)
 		box->getWidget(i)->drawSelf();
 
 	drawRect(box->barRect(), Color::dark);		// draw scroll bar
@@ -172,8 +205,8 @@ void DrawSys::drawScrollArea(const ScrollArea* box) {
 }
 
 void DrawSys::drawReaderBox(const ReaderBox* box) {
-	vec2t vis = box->visibleWidgets();
-	for (sizet i = vis.b; i < vis.t; i++)
+	mvec2 vis = box->visibleWidgets();
+	for (sizet i = vis.x; i < vis.y; i++)
 		box->getWidget(i)->drawSelf();
 
 	if (box->showBar()) {
@@ -186,6 +219,15 @@ void DrawSys::drawPopup(const Popup* box) {
 	drawRect(box->rect(), Color::normal);	// draw background
 	for (Widget* it : box->getWidgets())	// draw children
 		it->drawSelf();
+}
+
+void DrawSys::drawTooltip(Button* but) {
+	ivec2 res;
+	Rect rct = but->tooltipRect(res);
+	drawRect(rct, Color::tooltip);
+
+	rct = Rect(rct.pos() + Button::tooltipMargin, res);
+	SDL_RenderCopy(renderer, but->getTooltip(), nullptr, &rct);
 }
 
 void DrawSys::drawRect(const Rect& rect, Color color) {
@@ -208,14 +250,23 @@ void DrawSys::drawImage(SDL_Texture* tex, const Rect& rect, const Rect& frame) {
 	Rect crop = dst.crop(frame);
 
 	// get cropped source rect
-	vec2i res = texSize(tex);
-	vec2f factor(vec2f(res) / vec2f(rect.size()));
-	Rect src(vec2f(crop.pos()) * factor, res - vec2i(vec2f(crop.size()) * factor));
+	ivec2 res = texSize(tex);
+	vec2 factor(vec2(res) / vec2(rect.size()));
+	Rect src(vec2(crop.pos()) * factor, res - ivec2(vec2(crop.size()) * factor));
 	SDL_RenderCopy(renderer, tex, &src, &dst);
 }
 
-SDL_Texture* DrawSys::renderText(const string& text, int height) {
-	if (SDL_Surface* surf = TTF_RenderUTF8_Blended(fonts.getFont(height), text.c_str(), colors[uint8(Color::text)])) {
+SDL_Texture* DrawSys::renderText(const char* text, int height) {
+	if (SDL_Surface* surf = TTF_RenderUTF8_Blended(fonts.getFont(height), text, colors[uint8(Color::text)])) {
+		SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+		SDL_FreeSurface(surf);
+		return tex;
+	}
+	return nullptr;
+}
+
+SDL_Texture* DrawSys::renderText(const char* text, int height, uint length) {
+	if (SDL_Surface* surf = TTF_RenderUTF8_Blended_Wrapped(fonts.getFont(height), text, colors[uint8(Color::text)], length)) {
 		SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
 		SDL_FreeSurface(surf);
 		return tex;
@@ -225,71 +276,75 @@ SDL_Texture* DrawSys::renderText(const string& text, int height) {
 
 int DrawSys::loadTexturesDirectoryThreaded(void* data) {
 	Thread* thread = static_cast<Thread*>(data);
-	vector<string> files = FileSys::listDir(World::browser()->getCurDir(), FTYPE_REG, World::sets()->showHidden);
+	PictureLoader* pl = static_cast<PictureLoader*>(thread->data);
+	vector<fs::path> files = FileSys::listDir(pl->curDir, true, false, pl->showHidden);
 	uptrt lim, mem;	// picture count limit, picture size limit
-	bool fwd = initLoadLimits(files, thread, lim, mem);
-	sizet sizMag = memSizeMag(mem);
-	string limStr = limitToStr(lim, lim, mem, sizMag);
-	vector<Texture>* pics = new vector<Texture>;
+	sizet sizMag = initLoadLimits(pl, files, lim, mem);
+	pl->progLim = pl->limitToStr(lim, lim, mem, sizMag);
 
-	// iterate over files utils one of the limits is hit (it should be the one associated with the setting)
-	for (uptrt mov = btom<uptrt>(fwd), i = fwd ? 0 : files.size() - 1, c = 0, m = 0; i < files.size() && c < lim && m < mem; i += mov) {
+	// iterate over files until one of the limits is hit (it should be the one associated with the setting)
+	for (uptrt mov = btom<uptrt>(pl->fwd), i = pl->fwd ? 0 : files.size() - 1, c = 0, m = 0; i < files.size() && c < lim && m < mem; i += mov) {
 		if (!thread->getRun()) {
-			clearTexVec(*pics);
-			delete pics;
+			Texture::clearVec(pl->pics);
+			delete pl;
 			return 1;
 		}
-		World::winSys()->pushEvent(UserCode::readerProgress, new string(limitToStr(fwd ? i : files.size() - i - 1, c, m, sizMag)), new string(limStr));
+		pl->progVal = pl->limitToStr(pl->fwd ? i : files.size() - i - 1, c, m, sizMag);
+		pushEvent(UserCode::readerProgress, pl);
 
-		infiLock(World::drawSys()->rendLock);
-		SDL_Texture* tex = IMG_LoadTexture(World::drawSys()->renderer, childPath(World::browser()->getCurDir(), files[i]).c_str());
-		SDL_UnlockMutex(World::drawSys()->rendLock);
+		SDL_LockMutex(pl->drawSys->rendLock);
+		SDL_Texture* tex = IMG_LoadTexture(pl->drawSys->renderer, (pl->curDir / files[i]).u8string().c_str());
+		SDL_UnlockMutex(pl->drawSys->rendLock);
 		if (tex) {
-			pics->emplace_back(std::move(files[i]), tex);
+			pl->pics.emplace_back(files[i].u8string(), tex);
 			m += texMemory(tex);
 			c++;
 		}
 	}
-	if (!fwd)
-		std::reverse(pics->begin(), pics->end());
+	if (!pl->fwd)
+		std::reverse(pl->pics.begin(), pl->pics.end());
 
-	World::winSys()->pushEvent(UserCode::readerFinished, pics);
+	pushEvent(UserCode::readerFinished, pl);
 	return 0;
 }
 
 int DrawSys::loadTexturesArchiveThreaded(void* data) {
 	Thread* thread = static_cast<Thread*>(data);
-	uptrt start, end, lim, mem;	// start must be less than end (end does not get iterated over, unlike start)
-	mapFiles files = initLoadLimits(thread, start, end, lim, mem);
-	sizet sizMag = memSizeMag(mem);
-	string limStr = limitToStr(lim, lim, mem, sizMag);
-	archive* arch = FileSys::openArchive(World::browser()->getCurDir());
-	if (!arch)
+	PictureLoader* pl = static_cast<PictureLoader*>(thread->data);
+	archive* arch = FileSys::openArchive(pl->curDir);
+	if (!arch) {
+		delete pl;
 		return -1;
+	}
 
+	uptrt start, end, lim, mem;	// start must be less than end (end does not get iterated over, unlike start)
+	mapFiles files = initLoadLimits(pl, start, end, lim, mem);
+	sizet sizMag = memSizeMag(mem);
 	uptrt c = 0, m = 0;
-	vector<Texture>* pics = new vector<Texture>;
+	pl->progLim = pl->limitToStr(lim, lim, mem, sizMag);
+
 	for (archive_entry* entry; !archive_read_next_header(arch, &entry) && c < lim && m < mem;) {
 		if (!thread->getRun()) {
-			clearTexVec(*pics);
-			delete pics;
+			Texture::clearVec(pl->pics);
+			delete pl;
 			archive_read_free(arch);
 			return 1;
 		}
-		World::winSys()->pushEvent(UserCode::readerProgress, new string(limitToStr(c, c, m, sizMag)), new string(limStr));
+		pl->progVal = pl->limitToStr(c, c, m, sizMag);
+		pushEvent(UserCode::readerProgress, pl);
 
-		const char* ename = archive_entry_pathname(entry);
-		if (pair<sizet, uptrt>& ent = files[ename]; ent.first >= start && ent.first < end)
-			if (SDL_Texture* tex = World::drawSys()->loadArchiveTexture(arch, entry)) {
-				pics->emplace_back(ename, tex);
+		string pname = archive_entry_pathname_utf8(entry);
+		if (pair<sizet, uptrt>& ent = files[pname]; ent.first >= start && ent.first < end)
+			if (SDL_Texture* tex = pl->drawSys->loadArchiveTexture(arch, entry)) {
+				pl->pics.emplace_back(std::move(pname), tex);
 				m += ent.second;
 				c++;
 			}
 	}
 	archive_read_free(arch);
-	std::sort(pics->begin(), pics->end(), [&files](const Texture& a, const Texture& b) -> bool { return files[a.name].first < files[b.name].first; });
+	std::sort(pl->pics.begin(), pl->pics.end(), [&files](const Texture& a, const Texture& b) -> bool { return files[a.name].first < files[b.name].first; });
 
-	World::winSys()->pushEvent(UserCode::readerFinished, pics);
+	pushEvent(UserCode::readerFinished, pl);
 	return 0;
 }
 
@@ -300,45 +355,43 @@ SDL_Texture* DrawSys::loadArchiveTexture(archive* arch, archive_entry* entry) {
 
 	uint8* buffer = new uint8[sizet(bsiz)];
 	int64 size = archive_read_data(arch, buffer, sizet(bsiz));
-	infiLock(rendLock);
+	SDL_LockMutex(rendLock);
 	SDL_Texture* tex = size > 0 ? IMG_LoadTexture_RW(renderer, SDL_RWFromMem(buffer, int(size)), SDL_TRUE) : nullptr;
 	SDL_UnlockMutex(rendLock);
 	delete[] buffer;
 	return tex;
 }
 
-bool DrawSys::initLoadLimits(vector<string>& files, Thread* thread, uptrt& lim, uptrt& mem) {
-	auto [first, fwd] = thread->pop<std::tuple<string, bool>>();
-	if (World::sets()->picLim.type != PicLim::Type::none)
-		if (vector<string>::iterator it = std::find(files.begin(), files.end(), first); it != files.end())
-			fwd ? files.erase(files.begin(), it) : files.erase(it + 1, files.end());
+sizet DrawSys::initLoadLimits(PictureLoader* pl, vector<fs::path>& files, uptrt& lim, uptrt& mem) {
+	if (pl->picLim.type != PicLim::Type::none)
+		if (vector<fs::path>::iterator it = std::find(files.begin(), files.end(),fs::u8path(pl->firstPic)); it != files.end())
+			pl->fwd ? files.erase(files.begin(), it) : files.erase(it + 1, files.end());
 
-	switch (World::sets()->picLim.type) {
+	switch (pl->picLim.type) {
 	case PicLim::Type::none:
 		mem = UINTPTR_MAX;
 		lim = files.size();
 		break;
 	case PicLim::Type::count:
 		mem = UINTPTR_MAX;
-		lim = World::sets()->picLim.getCount() <= files.size() ? World::sets()->picLim.getCount() : files.size();
+		lim = pl->picLim.getCount() <= files.size() ? pl->picLim.getCount() : files.size();
 		break;
 	case PicLim::Type::size:
-		mem = World::sets()->picLim.getSize();
+		mem = pl->picLim.getSize();
 		lim = files.size();
 	}
-	return fwd;
+	return memSizeMag(mem);
 }
 
-mapFiles DrawSys::initLoadLimits(Thread* thread, uptrt& start, uptrt& end, uptrt& lim, uptrt& mem) {
+mapFiles DrawSys::initLoadLimits(PictureLoader* pl, uptrt& start, uptrt& end, uptrt& lim, uptrt& mem) {
 	vector<string> names;
-	mapFiles files = FileSys::listArchivePictures(World::browser()->getCurDir(), names);
-	auto [first, fwd] = thread->pop<std::tuple<string, bool>>();
+	mapFiles files = FileSys::listArchivePictures(pl->curDir, names);
 	start = 0;
-	if (World::sets()->picLim.type != PicLim::Type::none)
-		if (mapFiles::iterator it = files.find(first); it != files.end())
+	if (pl->picLim.type != PicLim::Type::none)
+		if (mapFiles::iterator it = files.find(pl->firstPic); it != files.end())
 			start = it->second.first;
 
-	switch (World::sets()->picLim.type) {
+	switch (pl->picLim.type) {
 	case PicLim::Type::none:
 		mem = UINTPTR_MAX;
 		lim = files.size();
@@ -346,20 +399,20 @@ mapFiles DrawSys::initLoadLimits(Thread* thread, uptrt& start, uptrt& end, uptrt
 		break;
 	case PicLim::Type::count:
 		mem = UINTPTR_MAX;
-		if (fwd) {
-			lim = World::sets()->picLim.getCount() + start <= files.size() ? World::sets()->picLim.getCount() : files.size() - start;
+		if (pl->fwd) {
+			lim = pl->picLim.getCount() + start <= files.size() ? pl->picLim.getCount() : files.size() - start;
 			end = start + lim;
 		} else {
-			lim = World::sets()->picLim.getCount() <= start + 1 ? World::sets()->picLim.getCount() : start + 1;
+			lim = pl->picLim.getCount() <= start + 1 ? pl->picLim.getCount() : start + 1;
 			end = start + 1;
 			if (start -= lim - 1; start > end)
 				start = 0;
 		}
 		break;
 	case PicLim::Type::size:
-		mem = World::sets()->picLim.getSize();
+		mem = pl->picLim.getSize();
 		lim = files.size();
-		if (fwd) {
+		if (pl->fwd) {
 			end = start;
 			for (uptrt m = 0; end < lim && m < mem; m += files[names[end]].second, end++);
 		} else {
@@ -370,14 +423,8 @@ mapFiles DrawSys::initLoadLimits(Thread* thread, uptrt& start, uptrt& end, uptrt
 	return files;
 }
 
-string DrawSys::limitToStr(uptrt i, uptrt c, uptrt m, sizet mag) {
-	switch (World::sets()->picLim.type) {
-	case PicLim::Type::none:
-		return to_string(i);
-	case PicLim::Type::count:
-		return to_string(c);
-	case PicLim::Type::size:
-		return memoryString(m, mag);
-	}
-	return "";
+uptrt DrawSys::texMemory(SDL_Texture* tex) {
+	uint32 format;
+	int width, height;
+	return !SDL_QueryTexture(tex, &format, nullptr, &width,&height) ? uptrt(width) * uptrt(height) * SDL_BYTESPERPIXEL(format) : 0;
 }

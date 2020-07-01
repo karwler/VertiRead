@@ -7,11 +7,10 @@
 
 // handles window events and contains video settings
 class WindowSys {
-public:
-	static constexpr char title[] = "VertiRead";
 private:
+	static constexpr char title[] = "VertiRead";
 	static constexpr char fileIcon[] = "icon.ico";
-	static constexpr vec2i windowMinSize = { 500, 300 };
+	static constexpr ivec2 windowMinSize = { 500, 300 };
 	static constexpr uint32 eventCheckTimeout = 50;
 	static constexpr float ticksPerSec = 1000.f;
 
@@ -32,14 +31,14 @@ public:
 	int start();
 	void close();
 
-	void pushEvent(UserCode code, void* data1 = nullptr, void* data2 = nullptr) const;
 	float getDSec() const;
-	vec2i displayResolution() const;
-	void setWindowPos(vec2i pos);
-	void moveCursor(vec2i mov);
+	uint32 windowID() const;
+	ivec2 displayResolution() const;
+	void setWindowPos(ivec2 pos);
+	void moveCursor(ivec2 mov);
 	void toggleOpacity();
 	void setFullscreen(bool on);
-	void setResolution(vec2i res);
+	void setResolution(ivec2 res);
 	void setRenderer(const string& name);
 	void resetSettings();
 
@@ -92,11 +91,15 @@ inline Settings* WindowSys::getSets() {
 	return sets.get();
 }
 
-inline vec2i WindowSys::displayResolution() const {
-	SDL_DisplayMode mode;
-	return !SDL_GetDesktopDisplayMode(window ? SDL_GetWindowDisplayIndex(window) : 0, &mode) ? vec2i(mode.w, mode.h) : INT_MAX;
+inline uint32 WindowSys::windowID() const {
+	return SDL_GetWindowID(window);
 }
 
-inline void WindowSys::setWindowPos(vec2i pos) {
+inline ivec2 WindowSys::displayResolution() const {
+	SDL_DisplayMode mode;
+	return !SDL_GetDesktopDisplayMode(window ? SDL_GetWindowDisplayIndex(window) : 0, &mode) ? ivec2(mode.w, mode.h) : ivec2(INT_MAX);
+}
+
+inline void WindowSys::setWindowPos(ivec2 pos) {
 	SDL_SetWindowPosition(window, pos.x, pos.y);
 }

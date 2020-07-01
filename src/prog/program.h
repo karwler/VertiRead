@@ -3,7 +3,7 @@
 #include "browser.h"
 #include "progs.h"
 
-// handles the frontend
+// handles the front-end
 class Program {
 private:
 	static constexpr float zoomFactor = 1.2f;
@@ -23,7 +23,7 @@ public:
 	void eventOpenBookList(Button* but = nullptr);
 	void eventOpenPageBrowser(Button* but);
 	void eventOpenLastPage(Button* but);
-	bool openFile(const string& file);
+	bool openFile(const fs::path& file);
 
 	// browser
 	void eventBrowserGoUp(Button* but = nullptr);
@@ -34,9 +34,8 @@ public:
 
 	// reader
 	void eventStartLoadingReader(const string& first, bool fwd = true);
-	void eventReaderLoadingProgress(string* prg, string* lim);
 	void eventReaderLoadingCancelled(Button* but = nullptr);
-	void eventReaderLoadingFinished(vector<Texture>* pics);
+	void eventReaderLoadingFinished(PictureLoader* pl);
 	void eventZoomIn(Button* but = nullptr);
 	void eventZoomOut(Button* but = nullptr);
 	void eventZoomReset(Button* but = nullptr);
@@ -111,9 +110,9 @@ public:
 
 private:
 	void switchPictures(bool fwd, const string& picname);
-	void offerMoveBooks(const string& oldLib);
+	void offerMoveBooks(fs::path&& oldLib);
 	void setState(ProgState* newState);
-	void reposizeWindow(vec2i dres, vec2i wsiz);
+	void reposizeWindow(ivec2 dres, ivec2 wsiz);
 };
 
 inline void Program::eventOpenBookList(Button*) {

@@ -1,28 +1,45 @@
 #pragma once
 
 // stuff that's used pretty much everywhere
-#include "utils/vec2.h"
+#ifdef _WIN32
+#include <SDL_image.h>
+#else
 #include <SDL2/SDL_image.h>
+#include <strings.h>
+#endif
+#include <glm/glm.hpp>
+#include <algorithm>
 #include <array>
 #include <climits>
+#include <filesystem>
 #include <iostream>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#ifndef _WIN32
-#include <strings.h>
-#endif
+namespace fs = std::filesystem;
 
-// get rid of SDL's main
 #ifdef main
 #undef main
 #endif
 
 // to make life easier
+using uchar = unsigned char;
+using ushort = unsigned short;
+using uint = unsigned int;
+using ulong = unsigned long;
+using ullong = unsigned long long;
+using llong = long long;
+using ldouble = long double;
+using wchar = wchar_t;
+
 using std::array;
 using std::pair;
+using std::string;
 using std::vector;
+using std::wstring;
+using std::to_string;
 
 using int8 = int8_t;
 using uint8 = uint8_t;
@@ -33,6 +50,7 @@ using uint32 = uint32_t;
 using int64 = int64_t;
 using uint64 = uint64_t;
 
+template <class T> using initlist = std::initializer_list<T>;
 template <class... T> using umap = std::unordered_map<T...>;
 template <class... T> using uptr = std::unique_ptr<T...>;
 template <class... T> using uset = std::unordered_set<T...>;
@@ -41,17 +59,21 @@ using sizet = size_t;
 using pdift = ptrdiff_t;
 using uptrt = uintptr_t;
 using pairStr = pair<string, string>;
+using pairPath = pair<fs::path, fs::path>;
 using mapFiles = umap<string, pair<sizet, uptrt>>;
 
-using vec2i = vec2<int>;
-using vec2f = vec2<float>;
-using vec2t = vec2<sizet>;
+using glm::vec2;
+using glm::ivec2;
+using mvec2 = glm::vec<2, sizet, glm::defaultp>;
 
-// forward declaraions
+// forward declarations
 class Button;
+class DrawSys;
 class Layout;
+struct PictureLoader;
 class Program;
 class ProgState;
+class Scene;
 
 // events
 using PCall = void (Program::*)(Button*);
@@ -60,11 +82,9 @@ using SACall = void (ProgState::*)(float);
 
 // global constants
 #ifdef _WIN32
-const char dsep = '\\';
-const char dseps[] = "\\";
+constexpr wchar topDir[] = L"";
 #else
-const char dsep = '/';
-const char dseps[] = "/";
+constexpr char topDir[] = "/";
 #endif
 
 constexpr array<char, 4> sizeLetters = {
@@ -133,25 +153,15 @@ constexpr bool outRange(T val, T min, T max) {
 	return val < min || val > max;
 }
 
-inline vec2i texSize(SDL_Texture* tex) {
-	vec2i s;
-	return !SDL_QueryTexture(tex, nullptr, nullptr, &s.x, &s.y) ? s : 0;
+inline ivec2 texSize(SDL_Texture* tex) {
+	ivec2 s;
+	return !SDL_QueryTexture(tex, nullptr, nullptr, &s.x, &s.y) ? s : ivec2(0);
 }
 
-inline uptrt texMemory(SDL_Texture* tex) {
-	uint32 format;
-	int width, height;
-	return !SDL_QueryTexture(tex, &format, nullptr, &width,&height) ? uptrt(width) * uptrt(height) * SDL_BYTESPERPIXEL(format) : 0;
-}
-
-inline vec2i mousePos() {
-	vec2i p;
+inline ivec2 mousePos() {
+	ivec2 p;
 	SDL_GetMouseState(&p.x, &p.y);
 	return p;
-}
-
-inline void infiLock(SDL_mutex* mutex) {
-	while (SDL_TryLockMutex(mutex));
 }
 
 inline string getRendererName(int id) {
@@ -159,23 +169,23 @@ inline string getRendererName(int id) {
 	return !SDL_GetRenderDriverInfo(id, &info) ? info.name : "";
 }
 
-vector<string> getAvailibleRenderers();
+void pushEvent(UserCode code, void* data1 = nullptr, void* data2 = nullptr);
 
 // SDL_Rect wrapper
 
 struct Rect : SDL_Rect {
 	Rect() = default;
 	constexpr Rect(int n);
-	constexpr Rect(int x, int y, int w, int h);
-	constexpr Rect(vec2i pos, vec2i size);
+	constexpr Rect(int px, int py, int sw, int sh);
+	constexpr Rect(ivec2 pos, ivec2 size);
 
-	vec2i& pos();
-	constexpr vec2i pos() const;
-	vec2i& size();
-	constexpr vec2i size() const;
-	constexpr vec2i end() const;
+	ivec2& pos();
+	constexpr ivec2 pos() const;
+	ivec2& size();
+	constexpr ivec2 size() const;
+	constexpr ivec2 end() const;
 
-	bool contain(const vec2i& point) const;
+	bool contain(const ivec2& point) const;
 	Rect crop(const Rect& rect);			// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
 	Rect intersect(const Rect& rect) const;	// same as above except it returns the overlap instead of the crop and it doesn't modify itself
 };
@@ -184,35 +194,35 @@ inline constexpr Rect::Rect(int n) :
 	SDL_Rect({ n, n, n, n })
 {}
 
-inline constexpr Rect::Rect(int x, int y, int w, int h) :
-	SDL_Rect({ x, y, w, h })
+inline constexpr Rect::Rect(int px, int py, int sw, int sh) :
+	SDL_Rect({ px, py, sw, sh })
 {}
 
-inline constexpr Rect::Rect(vec2i pos, vec2i size) :
-	SDL_Rect({ pos.x, pos.y, size.w, size.h })
+inline constexpr Rect::Rect(ivec2 pos, ivec2 size) :
+	SDL_Rect({ pos.x, pos.y, size.x, size.y })
 {}
 
-inline vec2i& Rect::pos() {
-	return *reinterpret_cast<vec2i*>(this);
+inline ivec2& Rect::pos() {
+	return *reinterpret_cast<ivec2*>(this);
 }
 
-inline constexpr vec2i Rect::pos() const {
-	return vec2i(x, y);
+inline constexpr ivec2 Rect::pos() const {
+	return ivec2(x, y);
 }
 
-inline vec2i& Rect::size() {
-	return reinterpret_cast<vec2i*>(this)[1];
+inline ivec2& Rect::size() {
+	return reinterpret_cast<ivec2*>(this)[1];
 }
 
-inline constexpr vec2i Rect::size() const {
-	return vec2i(w, h);
+inline constexpr ivec2 Rect::size() const {
+	return ivec2(w, h);
 }
 
-inline constexpr vec2i Rect::end() const {
+inline constexpr ivec2 Rect::end() const {
 	return pos() + size();
 }
 
-inline bool Rect::contain(const vec2i& point) const {
+inline bool Rect::contain(const ivec2& point) const {
 	return SDL_PointInRect(reinterpret_cast<const SDL_Point*>(&point), this);
 }
 
@@ -221,51 +231,23 @@ inline Rect Rect::intersect(const Rect& rect) const {
 	return SDL_IntersectRect(this, &rect, &isct) ? isct : Rect(0);
 }
 
-// SDL_Texture wrapper
-
-struct Texture {
-	string name;
-	SDL_Texture* tex;
-
-	Texture(string name = "", SDL_Texture* tex = nullptr);
-
-	vec2i res() const;
-};
-
-inline Texture::Texture(string name, SDL_Texture* tex) :
-	name(std::move(name)),
-	tex(tex)
-{}
-
-inline vec2i Texture::res() const {
-	return texSize(tex);
-}
-
 // SDL_Thread wrapper
 
 class Thread {
 public:
-	Thread(int (*func)(void*), void* data = nullptr);
+	Thread(int (*func)(void*), void* pdata = nullptr);
 	~Thread();
 
 	bool start(int (*func)(void*));
 	bool getRun() const;
 	void interrupt();
 	int finish();
-	template <class T> T pop();
 
 	void* data;
 private:
 	SDL_Thread* proc;
 	bool run;
 };
-
-template <class T>
-T Thread::pop() {
-	T ret = *static_cast<T*>(data);
-	delete static_cast<T*>(data);
-	return ret;
-}
 
 inline Thread::~Thread() {
 	finish();
@@ -279,13 +261,8 @@ inline void Thread::interrupt() {
 	run = false;
 }
 
+
 // files and strings
-
-int strnatcmp(const char* a, const char* b);	// natural string compare
-
-inline bool strnatless(const string& a, const string& b) {
-	return strnatcmp(a.c_str(), b.c_str()) < 0;
-}
 
 inline int strcicmp(const string& a, const string& b) {	// case insensitive check if strings are equal
 #ifdef _WIN32
@@ -303,41 +280,18 @@ inline int strncicmp(const string& a, const string& b, sizet n) {	// case insens
 #endif
 }
 
-inline bool isDsep(char c) {
-#ifdef _WIN32
-	return c == '\\' || c == '/';
-#else
-	return c == '/';
-#endif
-}
-
-inline bool notDsep(char c) {
-#ifdef _WIN32
-	return c != '\\' && c != '/';
-#else
-	return c != '/';
-#endif
-}
-
-inline bool isDriveLetter(const string& path) {
-	return path.length() >= 2 && isalnum(path[0]) && path[1] == ':' && std::all_of(path.begin() + 2, path.end(), isDsep);
-}
-
-bool pathCmp(const string& as, const string& bs);
-bool isSubpath(const string& path, const string& parent);
-string parentPath(const string& path);
-string getChild(const string& path, const string& parent);
-string filename(const string& path);	// get filename from path
+bool isDriveLetter(const fs::path& path);
+fs::path parentPath(const fs::path& path);
 string strEnclose(string str);
 vector<string> strUnenclose(const string& str);
 vector<string> getWords(const string& str);
 
-inline bool isSpace(char c) {
+inline bool isSpace(int c) {
 	return (c > '\0' && c <= ' ') || c == 0x7F;
 }
 
-inline bool notSpace(char c) {
-	return uchar(c) > ' ' && c != 0x7F;
+inline bool notSpace(int c) {
+	return uint(c) > ' ' && c != 0x7F;
 }
 
 inline string trim(const string& str) {
@@ -350,45 +304,33 @@ inline string trimZero(const string& str) {
 	return str.substr(0, str[id] == '.' ? id : id + 1);
 }
 
-inline string getExt(const string& path) {
-	string::const_reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
-	return it != path.rend() && *it == '.' ? string(it.base(), path.end()) : "";
-}
-
-inline bool hasExt(const string& path) {
-	string::const_reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
-	return it != path.rend() && *it == '.';
-}
-
-inline string delExt(const string& path) {
-	string::const_reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
-	return it != path.rend() && *it == '.' ? string(path.begin(), it.base() - 1) : "";
-}
-
-inline string appDsep(const string& path) {
-	return !path.empty() && isDsep(path.back()) ? path : path + dsep;
-}
-#ifdef _WIN32
-inline wstring appDsep(const wstring& path) {
-	return !path.empty() && path.back() == dsep ? path : path + wchar(dsep);
-}
-#endif
-inline string childPath(const string& parent, const string& child) {
-#ifdef _WIN32
-	return std::all_of(parent.begin(), parent.end(), isDsep) && isDriveLetter(child) ? child : appDsep(parent) + child;
-#else
-	return appDsep(parent) + child;
-#endif
-}
-
 inline string firstUpper(string str) {
 	str[0] = char(toupper(str[0]));
 	return str;
 }
 
-template <class T>
-bool isDotName(const T& str) {
-	return str[0] == '.' && (str[1] == '\0' || (str[1] == '.' && str[2] == '\0'));
+inline bool isDsep(int c) {
+#ifdef _WIN32
+	return c == '\\' || c == '/';
+#else
+	return c == '/';
+#endif
+}
+
+inline bool notDsep(int c) {
+#ifdef _WIN32
+	return c != '\\' && c != '/';
+#else
+	return c != '/';
+#endif
+}
+
+inline fs::path relativePath(const fs::path& path, const fs::path& base) {
+	return !base.empty() ? path.lexically_relative(base) : path;
+}
+
+inline bool isSubpath(const fs::path& path, const fs::path& base) {
+	return base.empty() || !path.lexically_relative(base).empty();
 }
 
 inline sizet memSizeMag(uptrt num) {
@@ -413,7 +355,8 @@ string swtos(const wstring& wstr);
 wstring cstow(const char* str);
 wstring sstow(const string& str);
 #endif
-inline string stos(const char* str) {	// dummy function for Arguments::setArgs
+
+inline string stos(const char* str) {	// dummy function for World::setArgs
 	return str;
 }
 
@@ -432,7 +375,7 @@ T strToEnum(const array<const char*, N>& names, const string& str) {
 
 template <class T>
 T strToVal(const umap<T, const char*>& names, const string& str) {
-	umap<uint8, const char*>::const_iterator it = std::find_if(names.begin(), names.end(), [str](const pair<T, const char*>& it) -> bool { return !strcicmp(it.second, str); });
+	umap<uint8, const char*>::const_iterator it = std::find_if(names.begin(), names.end(), [str](const pair<T, const char*>& nit) -> bool { return !strcicmp(nit.second, str); });
 	return it != names.end() ? it->first : T(0);
 }
 
@@ -469,43 +412,53 @@ T btom(bool b) {
 	return T(b) * T(2) - T(1);	// b needs to be 0 or 1
 }
 
+template <class T, class F, class... A>
+T readNumber(const char*& pos, F strtox, A... args) {
+	T num = T(0);
+	for (char* end; *pos; pos++)
+		if (num = T(strtox(pos, &end, args...)); pos != end) {
+			pos = end;
+			break;
+		}
+	return num;
+}
+
+template <class T, class F, class... A>
+T stoxv(const char* str, F strtox, typename T::value_type fill, A... args) {
+	T vec(fill);
+	for (glm::length_t i = 0; *str && i < vec.length();)
+		vec[i++] = readNumber<typename T::value_type>(str, strtox, args...);
+	return vec;
+}
+
+template <class T, class F = decltype(strtof)>
+T stofv(const char* str, F strtox = strtof, typename T::value_type fill = typename T::value_type(0)) {
+	return stoxv<T>(str, strtox, fill);
+}
+
+template <class T, class F>
+T stoiv(const char* str, F strtox, typename T::value_type fill = typename T::value_type(0), int base = 0) {
+	return stoxv<T>(str, strtox, fill, base);
+}
+
 // container stuff
 
-template <class T, class P, class F, class... A>
-bool foreachFAround(const vector<T>& vec, typename vector<T>::const_iterator start, P* parent, F func, A... args) {
-	if (std::find_if(start + 1, vec.end(), [parent, func, args...](const T& it) -> bool { return (parent->*func)(it, args...); }) != vec.end())
-		return true;
-	return std::find_if(vec.begin(), start, [parent, func, args...](const T& it) -> bool { return (parent->*func)(it, args...); }) != start;
+template <class T, glm::qualifier Q = glm::defaultp>
+glm::vec<2, T, Q> min(const glm::vec<2, T, Q>& val, const glm::vec<2, T, Q>& min) {
+	return glm::vec<2, T, Q>(std::min(val.x, min.x), std::min(val.y, min.y));
 }
 
-template <class T, class P, class F, class... A>
-bool foreachRAround(const vector<T>& vec, typename vector<T>::const_reverse_iterator start, P* parent, F func, A... args) {
-	if (std::find_if(start + 1, vec.rend(), [parent, func, args...](const T& it) -> bool { return (parent->*func)(it, args...); }) != vec.rend())
-		return true;
-	return !vec.empty() && std::find_if(vec.rbegin(), start, [parent, func, args...](const T& it) -> bool { return (parent->*func)(it, args...); }) != start;
+template <class T, glm::qualifier Q = glm::defaultp>
+glm::vec<2, T, Q> max(const glm::vec<2, T, Q>& val, const glm::vec<2, T, Q>& max) {
+	return glm::vec<2, T, Q>(std::max(val.x, max.x), std::max(val.y, max.y));
 }
 
-template <class T, class P, class F, class... A>
-bool foreachAround(const vector<T>& vec, typename vector<T>::const_iterator start, bool fwd, P* parent, F func, A... args) {
-	return fwd ? foreachFAround(vec, start, parent, func, args...) : foreachRAround(vec, std::make_reverse_iterator(start + 1), parent, func, args...);
+template <class T, glm::qualifier Q = glm::defaultp>
+glm::vec<2, T, Q> clamp(const glm::vec<2, T, Q>& val, const glm::vec<2, T, Q>& min, const glm::vec<2, T, Q>& max) {
+	return glm::vec<2, T, Q>(std::clamp(val.x, min.x, max.x), std::clamp(val.y, min.y, max.y));
 }
 
-template <class T>
-T popBack(vector<T>& vec) {
-	T t = std::move(vec.back());
-	vec.pop_back();
-	return t;
-}
-
-template <class T>
-void clear(vector<T*>& vec) {
-	for (T* it : vec)
-		delete it;
-	vec.clear();
-}
-
-inline void clearTexVec(vector<Texture>& vec) {
-	for (Texture& it : vec)
-		SDL_DestroyTexture(it.tex);
-	vec.clear();
+template <class T, glm::qualifier Q = glm::defaultp>
+glm::vec<2, T, Q> vswap(const T& x, const T& y, bool swap) {
+	return swap ? glm::vec<2, T, Q>(y, x) : glm::vec<2, T, Q>(x, y);
 }

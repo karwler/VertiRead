@@ -8,6 +8,7 @@ enum class Color : uint8 {
 	dark,
 	light,
 	select,
+	tooltip,
 	text,
 	texture
 };
@@ -68,12 +69,12 @@ inline constexpr bool Direction::negative() const {
 class Binding {
 public:
 	enum class Type : uint8 {
-		enter,
-		escape,
 		up,
 		down,
 		left,
 		right,
+		enter,
+		escape,
 		centerView,
 		nextPage,
 		prevPage,
@@ -100,12 +101,12 @@ public:
 		scrollSlow
 	};
 	static constexpr array<const char*, sizet(Type::scrollSlow)+1> names = {
-		"enter",
-		"escape",
 		"up",
 		"down",
 		"left",
 		"right",
+		"enter",
+		"escape",
 		"center view",
 		"next page",
 		"prev page",
@@ -144,12 +145,14 @@ public:
 		ASG_GAXIS_N = 0x80
 	};
 
+	static constexpr Type holders = Type::scrollUp;
+
 	union {
 		SBCall bcall;
 		SACall acall;
 	};
 private:
-	SDL_Scancode key;	// keybord key
+	SDL_Scancode key;	// keyboard key
 	uint8 jctID;		// joystick control id
 	uint8 jHatVal;		// joystick hat value
 	uint8 gctID;		// gamepad control id
@@ -160,8 +163,6 @@ public:
 	Binding();
 
 	void reset(Type newType);
-	bool isHolder() const;
-	uint8 canRepeat() const;
 
 	SDL_Scancode getKey() const;
 	bool keyAssigned() const;
@@ -202,14 +203,6 @@ public:
 inline Binding::Binding() :
 	asg(ASG_NONE)
 {}
-
-inline bool Binding::isHolder() const {
-	return type >= Type::scrollUp;
-}
-
-inline uint8 Binding::canRepeat() const {
-	return type >= Type::up && type <= Type::right;
-}
 
 inline SDL_Scancode Binding::getKey() const {
 	return key;
@@ -315,7 +308,7 @@ private:
 	static constexpr uptrt defaultCount = 128;
 
 public:
-	PicLim(Type type = Type::none, uptrt count = defaultCount);
+	PicLim(Type ltype = Type::none, uptrt cnt = defaultCount);
 
 	uptrt getCount() const;
 	void setCount(const string& str);
@@ -353,7 +346,9 @@ class Settings {
 public:
 	static constexpr float defaultZoom = 1.f;
 	static constexpr int defaultSpacing = 10;
-	static constexpr int axisLimit = SHRT_MAX;
+	static constexpr int axisLimit = SHRT_MAX + 1;
+	static constexpr char defaultFont[] = "BrisaSans";
+	static constexpr char defaultDirLib[] = "library";
 
 	bool maximized, fullscreen;
 	bool showHidden;
@@ -361,27 +356,22 @@ public:
 	PicLim picLim;
 	float zoom;
 	int spacing;
-	vec2i resolution;
+	ivec2 resolution;
 	string renderer;
-	vec2f scrollSpeed;
+	string font;
+	vec2 scrollSpeed;
 private:
 	int deadzone;
 	string theme;
-	string font;
-	string dirLib;
-
-	static constexpr char defaultFont[] = "BrisaSans";
-	static constexpr char defaultDirLib[] = "library";
+	fs::path dirLib;
 
 public:
-	Settings();
+	Settings(const fs::path& dirSets, vector<string>&& themes);
 
 	const string& getTheme() const;
-	const string& setTheme(const string& name);
-	const string& getFont() const;
-	const string& setFont(const string& newFont);
-	const string& getDirLib() const;
-	const string& setDirLib(const string& drc);
+	const string& setTheme(const string& name, vector<string>&& themes);
+	const fs::path& getDirLib() const;
+	const fs::path& setDirLib(const fs::path& drc, const fs::path& dirSets);
 
 	int getRendererIndex();
 	string scrollSpeedString() const;
@@ -393,11 +383,7 @@ inline const string& Settings::getTheme() const {
 	return theme;
 }
 
-inline const string& Settings::getFont() const {
-	return font;
-}
-
-inline const string& Settings::getDirLib() const {
+inline const fs::path& Settings::getDirLib() const {
 	return dirLib;
 }
 

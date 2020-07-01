@@ -40,6 +40,7 @@ Module.symvers
 Mkfile.old
 dkms.conf
 build*/
+lib*/
 
 # CMake
 CMakeCache.txt

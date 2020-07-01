@@ -4,14 +4,15 @@
 
 // handles input events and contains controls settings
 class InputSys {
+public:
+	bool mouseLast;		// last input was mouse or touch
+
 private:
 	struct Controller {
-		SDL_Joystick* joystick;			// for direct input
-		SDL_GameController* gamepad;	// for xinput
-		int index;
+		SDL_GameController* gamepad;
+		SDL_Joystick* joystick;
 
-		Controller(int id);
-
+		bool open(int id);
 		void close();
 	};
 
@@ -19,22 +20,26 @@ private:
 
 	vector<Controller> controllers;	// currently connected game controllers
 	array<Binding, Binding::names.size()> bindings;
-	vec2i mouseMove;				// last mouse motion
+	ivec2 mouseMove;				// last mouse motion
 	uint32 moveTime;				// timestamp of last recorded mouseMove
 
 public:
 	InputSys();
 	~InputSys();
 
-	void eventMouseMotion(const SDL_MouseMotionEvent& motion);
-	void eventMouseButtonDown(const SDL_MouseButtonEvent& button);
-	void eventMouseButtonUp(const SDL_MouseButtonEvent& button);
+	void eventMouseMotion(const SDL_MouseMotionEvent& motion, bool mouse = true);
+	void eventMouseButtonDown(const SDL_MouseButtonEvent& button, bool mouse = true);
+	void eventMouseButtonUp(const SDL_MouseButtonEvent& button, bool mouse = true);
+	void eventMouseWheel(const SDL_MouseWheelEvent& wheel);
 	void eventKeypress(const SDL_KeyboardEvent& key);
 	void eventJoystickButton(const SDL_JoyButtonEvent& jbutton);
 	void eventJoystickHat(const SDL_JoyHatEvent& jhat);
 	void eventJoystickAxis(const SDL_JoyAxisEvent& jaxis);
 	void eventGamepadButton(const SDL_ControllerButtonEvent& gbutton);
 	void eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis);
+	void eventFingerMove(const SDL_TouchFingerEvent& fin);
+	void eventFingerDown(const SDL_TouchFingerEvent& fin);
+	void eventFingerUp(const SDL_TouchFingerEvent& fin);
 
 	void tick() const;
 	bool isPressed(Binding::Type type, float& amt) const;	// looks through axis bindings (aka holders) in controls settings (amt will only be changed if the binding is an active axis)
@@ -45,12 +50,12 @@ public:
 	int getAxisJ(uint8 jaxis) const;				// check if any of the joysticks' axis value is greater than 0
 	int getAxisG(SDL_GameControllerAxis gaxis) const;			// check if any of the gamepads' axis value is greater than 0
 
-	vec2i getMouseMove() const;
+	ivec2 getMouseMove() const;
 	Binding& getBinding(Binding::Type type);
 	const array<Binding, Binding::names.size()>& getBindings() const;
 	void resetBindings();
-	void addController(int id);
-	void removeController(int id);
+	void reloadControllers();
+	void simulateMouseMove();
 
 private:
 	void checkBindingsK(SDL_Scancode key, uint8 repeat) const;
@@ -65,7 +70,7 @@ private:
 };
 
 inline bool InputSys::isPressed(Binding::Type type, float& amt) const {
-	return bindings[sizet(type)].isHolder() ? isPressed(bindings[sizet(type)], amt) : false;
+	return type >= Binding::holders ? isPressed(bindings[uint8(type)], amt) : false;
 }
 
 inline bool InputSys::isPressedB(uint8 jbutton) const {
@@ -76,8 +81,8 @@ inline bool InputSys::isPressedG(SDL_GameControllerButton gbutton) const {
 	return std::find_if(controllers.begin(), controllers.end(), [gbutton](const Controller& it) -> bool { return !it.gamepad && SDL_GameControllerGetButton(it.gamepad, gbutton); }) != controllers.end();
 }
 
-inline vec2i InputSys::getMouseMove() const {
-	return SDL_GetTicks() - moveTime < moveTimeout ? mouseMove : 0;
+inline ivec2 InputSys::getMouseMove() const {
+	return SDL_GetTicks() - moveTime < moveTimeout ? mouseMove : ivec2(0);
 }
 
 inline Binding& InputSys::getBinding(Binding::Type type) {

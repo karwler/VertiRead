@@ -1,4 +1,4 @@
-#include "engine/world.h"
+#include "prog/progs.h"
 
 // BINDING
 
@@ -211,9 +211,9 @@ void Binding::setGaxis(SDL_GameControllerAxis axis, bool positive) {
 
 // PICTURE LIMIT
 
-PicLim::PicLim(Type type, uptrt count) :
-	type(type),
-	count(count),
+PicLim::PicLim(Type ltype, uptrt cnt) :
+	type(ltype),
+	count(cnt),
 	size(defaultSize())
 {}
 
@@ -255,7 +255,7 @@ uptrt PicLim::toSize(const string& str) {
 
 // SETTINGS
 
-Settings::Settings() :
+Settings::Settings(const fs::path& dirSets, vector<string>&& themes) :
 	maximized(false),
 	fullscreen(false),
 	showHidden(true),
@@ -263,31 +263,28 @@ Settings::Settings() :
 	zoom(defaultZoom),
 	spacing(defaultSpacing),
 	resolution(800, 600),
+	font(defaultFont),
 	scrollSpeed(1600.f, 1600.f),
 	deadzone(256),
-	font(defaultFont),
-	dirLib(World::fileSys()->getDirSets() + defaultDirLib)
+	dirLib(dirSets / defaultDirLib)
 {
-	setTheme("");
+	setTheme(string(), std::move(themes));
 }
 
-const string& Settings::setTheme(const string& name) {
-	vector<string> themes = World::fileSys()->getAvailibleThemes();
-	if (vector<string>::iterator it = std::find(themes.begin(), themes.end(), name); it != themes.end())
+const string& Settings::setTheme(const string& name, vector<string>&& themes) {
+	if (vector<string>::const_iterator it = std::find(themes.begin(), themes.end(), name); it != themes.end())
 		return theme = name;
-	return theme = themes.empty() ? string() : themes[0];
+	return theme = themes.empty() ? string() : std::move(themes[0]);
 }
 
-const string& Settings::setFont(const string& newFont) {
-	string path = World::fileSys()->findFont(newFont);
-	return font = FileSys::isFont(path) ? newFont : defaultFont;
-}
-
-const string& Settings::setDirLib(const string& drc) {
-	dirLib = drc;
-	if (FileSys::fileType(dirLib) != FTYPE_DIR && !FileSys::createDir(dirLib))
-		if (dirLib = World::fileSys()->getDirSets() + defaultDirLib; FileSys::fileType(dirLib) != FTYPE_DIR)
-			FileSys::createDir(dirLib);
+const fs::path& Settings::setDirLib(const fs::path& drc, const fs::path& dirSets) {
+	try {
+		if (dirLib = drc; !fs::is_directory(dirLib) && !fs::create_directories(dirLib))
+			if (dirLib = dirSets / defaultDirLib; !fs::is_directory(dirLib))
+				fs::create_directories(dirLib);
+	} catch (...) {
+		dirLib = dirSets / defaultDirLib;
+	}
 	return dirLib;
 }
 

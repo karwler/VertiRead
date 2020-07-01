@@ -3,17 +3,17 @@
 
 // COMIC
 
-Comic::Comic(string title, vector<pairStr>&& chapters) :
-	title(std::move(title)),
-	chapters(std::move(chapters))
+Comic::Comic(string capt, vector<pairStr>&& chaps) :
+	title(std::move(capt)),
+	chapters(std::move(chaps))
 {}
 
 // WEB SOURCE
 
-WebSource::WebSource(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile) :
-	curlMain(curlMain),
-	mainLock(mainLock),
-	curlFile(curlFile)
+WebSource::WebSource(CURL* curlm, SDL_mutex* mlock, CURL* cfile) :
+	curlMain(curlm),
+	mainLock(mlock),
+	curlFile(cfile)
 {}
 
 WebSource::Type WebSource::source() const {
@@ -35,9 +35,13 @@ xmlDoc* WebSource::downloadHtml(const string& url) {
 	return htmlReadDoc(reinterpret_cast<const xmlChar*>(data.c_str()), url.c_str(), nullptr, HTML_PARSE_RECOVER | HTML_PARSE_NOERROR | HTML_PARSE_NOWARNING);
 }
 
-DownloadState WebSource::downloadFile(const string& url, const string& drc) {
-	string fpath = childPath(drc, FileSys::validateFilename(string(std::find_if(url.rbegin(), url.rend(), isDsep).base(), url.end())));
+DownloadState WebSource::downloadFile(const string& url, const fs::path& drc) {
+	fs::path fpath = drc / FileSys::validateFilename(fs::u8path(std::find_if(url.rbegin(), url.rend(), isDsep).base(), url.end()));
+#ifdef _WIN32
+	FILE* ofh = _wfopen(fpath.c_str(), L"wb");
+#else
 	FILE* ofh = fopen(fpath.c_str(), "wb");
+#endif
 	if (!ofh)
 		return World::downloader()->getDlState();
 
@@ -62,7 +66,7 @@ string WebSource::toUrl(string str) {
 		curl_free(ret);
 		return str;
 	}
-	return "";
+	return string();
 }
 
 xmlNode* WebSource::findElement(xmlNode* node, const char* tag) {
@@ -121,7 +125,7 @@ string WebSource::getAttr(xmlNode* node, const char* attr) {
 		xmlFree(prop);
 		return ret;
 	}
-	return "";
+	return string();
 }
 
 bool WebSource::hasAttr(xmlNode* node, const char* attr, const char* val) {
@@ -149,8 +153,8 @@ vector<pairStr> Mangahere::query(const string& text) {
 
 		for (xmlNode* node : findElements(root, "p", "class", "manga-list-4-item-title"))
 			if (node = findElement(node, "a"))
-				if (string link = getAttr(node, "href"); !link.empty())
-					results.emplace_back(trim(getContent(node)), baseUrl() + link);
+				if (string lnk = getAttr(node, "href"); !link.empty())
+					results.emplace_back(trim(getContent(node)), baseUrl() + lnk);
 
 		link.clear();
 		if (xmlNode* next = findElement(root, "div", "class", "pager-list-left"))
@@ -180,7 +184,7 @@ vector<pairStr> Mangahere::getChapters(const string& url) {
 	return chapters;
 }
 
-DownloadState Mangahere::downloadPictures(const string& url, const string& drc) {
+DownloadState Mangahere::downloadPictures(const string& url, const fs::path& drc) {
 	for (string link = url; !link.empty();) {
 		xmlDoc* doc = downloadHtml(link);
 		xmlNode* root = xmlDocGetRootElement(doc);
@@ -224,8 +228,8 @@ vector<pairStr> Mangamaster::query(const string& text) {
 			break;
 
 		for (xmlNode* node : findElements(root, "a", "class", "comic-item__name"))
-			if (string link = getAttr(node, "href"); !link.empty())
-				results.emplace_back(trim(getContent(node)), baseUrl() + link);
+			if (string lnk = getAttr(node, "href"); !link.empty())
+				results.emplace_back(trim(getContent(node)), baseUrl() + lnk);
 
 		link.clear();
 		if (xmlNode* next = findElement(root, "div", "class", "comics-navigate-link comics-navigate-link-next"))
@@ -251,7 +255,7 @@ vector<pairStr> Mangamaster::getChapters(const string& url) {
 	return chapters;
 }
 
-DownloadState Mangamaster::downloadPictures(const string& url, const string& drc) {
+DownloadState Mangamaster::downloadPictures(const string& url, const fs::path& drc) {
 	xmlDoc* doc = downloadHtml(url);
 	xmlNode* root = xmlDocGetRootElement(doc);
 	if (!root)
@@ -284,10 +288,10 @@ vector<pairStr> Nhentai::query(const string& text) {
 			break;
 
 		for (xmlNode* node : findElements(root, "a", "class", "cover"))
-			if (string title, link = getAttr(node, "href"); !link.empty()) {
+			if (string title, lnk = getAttr(node, "href"); !link.empty()) {
 				if (node = findElement(node, "div", "class", "caption"))
 					title = trim(getContent(node));
-				results.emplace_back(std::move(title), baseUrl() + link);
+				results.emplace_back(std::move(title), baseUrl() + lnk);
 			}
 
 		link.clear();
@@ -303,7 +307,7 @@ vector<pairStr> Nhentai::getChapters(const string& url) {
 	return { pair("All", url) };
 }
 
-DownloadState Nhentai::downloadPictures(const string& url, const string& drc) {
+DownloadState Nhentai::downloadPictures(const string& url, const fs::path& drc) {
 	xmlDoc* doc = downloadHtml(url);
 	xmlNode* root = xmlDocGetRootElement(doc);
 	if (!root)
@@ -360,7 +364,7 @@ Downloader::Downloader() :
 	curl_easy_setopt(curlFile, CURLOPT_NOPROGRESS, 0);
 	curl_easy_setopt(curlFile, CURLOPT_XFERINFOFUNCTION, progress);
 	curl_easy_setopt(curlFile, CURLOPT_XFERINFODATA, this);
-	source.reset(new Mangahere(curlMain, SDL_CreateMutex(), curlFile));
+	source = std::make_unique<Mangahere>(curlMain, SDL_CreateMutex(), curlFile);
 }
 
 Downloader::~Downloader() {
@@ -374,13 +378,13 @@ Downloader::~Downloader() {
 void Downloader::setSource(WebSource::Type type) {
 	switch (type) {
 	case WebSource::MANGAHERE:
-		source.reset(new Mangahere(source->curlMain, source->mainLock, source->curlFile));
+		source = std::make_unique<Mangahere>(source->curlMain, source->mainLock, source->curlFile);
 		break;
 	case WebSource::MANGAMASTER:
-		source.reset(new Mangamaster(source->curlMain, source->mainLock, source->curlFile));
+		source = std::make_unique<Mangamaster>(source->curlMain, source->mainLock, source->curlFile);
 		break;
 	case WebSource::NHENTAI:
-		source.reset(new Nhentai(source->curlMain, source->mainLock, source->curlFile));
+		source = std::make_unique<Nhentai>(source->curlMain, source->mainLock, source->curlFile);
 	}
 }
 
@@ -441,16 +445,16 @@ int Downloader::downloadChaptersThread(void* data) {
 	while (SDL_TryLockMutex(dwn->queueLock));	// lock for first iteration
 
 	while (!dwn->dlQueue.empty()) {	// iterate over comics in queue
-		dwn->dlProg = 0;
-		World::winSys()->pushEvent(UserCode::downloadNext);
+		dwn->dlProg = mvec2(0);
+		pushEvent(UserCode::downloadNext);
 
-		if (string bdrc = childPath(World::sets()->getDirLib(), FileSys::validateFilename(dwn->dlQueue.front().title)); FileSys::createDir(bdrc) || FileSys::fileType(bdrc) == FTYPE_DIR) {	// create comic base directory in library
+		if (fs::path bdrc = World::sets()->getDirLib() / FileSys::validateFilename(fs::u8path(dwn->dlQueue.front().title)); fs::is_directory(bdrc) || fs::create_directories(bdrc)) {	// create comic base directory in library
 			vector<pairStr> chaps = dwn->dlQueue.front().chapters;
 			SDL_UnlockMutex(dwn->queueLock);	// unlock after iteration check and copying chapter data
 
 			switch (dwn->downloadChapters(chaps, bdrc)) {
 			case DownloadState::stop:
-				World::winSys()->pushEvent(UserCode::downlaodFinished);
+				pushEvent(UserCode::downlaodFinished);
 				return 1;
 			case DownloadState::skip:
 				dwn->dlState = DownloadState::run;
@@ -461,17 +465,17 @@ int Downloader::downloadChaptersThread(void* data) {
 	}
 	SDL_UnlockMutex(dwn->queueLock);	// unlock after last dlPos check
 	dwn->dlState = DownloadState::stop;
-	World::winSys()->pushEvent(UserCode::downlaodFinished);
+	pushEvent(UserCode::downlaodFinished);
 	return 0;
 }
 
-DownloadState Downloader::downloadChapters(vector<pairStr> chaps, const string& bdrc) {
-	dlProg = vec2t(0, chaps.size());
+DownloadState Downloader::downloadChapters(vector<pairStr> chaps, const fs::path& bdrc) {
+	dlProg = mvec2(0, chaps.size());
 	for (sizet i = 0; i < chaps.size(); i++) {	// iterate over chapters in currently selected comic
-		dlProg.b = i;
-		World::winSys()->pushEvent(UserCode::downloadProgress);
+		dlProg.x = i;
+		pushEvent(UserCode::downloadProgress);
 
-		if (string cdrc = childPath(bdrc, FileSys::validateFilename(chaps[i].first)); FileSys::createDir(cdrc) || FileSys::fileType(cdrc) == FTYPE_DIR)	// create chapter directory
+		if (fs::path cdrc = bdrc / FileSys::validateFilename(fs::u8path(chaps[i].first)); fs::is_directory(cdrc) || fs::create_directories(cdrc))	// create chapter directory
 			if (DownloadState state = source->downloadPictures(chaps[i].second, cdrc); state != DownloadState::run)	// download pictures of current chapter
 				return state;
 	}

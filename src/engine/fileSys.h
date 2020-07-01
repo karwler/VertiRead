@@ -4,32 +4,11 @@
 #include <archive.h>
 #include <archive_entry.h>
 #include <fstream>
-#include <functional>
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <dirent.h>
-#endif
-
-enum FileType : uint8 {
-	FTYPE_REG = 0x01,
-	FTYPE_DIR = 0x02,
-	FTYPE_LNK = 0x04,
-	FTYPE_BLK = 0x08,
-	FTYPE_CHR = 0x10,
-	FTYPE_FIF = 0x20,
-	FTYPE_SOC = 0x40,
-	FTYPE_UNK = 0x80,
-
-	FTYPE_NON = 0x00,
-	FTYPE_STD = 0x03,	// REG | DIR
-	FTYPE_ANY = 0xFF
-};
 
 /* For interpreting lines in ini files:
    The first equal sign to be read splits the line into property and value, therefore titles can't contain equal signs.
    A key must be enclosed by brackets positioned before the equal sign.
-   Any space characters before and after the property string as well as between a key's closing bracket and the eqal sign are ignored.
+   Any space characters before and after the property string as well as between a key's closing bracket and the equal sign are ignored.
    The same applies to titles and keys, but not to values. */
 class IniLine {
 public:
@@ -112,6 +91,7 @@ public:
 		SDL_Color{ 60, 60, 60, 255 },		// dark
 		SDL_Color{ 120, 120, 120, 255 },	// light
 		SDL_Color{ 105, 105, 105, 255 },	// select
+		SDL_Color{ 75, 75, 75, 255 },		// tooltip
 		SDL_Color{ 210, 210, 210, 255 },	// text
 		SDL_Color{ 210, 210, 210, 255 }		// texture
 	};
@@ -121,6 +101,7 @@ public:
 		"dark",
 		"light",
 		"select",
+		"tooltip",
 		"text",
 		"texture"
 	};
@@ -176,79 +157,55 @@ private:
 	static constexpr char keyGAxisPos[] = "X_+";
 	static constexpr char keyGAxisNeg[] = "X_-";
 
-	string dirSets;	// settings directory
+	fs::path dirSets;	// settings directory
 #ifdef _WIN32		// os's font directories
-	array<string, 2> dirFonts;
+	array<fs::path, 2> dirFonts;
 #else
-	array<string, 3> dirFonts;
+	array<fs::path, 3> dirFonts;
 #endif
 public:
 	FileSys();
 
-	vector<string> getAvailibleThemes();
-	array<SDL_Color, defaultColors.size()> loadColors(const string& theme);	// updates settings' colors according to settings' theme
-	bool getLastPage(const string& book, string& drc, string& fname);
-	bool saveLastPage(const string& book, const string& drc, const string& fname);
-	Settings* loadSettings();
-	void saveSettings(const Settings* sets);
-	array<Binding, Binding::names.size()> getBindings();
-	void saveBindings(const array<Binding, Binding::names.size()>& bindings);
-	string findFont(const string& font);	// on success returns absolute path to font file, otherwise returns empty path
+	vector<string> getAvailableThemes() const;
+	array<SDL_Color, defaultColors.size()> loadColors(const string& theme) const;	// updates settings' colors according to settings' theme
+	bool getLastPage(const string& book, string& drc, string& fname) const;
+	bool saveLastPage(const string& book, const string& drc, const string& fname) const;
+	Settings* loadSettings() const;
+	void saveSettings(const Settings* sets) const;
+	array<Binding, Binding::names.size()> getBindings() const;
+	void saveBindings(const array<Binding, Binding::names.size()>& bindings) const;
+	fs::path findFont(const string& font) const;	// on success returns absolute path to font file, otherwise returns empty path
 
-	static vector<string> listDir(string drc, FileType filter = FTYPE_STD, bool showHidden = true, bool readLinks = true);
-	static int iterateDirRec(const string& drc, const std::function<int (const string&)>& call, FileType filter = FTYPE_STD, bool readLinks = true, bool followLinks = false);
-	static pair<vector<string>, vector<string>> listDirSep(string drc, FileType filter = FTYPE_REG, bool showHidden = true, bool readLinks = true);	// first is list of files, second is list of directories
+	static vector<fs::path> listDir(const fs::path& drc, bool files = true, bool dirs = true, bool showHidden = true);
+	static pair<vector<fs::path>, vector<fs::path>> listDirSep(const fs::path& drc, bool showHidden = true);	// first is list of files, second is list of directories
 
-	static string validateFilename(string file);
-	static bool createDir(const string& path);
-	static FileType fileType(const string& file, bool readLink = true);
-	static bool isPicture(const string& file);
-	static bool isFont(const string& file);
-	static bool isArchive(const string& file);
-	static bool isPictureArchive(const string& file);
-	static bool isArchivePicture(const string& file, const string& pname);
-	
-	static archive* openArchive(const string& file);
-	static vector<string> listArchive(const string& file);
-	static mapFiles listArchivePictures(const string& file, vector<string>& names);
+	static fs::path validateFilename(const fs::path& file);
+	static bool isPicture(const fs::path& file);
+	static bool isFont(const fs::path& file);
+	static bool isArchive(const fs::path& file);
+	static bool isPictureArchive(const fs::path& file);
+	static bool isArchivePicture(const fs::path& file, const string& pname);
+
+	static archive* openArchive(const fs::path& file);
+	static vector<string> listArchive(const fs::path& file);
+	static mapFiles listArchivePictures(const fs::path& file, vector<string>& names);
 	static SDL_Surface* loadArchivePicture(archive* arch, archive_entry* entry);
 
 	static int moveContentThreaded(void* data);	// moves files from one directory to another (data points to a thread and the thread's data is a pair of strings; src, dst)
-	const string& getDirSets() const;
+	const fs::path& getDirSets() const;
 
 private:
-	static vector<string> readFileLines(const string& file, bool printMessage = true);
-	static string readTextFile(const string& file, bool printMessage = true);
-	static bool writeTextFile(const string& file, const vector<string>& lines);
+	static vector<string> readFileLines(const fs::path& file, bool printMessage = true);
+	static string readTextFile(const fs::path& file, bool printMessage = true);
+	static bool writeTextFile(const fs::path& file, const vector<string>& lines);
 	static SDL_Color readColor(const string& line);
 
 	static int setWorkingDir();
 #ifdef _WIN32
-	static vector<char> listDrives();
-	static bool atrcmp(DWORD attrs, FileType filter);
-#else
-	static FileType stmtoft(const string& file, int (*statfunc)(const char*, struct stat*));
-	static bool dtycmp(const string& drc, const dirent* entry, FileType filter, bool readLink);
+	static vector<fs::path> listDrives();
 #endif
 };
 
-inline const string& FileSys::getDirSets() const {
+inline const fs::path& FileSys::getDirSets() const {
 	return dirSets;
 }
-
-inline bool FileSys::createDir(const string& path) {
-#ifdef _WIN32
-	return CreateDirectoryW(sstow(path).c_str(), 0);
-#else
-	return !mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-#endif
-}
-#ifdef _WIN32
-inline bool FileSys::atrcmp(DWORD attrs, FileType filter) {
-	return filter & (attrs & FILE_ATTRIBUTE_DIRECTORY ? FTYPE_DIR : FTYPE_REG);
-}
-#else
-inline FileType FileSys::fileType(const string& file, bool readLink) {
-	return stmtoft(file, readLink ? stat : lstat);
-}
-#endif

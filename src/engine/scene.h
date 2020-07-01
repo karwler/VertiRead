@@ -6,16 +6,16 @@
 struct ClickStamp {
 	Widget* widget;
 	ScrollArea* area;
-	vec2i mPos;
+	ivec2 mPos;
 
-	ClickStamp(Widget* widget = nullptr, ScrollArea* area = nullptr, vec2i mPos = 0);
+	ClickStamp(Widget* wgt = nullptr, ScrollArea* sarea = nullptr, ivec2 cursPos = ivec2(0));
 };
 
-// handles more backend UI interactions, works with widgets (UI elements), and contains Program and Library
+// handles more back-end UI interactions, works with widgets (UI elements), and contains Program and Library
 class Scene {
 public:
 	Widget* select;		// currently selected widget
-	Widget* capture;	// either pointer to widget currently hogging all keyboard input or ScrollArea whichs slider is currently being dragged. nullptr if nothing is being captured or dragged
+	Widget* capture;	// either pointer to widget currently hogging all keyboard input or ScrollArea which's slider is currently being dragged. nullptr if nothing is being captured or dragged
 private:
 	uptr<RootLayout> layout;
 	uptr<Popup> popup;
@@ -29,10 +29,10 @@ public:
 	Scene();
 
 	void tick(float dSec);
-	void onMouseMove(vec2i mPos, vec2i mMov);
-	void onMouseDown(vec2i mPos, uint8 mBut, uint8 mCnt);
-	void onMouseUp(vec2i mPos, uint8 mBut, uint8 mCnt);
-	void onMouseWheel(vec2i wMov);
+	void onMouseMove(ivec2 mPos, ivec2 mMov);
+	void onMouseDown(ivec2 mPos, uint8 mBut, uint8 mCnt);
+	void onMouseUp(ivec2 mPos, uint8 mBut, uint8 mCnt);
+	void onMouseWheel(ivec2 wMov);
 	void onMouseLeave();
 	void onText(const char* str);	// text input should only run if line edit is being captured, therefore a cast check isn't necessary
 	void onResize();
@@ -44,16 +44,17 @@ public:
 	void setPopup(Popup* newPopup, Widget* newCapture = nullptr);
 	void setPopup(const pair<Popup*, Widget*>& popcap);
 
+	void updateSelect();
+	void updateSelect(ivec2 mPos);
 	void selectFirst();
-	sizet findSelectedID(Layout* box);	// get id of possibly select or select's parent in relation to box
+	sizet findSelectedID(Layout* box);	// get id of possibly select or selects parent in relation to box
 	bool cursorDisableable();
-	bool cursorInClickRange(vec2i mPos, uint8 mBut);
+	bool cursorInClickRange(ivec2 mPos, uint8 mBut);
 
 private:
-	Widget* getSelected(vec2i mPos, Layout* box);
+	Widget* getSelected(ivec2 mPos);
 	ScrollArea* getSelectedScrollArea() const;
-	bool overlayFocused(vec2i mPos);
-	Layout* topLayout(vec2i mPos);
+	bool overlayFocused(ivec2 mPos);
 };
 
 inline RootLayout* Scene::getLayout() {
@@ -72,10 +73,10 @@ inline void Scene::setPopup(const pair<Popup*, Widget*>& popcap) {
 	setPopup(popcap.first, popcap.second);
 }
 
-inline bool Scene::cursorInClickRange(vec2i mPos, uint8 mBut) {
-	return vec2f(mPos - stamps[mBut-1].mPos).length() <= clickMoveThreshold;
+inline void Scene::updateSelect(ivec2 mPos) {
+	select = getSelected(mPos);
 }
 
-inline Layout* Scene::topLayout(vec2i mPos) {
-	return popup ? popup.get() : overlayFocused(mPos) ? overlay.get() : layout.get();
+inline bool Scene::cursorInClickRange(ivec2 mPos, uint8 mBut) {
+	return vec2(mPos - stamps[mBut-1].mPos).length() <= clickMoveThreshold;
 }

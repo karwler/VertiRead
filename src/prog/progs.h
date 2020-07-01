@@ -15,9 +15,9 @@ protected:
 
 		Text(string str, int height, int margin = Label::defaultTextMargin);
 	};
-	static int findMaxLength(const string* strs, sizet scnt, int height, int margin = Label::defaultTextMargin);
 
 	static constexpr int popupLineHeight = 40;
+	static constexpr int tooltipHeight = 16;
 	static constexpr int lineHeight = 30;
 	static constexpr int topHeight = 40;
 	static constexpr int topSpacing = 10;
@@ -26,7 +26,10 @@ protected:
 private:
 	static constexpr float cursorMoveFactor = 10.f;
 
+	uint maxTooltipLength;
+
 public:
+	ProgState();
 	virtual ~ProgState() = default;	// to keep the compiler happy
 
 	void eventEnter();
@@ -57,17 +60,27 @@ public:
 	virtual void eventHide();
 	void eventBoss();
 	void eventRefresh();
-	virtual void eventFileDrop(const string&) {}
+	virtual void eventFileDrop(const fs::path&) {}
 	virtual void eventClosing() {}
+	void onResize();
 
 	virtual RootLayout* createLayout();
 	virtual Overlay* createOverlay();
-	static Popup* createPopupMessage(string msg, PCall ccal, string ctxt = "Ok", Label::Alignment malign = Label::Alignment::left);
+	static Popup* createPopupMessage(string msg, PCall ccal, string ctxt = "Okay", Label::Alignment malign = Label::Alignment::left);
 	static Popup* createPopupChoice(string msg, PCall kcal, PCall ccal, Label::Alignment malign = Label::Alignment::left);
+
+protected:
+	template <class T> static int findMaxLength(T pos, T end, int height, int margin = Label::defaultTextMargin);	// TODO: no margin parameter
+	SDL_Texture* makeTooltip(const char* str);
+	SDL_Texture* makeTooltipL(const char* str);
 
 private:
 	void eventSelect(Direction dir);
 };
+
+inline ProgState::ProgState() {
+	onResize();
+}
 
 class ProgBooks : public ProgState {
 public:
@@ -75,7 +88,7 @@ public:
 
 	virtual void eventEscape() override;
 	virtual void eventHide() override;
-	virtual void eventFileDrop(const string& file) override;
+	virtual void eventFileDrop(const fs::path& file) override;
 
 	virtual RootLayout* createLayout() override;
 };
@@ -86,7 +99,7 @@ public:
 
 	virtual void eventEscape() override;
 	virtual void eventHide() override;
-	virtual void eventFileDrop(const string& file) override;
+	virtual void eventFileDrop(const fs::path& file) override;
 
 	virtual RootLayout* createLayout() override;
 };
@@ -163,7 +176,7 @@ public:
 #endif
 class ProgSettings : public ProgState {
 public:
-	string oldPathBuffer;	// for keeping old library path between decisions
+	fs::path oldPathBuffer;	// for keeping old library path between decisions
 	Layout* limitLine;
 	Slider* deadzoneSL;
 	LabelEdit* deadzoneLE;
@@ -177,11 +190,11 @@ public:
 	virtual void eventEscape() override;
 	virtual void eventFullscreen() override;
 	virtual void eventHide() override;
-	virtual void eventFileDrop(const string& file) override;
+	virtual void eventFileDrop(const fs::path& file) override;
 
 	virtual RootLayout* createLayout() override;
 
-	static Widget* createLimitEdit();
+	Widget* createLimitEdit();
 };
 
 class ProgSearchDir : public ProgState {

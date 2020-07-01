@@ -20,7 +20,7 @@ struct Comic {
 	string title;
 	vector<pairStr> chapters;	// name, url
 
-	Comic(string title = "", vector<pairStr>&& chapters = {});
+	Comic(string capt = string(), vector<pairStr>&& chaps = vector<pairStr>());
 };
 
 class WebSource {
@@ -46,7 +46,7 @@ public:
 	CURL* curlFile;			// handle for downloading files in dlQueue
 
 public:
-	WebSource(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile);
+	WebSource(CURL* curlm, SDL_mutex* mlock, CURL* cfile);
 	virtual ~WebSource() = default;
 
 	const char* name() const;
@@ -54,12 +54,12 @@ public:
 	virtual Type source() const;	// dummy function
 
 	virtual vector<pairStr> query(const string& text) = 0;
-	virtual vector<pairStr> getChapters(const string& url) = 0;	// url needs to be of the comic's main info page; returned chapter lit has pairs of first name, secod url
-	virtual DownloadState downloadPictures(const string& url, const string& drc) = 0;	// returns non-zero if interrupted
+	virtual vector<pairStr> getChapters(const string& url) = 0;	// url needs to be of the comic's main info page; returned chapter lit has pairs of first name, second url
+	virtual DownloadState downloadPictures(const string& url, const fs::path& drc) = 0;	// returns non-zero if interrupted
 
 protected:
 	xmlDoc* downloadHtml(const string& url);
-	DownloadState downloadFile(const string& url, const string& drc);	// returns non-zero if progress got interrupted
+	DownloadState downloadFile(const string& url, const fs::path& drc);	// returns non-zero if progress got interrupted
 	string toUrl(string str);
 
 	static xmlNode* findElement(xmlNode* node, const char* tag);
@@ -86,51 +86,39 @@ inline bool WebSource::namecmp(const xmlChar* name, const char* str) {
 
 class Mangahere : public WebSource {
 public:
-	Mangahere(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile);
+	using WebSource::WebSource;
 	virtual ~Mangahere() override = default;
 
 	virtual Type source() const override;
 	virtual vector<pairStr> query(const string& text) override;
 	virtual vector<pairStr> getChapters(const string& url) override;
-	virtual DownloadState downloadPictures(const string& url, const string& drc) override;
+	virtual DownloadState downloadPictures(const string& url, const fs::path& drc) override;
 };
-
-inline Mangahere::Mangahere(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile) :
-	WebSource(curlMain, mainLock, curlFile)
-{}
 
 class Mangamaster : public WebSource {
 public:
-	Mangamaster(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile);
+	using WebSource::WebSource;
 	virtual ~Mangamaster() override = default;
 
 	virtual Type source() const override;
 	virtual vector<pairStr> query(const string& text) override;
 	virtual vector<pairStr> getChapters(const string& url) override;
-	virtual DownloadState downloadPictures(const string& url, const string& drc) override;
+	virtual DownloadState downloadPictures(const string& url, const fs::path& drc) override;
 };
-
-inline Mangamaster::Mangamaster(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile) :
-	WebSource(curlMain, mainLock, curlFile)
-{}
 
 class Nhentai : public WebSource {
 public:
-	Nhentai(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile);
+	using WebSource::WebSource;
 	virtual ~Nhentai() override = default;
 
 	virtual Type source() const override;
 	virtual vector<pairStr> query(const string& text) override;
 	virtual vector<pairStr> getChapters(const string& url) override;
-	virtual DownloadState downloadPictures(const string& url, const string& drc) override;
+	virtual DownloadState downloadPictures(const string& url, const fs::path& drc) override;
 
 private:
 	string getPictureUrl(const string& url);
 };
-
-inline Nhentai::Nhentai(CURL* curlMain, SDL_mutex* mainLock, CURL* curlFile) :
-	WebSource(curlMain, mainLock, curlFile)
-{}
 
 class Downloader {
 public:
@@ -139,7 +127,7 @@ private:
 	uptr<WebSource> source;	// for downloading and interpreting htmls
 	SDL_Thread* dlProc;		// thread for downloading files in dlQueue
 	deque<Comic> dlQueue;	// current downloads
-	vec2t dlProg;			// download progress of current comic
+	mvec2 dlProg;			// download progress of current comic
 	DownloadState dlState;	// for controlling dlProc
 
 public:
@@ -150,7 +138,7 @@ public:
 	void setSource(WebSource::Type type);
 	const deque<Comic>& getDlQueue() const;
 	DownloadState getDlState();
-	const vec2t& getDlProg() const;
+	const mvec2& getDlProg() const;
 	bool downloadComic(const Comic& info);	// info.chapters needs to be filled with names and urls for getPictures
 	bool startProc();
 	void interruptProc();
@@ -162,7 +150,7 @@ private:
 	static sizet writeText(char* ptr, sizet size, sizet nmemb, void* userdata);
 	static int progress(void* clientp, cofft dltotal, cofft dlnow, cofft ultotal, cofft ulnow);
 	static int downloadChaptersThread(void* data);
-	DownloadState downloadChapters(vector<pairStr> chaps, const string& bdrc);	// returns non-zero if interrupted
+	DownloadState downloadChapters(vector<pairStr> chaps, const fs::path& bdrc);	// returns non-zero if interrupted
 };
 
 inline WebSource* Downloader::getSource() const {
@@ -177,7 +165,7 @@ inline DownloadState Downloader::getDlState() {
 	return dlState;
 }
 
-inline const vec2t& Downloader::getDlProg() const {
+inline const mvec2& Downloader::getDlProg() const {
 	return dlProg;
 }
 #else
