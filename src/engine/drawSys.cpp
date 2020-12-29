@@ -86,8 +86,8 @@ DrawSys::DrawSys(SDL_Window* window, int driverIndex, Settings* sets, const File
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
 	// load default textures with colors and initialize fonts
-	for (const fs::path& file : FileSys::listDir(FileSys::dirTexs, true, false)) {
-		if (fs::path path = FileSys::dirTexs / file; SDL_Texture* tex = IMG_LoadTexture(renderer, path.u8string().c_str()))
+	for (const fs::path& file : FileSys::listDir(fileSys->getDirIcons(), true, false, false)) {
+		if (fs::path path = fileSys->getDirIcons() / file; SDL_Texture* tex = IMG_LoadTexture(renderer, path.u8string().c_str()))
 			texes.emplace(file.stem().u8string(), tex);
 		else
 			std::cerr << "failed to load texture " << file << '\n' << IMG_GetError() << std::endl;

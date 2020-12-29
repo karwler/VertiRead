@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef BUILD_DOWNLOADER
+#ifdef DOWNLOADER
 #include "utils/utils.h"
 #include <curl/curl.h>
 #include <libxml/HTMLparser.h>

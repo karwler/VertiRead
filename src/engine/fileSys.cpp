@@ -60,39 +60,49 @@ IniLine::Type IniLine::setLine(const string& str) {
 
 FileSys::FileSys() {
 	// set up file/directory path constants
-	if (setWorkingDir())
-		std::cerr << "failed to set working directory" << std::endl;
+	if (char* path = SDL_GetBasePath()) {
 #ifdef _WIN32
-	dirFonts = { fs::path(L"."), fs::path(_wgetenv(L"SystemDrive")) / L"Windows\\Fonts" };
-	dirSets = fs::path(_wgetenv(L"AppData")) / L"VertiRead";
+		dirBase = fs::u8path(path);
 #else
-	dirFonts = { fs::u8path("."), fs::u8path(getenv("HOME")) / ".fonts", fs::u8path("/usr/share/fonts/") };
-	dirSets = fs::u8path(getenv("HOME")) / ".vertiread";
+		dirBase = fs::u8path(path).parent_path().parent_path();	// one extra because of the appended directory separator
 #endif
+		SDL_free(path);
+	}
+	if (dirBase.empty())
+		std::cerr << "failed to get base directory" << std::endl;
+
+#ifdef _WIN32
+	dirSets = fs::path(_wgetenv(L"AppData")) / L"VertiRead";
+	dirConfs = dirBase;
+	dirIcons = dirBase / L"icons";
+	dirFonts = { dirBase, fs::path(_wgetenv(L"SystemDrive")) / L"Windows\\Fonts" };
+#else
+	dirSets = fs::u8path(getenv("HOME")) / ".vertiread";
+	dirConfs = dirBase / "share";
+	dirIcons = dirBase / "share/icons";
+	dirFonts = { dirBase / "share/fonts", fs::u8path(getenv("HOME")) / ".fonts", fs::u8path("/usr/share/fonts/") };
+#endif
+
 	// check if all (more or less) necessary files and directories exist
 	try {
 		if (!fs::is_directory(dirSets) && !fs::create_directories(dirSets))
-			std::cerr << "failed to create settings directory" << std::endl;
-	} catch (...) {
-		std::cerr << "invalid settings path" << std::endl;
+			throw std::runtime_error("failed to create settings directory");
+	} catch (const std::runtime_error& err) {
+		std::cerr << err.what() << std::endl;
 	}
 	try {
-		if (!fs::is_regular_file(fileThemes))
-			std::cerr << "failed to find themes file" << std::endl;
-	} catch (...) {
-		std::cerr << "invalid themes path" << std::endl;
-	}
-	try {
-		if (!fs::is_directory(dirTexs))
-			std::cerr << "failed to find texture directory" << std::endl;
-	} catch (...) {
-		std::cerr << "invalid texture path" << std::endl;
+		if (!fs::is_directory(dirIcons))
+			throw std::runtime_error("failed to find icons directory");
+		if (!fs::is_regular_file(dirConfs / fileThemes))
+			throw std::runtime_error("failed to find themes file");
+	} catch (const std::runtime_error& err) {
+		std::cerr << err.what() << std::endl;
 	}
 }
 
 vector<string> FileSys::getAvailableThemes() const {
 	vector<string> themes;
-	for (IniLine il : readFileLines(fileThemes))
+	for (IniLine il : readFileLines(dirConfs / fileThemes))
 		if (il.getType() == IniLine::Type::title)
 			themes.push_back(il.getPrp());
 	return !themes.empty() ? themes : vector<string>{ "default" };
@@ -100,7 +110,7 @@ vector<string> FileSys::getAvailableThemes() const {
 
 array<SDL_Color, FileSys::defaultColors.size()> FileSys::loadColors(const string& theme) const {
 	array<SDL_Color, defaultColors.size()> colors = defaultColors;
-	vector<string> lines = readFileLines(fileThemes);
+	vector<string> lines = readFileLines(dirConfs / fileThemes);
 
 	IniLine il;	// find title equal to theme and read colors until the end of the file or another title
 	vector<string>::iterator it = std::find_if(lines.begin(), lines.end(), [&il, theme](const string& ln) -> bool { return il.setLine(ln) == IniLine::Type::title && il.getPrp() == theme; });
@@ -275,40 +285,31 @@ vector<string> FileSys::readFileLines(const fs::path& file, bool printMessage) {
 }
 
 string FileSys::readTextFile(const fs::path& file, bool printMessage) {
-	string text;
-	try {
-		std::ifstream ifh(file, std::ios::binary | std::ios::ate);
-		if (!ifh.good())
-			throw 0;
-		std::streampos len = ifh.tellg();
-		if (len == -1)
-			throw 0;
-		ifh.seekg(0);
+	if (std::ifstream ifh(file, std::ios::binary | std::ios::ate); ifh.good())
+		if (std::streampos len = ifh.tellg(); len != -1) {
+			ifh.seekg(0);
 
-		text.resize(len);
-		if (ifh.read(text.data(), text.length()); sizet(ifh.gcount()) < text.length())
-			text.resize(ifh.gcount());
-	} catch (...) {
-		if (printMessage)
-			std::cerr << "failed to open file " << file << std::endl;
-		return string();
-	}
-	return text;
+			string text;
+			text.resize(len);
+			if (ifh.read(text.data(), text.length()); sizet(ifh.gcount()) < text.length())
+				text.resize(ifh.gcount());
+			return text;
+		}
+	if (printMessage)
+		std::cerr << "failed to open file " << file << std::endl;
+	return string();
 }
 
 bool FileSys::writeTextFile(const fs::path& file, const vector<string>& lines) {
-	try {
-		std::ofstream ofh(file, std::ios::binary);
-		if (!ofh.good())
-			throw 0;
-
-		for (const string& it : lines) {
-			ofh.write(it.c_str(), it.length());
-			ofh.put('\n');
-		}
-	} catch (...) {
+	std::ofstream ofh(file, std::ios::binary);
+	if (!ofh.good()) {
 		std::cerr << "failed to write file " << file << std::endl;
 		return false;
+	}
+
+	for (const string& it : lines) {
+		ofh.write(it.c_str(), it.length());
+		ofh.put('\n');
 	}
 	return true;
 }
@@ -384,7 +385,7 @@ fs::path FileSys::validateFilename(const fs::path& file) {
 	string str = file.u8string();
 #ifdef _WIN32
 	for (const char* it : takenFilenames)
-		if (sizet len = strlen(it); !strncicmp(str, it, len))
+		if (sizet len = strlen(it); !SDL_strncasecmp(str.c_str(), it, len))
 			str.erase(0, len);
 	str.erase(std::remove_if(str.begin(), str.end(), [](char c) -> bool { return c == '<' || c == '>' || c == ':' || c == '"' || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*' || uchar(c) < ' '; }), str.end());
 
@@ -534,19 +535,6 @@ int FileSys::moveContentThreaded(void* data) {
 	return 0;
 }
 
-int FileSys::setWorkingDir() {
-	char* path = SDL_GetBasePath();
-	if (!path)
-		return 1;
-#ifdef _WIN32
-	int err = _wchdir(cstow(path).c_str());
-#else
-	int err = chdir(path);
-#endif
-	SDL_free(path);
-	return err;
-}
-
 fs::path FileSys::findFont(const string& font) const {
 	if (fs::path path = fs::u8path(font); isFont(path))	// check if font refers to a file
 		return path;
@@ -554,7 +542,7 @@ fs::path FileSys::findFont(const string& font) const {
 	for (const fs::path& drc : dirFonts) {	// check font directories
 		try {
 			for (const fs::directory_entry& it : fs::recursive_directory_iterator(drc, fs::directory_options::follow_directory_symlink | fs::directory_options::skip_permission_denied))
-				if (!strcicmp(it.path().stem().u8string(), font) && isFont(it.path()))
+				if (!SDL_strcasecmp(it.path().stem().u8string().c_str(), font.c_str()) && isFont(it.path()))
 					return it.path();
 		} catch (...) {}
 	}

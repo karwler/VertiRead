@@ -106,11 +106,6 @@ public:
 		"texture"
 	};
 
-#ifdef _WIN32
-	static constexpr char dirTexs[] = "textures\\";
-#else
-	static constexpr char dirTexs[] = "textures/";
-#endif
 	static constexpr char extIni[] = ".ini";
 private:
 	static constexpr char defaultFrMode[] = "rb";
@@ -157,12 +152,11 @@ private:
 	static constexpr char keyGAxisPos[] = "X_+";
 	static constexpr char keyGAxisNeg[] = "X_-";
 
+	fs::path dirBase;	// application base directory
 	fs::path dirSets;	// settings directory
-#ifdef _WIN32		// os's font directories
-	array<fs::path, 2> dirFonts;
-#else
-	array<fs::path, 3> dirFonts;
-#endif
+	fs::path dirConfs;	// internal config directory
+	fs::path dirIcons;	// icon directory
+	vector<fs::path> dirFonts;	// os's font directories
 public:
 	FileSys();
 
@@ -193,6 +187,8 @@ public:
 
 	static int moveContentThreaded(void* data);	// moves files from one directory to another (data points to a thread and the thread's data is a pair of strings; src, dst)
 	const fs::path& getDirSets() const;
+	const fs::path& getDirIcons() const;
+	string windowIconPath() const;
 
 private:
 	static vector<string> readFileLines(const fs::path& file, bool printMessage = true);
@@ -200,7 +196,6 @@ private:
 	static bool writeTextFile(const fs::path& file, const vector<string>& lines);
 	static SDL_Color readColor(const string& line);
 
-	static int setWorkingDir();
 #ifdef _WIN32
 	static vector<fs::path> listDrives();
 #endif
@@ -208,4 +203,16 @@ private:
 
 inline const fs::path& FileSys::getDirSets() const {
 	return dirSets;
+}
+
+inline const fs::path& FileSys::getDirIcons() const {
+	return dirIcons;
+}
+
+inline string FileSys::windowIconPath() const {
+#if defined(__WIN32) || defined(APPIMAGE)
+	return (dirBase / "vertiread.png").u8string();
+#else
+	return (dirBase / "share/vertiread.png").u8string();
+#endif
 }

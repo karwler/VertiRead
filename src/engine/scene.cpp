@@ -147,12 +147,9 @@ ScrollArea* Scene::getSelectedScrollArea() const {
 }
 
 bool Scene::overlayFocused(ivec2 mPos) {
-	if (!overlay)
-		return false;
-
-	if (overlay->on)
-		return overlay->rect().contain(mPos) ? true : overlay->on = false;
-	return overlay->actRect().contain(mPos) ? overlay->on = true : false;
+	if (overlay)
+		return overlay->on = overlay->on ? overlay->rect().contain(mPos) : overlay->actRect().contain(mPos);
+	return false;
 }
 
 void Scene::selectFirst() {
@@ -165,7 +162,7 @@ void Scene::selectFirst() {
 		if (id >= lay->getWidgets().size()) {
 			id = lay->getIndex() + 1;
 			lay = lay->getParent();
-		} else if (next = dynamic_cast<Layout*>(lay->getWidget(id)))
+		} else if (next = dynamic_cast<Layout*>(lay->getWidget(id)); next)
 			lay = next;
 		else if (lay->getWidget(id)->navSelectable()) {
 			select = lay->getWidget(0);

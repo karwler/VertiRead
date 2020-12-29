@@ -141,7 +141,7 @@ public:
 private:
 	int modifySpeed(float value);	// change scroll speed depending on pressed bindings
 };
-#ifdef BUILD_DOWNLOADER
+#ifdef DOWNLOADER
 class ProgDownloader : public ProgState {
 public:
 	LabelEdit* query;

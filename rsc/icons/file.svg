@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="256"
+   height="256"
+   viewBox="0 0 67.733332 67.733335"
+   version="1.1"
+   id="svg8"
+   sodipodi:docname="file.svg"
+   inkscape:version="1.0.1 (3bc2e813f5, 2020-09-07)">
+  <defs
+     id="defs2">
+    <inkscape:path-effect
+       effect="powermask"
+       id="path-effect1111"
+       is_visible="true"
+       lpeversion="1"
+       uri="#mask-powermask-path-effect1111"
+       invert="false"
+       hide_mask="false"
+       background="true"
+       background_color="#ffffffff" />
+    <mask
+       maskUnits="userSpaceOnUse"
+       id="mask-powermask-path-effect1111">
+      <path
+         id="mask-powermask-path-effect1111_box"
+         style="fill:#ffffff;fill-opacity:1"
+         d="M 7.3100939,0.94024086 H 60.487344 V 66.656401 H 7.3100939 Z" />
+      <rect
+         style="fill:#000000;fill-opacity:1;stroke:#ffffff;stroke-width:1.78575;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0"
+         id="rect1109"
+         width="35.133007"
+         height="9.7987146"
+         x="24.950897"
+         y="-41.214977"
+         transform="rotate(45.869148)" />
+    </mask>
+    <filter
+       id="mask-powermask-path-effect1111_inverse"
+       inkscape:label="filtermask-powermask-path-effect1111"
+       style="color-interpolation-filters:sRGB"
+       height="100"
+       width="100"
+       x="-50"
+       y="-50">
+      <feColorMatrix
+         id="mask-powermask-path-effect1111_primitive1"
+         values="1"
+         type="saturate"
+         result="fbSourceGraphic" />
+      <feColorMatrix
+         id="mask-powermask-path-effect1111_primitive2"
+         values="-1 0 0 0 1 0 -1 0 0 1 0 0 -1 0 1 0 0 0 1 0 "
+         in="fbSourceGraphic" />
+    </filter>
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="1.4"
+     inkscape:cx="58.4839"
+     inkscape:cy="198.83732"
+     inkscape:document-units="mm"
+     inkscape:current-layer="layer1"
+     inkscape:document-rotation="0"
+     showgrid="false"
+     units="px"
+     inkscape:pagecheckerboard="true"
+     inkscape:snap-object-midpoints="false"
+     inkscape:window-width="1366"
+     inkscape:window-height="743"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="0" />
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <g
+       id="g1097"
+       mask="url(#mask-powermask-path-effect1111)"
+       inkscape:path-effect="#path-effect1111"
+       transform="matrix(1.0546217,0,0,1.0546217,-1.7358201,-1.7019678)">
+      <path
+         style="fill:none;fill-opacity:1;stroke:#ffffff;stroke-width:4;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         id="rect1031"
+         width="47.17725"
+         height="59.71616"
+         x="10.310094"
+         y="3.9402409"
+         ry="0.35992956"
+         sodipodi:type="rect"
+         d="m 10.670023,3.9402409 h 46.457391 c 0.199401,0 0.35993,0.1605285 0.35993,0.3599295 V 63.296471 c 0,0.199401 -0.160529,0.35993 -0.35993,0.35993 H 10.670023 c -0.199401,0 -0.359929,-0.160529 -0.359929,-0.35993 V 4.3001704 c 0,-0.199401 0.160528,-0.3599295 0.359929,-0.3599295 z" />
+      <path
+         style="fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:4;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.449567"
+         id="rect1039"
+         width="16.2258"
+         height="15.957523"
+         x="42.188602"
+         y="3.7888072"
+         ry="0"
+         sodipodi:type="rect"
+         d="m 42.188602,3.7888072 h 16.2258 V 19.74633 h -16.2258 z" />
+    </g>
+  </g>
+</svg>

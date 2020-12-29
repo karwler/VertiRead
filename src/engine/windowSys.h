@@ -9,7 +9,6 @@
 class WindowSys {
 private:
 	static constexpr char title[] = "VertiRead";
-	static constexpr char fileIcon[] = "icon.ico";
 	static constexpr ivec2 windowMinSize = { 500, 300 };
 	static constexpr uint32 eventCheckTimeout = 50;
 	static constexpr float ticksPerSec = 1000.f;

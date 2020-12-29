@@ -1,11 +1,11 @@
 #pragma once
 
 // stuff that's used pretty much everywhere
-#ifdef _WIN32
+#define SDL_MAIN_HANDLED
+#if defined(_WIN32) || defined(APPIMAGE)
 #include <SDL_image.h>
 #else
 #include <SDL2/SDL_image.h>
-#include <strings.h>
 #endif
 #include <glm/glm.hpp>
 #include <algorithm>
@@ -19,10 +19,6 @@
 #include <unordered_set>
 #include <vector>
 namespace fs = std::filesystem;
-
-#ifdef main
-#undef main
-#endif
 
 // to make life easier
 using uchar = unsigned char;
@@ -264,22 +260,6 @@ inline void Thread::interrupt() {
 
 // files and strings
 
-inline int strcicmp(const string& a, const string& b) {	// case insensitive check if strings are equal
-#ifdef _WIN32
-	return _stricmp(a.c_str(), b.c_str());
-#else
-	return strcasecmp(a.c_str(), b.c_str());
-#endif
-}
-
-inline int strncicmp(const string& a, const string& b, sizet n) {	// case insensitive check if strings are equal
-#ifdef _WIN32
-	return _strnicmp(a.c_str(), b.c_str(), n);
-#else
-	return strncasecmp(a.c_str(), b.c_str(), n);
-#endif
-}
-
 bool isDriveLetter(const fs::path& path);
 fs::path parentPath(const fs::path& path);
 string strEnclose(string str);
@@ -370,12 +350,12 @@ inline const char* btos(bool b) {
 
 template <class T, sizet N>
 T strToEnum(const array<const char*, N>& names, const string& str) {
-	return T(std::find_if(names.begin(), names.end(), [str](const string& it) -> bool { return !strcicmp(it, str); }) - names.begin());
+	return T(std::find_if(names.begin(), names.end(), [str](const string& it) -> bool { return !SDL_strcasecmp(it.c_str(), str.c_str()); }) - names.begin());
 }
 
 template <class T>
 T strToVal(const umap<T, const char*>& names, const string& str) {
-	umap<uint8, const char*>::const_iterator it = std::find_if(names.begin(), names.end(), [str](const pair<T, const char*>& nit) -> bool { return !strcicmp(nit.second, str); });
+	umap<uint8, const char*>::const_iterator it = std::find_if(names.begin(), names.end(), [str](const pair<T, const char*>& nit) -> bool { return !SDL_strcasecmp(nit.second, str.c_str()); });
 	return it != names.end() ? it->first : T(0);
 }
 
@@ -442,21 +422,6 @@ T stoiv(const char* str, F strtox, typename T::value_type fill = typename T::val
 }
 
 // container stuff
-
-template <class T, glm::qualifier Q = glm::defaultp>
-glm::vec<2, T, Q> min(const glm::vec<2, T, Q>& val, const glm::vec<2, T, Q>& min) {
-	return glm::vec<2, T, Q>(std::min(val.x, min.x), std::min(val.y, min.y));
-}
-
-template <class T, glm::qualifier Q = glm::defaultp>
-glm::vec<2, T, Q> max(const glm::vec<2, T, Q>& val, const glm::vec<2, T, Q>& max) {
-	return glm::vec<2, T, Q>(std::max(val.x, max.x), std::max(val.y, max.y));
-}
-
-template <class T, glm::qualifier Q = glm::defaultp>
-glm::vec<2, T, Q> clamp(const glm::vec<2, T, Q>& val, const glm::vec<2, T, Q>& min, const glm::vec<2, T, Q>& max) {
-	return glm::vec<2, T, Q>(std::clamp(val.x, min.x, max.x), std::clamp(val.y, min.y, max.y));
-}
 
 template <class T, glm::qualifier Q = glm::defaultp>
 glm::vec<2, T, Q> vswap(const T& x, const T& y, bool swap) {

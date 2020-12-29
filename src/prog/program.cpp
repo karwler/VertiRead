@@ -184,7 +184,7 @@ void Program::eventExitReader(Button*) {
 }
 
 // DOWNLOADER
-#ifdef BUILD_DOWNLOADER
+#ifdef DOWNLOADER
 void Program::eventOpenDownloader(Button*) {
 	setState(new ProgDownloader);
 }
@@ -302,7 +302,7 @@ void Program::eventSetSpacing(Button* but) {
 
 void Program::eventSetLibraryDirLE(Button* but) {
 	fs::path oldLib = World::sets()->getDirLib();
-#ifdef BUILD_DOWNLOADER
+#ifdef DOWNLOADER
 	if (downloader.getDlState() != DownloadState::stop) {
 		World::scene()->setPopup(ProgState::createPopupMessage("Can't change while downloading.", &Program::eventClosePopup));
 		return;
@@ -486,7 +486,7 @@ void Program::eventClosePopup(Button*) {
 }
 
 void Program::eventTryExit(Button*) {
-#ifdef BUILD_DOWNLOADER
+#ifdef DOWNLOADER
 	if (downloader.getDlState() == DownloadState::stop)
 		eventForceExit();
 	else

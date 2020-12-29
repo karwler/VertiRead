@@ -1,6 +1,6 @@
 #include <windows.h>
 
-MAINICON ICON "icon.ico"
+MAINICON ICON "vertiread.ico"
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION 1,0,0,0

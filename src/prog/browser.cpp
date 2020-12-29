@@ -19,7 +19,7 @@ Browser::Browser(fs::path rootDirectory, fs::path container, fs::path file, PCal
 	if ((rootDir != topDir && !fs::is_directory(rootDir)) || !isSubpath(curDir, rootDir))
 		throw std::runtime_error("invalid archive browser arguments");
 
-	if (inArchive = !fs::is_directory(curDir)) {
+	if (inArchive = !fs::is_directory(curDir); inArchive) {
 		if (!FileSys::isArchive(curDir))
 			throw std::runtime_error(curDir.u8string() + " isn't a directory or archive");
 		if (checkFile && !FileSys::isArchivePicture(curDir, curFile.u8string()))

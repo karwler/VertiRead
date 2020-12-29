@@ -49,7 +49,16 @@ void WindowSys::init() {
 	if (!(flags & IMG_INIT_WEBP))
 		std::cerr << "failed to initialize WEBP:\n" << IMG_GetError() << std::endl;
 
+#if SDL_VERSION_ATLEAST(2, 0, 10)
+	SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
+	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+#else
+	SDL_SetHint(SDL_HINT_ANDROID_SEPARATE_MOUSE_AND_TOUCH, "1");
+#endif
 	SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
+#if SDL_VERSION_ATLEAST(2, 0, 9)
+	SDL_EventState(SDL_DISPLAYEVENT, SDL_DISABLE);
+#endif
 	SDL_EventState(SDL_TEXTEDITING, SDL_DISABLE);
 	SDL_EventState(SDL_KEYMAPCHANGED, SDL_DISABLE);
 	SDL_EventState(SDL_JOYBALLMOTION, SDL_DISABLE);
@@ -64,6 +73,9 @@ void WindowSys::init() {
 	SDL_EventState(SDL_DROPCOMPLETE, SDL_DISABLE);
 	SDL_EventState(SDL_AUDIODEVICEADDED, SDL_DISABLE);
 	SDL_EventState(SDL_AUDIODEVICEREMOVED, SDL_DISABLE);
+#if SDL_VERSION_ATLEAST(2, 0, 9)
+	SDL_EventState(SDL_SENSORUPDATE, SDL_DISABLE);
+#endif
 	SDL_EventState(SDL_RENDER_TARGETS_RESET, SDL_DISABLE);
 	SDL_EventState(SDL_RENDER_DEVICE_RESET, SDL_DISABLE);
 	SDL_StopTextInput();
@@ -104,11 +116,11 @@ void WindowSys::createWindow() {
 
 	// create new window
 	sets->resolution = clamp(sets->resolution, windowMinSize, displayResolution());
-	if (!(window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets->resolution.x, sets->resolution.y, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | (sets->maximized ? SDL_WINDOW_MAXIMIZED : 0) | (sets->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0))))
+	if (!(window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets->resolution.x, sets->resolution.y, SDL_WINDOW_RESIZABLE | (sets->maximized ? SDL_WINDOW_MAXIMIZED : 0) | (sets->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0))))
 		throw std::runtime_error(string("Failed to create window:\n") + SDL_GetError());
 
 	// visual stuff
-	if (SDL_Surface* icon = IMG_Load(fileIcon)) {
+	if (SDL_Surface* icon = IMG_Load(fileSys->windowIconPath().c_str())) {
 		SDL_SetWindowIcon(window, icon);
 		SDL_FreeSurface(icon);
 	}
@@ -126,6 +138,18 @@ void WindowSys::destroyWindow() {
 
 void WindowSys::handleEvent(const SDL_Event& event) {
 	switch (event.type) {
+	case SDL_QUIT:
+		program->eventTryExit();
+		break;
+	case SDL_WINDOWEVENT:
+		eventWindow(event.window);
+		break;
+	case SDL_KEYDOWN:
+		inputSys->eventKeypress(event.key);
+		break;
+	case SDL_TEXTINPUT:
+		scene->onText(event.text.text);
+		break;
 	case SDL_MOUSEMOTION:
 		inputSys->eventMouseMotion(event.motion);
 		break;
@@ -138,8 +162,23 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 	case SDL_MOUSEWHEEL:
 		inputSys->eventMouseWheel(event.wheel);
 		break;
-	case SDL_FINGERMOTION:
-		inputSys->eventFingerMove(event.tfinger);
+	case SDL_JOYAXISMOTION:
+		inputSys->eventJoystickAxis(event.jaxis);
+		break;
+	case SDL_JOYHATMOTION:
+		inputSys->eventJoystickHat(event.jhat);
+		break;
+	case SDL_JOYBUTTONDOWN:
+		inputSys->eventJoystickButton(event.jbutton);
+		break;
+	case SDL_JOYDEVICEADDED: case SDL_JOYDEVICEREMOVED:
+		inputSys->reloadControllers();
+		break;
+	case SDL_CONTROLLERAXISMOTION:
+		inputSys->eventGamepadAxis(event.caxis);
+		break;
+	case SDL_CONTROLLERBUTTONDOWN:
+		inputSys->eventGamepadButton(event.cbutton);
 		break;
 	case SDL_FINGERDOWN:
 		inputSys->eventFingerDown(event.tfinger);
@@ -147,29 +186,8 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 	case SDL_FINGERUP:
 		inputSys->eventFingerUp(event.tfinger);
 		break;
-	case SDL_KEYDOWN:
-		inputSys->eventKeypress(event.key);
-		break;
-	case SDL_JOYBUTTONDOWN:
-		inputSys->eventJoystickButton(event.jbutton);
-		break;
-	case SDL_JOYHATMOTION:
-		inputSys->eventJoystickHat(event.jhat);
-		break;
-	case SDL_JOYAXISMOTION:
-		inputSys->eventJoystickAxis(event.jaxis);
-		break;
-	case SDL_CONTROLLERBUTTONDOWN:
-		inputSys->eventGamepadButton(event.cbutton);
-		break;
-	case SDL_CONTROLLERAXISMOTION:
-		inputSys->eventGamepadAxis(event.caxis);
-		break;
-	case SDL_TEXTINPUT:
-		scene->onText(event.text.text);
-		break;
-	case SDL_WINDOWEVENT:
-		eventWindow(event.window);
+	case SDL_FINGERMOTION:
+		inputSys->eventFingerMove(event.tfinger);
 		break;
 	case SDL_DROPFILE:
 		program->getState()->eventFileDrop(fs::u8path(event.drop.file));
@@ -179,14 +197,8 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 		scene->onText(event.drop.file);
 		SDL_free(event.drop.file);
 		break;
-	case SDL_JOYDEVICEADDED: case SDL_JOYDEVICEREMOVED:
-		inputSys->reloadControllers();
-		break;
 	case SDL_USEREVENT:
 		program->eventUser(event.user);
-		break;
-	case SDL_QUIT:
-		program->eventTryExit();
 	}
 }
 
@@ -195,8 +207,6 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 	case SDL_WINDOWEVENT_RESIZED:
 		if (uint32 flags = SDL_GetWindowFlags(window); !(flags & SDL_WINDOW_FULLSCREEN_DESKTOP) && !(sets->maximized = flags & SDL_WINDOW_MAXIMIZED))	// update settings if needed
 			SDL_GetWindowSize(window, &sets->resolution.x, &sets->resolution.y);
-		scene->onResize();
-		break;
 	case SDL_WINDOWEVENT_SIZE_CHANGED:
 		scene->onResize();
 		break;

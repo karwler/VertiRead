@@ -43,7 +43,7 @@ public:
 	void eventNextDir(Button* but = nullptr);
 	void eventPrevDir(Button* but = nullptr);
 	void eventExitReader(Button* but = nullptr);
-#ifdef BUILD_DOWNLOADER
+#ifdef DOWNLOADER
 	// downloader
 	void eventOpenDownloader(Button* but = nullptr);
 	void eventSwitchSource(Button* but = nullptr);

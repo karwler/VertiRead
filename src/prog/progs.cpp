@@ -157,7 +157,7 @@ RootLayout* ProgBooks::createLayout() {
 	Text settings("Settings", topHeight);
 	Text exit("Exit", topHeight);
 	vector<Widget*> top = {
-#ifdef BUILD_DOWNLOADER
+#ifdef DOWNLOADER
 		new Label(download.length, download.text, &Program::eventOpenDownloader),
 #endif
 		new Label(settings.length, std::move(settings.text), &Program::eventOpenSettings),
@@ -256,19 +256,19 @@ void ProgReader::eventRight() {
 }
 
 void ProgReader::eventScrollUp(float amt) {
-	World::scene()->getLayout()->onScroll(ivec2(0, -modifySpeed(amt * World::sets()->scrollSpeed.y)));
+	reader->onScroll(ivec2(0, -modifySpeed(amt * World::sets()->scrollSpeed.y)));
 }
 
 void ProgReader::eventScrollDown(float amt) {
-	World::scene()->getLayout()->onScroll(ivec2(0, modifySpeed(amt * World::sets()->scrollSpeed.y)));
+	reader->onScroll(ivec2(0, modifySpeed(amt * World::sets()->scrollSpeed.y)));
 }
 
 void ProgReader::eventScrollRight(float amt) {
-	World::scene()->getLayout()->onScroll(ivec2(modifySpeed(amt * World::sets()->scrollSpeed.x), 0));
+	reader->onScroll(ivec2(modifySpeed(amt * World::sets()->scrollSpeed.x), 0));
 }
 
 void ProgReader::eventScrollLeft(float amt) {
-	World::scene()->getLayout()->onScroll(ivec2(-modifySpeed(amt * World::sets()->scrollSpeed.x), 0));
+	reader->onScroll(ivec2(-modifySpeed(amt * World::sets()->scrollSpeed.x), 0));
 }
 
 void ProgReader::eventNextPage() {
@@ -342,8 +342,8 @@ Overlay* ProgReader::createOverlay() {
 		new Button(picSize, &Program::eventPrevDir, nullptr, nullptr, makeTooltip("Previous"), false, World::drawSys()->texture("left"), picMargin),
 		new Button(picSize, &Program::eventZoomIn, nullptr, nullptr, makeTooltip("Zoom in"), false, World::drawSys()->texture("plus"), picMargin),
 		new Button(picSize, &Program::eventZoomOut, nullptr, nullptr, makeTooltip("Zoom out"), false, World::drawSys()->texture("minus"), picMargin),
-		new Button(picSize, &Program::eventZoomReset, nullptr, nullptr, makeTooltip("Zoom reset"), false, World::drawSys()->texture("circle"), picMargin),
-		new Button(picSize, &Program::eventCenterView, nullptr, nullptr, makeTooltip("Center"), false, World::drawSys()->texture("square"), picMargin)
+		new Button(picSize, &Program::eventZoomReset, nullptr, nullptr, makeTooltip("Zoom reset"), false, World::drawSys()->texture("reset"), picMargin),
+		new Button(picSize, &Program::eventCenterView, nullptr, nullptr, makeTooltip("Center"), false, World::drawSys()->texture("center"), picMargin)
 	};
 	int ysiz = picSize * int(menu.size());
 	return new Overlay(svec2(0), svec2(picSize, ysiz), svec2(0), svec2(picSize/2, ysiz), std::move(menu), Direction::down, 0);
@@ -358,7 +358,7 @@ int ProgReader::modifySpeed(float value) {
 }
 
 // PROG DOWNLOADER
-#ifdef BUILD_DOWNLOADER
+#ifdef DOWNLOADER
 void ProgDownloader::eventEscape() {
 	if (!World::program()->tryClosePopupThread())
 		World::program()->eventOpenBookList();
@@ -550,7 +550,7 @@ RootLayout* ProgSettings::createLayout() {
 	Text exit("Exit", topHeight);
 	vector<Widget*> top = {
 		new Label(books.length, std::move(books.text), &Program::eventOpenBookList),
-#ifdef BUILD_DOWNLOADER
+#ifdef DOWNLOADER
 		new Label(download.length, std::move(download.text), &Program::eventOpenDownloader),
 #endif
 		new Label(exit.length, std::move(exit.text), &Program::eventTryExit)

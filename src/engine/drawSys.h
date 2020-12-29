@@ -2,7 +2,7 @@
 
 #include "fileSys.h"
 #include "utils/layouts.h"
-#ifdef _WIN32
+#if defined(_WIN32) || defined(APPIMAGE)
 #include <SDL_ttf.h>
 #else
 #include <SDL2/SDL_ttf.h>

@@ -303,7 +303,7 @@ void ScrollArea::onHold(ivec2 mPos, uint8 mBut) {
 
 	if (mBut == SDL_BUTTON_LEFT) {	// check scroll bar left click
 		World::scene()->capture = this;
-		if (draggingSlider = barRect().contain(mPos)) {
+		if (draggingSlider = barRect().contain(mPos); draggingSlider) {
 			int di = direction.vertical();
 			if (int sp = sliderPos(), ss = sliderSize(); outRange(mPos[di], sp, sp + ss))	// if mouse outside of slider but inside bar
 				setSlider(mPos[di] - ss /2);

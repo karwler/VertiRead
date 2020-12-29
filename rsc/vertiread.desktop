@@ -1,13 +1,12 @@
 [Desktop Entry]
 Version=1.0
 Name=VertiRead
-Exec=
-Icon=
+Exec=bin/vertiread
+Icon=vertiread
 Comment=Comic/Manga reader
 GenericName=Manga Reader
 Keywords=Manga;Reader
-Categories=Utility
+Categories=Graphics;
 Type=Application
 Terminal=false
-X-MultipleArgs=false
-StartupNotify=true
+StartupNotify=false

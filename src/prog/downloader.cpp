@@ -1,4 +1,4 @@
-#ifdef BUILD_DOWNLOADER
+#ifdef DOWNLOADER
 #include "engine/world.h"
 
 // COMIC
@@ -51,7 +51,7 @@ DownloadState WebSource::downloadFile(const string& url, const fs::path& drc) {
 	fclose(ofh);
 	if (code) {
 		std::cerr << "CURL error: " << curl_easy_strerror(code) << std::endl;
-		remove(fpath.c_str());
+		fs::remove(fpath);
 	}
 	return World::downloader()->getDlState();
 }
@@ -152,7 +152,7 @@ vector<pairStr> Mangahere::query(const string& text) {
 			break;
 
 		for (xmlNode* node : findElements(root, "p", "class", "manga-list-4-item-title"))
-			if (node = findElement(node, "a"))
+			if (node = findElement(node, "a"); node)
 				if (string lnk = getAttr(node, "href"); !link.empty())
 					results.emplace_back(trim(getContent(node)), baseUrl() + lnk);
 
@@ -204,7 +204,7 @@ DownloadState Mangahere::downloadPictures(const string& url, const fs::path& drc
 
 		link.clear();
 		if (xmlNode* next = findElement(root, "div", "class", "pager-list-left"))
-			if (next = findElement(next, "span"))
+			if (next = findElement(next, "span"); next)
 				if (vector<xmlNode*> pgs = findElements(next, "a"); !pgs.empty())
 					if (string page = getAttr(pgs.back(), "href"); !page.empty() && page != "javascript:void(0)")
 						link = baseUrl() + link;
@@ -289,7 +289,7 @@ vector<pairStr> Nhentai::query(const string& text) {
 
 		for (xmlNode* node : findElements(root, "a", "class", "cover"))
 			if (string title, lnk = getAttr(node, "href"); !link.empty()) {
-				if (node = findElement(node, "div", "class", "caption"))
+				if (node = findElement(node, "div", "class", "caption"); node)
 					title = trim(getContent(node));
 				results.emplace_back(std::move(title), baseUrl() + lnk);
 			}
