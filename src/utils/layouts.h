@@ -28,18 +28,19 @@ public:
 	};
 
 	static constexpr int defaultItemSpacing = 5;
-protected:
 	static constexpr Direction::Dir defaultDirection = Direction::down;
 
+protected:
 	vector<Widget*> widgets;
 	vector<ivec2> positions;	// widgets' positions. one element larger than widgets. last element is layout's size
 	uset<Widget*> selected;
 	int spacing;				// space between widgets
+	bool margin;				// use spacing around the widgets as well
 	Select selection;			// how many items can be selected at once
 	Direction direction;		// in what direction widgets are stacked (TileBox doesn't support horizontal)
 
 public:
-	Layout(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), Direction dir = defaultDirection, Select select = Select::none, int space = defaultItemSpacing);
+	Layout(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), Direction dir = defaultDirection, Select select = Select::none, int space = defaultItemSpacing, bool pad = false);
 	virtual ~Layout() override;
 
 	virtual void drawSelf() const override;
@@ -64,6 +65,7 @@ public:
 	virtual ivec2 wgtSize(sizet id) const;
 	void selectWidget(sizet id);
 	void deselectWidget(sizet id);
+	int getSpacing() const;
 
 protected:
 	void initWidgets(vector<Widget*>&& wgts);
@@ -76,6 +78,7 @@ private:
 	void scanPerpendicular(int mid, Direction dir);
 
 	mvec2 findMinMaxSelectedID() const;
+	static bool anyWidgetsNavSelected(Layout* box);
 };
 
 inline Widget* Layout::getWidget(sizet id) const {
@@ -94,10 +97,14 @@ inline void Layout::deselectWidget(sizet id) {
 	selected.erase(widgets[id]);
 }
 
+inline int Layout::getSpacing() const {
+	return spacing;
+}
+
 // top level layout
 class RootLayout : public Layout {
 public:
-	RootLayout(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), Direction dir = defaultDirection, Select select = Select::none, int space = defaultItemSpacing);
+	RootLayout(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), Direction dir = defaultDirection, Select select = Select::none, int space = defaultItemSpacing, bool pad = false);
 	virtual ~RootLayout() override = default;
 
 	virtual ivec2 position() const override;
@@ -107,11 +114,14 @@ public:
 
 // layout with background with free position/size (shouldn't have a parent)
 class Popup : public RootLayout {
-private:
+public:
+	Color bgColor;
+	Widget* firstNavSelect;
+protected:
 	Size sizeY;	// use Widget's relSize as width
 
 public:
-	Popup(const svec2& size = svec2(0), vector<Widget*>&& children = vector<Widget*>(), Direction dir = defaultDirection, int space = defaultItemSpacing);
+	Popup(const svec2& size = svec2(0), vector<Widget*>&& children = vector<Widget*>(), Widget* first = nullptr, Color background = Color::normal, Direction dir = defaultDirection, int space = defaultItemSpacing, bool pad = true);
 	virtual ~Popup() override = default;
 
 	virtual void drawSelf() const override;
@@ -129,12 +139,34 @@ private:
 	svec2 actPos, actSize;	// positions and size of activation area
 
 public:
-	Overlay(const svec2& position = svec2(0), const svec2& size = svec2(0), const svec2& activationPos = svec2(0), const svec2& activationSize = svec2(0), vector<Widget*>&& children = vector<Widget*>(), Direction dir = Direction::down, int space = defaultItemSpacing);
+	Overlay(const svec2& position = svec2(0), const svec2& size = svec2(0), const svec2& activationPos = svec2(0), const svec2& activationSize = svec2(0), vector<Widget*>&& children = vector<Widget*>(), Color background = Color::normal, Direction dir = defaultDirection, int space = defaultItemSpacing, bool pad = false);
 	virtual ~Overlay() override = default;
 
 	virtual ivec2 position() const override;
 	Rect actRect() const;
 };
+
+// mix between popup and overlay for context menus
+class Context : public Popup {
+private:
+	svec2 pos;
+	LCall resizeCall;
+
+public:
+	Context(const svec2& position = svec2(0), const svec2& size = svec2(0), vector<Widget*>&& children = vector<Widget*>(), Widget* first = nullptr, Widget* owner = nullptr, Color background = Color::dark, LCall resize = nullptr, Direction dir = defaultDirection, int space = defaultItemSpacing, bool pad = true);
+	virtual ~Context() override = default;
+
+	virtual void onResize() override;
+	virtual ivec2 position() const override;
+
+	template <class T = Widget> T* owner() const;
+	void setRect(const Rect& rct);
+};
+
+template <class T>
+inline T* Context::owner() const {
+	return reinterpret_cast<T*>(parent);
+}
 
 // places widgets vertically through which the user can scroll (DON"T PUT SCROLL AREAS INTO OTHER SCROLL AREAS)
 class ScrollArea : public Layout {
@@ -148,7 +180,7 @@ private:
 	static constexpr float scrollThrottle = 10.f;
 
 public:
-	ScrollArea(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), Direction dir = defaultDirection, Select select = Select::none, int space = defaultItemSpacing);
+	ScrollArea(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), Direction dir = defaultDirection, Select select = Select::none, int space = defaultItemSpacing, bool pad = false);
 	virtual ~ScrollArea() override = default;
 
 	virtual void drawSelf() const override;
@@ -208,7 +240,7 @@ private:
 	int wheight;
 
 public:
-	TileBox(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), int childHeight = defaultItemHeight, Direction dir = defaultDirection, Select select = Select::none, int space = defaultItemSpacing);
+	TileBox(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), int childHeight = defaultItemHeight, Direction dir = defaultDirection, Select select = Select::none, int space = defaultItemSpacing, bool pad = false);
 	virtual ~TileBox() override = default;
 
 	virtual void onResize() override;
@@ -240,7 +272,7 @@ private:
 	bool countDown;			// whether to decrease cursorTimer until cursor hide
 
 public:
-	ReaderBox(const Size& size = Size(), vector<Texture>&& imgs = vector<Texture>(), Direction dir = defaultDirection, float fzoom = Settings::defaultZoom, int space = Settings::defaultSpacing);
+	ReaderBox(const Size& size = Size(), vector<Texture>&& imgs = vector<Texture>(), Direction dir = defaultDirection, float fzoom = Settings::defaultZoom, int space = Settings::defaultSpacing, bool pad = false);
 	virtual ~ReaderBox() override;
 
 	virtual void drawSelf() const override;

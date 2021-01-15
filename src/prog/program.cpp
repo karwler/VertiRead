@@ -44,18 +44,39 @@ void Program::eventOpenPageBrowser(Button* but) {
 	setState(new ProgPageBrowser);
 }
 
-void Program::eventOpenLastPage(Button* but) {
-	Label* lbl = dynamic_cast<Label*>(but);
+void Program::eventOpenBookContext(Button* but) {
+	vector<pair<string, PCall>> items = dynamic_cast<Label*>(but) ? vector<pair<string, PCall>>{
+		pair("Continue", &Program::eventOpenLastPage),
+		pair("Delete", &Program::eventDeleteBook)
+	} : vector<pair<string, PCall>>{
+		pair("Continue", &Program::eventOpenLastPage)
+	};
+	World::scene()->setContext(ProgState::createContext(std::move(items), but));
+}
+
+void Program::eventOpenLastPage(Button*) {
+	Label* lbl = dynamic_cast<Label*>(World::scene()->getContext()->owner());
 	if (string drc, fname; World::fileSys()->getLastPage(lbl ? lbl->getText() : ProgState::dotStr, drc, fname)) {
 		try {
 			browser = std::make_unique<Browser>(lbl ? World::sets()->getDirLib() / fs::u8path(lbl->getText()) : topDir, lbl ? World::sets()->getDirLib() / fs::u8path(lbl->getText()) / fs::u8path(drc) : fs::u8path(drc), fs::u8path(fname), &Program::eventOpenBookList, true);
 			eventStartLoadingReader(fname);
 		} catch (const std::runtime_error& e) {
 			std::cerr << e.what() << std::endl;
-			eventOpenPageBrowser(but);
+			eventOpenPageBrowser(lbl);
 		}
 	} else
-		eventOpenPageBrowser(but);
+		eventOpenPageBrowser(World::scene()->getContext()->owner<Button>());
+}
+
+void Program::eventDeleteBook(Button*) {
+	try {
+		Label* lbl = World::scene()->getContext()->owner<Label>();
+		fs::remove_all(World::sets()->getDirLib() / fs::u8path(lbl->getText()));
+		World::scene()->setContext(nullptr);
+		lbl->getParent()->deleteWidget(lbl->getIndex());
+	} catch (const std::runtime_error& err) {
+		World::scene()->setPopup(ProgState::createPopupMessage(err.what(), &Program::eventClosePopup));
+	}
 }
 
 bool Program::openFile(const fs::path& file) {
@@ -184,6 +205,7 @@ void Program::eventExitReader(Button*) {
 }
 
 // DOWNLOADER
+
 #ifdef DOWNLOADER
 void Program::eventOpenDownloader(Button*) {
 	setState(new ProgDownloader);
@@ -191,8 +213,9 @@ void Program::eventOpenDownloader(Button*) {
 
 void Program::eventSwitchSource(Button* but) {
 	ProgDownloader* pd = static_cast<ProgDownloader*>(state.get());
-
-	downloader.setSource(WebSource::Type(static_cast<SwitchBox*>(but)->getCurOpt()));
+	downloader.setSource(WebSource::Type(but->getIndex()));
+	World::scene()->getContext()->owner<ComboBox>()->setCurOpt(downloader.getSource()->source());
+	World::scene()->setContext(nullptr);
 	pd->printResults({});
 	pd->printInfo(vector<pairStr>());
 }
@@ -286,10 +309,13 @@ void Program::eventClearDownloads(Button*) {
 	static_cast<ProgDownloads*>(state.get())->list->setWidgets({});
 }
 #endif
+
 // SETTINGS
 
 void Program::eventSwitchDirection(Button* but) {
-	World::sets()->direction = strToEnum<Direction::Dir>(Direction::names, static_cast<SwitchBox*>(but)->getText());
+	World::sets()->direction = strToEnum<Direction::Dir>(Direction::names, static_cast<Label*>(but)->getText());
+	World::scene()->getContext()->owner<ComboBox>()->setCurOpt(World::sets()->direction);
+	World::scene()->setContext(nullptr);
 }
 
 void Program::eventSetZoom(Button* but) {
@@ -373,7 +399,7 @@ void Program::eventSetHide(Button* but) {
 }
 
 void Program::eventSetTheme(Button* but) {
-	World::drawSys()->setTheme(static_cast<SwitchBox*>(but)->getText(), World::sets(), World::fileSys());
+	World::drawSys()->setTheme(static_cast<ComboBox*>(but)->getText(), World::sets(), World::fileSys());
 	World::scene()->resetLayouts();
 }
 
@@ -386,7 +412,7 @@ void Program::eventSetFont(Button* but) {
 }
 
 void Program::eventSetRenderer(Button* but) {
-	World::winSys()->setRenderer(static_cast<SwitchBox*>(but)->getText());
+	World::winSys()->setRenderer(static_cast<ComboBox*>(but)->getText());
 }
 
 void Program::eventSetScrollSpeed(Button* but) {
@@ -443,7 +469,9 @@ void Program::eventSetFill(Button*) {
 
 void Program::eventSetPicLimitType(Button* but) {
 	ProgSettings* ps = static_cast<ProgSettings*>(state.get());
-	World::sets()->picLim.type = strToEnum<PicLim::Type>(PicLim::names, static_cast<SwitchBox*>(but)->getText());
+	World::sets()->picLim.type = strToEnum<PicLim::Type>(PicLim::names, static_cast<Label*>(but)->getText());
+	World::scene()->getContext()->owner<ComboBox>()->setCurOpt(uint8(World::sets()->picLim.type));
+	World::scene()->setContext(nullptr);
 	ps->limitLine->replaceWidget(ps->limitLine->getWidgets().size() - 1, static_cast<ProgSettings*>(state.get())->createLimitEdit());
 }
 
@@ -483,6 +511,15 @@ bool Program::tryClosePopupThread() {
 
 void Program::eventClosePopup(Button*) {
 	World::scene()->setPopup(nullptr);
+}
+
+void Program::eventCloseContext(Button*) {
+	World::scene()->setContext(nullptr);
+}
+
+void Program::eventResizeComboContext(Layout* lay) {
+	Context* ctx = static_cast<Context*>(lay);
+	ctx->setRect(ProgState::calcTextContextRect(static_cast<ScrollArea*>(ctx->getWidget(0))->getWidgets(), ctx->owner()->position(), ctx->owner()->size(), ctx->getSpacing()));
 }
 
 void Program::eventTryExit(Button*) {

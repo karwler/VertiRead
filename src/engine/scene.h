@@ -20,6 +20,7 @@ private:
 	uptr<RootLayout> layout;
 	uptr<Popup> popup;
 	uptr<Overlay> overlay;
+	uptr<Context> context;
 	array<ClickStamp, SDL_BUTTON_RIGHT> stamps;	// data about last mouse click (indexes are mouse button numbers
 
 	static constexpr float clickMoveThreshold = 8.f;
@@ -41,8 +42,10 @@ public:
 	RootLayout* getLayout();
 	Overlay* getOverlay();
 	Popup* getPopup();
-	void setPopup(Popup* newPopup, Widget* newCapture = nullptr);
-	void setPopup(const pair<Popup*, Widget*>& popcap);
+	void setPopup(uptr<Popup>&& newPopup, Widget* newCapture = nullptr);
+	void setPopup(pair<uptr<Popup>, Widget*>&& popcap);
+	Context* getContext();
+	void setContext(uptr<Context>&& newContext);
 
 	void updateSelect();
 	void updateSelect(ivec2 mPos);
@@ -69,8 +72,12 @@ inline Popup* Scene::getPopup() {
 	return popup.get();
 }
 
-inline void Scene::setPopup(const pair<Popup*, Widget*>& popcap) {
-	setPopup(popcap.first, popcap.second);
+inline void Scene::setPopup(pair<uptr<Popup>, Widget*>&& popcap) {
+	setPopup(std::move(popcap.first), popcap.second);
+}
+
+inline Context* Scene::getContext() {
+	return context.get();
 }
 
 inline void Scene::updateSelect(ivec2 mPos) {

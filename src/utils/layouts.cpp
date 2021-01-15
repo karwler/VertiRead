@@ -15,9 +15,10 @@ void Texture::clearVec(vector<Texture>& vec) {
 
 // LAYOUT
 
-Layout::Layout(const Size& size, vector<Widget*>&& children, Direction dir, Select select, int space) :
+Layout::Layout(const Size& size, vector<Widget*>&& children, Direction dir, Select select, int space, bool pad) :
 	Widget(size),
 	spacing(space),
+	margin(pad),
 	selection(select),
 	direction(dir)
 {
@@ -36,8 +37,9 @@ void Layout::drawSelf() const {
 void Layout::onResize() {
 	// get amount of space for widgets with percent size and get total sum
 	int vi = direction.vertical();
-	ivec2 wsiz = size();
-	int space = wsiz[vi] - int(widgets.size()-1) * spacing;
+	int pad = margin ? spacing : 0;
+	ivec2 wsiz = size() - pad * 2;
+	int space = wsiz[vi] - int(widgets.size() - 1) * spacing;
 	float total = 0;
 	for (Widget* it : widgets) {
 		if (it->getRelSize().usePix)
@@ -47,7 +49,7 @@ void Layout::onResize() {
 	}
 
 	// calculate positions for each widget and set last poss element to end position of the last widget
-	ivec2 pos(0);
+	ivec2 pos(pad);
 	for (sizet i = 0; i < widgets.size(); i++) {
 		positions[i] = pos;
 		pos[vi] += (widgets[i]->getRelSize().usePix ? widgets[i]->getRelSize().pix : int(widgets[i]->getRelSize().prc * float(space) / total)) + spacing;
@@ -137,18 +139,37 @@ void Layout::clearWidgets() {
 }
 
 void Layout::setWidgets(vector<Widget*>&& wgts) {
+	bool updateSelect = anyWidgetsNavSelected(this);
 	initWidgets(std::move(wgts));
 	postInit();
+	if (updateSelect) {
+		World::scene()->select = nullptr;
+		World::scene()->updateSelect();
+	}
+}
+
+bool Layout::anyWidgetsNavSelected(Layout* box) {
+	for (Widget* it : box->widgets) {
+		if (World::scene()->select == it)
+			return true;
+		if (Layout* lay = dynamic_cast<Layout*>(it); lay && anyWidgetsNavSelected(lay))
+			return true;
+	}
+	return false;
 }
 
 void Layout::replaceWidget(sizet id, Widget* widget) {
+	bool updateSelect = World::scene()->select == widgets[id];
 	delete widgets[id];
 	widgets[id] = widget;
 	widget->setParent(this, id);
 	postInit();
+	if (updateSelect)
+		World::scene()->select = widgets[id];
 }
 
 void Layout::deleteWidget(sizet id) {
+	bool updateSelect = World::scene()->select == widgets[id];
 	delete widgets[id];
 	widgets.erase(widgets.begin() + pdift(id));
 	positions.pop_back();
@@ -156,6 +177,10 @@ void Layout::deleteWidget(sizet id) {
 	for (sizet i = id; i < widgets.size(); i++)
 		widgets[i]->setParent(this, i);
 	postInit();
+	if (updateSelect) {
+		World::scene()->select = nullptr;
+		World::scene()->updateSelect();
+	}
 }
 
 ivec2 Layout::wgtPosition(sizet id) const {
@@ -164,7 +189,7 @@ ivec2 Layout::wgtPosition(sizet id) const {
 
 ivec2 Layout::wgtSize(sizet id) const {
 	int di = direction.vertical();
-	return vswap(size()[!di], positions[id+1][di] - positions[id][di] - spacing, !di);
+	return vswap((size() - (margin ? spacing * 2 : 0))[!di], positions[id+1][di] - positions[id][di] - spacing, !di);
 }
 
 ivec2 Layout::listSize() const {
@@ -207,8 +232,8 @@ mvec2 Layout::findMinMaxSelectedID() const {
 
 // ROOT LAYOUT
 
-RootLayout::RootLayout(const Size& size, vector<Widget*>&& children, Direction dir, Select select, int space) :
-	Layout(size, std::move(children), dir, select, space)
+RootLayout::RootLayout(const Size& size, vector<Widget*>&& children, Direction dir, Select select, int space, bool pad) :
+	Layout(size, std::move(children), dir, select, space, pad)
 {}
 
 ivec2 RootLayout::position() const {
@@ -225,8 +250,10 @@ Rect RootLayout::frame() const {
 
 // POPUP
 
-Popup::Popup(const svec2& size, vector<Widget*>&& children, Direction dir, int space) :
-	RootLayout(size.x, std::move(children), dir, Select::none, space),
+Popup::Popup(const svec2& size, vector<Widget*>&& children, Widget* first, Color background, Direction dir, int space, bool pad) :
+	RootLayout(size.x, std::move(children), dir, Select::none, space, pad),
+	bgColor(background),
+	firstNavSelect(first),
 	sizeY(size.y)
 {}
 
@@ -245,8 +272,8 @@ ivec2 Popup::size() const {
 
 // OVERLAY
 
-Overlay::Overlay(const svec2& position, const svec2& size, const svec2& activationPos, const svec2& activationSize, vector<Widget*>&& children, Direction dir, int space) :
-	Popup(size, std::move(children), dir, space),
+Overlay::Overlay(const svec2& position, const svec2& size, const svec2& activationPos, const svec2& activationSize, vector<Widget*>&& children, Color background, Direction dir, int space, bool pad) :
+	Popup(size, std::move(children), nullptr, background, dir, space, pad),
 	on(false),
 	pos(position),
 	actPos(activationPos),
@@ -263,10 +290,36 @@ Rect Overlay::actRect() const {
 	return Rect(actPos.x.usePix ? actPos.x.pix : int(actPos.x.prc * res.x), actPos.y.usePix ? actPos.y.pix : int(actPos.y.prc * res.y), actSize.x.usePix ? actSize.x.pix : int(actSize.x.prc * res.x), actSize.y.usePix ? actSize.y.pix : int(actSize.y.prc * res.y));
 }
 
+// CONTEXT
+
+Context::Context(const svec2& position, const svec2& size, vector<Widget*>&& children, Widget* first, Widget* owner, Color background, LCall resize, Direction dir, int space, bool pad) :
+	Popup(size, std::move(children), first, background, dir, space, pad),
+	pos(position),
+	resizeCall(resize)
+{
+	parent = reinterpret_cast<Layout*>(owner);	// parent shouldn't be in use anyway
+}
+
+void Context::onResize() {
+	World::prun(resizeCall, this);
+	Layout::onResize();
+}
+
+ivec2 Context::position() const {
+	vec2 res = World::drawSys()->viewport().size();
+	return ivec2(pos.x.usePix ? pos.x.pix : int(pos.x.prc * res.x), pos.y.usePix ? pos.y.pix : int(pos.y.prc * res.y));
+}
+
+void Context::setRect(const Rect& rct) {
+	pos = rct.pos();
+	relSize = rct.w;
+	sizeY = rct.h;
+}
+
 // SCROLL AREA
 
-ScrollArea::ScrollArea(const Size& size, vector<Widget*>&& children, Direction dir, Select select, int space) :
-	Layout(size, std::move(children), dir, select, space),
+ScrollArea::ScrollArea(const Size& size, vector<Widget*>&& children, Direction dir, Select select, int space, bool pad) :
+	Layout(size, std::move(children), dir, select, space, pad),
 	draggingSlider(false),
 	listPos(0),
 	motion(0.f),
@@ -500,8 +553,8 @@ mvec2 ScrollArea::visibleWidgets() const {
 
 // TILE BOX
 
-TileBox::TileBox(const Size& size, vector<Widget*>&& children, int childHeight, Direction dir, Select select, int space) :
-	ScrollArea(size, std::move(children), dir, select, space),
+TileBox::TileBox(const Size& size, vector<Widget*>&& children, int childHeight, Direction dir, Select select, int space, bool pad) :
+	ScrollArea(size, std::move(children), dir, select, space, pad),
 	wheight(childHeight)
 {}
 
@@ -586,8 +639,8 @@ int TileBox::wgtREnd(sizet id) const {
 
 // READER BOX
 
-ReaderBox::ReaderBox(const Size& size, vector<Texture>&& imgs, Direction dir, float fzoom, int space) :
-	ScrollArea(size, {}, dir, Select::none, space),
+ReaderBox::ReaderBox(const Size& size, vector<Texture>&& imgs, Direction dir, float fzoom, int space, bool pad) :
+	ScrollArea(size, {}, dir, Select::none, space, pad),
 	cursorTimer(menuHideTimeout),
 	zoom(fzoom),
 	countDown(true)

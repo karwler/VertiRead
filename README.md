@@ -22,7 +22,7 @@ Settings files are being saved in "%AppData%\VertiRead".
 
 ## How to use it
 The idea is that you have a library directory in which you have your comics saved in form of pictures or archives of pictures. The location of this directory can be changed in the settings.  
-Left clicking on a book in the book list will take you to the file explorer, while right clicking on a book will take you to the last viewed page.  
+Left clicking on a book in the book list will take you to the file explorer, while right clicking on a book will show you further options, like going to the last viewed page.  
 The last button in the book list allows you to navigate through files outside of the library directory. While in the book list or browser view, you can drag and drop a folder or file into the window to browse/open it. It's also possible to start the program with a file/directory path as a command line argument to start in the page browser or reader.  
 The reader has a hidden side panel on the left.  
 You can set an image count or size limit in the settings for how many pictures can be loaded at once. If set, the directory switching buttons/keys will instead load the next or previous batch of pictures, or go to the next directory/archive if there are no more pictures to load in the current one.  

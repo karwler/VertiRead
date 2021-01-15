@@ -42,7 +42,7 @@ inline void Size::set(float percent) {
 class Widget {
 protected:
 	Layout* parent;	// every widget that isn't a Layout should have a parent
-	sizet index;		// this widget's id in parent's widget list
+	sizet index;	// this widget's id in parent's widget list
 	Size relSize;	// size relative to parent's parameters
 
 public:
@@ -277,6 +277,7 @@ public:
 	Rect textFrame() const;
 	virtual Rect texRect() const override;
 	int textIconOffset() const;
+	int getTextMargin() const;
 protected:
 	virtual ivec2 textPos() const;
 	virtual void updateTextTex();
@@ -290,24 +291,32 @@ inline Rect Label::textRect() const {
 	return Rect(textPos(), texSize(textTex));
 }
 
+inline int Label::getTextMargin() const {
+	return textMargin;
+}
+
 // for switching between multiple options (kinda like a drop-down menu except I was too lazy to make an actual one)
-class SwitchBox : public Label {
+class ComboBox : public Label {
 private:
 	vector<string> options;
 	sizet curOpt;
 
 public:
-	SwitchBox(const Size& size = Size(), string curOption = string(), vector<string>&& opts = vector<string>(), PCall call = nullptr, SDL_Texture* tip = nullptr, Alignment alignment = Alignment::left, SDL_Texture* texture = nullptr, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
-	virtual ~SwitchBox() override = default;
+	ComboBox(const Size& size = Size(), string curOption = string(), vector<string>&& opts = vector<string>(), PCall call = nullptr, SDL_Texture* tip = nullptr, Alignment alignment = Alignment::left, SDL_Texture* texture = nullptr, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
+	virtual ~ComboBox() override = default;
 
 	virtual void onClick(ivec2 mPos, uint8 mBut) override;
 
+	const vector<string>& getOptions() const;
 	sizet getCurOpt() const;
-private:
-	void shiftOption(bool fwd);
+	void setCurOpt(sizet id);
 };
 
-inline sizet SwitchBox::getCurOpt() const {
+inline const vector<string>& ComboBox::getOptions() const {
+	return options;
+}
+
+inline sizet ComboBox::getCurOpt() const {
 	return curOpt;
 }
 

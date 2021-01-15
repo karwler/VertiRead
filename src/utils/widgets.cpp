@@ -293,26 +293,19 @@ void Label::updateTextTex() {
 
 // SWITCH BOX
 
-SwitchBox::SwitchBox(const Size& size, string curOption, vector<string>&& opts, PCall call, SDL_Texture* tip, Alignment alignment, SDL_Texture* texture, bool bg, int lineMargin, int iconMargin) :
+ComboBox::ComboBox(const Size& size, string curOption, vector<string>&& opts, PCall call, SDL_Texture* tip, Alignment alignment, SDL_Texture* texture, bool bg, int lineMargin, int iconMargin) :
 	Label(size, std::move(curOption), call, call, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
 	options(std::move(opts)),
-	curOpt(sizet(std::find(options.begin(), options.end(), text) - options.begin()))
-{
-	if (curOpt >= options.size())
-		curOpt = 0;
+	curOpt(std::min(sizet(std::find(options.begin(), options.end(), text) - options.begin()), options.size()))
+{}
+
+void ComboBox::onClick(ivec2, uint8 mBut) {
+	if (mBut == SDL_BUTTON_LEFT || SDL_BUTTON_RIGHT)
+		World::scene()->setContext(World::state()->createComboContext(this, mBut == SDL_BUTTON_LEFT ? lcall : rcall));
 }
 
-void SwitchBox::onClick(ivec2 mPos, uint8 mBut) {
-	if (mBut == SDL_BUTTON_LEFT)
-		shiftOption(true);
-	else if (mBut == SDL_BUTTON_RIGHT)
-		shiftOption(false);
-	Button::onClick(mPos, mBut);
-}
-
-void SwitchBox::shiftOption(bool fwd) {
-	if (curOpt += btom<sizet>(fwd); curOpt >= options.size())
-		curOpt = fwd ? 0 : options.size() - 1;
+void ComboBox::setCurOpt(sizet id) {
+	curOpt = std::min(id, options.size());
 	setText(options[curOpt]);
 }
 

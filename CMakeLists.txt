@@ -271,7 +271,7 @@ if((CMAKE_CXX_COMPILER_ID MATCHES "GNU") OR (CMAKE_CXX_COMPILER_ID MATCHES "Clan
 	endif()
 
 	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-		set(FLG_RELEASE "${FLG_RELEASE} -s")
+		set(FLG_RELEASE "${FLG_RELEASE} -flto -fuse-linker-plugin -s")
 		set(CXX_FLG_ANY "${CXX_FLG_ANY} -Wcast-align=strict -Wduplicated-cond -Wlogical-op -Wuseless-cast")
 	else()
 		set(CXX_FLG_ANY "${CXX_FLG_ANY} -Wcast-align -Wnull-dereference -Wshadow-all")

@@ -155,6 +155,10 @@ void DrawSys::drawWidgets(Scene* scene, bool mouseLast) {
 		scene->getPopup()->drawSelf();
 	}
 
+	// draw context menu
+	if (scene->getContext())
+		scene->getContext()->drawSelf();
+
 	// draw caret if capturing LineEdit
 	if (LabelEdit* let = dynamic_cast<LabelEdit*>(scene->capture))
 		drawRect(let->caretRect(), Color::light);
@@ -216,7 +220,7 @@ void DrawSys::drawReaderBox(const ReaderBox* box) {
 }
 
 void DrawSys::drawPopup(const Popup* box) {
-	drawRect(box->rect(), Color::normal);	// draw background
+	drawRect(box->rect(), box->bgColor);	// draw background
 	for (Widget* it : box->getWidgets())	// draw children
 		it->drawSelf();
 }

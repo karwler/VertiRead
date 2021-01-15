@@ -23,6 +23,7 @@ protected:
 	static constexpr int topSpacing = 10;
 	static constexpr int picSize = 40;
 	static constexpr int picMargin = 4;
+	static constexpr int contextMargin = 3;
 private:
 	static constexpr float cursorMoveFactor = 10.f;
 
@@ -64,18 +65,23 @@ public:
 	virtual void eventClosing() {}
 	void onResize();
 
-	virtual RootLayout* createLayout();
-	virtual Overlay* createOverlay();
-	static Popup* createPopupMessage(string msg, PCall ccal, string ctxt = "Okay", Label::Alignment malign = Label::Alignment::left);
-	static Popup* createPopupChoice(string msg, PCall kcal, PCall ccal, Label::Alignment malign = Label::Alignment::left);
+	virtual uptr<RootLayout> createLayout() = 0;
+	virtual uptr<Overlay> createOverlay();
+	static uptr<Popup> createPopupMessage(string msg, PCall ccal, string ctxt = "Okay", Label::Alignment malign = Label::Alignment::left);
+	static uptr<Popup> createPopupChoice(string msg, PCall kcal, PCall ccal, Label::Alignment malign = Label::Alignment::left);
+	static uptr<Context> createContext(vector<pair<string, PCall>>&& items, Widget* parent);
+	static uptr<Context> createComboContext(ComboBox* parent, PCall kcal);
 
+	static Rect calcTextContextRect(const vector<Widget*>& items, ivec2 pos, ivec2 size, int margin = contextMargin);
 protected:
 	template <class T> static int findMaxLength(T pos, T end, int height, int margin = Label::defaultTextMargin);	// TODO: no margin parameter
 	SDL_Texture* makeTooltip(const char* str);
 	SDL_Texture* makeTooltipL(const char* str);
 
+	bool eventCommonEscape();	// returns true if something happened
 private:
 	void eventSelect(Direction dir);
+	static void calcContextPos(int& pos, int& siz, int limit);
 };
 
 inline ProgState::ProgState() {
@@ -90,7 +96,7 @@ public:
 	virtual void eventHide() override;
 	virtual void eventFileDrop(const fs::path& file) override;
 
-	virtual RootLayout* createLayout() override;
+	virtual uptr<RootLayout> createLayout() override;
 };
 
 class ProgPageBrowser : public ProgState {
@@ -101,7 +107,7 @@ public:
 	virtual void eventHide() override;
 	virtual void eventFileDrop(const fs::path& file) override;
 
-	virtual RootLayout* createLayout() override;
+	virtual uptr<RootLayout> createLayout() override;
 };
 
 class ProgReader : public ProgState {
@@ -135,12 +141,13 @@ public:
 	virtual void eventHide() override;
 	virtual void eventClosing() override;
 
-	virtual RootLayout* createLayout() override;
-	virtual Overlay* createOverlay() override;
+	virtual uptr<RootLayout> createLayout() override;
+	virtual uptr<Overlay> createOverlay() override;
 
 private:
 	int modifySpeed(float value);	// change scroll speed depending on pressed bindings
 };
+
 #ifdef DOWNLOADER
 class ProgDownloader : public ProgState {
 public:
@@ -156,7 +163,7 @@ public:
 
 	virtual void eventEscape() override;
 
-	virtual RootLayout* createLayout() override;
+	virtual uptr<RootLayout> createLayout() override;
 	Comic curInfo() const;
 	void printResults(vector<pairStr>&& comics);
 	void printInfo(vector<pairStr>&& chaps);
@@ -171,9 +178,10 @@ public:
 
 	virtual void eventEscape() override;
 
-	virtual RootLayout* createLayout() override;
+	virtual uptr<RootLayout> createLayout() override;
 };
 #endif
+
 class ProgSettings : public ProgState {
 public:
 	fs::path oldPathBuffer;	// for keeping old library path between decisions
@@ -192,7 +200,7 @@ public:
 	virtual void eventHide() override;
 	virtual void eventFileDrop(const fs::path& file) override;
 
-	virtual RootLayout* createLayout() override;
+	virtual uptr<RootLayout> createLayout() override;
 
 	Widget* createLimitEdit();
 };
@@ -207,5 +215,5 @@ public:
 	virtual void eventEscape() override;
 	virtual void eventHide() override;
 
-	virtual RootLayout* createLayout() override;
+	virtual uptr<RootLayout> createLayout() override;
 };

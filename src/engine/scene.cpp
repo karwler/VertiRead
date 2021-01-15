@@ -21,6 +21,8 @@ void Scene::tick(float dSec) {
 		popup->tick(dSec);
 	if (overlay)
 		overlay->tick(dSec);
+	if (context)
+		context->tick(dSec);
 }
 
 void Scene::onMouseMove(ivec2 mPos, ivec2 mMov) {
@@ -33,6 +35,8 @@ void Scene::onMouseMove(ivec2 mPos, ivec2 mMov) {
 		popup->onMouseMove(mPos, mMov);
 	if (overlay)
 		overlay->onMouseMove(mPos, mMov);
+	if (context)
+		context->onMouseMove(mPos, mMov);
 }
 
 void Scene::onMouseDown(ivec2 mPos, uint8 mBut, uint8 mCnt) {
@@ -42,6 +46,8 @@ void Scene::onMouseDown(ivec2 mPos, uint8 mBut, uint8 mCnt) {
 		box->restoreText();
 		capture = nullptr;
 	}
+	if (context && !context->rect().contain(mPos))
+		setContext(nullptr);
 
 	updateSelect(mPos);	// update in case selection has changed through keys while cursor remained at the old position
 	if (uint8 bid = mBut - 1; mCnt == 2 && select && stamps[bid].widget == select && cursorInClickRange(mPos, mBut) && select->hasDoubleclick())
@@ -87,6 +93,8 @@ void Scene::onResize() {
 		popup->onResize();
 	if (overlay)
 		overlay->onResize();
+	if (context)
+		context->onResize();
 }
 
 void Scene::resetLayouts() {
@@ -96,10 +104,11 @@ void Scene::resetLayouts() {
 	select = nullptr;
 	capture = nullptr;
 	popup.reset();
+	context.reset();
 
 	// set up new widgets
-	layout.reset(World::state()->createLayout());
-	overlay.reset(World::state()->createOverlay());
+	layout = World::state()->createLayout();
+	overlay = World::state()->createOverlay();
 
 	layout->postInit();
 	if (overlay)
@@ -107,15 +116,26 @@ void Scene::resetLayouts() {
 	World::inputSys()->simulateMouseMove();
 }
 
-void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
-	popup.reset(newPopup);
-	if (popup)
+void Scene::setPopup(uptr<Popup>&& newPopup, Widget* newCapture) {
+	if (context)
+		setContext(nullptr);
+	if (popup = std::move(newPopup); popup)
 		popup->postInit();
-
-	capture = newCapture;
-	if (capture)
+	if (capture = newCapture; capture)
 		capture->onClick(mousePos(), SDL_BUTTON_LEFT);
-	World::inputSys()->simulateMouseMove();
+	if (!World::inputSys()->mouseLast)
+		select = capture ? capture : popup ? popup->firstNavSelect : nullptr;
+	updateSelect();
+}
+
+void Scene::setContext(uptr<Context>&& newContext) {
+	if (context && context->owner() && !World::inputSys()->mouseLast)
+		select = context->owner();
+	if (context = std::move(newContext); context)
+		context->postInit();
+	if (!World::inputSys()->mouseLast)
+		select = context ? context->firstNavSelect : nullptr;
+	updateSelect();
 }
 
 void Scene::updateSelect() {
@@ -124,7 +144,18 @@ void Scene::updateSelect() {
 }
 
 Widget* Scene::getSelected(ivec2 mPos) {
-	for (Layout* box = popup ? popup.get() : overlayFocused(mPos) ? overlay.get() : layout.get();;) {
+	if (!World::drawSys()->viewport().contain(mPos))
+		return nullptr;
+
+	Layout* box = layout.get();
+	if (context && context->rect().contain(mPos))
+		box = context.get();
+	else if (popup)
+		box = popup.get();
+	else if (overlayFocused(mPos))
+		box = overlay.get();
+
+	for (;;) {
 		Rect frame = box->frame();
 		if (vector<Widget*>::const_iterator it = std::find_if(box->getWidgets().begin(), box->getWidgets().end(), [&frame, &mPos](const Widget* wi) -> bool { return wi->rect().intersect(frame).contain(mPos); }); it != box->getWidgets().end()) {
 			if (Layout* lay = dynamic_cast<Layout*>(*it))
@@ -153,22 +184,25 @@ bool Scene::overlayFocused(ivec2 mPos) {
 }
 
 void Scene::selectFirst() {
-	if (popup || overlay)
-		return;
-
-	Layout* next = dynamic_cast<Layout*>(select);
-	Layout* lay = next ? next : layout.get();
-	for (sizet id = 0; lay;) {
-		if (id >= lay->getWidgets().size()) {
-			id = lay->getIndex() + 1;
-			lay = lay->getParent();
-		} else if (next = dynamic_cast<Layout*>(lay->getWidget(id)); next)
-			lay = next;
-		else if (lay->getWidget(id)->navSelectable()) {
-			select = lay->getWidget(0);
-			break;
-		} else
-			id++;
+	if (context)
+		select = context->firstNavSelect;
+	else if (popup)
+		select = popup->firstNavSelect;
+	else {
+		Layout* next = dynamic_cast<Layout*>(select);
+		Layout* lay = next ? next : layout.get();
+		for (sizet id = 0; lay;) {
+			if (id >= lay->getWidgets().size()) {
+				id = lay->getIndex() + 1;
+				lay = lay->getParent();
+			} else if (next = dynamic_cast<Layout*>(lay->getWidget(id)); next)
+				lay = next;
+			else if (lay->getWidget(id)->navSelectable()) {
+				select = lay->getWidget(0);
+				break;
+			} else
+				id++;
+		}
 	}
 }
 

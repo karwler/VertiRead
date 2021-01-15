@@ -22,7 +22,9 @@ public:
 	// books
 	void eventOpenBookList(Button* but = nullptr);
 	void eventOpenPageBrowser(Button* but);
-	void eventOpenLastPage(Button* but);
+	void eventOpenBookContext(Button* but);
+	void eventOpenLastPage(Button* but = nullptr);
+	void eventDeleteBook(Button* but = nullptr);
 	bool openFile(const fs::path& file);
 
 	// browser
@@ -101,6 +103,8 @@ public:
 	// other
 	bool tryClosePopupThread();
 	void eventClosePopup(Button* but = nullptr);
+	void eventCloseContext(Button* but = nullptr);
+	void eventResizeComboContext(Layout* lay = nullptr);
 	void eventTryExit(Button* but = nullptr);
 	void eventForceExit(Button* but = nullptr);
 

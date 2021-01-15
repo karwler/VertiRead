@@ -73,6 +73,7 @@ class Scene;
 
 // events
 using PCall = void (Program::*)(Button*);
+using LCall = void (Program::*)(Layout*);
 using SBCall = void (ProgState::*)();
 using SACall = void (ProgState::*)(float);
 
@@ -181,7 +182,7 @@ struct Rect : SDL_Rect {
 	constexpr ivec2 size() const;
 	constexpr ivec2 end() const;
 
-	bool contain(const ivec2& point) const;
+	bool contain(ivec2 point) const;
 	Rect crop(const Rect& rect);			// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
 	Rect intersect(const Rect& rect) const;	// same as above except it returns the overlap instead of the crop and it doesn't modify itself
 };
@@ -218,7 +219,7 @@ inline constexpr ivec2 Rect::end() const {
 	return pos() + size();
 }
 
-inline bool Rect::contain(const ivec2& point) const {
+inline bool Rect::contain(ivec2 point) const {
 	return SDL_PointInRect(reinterpret_cast<const SDL_Point*>(&point), this);
 }
 
