@@ -1,12 +1,21 @@
-# project properties
-cmake_minimum_required(VERSION 3.10.2)
-project(VertiRead LANGUAGES CXX)
-if(CMAKE_CONFIGURATION_TYPES)
-	set(CMAKE_CONFIGURATION_TYPES "Debug" "Release")
-endif()
+cmake_minimum_required(VERSION 3.12.4)
+project(VertiRead VERSION 1.0.0 DESCRIPTION "Comic/Manga reader" HOMEPAGE_URL "https://github.com/karwler/vertiread" LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+if(NOT GENERATOR_IS_MULTI_CONFIG AND NOT CMAKE_BUILD_TYPE)
+	set(CMAKE_BUILD_TYPE Release)
+endif()
+
+option(DOWNLOADER "Build with downloader. (currently mostly broken)" OFF)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+	option(NATIVE "Build for the current CPU." OFF)
+endif()
+if(UNIX)
+	option(APPIMAGE "Package as an AppImage." OFF)
+endif()
+
+string(TOLOWER ${PROJECT_NAME} PROJECT_NAME_LOWER)
 
 # source files
 set(SRC_FILES
@@ -45,23 +54,31 @@ if(CMAKE_SYSTEM_NAME MATCHES "Windows")
 endif()
 
 # dependencies
-set(VER_ARC "3.5.1" CACHE STRING "libarchive version.")
-set(VER_SDL "2.0.14" CACHE STRING "SDL2 version.")
-set(VER_IMG "2.0.5" CACHE STRING "SDL2_image version.")
-set(VER_TTF "2.0.15" CACHE STRING "SDL2_ttf version.")
-set(VER_GLM "0.9.9.8" CACHE STRING "glm version.")
-set(VER_CURL "7.74.0" CACHE STRING "libcurl version.")
-set(VER_LXML "2.9.10" CACHE STRING "libxml2 version.")
+set(VER_ARC "3.6.1")
+set(VER_SDL "2.0.22")
+set(VER_IMG "2.6.0")
+set(VER_TTF "2.20.0")
+set(VER_GLM "0.9.9.8")
+set(VER_CURL "7.83.1")
+set(VER_LXML "2.9.14")
 set(DIR_LIB "${CMAKE_SOURCE_DIR}/lib")
 set(DIR_RSC "${CMAKE_SOURCE_DIR}/rsc")
 set(DIR_ICN "${DIR_RSC}/icons")
 
-option(DOWNLOADER "Build with downloader. (currently mostly broken)" OFF)
-if((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
-	option(NATIVE "Build for the current CPU." OFF)
-endif()
-if(CMAKE_SYSTEM_NAME MATCHES "Linux")
-	option(APPIMAGE "Package as an AppImage." OFF)
+if(MSVC)
+	set(ENV{CL} /MP)
+	set(MAKE_CMD "nmake")
+else()
+	set(MAKE_CMD "make")
+	if(MINGW)
+		set(MAKE_CMD "mingw32-${MAKE_CMD}")
+	endif()
+
+	include(ProcessorCount)
+	ProcessorCount(NJOBS)
+	if(NJOBS GREATER 1)
+		set(MAKE_CMD "${MAKE_CMD}\;-j${NJOBS}")
+	endif()
 endif()
 
 function(downloadLib URL LIBDIR ORIG_LIBDIR)
@@ -106,246 +123,175 @@ endfunction()
 file(MAKE_DIRECTORY "${DIR_LIB}")
 downloadLib("https://github.com/g-truc/glm/releases/download/${VER_GLM}/glm-${VER_GLM}.zip" "${DIR_LIB}/glm" "")
 include_directories("${CMAKE_SOURCE_DIR}/src" "${DIR_LIB}/glm")
+
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
 	set(PBOUT_DIR "${CMAKE_BINARY_DIR}/${PROJECT_NAME}")
+	set(TBIN_DIR "${PBOUT_DIR}")
 	set(DATA_DIR "${PBOUT_DIR}")
-	set(FONTS_DIR "${PBOUT_DIR}")
 	set(ICONS_DIR "${PBOUT_DIR}/icons")
 	set(LICN_DIR "${PBOUT_DIR}/licenses")
-	set(LIBS_DIR "${PBOUT_DIR}")
-	set(EXECUTABLE_OUTPUT_PATH "${PBOUT_DIR}")
 
 	if(MSVC)
 		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 			set(VMACHINE "x64")
+			set(DIR_ARC "${DIR_LIB}/libarchive")
+			set(BIN_ARC "${DIR_ARC}/bin")
+			set(LIB_ARC "${DIR_ARC}/lib")
+			set(INC_ARC "${DIR_ARC}/include")
 		else()
 			set(VMACHINE "x86")
+			set(DIR_ARC "${DIR_LIB}/libarchive-${VER_ARC}")
+			set(BIN_ARC "${DIR_ARC}/build/bin")
+			set(LIB_ARC "${DIR_ARC}/build/libarchive")
+			set(INC_ARC "${DIR_ARC}/libarchive")
 		endif()
 		set(DIR_SDL "${DIR_LIB}/SDL2-${VER_SDL}-msvc")
 		set(DIR_IMG "${DIR_LIB}/SDL2_image-${VER_IMG}-msvc")
 		set(DIR_TTF "${DIR_LIB}/SDL2_ttf-${VER_TTF}-msvc")
 		set(DIR_CURL "${DIR_LIB}/curl-${VER_CURL}-${VMACHINE}-msvc")
 		set(DIR_LXML "${DIR_LIB}/libxml2-${VER_LXML}-${VMACHINE}-msvc")
-		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-			set(DIR_ARC "${DIR_LIB}/libarchive")
-			set(BIN_ARC "${DIR_ARC}/bin")
-			set(LIB_ARC "${DIR_ARC}/lib")
-			set(INC_ARC "${DIR_ARC}/include")
-		else()
-			set(DIR_ARC "${DIR_LIB}/libarchive-${VER_ARC}")
-			set(BIN_ARC "${DIR_ARC}/build/bin")
-			set(LIB_ARC "${DIR_ARC}/build/libarchive")
-			set(INC_ARC "${DIR_ARC}/libarchive")
-		endif()
 		set(OUT_CURL "${DIR_CURL}/builds/libcurl-vc-${VMACHINE}-release-dll-ipv6-sspi-schannel")
 		set(BIN_SDL "${DIR_SDL}/lib/${VMACHINE}")
 		set(BIN_IMG "${DIR_IMG}/lib/${VMACHINE}")
 		set(BIN_TTF "${DIR_TTF}/lib/${VMACHINE}")
 		set(BIN_CURL "${OUT_CURL}/bin")
 		set(BIN_LXML "${DIR_LXML}/win32/bin.msvc")
-		set(LIC_SDL "${DIR_SDL}")
-		set(LIC_IMG "${DIR_IMG}")
-		set(LIC_TTF "${DIR_TTF}")
 
 		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-			downloadLib("https://github.com/libarchive/libarchive/releases/download/${VER_ARC}/libarchive-v${VER_ARC}-win64.zip" "${DIR_ARC}" "")
+			downloadLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-v${VER_ARC}-amd64.zip" "${DIR_ARC}" "")
 		else()
-			compileLib("https://github.com/libarchive/libarchive/releases/download/${VER_ARC}/libarchive-${VER_ARC}.zip" "${DIR_ARC}" "cmake\;..\;-G\;NMake Makefiles\;-DENABLE_WERROR=0;nmake" "${DIR_ARC}/build" "")
+			compileLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-${VER_ARC}.zip" "${DIR_ARC}" "cmake\;..\;-G\;NMake Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DENABLE_WERROR=0;${MAKE_CMD}" "${DIR_ARC}/build" "")
 		endif()
-		downloadLib("https://www.libsdl.org/release/SDL2-devel-${VER_SDL}-VC.zip" "${DIR_SDL}" "${DIR_LIB}/SDL2-${VER_SDL}")
-		downloadLib("https://www.libsdl.org/projects/SDL_image/release/SDL2_image-devel-${VER_IMG}-VC.zip" "${DIR_IMG}" "${DIR_LIB}/SDL2_image-${VER_IMG}")
-		downloadLib("https://www.libsdl.org/projects/SDL_ttf/release/SDL2_ttf-devel-${VER_TTF}-VC.zip" "${DIR_TTF}" "${DIR_LIB}/SDL2_ttf-${VER_TTF}")
+		downloadLib("https://github.com/libsdl-org/SDL/releases/download/release-${VER_SDL}/SDL2-devel-${VER_SDL}-VC.zip" "${DIR_SDL}" "${DIR_LIB}/SDL2-${VER_SDL}")
+		downloadLib("https://github.com/libsdl-org/SDL_image/releases/download/release-${VER_IMG}/SDL2_image-devel-${VER_IMG}-VC.zip" "${DIR_IMG}" "${DIR_LIB}/SDL2_image-${VER_IMG}")
+		downloadLib("https://github.com/libsdl-org/SDL_ttf/releases/download/release-${VER_TTF}/SDL2_ttf-devel-${VER_TTF}-VC.zip" "${DIR_TTF}" "${DIR_LIB}/SDL2_ttf-${VER_TTF}")
 		link_directories("${LIB_ARC}" "${BIN_SDL}" "${BIN_IMG}" "${BIN_TTF}")
 		include_directories("${INC_ARC}" "${DIR_SDL}/include" "${DIR_IMG}/include" "${DIR_TTF}/include")
 		if(DOWNLOADER)
-			compileLib("https://curl.haxx.se/download/curl-${VER_CURL}.zip" "${DIR_CURL}" "nmake\;/f\;Makefile.vc\;mode=dll\;MACHINE=${VMACHINE}" "${DIR_CURL}/winbuild" "${DIR_LIB}/curl-${VER_CURL}")
-			compileLib("ftp://xmlsoft.org/libxml2/libxml2-${VER_LXML}.tar.gz" "${DIR_LXML}" "cscript\;configure.js\;compiler=msvc\;iconv=no;nmake\;/f\;Makefile.msvc" "${DIR_LXML}/win32" "${DIR_LIB}/libxml2-${VER_LXML}")
+			compileLib("https://curl.haxx.se/download/curl-${VER_CURL}.zip" "${DIR_CURL}" "${MAKE_CMD}\;/f\;Makefile.vc\;mode=dll\;MACHINE=${VMACHINE}" "${DIR_CURL}/winbuild" "${DIR_LIB}/curl-${VER_CURL}")
+			compileLib("https://gitlab.gnome.org/GNOME/libxml2/-/archive/v${VER_LXML}/libxml2-v${VER_LXML}.zip" "${DIR_LXML}" "cscript\;configure.js\;compiler=msvc\;iconv=no;${MAKE_CMD}\;/f\;Makefile.msvc" "${DIR_LXML}/win32" "${DIR_LIB}/libxml2-v${VER_LXML}")
 			link_directories("${OUT_CURL}/lib" "${BIN_LXML}")
 			include_directories("${OUT_CURL}/include" "${DIR_LXML}/include")
 		endif()
 	else()
-		set(LIC_SDL "${DIR_LIB}/SDL2-${VER_SDL}-mingw")
-		set(LIC_IMG "${DIR_LIB}/SDL2_image-${VER_IMG}-mingw")
-		set(LIC_TTF "${DIR_LIB}/SDL2_ttf-${VER_TTF}-mingw")
 		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 			set(VMACHINE "win64")
-			set(DIR_SDL "${LIC_SDL}/x86_64-w64-mingw32")
-			set(DIR_IMG "${LIC_IMG}/x86_64-w64-mingw32")
-			set(DIR_TTF "${LIC_TTF}/x86_64-w64-mingw32")
+			set(VMARCH "x86_64")
 		else()
 			set(VMACHINE "win32")
-			set(DIR_SDL "${LIC_SDL}/i686-w64-mingw32")
-			set(DIR_IMG "${LIC_IMG}/i686-w64-mingw32")
-			set(DIR_TTF "${LIC_TTF}/i686-w64-mingw32")
+			set(VMARCH "i686")
 		endif()
+		set(DIR_SDL "${DIR_LIB}/SDL2-${VER_SDL}-mingw")
+		set(DIR_IMG "${DIR_LIB}/SDL2_image-${VER_IMG}-mingw")
+		set(DIR_TTF "${DIR_LIB}/SDL2_ttf-${VER_TTF}-mingw")
 		set(DIR_ARC "${DIR_LIB}/libarchive-${VER_ARC}-${VMACHINE}-mingw")
 		set(DIR_CURL "${DIR_LIB}/curl-${VER_CURL}-${VMACHINE}-mingw")
 		set(DIR_LXML "${DIR_LIB}/libxml2-${VER_LXML}-${VMACHINE}-mingw")
 		set(BIN_ARC "${DIR_ARC}/build/bin")
-		set(BIN_SDL "${DIR_SDL}/bin")
-		set(BIN_IMG "${DIR_IMG}/bin")
-		set(BIN_TTF "${DIR_TTF}/bin")
+		set(BIN_SDL "${DIR_SDL}/${VMARCH}-w64-mingw32/bin")
+		set(BIN_IMG "${DIR_IMG}/${VMARCH}-w64-mingw32/bin")
+		set(BIN_TTF "${DIR_TTF}/${VMARCH}-w64-mingw32/bin")
 		set(BIN_CURL "${DIR_CURL}/bin")
 		set(BIN_LXML "${DIR_LXML}/win32/bin.mingw")
 
-		compileLib("https://github.com/libarchive/libarchive/releases/download/${VER_ARC}/libarchive-${VER_ARC}.zip" "${DIR_ARC}" "cmake\;..\;-G\;MinGW Makefiles\;-DENABLE_WERROR=0;mingw32-make" "${DIR_ARC}/build" "${DIR_LIB}/libarchive-${VER_ARC}")
-		downloadLib("https://www.libsdl.org/release/SDL2-devel-${VER_SDL}-mingw.tar.gz" "${LIC_SDL}" "${DIR_LIB}/SDL2-${VER_SDL}")
-		downloadLib("https://www.libsdl.org/projects/SDL_image/release/SDL2_image-devel-${VER_IMG}-mingw.tar.gz" "${LIC_IMG}" "${DIR_LIB}/SDL2_image-${VER_IMG}")
-		downloadLib("https://www.libsdl.org/projects/SDL_ttf/release/SDL2_ttf-devel-${VER_TTF}-mingw.tar.gz" "${LIC_TTF}" "${DIR_LIB}/SDL2_ttf-${VER_TTF}")
-		link_directories("${DIR_ARC}/build/libarchive" "${DIR_SDL}/lib" "${DIR_IMG}/lib" "${DIR_TTF}/lib")
-		include_directories("${DIR_ARC}/libarchive" "${DIR_SDL}/include/SDL2" "${DIR_IMG}/include/SDL2" "${DIR_TTF}/include/SDL2")
+		compileLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-${VER_ARC}.zip" "${DIR_ARC}" "cmake\;..\;-G\;MinGW Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DENABLE_WERROR=0;${MAKE_CMD}\;archive" "${DIR_ARC}/build" "${DIR_LIB}/libarchive-${VER_ARC}")
+		downloadLib("https://github.com/libsdl-org/SDL/releases/download/release-${VER_SDL}/SDL2-devel-${VER_SDL}-mingw.zip" "${DIR_SDL}" "${DIR_LIB}/SDL2-${VER_SDL}")
+		downloadLib("https://github.com/libsdl-org/SDL_image/releases/download/release-${VER_IMG}/SDL2_image-devel-${VER_IMG}-mingw.zip" "${DIR_IMG}" "${DIR_LIB}/SDL2_image-${VER_IMG}")
+		downloadLib("https://github.com/libsdl-org/SDL_ttf/releases/download/release-${VER_TTF}/SDL2_ttf-devel-${VER_TTF}-mingw.zip" "${DIR_TTF}" "${DIR_LIB}/SDL2_ttf-${VER_TTF}")
+		link_directories("${DIR_ARC}/build/libarchive" "${DIR_SDL}/${VMARCH}-w64-mingw32/lib" "${DIR_IMG}/${VMARCH}-w64-mingw32/lib" "${DIR_TTF}/${VMARCH}-w64-mingw32/lib")
+		include_directories("${DIR_ARC}/libarchive" "${DIR_SDL}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_IMG}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_TTF}/${VMARCH}-w64-mingw32/include/SDL2")
 
 		if(DOWNLOADER)
 			downloadLib("https://curl.haxx.se/windows/dl-${VER_CURL}/curl-${VER_CURL}-${VMACHINE}-mingw.zip" "${DIR_CURL}" "")
-			compileLib("ftp://xmlsoft.org/libxml2/libxml2-${VER_LXML}.tar.gz" "${DIR_LXML}" "cscript\;configure.js\;compiler=mingw\;iconv=no;mingw32-make\;/f\;Makefile.mingw" "${DIR_LXML}/win32" "${DIR_LIB}/libxml2-${VER_LXML}")
+			compileLib("https://gitlab.gnome.org/GNOME/libxml2/-/archive/v${VER_LXML}/libxml2-v${VER_LXML}.zip" "${DIR_LXML}" "cscript\;configure.js\;compiler=mingw\;iconv=no;${MAKE_CMD}\;-f\;Makefile.mingw" "${DIR_LXML}/win32" "${DIR_LIB}/libxml2-v${VER_LXML}")
 			link_directories("${OUT_CURL}/lib" "${BIN_LXML}")
 			include_directories("${OUT_CURL}/include" "${DIR_LXML}/include")
 		endif()
 	endif()
 else()
+	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+		set(VMARCH "x86_64")
+	else()
+		set(VMARCH "i386")
+	endif()
 	if(APPIMAGE)
 		set(PBOUT_DIR "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.AppDir")
+		set(TBIN_DIR "${PBOUT_DIR}/usr/bin")
+		set(DATA_DIR "${PBOUT_DIR}/usr/share/${PROJECT_NAME_LOWER}")
 	else()
-		set(PBOUT_DIR "${CMAKE_BINARY_DIR}/${PROJECT_NAME}")
+		set(PBOUT_DIR "${CMAKE_BINARY_DIR}/${PROJECT_NAME_LOWER}")
+		set(TBIN_DIR "${PBOUT_DIR}/bin")
+		set(DATA_DIR "${PBOUT_DIR}/share/${PROJECT_NAME_LOWER}")
 	endif()
-	set(DATA_DIR "${PBOUT_DIR}/share")
-	set(FONTS_DIR "${DATA_DIR}/fonts")
 	set(ICONS_DIR "${DATA_DIR}/icons")
 	set(LICN_DIR "${DATA_DIR}/licenses")
-	set(LIBS_DIR "${PBOUT_DIR}/lib")
-	set(EXECUTABLE_OUTPUT_PATH "${PBOUT_DIR}/bin")
-
-	if(APPIMAGE)
-		set(DIR_ARC "${DIR_LIB}/libarchive-${VER_ARC}")
-		set(DIR_SDL "${DIR_LIB}/SDL2-${VER_SDL}")
-		set(DIR_IMG "${DIR_LIB}/SDL2_image-${VER_IMG}")
-		set(DIR_TTF "${DIR_LIB}/SDL2_ttf-${VER_TTF}")
-		set(DIR_CURL "${DIR_LIB}/curl-${VER_CURL}")
-		set(DIR_LXML "${DIR_LIB}/libxml2-${VER_LXML}")
-
-		compileLib("https://github.com/libarchive/libarchive/releases/download/${VER_ARC}/libarchive-${VER_ARC}.tar.gz" "${DIR_ARC}" "./configure;make" "${DIR_ARC}" "")
-		compileLib("https://www.libsdl.org/release/SDL2-${VER_SDL}.tar.gz" "${DIR_SDL}" "./configure;make" "${DIR_SDL}" "")
-		compileLib("https://www.libsdl.org/projects/SDL_image/release/SDL2_image-${VER_IMG}.tar.gz" "${DIR_IMG}" "./configure;make" "${DIR_IMG}" "")
-		compileLib("https://www.libsdl.org/projects/SDL_ttf/release/SDL2_ttf-${VER_TTF}.tar.gz" "${DIR_TTF}" "./configure;make" "${DIR_TTF}" "")
-		link_directories("${LIBS_DIR}")
-		include_directories("${DIR_ARC}/libarchive" "${DIR_SDL}/include" "${DIR_IMG}" "${DIR_TTF}")
-		if(DOWNLOADER)
-			compileLib("https://curl.se/download/curl-${VER_CURL}.tar.gz" "${DIR_CURL}" "./configure;make" "${DIR_CURL}" "")
-			compileLib("ftp://xmlsoft.org/libxml2/libxml2-${VER_LXML}.tar.gz" "${DIR_LXML}" "./configure;make" "${DIR_LXML}" "")
-			include_directories("${DIR_CURL}/include" "${DIR_LXML}/include")
-		endif()
-	elseif(DOWNLOADER)
-		include_directories("/usr/include/libxml2")
-	endif()
+	include_directories($<$<BOOL:${DOWNLOADER}>:/usr/include/libxml2>)
 endif()
 
 # compiler flags
-if(CMAKE_SYSTEM_NAME MATCHES "Windows")
-	add_definitions(-D_UNICODE -D_CRT_SECURE_NO_WARNINGS -DNOMINMAX)
-endif()
-if(APPIMAGE)
-	add_definitions(-DAPPIMAGE)
-endif()
-if(DOWNLOADER)
-	add_definitions(-DDOWNLOADER)
-endif()
+add_compile_definitions($<$<BOOL:${DOWNLOADER}>:DOWNLOADER> "$<$<BOOL:${WIN32}>:UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;NOMINMAX;$<$<NOT:$<BOOL:${MSVC}>>:_WIN32_WINNT=0x600>>")
 
-if(CMAKE_CONFIGURATION_TYPES)
-	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG -D_DEBUG")
-	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DNDEBUG")
-elseif(${CMAKE_BUILD_TYPE} MATCHES "Debug")
-	add_definitions(-DDEBUG -D_DEBUG)
-else()
-	add_definitions(-DNDEBUG)
-endif()
-
-if((CMAKE_CXX_COMPILER_ID MATCHES "GNU") OR (CMAKE_CXX_COMPILER_ID MATCHES "Clang"))
-	set(CXX_FLG_ANY "-Wall -Wextra -pedantic-errors -Wdouble-promotion -Wformat=2 -Wmissing-declarations -Wold-style-cast -Wshadow -Wunreachable-code -Wno-implicit-fallthrough -Wno-old-style-cast -Wno-switch")
-	set(FLG_DEBUG "-g")
-	set(FLG_RELEASE "-O3")
-
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	add_compile_options(-Wall -Wextra -pedantic-errors -Wformat=2 -Wmissing-declarations -Wold-style-cast -Wshadow -Wunreachable-code -Wno-implicit-fallthrough -Wno-old-style-cast -Wno-switch $<$<NOT:$<BOOL:${MINGW}>>:-Wdouble-promotion>)
 	if(NATIVE)
-		set(CXX_FLG_ANY "${CXX_FLG_ANY} -march=native")
+		add_compile_options(-march=native)
 	elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
-		set(CXX_FLG_ANY "${CXX_FLG_ANY} -mmmx -msse -msse2")
+		add_compile_options(-march=x86-64)
 	endif()
-
 	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-		set(FLG_RELEASE "${FLG_RELEASE} -flto -fuse-linker-plugin -s")
-		set(CXX_FLG_ANY "${CXX_FLG_ANY} -Wcast-align=strict -Wduplicated-cond -Wlogical-op -Wuseless-cast")
+		add_compile_options(-Wcast-align=strict -Wduplicated-cond -Wlogical-op -Wuseless-cast
+							"$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto;-fuse-linker-plugin>")
+		add_link_options("$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto;-fuse-linker-plugin;-s>")
 	else()
-		set(CXX_FLG_ANY "${CXX_FLG_ANY} -Wcast-align -Wnull-dereference -Wshadow-all")
+		add_compile_options(-Wcast-align -Wnull-dereference -Wshadow-all -Wno-final-dtor-non-final-class)
 	endif()
 elseif(MSVC)
-	set(CXX_FLG_ANY "/W4 /wd4100 /wd4201 /wd4244 /wd4458 /wd4706 /wd4805")
-	set(FLG_DEBUG "/Od /Ob0")
-	set(FLG_RELEASE "/O2 /Ob2 /Oi /Ot /GL")
-endif()
-
-if(CMAKE_CONFIGURATION_TYPES)
-	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_FLG_ANY} ${FLG_DEBUG}")
-	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${CXX_FLG_ANY} ${FLG_RELEASE}")
-elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_FLG_ANY} ${FLG_DEBUG}")
-else()
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_FLG_ANY} ${FLG_RELEASE}")
+	add_compile_options(/W4 /wd4100 /wd4201 /wd4244 /wd4267 /wd4458 /wd4706 /wd4805 $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:/GL>)
 endif()
 
 # set main target
 add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES})
-target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image SDL2_ttf archive)
-if(DOWNLOADER)
-	if(CMAKE_SYSTEM_NAME MATCHES "Windows")
-		target_link_libraries(${PROJECT_NAME} libcurl libxml2)
-	else()
-		target_link_libraries(${PROJECT_NAME} curl xml2)
-	endif()
-endif()
-set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image SDL2_ttf archive
+						"$<$<BOOL:${UNIX}>:pthread;dl>"
+						"$<$<BOOL:${DOWNLOADER}>:$<IF:$<BOOL:${WIN32}>,libcurl;libxml2,curl;xml2>>")
 
-# target properties
 set_target_properties(${PROJECT_NAME} PROPERTIES
-						RUNTIME_OUTPUT_DIRECTORY "${EXECUTABLE_OUTPUT_PATH}"
-						RUNTIME_OUTPUT_DIRECTORY_DEBUG "${EXECUTABLE_OUTPUT_PATH}"
-						RUNTIME_OUTPUT_DIRECTORY_RELEASE "${EXECUTABLE_OUTPUT_PATH}")
-if(NOT CMAKE_SYSTEM_NAME MATCHES "Windows")
-	string(TOLOWER ${PROJECT_NAME} PROJECT_NAME_LOWER)
+						RUNTIME_OUTPUT_DIRECTORY "${TBIN_DIR}"
+						RUNTIME_OUTPUT_DIRECTORY_DEBUG "${TBIN_DIR}"
+						RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TBIN_DIR}"
+						RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${TBIN_DIR}"
+						RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${TBIN_DIR}")
+if(WIN32)
+	set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DPI_AWARE "PerMonitor")
+	set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+else()
 	set_target_properties(${PROJECT_NAME} PROPERTIES
 							OUTPUT_NAME ${PROJECT_NAME_LOWER})
 endif()
 
 # build commands
-find_program(PYTHON "python3" NAMES "python")
-add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
-					COMMAND "${PYTHON}" "${CMAKE_SOURCE_DIR}/pictool.py" "${DIR_RSC}/vertiread.svg")
-
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 					COMMAND "${CMAKE_COMMAND}" -E make_directory "${ICONS_DIR}"
-					COMMAND "${CMAKE_COMMAND}" -E copy_directory "${DIR_RSC}/fonts" "${FONTS_DIR}"
 					COMMAND "${CMAKE_COMMAND}" -E copy_directory "${DIR_RSC}/licenses" "${LICN_DIR}"
-					COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/themes.ini" "${DATA_DIR}"
+					COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/BrisaSans.otf" "${DIR_RSC}/themes.ini" "${DATA_DIR}"
 					COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_LIB}/glm/copying.txt" "${LICN_DIR}/COPYING.glm.txt"
-					COMMAND "${PYTHON}" "${CMAKE_SOURCE_DIR}/pictool.py" "${ICONS_DIR}" "${DIR_ICN}/center.svg" "${DIR_ICN}/cross.svg" "${DIR_ICN}/file.svg" "${DIR_ICN}/folder.svg" "${DIR_ICN}/left.svg" "${DIR_ICN}/minus.svg" "${DIR_ICN}/plus.svg" "${DIR_ICN}/reset.svg" "${DIR_ICN}/right.svg" "${DIR_ICN}/search.svg")
-if(CMAKE_SYSTEM_NAME MATCHES "Windows")
+					COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.svg" "${DIR_ICN}/center.svg" "${DIR_ICN}/cross.svg" "${DIR_ICN}/file.svg" "${DIR_ICN}/folder.svg" "${DIR_ICN}/left.svg" "${DIR_ICN}/minus.svg" "${DIR_ICN}/plus.svg" "${DIR_ICN}/reset.svg" "${DIR_ICN}/right.svg" "${DIR_ICN}/search.svg" "${ICONS_DIR}")
+if(WIN32)
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/vertiread.png" "${DATA_DIR}"
-						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ARC}/archive.dll" "${BIN_SDL}/SDL2.dll" "${BIN_IMG}/SDL2_image.dll" "${BIN_IMG}/libjpeg-9.dll" "${BIN_IMG}/libpng16-16.dll" "${BIN_IMG}/libtiff-5.dll" "${BIN_IMG}/libwebp-7.dll" "${BIN_TTF}/SDL2_ttf.dll" "${BIN_TTF}/libfreetype-6.dll" "${BIN_TTF}/zlib1.dll" "${LIBS_DIR}"
-						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_IMG}/LICENSE.jpeg.txt" "${BIN_IMG}/LICENSE.png.txt" "${BIN_IMG}/LICENSE.tiff.txt" "${BIN_IMG}/LICENSE.webp.txt" "${BIN_TTF}/LICENSE.freetype.txt" "${BIN_TTF}/LICENSE.zlib.txt" "${LICN_DIR}"
-						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${LIC_SDL}/COPYING.txt" "${LICN_DIR}/COPYING.SDL.txt"
-						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${LIC_IMG}/COPYING.txt" "${LICN_DIR}/COPYING.SDL_image.txt"
-						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${LIC_TTF}/COPYING.txt" "${LICN_DIR}/COPYING.SDL_ttf.txt")
+						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ARC}/$<IF:$<BOOL:${MSVC}>,archive.dll,libarchive.dll>" "${BIN_SDL}/SDL2.dll" "${BIN_IMG}/SDL2_image.dll" "${BIN_TTF}/SDL2_ttf.dll" "$<$<BOOL:${MSVC}>:${BIN_IMG}/optional/libtiff-5.dll;${BIN_IMG}/optional/libwebp-7.dll>" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+						COMMAND "$<$<BOOL:${MSVC}>:${CMAKE_COMMAND};-E;copy_if_different;${BIN_IMG}/optional/LICENSE.tiff.txt;${BIN_IMG}/optional/LICENSE.webp.txt;${BIN_TTF}/LICENSE.freetype.txt;${BIN_TTF}/LICENSE.harfbuzz.txt;${BIN_TTF}/LICENSE.zlib.txt;${LICN_DIR}>"
+						COMMAND "$<$<BOOL:${MINGW}>:${CMAKE_COMMAND};-E;copy_if_different;${DIR_ARC}/COPYING;${LICN_DIR}/COPYING.libarchive.txt>"
+						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_SDL}/COPYING.txt" "${LICN_DIR}/COPYING.SDL.txt"
+						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_IMG}/LICENSE.txt" "${LICN_DIR}/LICENSE.SDL_image.txt"
+						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_TTF}/LICENSE.txt" "${LICN_DIR}/LICENSE.SDL_ttf.txt"
+						COMMAND_EXPAND_LISTS)
 	if(DOWNLOADER)
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 			                COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_LXML}/libxml2.dll" "${PBOUT_DIR}"
-							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_LXML}/COPYING" "${LICN_DIR}/COPYING.libxml.txt")
-		if(MSVC)
-			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-								COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_CURL}/COPYING" "${LICN_DIR}/COPYING.curl.txt")
-		else()
-			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-								COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_CURL}/COPYING.txt" "${LICN_DIR}/COPYING.curl.txt"
-								COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_CURL}/COPYING-brotli.txt" "${DIR_CURL}/COPYING-libssh2.txt" "${DIR_CURL}/COPYING-nghttp2.txt" "${DIR_CURL}/COPYING-openssl.txt" "${DIR_CURL}/COPYING-zstd.txt" "${LICN_DIR}")
-		endif()
+							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_LXML}/Copyright" "${LICN_DIR}/Copyright.libxml.txt"
+							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_CURL}/$<IF:$<BOOL:${MSVC}>,COPYING,COPYING.txt>" "${LICN_DIR}/COPYING.curl.txt"
+							COMMAND "$<$<NOT:$<BOOL:${MSVC}>>:${CMAKE_COMMAND};-E;copy_if_different;${DIR_CURL}/COPYING-brotli.txt;${DIR_CURL}/COPYING-libidn2.txt;${DIR_CURL}/COPYING-libssh2.txt;${DIR_CURL}/COPYING-nghttp2.txt;${DIR_CURL}/COPYING-openssl.txt;${DIR_CURL}/COPYING-zlib.txt;${LICN_DIR}>"
+							COMMAND_EXPAND_LISTS)
 		if(MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
 			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 								COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_CURL}/libcurl.dll" "${PBOUT_DIR}")
@@ -356,43 +302,54 @@ if(CMAKE_SYSTEM_NAME MATCHES "Windows")
 	endif()
 else()
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/vertiread.desktop" "${PBOUT_DIR}")
+						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.desktop" "${PBOUT_DIR}")
 
-	if((CMAKE_CXX_COMPILER_ID MATCHES "Clang") AND (NOT CMAKE_BUILD_TYPE STREQUAL "Debug"))
+	if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 		find_program(STRIPPER "strip")
 		if(STRIPPER)
 			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-								COMMAND "${STRIPPER}" -s "${EXECUTABLE_OUTPUT_PATH}/${PROJECT_NAME_LOWER}")
+								COMMAND "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:${STRIPPER};-s;$<TARGET_FILE:${TARGET_NAME}>>"
+								COMMAND_EXPAND_LISTS)
+		else()
+			message(WARNING "Can't strip the executable: Failed to find stip")
 		endif()
 	endif()
 	if(APPIMAGE)
-		add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
-							COMMAND "${CMAKE_COMMAND}" -E make_directory "${LIBS_DIR}"
-							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_ARC}/.libs/libarchive*.so*" "${DIR_SDL}/build/.libs/libSDL2*.so*" "${DIR_IMG}/.libs/libSDL2_image*.so*" "${DIR_TTF}/.libs/libSDL2_ttf*.so*" "${LIBS_DIR}")
-		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-							COMMAND "${CMAKE_COMMAND}" -E create_symlink "bin/${PROJECT_NAME_LOWER}" "${PBOUT_DIR}/AppRun"
-							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/vertiread.png" "${PBOUT_DIR}"
-							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_ARC}/COPYING" "${LICN_DIR}/COPYING.libarchive.txt"
-							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_SDL}/COPYING.txt" "${LICN_DIR}/COPYING.SDL.txt"
-							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_IMG}/COPYING.txt" "${LICN_DIR}/COPYING.SDL_image.txt"
-							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_TTF}/COPYING.txt" "${LICN_DIR}/COPYING.SDL_ttf.txt")
-		if(DOWNLOADER)
-			add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
-				                COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_CURL}/lib/.libs/libcurl*.so*" "${DIR_LXML}/.libs/libxml2*.so*" "${LIBS_DIR}")
-			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-				                COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_CURL}/COPYING" "${LICN_DIR}/COPYING.curl.txt"
-								COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_LXML}/COPYING" "${LICN_DIR}/COPYING.libxml.txt")
+		find_program(LINUXDEPLOY "linuxdeploy")
+		if(NOT LINUXDEPLOY)
+			set(LDPEXE_NAME "linuxdeploy-${VMARCH}.AppImage")
+			set(LINUXDEPLOY "${DIR_LIB}/${LDPEXE_NAME}")
+			if(EXISTS "${LINUXDEPLOY}")
+				message(STATUS "Found ${LINUXDEPLOY}")
+			else()
+				message(STATUS "Downloading ${LINUXDEPLOY}")
+				file(DOWNLOAD "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/${LDPEXE_NAME}" "${LINUXDEPLOY}")
+				file(CHMOD "${LINUXDEPLOY}" FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+			endif()
 		endif()
-
-		find_program(APPIMAGETOOL "appimagetool")
-		if(APPIMAGETOOL)
-			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-								COMMAND "${APPIMAGETOOL}" "${PBOUT_DIR}")
-		endif()
-	else()
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/vertiread.png" "${DATA_DIR}")
+							COMMAND "${CMAKE_COMMAND}" -E create_symlink "usr/bin/${PROJECT_NAME_LOWER}" "${PBOUT_DIR}/AppRun"
+							COMMAND "${CMAKE_COMMAND}" -E create_symlink "usr/share/${PROJECT_NAME_LOWER}/icons/${PROJECT_NAME_LOWER}.svg" "${PBOUT_DIR}/${PROJECT_NAME_LOWER}.svg"
+							COMMAND bash -c "VERSION='${PROJECT_VERSION}' '${LINUXDEPLOY}' --appdir '${PBOUT_DIR}' --output appimage")
 	endif()
+endif()
+
+# install target
+if(WIN32)
+	set(DST_DIR "${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}")
+	install(TARGETS ${PROJECT_NAME} DESTINATION "${DST_DIR}")
+	install(DIRECTORY "${ICONS_DIR}" DESTINATION "${DST_DIR}")
+	install(FILES "${DATA_DIR}/BrisaSans.otf" "${DATA_DIR}/themes.ini" "${PBOUT_DIR}/${PROJECT_NAME_LOWER}.png" DESTINATION "${DST_DIR}")
+	install(DIRECTORY "${LICN_DIR}" DESTINATION "${DST_DIR}")
+	install(FILES "${PBOUT_DIR}/archive.dll" "${PBOUT_DIR}/libfreetype-6.dll" "${PBOUT_DIR}/libjpeg-9.dll" "${PBOUT_DIR}/libpng16-16.dll" "${PBOUT_DIR}/libtiff-5.dll" "${PBOUT_DIR}/libwebp-7.dll" "${PBOUT_DIR}/SDL2.dll" "${PBOUT_DIR}/SDL2_image.dll" "${PBOUT_DIR}/SDL2_ttf.dll" "${PBOUT_DIR}/zlib1.dll" DESTINATION "${DST_DIR}")
+elseif(APPIMAGE)
+	install(FILES "${CMAKE_BINARY_DIR}/${PROJECT_NAME}-x86_64.AppImage" DESTINATION "${CMAKE_INSTALL_PREFIX}")
+else()
+	set(DST_DIR "${CMAKE_INSTALL_PREFIX}/share/${PROJECT_NAME_LOWER}")
+	install(TARGETS ${PROJECT_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")
+	install(DIRECTORY "${ICONS_DIR}" DESTINATION "${DST_DIR}")
+	install(FILES "${DATA_DIR}/BrisaSans.otf" "${DATA_DIR}/themes.ini" "${PBOUT_DIR}/${PROJECT_NAME_LOWER}.png" DESTINATION "${DST_DIR}")
+	install(DIRECTORY "${LICN_DIR}" DESTINATION "${DST_DIR}")
 endif()
 
 # group files

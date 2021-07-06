@@ -1,10 +1,16 @@
 #pragma once
 
-#include "engine/fileSys.h"
+#include "utils/utils.h"
 
 // logic for browsing files
 class Browser {
 public:
+#ifdef _WIN32
+	static constexpr wchar topDir[] = L"";
+#else
+	static constexpr char topDir[] = "/";
+#endif
+
 	PCall exCall;	// gets called when goUp() fails, aka stepping out of rootDir into the previous menu
 private:
 	fs::path rootDir;	// the top directory one can visit
@@ -26,7 +32,7 @@ public:
 	const fs::path& getCurDir() const;
 	const fs::path& getCurFile() const;
 	bool getInArchive() const;
-	string nextFile(const string& file, bool fwd, bool showHidden) const;
+	string nextFile(string_view file, bool fwd, bool showHidden) const;
 	pair<vector<string>, vector<string>> listCurDir(bool showHidden) const;
 
 private:
@@ -34,8 +40,8 @@ private:
 	void shiftArchive(bool fwd, bool showHidden);
 	bool nextDir(const fs::path& dit, const fs::path& pdir, bool showHidden);
 	bool nextArchive(const fs::path& ait, const fs::path& pdir);
-	string nextDirFile(const string& file, bool fwd, bool showHidde) const;
-	string nextArchiveFile(const string& file, bool fwd) const;
+	string nextDirFile(string_view file, bool fwd, bool showHidde) const;
+	string nextArchiveFile(string_view file, bool fwd) const;
 
 	template <class T, class P, class F, class... A> static bool foreachFAround(const vector<T>& vec, typename vector<T>::const_iterator start, P* parent, F func, A... args);
 	template <class T, class P, class F, class... A> static bool foreachRAround(const vector<T>& vec, typename vector<T>::const_reverse_iterator start, P* parent, F func, A... args);
@@ -58,6 +64,6 @@ inline bool Browser::getInArchive() const {
 	return inArchive;
 }
 
-inline string Browser::nextFile(const string& file, bool fwd, bool showHidden) const {
+inline string Browser::nextFile(string_view file, bool fwd, bool showHidden) const {
 	return inArchive ? nextArchiveFile(file, fwd) : nextDirFile(file, fwd, showHidden);
 }

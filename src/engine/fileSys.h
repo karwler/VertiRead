@@ -1,8 +1,6 @@
 #pragma once
 
 #include "utils/settings.h"
-#include <archive.h>
-#include <archive_entry.h>
 #include <fstream>
 
 /* For interpreting lines in ini files:
@@ -19,35 +17,32 @@ public:
 		title		// title, no everything else
 	};
 private:
-	Type type;
+	Type type = Type::empty;
 	string prp;	// property, aka. the thing before the equal sign/brackets
 	string key;	// the thing between the brackets (empty if there are no brackets)
 	string val;	// value, aka. the thing after the equal sign
 
 public:
-	IniLine();
-	IniLine(const string& line);
+	IniLine() = default;
+	IniLine(string_view line);
 
 	Type getType() const;
 	const string& getPrp() const;
 	const string& getKey() const;
 	const string& getVal() const;
 
-	void setVal(const string& property, const string& value);
-	void setVal(const string& property, const string& vkey, const string& value);
-	void setTitle(const string& title);
-	Type setLine(const string& str);
+	void setVal(string_view property, string_view value);
+	void setVal(string_view property, string_view vkey, string_view value);
+	void setTitle(string_view title);
+	Type setLine(string_view str);
+	static vector<IniLine> readLines(string_view text);
 
 	template <class... T> static void writeTitle(std::ofstream& ss, T&&... title);
 	template <class P, class... T> static void writeVal(std::ofstream& ss, P&& prp, T&&... val);
 	template <class P, class K, class... T> static void writeKeyVal(std::ofstream& ss, P&& prp, K&& key, T&&... val);
 };
 
-inline IniLine::IniLine() :
-	type(Type::empty)
-{}
-
-inline IniLine::IniLine(const string& line) {
+inline IniLine::IniLine(string_view line) {
 	setLine(line);
 }
 
@@ -69,58 +64,34 @@ inline const string& IniLine::getVal() const {
 
 template <class... T>
 void IniLine::writeTitle(std::ofstream& ss, T&&... title) {
-	((ss << '[') << ... << std::forward<T>(title)) << "]\n";
+	((ss << '[') << ... << std::forward<T>(title)) << ']' << linend;
 }
 
 template <class P, class... T>
 void IniLine::writeVal(std::ofstream& ss, P&& prp, T&&... val) {
-	((ss << std::forward<P>(prp) << '=') << ... << std::forward<T>(val)) << '\n';
+	((ss << std::forward<P>(prp) << '=') << ... << std::forward<T>(val)) << linend;
 }
 
 template <class P, class K, class... T>
 void IniLine::writeKeyVal(std::ofstream& ss, P&& prp, K&& key, T&&... val) {
-	((ss << std::forward<P>(prp) << '[' << std::forward<K>(key) << "]=") << ... << std::forward<T>(val)) << '\n';
+	((ss << std::forward<P>(prp) << '[' << std::forward<K>(key) << "]=") << ... << std::forward<T>(val)) << linend;
 }
 
 // handles all filesystem interactions
 class FileSys {
 public:
-	static constexpr array<SDL_Color, sizet(Color::texture)+1> defaultColors = {
-		SDL_Color{ 10, 10, 10, 255 },		// background
-		SDL_Color{ 90, 90, 90, 255 },		// normal
-		SDL_Color{ 60, 60, 60, 255 },		// dark
-		SDL_Color{ 120, 120, 120, 255 },	// light
-		SDL_Color{ 105, 105, 105, 255 },	// select
-		SDL_Color{ 75, 75, 75, 255 },		// tooltip
-		SDL_Color{ 210, 210, 210, 255 },	// text
-		SDL_Color{ 210, 210, 210, 255 }		// texture
-	};
-	static constexpr array<const char*, defaultColors.size()> colorNames = {
-		"background",
-		"normal",
-		"dark",
-		"light",
-		"select",
-		"tooltip",
-		"text",
-		"texture"
-	};
-
 	static constexpr char extIni[] = ".ini";
 private:
 	static constexpr char defaultFrMode[] = "rb";
 	static constexpr char defaultFwMode[] = "wb";
 	static constexpr sizet archiveReadBlockSize = 10240;
 #ifdef _WIN32
-	static constexpr array<const char*, 22> takenFilenames = {
+	static constexpr array<string_view, 22> takenFilenames = {
 		"CON", "PRN", "AUX", "NUL",
 		"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
 		"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
 	};
-	static constexpr sizet drivesMax = 26;
-	static constexpr sizet fnameMax = 255;
-#else
-	static constexpr sizet fnameMax = NAME_MAX;
+	static constexpr char drivesMax = 26;
 #endif
 	static constexpr char fileThemes[] = "themes.ini";
 	static constexpr char fileSettings[] = "settings.ini";
@@ -155,20 +126,18 @@ private:
 	fs::path dirBase;	// application base directory
 	fs::path dirSets;	// settings directory
 	fs::path dirConfs;	// internal config directory
-	fs::path dirIcons;	// icon directory
-	vector<fs::path> dirFonts;	// os's font directories
 public:
 	FileSys();
 
 	vector<string> getAvailableThemes() const;
-	array<SDL_Color, defaultColors.size()> loadColors(const string& theme) const;	// updates settings' colors according to settings' theme
-	bool getLastPage(const string& book, string& drc, string& fname) const;
-	bool saveLastPage(const string& book, const string& drc, const string& fname) const;
+	array<SDL_Color, Settings::defaultColors.size()> loadColors(string_view theme) const;	// updates settings' colors according to settings' theme
+	bool getLastPage(string_view book, string& drc, string& fname) const;
+	bool saveLastPage(string_view book, string_view drc, string_view fname) const;
 	Settings* loadSettings() const;
 	void saveSettings(const Settings* sets) const;
 	array<Binding, Binding::names.size()> getBindings() const;
 	void saveBindings(const array<Binding, Binding::names.size()>& bindings) const;
-	fs::path findFont(const string& font) const;	// on success returns absolute path to font file, otherwise returns empty path
+	fs::path findFont(string_view font) const;	// on success returns absolute path to font file, otherwise returns empty path
 
 	static vector<fs::path> listDir(const fs::path& drc, bool files = true, bool dirs = true, bool showHidden = true);
 	static pair<vector<fs::path>, vector<fs::path>> listDirSep(const fs::path& drc, bool showHidden = true);	// first is list of files, second is list of directories
@@ -178,24 +147,24 @@ public:
 	static bool isFont(const fs::path& file);
 	static bool isArchive(const fs::path& file);
 	static bool isPictureArchive(const fs::path& file);
-	static bool isArchivePicture(const fs::path& file, const string& pname);
+	static bool isArchivePicture(const fs::path& file, string_view pname);
 
 	static archive* openArchive(const fs::path& file);
 	static vector<string> listArchive(const fs::path& file);
 	static mapFiles listArchivePictures(const fs::path& file, vector<string>& names);
 	static SDL_Surface* loadArchivePicture(archive* arch, archive_entry* entry);
 
-	static int moveContentThreaded(void* data);	// moves files from one directory to another (data points to a thread and the thread's data is a pair of strings; src, dst)
+	static void moveContentThreaded(bool* running, fs::path src, fs::path dst);
 	const fs::path& getDirSets() const;
-	const fs::path& getDirIcons() const;
-	string windowIconPath() const;
+	fs::path dirIcons() const;
 
 private:
 	static vector<string> readFileLines(const fs::path& file, bool printMessage = true);
 	static string readTextFile(const fs::path& file, bool printMessage = true);
 	static bool writeTextFile(const fs::path& file, const vector<string>& lines);
-	static SDL_Color readColor(const string& line);
+	static SDL_Color readColor(string_view str);
 
+	static fs::path searchFontDirs(string_view font, initlist<fs::path> dirs);
 #ifdef _WIN32
 	static vector<fs::path> listDrives();
 #endif
@@ -205,14 +174,6 @@ inline const fs::path& FileSys::getDirSets() const {
 	return dirSets;
 }
 
-inline const fs::path& FileSys::getDirIcons() const {
-	return dirIcons;
-}
-
-inline string FileSys::windowIconPath() const {
-#if defined(__WIN32) || defined(APPIMAGE)
-	return (dirBase / "vertiread.png").u8string();
-#else
-	return (dirBase / "share/vertiread.png").u8string();
-#endif
+inline fs::path FileSys::dirIcons() const {
+	return dirConfs / "icons";
 }

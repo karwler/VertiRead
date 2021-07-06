@@ -1,7 +1,7 @@
 [Desktop Entry]
 Version=1.0
 Name=VertiRead
-Exec=bin/vertiread
+Exec=usr/bin/vertiread
 Icon=vertiread
 Comment=Comic/Manga reader
 GenericName=Manga Reader

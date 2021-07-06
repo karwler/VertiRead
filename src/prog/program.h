@@ -1,7 +1,8 @@
 #pragma once
 
 #include "browser.h"
-#include "progs.h"
+#include "downloader.h"
+#include <thread>
 
 // handles the front-end
 class Program {
@@ -11,11 +12,14 @@ private:
 	static constexpr float resModeRatio = 0.75f;
 
 	Downloader downloader;
-	uptr<ProgState> state;
+	ProgState* state = nullptr;
 	uptr<Browser> browser;
-	uptr<Thread> thread;
+	std::thread thread;
+	bool threadRunning = false;
 
 public:
+	~Program();
+
 	void start();
 	void eventUser(const SDL_UserEvent& user);
 
@@ -113,22 +117,14 @@ public:
 	Browser* getBrowser();
 
 private:
-	void switchPictures(bool fwd, const string& picname);
+	void switchPictures(bool fwd, string_view picname);
 	void offerMoveBooks(fs::path&& oldLib);
-	void setState(ProgState* newState);
+	template <class T, class... A> void setState(A&&... args);
 	void reposizeWindow(ivec2 dres, ivec2 wsiz);
 };
 
-inline void Program::eventOpenBookList(Button*) {
-	setState(new ProgBooks);
-}
-
-inline void Program::eventOpenSettings(Button*) {
-	setState(new ProgSettings);
-}
-
 inline ProgState* Program::getState() {
-	return state.get();
+	return state;
 }
 
 inline Browser* Program::getBrowser() {

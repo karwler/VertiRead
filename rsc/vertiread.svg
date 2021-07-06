@@ -1,78 +1,15 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
-   xmlns:dc="http://purl.org/dc/elements/1.1/"
-   xmlns:cc="http://creativecommons.org/ns#"
-   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-   xmlns:svg="http://www.w3.org/2000/svg"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="256"
-   height="256"
-   viewBox="0 0 67.733332 67.733335"
-   version="1.1"
-   id="svg8"
-   inkscape:version="1.0.1 (3bc2e813f5, 2020-09-07)"
-   sodipodi:docname="vertiread.svg">
-  <defs
-     id="defs2" />
-  <sodipodi:namedview
-     id="base"
-     pagecolor="#ffffff"
-     bordercolor="#666666"
-     borderopacity="1.0"
-     inkscape:pageopacity="0"
-     inkscape:pageshadow="2"
-     inkscape:zoom="1.4"
-     inkscape:cx="136.10723"
-     inkscape:cy="162.10813"
-     inkscape:document-units="mm"
-     inkscape:current-layer="layer1"
-     inkscape:document-rotation="0"
-     showgrid="false"
-     units="px"
-     inkscape:window-width="1366"
-     inkscape:window-height="715"
-     inkscape:window-x="0"
-     inkscape:window-y="0"
-     inkscape:window-maximized="1" />
-  <metadata
-     id="metadata5">
-    <rdf:RDF>
-      <cc:Work
-         rdf:about="">
-        <dc:format>image/svg+xml</dc:format>
-        <dc:type
-           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
-      </cc:Work>
-    </rdf:RDF>
-  </metadata>
-  <g
-     inkscape:label="Layer 1"
-     inkscape:groupmode="layer"
-     id="layer1">
-    <text
-       xml:space="preserve"
-       style="font-style:italic;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:65.2639px;line-height:1.25;font-family:Arial;-inkscape-font-specification:'Arial Bold Italic';fill:#000000;stroke:#ffffff;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;"
-       x="0.91231543"
-       y="47.562004"
-       id="text20"><tspan
-         sodipodi:role="line"
-         id="tspan18"
-         x="0.91231543"
-         y="47.562004"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:65.2639px;font-family:Arial;-inkscape-font-specification:'Arial Bold';fill:#000000;stroke:#ffffff;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;">V</tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-style:italic;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:63.5px;line-height:1.25;font-family:Arial;-inkscape-font-specification:'Arial Bold Italic';fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       x="19.650347"
-       y="66.956718"
-       id="text24"><tspan
-         sodipodi:role="line"
-         id="tspan22"
-         x="19.650347"
-         y="66.956718"
-         style="font-style:italic;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:63.5px;font-family:Arial;-inkscape-font-specification:'Arial Bold Italic';fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1">R</tspan></text>
-  </g>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="256" height="256" version="1.1" viewBox="0 0 67.733 67.733" xmlns="http://www.w3.org/2000/svg">
+<g stroke="#fff" aria-label="V">
+<g stroke="none">
+<path d="m17.579 47.562-16.698-46.717h10.229l11.823 34.576 11.44-34.576h10.006l-16.73 46.717z" color="#000000" style="-inkscape-stroke:none"/>
+<path d="m0.16992 0.3457 17.057 47.717h10.773l17.09-47.717h-11.078l-11.088 33.506-11.457-33.506zm1.4219 1h9.1602l12.188 35.643 11.795-35.643h8.9336l-16.371 45.717h-9.3672z" color="#000000" fill="#fff" style="-inkscape-stroke:none"/>
+</g>
+</g>
+<g fill="#fff" stroke="#000" aria-label="R">
+<g stroke="none">
+<path d="m31.805 66.957h-9.3638l9.5188-45.455h20.185q5.209 0 8.0925 1.0852 2.9146 1.0542 4.6819 3.9067 1.7983 2.8525 1.7983 6.9143 0 5.7981-3.4727 9.5808-3.4727 3.7517-10.511 4.6509 1.7983 1.6123 3.3796 4.2478 3.1316 5.333 6.9763 15.069h-10.046q-1.2092-3.8447-4.7439-11.999-1.9224-4.4028-4.0928-5.9221-1.3333-0.89917-4.6509-0.89917h-3.8137zm5.364-25.642h4.9609q7.5344 0 9.9839-0.89917 2.4805-0.89917 3.8757-2.8215 1.3953-1.9224 1.3953-4.0308 0-2.4805-2.0154-3.7207-1.2402-0.74414-5.364-0.74414h-10.294z" color="#000000" style="-inkscape-stroke:none"/>
+<path d="m31.553 21.002-9.7266 46.455h10.385l0.08398-0.39844 3.8535-18.422h3.4082c2.1628 0 3.6345 0.32007 4.3652 0.81055 1.3173 0.92299 2.6581 2.821 3.9199 5.7109 2.3528 5.428 3.93 9.4229 4.7246 11.949l0.11133 0.34961h11.146l-0.26953-0.68359c-2.5687-6.5047-4.9-11.546-7.0098-15.139l-4e-3 -4e-3c-0.91161-1.5193-1.9152-2.6683-2.9492-3.7031 4.3322-0.68676 7.7562-2.1545 10.02-4.5996h2e-3c2.4012-2.6156 3.6035-5.9547 3.6035-9.9199 0-2.7799-0.6186-5.1862-1.873-7.1777-1.2285-1.9829-2.8892-3.3724-4.9375-4.1133-2.0146-0.75672-4.7582-1.1152-8.2617-1.1152zm0.8125 1h19.779c3.4379 0 6.0865 0.36422 7.916 1.0527l0.0039 2e-3h2e-3c1.8378 0.66473 3.2998 1.8806 4.4277 3.7012v2e-3h2e-3c1.1418 1.8111 1.7207 4.0144 1.7207 6.6484 0 3.7656-1.1108 6.8141-3.3398 9.2422-2.2142 2.3922-5.5913 3.9045-10.207 4.4941l-1.084 0.13867 0.81445 0.72852c1.1523 1.0331 2.2489 2.4089 3.2832 4.1328 1.9832 3.3779 4.2134 8.2075 6.6504 14.312h-8.9513c-0.83715-2.6035-2.3339-6.4138-4.625-11.699-1.3007-2.9791-2.6877-5.0296-4.2637-6.1328l-0.0078-4e-3c-1.0482-0.70685-2.6728-0.98428-4.9297-0.98428h-4.2207l-3.9395 18.82h-8.3418zm6.9395 6.5957-2.75 13.217h5.5742c5.0428 0 8.3676-0.27309 10.156-0.92969 1.7315-0.62818 3.1187-1.6312 4.1094-2.9961 0.98122-1.3519 1.4902-2.8103 1.4902-4.3262 0-1.7891-0.78361-3.2417-2.2539-4.1465h-2e-3l-2e-3 -2e-3c-1.0365-0.62188-2.8418-0.81641-5.6211-0.81641zm0.8125 1h9.8887c2.7191 0 4.4883 0.30352 5.1055 0.67383 1.2132 0.74857 1.7734 1.775 1.7734 3.291 0 1.2953-0.42165 2.527-1.3008 3.7383-0.86921 1.1976-2.0661 2.0738-3.6406 2.6445h-2e-3v2e-3c-1.4773 0.5423-4.8094 0.86719-9.8125 0.86719h-4.3457z" color="#000000" fill="#000" style="-inkscape-stroke:none"/>
+</g>
+</g>
 </svg>

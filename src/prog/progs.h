@@ -1,7 +1,7 @@
 #pragma once
 
-#include "utils/layouts.h"
 #include "downloader.h"
+#include "utils/settings.h"
 
 // for handling program state specific things that occur in all states
 class ProgState {
@@ -13,21 +13,20 @@ protected:
 		string text;
 		int length;
 
-		Text(string str, int height, int margin = Label::defaultTextMargin);
+		Text(string str, int height);
 	};
 
-	static constexpr int popupLineHeight = 40;
-	static constexpr int tooltipHeight = 16;
-	static constexpr int lineHeight = 30;
-	static constexpr int topHeight = 40;
-	static constexpr int topSpacing = 10;
-	static constexpr int picSize = 40;
-	static constexpr int picMargin = 4;
-	static constexpr int contextMargin = 3;
+	int popupLineHeight;
+	int tooltipHeight;
+	int lineHeight;
+	int topHeight;
+	int topSpacing;
+	int picSize;
+	int picMargin;
 private:
-	static constexpr float cursorMoveFactor = 10.f;
-
+	int contextMargin;
 	uint maxTooltipLength;
+	float cursorMoveFactor;
 
 public:
 	ProgState();
@@ -65,16 +64,16 @@ public:
 	virtual void eventClosing() {}
 	void onResize();
 
-	virtual uptr<RootLayout> createLayout() = 0;
-	virtual uptr<Overlay> createOverlay();
-	static uptr<Popup> createPopupMessage(string msg, PCall ccal, string ctxt = "Okay", Label::Alignment malign = Label::Alignment::left);
-	static uptr<Popup> createPopupChoice(string msg, PCall kcal, PCall ccal, Label::Alignment malign = Label::Alignment::left);
-	static uptr<Context> createContext(vector<pair<string, PCall>>&& items, Widget* parent);
-	static uptr<Context> createComboContext(ComboBox* parent, PCall kcal);
+	virtual RootLayout* createLayout() = 0;
+	virtual Overlay* createOverlay();
+	Popup* createPopupMessage(string msg, PCall ccal, string ctxt = "Okay", Alignment malign = Alignment::left);
+	Popup* createPopupChoice(string msg, PCall kcal, PCall ccal, Alignment malign = Alignment::left);
+	Context* createContext(vector<pair<string, PCall>>&& items, Widget* parent);
+	Context* createComboContext(ComboBox* parent, PCall kcal);
 
-	static Rect calcTextContextRect(const vector<Widget*>& items, ivec2 pos, ivec2 size, int margin = contextMargin);
+	static Rect calcTextContextRect(const vector<Widget*>& items, ivec2 pos, ivec2 size, int margin);
 protected:
-	template <class T> static int findMaxLength(T pos, T end, int height, int margin = Label::defaultTextMargin);	// TODO: no margin parameter
+	template <class T> static int findMaxLength(T pos, T end, int height);
 	SDL_Texture* makeTooltip(const char* str);
 	SDL_Texture* makeTooltipL(const char* str);
 
@@ -90,24 +89,24 @@ inline ProgState::ProgState() {
 
 class ProgBooks : public ProgState {
 public:
-	virtual ~ProgBooks() override = default;
+	~ProgBooks() final = default;
 
-	virtual void eventEscape() override;
-	virtual void eventHide() override;
-	virtual void eventFileDrop(const fs::path& file) override;
+	void eventEscape() final;
+	void eventHide() final;
+	void eventFileDrop(const fs::path& file) final;
 
-	virtual uptr<RootLayout> createLayout() override;
+	RootLayout* createLayout() final;
 };
 
 class ProgPageBrowser : public ProgState {
 public:
-	virtual ~ProgPageBrowser() override = default;
+	~ProgPageBrowser() final = default;
 
-	virtual void eventEscape() override;
-	virtual void eventHide() override;
-	virtual void eventFileDrop(const fs::path& file) override;
+	void eventEscape() final;
+	void eventHide() final;
+	void eventFileDrop(const fs::path& file) final;
 
-	virtual uptr<RootLayout> createLayout() override;
+	RootLayout* createLayout() final;
 };
 
 class ProgReader : public ProgState {
@@ -117,35 +116,35 @@ private:
 	static constexpr float scrollFactor = 2.f;
 
 public:
-	virtual ~ProgReader() override = default;
+	~ProgReader() final = default;
 
-	virtual void eventEscape() override;
-	virtual void eventUp() override;
-	virtual void eventDown() override;
-	virtual void eventLeft() override;
-	virtual void eventRight() override;
-	virtual void eventScrollUp(float amt) override;
-	virtual void eventScrollDown(float amt) override;
-	virtual void eventScrollLeft(float amt) override;
-	virtual void eventScrollRight(float amt) override;
-	virtual void eventCenterView() override;
-	virtual void eventNextPage() override;
-	virtual void eventPrevPage() override;
-	virtual void eventZoomIn() override;
-	virtual void eventZoomOut() override;
-	virtual void eventZoomReset() override;
-	virtual void eventToStart() override;
-	virtual void eventToEnd() override;
-	virtual void eventNextDir() override;
-	virtual void eventPrevDir() override;
-	virtual void eventHide() override;
-	virtual void eventClosing() override;
+	void eventEscape() final;
+	void eventUp() final;
+	void eventDown() final;
+	void eventLeft() final;
+	void eventRight() final;
+	void eventScrollUp(float amt) final;
+	void eventScrollDown(float amt) final;
+	void eventScrollLeft(float amt) final;
+	void eventScrollRight(float amt) final;
+	void eventCenterView() final;
+	void eventNextPage() final;
+	void eventPrevPage() final;
+	void eventZoomIn() final;
+	void eventZoomOut() final;
+	void eventZoomReset() final;
+	void eventToStart() final;
+	void eventToEnd() final;
+	void eventNextDir() final;
+	void eventPrevDir() final;
+	void eventHide() final;
+	void eventClosing() final;
 
-	virtual uptr<RootLayout> createLayout() override;
-	virtual uptr<Overlay> createOverlay() override;
+	RootLayout* createLayout() final;
+	Overlay* createOverlay() final;
 
 private:
-	int modifySpeed(float value);	// change scroll speed depending on pressed bindings
+	static int modifySpeed(float value);	// change scroll speed depending on pressed bindings
 };
 
 #ifdef DOWNLOADER
@@ -159,11 +158,11 @@ public:
 	vector<string> resultUrls, chapterUrls;
 
 public:
-	virtual ~ProgDownloader() override = default;
+	~ProgDownloader() final = default;
 
-	virtual void eventEscape() override;
+	void eventEscape() final;
 
-	virtual uptr<RootLayout> createLayout() override;
+	RootLayout* createLayout() final;
 	Comic curInfo() const;
 	void printResults(vector<pairStr>&& comics);
 	void printInfo(vector<pairStr>&& chaps);
@@ -174,11 +173,11 @@ public:
 	ScrollArea* list;
 
 public:
-	virtual ~ProgDownloads() override = default;
+	~ProgDownloads() final = default;
 
-	virtual void eventEscape() override;
+	void eventEscape() final;
 
-	virtual uptr<RootLayout> createLayout() override;
+	RootLayout* createLayout() final;
 };
 #endif
 
@@ -193,14 +192,14 @@ private:
 	CheckBox* showHidden;
 
 public:
-	virtual ~ProgSettings() override = default;
+	~ProgSettings() final = default;
 
-	virtual void eventEscape() override;
-	virtual void eventFullscreen() override;
-	virtual void eventHide() override;
-	virtual void eventFileDrop(const fs::path& file) override;
+	void eventEscape() final;
+	void eventFullscreen() final;
+	void eventHide() final;
+	void eventFileDrop(const fs::path& file) final;
 
-	virtual uptr<RootLayout> createLayout() override;
+	RootLayout* createLayout() final;
 
 	Widget* createLimitEdit();
 };
@@ -209,11 +208,10 @@ class ProgSearchDir : public ProgState {
 public:
 	ScrollArea* list;
 
-public:
-	virtual ~ProgSearchDir() override = default;
+	~ProgSearchDir() final = default;
 
-	virtual void eventEscape() override;
-	virtual void eventHide() override;
+	void eventEscape() final;
+	void eventHide() final;
 
-	virtual uptr<RootLayout> createLayout() override;
+	RootLayout* createLayout() final;
 };

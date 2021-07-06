@@ -1,6 +1,7 @@
 #pragma once
 
 #include "windowSys.h"
+#include "prog/program.h"
 
 // class that makes accessing stuff easier and holds command line arguments
 class World {
@@ -87,22 +88,6 @@ inline bool World::hasFlag(const char* key) {
 inline const char* World::getOpt(const char* key) {
 	umap<string, string>::const_iterator it = opts.find(key);
 	return it != opts.end() ? it->second.c_str() : nullptr;
-}
-
-template <class C, class F>
-void World::setArgs(int argc, C** argv, F conv) {
-	for (int i = 0; i < argc; i++) {
-		if (argv[i][0] == '-') {
-			if (string key = conv(argv[i] + 1); checkOpts.count(key) && i + 1 < argc)
-				opts.emplace(key, conv(argv[++i]));
-			else if (checkFlags.count(key))
-				flags.insert(key);
-			else
-				vals.push_back(conv(argv[i]));
-		} else
-			vals.push_back(conv(argv[i]));
-	}
-	vals.shrink_to_fit();
 }
 
 template <class F, class... A>

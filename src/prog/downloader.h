@@ -1,14 +1,19 @@
 #pragma once
 
-#ifdef DOWNLOADER
 #include "utils/utils.h"
-#include <curl/curl.h>
-#include <libxml/HTMLparser.h>
-#include <libxml/HTMLtree.h>
+#ifdef DOWNLOADER
 #include <deque>
+#include <mutex>
+#include <thread>
 
 using std::deque;
-using cofft = curl_off_t;
+using cofft = llong;	// curl_off_t
+using CURL = void;
+using xmlChar = uchar;
+struct _xmlDoc;
+using xmlDoc = _xmlDoc;
+struct _xmlNode;
+using xmlNode = _xmlNode;
 
 enum class DownloadState : uint8 {
 	run,
@@ -26,27 +31,28 @@ struct Comic {
 class WebSource {
 public:
 	enum Type : uint8 {
-		MANGAHERE,
-		MANGAMASTER,
-		NHENTAI
+		mangahere,
+		mangamaster,
+		nhentai
 	};
-	static constexpr array<const char*, NHENTAI+1> sourceNames = {
+	static constexpr array<const char*, nhentai + 1> sourceNames = {
 		"MangaHere",
 		"MangaMaster",
 		"nhentai"
 	};
-	static constexpr array<const char*, NHENTAI+1> sourceUrls = {
+	static constexpr array<const char*, nhentai + 1> sourceUrls = {
 		"https://www.mangahere.cc",
 		"http://www.mangamaster.net",
 		"https://nhentai.net"
 	};
 
+protected:
 	CURL* curlMain;			// for downloading html
-	SDL_mutex* mainLock;	// lock before using curlMain
+	std::mutex mainLock;	// lock before using curlMain
 	CURL* curlFile;			// handle for downloading files in dlQueue
 
 public:
-	WebSource(CURL* curlm, SDL_mutex* mlock, CURL* cfile);
+	WebSource(CURL* curlm, CURL* cfile);
 	virtual ~WebSource() = default;
 
 	const char* name() const;
@@ -60,7 +66,7 @@ public:
 protected:
 	xmlDoc* downloadHtml(const string& url);
 	DownloadState downloadFile(const string& url, const fs::path& drc);	// returns non-zero if progress got interrupted
-	string toUrl(string str);
+	string toUrl(string_view str);
 
 	static xmlNode* findElement(xmlNode* node, const char* tag);
 	static vector<xmlNode*> findElements(xmlNode* node, const char* tag);
@@ -70,6 +76,8 @@ protected:
 	static string getAttr(xmlNode* node, const char* attr);
 	static bool hasAttr(xmlNode* node, const char* attr, const char* val);
 	static bool namecmp(const xmlChar* name, const char* str);
+
+	friend class Downloader;
 };
 
 inline const char* WebSource::name() const {
@@ -87,34 +95,34 @@ inline bool WebSource::namecmp(const xmlChar* name, const char* str) {
 class Mangahere : public WebSource {
 public:
 	using WebSource::WebSource;
-	virtual ~Mangahere() override = default;
+	~Mangahere() final = default;
 
-	virtual Type source() const override;
-	virtual vector<pairStr> query(const string& text) override;
-	virtual vector<pairStr> getChapters(const string& url) override;
-	virtual DownloadState downloadPictures(const string& url, const fs::path& drc) override;
+	Type source() const final;
+	vector<pairStr> query(const string& text) final;
+	vector<pairStr> getChapters(const string& url) final;
+	DownloadState downloadPictures(const string& url, const fs::path& drc) final;
 };
 
 class Mangamaster : public WebSource {
 public:
 	using WebSource::WebSource;
-	virtual ~Mangamaster() override = default;
+	~Mangamaster() final = default;
 
-	virtual Type source() const override;
-	virtual vector<pairStr> query(const string& text) override;
-	virtual vector<pairStr> getChapters(const string& url) override;
-	virtual DownloadState downloadPictures(const string& url, const fs::path& drc) override;
+	Type source() const final;
+	vector<pairStr> query(const string& text) final;
+	vector<pairStr> getChapters(const string& url) final;
+	DownloadState downloadPictures(const string& url, const fs::path& drc) final;
 };
 
 class Nhentai : public WebSource {
 public:
 	using WebSource::WebSource;
-	virtual ~Nhentai() override = default;
+	~Nhentai() final = default;
 
-	virtual Type source() const override;
-	virtual vector<pairStr> query(const string& text) override;
-	virtual vector<pairStr> getChapters(const string& url) override;
-	virtual DownloadState downloadPictures(const string& url, const fs::path& drc) override;
+	Type source() const final;
+	vector<pairStr> query(const string& text) final;
+	vector<pairStr> getChapters(const string& url) final;
+	DownloadState downloadPictures(const string& url, const fs::path& drc) final;
 
 private:
 	string getPictureUrl(const string& url);
@@ -122,13 +130,13 @@ private:
 
 class Downloader {
 public:
-	SDL_mutex* queueLock;	// lock when using dlQueue
+	std::mutex queueLock;	// lock when using dlQueue
 private:
 	uptr<WebSource> source;	// for downloading and interpreting htmls
-	SDL_Thread* dlProc;		// thread for downloading files in dlQueue
+	std::thread dlProc;		// thread for downloading files in dlQueue
 	deque<Comic> dlQueue;	// current downloads
 	mvec2 dlProg;			// download progress of current comic
-	DownloadState dlState;	// for controlling dlProc
+	DownloadState dlState = DownloadState::stop;	// for controlling dlProc
 
 public:
 	Downloader();
@@ -137,7 +145,7 @@ public:
 	WebSource* getSource() const;
 	void setSource(WebSource::Type type);
 	const deque<Comic>& getDlQueue() const;
-	DownloadState getDlState();
+	DownloadState getDlState() const;
 	const mvec2& getDlProg() const;
 	bool downloadComic(const Comic& info);	// info.chapters needs to be filled with names and urls for getPictures
 	bool startProc();
@@ -149,8 +157,8 @@ public:
 private:
 	static sizet writeText(char* ptr, sizet size, sizet nmemb, void* userdata);
 	static int progress(void* clientp, cofft dltotal, cofft dlnow, cofft ultotal, cofft ulnow);
-	static int downloadChaptersThread(void* data);
-	DownloadState downloadChapters(vector<pairStr> chaps, const fs::path& bdrc);	// returns non-zero if interrupted
+	int downloadChaptersThread();
+	DownloadState downloadChapters(const vector<pairStr>& chaps, const fs::path& bdrc);	// returns non-zero if interrupted
 };
 
 inline WebSource* Downloader::getSource() const {
@@ -161,16 +169,23 @@ inline const deque<Comic>& Downloader::getDlQueue() const {
 	return dlQueue;
 }
 
-inline DownloadState Downloader::getDlState() {
+inline DownloadState Downloader::getDlState() const {
 	return dlState;
 }
 
 inline const mvec2& Downloader::getDlProg() const {
 	return dlProg;
 }
+
+inline void Downloader::finishProc() {
+	dlProc.join();
+}
+
 #else
+
 class Downloader {
 public:
 	void interruptProc() {}
 };
+
 #endif

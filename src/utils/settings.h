@@ -13,6 +13,12 @@ enum class Color : uint8 {
 	texture
 };
 
+enum class Alignment : uint8 {
+	left,
+	center,
+	right
+};
+
 class Direction {
 public:
 	enum Dir : uint8 {
@@ -21,7 +27,7 @@ public:
 		left,
 		right
 	};
-	static constexpr array<const char*, right+1> names = {
+	static constexpr array<const char*, right + 1> names = {
 		"Up",
 		"Down",
 		"Left",
@@ -42,27 +48,27 @@ public:
 	constexpr bool negative() const;
 };
 
-inline constexpr Direction::Direction(Dir direction) :
+constexpr Direction::Direction(Dir direction) :
 	dir(direction)
 {}
 
-inline constexpr Direction::operator Dir() const {
+constexpr Direction::operator Dir() const {
 	return dir;
 }
 
-inline constexpr bool Direction::vertical() const {
+constexpr bool Direction::vertical() const {
 	return dir <= down;
 }
 
-inline constexpr bool Direction::horizontal() const {
+constexpr bool Direction::horizontal() const {
 	return dir >= left;
 }
 
-inline constexpr bool Direction::positive() const {
+constexpr bool Direction::positive() const {
 	return dir & 1;
 }
 
-inline constexpr bool Direction::negative() const {
+constexpr bool Direction::negative() const {
 	return !positive();
 }
 
@@ -100,7 +106,7 @@ public:
 		scrollFast,
 		scrollSlow
 	};
-	static constexpr array<const char*, sizet(Type::scrollSlow)+1> names = {
+	static constexpr array<const char*, sizet(Type::scrollSlow) + 1> names = {
 		"up",
 		"down",
 		"left",
@@ -144,8 +150,44 @@ public:
 		ASG_GAXIS_P = 0x40,
 		ASG_GAXIS_N = 0x80
 	};
-
 	static constexpr Type holders = Type::scrollUp;
+
+	static inline const umap<uint8, const char*> hatNames = {
+		pair(SDL_HAT_CENTERED, "Center"),
+		pair(SDL_HAT_UP, "Up"),
+		pair(SDL_HAT_RIGHT, "Right"),
+		pair(SDL_HAT_DOWN, "Down"),
+		pair(SDL_HAT_LEFT, "Left"),
+		pair(SDL_HAT_RIGHTUP, "Right-Up"),
+		pair(SDL_HAT_RIGHTDOWN, "Right-Down"),
+		pair(SDL_HAT_LEFTDOWN, "Left-Down"),
+		pair(SDL_HAT_LEFTUP, "Left-Up")
+	};
+	static constexpr array<const char*, SDL_CONTROLLER_BUTTON_MAX> gbuttonNames = {
+		"A",
+		"B",
+		"X",
+		"Y",
+		"Back",
+		"Guide",
+		"Start",
+		"LS",
+		"RS",
+		"LB",
+		"RB",
+		"Up",
+		"Down",
+		"Left",
+		"Right"
+	};
+	static constexpr array<const char*, SDL_CONTROLLER_AXIS_MAX> gaxisNames = {
+		"LX",
+		"LY",
+		"RX",
+		"RY",
+		"LT",
+		"RT"
+	};
 
 	union {
 		SBCall bcall;
@@ -295,10 +337,23 @@ public:
 		count,
 		size
 	};
-	static constexpr array<const char*, sizet(Type::size)+1> names = {
+	static constexpr array<const char*, sizet(Type::size) + 1> names = {
 		"none",
 		"count",
 		"size"
+	};
+
+	static constexpr array<uptrt, 4> sizeFactors = {
+		1,
+		1'000,
+		1'000'000,
+		1'000'000'000
+	};
+	static constexpr array<char, 4> sizeLetters = {
+		'B',
+		'K',
+		'M',
+		'G'
 	};
 
 	Type type;
@@ -311,14 +366,18 @@ public:
 	PicLim(Type ltype = Type::none, uptrt cnt = defaultCount);
 
 	uptrt getCount() const;
-	void setCount(const string& str);
+	void setCount(string_view str);
 	uptrt getSize() const;
-	void setSize(const string& str);
-	void set(const string& str);
+	void setSize(string_view str);
+	void set(string_view str);
+
+	static sizet memSizeMag(uptrt num);
+	static string memoryString(uptrt num, sizet mag);
+	static string memoryString(uptrt num);
 
 private:
-	static uptrt toCount(const string& str);
-	static uptrt toSize(const string& str);
+	static uptrt toCount(string_view str);
+	static uptrt toSize(string_view str);
 	static uptrt defaultSize();
 };
 
@@ -326,7 +385,7 @@ inline uptrt PicLim::getCount() const {
 	return count;
 }
 
-inline void PicLim::setCount(const string& str) {
+inline void PicLim::setCount(string_view str) {
 	count = toCount(str);
 }
 
@@ -334,12 +393,16 @@ inline uptrt PicLim::getSize() const {
 	return size;
 }
 
-inline void PicLim::setSize(const string& str) {
+inline void PicLim::setSize(string_view str) {
 	size = toSize(str);
 }
 
 inline uptrt PicLim::defaultSize() {
-	return uptrt(uint(SDL_GetSystemRAM()) / 2) * 1'000'000;
+	return SDL_GetSystemRAM() / 2 * 1'000'000;
+}
+
+inline string PicLim::memoryString(uptrt num) {
+	return memoryString(num, memSizeMag(num));
 }
 
 class Settings {
@@ -350,18 +413,40 @@ public:
 	static constexpr char defaultFont[] = "BrisaSans";
 	static constexpr char defaultDirLib[] = "library";
 
-	bool maximized, fullscreen;
-	bool showHidden;
-	Direction direction;
+	static constexpr array<SDL_Color, sizet(Color::texture) + 1> defaultColors = {
+		SDL_Color{ 10, 10, 10, 255 },		// background
+		SDL_Color{ 90, 90, 90, 255 },		// normal
+		SDL_Color{ 60, 60, 60, 255 },		// dark
+		SDL_Color{ 120, 120, 120, 255 },	// light
+		SDL_Color{ 105, 105, 105, 255 },	// select
+		SDL_Color{ 75, 75, 75, 255 },		// tooltip
+		SDL_Color{ 210, 210, 210, 255 },	// text
+		SDL_Color{ 210, 210, 210, 255 }		// texture
+	};
+	static constexpr array<const char*, defaultColors.size()> colorNames = {
+		"background",
+		"normal",
+		"dark",
+		"light",
+		"select",
+		"tooltip",
+		"text",
+		"texture"
+	};
+
+	bool maximized = false;
+	bool fullscreen = false;
+	bool showHidden = false;
+	Direction direction = Direction::down;
 	PicLim picLim;
-	float zoom;
-	int spacing;
-	ivec2 resolution;
+	float zoom = defaultZoom;
+	int spacing = defaultSpacing;
+	ivec2 resolution = { 800, 600 };
 	string renderer;
-	string font;
-	vec2 scrollSpeed;
+	string font = defaultFont;
+	vec2 scrollSpeed = { 1600.f, 1600.f };
 private:
-	int deadzone;
+	int deadzone = 256;
 	string theme;
 	fs::path dirLib;
 
@@ -369,11 +454,11 @@ public:
 	Settings(const fs::path& dirSets, vector<string>&& themes);
 
 	const string& getTheme() const;
-	const string& setTheme(const string& name, vector<string>&& themes);
+	const string& setTheme(string_view name, vector<string>&& themes);
 	const fs::path& getDirLib() const;
 	const fs::path& setDirLib(const fs::path& drc, const fs::path& dirSets);
 
-	int getRendererIndex();
+	pair<int, uint32> getRendererInfo();
 	string scrollSpeedString() const;
 	int getDeadzone() const;
 	void setDeadzone(int val);
@@ -388,7 +473,7 @@ inline const fs::path& Settings::getDirLib() const {
 }
 
 inline string Settings::scrollSpeedString() const {
-	return trimZero(to_string(scrollSpeed.x)) + ' ' + trimZero(to_string(scrollSpeed.y));
+	return toStr(scrollSpeed.x) + ' ' + toStr(scrollSpeed.y);
 }
 
 inline int Settings::getDeadzone() const {

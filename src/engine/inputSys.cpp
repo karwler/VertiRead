@@ -1,4 +1,9 @@
+#include "inputSys.h"
+#include "drawSys.h"
+#include "fileSys.h"
+#include "scene.h"
 #include "world.h"
+#include "utils/widgets.h"
 
 // CONTROLLER
 
@@ -18,10 +23,7 @@ void InputSys::Controller::close() {
 // INPUT SYS
 
 InputSys::InputSys() :
-	mouseLast(false),
-	bindings(World::fileSys()->getBindings()),
-	mouseMove(0),
-	moveTime(0)
+	bindings(World::fileSys()->getBindings())
 {
 	reloadControllers();
 }
@@ -31,17 +33,19 @@ InputSys::~InputSys() {
 		it.close();
 }
 
-void InputSys::eventMouseMotion(const SDL_MouseMotionEvent& motion, bool mouse) {
-	mouseLast = mouse;
+void InputSys::eventMouseMotion(const SDL_MouseMotionEvent& motion) {
+	mouseLast = motion.type == SDL_MOUSEMOTION;
 	mouseMove = ivec2(motion.xrel, motion.yrel);
 	moveTime = motion.timestamp;
 	World::scene()->onMouseMove(ivec2(motion.x, motion.y), mouseMove);
 }
 
-void InputSys::eventMouseButtonDown(const SDL_MouseButtonEvent& button, bool mouse) {
-	if (mouseLast = mouse; button.button < SDL_BUTTON_X1)
+void InputSys::eventMouseButtonDown(const SDL_MouseButtonEvent& button) {
+	mouseLast = button.type == SDL_MOUSEBUTTONDOWN;
+	switch (button.button) {
+	case SDL_BUTTON_LEFT: case SDL_BUTTON_MIDDLE: case SDL_BUTTON_RIGHT:
 		World::scene()->onMouseDown(ivec2(button.x, button.y), button.button, button.clicks);
-	else switch (button.button) {
+		break;
 	case SDL_BUTTON_X1:
 		World::srun(bindings[uint8(Binding::Type::escape)].bcall);
 		break;
@@ -50,8 +54,8 @@ void InputSys::eventMouseButtonDown(const SDL_MouseButtonEvent& button, bool mou
 	}
 }
 
-void InputSys::eventMouseButtonUp(const SDL_MouseButtonEvent& button, bool mouse) {
-	if (mouseLast = mouse; button.button < SDL_BUTTON_X1)
+void InputSys::eventMouseButtonUp(const SDL_MouseButtonEvent& button) {
+	if (mouseLast = button.type == SDL_MOUSEBUTTONUP; button.button < SDL_BUTTON_X1)
 		World::scene()->onMouseUp(ivec2(button.x, button.y), button.button, button.clicks);
 }
 
@@ -60,117 +64,139 @@ void InputSys::eventMouseWheel(const SDL_MouseWheelEvent& wheel) {
 	World::scene()->onMouseWheel(ivec2(wheel.x, -wheel.y));
 }
 
-void InputSys::eventKeypress(const SDL_KeyboardEvent& key) {
-	if (World::scene()->capture)	// different behavior when capturing or not
-		World::scene()->capture->onKeypress(key.keysym);
+void InputSys::eventKeypress(const SDL_KeyboardEvent& key) const {
+	if (World::scene()->getCapture())	// different behavior when capturing or not
+		World::scene()->getCapture()->onKeypress(key.keysym);
 	else
 		checkBindingsK(key.keysym.scancode, key.repeat);
 }
 
-void InputSys::eventJoystickButton(const SDL_JoyButtonEvent& jbutton) {
+void InputSys::eventJoystickButton(const SDL_JoyButtonEvent& jbutton) const {
 	if (SDL_GameControllerFromInstanceID(jbutton.which))	// don't execute if there can be a game controller event
 		return;
 
-	if (World::scene()->capture)
-		World::scene()->capture->onJButton(jbutton.button);
+	if (World::scene()->getCapture())
+		World::scene()->getCapture()->onJButton(jbutton.button);
 	else
 		checkBindingsB(jbutton.button);
 }
 
-void InputSys::eventJoystickHat(const SDL_JoyHatEvent& jhat) {
+void InputSys::eventJoystickHat(const SDL_JoyHatEvent& jhat) const {
 	if (jhat.value == SDL_HAT_CENTERED || SDL_GameControllerFromInstanceID(jhat.which))
 		return;
 
-	if (World::scene()->capture)
-		World::scene()->capture->onJHat(jhat.hat, jhat.value);
+	if (World::scene()->getCapture())
+		World::scene()->getCapture()->onJHat(jhat.hat, jhat.value);
 	else
 		checkBindingsH(jhat.hat, jhat.value);
 }
 
-void InputSys::eventJoystickAxis(const SDL_JoyAxisEvent& jaxis) {
+void InputSys::eventJoystickAxis(const SDL_JoyAxisEvent& jaxis) const {
 	int value = checkAxisValue(jaxis.value);
 	if (!value || SDL_GameControllerFromInstanceID(jaxis.which))
 		return;
 
-	if (World::scene()->capture)
-		World::scene()->capture->onJAxis(jaxis.axis, value > 0);
+	if (World::scene()->getCapture())
+		World::scene()->getCapture()->onJAxis(jaxis.axis, value > 0);
 	else
 		checkBindingsA(jaxis.axis, value > 0);
 }
 
-void InputSys::eventGamepadButton(const SDL_ControllerButtonEvent& gbutton) {
-	if (World::scene()->capture)
-		World::scene()->capture->onGButton(SDL_GameControllerButton(gbutton.button));
+void InputSys::eventGamepadButton(const SDL_ControllerButtonEvent& gbutton) const {
+	if (World::scene()->getCapture())
+		World::scene()->getCapture()->onGButton(SDL_GameControllerButton(gbutton.button));
 	else
 		checkBindingsG(SDL_GameControllerButton(gbutton.button));
 }
 
-void InputSys::eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis) {
+void InputSys::eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis) const {
 	int value = checkAxisValue(gaxis.value);
 	if (!value)
 		return;
 
-	if (World::scene()->capture)
-		World::scene()->capture->onGAxis(SDL_GameControllerAxis(gaxis.axis), value > 0);
+	if (World::scene()->getCapture())
+		World::scene()->getCapture()->onGAxis(SDL_GameControllerAxis(gaxis.axis), value > 0);
 	else
 		checkBindingsX(SDL_GameControllerAxis(gaxis.axis), value > 0);
 }
 
 void InputSys::eventFingerMove(const SDL_TouchFingerEvent& fin) {
 	vec2 size = World::drawSys()->viewport().size();
-	eventMouseMotion({ fin.type, fin.timestamp, World::winSys()->windowID(), SDL_TOUCH_MOUSEID, SDL_BUTTON_LMASK, int(fin.x * size.x), int(fin.y * size.y), int(fin.dx * size.x), int(fin.dy * size.y) }, false);
+	SDL_MouseMotionEvent event{};
+	event.type = fin.type;
+	event.timestamp = fin.timestamp;
+	event.windowID = fin.windowID;
+	event.which = SDL_TOUCH_MOUSEID;
+	event.state = SDL_BUTTON_LMASK;
+	event.x = int(fin.x * size.x);
+	event.y = int(fin.y * size.y);
+	event.x = int(fin.dx * size.x);
+	event.y = int(fin.dy * size.y);
+	eventMouseMotion(event);
 }
 
 void InputSys::eventFingerDown(const SDL_TouchFingerEvent& fin) {
-	ivec2 pos = vec2(fin.x, fin.y) * vec2(World::drawSys()->viewport().size());
-	eventMouseButtonDown({ fin.type, fin.timestamp, World::winSys()->windowID(), SDL_TOUCH_MOUSEID, SDL_BUTTON_LEFT, SDL_PRESSED, 1, 0, pos.x, pos.y }, false);
+	eventMouseButtonDown(toMouseEvent(fin, SDL_PRESSED, World::drawSys()->viewport().size()));
 }
 
 void InputSys::eventFingerUp(const SDL_TouchFingerEvent& fin) {
-	ivec2 pos = vec2(fin.x, fin.y) * vec2(World::drawSys()->viewport().size());
-	eventMouseButtonUp({ fin.type, fin.timestamp, World::winSys()->windowID(), SDL_TOUCH_MOUSEID, SDL_BUTTON_LEFT, SDL_RELEASED, 1, 0, pos.x, pos.y }, false);
+	eventMouseButtonUp(toMouseEvent(fin, SDL_RELEASED, World::drawSys()->viewport().size()));
 	World::scene()->updateSelect(ivec2(-1));
+}
+
+SDL_MouseButtonEvent InputSys::toMouseEvent(const SDL_TouchFingerEvent& fin, uint8 state, vec2 winSize) {
+	SDL_MouseButtonEvent event{};
+	event.type = fin.type;
+	event.timestamp = fin.timestamp;
+	event.windowID = fin.windowID;
+	event.which = SDL_TOUCH_MOUSEID;
+	event.button = SDL_BUTTON_LEFT;
+	event.state = state;
+	event.clicks = 1;
+	event.x = int(fin.x * winSize.x);
+	event.y = int(fin.y * winSize.y);
+	return event;
 }
 
 void InputSys::tick() const {
 	// handle key hold
-	for (sizet i = uint8(Binding::holders); i < bindings.size(); i++)
+	for (sizet i = uint8(Binding::holders); i < bindings.size(); ++i)
 		if (float amt = 1.f; isPressed(bindings[i], amt))
 			World::srun(bindings[i].acall, amt);
 }
 
 void InputSys::checkBindingsK(SDL_Scancode key, uint8 repeat) const {
-	for (uint8 i = 0, e = uint8(repeat ? Binding::Type::right : Binding::holders); i < e; i++)
+	for (uint8 i = 0, e = uint8(repeat ? Binding::Type::right : Binding::holders); i < e; ++i)
 		if (bindings[i].keyAssigned() && bindings[i].getKey() == key)
 			World::srun(bindings[i].bcall);
 }
 
 void InputSys::checkBindingsB(uint8 jbutton) const {
-	for (uint8 i = 0; i < uint8(Binding::holders); i++)
+	for (uint8 i = 0; i < uint8(Binding::holders); ++i)
 		if (bindings[i].jbuttonAssigned() && bindings[i].getJctID() == jbutton)
 			World::srun(bindings[i].bcall);
 }
 
 void InputSys::checkBindingsH(uint8 jhat, uint8 val) const {
-	for (uint8 i = 0; i < uint8(Binding::holders); i++)
+	for (uint8 i = 0; i < uint8(Binding::holders); ++i)
 		if (bindings[i].jhatAssigned() && bindings[i].getJctID() == jhat && bindings[i].getJhatVal() == val)
 			World::srun(bindings[i].bcall);
 }
 
 void InputSys::checkBindingsA(uint8 jaxis, bool positive) const {
-	for (uint8 i = 0; i < uint8(Binding::holders); i++)
+	for (uint8 i = 0; i < uint8(Binding::holders); ++i)
 		if (bindings[i].jposAxisAssigned() == positive && bindings[i].getJctID() == jaxis)
 			World::srun(bindings[i].bcall);
 }
 
 void InputSys::checkBindingsG(SDL_GameControllerButton gbutton) const {
-	for (uint8 i = 0; i < uint8(Binding::holders); i++)
+	for (uint8 i = 0; i < uint8(Binding::holders); ++i)
 		if (bindings[i].gbuttonAssigned() && bindings[i].getGbutton() == gbutton)
 			World::srun(bindings[i].bcall);
 }
 
 void InputSys::checkBindingsX(SDL_GameControllerAxis gaxis, bool positive) const {
-	for (uint8 i = 0; i < uint8(Binding::holders); i++)
+	for (uint8 i = 0; i < uint8(Binding::holders); ++i)
 		if (bindings[i].gposAxisAssigned() == positive && bindings[i].getGaxis() == gaxis)
 			World::srun(bindings[i].bcall);
 }
@@ -202,7 +228,7 @@ bool InputSys::isPressed(const Binding& abind, float& amt) const {
 bool InputSys::isPressedH(uint8 jhat, uint8 val) const {
 	for (const Controller& it : controllers)
 		if (!it.gamepad)
-			for (int i = 0; i < SDL_JoystickNumHats(it.joystick); i++)
+			for (int i = 0; i < SDL_JoystickNumHats(it.joystick); ++i)
 				if (jhat == i && SDL_JoystickGetHat(it.joystick, i) == val)
 					return true;
 	return false;
@@ -225,7 +251,7 @@ int InputSys::getAxisG(SDL_GameControllerAxis gaxis) const {
 }
 
 void InputSys::resetBindings() {
-	for (sizet i = 0; i < bindings.size(); i++)
+	for (sizet i = 0; i < bindings.size(); ++i)
 		bindings[i].reset(Binding::Type(i));
 }
 
@@ -234,7 +260,7 @@ void InputSys::reloadControllers() {
 		it.close();
 	controllers.clear();
 
-	for (int i = 0; i < SDL_NumJoysticks(); i++) {
+	for (int i = 0; i < SDL_NumJoysticks(); ++i) {
 		if (Controller ctr; ctr.open(i))
 			controllers.push_back(ctr);
 		else
@@ -247,9 +273,16 @@ int InputSys::checkAxisValue(int value) const {
 }
 
 void InputSys::simulateMouseMove() {
-	if (ivec2 pos; mouseLast) {
-		uint32 state = SDL_GetMouseState(&pos.x, &pos.y);
-		eventMouseMotion({ SDL_MOUSEMOTION, SDL_GetTicks(), World::winSys()->windowID(), 0, state, pos.x, pos.y, 0, 0 }, mouseLast);
-	} else
-		eventMouseMotion({ SDL_FINGERMOTION, SDL_GetTicks(), World::winSys()->windowID(), SDL_TOUCH_MOUSEID, 0, -1, -1, 0, 0 }, mouseLast);
+	SDL_MouseMotionEvent event{};
+	event.timestamp = SDL_GetTicks();
+	if (mouseLast) {
+		event.type = SDL_MOUSEMOTION;
+		event.state = SDL_GetMouseState(&event.x, &event.y);
+	} else {
+		event.type = SDL_FINGERMOTION;
+		event.which = SDL_TOUCH_MOUSEID;
+		event.x = INT_MIN;
+		event.y = INT_MIN;
+	}
+	eventMouseMotion(event);
 }

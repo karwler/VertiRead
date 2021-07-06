@@ -1,4 +1,9 @@
+#include "scene.h"
+#include "drawSys.h"
+#include "inputSys.h"
 #include "world.h"
+#include "prog/progs.h"
+#include "utils/layouts.h"
 
 // CLICK STAMP
 
@@ -10,10 +15,12 @@ ClickStamp::ClickStamp(Widget* wgt, ScrollArea* sarea, ivec2 cursPos) :
 
 // SCENE
 
-Scene::Scene() :
-	select(nullptr),
-	capture(nullptr)
-{}
+Scene::~Scene() {
+	delete layout;
+	delete popup;
+	delete overlay;
+	delete context;
+}
 
 void Scene::tick(float dSec) {
 	layout->tick(dSec);
@@ -53,7 +60,7 @@ void Scene::onMouseDown(ivec2 mPos, uint8 mBut, uint8 mCnt) {
 	if (uint8 bid = mBut - 1; mCnt == 2 && select && stamps[bid].widget == select && cursorInClickRange(mPos, mBut) && select->hasDoubleclick())
 		select->onDoubleClick(mPos, mBut);
 	else {
-		stamps[mBut-1] = ClickStamp(select, getSelectedScrollArea(), mPos);
+		stamps[mBut - 1] = ClickStamp(select, getSelectedScrollArea(), mPos);
 		if (stamps[bid].area)	// area goes first so widget can overwrite it's capture
 			stamps[bid].area->onHold(mPos, mBut);
 		if (stamps[bid].widget != stamps[bid].area)
@@ -64,7 +71,7 @@ void Scene::onMouseDown(ivec2 mPos, uint8 mBut, uint8 mCnt) {
 void Scene::onMouseUp(ivec2 mPos, uint8 mBut, uint8 mCnt) {
 	if (capture)
 		capture->onUndrag(mBut);
-	if (select && stamps[mBut-1].widget == select && cursorInClickRange(mPos, mBut) && (mCnt != 2 || !select->hasDoubleclick()))
+	if (select && stamps[mBut - 1].widget == select && cursorInClickRange(mPos, mBut) && (mCnt != 2 || !select->hasDoubleclick()))
 		select->onClick(mPos, mBut);
 }
 
@@ -81,9 +88,18 @@ void Scene::onMouseLeave() {
 		it.widget = it.area = nullptr;
 }
 
-void Scene::onText(const char* str) {
-	if (capture)
-		capture->onText(str);
+void Scene::onCompose(string_view str) {
+	if (capture) {
+		capture->onCompose(str, captureLen);
+		captureLen = str.length();
+	}
+}
+
+void Scene::onText(string_view str) {
+	if (capture) {
+		capture->onText(str, captureLen);
+		captureLen = 0;
+	}
 }
 
 void Scene::onResize() {
@@ -99,27 +115,38 @@ void Scene::onResize() {
 
 void Scene::resetLayouts() {
 	// clear scene
+#if !SDL_TTF_VERSION_ATLEAST(2, 0, 18)
 	World::drawSys()->clearFonts();
+#endif
 	onMouseLeave();	// reset stamps
 	select = nullptr;
 	capture = nullptr;
-	popup.reset();
-	context.reset();
+	delete layout;
+	delete popup;
+	popup = nullptr;
+	delete overlay;
+	delete context;
+	context = nullptr;
 
 	// set up new widgets
 	layout = World::state()->createLayout();
 	overlay = World::state()->createOverlay();
-
 	layout->postInit();
 	if (overlay)
 		overlay->postInit();
 	World::inputSys()->simulateMouseMove();
 }
 
-void Scene::setPopup(uptr<Popup>&& newPopup, Widget* newCapture) {
+void Scene::setCapture(Widget* inter) {
+	capture = inter;
+	captureLen = 0;
+}
+
+void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
 	if (context)
 		setContext(nullptr);
-	if (popup = std::move(newPopup); popup)
+	delete popup;
+	if (popup = newPopup; popup)
 		popup->postInit();
 	if (capture = newCapture; capture)
 		capture->onClick(mousePos(), SDL_BUTTON_LEFT);
@@ -128,10 +155,11 @@ void Scene::setPopup(uptr<Popup>&& newPopup, Widget* newCapture) {
 	updateSelect();
 }
 
-void Scene::setContext(uptr<Context>&& newContext) {
+void Scene::setContext(Context* newContext) {
 	if (context && context->owner() && !World::inputSys()->mouseLast)
 		select = context->owner();
-	if (context = std::move(newContext); context)
+	delete context;
+	if (context = newContext; context)
 		context->postInit();
 	if (!World::inputSys()->mouseLast)
 		select = context ? context->firstNavSelect : nullptr;
@@ -147,13 +175,13 @@ Widget* Scene::getSelected(ivec2 mPos) {
 	if (!World::drawSys()->viewport().contain(mPos))
 		return nullptr;
 
-	Layout* box = layout.get();
+	Layout* box = layout;
 	if (context && context->rect().contain(mPos))
-		box = context.get();
+		box = context;
 	else if (popup)
-		box = popup.get();
+		box = popup;
 	else if (overlayFocused(mPos))
-		box = overlay.get();
+		box = overlay;
 
 	for (;;) {
 		Rect frame = box->frame();
@@ -177,7 +205,7 @@ ScrollArea* Scene::getSelectedScrollArea() const {
 	return dynamic_cast<ScrollArea*>(parent);
 }
 
-bool Scene::overlayFocused(ivec2 mPos) {
+bool Scene::overlayFocused(ivec2 mPos) const {
 	if (overlay)
 		return overlay->on = overlay->on ? overlay->rect().contain(mPos) : overlay->actRect().contain(mPos);
 	return false;
@@ -190,7 +218,7 @@ void Scene::selectFirst() {
 		select = popup->firstNavSelect;
 	else {
 		Layout* next = dynamic_cast<Layout*>(select);
-		Layout* lay = next ? next : layout.get();
+		Layout* lay = next ? next : layout;
 		for (sizet id = 0; lay;) {
 			if (id >= lay->getWidgets().size()) {
 				id = lay->getIndex() + 1;
@@ -201,24 +229,24 @@ void Scene::selectFirst() {
 				select = lay->getWidget(0);
 				break;
 			} else
-				id++;
+				++id;
 		}
 	}
 }
 
-sizet Scene::findSelectedID(Layout* box) {
+sizet Scene::findSelectedID(Layout* box) const {
 	Widget* child = select;
 	while (child->getParent() && child->getParent() != box)
 		child = child->getParent();
 	return child->getParent() ? child->getIndex() : SIZE_MAX;
 }
 
-bool Scene::cursorDisableable() {
+bool Scene::cursorDisableable() const {
 	Layout* parent = dynamic_cast<Layout*>(select);
 	if (select && !parent)
 		parent = select->getParent();
 
 	while (parent->getParent())
 		parent = parent->getParent();
-	return parent == layout.get();
+	return parent == layout;
 }

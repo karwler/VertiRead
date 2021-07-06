@@ -1,8 +1,7 @@
 #pragma once
 
-// stuff that's used pretty much everywhere
 #define SDL_MAIN_HANDLED
-#if defined(_WIN32) || defined(APPIMAGE)
+#ifdef _WIN32
 #include <SDL_image.h>
 #else
 #include <SDL2/SDL_image.h>
@@ -10,7 +9,9 @@
 #include <glm/glm.hpp>
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <climits>
+#include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -18,6 +19,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+using namespace std::string_literals;
+using namespace std::string_view_literals;
 namespace fs = std::filesystem;
 
 // to make life easier
@@ -33,9 +36,10 @@ using wchar = wchar_t;
 using std::array;
 using std::pair;
 using std::string;
+using std::string_view;
 using std::vector;
 using std::wstring;
-using std::to_string;
+using std::wstring_view;
 
 using int8 = int8_t;
 using uint8 = uint8_t;
@@ -63,42 +67,48 @@ using glm::ivec2;
 using mvec2 = glm::vec<2, sizet, glm::defaultp>;
 
 // forward declarations
+struct archive;
+struct archive_entry;
+class Browser;
 class Button;
+class CheckBox;
+class ComboBox;
+class Context;
 class DrawSys;
+class FileSys;
+class InputSys;
+class Label;
+class LabelEdit;
 class Layout;
+class Overlay;
 struct PictureLoader;
+class Picture;
+class Popup;
 class Program;
+class ProgressBar;
 class ProgState;
+class ReaderBox;
+class RootLayout;
 class Scene;
+class ScrollArea;
+class Settings;
+class Slider;
+class Widget;
 
 // events
+
 using PCall = void (Program::*)(Button*);
 using LCall = void (Program::*)(Layout*);
 using SBCall = void (ProgState::*)();
 using SACall = void (ProgState::*)(float);
 
-// global constants
-#ifdef _WIN32
-constexpr wchar topDir[] = L"";
-#else
-constexpr char topDir[] = "/";
-#endif
-
-constexpr array<char, 4> sizeLetters = {
-	'B',
-	'K',
-	'M',
-	'G'
-};
-
-constexpr array<uptrt, 4> sizeFactors = {
-	1,
-	1'000,
-	1'000'000,
-	1'000'000'000
-};
-
 // general wrappers
+
+#ifdef _WIN32
+constexpr string_view linend = "\r\n";
+#else
+constexpr string_view linend = "\n";
+#endif
 
 enum class UserCode : int32 {
 	readerProgress,
@@ -150,6 +160,41 @@ constexpr bool outRange(T val, T min, T max) {
 	return val < min || val > max;
 }
 
+template <class T>
+string operator+(std::basic_string<T>&& a, std::basic_string_view<T> b) {
+	sizet alen = a.length();
+	a.resize(alen + b.length());
+	std::copy(b.begin(), b.end(), a.begin() + alen);
+	return a;
+}
+
+template <class T>
+string operator+(const std::basic_string<T>& a, std::basic_string_view<T> b) {
+	std::basic_string<T> r;
+	r.resize(a.length() + b.length());
+	std::copy(a.begin(), a.end(), r.begin());
+	std::copy(b.begin(), b.end(), r.begin() + a.length());
+	return r;
+}
+
+template <class T>
+string operator+(std::basic_string_view<T> a, std::basic_string<T>&& b) {
+	sizet blen = b.length();
+	b.resize(a.length() + blen);
+	std::move_backward(b.begin(), b.begin() + blen, b.begin() + a.length());
+	std::copy(a.begin(), a.end(), b.begin());
+	return b;
+}
+
+template <class T>
+string operator+(std::basic_string_view<T> a, const std::basic_string<T>& b) {
+	std::basic_string<T> r;
+	r.resize(a.length() + b.length());
+	std::copy(a.begin(), a.end(), r.begin());
+	std::copy(b.begin(), b.end(), r.begin() + a.length());
+	return r;
+}
+
 inline ivec2 texSize(SDL_Texture* tex) {
 	ivec2 s;
 	return !SDL_QueryTexture(tex, nullptr, nullptr, &s.x, &s.y) ? s : ivec2(0);
@@ -161,15 +206,13 @@ inline ivec2 mousePos() {
 	return p;
 }
 
-inline string getRendererName(int id) {
-	SDL_RendererInfo info;
-	return !SDL_GetRenderDriverInfo(id, &info) ? info.name : "";
+inline void pushEvent(UserCode code, void* data1 = nullptr, void* data2 = nullptr) {
+	SDL_Event event;
+	event.user = { SDL_USEREVENT, SDL_GetTicks(), 0, int32(code), data1, data2 };
+	SDL_PushEvent(&event);
 }
 
-void pushEvent(UserCode code, void* data1 = nullptr, void* data2 = nullptr);
-
 // SDL_Rect wrapper
-
 struct Rect : SDL_Rect {
 	Rect() = default;
 	constexpr Rect(int n);
@@ -187,23 +230,23 @@ struct Rect : SDL_Rect {
 	Rect intersect(const Rect& rect) const;	// same as above except it returns the overlap instead of the crop and it doesn't modify itself
 };
 
-inline constexpr Rect::Rect(int n) :
-	SDL_Rect({ n, n, n, n })
+constexpr Rect::Rect(int n) :
+	SDL_Rect{ n, n, n, n }
 {}
 
-inline constexpr Rect::Rect(int px, int py, int sw, int sh) :
-	SDL_Rect({ px, py, sw, sh })
+constexpr Rect::Rect(int px, int py, int sw, int sh) :
+	SDL_Rect{ px, py, sw, sh }
 {}
 
-inline constexpr Rect::Rect(ivec2 pos, ivec2 size) :
-	SDL_Rect({ pos.x, pos.y, size.x, size.y })
+constexpr Rect::Rect(ivec2 pos, ivec2 size) :
+	SDL_Rect{ pos.x, pos.y, size.x, size.y }
 {}
 
 inline ivec2& Rect::pos() {
 	return *reinterpret_cast<ivec2*>(this);
 }
 
-inline constexpr ivec2 Rect::pos() const {
+constexpr ivec2 Rect::pos() const {
 	return ivec2(x, y);
 }
 
@@ -211,11 +254,11 @@ inline ivec2& Rect::size() {
 	return reinterpret_cast<ivec2*>(this)[1];
 }
 
-inline constexpr ivec2 Rect::size() const {
+constexpr ivec2 Rect::size() const {
 	return ivec2(w, h);
 }
 
-inline constexpr ivec2 Rect::end() const {
+constexpr ivec2 Rect::end() const {
 	return pos() + size();
 }
 
@@ -228,44 +271,32 @@ inline Rect Rect::intersect(const Rect& rect) const {
 	return SDL_IntersectRect(this, &rect, &isct) ? isct : Rect(0);
 }
 
-// SDL_Thread wrapper
+// reader picture
+struct Texture {
+	string name;
+	SDL_Texture* tex;
 
-class Thread {
-public:
-	Thread(int (*func)(void*), void* pdata = nullptr);
-	~Thread();
+	Texture(string&& tname = string(), SDL_Texture* texture = nullptr);
 
-	bool start(int (*func)(void*));
-	bool getRun() const;
-	void interrupt();
-	int finish();
-
-	void* data;
-private:
-	SDL_Thread* proc;
-	bool run;
+	ivec2 res() const;
 };
 
-inline Thread::~Thread() {
-	finish();
-}
+inline Texture::Texture(string&& tname, SDL_Texture* texture) :
+	name(std::move(tname)),
+	tex(texture)
+{}
 
-inline bool Thread::getRun() const {
-	return run;
+inline ivec2 Texture::res() const {
+	return texSize(tex);
 }
-
-inline void Thread::interrupt() {
-	run = false;
-}
-
 
 // files and strings
 
 bool isDriveLetter(const fs::path& path);
 fs::path parentPath(const fs::path& path);
-string strEnclose(string str);
-vector<string> strUnenclose(const string& str);
-vector<string> getWords(const string& str);
+string strEnclose(string_view str);
+vector<string> strUnenclose(string_view str);
+vector<string_view> getWords(string_view str);
 
 inline bool isSpace(int c) {
 	return (c > '\0' && c <= ' ') || c == 0x7F;
@@ -275,19 +306,15 @@ inline bool notSpace(int c) {
 	return uint(c) > ' ' && c != 0x7F;
 }
 
-inline string trim(const string& str) {
-	string::const_iterator pos = std::find_if(str.begin(), str.end(), notSpace);
-	return string(pos, std::find_if(str.rbegin(), std::make_reverse_iterator(pos), notSpace).base());
+inline string_view trim(string_view str) {
+	string_view::iterator pos = std::find_if(str.begin(), str.end(), notSpace);
+	return string_view(&*pos, std::find_if(str.rbegin(), std::make_reverse_iterator(pos), notSpace).base() - pos);
 }
 
-inline string trimZero(const string& str) {
-	sizet id = str.find_last_not_of('0');
-	return str.substr(0, str[id] == '.' ? id : id + 1);
-}
-
-inline string firstUpper(string str) {
-	str[0] = char(toupper(str[0]));
-	return str;
+inline string firstUpper(string_view str) {
+	string txt(str);
+	txt[0] = toupper(txt[0]);
+	return txt;
 }
 
 inline bool isDsep(int c) {
@@ -314,115 +341,121 @@ inline bool isSubpath(const fs::path& path, const fs::path& base) {
 	return base.empty() || !path.lexically_relative(base).empty();
 }
 
-inline sizet memSizeMag(uptrt num) {
-	sizet m;
-	for (m = 0; m + 1 < sizeLetters.size() && (!(num % 1000) && (num /= 1000)); m++);
-	return m;
-}
-
-inline string memoryString(uptrt num, sizet mag) {
-	string str = to_string(num / sizeFactors[mag]);
-	return (mag ? str + sizeLetters[mag] : str) + sizeLetters[0];
-}
-
-inline string memoryString(uptrt num) {
-	return memoryString(num, memSizeMag(num));
-}
-
 // conversions
 #ifdef _WIN32
-string cwtos(const wchar* wstr);
-string swtos(const wstring& wstr);
-wstring cstow(const char* str);
-wstring sstow(const string& str);
+string swtos(wstring_view wstr);
+wstring sstow(string_view str);
 #endif
 
-inline string stos(const char* str) {	// dummy function for World::setArgs
-	return str;
+inline string stos(string_view str) {	// dummy function for World::setArgs
+	return string(str);
 }
 
-inline bool stob(const string& str) {
-	return str == "true" || str == "1";
-}
-
-inline const char* btos(bool b) {
+inline const char* toStr(bool b) {
 	return b ? "true" : "false";
 }
 
-template <class T, sizet N>
-T strToEnum(const array<const char*, N>& names, const string& str) {
-	return T(std::find_if(names.begin(), names.end(), [str](const string& it) -> bool { return !SDL_strcasecmp(it.c_str(), str.c_str()); }) - names.begin());
+template <uint8 base = 10, class T, std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, bool>, int> = 0>
+string toStr(T num) {
+	array<char, sizeof(T) * 8 + std::is_signed_v<T>> buf;
+	std::to_chars_result res = std::to_chars(buf.data(), buf.data() + buf.size(), num, base);
+	if constexpr (base > 10)
+		std::transform(buf.data(), res.ptr, buf.data(), toupper);
+	return string(buf.data(), res.ptr);
 }
 
-template <class T>
-T strToVal(const umap<T, const char*>& names, const string& str) {
-	umap<uint8, const char*>::const_iterator it = std::find_if(names.begin(), names.end(), [str](const pair<T, const char*>& nit) -> bool { return !SDL_strcasecmp(nit.second, str.c_str()); });
-	return it != names.end() ? it->first : T(0);
+template <uint8 base = 10, class T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
+string toStr(T num) {
+	return toStr(std::underlying_type_t<T>(num));
 }
 
-inline long sstol(const string& str, int base = 0) {
-	return strtol(str.c_str(), nullptr, base);
+template <uint8 base = 10, class T, std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, bool>, int> = 0>
+string toStr(T num, uint8 pad) {
+	array<char, sizeof(T) * 8 + std::is_signed_v<T>> buf;
+	std::to_chars_result res = std::to_chars(buf.data(), buf.data() + buf.size(), num);
+	if constexpr (base > 10)
+		std::transform(buf.data(), res.ptr, buf.data(), toupper);
+
+	uint8 len = res.ptr - buf.data();
+	if (pad > len) {
+		pad = std::min(uint8(pad - len), uint8(buf.size()));
+		std::move_backward(buf.data(), res.ptr, buf.data() + pad);
+		std::fill_n(buf.begin(), pad, '0');
+		len += pad;
+	}
+	return string(buf.data(), len);
 }
 
-inline llong sstoll(const string& str, int base = 0) {
-	return strtoll(str.c_str(), nullptr, base);
+template <class T = float, std::enable_if_t<std::is_floating_point_v<T>, int> = 0>
+constexpr sizet recommendedCharBufferSize() {
+	if constexpr (std::is_same_v<T, float>)
+		return 16;
+	if constexpr (std::is_same_v<T, double>)
+		return 24;
+	return 30;
 }
 
-inline ulong sstoul(const string& str, int base = 0) {
-	return strtoul(str.c_str(), nullptr, base);
+template <class T = float, std::enable_if_t<std::is_floating_point_v<T>, int> = 0>
+string toStr(T num) {
+	array<char, recommendedCharBufferSize<T>()> buf;
+	std::to_chars_result res = std::to_chars(buf.data(), buf.data() + buf.size(), num);
+	return string(buf.data(), res.ptr);
 }
 
-inline ullong sstoull(const string& str, int base = 0) {
-	return strtoull(str.c_str(), nullptr, base);
+template <glm::length_t L, class T, glm::qualifier Q, std::enable_if_t<(std::is_integral_v<T> && !std::is_same_v<T, bool>) || std::is_floating_point_v<T>, int> = 0>
+string toStr(const glm::vec<L, T, Q>& v, string_view sep = " ") {
+	string str;
+	for (glm::length_t i = 0; i < L - 1; ++i)
+		str += toStr(v[i]) + sep;
+	return str + toStr(v[L - 1]);
 }
 
-inline float sstof(const string& str) {
-	return strtof(str.c_str(), nullptr);
+template <class T, sizet N, std::enable_if_t<std::is_integral_v<T> || std::is_enum_v<T>, int> = 0>
+T strToEnum(const array<const char*, N>& names, string_view str, T defaultValue = T(N)) {
+	typename array<const char*, N>::const_iterator p = std::find_if(names.begin(), names.end(), [str](const char* it) -> bool { return !SDL_strncasecmp(it, str.data(), str.length()) && !it[str.length()]; });
+	return p != names.end() ? T(p - names.begin()) : defaultValue;
 }
 
-inline double sstod(const string& str) {
-	return strtod(str.c_str(), nullptr);
+template <class T, std::enable_if_t<std::is_integral_v<T> || std::is_floating_point_v<T> || std::is_enum_v<T>, int> = 0>
+T strToVal(const umap<T, const char*>& names, string_view str, T defaultValue = T(0)) {
+	typename umap<T, const char*>::const_iterator it = std::find_if(names.begin(), names.end(), [str](const pair<const T, const char*>& nit) -> bool { return !SDL_strncasecmp(nit.second, str.data(), str.length()) && !nit.second[str.length()]; });
+	return it != names.end() ? it->first : defaultValue;
 }
 
-inline ldouble sstold(const string& str) {
-	return strtold(str.c_str(), nullptr);
+inline bool toBool(string_view str) {
+	return (str.length() >= 4 && !SDL_strncasecmp(str.data(), "true", 4)) || (str.length() >= 2 && !SDL_strncasecmp(str.data(), "on", 2)) || (!str.empty() && !SDL_strncasecmp(str.data(), "y", 1)) || std::any_of(str.begin(), str.end(), [](char c) -> bool { return c >= '1' && c <= '9'; });
 }
+
+template <class T, class... A, std::enable_if_t<(std::is_integral_v<T> && !std::is_same_v<T, bool>) || std::is_floating_point_v<T>, int> = 0>
+T toNum(string_view str, A... args) {
+	T val = T(0);
+	sizet i = 0;
+	for (; i < str.length() && isSpace(str[i]); ++i);
+	std::from_chars(str.data() + i, str.data() + str.length(), val, args...);
+	return val;
+}
+
+template <class T, class N = typename T::value_type, class... A, std::enable_if_t<(std::is_integral_v<N> && !std::is_same_v<N, bool>) || std::is_floating_point_v<N>, int> = 0>
+T toVec(string_view str, typename T::value_type fill = typename T::value_type(0), A... args) {
+	T vec(fill);
+	sizet p = 0;
+	for (glm::length_t i = 0; p < str.length() && i < vec.length(); ++i) {
+		for (; p < str.length() && isSpace(str[p]); ++p);
+		for (; p < str.length(); ++p)
+			if (std::from_chars_result res = std::from_chars(str.data() + p, str.data() + str.length(), vec[i], args...); res.ec == std::errc()) {
+				p = res.ptr - str.data();
+				break;
+			}
+	}
+	return vec;
+}
+
+// container stuff
 
 template <class T>
 T btom(bool b) {
 	return T(b) * T(2) - T(1);	// b needs to be 0 or 1
 }
-
-template <class T, class F, class... A>
-T readNumber(const char*& pos, F strtox, A... args) {
-	T num = T(0);
-	for (char* end; *pos; pos++)
-		if (num = T(strtox(pos, &end, args...)); pos != end) {
-			pos = end;
-			break;
-		}
-	return num;
-}
-
-template <class T, class F, class... A>
-T stoxv(const char* str, F strtox, typename T::value_type fill, A... args) {
-	T vec(fill);
-	for (glm::length_t i = 0; *str && i < vec.length();)
-		vec[i++] = readNumber<typename T::value_type>(str, strtox, args...);
-	return vec;
-}
-
-template <class T, class F = decltype(strtof)>
-T stofv(const char* str, F strtox = strtof, typename T::value_type fill = typename T::value_type(0)) {
-	return stoxv<T>(str, strtox, fill);
-}
-
-template <class T, class F>
-T stoiv(const char* str, F strtox, typename T::value_type fill = typename T::value_type(0), int base = 0) {
-	return stoxv<T>(str, strtox, fill, base);
-}
-
-// container stuff
 
 template <class T, glm::qualifier Q = glm::defaultp>
 glm::vec<2, T, Q> vswap(const T& x, const T& y, bool swap) {

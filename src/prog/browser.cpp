@@ -1,4 +1,5 @@
 #include "browser.h"
+#include "engine/fileSys.h"
 
 Browser::Browser(fs::path rootDirectory, fs::path curDirectory, PCall exitCall) :
 	exCall(exitCall),
@@ -38,7 +39,10 @@ fs::file_type Browser::goTo(const fs::path& path) {
 			inArchive = false;
 			return fs::file_type::directory;
 		}
-	} catch (...) {}
+	} catch (const std::runtime_error& err) {
+		std::cerr << err.what() << std::endl;
+	}
+
 	if (FileSys::isArchive(path)) {
 		curDir = path;
 		inArchive = true;
@@ -58,7 +62,9 @@ bool Browser::goIn(const fs::path& dname) {
 			curDir = std::move(newPath);
 			return true;
 		}
-	} catch (...) {}
+	} catch (const std::runtime_error& err) {
+		std::cerr << err.what() << std::endl;
+	}
 	return false;
 }
 
@@ -99,7 +105,9 @@ void Browser::goNext(bool fwd, bool showHidden) {
 			shiftArchive(fwd, showHidden);
 		else if (curDir != rootDir)
 			shiftDir(fwd, showHidden);
-	} catch (...) {}
+	} catch (const std::runtime_error& err) {
+		std::cerr << err.what() << std::endl;
+	}
 }
 
 void Browser::shiftDir(bool fwd, bool showHidden) {
@@ -138,20 +146,20 @@ bool Browser::nextArchive(const fs::path& ait, const fs::path& pdir) {
 	return false;
 }
 
-string Browser::nextDirFile(const string& file, bool fwd, bool showHidden) const {
+string Browser::nextDirFile(string_view file, bool fwd, bool showHidden) const {
 	if (!file.empty()) {
 		vector<fs::path> files = FileSys::listDir(curDir, true, false, showHidden);
-		for (sizet mov = btom<sizet>(fwd), i = sizet(std::find(files.begin(), files.end(), fs::u8path(file)) - files.begin()) + mov; i < files.size(); i += mov)
+		for (sizet mov = btom<sizet>(fwd), i = std::find(files.begin(), files.end(), fs::u8path(file)) - files.begin() + mov; i < files.size(); i += mov)
 			if (FileSys::isPicture(curDir / files[i]))
 				return files[i].u8string();
 	}
 	return string();
 }
 
-string Browser::nextArchiveFile(const string& file, bool fwd) const {
+string Browser::nextArchiveFile(string_view file, bool fwd) const {
 	if (vector<string> pics; !file.empty()) {
 		FileSys::listArchivePictures(curDir, pics);
-		if (sizet i = sizet(std::find(pics.begin(), pics.end(), file) - pics.begin()) + btom<sizet>(fwd); i < pics.size())
+		if (sizet i = std::find(pics.begin(), pics.end(), file) - pics.begin() + btom<sizet>(fwd); i < pics.size())
 			return pics[i];
 	}
 	return string();
@@ -161,10 +169,10 @@ pair<vector<string>, vector<string>> Browser::listCurDir(bool showHidden) const 
 	if (inArchive)
 		return pair(FileSys::listArchive(curDir), vector<string>());
 
-	pair<vector<fs::path>, vector<fs::path>> in = FileSys::listDirSep(curDir, showHidden);
-	pair<vector<string>, vector<string>> out(in.first.size(), in.second.size());
-	std::transform(in.first.begin(), in.first.end(), out.first.begin(), [](const fs::path& it) -> string { return it.u8string(); });
-	std::transform(in.second.begin(), in.second.end(), out.second.begin(), [](const fs::path& it) -> string { return it.u8string(); });
+	auto [files, dirs] = FileSys::listDirSep(curDir, showHidden);
+	pair<vector<string>, vector<string>> out(files.size(), dirs.size());
+	std::transform(files.begin(), files.end(), out.first.begin(), [](const fs::path& it) -> string { return it.u8string(); });
+	std::transform(dirs.begin(), dirs.end(), out.second.begin(), [](const fs::path& it) -> string { return it.u8string(); });
 	return out;
 }
 

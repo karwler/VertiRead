@@ -1,10 +1,16 @@
+#include "progs.h"
+#include "engine/drawSys.h"
+#include "engine/fileSys.h"
+#include "engine/inputSys.h"
+#include "engine/scene.h"
 #include "engine/world.h"
+#include "utils/layouts.h"
 
 // PROGRAM TEXT
 
-ProgState::Text::Text(string str, int height, int margin) :
+ProgState::Text::Text(string str, int height) :
 	text(std::move(str)),
-	length(World::drawSys()->textLength(text.c_str(), height) + margin * 2)
+	length(World::drawSys()->textLength(text, height) + Label::defaultTextMargin * 2)
 {}
 
 // PROGRAM STATE
@@ -79,68 +85,77 @@ void ProgState::eventRefresh() {
 }
 
 void ProgState::onResize() {
+	popupLineHeight = int(40.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
+	tooltipHeight = int(16.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
+	lineHeight = int(30.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
+	topHeight = int(40.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
+	topSpacing = int(10.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
+	picSize = int(40.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
+	picMargin = int(4.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
+	contextMargin = int(3.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
 	maxTooltipLength = World::drawSys()->viewport().w * 2 / 3;
+	cursorMoveFactor = 10.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi();
 }
 
-uptr<Overlay> ProgState::createOverlay() {
+Overlay* ProgState::createOverlay() {
 	return nullptr;
 }
 
-uptr<Popup> ProgState::createPopupMessage(string msg, PCall ccal, string ctxt, Label::Alignment malign) {
+Popup* ProgState::createPopupMessage(string msg, PCall ccal, string ctxt, Alignment malign) {
 	Text ok(std::move(ctxt), popupLineHeight);
 	Text mg(std::move(msg), popupLineHeight);
 	Widget* first;
 	vector<Widget*> bot = {
 		new Widget(),
-		first = new Label(ok.length, std::move(ok.text), ccal, nullptr, nullptr, nullptr, Label::Alignment::center),
+		first = new Label(ok.length, std::move(ok.text), ccal, nullptr, nullptr, nullptr, Alignment::center),
 		new Widget()
 	};
 	vector<Widget*> con = {
 		new Label(1.f, std::move(mg.text), nullptr, nullptr, nullptr, nullptr, malign),
 		new Layout(1.f, std::move(bot), Direction::right, Layout::Select::none, 0)
 	};
-	return std::make_unique<Popup>(svec2(mg.length + Layout::defaultItemSpacing * 2, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), first);
+	return new Popup(svec2(mg.length + Layout::defaultItemSpacing * 2, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), first);
 }
 
-uptr<Popup> ProgState::createPopupChoice(string msg, PCall kcal, PCall ccal, Label::Alignment malign) {
+Popup* ProgState::createPopupChoice(string msg, PCall kcal, PCall ccal, Alignment malign) {
 	Text mg(std::move(msg), popupLineHeight);
 	Widget* first;
 	vector<Widget*> bot = {
-		first = new Label(1.f, "Yes", kcal, nullptr, nullptr, nullptr, Label::Alignment::center),
-		new Label(1.f, "No", ccal, nullptr, nullptr, nullptr, Label::Alignment::center)
+		first = new Label(1.f, "Yes", kcal, nullptr, nullptr, nullptr, Alignment::center),
+		new Label(1.f, "No", ccal, nullptr, nullptr, nullptr, Alignment::center)
 	};
 	vector<Widget*> con = {
 		new Label(1.f, std::move(mg.text), nullptr, nullptr, nullptr, nullptr, malign),
 		new Layout(1.f, std::move(bot), Direction::right, Layout::Select::none, 0)
 	};
-	return std::make_unique<Popup>(svec2(mg.length + Layout::defaultItemSpacing * 2, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), first);
+	return new Popup(svec2(mg.length + Layout::defaultItemSpacing * 2, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), first);
 }
 
-uptr<Context> ProgState::createContext(vector<pair<string, PCall>>&& items, Widget* parent) {
+Context* ProgState::createContext(vector<pair<string, PCall>>&& items, Widget* parent) {
 	vector<Widget*> wgts(items.size());
 	for (sizet i = 0; i < items.size(); ++i)
 		wgts[i] = new Label(lineHeight, std::move(items[i].first), items[i].second, &Program::eventCloseContext);
 
 	Widget* first = wgts[0];
-	Rect rect = calcTextContextRect(wgts, mousePos(), ivec2(0, lineHeight));
-	return std::make_unique<Context>(rect.pos(), rect.size(), vector<Widget*>{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, Layout::Select::none, 0) }, first, parent, Color::dark, nullptr, Layout::defaultDirection, contextMargin);
+	Rect rect = calcTextContextRect(wgts, mousePos(), ivec2(0, lineHeight), contextMargin);
+	return new Context(rect.pos(), rect.size(), vector<Widget*>{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, Layout::Select::none, 0) }, first, parent, Color::dark, nullptr, Layout::defaultDirection, contextMargin);
 }
 
-uptr<Context> ProgState::createComboContext(ComboBox* parent, PCall kcal) {
+Context* ProgState::createComboContext(ComboBox* parent, PCall kcal) {
 	ivec2 size = parent->size();
 	vector<Widget*> wgts(parent->getOptions().size());
 	for (sizet i = 0; i < parent->getOptions().size(); ++i)
 		wgts[i] = new Label(size.y, parent->getOptions()[i], kcal, &Program::eventCloseContext);
 
 	Widget* first = wgts[0];
-	Rect rect = calcTextContextRect(wgts, parent->position(), size);
-	return std::make_unique<Context>(rect.pos(), rect.size(), vector<Widget*>{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, Layout::Select::none, 0) }, first, parent, Color::dark, &Program::eventResizeComboContext, Layout::defaultDirection, contextMargin);
+	Rect rect = calcTextContextRect(wgts, parent->position(), size, contextMargin);
+	return new Context(rect.pos(), rect.size(), vector<Widget*>{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, Layout::Select::none, 0) }, first, parent, Color::dark, &Program::eventResizeComboContext, Layout::defaultDirection, contextMargin);
 }
 
 Rect ProgState::calcTextContextRect(const vector<Widget*>& items, ivec2 pos, ivec2 size, int margin) {
 	for (Widget* it : items)
 		if (Label* lbl = dynamic_cast<Label*>(it))
-			if (int w = World::drawSys()->textLength(lbl->getText().c_str(), size.y) + lbl->getTextMargin() * 2 + Slider::barSize + margin * 2; w > size.x)
+			if (int w = World::drawSys()->textLength(lbl->getText(), size.y) + lbl->getTextMargin() * 2 + Slider::barSize + margin * 2; w > size.x)
 				size.x = w;
 	size.y = size.y * items.size() + margin * 2;
 
@@ -160,10 +175,10 @@ void ProgState::calcContextPos(int& pos, int& siz, int limit) {
 }
 
 template <class T>
-int ProgState::findMaxLength(T pos, T end, int height, int margin) {
+int ProgState::findMaxLength(T pos, T end, int height) {
 	int width = 0;
-	for (; pos != end; pos++)
-		if (int len = World::drawSys()->textLength(*pos, height) + margin * 2; len > width)
+	for (; pos != end; ++pos)
+		if (int len = World::drawSys()->textLength(*pos, height) + Label::defaultTextMargin * 2; len > width)
 			width = len;
 	return width;
 }
@@ -174,12 +189,12 @@ SDL_Texture* ProgState::makeTooltip(const char* str) {
 
 SDL_Texture* ProgState::makeTooltipL(const char* str) {
 	uint width = 0;
-	for (const char* pos = str; *pos;) {
-		sizet len = strcspn(pos, "\n");
-		if (uint siz = World::drawSys()->textLength(string(pos, len).c_str(), tooltipHeight) + Label::tooltipMargin.x * 2; siz > width)
+	while (*str) {
+		sizet len = strcspn(str, "\n");
+		if (uint siz = World::drawSys()->textLength(string(str, len), tooltipHeight) + Label::tooltipMargin.x * 2; siz > width)
 			if (width = std::min(siz, maxTooltipLength); width == maxTooltipLength)
 				break;
-		pos += pos[len] ? len + 1 : len;
+		str += str[len] ? len + 1 : len;
 	}
 	return World::drawSys()->renderText(str, tooltipHeight, width);
 }
@@ -200,7 +215,7 @@ void ProgBooks::eventFileDrop(const fs::path& file) {
 	World::program()->openFile(file);
 }
 
-uptr<RootLayout> ProgBooks::createLayout() {
+RootLayout* ProgBooks::createLayout() {
 	// top bar
 	Text download("Download", topHeight);
 	Text settings("Settings", topHeight);
@@ -216,7 +231,7 @@ uptr<RootLayout> ProgBooks::createLayout() {
 	// book list
 	vector<fs::path> books = FileSys::listDir(World::sets()->getDirLib(), false, true, World::sets()->showHidden);
 	vector<Widget*> tiles(books.size()+1);
-	for (sizet i = 0; i < books.size(); i++) {
+	for (sizet i = 0; i < books.size(); ++i) {
 		Text txt(books[i].u8string(), TileBox::defaultItemHeight);
 		tiles[i] = new Label(txt.length, std::move(txt.text), &Program::eventOpenPageBrowser, &Program::eventOpenBookContext);
 	}
@@ -227,7 +242,7 @@ uptr<RootLayout> ProgBooks::createLayout() {
 		new Layout(topHeight, std::move(top), Direction::right, Layout::Select::none, topSpacing),
 		new TileBox(1.f, std::move(tiles))
 	};
-	return std::make_unique<RootLayout>(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
+	return new RootLayout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
 }
 
 // PROG PAGE BROWSER
@@ -246,7 +261,7 @@ void ProgPageBrowser::eventFileDrop(const fs::path& file) {
 	World::program()->openFile(file);
 }
 
-uptr<RootLayout> ProgPageBrowser::createLayout() {
+RootLayout* ProgPageBrowser::createLayout() {
 	// sidebar
 	initlist<const char*> txs = {
 		"Exit",
@@ -262,10 +277,10 @@ uptr<RootLayout> ProgPageBrowser::createLayout() {
 	// list of files and directories
 	auto [files, dirs] = World::browser()->listCurDir(World::sets()->showHidden);
 	vector<Widget*> items(files.size() + dirs.size());
-	for (sizet i = 0; i < dirs.size(); i++)
-		items[i] = new Label(lineHeight, std::move(dirs[i]), &Program::eventBrowserGoIn, nullptr, nullptr, nullptr, Label::Alignment::left, World::drawSys()->texture("folder"));
-	for (sizet i = 0; i < files.size(); i++)
-		items[dirs.size()+i] = new Label(lineHeight, std::move(files[i]), &Program::eventBrowserGoFile, nullptr, nullptr, nullptr, Label::Alignment::left, World::drawSys()->texture("file"));
+	for (sizet i = 0; i < dirs.size(); ++i)
+		items[i] = new Label(lineHeight, std::move(dirs[i]), &Program::eventBrowserGoIn, nullptr, nullptr, nullptr, Alignment::left, World::drawSys()->texture("folder"));
+	for (sizet i = 0; i < files.size(); ++i)
+		items[dirs.size() + i] = new Label(lineHeight, std::move(files[i]), &Program::eventBrowserGoFile, nullptr, nullptr, nullptr, Alignment::left, World::drawSys()->texture("file"));
 
 	// main content
 	vector<Widget*> mid = {
@@ -275,10 +290,10 @@ uptr<RootLayout> ProgPageBrowser::createLayout() {
 
 	// root layout
 	vector<Widget*> cont = {
-		new LabelEdit(lineHeight, World::browser()->getRootDir() != topDir ? relativePath(World::browser()->getCurDir(), World::sets()->getDirLib()).u8string() : World::browser()->getCurDir().u8string(), &Program::eventBrowserGoTo),
+		new LabelEdit(lineHeight, World::browser()->getRootDir() != Browser::topDir ? relativePath(World::browser()->getCurDir(), World::sets()->getDirLib()).u8string() : World::browser()->getCurDir().u8string(), &Program::eventBrowserGoTo),
 		new Layout(1.f, std::move(mid), Direction::right, Layout::Select::none, topSpacing)
 	};
-	return std::make_unique<RootLayout>(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
+	return new RootLayout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
 }
 
 // PROG READER
@@ -379,12 +394,12 @@ void ProgReader::eventClosing() {
 	SDL_ShowCursor(SDL_ENABLE);
 }
 
-uptr<RootLayout> ProgReader::createLayout() {
+RootLayout* ProgReader::createLayout() {
 	vector<Widget*> cont = { reader = new ReaderBox(1.f, {}, World::sets()->direction, World::sets()->zoom, World::sets()->spacing) };
-	return std::make_unique<RootLayout>(1.f, std::move(cont), Direction::right, Layout::Select::none, 0);
+	return new RootLayout(1.f, std::move(cont), Direction::right, Layout::Select::none, 0);
 }
 
-uptr<Overlay> ProgReader::createOverlay() {
+Overlay* ProgReader::createOverlay() {
 	vector<Widget*> menu = {
 		new Button(picSize, &Program::eventExitReader, nullptr, nullptr, makeTooltip("Exit"), false, World::drawSys()->texture("cross"), picMargin),
 		new Button(picSize, &Program::eventNextDir, nullptr, nullptr, makeTooltip("Next"), false, World::drawSys()->texture("right"), picMargin),
@@ -394,8 +409,8 @@ uptr<Overlay> ProgReader::createOverlay() {
 		new Button(picSize, &Program::eventZoomReset, nullptr, nullptr, makeTooltip("Zoom reset"), false, World::drawSys()->texture("reset"), picMargin),
 		new Button(picSize, &Program::eventCenterView, nullptr, nullptr, makeTooltip("Center"), false, World::drawSys()->texture("center"), picMargin)
 	};
-	int ysiz = picSize * int(menu.size());
-	return std::make_unique<Overlay>(svec2(0), svec2(picSize, ysiz), svec2(0), svec2(picSize/2, ysiz), std::move(menu), Color::normal, Direction::down, 0);
+	int ysiz = picSize * menu.size();
+	return new Overlay(svec2(0), svec2(picSize, ysiz), svec2(0), svec2(picSize/2, ysiz), std::move(menu), Color::normal, Direction::down, 0);
 }
 
 int ProgReader::modifySpeed(float value) {
@@ -414,7 +429,7 @@ void ProgDownloader::eventEscape() {
 		World::program()->eventOpenBookList();
 }
 
-uptr<RootLayout> ProgDownloader::createLayout() {
+RootLayout* ProgDownloader::createLayout() {
 	// top bar
 	vector<string> wsrcs(WebSource::sourceNames.begin(), WebSource::sourceNames.end());
 	Text books("Library", topHeight);
@@ -427,7 +442,7 @@ uptr<RootLayout> ProgDownloader::createLayout() {
 		new Label(exit.length, std::move(exit.text), &Program::eventTryExit),
 		new Widget(),
 		new Label(downloads.length, std::move(downloads.text), &Program::eventOpenDownloadList),
-		new ComboBox(findMaxLength(wsrcs.begin(), wsrcs.end(), topHeight), World::downloader()->getSource()->name(), std::move(wsrcs), &Program::eventSwitchSource, nullptr, Label::Alignment::center)
+		new ComboBox(findMaxLength(wsrcs.begin(), wsrcs.end(), topHeight), World::downloader()->getSource()->name(), std::move(wsrcs), &Program::eventSwitchSource, nullptr, Alignment::center)
 	};
 
 	// download button and bar
@@ -467,12 +482,12 @@ uptr<RootLayout> ProgDownloader::createLayout() {
 		new Layout(topHeight, std::move(top), Direction::right, Layout::Select::none, topSpacing),
 		new Layout(1.f, std::move(mid), Direction::right, Layout::Select::none, topSpacing)
 	};
-	return std::make_unique<RootLayout>(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
+	return new RootLayout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
 }
 
 Comic ProgDownloader::curInfo() const {
 	Comic info(static_cast<LabelEdit*>(*results->getSelected().begin())->getText(), vector<pairStr>(chapterUrls.size()));
-	for (sizet i = 0; i < chapterUrls.size(); i++)
+	for (sizet i = 0; i < chapterUrls.size(); ++i)
 		info.chapters[i] = pair(static_cast<Label*>(static_cast<Layout*>(chapters->getWidget(i))->getWidget(1))->getText(), chapterUrls[i]);
 	return info;
 }
@@ -480,7 +495,7 @@ Comic ProgDownloader::curInfo() const {
 void ProgDownloader::printResults(vector<pairStr>&& comics) {
 	resultUrls.resize(comics.size());
 	vector<Widget*> wgts(comics.size());
-	for (sizet i = 0; i < wgts.size(); i++) {
+	for (sizet i = 0; i < wgts.size(); ++i) {
 		wgts[i] = new Label(TileBox::defaultItemHeight, std::move(comics[i].first), &Program::eventShowComicInfo, nullptr, &Program::eventDownloadComic);
 		resultUrls[i] = std::move(comics[i].second);
 	}
@@ -490,7 +505,7 @@ void ProgDownloader::printResults(vector<pairStr>&& comics) {
 void ProgDownloader::printInfo(vector<pairStr>&& chaps) {
 	chapterUrls.resize(chaps.size());
 	vector<Widget*> wgts(chaps.size());
-	for (sizet i = 0; i < wgts.size(); i++) {
+	for (sizet i = 0; i < wgts.size(); ++i) {
 		vector<Widget*> line = {
 			new CheckBox(TileBox::defaultItemHeight, true),
 			new Label(1.f, std::move(chaps[i].first), &Program::eventSelectChapter, nullptr, &Program::eventDownloadChapter)
@@ -509,7 +524,7 @@ void ProgDownloads::eventEscape() {
 		World::program()->eventOpenDownloader();
 }
 
-uptr<RootLayout> ProgDownloads::createLayout() {
+RootLayout* ProgDownloads::createLayout() {
 	// top bar
 	Text books("Library", topHeight);
 	Text download("Download", topHeight);
@@ -537,9 +552,9 @@ uptr<RootLayout> ProgDownloads::createLayout() {
 	};
 
 	// queue list
-	while (SDL_TryLockMutex(World::downloader()->queueLock));
+	World::downloader()->queueLock.lock();
 	vector<Widget*> lse(World::downloader()->getDlQueue().size());
-	for (sizet i = 0; i < lse.size(); i++) {
+	for (sizet i = 0; i < lse.size(); ++i) {
 		vector<Widget*> ln = {
 			new Label(1.f, World::downloader()->getDlQueue()[i].title + " - waiting"),
 			new Label(TileBox::defaultItemHeight, "X", &Program::eventDownloadDelete)
@@ -547,8 +562,8 @@ uptr<RootLayout> ProgDownloads::createLayout() {
 		lse[i] = new Layout(TileBox::defaultItemHeight, std::move(ln), Direction::right);
 	}
 	if (!lse.empty())
-		static_cast<Label*>(static_cast<Layout*>(lse[0])->getWidget(0))->setText(World::downloader()->getDlQueue()[0].title + " - " + to_string(World::downloader()->getDlProg().x) + '/' + to_string(World::downloader()->getDlProg().y));
-	SDL_UnlockMutex(World::downloader()->queueLock);
+		static_cast<Label*>(static_cast<Layout*>(lse[0])->getWidget(0))->setText(World::downloader()->getDlQueue()[0].title + " - " + toStr(World::downloader()->getDlProg().x) + '/' + toStr(World::downloader()->getDlProg().y));
+	World::downloader()->queueLock.unlock();
 
 	// main content
 	vector<Widget*> mid = {
@@ -561,7 +576,7 @@ uptr<RootLayout> ProgDownloads::createLayout() {
 		new Layout(topHeight, std::move(top), Direction::right, Layout::Select::none, topSpacing),
 		new Layout(1.f, std::move(mid), Direction::right)
 	};
-	return std::make_unique<RootLayout>(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
+	return new RootLayout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
 }
 #endif
 
@@ -590,11 +605,13 @@ void ProgSettings::eventFileDrop(const fs::path& file) {
 		try {
 			if (fs::is_directory(file))
 				World::sets()->setDirLib(file, World::fileSys()->getDirSets());
-		} catch (...) {}
+		} catch (const std::runtime_error& err) {
+			std::cerr << err.what() << std::endl;
+		}
 	}
 }
 
-uptr<RootLayout> ProgSettings::createLayout() {
+RootLayout* ProgSettings::createLayout() {
 	// top bar
 	Text books("Library", topHeight);
 	Text download("Download", topHeight);
@@ -631,7 +648,7 @@ uptr<RootLayout> ProgSettings::createLayout() {
 	};
 	initlist<const char*>::iterator itxs = txs.begin();
 	array<string, Binding::names.size()> bnames;
-	for (sizet i = 0; i < Binding::names.size(); i++)
+	for (sizet i = 0; i < Binding::names.size(); ++i)
 		bnames[i] = firstUpper(Binding::names[i]);
 	int descLength = std::max(findMaxLength(txs.begin(), txs.end(), lineHeight), findMaxLength(bnames.begin(), bnames.end(), lineHeight));
 
@@ -642,23 +659,25 @@ uptr<RootLayout> ProgSettings::createLayout() {
 	constexpr char tipDeadzon[] = "Controller axis deadzone";
 
 	// action fields for labels
-	vector<string> renderers((sizet(SDL_GetNumRenderDrivers())));
-	for (sizet i = 0; i < renderers.size(); i++)
-		renderers[i] = getRendererName(int(i));
+	SDL_RendererInfo rendererInfo;
+	vector<string> renderers(SDL_GetNumRenderDrivers());
+	for (sizet i = 0; i < renderers.size(); ++i)
+		if (!SDL_GetRenderDriverInfo(i, &rendererInfo))
+			renderers[i] = rendererInfo.name;
 	vector<string> themes = World::fileSys()->getAvailableThemes();
 	vector<string> directs(Direction::names.begin(), Direction::names.end());
 	vector<string> plims(PicLim::names.begin(), PicLim::names.end());
 	Text dots(KeyGetter::ellipsisStr, lineHeight);
-	Text dznum(to_string(Settings::axisLimit), lineHeight);
+	Text dznum(toStr(Settings::axisLimit), lineHeight);
 	vector<Widget*> lx[] = { {
 		new Label(descLength, *itxs++),
 		new ComboBox(1.f, directs[uint8(World::sets()->direction)], std::move(directs), &Program::eventSwitchDirection, makeTooltip("Reading direction"))
 	}, {
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, trimZero(to_string(World::sets()->zoom)), &Program::eventSetZoom, nullptr, nullptr, makeTooltip("Default reader zoom"), LabelEdit::TextType::uFloat)
+		new LabelEdit(1.f, toStr(World::sets()->zoom), &Program::eventSetZoom, nullptr, nullptr, makeTooltip("Default reader zoom"), LabelEdit::TextType::uFloat)
 	}, {
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, to_string(World::sets()->spacing), &Program::eventSetSpacing, nullptr, nullptr, makeTooltip("Picture spacing in reader"), LabelEdit::TextType::uInt)
+		new LabelEdit(1.f, toStr(World::sets()->spacing), &Program::eventSetSpacing, nullptr, nullptr, makeTooltip("Picture spacing in reader"), LabelEdit::TextType::uInt)
 	}, {
 		new Label(descLength, *itxs++),
 		new ComboBox(findMaxLength(plims.begin(), plims.end(), lineHeight), plims[uint8(World::sets()->picLim.type)], std::move(plims), &Program::eventSetPicLimitType, makeTooltipL(tipPicLim)),
@@ -684,7 +703,7 @@ uptr<RootLayout> ProgSettings::createLayout() {
 	}, {
 		new Label(descLength, *itxs++),
 		new LabelEdit(1.f, World::sets()->getDirLib().u8string(), &Program::eventSetLibraryDirLE, nullptr, nullptr, makeTooltip("Library path")),
-		new Label(dots.length, std::move(dots.text), &Program::eventOpenLibDirBrowser, nullptr, nullptr, makeTooltip("Browse for library"), Label::Alignment::center)
+		new Label(dots.length, std::move(dots.text), &Program::eventOpenLibDirBrowser, nullptr, nullptr, makeTooltip("Browse for library"), Alignment::center)
 	}, {
 		new Label(descLength, *itxs++),
 		new ComboBox(1.f, World::sets()->renderer, std::move(renderers), &Program::eventSetRenderer, makeTooltip("Graphics renderer"))
@@ -694,17 +713,17 @@ uptr<RootLayout> ProgSettings::createLayout() {
 	}, {
 		new Label(descLength, *itxs++),
 		deadzoneSL = new Slider(1.f, World::sets()->getDeadzone(), 0, Settings::axisLimit, &Program::eventSetDeadzoneSL, nullptr, nullptr, makeTooltip(tipDeadzon)),
-		deadzoneLE = new LabelEdit(dznum.length + LabelEdit::caretWidth, to_string(World::sets()->getDeadzone()), &Program::eventSetDeadzoneLE, nullptr, nullptr, makeTooltip(tipDeadzon), LabelEdit::TextType::uInt)
+		deadzoneLE = new LabelEdit(dznum.length + LabelEdit::caretWidth, toStr(World::sets()->getDeadzone()), &Program::eventSetDeadzoneLE, nullptr, nullptr, makeTooltip(tipDeadzon), LabelEdit::TextType::uInt)
 	} };
 	sizet lcnt = txs.size();
 	vector<Widget*> lns(lcnt + 1 + bnames.size() + 2);
-	for (sizet i = 0; i < lcnt; i++)
+	for (sizet i = 0; i < lcnt; ++i)
 		lns[i] = new Layout(lineHeight, std::move(lx[i]), Direction::right);
 	lns[lcnt] = new Widget(0);
 	limitLine = static_cast<Layout*>(lns[3]);
 
 	// shortcut entries
-	for (sizet i = 0; i < bnames.size(); i++) {
+	for (sizet i = 0; i < bnames.size(); ++i) {
 		Label* lbl = new Label(descLength, std::move(bnames[i]));
 		vector<Widget*> lin {
 			lbl,
@@ -712,29 +731,29 @@ uptr<RootLayout> ProgSettings::createLayout() {
 			new KeyGetter(1.f, KeyGetter::AcceptType::joystick, Binding::Type(i), makeTooltip((lbl->getText() + " joystick binding").c_str())),
 			new KeyGetter(1.f, KeyGetter::AcceptType::gamepad, Binding::Type(i), makeTooltip((lbl->getText() + " gamepad binding").c_str()))
 		};
-		lns[lcnt+1+i] = new Layout(lineHeight, std::move(lin), Direction::right);
+		lns[lcnt + 1 + i] = new Layout(lineHeight, std::move(lin), Direction::right);
 	}
 	lcnt += 1 + Binding::names.size();
 
 	// reset button
 	Text resbut("Reset", lineHeight);
 	lns[lcnt] = new Widget(0);
-	lns[lcnt+1] = new Layout(lineHeight, { new Label(resbut.length, std::move(resbut.text), &Program::eventResetSettings, nullptr, nullptr, makeTooltip("Reset all settings")) }, Direction::right);
+	lns[lcnt + 1] = new Layout(lineHeight, { new Label(resbut.length, std::move(resbut.text), &Program::eventResetSettings, nullptr, nullptr, makeTooltip("Reset all settings")) }, Direction::right);
 
 	// root layout
 	vector<Widget*> cont = {
 		new Layout(topHeight, std::move(top), Direction::right, Layout::Select::none, topSpacing),
 		new ScrollArea(1.f, std::move(lns))
 	};
-	return std::make_unique<RootLayout>(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
+	return new RootLayout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
 }
 
 Widget* ProgSettings::createLimitEdit() {
 	switch (World::sets()->picLim.type) {
 	case PicLim::Type::count:
-		return new LabelEdit(1.f, to_string(World::sets()->picLim.getCount()), &Program::eventSetPicLimCount, nullptr, nullptr, makeTooltip("Number of pictures per batch"), LabelEdit::TextType::uInt);
+		return new LabelEdit(1.f, toStr(World::sets()->picLim.getCount()), &Program::eventSetPicLimCount, nullptr, nullptr, makeTooltip("Number of pictures per batch"), LabelEdit::TextType::uInt);
 	case PicLim::Type::size:
-		return new LabelEdit(1.f, memoryString(World::sets()->picLim.getSize()), &Program::eventSetPicLimSize, nullptr, nullptr, makeTooltip("Total size of pictures per batch"));
+		return new LabelEdit(1.f, PicLim::memoryString(World::sets()->picLim.getSize()), &Program::eventSetPicLimSize, nullptr, nullptr, makeTooltip("Total size of pictures per batch"));
 	}
 	return new Widget();
 }
@@ -751,7 +770,7 @@ void ProgSearchDir::eventHide() {
 	World::scene()->resetLayouts();
 }
 
-uptr<RootLayout> ProgSearchDir::createLayout() {
+RootLayout* ProgSearchDir::createLayout() {
 	// sidebar
 	initlist<const char*> txs = {
 		"Exit",
@@ -769,8 +788,8 @@ uptr<RootLayout> ProgSearchDir::createLayout() {
 	// directory list
 	vector<fs::path> strs = FileSys::listDir(World::browser()->getCurDir(), false, true, World::sets()->showHidden);
 	vector<Widget*> items(strs.size());
-	for (sizet i = 0; i < strs.size(); i++)
-		items[i] = new Label(lineHeight, strs[i].u8string(), nullptr, nullptr, &Program::eventBrowserGoIn, nullptr, Label::Alignment::left, World::drawSys()->texture("folder"));
+	for (sizet i = 0; i < strs.size(); ++i)
+		items[i] = new Label(lineHeight, strs[i].u8string(), nullptr, nullptr, &Program::eventBrowserGoIn, nullptr, Alignment::left, World::drawSys()->texture("folder"));
 
 	// main content
 	vector<Widget*> mid = {
@@ -783,5 +802,5 @@ uptr<RootLayout> ProgSearchDir::createLayout() {
 		new LabelEdit(lineHeight, World::browser()->getCurDir().u8string(), &Program::eventBrowserGoTo),
 		new Layout(1.f, std::move(mid), Direction::right, Layout::Select::none, topSpacing)
 	};
-	return std::make_unique<RootLayout>(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
+	return new RootLayout(1.f, std::move(cont), Direction::down, Layout::Select::none, topSpacing);
 }
