@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -37,6 +38,7 @@ using std::array;
 using std::pair;
 using std::string;
 using std::string_view;
+using std::tuple;
 using std::vector;
 using std::wstring;
 using std::wstring_view;
@@ -57,6 +59,7 @@ template <class... T> using uset = std::unordered_set<T...>;
 
 using sizet = size_t;
 using pdift = ptrdiff_t;
+using iptrt = intptr_t;
 using uptrt = uintptr_t;
 using pairStr = pair<string, string>;
 using pairPath = pair<fs::path, fs::path>;
@@ -64,6 +67,10 @@ using mapFiles = umap<string, pair<sizet, uptrt>>;
 
 using glm::vec2;
 using glm::ivec2;
+using glm::uvec2;
+using glm::vec4;
+using glm::u8vec4;
+using glm::ivec4;
 using mvec2 = glm::vec<2, sizet, glm::defaultp>;
 
 // forward declarations
@@ -93,7 +100,9 @@ class Scene;
 class ScrollArea;
 class Settings;
 class Slider;
+class Texture;
 class Widget;
+class WindowArranger;
 
 // events
 
@@ -195,17 +204,6 @@ string operator+(std::basic_string_view<T> a, const std::basic_string<T>& b) {
 	return r;
 }
 
-inline ivec2 texSize(SDL_Texture* tex) {
-	ivec2 s;
-	return !SDL_QueryTexture(tex, nullptr, nullptr, &s.x, &s.y) ? s : ivec2(0);
-}
-
-inline ivec2 mousePos() {
-	ivec2 p;
-	SDL_GetMouseState(&p.x, &p.y);
-	return p;
-}
-
 inline void pushEvent(UserCode code, void* data1 = nullptr, void* data2 = nullptr) {
 	SDL_Event event;
 	event.user = { SDL_USEREVENT, SDL_GetTicks(), 0, int32(code), data1, data2 };
@@ -218,16 +216,22 @@ struct Rect : SDL_Rect {
 	constexpr Rect(int n);
 	constexpr Rect(int px, int py, int sw, int sh);
 	constexpr Rect(ivec2 pos, ivec2 size);
+	constexpr Rect(const ivec4& vec);
+
+	int& operator[](sizet i);
+	constexpr int operator[](sizet i) const;
+	constexpr bool operator==(const Rect& rect) const;
 
 	ivec2& pos();
 	constexpr ivec2 pos() const;
 	ivec2& size();
 	constexpr ivec2 size() const;
 	constexpr ivec2 end() const;
+	constexpr ivec4 toVec() const;
 
 	bool contain(ivec2 point) const;
-	Rect crop(const Rect& rect);			// crop rect so it fits in the frame (aka set rect to the area where they overlap) and return how much was cut off
-	Rect intersect(const Rect& rect) const;	// same as above except it returns the overlap instead of the crop and it doesn't modify itself
+	bool overlap(const Rect& rect) const;
+	Rect intersect(const Rect& rect) const;
 };
 
 constexpr Rect::Rect(int n) :
@@ -241,6 +245,18 @@ constexpr Rect::Rect(int px, int py, int sw, int sh) :
 constexpr Rect::Rect(ivec2 pos, ivec2 size) :
 	SDL_Rect{ pos.x, pos.y, size.x, size.y }
 {}
+
+constexpr Rect::Rect(const ivec4& vec) :
+	SDL_Rect{ vec.x, vec.y, vec.z, vec.w }
+{}
+
+inline int& Rect::operator[](sizet i) {
+	return reinterpret_cast<int*>(this)[i];
+}
+
+constexpr bool Rect::operator==(const Rect& rect) const {
+	return x == rect.x && y == rect.y && w == rect.w && h == rect.h;
+}
 
 inline ivec2& Rect::pos() {
 	return *reinterpret_cast<ivec2*>(this);
@@ -262,32 +278,21 @@ constexpr ivec2 Rect::end() const {
 	return pos() + size();
 }
 
+constexpr ivec4 Rect::toVec() const {
+	return ivec4(x, y, w, h);
+}
+
 inline bool Rect::contain(ivec2 point) const {
 	return SDL_PointInRect(reinterpret_cast<const SDL_Point*>(&point), this);
+}
+
+inline bool Rect::overlap(const Rect& rect) const {
+	return SDL_HasIntersection(this, &rect);
 }
 
 inline Rect Rect::intersect(const Rect& rect) const {
 	Rect isct;
 	return SDL_IntersectRect(this, &rect, &isct) ? isct : Rect(0);
-}
-
-// reader picture
-struct Texture {
-	string name;
-	SDL_Texture* tex;
-
-	Texture(string&& tname = string(), SDL_Texture* texture = nullptr);
-
-	ivec2 res() const;
-};
-
-inline Texture::Texture(string&& tname, SDL_Texture* texture) :
-	name(std::move(tname)),
-	tex(texture)
-{}
-
-inline ivec2 Texture::res() const {
-	return texSize(tex);
 }
 
 // files and strings
@@ -297,6 +302,7 @@ fs::path parentPath(const fs::path& path);
 string strEnclose(string_view str);
 vector<string> strUnenclose(string_view str);
 vector<string_view> getWords(string_view str);
+string currentDateTimeStr(char ts = ':', char sep = ' ', char ds = '-');
 
 inline bool isSpace(int c) {
 	return (c > '\0' && c <= ' ') || c == 0x7F;
@@ -308,13 +314,7 @@ inline bool notSpace(int c) {
 
 inline string_view trim(string_view str) {
 	string_view::iterator pos = std::find_if(str.begin(), str.end(), notSpace);
-	return string_view(&*pos, std::find_if(str.rbegin(), std::make_reverse_iterator(pos), notSpace).base() - pos);
-}
-
-inline string firstUpper(string_view str) {
-	string txt(str);
-	txt[0] = toupper(txt[0]);
-	return txt;
+	return string_view(str.data() + (pos - str.begin()), std::find_if(str.rbegin(), std::make_reverse_iterator(pos), notSpace).base() - pos);
 }
 
 inline bool isDsep(int c) {
@@ -377,13 +377,15 @@ string toStr(T num, uint8 pad) {
 		std::transform(buf.data(), res.ptr, buf.data(), toupper);
 
 	uint8 len = res.ptr - buf.data();
-	if (pad > len) {
-		pad = std::min(uint8(pad - len), uint8(buf.size()));
-		std::move_backward(buf.data(), res.ptr, buf.data() + pad);
-		std::fill_n(buf.begin(), pad, '0');
-		len += pad;
-	}
-	return string(buf.data(), len);
+	if (len >= pad)
+		return string(buf.data(), res.ptr);
+
+	string str;
+	str.resize(pad);
+	pad -= len;
+	std::fill_n(str.begin(), pad, '0');
+	std::copy(buf.data(), res.ptr, str.begin() + pad);
+	return str;
 }
 
 template <class T = float, std::enable_if_t<std::is_floating_point_v<T>, int> = 0>
@@ -442,7 +444,7 @@ T toVec(string_view str, typename T::value_type fill = typename T::value_type(0)
 	for (glm::length_t i = 0; p < str.length() && i < vec.length(); ++i) {
 		for (; p < str.length() && isSpace(str[p]); ++p);
 		for (; p < str.length(); ++p)
-			if (std::from_chars_result res = std::from_chars(str.data() + p, str.data() + str.length(), vec[i], args...); res.ec == std::errc()) {
+			if (std::from_chars_result res = std::from_chars(str.data() + p, str.data() + str.length(), vec[i], args...); res.ec == std::errc(0)) {
 				p = res.ptr - str.data();
 				break;
 			}
@@ -450,7 +452,7 @@ T toVec(string_view str, typename T::value_type fill = typename T::value_type(0)
 	return vec;
 }
 
-// container stuff
+// other
 
 template <class T>
 T btom(bool b) {
@@ -460,4 +462,18 @@ T btom(bool b) {
 template <class T, glm::qualifier Q = glm::defaultp>
 glm::vec<2, T, Q> vswap(const T& x, const T& y, bool swap) {
 	return swap ? glm::vec<2, T, Q>(y, x) : glm::vec<2, T, Q>(x, y);
+}
+
+template <class... A>
+void logInfo(A&&... args) {
+	std::ostringstream ss;
+	(ss << ... << std::forward<A>(args));
+	SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s%s", ss.str().c_str(), linend.data());
+}
+
+template <class... A>
+void logError(A&&... args) {
+	std::ostringstream ss;
+	(ss << ... << std::forward<A>(args));
+	SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s%s", ss.str().c_str(), linend.data());
 }

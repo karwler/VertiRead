@@ -37,14 +37,14 @@ void InputSys::eventMouseMotion(const SDL_MouseMotionEvent& motion) {
 	mouseLast = motion.type == SDL_MOUSEMOTION;
 	mouseMove = ivec2(motion.xrel, motion.yrel);
 	moveTime = motion.timestamp;
-	World::scene()->onMouseMove(ivec2(motion.x, motion.y), mouseMove);
+	World::scene()->onMouseMove(ivec2(motion.x, motion.y) + World::winSys()->winViewOffset(motion.windowID), mouseMove);
 }
 
 void InputSys::eventMouseButtonDown(const SDL_MouseButtonEvent& button) {
 	mouseLast = button.type == SDL_MOUSEBUTTONDOWN;
 	switch (button.button) {
 	case SDL_BUTTON_LEFT: case SDL_BUTTON_MIDDLE: case SDL_BUTTON_RIGHT:
-		World::scene()->onMouseDown(ivec2(button.x, button.y), button.button, button.clicks);
+		World::scene()->onMouseDown(ivec2(button.x, button.y) + World::winSys()->winViewOffset(button.windowID), button.button, button.clicks);
 		break;
 	case SDL_BUTTON_X1:
 		World::srun(bindings[uint8(Binding::Type::escape)].bcall);
@@ -56,12 +56,16 @@ void InputSys::eventMouseButtonDown(const SDL_MouseButtonEvent& button) {
 
 void InputSys::eventMouseButtonUp(const SDL_MouseButtonEvent& button) {
 	if (mouseLast = button.type == SDL_MOUSEBUTTONUP; button.button < SDL_BUTTON_X1)
-		World::scene()->onMouseUp(ivec2(button.x, button.y), button.button, button.clicks);
+		World::scene()->onMouseUp(ivec2(button.x, button.y) + World::winSys()->winViewOffset(button.windowID), button.button, button.clicks);
 }
 
 void InputSys::eventMouseWheel(const SDL_MouseWheelEvent& wheel) {
 	mouseLast = true;
-	World::scene()->onMouseWheel(ivec2(wheel.x, -wheel.y));
+#if SDL_VERSION_ATLEAST(2, 26, 0)
+	World::scene()->onMouseWheel(ivec2(wheel.mouseX, wheel.mouseY), ivec2(wheel.x, -wheel.y));
+#else
+	World::scene()->onMouseWheel(World::winSys()->mousePos(), ivec2(wheel.x, -wheel.y));
+#endif
 }
 
 void InputSys::eventKeypress(const SDL_KeyboardEvent& key) const {
@@ -121,7 +125,7 @@ void InputSys::eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis) const {
 }
 
 void InputSys::eventFingerMove(const SDL_TouchFingerEvent& fin) {
-	vec2 size = World::drawSys()->viewport().size();
+	vec2 size = World::drawSys()->getViewRes();
 	SDL_MouseMotionEvent event{};
 	event.type = fin.type;
 	event.timestamp = fin.timestamp;
@@ -136,11 +140,11 @@ void InputSys::eventFingerMove(const SDL_TouchFingerEvent& fin) {
 }
 
 void InputSys::eventFingerDown(const SDL_TouchFingerEvent& fin) {
-	eventMouseButtonDown(toMouseEvent(fin, SDL_PRESSED, World::drawSys()->viewport().size()));
+	eventMouseButtonDown(toMouseEvent(fin, SDL_PRESSED, World::drawSys()->getViewRes()));
 }
 
 void InputSys::eventFingerUp(const SDL_TouchFingerEvent& fin) {
-	eventMouseButtonUp(toMouseEvent(fin, SDL_RELEASED, World::drawSys()->viewport().size()));
+	eventMouseButtonUp(toMouseEvent(fin, SDL_RELEASED, World::drawSys()->getViewRes()));
 	World::scene()->updateSelect(ivec2(-1));
 }
 

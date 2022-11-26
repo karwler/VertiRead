@@ -98,6 +98,12 @@ void Binding::reset(Type newType) {
 		setJbutton(8);
 		setGbutton(SDL_CONTROLLER_BUTTON_BACK);
 		break;
+	case Type::multiFullscreen:
+		bcall = &ProgState::eventMultiFullscreen;
+		setKey(SDL_SCANCODE_G);
+		setJbutton(9);
+		setGbutton(SDL_CONTROLLER_BUTTON_START);
+		break;
 	case Type::hide:
 		bcall = &ProgState::eventHide;
 		setKey(SDL_SCANCODE_H);
@@ -215,14 +221,14 @@ void Binding::setGaxis(SDL_GameControllerAxis axis, bool positive) {
 // PICTURE LIMIT
 
 PicLim::PicLim(Type ltype, uptrt cnt) :
-	type(ltype),
 	count(cnt),
-	size(defaultSize())
+	size(defaultSize()),
+	type(ltype)
 {}
 
 void PicLim::set(string_view str) {
 	vector<string_view> elems = getWords(str);
-	type = !elems.empty() ? strToEnum<Type>(names, elems[0], Type::none) : Type::none;
+	type = !elems.empty() ? strToEnum(names, elems[0], Type::none) : Type::none;
 	count = elems.size() > 1 ? toCount(elems[1]) : defaultCount;
 	size = elems.size() > 2 ? toSize(elems[2]) : defaultSize();
 }
@@ -287,22 +293,33 @@ const fs::path& Settings::setDirLib(const fs::path& drc, const fs::path& dirSets
 			if (dirLib = dirSets / defaultDirLib; !fs::is_directory(dirLib))
 				fs::create_directories(dirLib);
 	} catch (const std::runtime_error& err) {
-		std::cerr << err.what() << std::endl;
+		logError(err.what());
 		dirLib = dirSets / defaultDirLib;
 	}
 	return dirLib;
 }
 
-pair<int, uint32> Settings::getRendererInfo() {
-	SDL_RendererInfo info;
-	for (int i = 0; i < SDL_GetNumRenderDrivers(); ++i)
-		if (!SDL_GetRenderDriverInfo(i, &info) && info.name == renderer)
-			return pair(i, info.flags);
+umap<int, Rect> Settings::displayArrangement() {
+	ivec2 origin(INT_MAX);
+	umap<int, Rect> dsps;
+	for (int i = 0; i < SDL_GetNumVideoDisplays(); ++i)
+		if (Rect rect; !SDL_GetDisplayBounds(i, &rect)) {
+			dsps.emplace(i, rect);
+			origin = glm::min(origin, rect.pos());
+		}
+	for (auto& [id, rect] : dsps)
+		rect.pos() -= origin;
+	return dsps;
+}
 
-	if (!SDL_GetRenderDriverInfo(0, &info)) {
-		renderer = info.name;
-		return pair(0, info.flags);
-	}
-	renderer.clear();
-	return pair(-1, 0);
+void Settings::unionDisplays() {
+	umap<int, Rect> dsps = displayArrangement();
+	for (umap<int, Rect>::iterator it = displays.begin(); it != displays.end(); ++it)
+		if (!dsps.count(it->first))
+			displays.erase(it);
+	for (umap<int, Rect>::const_iterator ds = dsps.begin(); ds != dsps.end(); ++ds)
+		if (umap<int, Rect>::iterator it = displays.find(ds->first); it != displays.end() && it->second.size() != ds->second.size())
+			displays.erase(it);
+	if (displays.empty())
+		displays = std::move(dsps);
 }

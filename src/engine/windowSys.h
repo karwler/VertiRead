@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/utils.h"
+#include "utils/settings.h"
 
 // handles window events and contains video settings
 class WindowSys {
@@ -18,7 +18,7 @@ private:
 	Program* program;
 	Scene* scene;
 	Settings* sets;
-	SDL_Window* window = nullptr;
+	umap<int, SDL_Window*> windows;
 	float winDpi;
 	float dSec = 0.f;		// delta seconds, aka the time between each iteration of the above mentioned loop
 	bool run = true;		// whether the loop in which the program runs should continue
@@ -29,15 +29,16 @@ public:
 
 	float getDSec() const;
 	float getWinDpi() const;
-	uint32 windowID() const;
+	ivec2 mousePos() const;
+	ivec2 winViewOffset(uint32 wid) const;
 	ivec2 displayResolution() const;
-	void setWindowPos(ivec2 pos);
 	void moveCursor(ivec2 mov);
 	void toggleOpacity();
-	void setFullscreen(bool on);
+	void setScreenMode(Settings::Screen sm);
+	void setWindowPos(ivec2 pos);
 	void setResolution(ivec2 res);
-	void setRenderer(string_view name);
 	void resetSettings();
+	void recreateWindows();
 
 	FileSys* getFileSys();
 	DrawSys* getDrawSys();
@@ -51,9 +52,11 @@ private:
 	void exec();
 
 	void createWindow();
-	void destroyWindow();
+	void createMultiWindow();
+	void destroyWindows();
 	void handleEvent(const SDL_Event& event);	// pass events to their specific handlers
 	void eventWindow(const SDL_WindowEvent& winEvent);
+	void eventDisplay(const SDL_DisplayEvent& dspEvent);
 };
 
 inline void WindowSys::close() {
@@ -90,17 +93,4 @@ inline Settings* WindowSys::getSets() {
 
 inline float WindowSys::getWinDpi() const {
 	return winDpi;
-}
-
-inline uint32 WindowSys::windowID() const {
-	return SDL_GetWindowID(window);
-}
-
-inline ivec2 WindowSys::displayResolution() const {
-	SDL_DisplayMode mode;
-	return !SDL_GetDesktopDisplayMode(window ? SDL_GetWindowDisplayIndex(window) : 0, &mode) ? ivec2(mode.w, mode.h) : ivec2(INT_MAX);
-}
-
-inline void WindowSys::setWindowPos(ivec2 pos) {
-	SDL_SetWindowPosition(window, pos.x, pos.y);
 }

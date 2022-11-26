@@ -3,24 +3,19 @@
 #include <windows.h>
 #endif
 
-// GENERAL
-
-Rect Rect::crop(const Rect& rect) {
-	Rect isct;
-	if (!SDL_IntersectRect(this, &rect, &isct))
-		return *this = Rect(0);
-
-	ivec2 te = end(), ie = isct.end();
-	Rect crop;
-	crop.x = isct.x > x ? isct.x - x : 0;
-	crop.y = isct.y > y ? isct.y - y : 0;
-	crop.w = ie.x < te.x ? te.x - ie.x + crop.x : 0;
-	crop.h = ie.y < te.y ? te.y - ie.y + crop.y : 0;
-	*this = isct;
-	return crop;
+constexpr int Rect::operator[](sizet i) const {
+	switch (i) {
+	case 0:
+		return x;
+	case 1:
+		return y;
+	case 2:
+		return w;
+	case 3:
+		return h;
+	}
+	throw std::out_of_range("Rect index " + toStr(i) + " out of range" + linend);
 }
-
-// FILES AND STRINGS
 
 bool isDriveLetter(const fs::path& path) {
 	if (const fs::path::value_type* p = path.c_str(); isalpha(p[0]) && p[1] == ':') {
@@ -88,6 +83,17 @@ vector<string_view> getWords(string_view str) {
 		for (p = i; p < str.length() && isSpace(str[p]); ++p);
 	}
 	return words;
+}
+
+string currentDateTimeStr(char ts, char sep, char ds) {
+	time_t rawt = time(nullptr);
+	tm tim;
+#ifdef _WIN32
+	localtime_s(&tim, &rawt);
+#else
+	localtime_r(&rawt, &tim);
+#endif
+	return toStr(tim.tm_year + 1900) + ds + toStr(tim.tm_mon, 2) + ds + toStr(tim.tm_mday, 2) + sep + toStr(tim.tm_hour, 2) + ts + toStr(tim.tm_min, 2) + ts + toStr(tim.tm_sec, 2);
 }
 
 #ifdef _WIN32

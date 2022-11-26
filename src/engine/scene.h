@@ -34,11 +34,12 @@ public:
 	void onMouseMove(ivec2 mPos, ivec2 mMov);
 	void onMouseDown(ivec2 mPos, uint8 mBut, uint8 mCnt);
 	void onMouseUp(ivec2 mPos, uint8 mBut, uint8 mCnt);
-	void onMouseWheel(ivec2 wMov);
+	void onMouseWheel(ivec2 mPos, ivec2 wMov);
 	void onMouseLeave();
 	void onCompose(string_view str);
 	void onText(string_view str);
 	void onResize();
+	void onDisplayChange();
 
 	Widget* getCapture() const;
 	void setCapture(Widget* inter);

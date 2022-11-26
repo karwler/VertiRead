@@ -32,21 +32,42 @@ Rect Widget::frame() const {
 	return parent->frame();
 }
 
+void Widget::setSize(const Size& size) {
+	relSize = size;
+	parent->onResize();
+}
+
 void Widget::onNavSelect(Direction dir) {
 	parent->navSelectNext(index, dir.vertical() ? center().x : center().y, dir);
 }
 
+int Widget::sizeToPixAbs(const Size& siz, int res) const {
+	switch (siz.mod) {
+	case Size::rela:
+		return int(siz.prc * float(res));
+	case Size::pixv:
+		return siz.pix;
+	case Size::calc:
+		return siz(this);
+	}
+	return 0;
+}
+
 // PICTURE
 
-Picture::Picture(const Size& size, bool bg, SDL_Texture* texture, int margin) :
+Picture::Picture(const Size& size, bool bg, const Texture* texture, int margin) :
 	Widget(size),
 	tex(texture),
 	showBG(bg),
 	texMargin(margin)
 {}
 
-void Picture::drawSelf() const {
-	World::drawSys()->drawPicture(this);
+void Picture::drawSelf(const Rect& view) const {
+	World::drawSys()->drawPicture(this, view);
+}
+
+void Picture::drawAddr(const Rect& view) const {
+	World::drawSys()->drawPictureAddr(this, view);
 }
 
 Color Picture::color() const {
@@ -60,7 +81,7 @@ Rect Picture::texRect() const {
 
 // BUTTON
 
-Button::Button(const Size& size, PCall leftCall, PCall rightCall, PCall doubleCall, SDL_Texture* tip, bool bg, SDL_Texture* texture, int margin) :
+Button::Button(const Size& size, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, bool bg, const Texture* texture, int margin) :
 	Picture(size, bg, texture, margin),
 	lcall(leftCall),
 	rcall(rightCall),
@@ -70,7 +91,7 @@ Button::Button(const Size& size, PCall leftCall, PCall rightCall, PCall doubleCa
 
 Button::~Button() {
 	if (tooltip)
-		SDL_DestroyTexture(tooltip);
+		tooltip->free();
 }
 
 void Button::onClick(ivec2, uint8 mBut) {
@@ -104,10 +125,13 @@ Color Button::color() const {
 	return Color::normal;
 }
 
-Rect Button::tooltipRect(ivec2& tres) const {
-	tres = texSize(tooltip);
-	ivec2 view = World::drawSys()->viewport().size();
-	Rect rct(mousePos() + ivec2(0, DrawSys::cursorHeight), tres + tooltipMargin * 2);
+const Texture* Button::getTooltip() {
+	return tooltip;
+}
+
+Rect Button::tooltipRect() const {
+	ivec2 view = World::drawSys()->getViewRes();
+	Rect rct(World::winSys()->mousePos() + ivec2(0, DrawSys::cursorHeight), tooltip ? tooltip->getRes() + tooltipMargin * 2 : ivec2(0));
 	if (rct.x + rct.w > view.x)
 		rct.x = view.x - rct.w;
 	if (rct.y + rct.h > view.y)
@@ -117,13 +141,13 @@ Rect Button::tooltipRect(ivec2& tres) const {
 
 // CHECK BOX
 
-CheckBox::CheckBox(const Size& size, bool checked, PCall leftCall, PCall rightCall, PCall doubleCall, SDL_Texture* tip, bool bg, SDL_Texture* texture, int margin) :
+CheckBox::CheckBox(const Size& size, bool checked, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, bool bg, const Texture* texture, int margin) :
 	Button(size, leftCall, rightCall, doubleCall, tip, bg, texture, margin),
 	on(checked)
 {}
 
-void CheckBox::drawSelf() const {
-	World::drawSys()->drawCheckBox(this);
+void CheckBox::drawSelf(const Rect& view) const {
+	World::drawSys()->drawCheckBox(this, view);
 }
 
 void CheckBox::onClick(ivec2 mPos, uint8 mBut) {
@@ -140,15 +164,15 @@ Rect CheckBox::boxRect() const {
 
 // SLIDER
 
-Slider::Slider(const Size& size, int value, int minimum, int maximum, PCall leftCall, PCall rightCall, PCall doubleCall, SDL_Texture* tip, bool bg, SDL_Texture* texture, int margin) :
+Slider::Slider(const Size& size, int value, int minimum, int maximum, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, bool bg, const Texture* texture, int margin) :
 	Button(size, leftCall, rightCall, doubleCall, tip, bg, texture, margin),
 	val(value),
 	vmin(minimum),
 	vmax(maximum)
 {}
 
-void Slider::drawSelf() const {
-	World::drawSys()->drawSlider(this);
+void Slider::drawSelf(const Rect& view) const {
+	World::drawSys()->drawSlider(this, view);
 }
 
 void Slider::onClick(ivec2, uint8 mBut) {
@@ -197,15 +221,15 @@ int Slider::sliderLim() const {
 
 // PROGRESS BAR
 
-ProgressBar::ProgressBar(const Size& size, int value, int minimum, int maximum, bool bg, SDL_Texture* texture, int margin) :
+ProgressBar::ProgressBar(const Size& size, int value, int minimum, int maximum, bool bg, const Texture* texture, int margin) :
 	Picture(size, bg, texture, margin),
 	val(value),
 	vmin(minimum),
 	vmax(maximum)
 {}
 
-void ProgressBar::drawSelf() const {
-	World::drawSys()->drawProgressBar(this);
+void ProgressBar::drawSelf(const Rect& view) const {
+	World::drawSys()->drawProgressBar(this, view);
 }
 
 Rect ProgressBar::barRect() const {
@@ -216,7 +240,7 @@ Rect ProgressBar::barRect() const {
 
 // LABEL
 
-Label::Label(const Size& size, string line, PCall leftCall, PCall rightCall, PCall doubleCall, SDL_Texture* tip, Alignment alignment, SDL_Texture* texture, bool bg, int lineMargin, int iconMargin) :
+Label::Label(const Size& size, string line, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, Alignment alignment, const Texture* texture, bool bg, int lineMargin, int iconMargin) :
 	Button(size, leftCall, rightCall, doubleCall, tip, bg, texture, iconMargin),
 	text(std::move(line)),
 	textMargin(lineMargin),
@@ -224,11 +248,12 @@ Label::Label(const Size& size, string line, PCall leftCall, PCall rightCall, PCa
 {}
 
 Label::~Label() {
-	SDL_DestroyTexture(textTex);
+	if (textTex)
+		textTex->free();
 }
 
-void Label::drawSelf() const {
-	World::drawSys()->drawLabel(this);
+void Label::drawSelf(const Rect& view) const {
+	World::drawSys()->drawLabel(this, view);
 }
 
 void Label::onResize() {
@@ -249,6 +274,10 @@ void Label::setText(const string& str) {
 	updateTextTex();
 }
 
+Rect Label::textRect() const {
+	return Rect(textPos(), textTex->getRes());
+}
+
 Rect Label::textFrame() const {
 	Rect rct = rect();
 	int ofs = textIconOffset();
@@ -258,8 +287,11 @@ Rect Label::textFrame() const {
 Rect Label::texRect() const {
 	Rect rct = rect();
 	rct.h -= texMargin * 2;
-	ivec2 res = texSize(tex);
-	return Rect(rct.pos() + texMargin, ivec2(float(rct.h * res.x) / float(res.y), rct.h));
+	return Rect(rct.pos() + texMargin, ivec2(float(rct.h * tex->getRes().x) / float(tex->getRes().y), rct.h));
+}
+
+int Label::textIconOffset() const {
+	return tex ? int(float(size().y * tex->getRes().x) / float(tex->getRes().y)) : 0;
 }
 
 ivec2 Label::textPos() const {
@@ -268,29 +300,22 @@ ivec2 Label::textPos() const {
 		return ivec2(pos.x + textIconOffset() + textMargin, pos.y);
 	case Alignment::center: {
 		int iofs = textIconOffset();
-		return ivec2(pos.x + iofs + (size().x - iofs - texSize(textTex).x) / 2, pos.y); }
+		return ivec2(pos.x + iofs + (size().x - iofs - textTex->getRes().x) / 2, pos.y); }
 	case Alignment::right:
-		return ivec2(pos.x + size().x - texSize(textTex).x - textMargin, pos.y);
+		return ivec2(pos.x + size().x - textTex->getRes().x - textMargin, pos.y);
 	}
 	throw std::runtime_error("Invalid alignment type: " + toStr(align));
 }
 
-int Label::textIconOffset() const {
-	if (tex) {
-		ivec2 res = texSize(tex);
-		return int(float(size().y * res.x) / float(res.y));
-	}
-	return 0;
-}
-
 void Label::updateTextTex() {
-	SDL_DestroyTexture(textTex);
+	if (textTex)
+		textTex->free();
 	textTex = World::drawSys()->renderText(text, size().y);
 }
 
-// SWITCH BOX
+// COMBO BOX
 
-ComboBox::ComboBox(const Size& size, string curOption, vector<string>&& opts, PCall call, SDL_Texture* tip, Alignment alignment, SDL_Texture* texture, bool bg, int lineMargin, int iconMargin) :
+ComboBox::ComboBox(const Size& size, string curOption, vector<string>&& opts, PCall call, Texture* tip, Alignment alignment, const Texture* texture, bool bg, int lineMargin, int iconMargin) :
 	Label(size, std::move(curOption), call, call, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
 	options(std::move(opts)),
 	curOpt(std::min(sizet(std::find(options.begin(), options.end(), text) - options.begin()), options.size()))
@@ -308,13 +333,18 @@ void ComboBox::setCurOpt(sizet id) {
 
 // LABEL EDIT
 
-LabelEdit::LabelEdit(const Size& size, string line, PCall leftCall, PCall rightCall, PCall doubleCall, SDL_Texture* tip, TextType type, bool focusLossConfirm, SDL_Texture* texture, bool bg, int lineMargin, int iconMargin) :
+LabelEdit::LabelEdit(const Size& size, string line, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, TextType type, bool focusLossConfirm, const Texture* texture, bool bg, int lineMargin, int iconMargin) :
 	Label(size, std::move(line), leftCall, rightCall, doubleCall, tip, Alignment::left, texture, bg, lineMargin, iconMargin),
 	unfocusConfirm(focusLossConfirm),
 	textType(type),
 	oldText(text)
 {
 	cleanText();
+}
+
+void LabelEdit::drawTop(const Rect& view) const {
+	ivec2 ps = position();
+	World::drawSys()->drawCaret(Rect(caretPos() + ps.x + textIconOffset() + textMargin, ps.y, caretWidth, size().y), frame(), view);
 }
 
 void LabelEdit::onClick(ivec2, uint8 mBut) {
@@ -448,11 +478,6 @@ void LabelEdit::onTextReset() {
 	setCPos(text.length());
 }
 
-Rect LabelEdit::caretRect() {
-	ivec2 ps = position();
-	return { caretPos() + ps.x + textIconOffset() + textMargin, ps.y, caretWidth, size().y };
-}
-
 void LabelEdit::setCPos(uint cp) {
 	cpos = cp;
 	if (int cl = caretPos(); cl < 0)
@@ -461,8 +486,8 @@ void LabelEdit::setCPos(uint cp) {
 		textOfs -= ce - sx;
 }
 
-int LabelEdit::caretPos() {
-	return World::drawSys()->textLength(text.data(), cpos, size().y) + textOfs;
+int LabelEdit::caretPos() const {
+	return World::drawSys()->textLength(text, cpos, size().y) + textOfs;
 }
 
 void LabelEdit::confirm() {
@@ -648,7 +673,7 @@ void LabelEdit::cleanUFloatSpacedText() {
 
 // KEY GETTER
 
-KeyGetter::KeyGetter(const Size& size, AcceptType type, Binding::Type binding, SDL_Texture* tip, Alignment alignment, SDL_Texture* texture, bool bg, int lineMargin, int iconMargin) :
+KeyGetter::KeyGetter(const Size& size, AcceptType type, Binding::Type binding, Texture* tip, Alignment alignment, const Texture* texture, bool bg, int lineMargin, int iconMargin) :
 	Label(size, bindingText(binding, type), nullptr, nullptr, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
 	acceptType(type),
 	bindingType(binding)
@@ -763,4 +788,236 @@ string KeyGetter::bindingText(Binding::Type binding, KeyGetter::AcceptType accep
 		throw std::runtime_error("Invalid accept type: " + toStr(accept));
 	}
 	return string();
+}
+
+// WINDOW ARRANGER
+
+WindowArranger::Dsp::Dsp(const Rect& vdsp, bool on) :
+	full(vdsp),
+	active(on)
+{}
+
+WindowArranger::WindowArranger(const Size& size, float baseScale, bool vertExp, PCall leftCall, PCall rightCall, Texture* tip, bool bg, const Texture* texture, int margin) :
+	Button(size, leftCall, rightCall, nullptr, tip, bg, texture, margin),
+	bscale(baseScale),
+	vertical(vertExp)
+{
+	calcDisplays();
+}
+
+WindowArranger::~WindowArranger() {
+	freeTextures();
+}
+
+void WindowArranger::freeTextures() {
+	for (auto& [id, dsp] : disps)
+		if (dsp.txt)
+			dsp.txt->free();
+}
+
+void WindowArranger::calcDisplays() {
+	umap<int, Rect> all = Settings::displayArrangement();
+	disps.reserve(all.size());
+	totalDim = ivec2(0);
+
+	const umap<int, Rect>& sadisp = World::sets()->displays;
+	for (auto& [id, rect] : sadisp) {
+		disps.emplace(id, Dsp(rect, true));
+		totalDim = glm::max(totalDim, rect.end());
+	}
+	ivec2 border = vswap(totalDim[vertical], 0, vertical);
+	for (auto& [id, rect] : all) {
+		Rect dst = rect;
+		if (std::any_of(disps.begin(), disps.end(), [&dst](const pair<int, Dsp>& p) -> bool { return p.second.full.overlap(dst); })) {
+			dst.pos() = border;
+			border[vertical] += dst.size()[vertical];
+		}
+		if (auto [it, ok] = disps.emplace(id, Dsp(dst, false)); ok)
+			totalDim = glm::max(totalDim, dst.end());
+	}
+}
+
+void WindowArranger::buildEntries() {
+	float scale = entryScale(size());
+	for (auto& [id, dsp] : disps) {
+		dsp.rect = Rect(vec2(dsp.full.pos()) * scale, vec2(dsp.full.size()) * scale);
+		dsp.txt = World::drawSys()->renderText(toStr(id), dsp.rect.h);
+	}
+}
+
+void WindowArranger::drawSelf(const Rect& view) const {
+	World::drawSys()->drawWindowArranger(this, view);
+}
+
+void WindowArranger::drawTop(const Rect& view) const {
+	const Dsp& dsp = disps.at(dragging);
+	World::drawSys()->drawWaDisp(dragr, Color::light, dsp.txt ? Rect(dragr.pos() + (dragr.size() - dsp.txt->getRes()) / 2, dsp.txt->getRes()) : Rect(0), dsp.txt, frame(), view);
+}
+
+void WindowArranger::onResize() {
+	freeTextures();
+	buildEntries();
+}
+
+void WindowArranger::postInit() {
+	buildEntries();
+}
+
+void WindowArranger::onClick(ivec2 mPos, uint8 mBut) {
+	if (((mBut == SDL_BUTTON_LEFT && lcall) || (mBut == SDL_BUTTON_RIGHT && rcall)) && disps.size() > 1) {
+		selected = dispUnderPos(mPos);
+		if (umap<int, Dsp>::iterator it = disps.find(selected); it != disps.end()) {
+			it->second.active = !it->second.active;
+			World::prun(mBut == SDL_BUTTON_LEFT ? lcall : rcall, this);
+		}
+	}
+}
+
+void WindowArranger::onMouseMove(ivec2 mPos, ivec2) {
+	selected = dispUnderPos(mPos);
+}
+
+void WindowArranger::onHold(ivec2 mPos, uint8 mBut) {
+	if (mBut == SDL_BUTTON_LEFT && disps.size() > 1) {
+		dragging = dispUnderPos(mPos);
+		if (umap<int, Dsp>::iterator it = disps.find(dragging); it != disps.end()) {
+			World::scene()->setCapture(this);
+			dragr = Rect(it->second.rect.pos() + position() + winMargin, it->second.rect.size());
+		}
+	}
+}
+
+void WindowArranger::onDrag(ivec2 mPos, ivec2) {
+	dragr.pos() = mPos - disps.at(dragging).rect.size() / 2;
+	if (ivec2 spos = snapDrag(); spos.x >= 0 && spos.y >= 0)
+		dragr.pos() = ivec2(vec2(spos) * entryScale(size())) + position() + winMargin;
+}
+
+void WindowArranger::onUndrag(uint8 mBut) {
+	if (mBut == SDL_BUTTON_LEFT) {
+		World::scene()->setCapture(nullptr);
+
+		ivec2 spos = snapDrag();
+		float scale = entryScale(size());
+		Dsp& dsp = disps.find(dragging)->second;
+		dsp.full.pos() = spos.x >= 0 && spos.y >= 0 ? spos : ivec2(vec2(dragr.pos() - position() - winMargin) / scale);
+		glm::clamp(dsp.full.pos(), ivec2(0), totalDim);
+		totalDim = glm::max(totalDim, dsp.full.end());
+		dsp.rect.pos() = vec2(dsp.full.pos()) * scale;
+		World::prun(lcall, this);
+	}
+}
+
+ivec2 WindowArranger::snapDrag() const {
+	constexpr array<pair<uint, uint>, 24> snapRelationsOuter = {
+		pair(0, 2), pair(0, 5), pair(0, 7),	// top left to top right, bottom left, bottom right
+		pair(1, 5), pair(1, 6), pair(1, 7),	// top center to bottom left, bottom center, bottom right
+		pair(2, 0), pair(2, 5), pair(2, 7),	// top right to top left, bottom left, bottom right
+		pair(3, 2), pair(3, 4), pair(3, 7),	// left center to right top, right center, right bottom
+		pair(4, 0), pair(4, 3), pair(4, 5),	// right center to left top, left center, left bottom
+		pair(5, 0), pair(5, 2), pair(5, 7),	// bottom left to top left, top right, bottom right
+		pair(6, 0), pair(6, 1), pair(6, 2),	// bottom center to top left, top center, top right
+		pair(7, 0), pair(7, 2), pair(7, 5)	// bottom right to top left, top right, bottom left
+	};
+	constexpr array<pair<uint, uint>, 8> snapRelationsInner = {
+		pair(0, 0), pair(1, 1), pair(2, 2), pair(3, 3), pair(4, 4), pair(5, 5), pair(6, 6), pair(7, 7)
+	};
+	ivec2 (* const offsetCalc[8])(ivec2, ivec2) = {
+		[](ivec2, ivec2 pnt) -> ivec2 { return pnt; },
+		[](ivec2 siz, ivec2 pnt) -> ivec2 { return ivec2(pnt.x - siz.x / 2, pnt.y); },
+		[](ivec2 siz, ivec2 pnt) -> ivec2 { return ivec2(pnt.x - siz.x, pnt.y); },
+		[](ivec2 siz, ivec2 pnt) -> ivec2 { return ivec2(pnt.x, pnt.y - siz.y / 2); },
+		[](ivec2 siz, ivec2 pnt) -> ivec2 { return ivec2(pnt.x - siz.x, pnt.y - siz.y / 2); },
+		[](ivec2 siz, ivec2 pnt) -> ivec2 { return ivec2(pnt.x, pnt.y - siz.y); },
+		[](ivec2 siz, ivec2 pnt) -> ivec2 { return ivec2(pnt.x - siz.x / 2, pnt.y - siz.y); },
+		[](ivec2 siz, ivec2 pnt) -> ivec2 { return pnt - siz; }
+	};
+
+	umap<int, Dsp>::const_iterator snapFrom = disps.find(dragging);
+	array<ivec2, 8> snaps = getSnapPoints(Rect(vec2(dragr.pos() - position() - winMargin) / entryScale(size()), snapFrom->second.full.size()));
+	uint snapId;
+	ivec2 snapPnt;
+	float minDist = FLT_MAX;
+	for (umap<int, Dsp>::const_iterator it = disps.begin(); it != disps.end(); ++it)
+		if (it->first != dragging)
+			scanClosestSnapPoint(snapRelationsOuter, it->second.full, snaps, snapId, snapPnt, minDist);
+	scanClosestSnapPoint(snapRelationsInner, Rect(ivec2(0), totalDim), snaps, snapId, snapPnt, minDist);
+	return minDist <= float(std::min(snapFrom->second.full.w, snapFrom->second.full.h)) / 3.f
+		? offsetCalc[snapId](snapFrom->second.full.size(), snapPnt)
+		: ivec2(INT_MIN);
+}
+
+array<ivec2, 8> WindowArranger::getSnapPoints(const Rect& rect) {
+	return {
+		rect.pos(),
+		ivec2(rect.x + rect.w / 2, rect.y),
+		ivec2(rect.end().x, rect.y),
+		ivec2(rect.x, rect.y + rect.h / 2),
+		ivec2(rect.end().x, rect.y + rect.h / 2),
+		ivec2(rect.x, rect.end().y),
+		ivec2(rect.x + rect.w / 2, rect.end().y),
+		rect.end()
+	};
+}
+
+template <sizet S>
+void WindowArranger::scanClosestSnapPoint(const array<pair<uint, uint>, S>& relations, const Rect& rect, const array<ivec2, 8>& snaps, uint& snapId, ivec2& snapPnt, float& minDist) {
+	array<ivec2, 8> rpnts = getSnapPoints(rect);
+	for (auto [from, to] : relations)
+		if (float dist = glm::length(vec2(rpnts[to] - snaps[from])); dist < minDist) {
+			minDist = dist;
+			snapPnt = rpnts[to];
+			snapId = from;
+		}
+}
+
+void WindowArranger::onDisplayChange() {
+	freeTextures();
+	disps.clear();
+	calcDisplays();
+	buildEntries();
+}
+
+bool WindowArranger::navSelectable() const {
+	return true;
+}
+
+Color WindowArranger::color() const {
+	return Color::dark;
+}
+
+const Texture* WindowArranger::getTooltip() {
+	return disps.count(selected) ? tooltip : nullptr;
+}
+
+bool WindowArranger::draggingDisp(int id) const {
+	return id == dragging && World::scene()->getCapture() == this;
+}
+
+int WindowArranger::dispUnderPos(ivec2 pnt) const {
+	ivec2 pos = position();
+	for (const auto& [id, dsp] : disps)
+		if (offsetDisp(dsp.rect, pos).contain(pnt))
+			return id;
+	return Renderer::singleDspId;
+}
+
+float WindowArranger::entryScale(ivec2 siz) const {
+	int fsiz = siz[!vertical] - winMargin * 2;
+	return int(float(totalDim[!vertical]) * bscale) <= fsiz ? bscale : float(totalDim[!vertical]) / float(fsiz);
+}
+
+tuple<Rect, Color, Rect, const Texture*> WindowArranger::dispRect(int id, const Dsp& dsp) const {
+	ivec2 offs = position() + winMargin;
+	Rect rct = Rect(dsp.rect.pos() + offs, dsp.rect.size());
+	Color clr = id != selected || World::scene()->select != this || World::scene()->getCapture() != this ? dsp.active ? Color::light : Color::normal : Color::select;
+	return tuple(rct, clr, dsp.txt ? Rect(rct.pos() + (rct.size() - dsp.txt->getRes()) / 2, dsp.txt->getRes()) : Rect(0), dsp.txt);
+}
+
+umap<int, Rect> WindowArranger::getActiveDisps() const {
+	umap<int, Rect> act;
+	for (auto& [id, dsp] : disps)
+		if (dsp.active)
+			act.emplace(id, dsp.full);
+	return act;
 }

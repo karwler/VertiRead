@@ -75,10 +75,10 @@ void Scene::onMouseUp(ivec2 mPos, uint8 mBut, uint8 mCnt) {
 		select->onClick(mPos, mBut);
 }
 
-void Scene::onMouseWheel(ivec2 wMov) {
+void Scene::onMouseWheel(ivec2 mPos, ivec2 wMov) {
 	if (ScrollArea* box = getSelectedScrollArea()) {
 		box->onScroll(wMov * scrollFactorWheel);
-		updateSelect(mousePos());
+		updateSelect(mPos);
 	} else if (select)
 		select->onScroll(wMov * scrollFactorWheel);
 }
@@ -111,6 +111,14 @@ void Scene::onResize() {
 		overlay->onResize();
 	if (context)
 		context->onResize();
+}
+
+void Scene::onDisplayChange() {
+	layout->onDisplayChange();
+	if (popup)
+		popup->onDisplayChange();
+	if (overlay)
+		overlay->onDisplayChange();
 }
 
 void Scene::resetLayouts() {
@@ -149,7 +157,7 @@ void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
 	if (popup = newPopup; popup)
 		popup->postInit();
 	if (capture = newCapture; capture)
-		capture->onClick(mousePos(), SDL_BUTTON_LEFT);
+		capture->onClick(World::winSys()->mousePos(), SDL_BUTTON_LEFT);
 	if (!World::inputSys()->mouseLast)
 		select = capture ? capture : popup ? popup->firstNavSelect : nullptr;
 	updateSelect();
@@ -168,11 +176,11 @@ void Scene::setContext(Context* newContext) {
 
 void Scene::updateSelect() {
 	if (World::inputSys()->mouseLast)
-		updateSelect(mousePos());
+		updateSelect(World::winSys()->mousePos());
 }
 
 Widget* Scene::getSelected(ivec2 mPos) {
-	if (!World::drawSys()->viewport().contain(mPos))
+	if (!Rect(ivec2(0), World::drawSys()->getViewRes()).contain(mPos))
 		return nullptr;
 
 	Layout* box = layout;
@@ -182,6 +190,11 @@ Widget* Scene::getSelected(ivec2 mPos) {
 		box = popup;
 	else if (overlayFocused(mPos))
 		box = overlay;
+
+	if (World::sets()->gpuSelecting) {
+		Widget* wgt = World::drawSys()->getSelectedWidget(box, mPos);
+		return wgt ? wgt->navSelectable() ? wgt : wgt->getParent() : nullptr;
+	}
 
 	for (;;) {
 		Rect frame = box->frame();

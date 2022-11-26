@@ -4,9 +4,8 @@
 #include <archive.h>
 #include <archive_entry.h>
 #include <queue>
-#ifdef _WIN32
-#include <windows.h>
-#else
+#include <regex>
+#ifndef _WIN32
 #include <dirent.h>
 #include <dlfcn.h>
 #include <fontconfig/fontconfig.h>
@@ -85,7 +84,7 @@ FileSys::FileSys() {
 		SDL_free(path);
 	}
 	if (dirBase.empty())
-		std::cerr << "failed to get base directory" << std::endl;
+		logError("failed to get base directory");
 
 #ifdef _WIN32
 	dirSets = fs::path(_wgetenv(L"AppData")) / L"VertiRead";
@@ -95,12 +94,27 @@ FileSys::FileSys() {
 	dirConfs = dirBase / "share/vertiread";
 #endif
 
+	try {
+		std::regex rgx(R"r(log_[\d\-_]+\.txt)r", std::regex::icase | std::regex::optimize);
+		for (const fs::directory_entry& it : fs::directory_iterator(dirSets, fs::directory_options::skip_permission_denied))
+			if (std::error_code ec; std::regex_match(it.path().filename().u8string(), rgx) && it.is_regular_file(ec))
+				fs::remove(it.path(), ec);
+
+		fs::path logPath = dirSets / ("log_" + currentDateTimeStr('-', '_') + ".txt");
+		if (logFile.open(logPath); logFile.good())
+			SDL_LogSetOutputFunction(logWrite, &logFile);
+		else
+			logError("failed to create log file: ", logPath);
+	} catch (const std::runtime_error& err) {
+		logError(err.what());
+	}
+
 	// check if all (more or less) necessary files and directories exist
 	try {
 		if (!fs::is_directory(dirSets) && !fs::create_directories(dirSets))
 			throw std::runtime_error("failed to create settings directory");
 	} catch (const std::runtime_error& err) {
-		std::cerr << err.what() << std::endl;
+		logError(err.what());
 	}
 	try {
 		if (!fs::is_directory(dirIcons()))
@@ -108,8 +122,13 @@ FileSys::FileSys() {
 		if (!fs::is_regular_file(dirConfs / fileThemes))
 			throw std::runtime_error("failed to find themes file");
 	} catch (const std::runtime_error& err) {
-		std::cerr << err.what() << std::endl;
+		logError(err.what());
 	}
+}
+
+FileSys::~FileSys() {
+	SDL_LogSetOutputFunction(nullptr, nullptr);
+	logFile.close();
 }
 
 vector<string> FileSys::getAvailableThemes() const {
@@ -124,8 +143,8 @@ vector<string> FileSys::getAvailableThemes() const {
 	return !themes.empty() ? themes : vector<string>{ "default" };
 }
 
-array<SDL_Color, Settings::defaultColors.size()> FileSys::loadColors(string_view theme) const {
-	array<SDL_Color, Settings::defaultColors.size()> colors = Settings::defaultColors;
+array<vec4, Settings::defaultColors.size()> FileSys::loadColors(string_view theme) const {
+	array<vec4, Settings::defaultColors.size()> colors = Settings::defaultColors;
 	vector<string> lines = readFileLines(dirSets / fileThemes, false);
 	if (lines.empty())
 		lines = readFileLines(dirConfs / fileThemes);
@@ -140,7 +159,7 @@ array<SDL_Color, Settings::defaultColors.size()> FileSys::loadColors(string_view
 			break;
 		if (il.getType() == IniLine::Type::prpVal)
 			if (sizet cid = strToEnum<sizet>(Settings::colorNames, il.getPrp()); cid < colors.size())
-				colors[cid] = readColor(il.getVal());
+				colors[cid] = toVec<vec4>(il.getVal());
 	}
 	return colors;
 }
@@ -173,35 +192,42 @@ Settings* FileSys::loadSettings() const {
 		if (il.getType() != IniLine::Type::prpVal)
 			continue;
 
-		if (il.getPrp() == iniKeywordMaximized)
+		if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordMaximized))
 			sets->maximized = toBool(il.getVal());
-		else if (il.getPrp() == iniKeywordFullscreen)
-			sets->fullscreen = toBool(il.getVal());
-		else if (il.getPrp() == iniKeywordResolution)
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordScreen))
+			sets->screen = strToEnum(Settings::screenModeNames, il.getVal(), Settings::defaultScreenMode);
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordDisplay))
+			sets->displays[toNum<int>(il.getKey())] = toVec<ivec4>(il.getVal());
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordResolution))
 			sets->resolution = toVec<ivec2, uint>(il.getVal());
-		else if (il.getPrp() == iniKeywordDirection)
-			sets->direction = strToEnum<Direction::Dir>(Direction::names, il.getVal(), Direction::down);
-		else if (il.getPrp() == iniKeywordZoom)
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordVSync))
+			sets->vsync = Settings::VSync(strToEnum(Settings::vsyncNames, il.getVal(), int8(Settings::defaultVSync) + 1) - 1);
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordRenderer))
+			sets->renderer = strToEnum(Settings::rendererNames, il.getVal(), Settings::defaultRenderer);
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordGpuSelecting))
+			sets->gpuSelecting = toBool(il.getVal());
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordDirection))
+			sets->direction = strToEnum(Direction::names, il.getVal(), Settings::defaultDirection);
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordZoom))
 			sets->zoom = toNum<float>(il.getVal());
-		else if (il.getPrp() == iniKeywordSpacing)
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordSpacing))
 			sets->spacing = toNum<ushort>(il.getVal());
-		else if (il.getPrp() == iniKeywordPictureLimit)
+		else if (!SDL_strcasecmp(il.getPrp().c_str(),iniKeywordPictureLimit))
 			sets->picLim.set(il.getVal());
-		else if (il.getPrp() == iniKeywordFont)
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordFont))
 			sets->font = FileSys::isFont(findFont(il.getVal())) ? il.getVal() : Settings::defaultFont;
-		else if (il.getPrp() == iniKeywordTheme)
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordTheme))
 			sets->setTheme(il.getVal(), getAvailableThemes());
-		else if (il.getPrp() == iniKeywordShowHidden)
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordShowHidden))
 			sets->showHidden = toBool(il.getVal());
-		else if (il.getPrp() == iniKeywordLibrary)
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordLibrary))
 			sets->setDirLib(fs::u8path(il.getVal()), dirSets);
-		else if (il.getPrp() == iniKeywordRenderer)
-			sets->renderer = std::move(il.getVal());
-		else if (il.getPrp() == iniKeywordScrollSpeed)
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordScrollSpeed))
 			sets->scrollSpeed = toVec<vec2>(il.getVal());
-		else if (il.getPrp() == iniKeywordDeadzone)
+		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordDeadzone))
 			sets->setDeadzone(toNum<uint>(il.getVal()));
 	}
+	sets->unionDisplays();
 	return sets;
 }
 
@@ -209,12 +235,17 @@ void FileSys::saveSettings(const Settings* sets) const {
 	fs::path path = dirSets / fileSettings;
 	std::ofstream ofh(path, std::ios::binary);
 	if (!ofh.good()) {
-		std::cerr << "failed to write settings file " << path << std::endl;
+		logError("failed to write settings file ", path);
 		return;
 	}
 	IniLine::writeVal(ofh, iniKeywordMaximized, toStr(sets->maximized));
-	IniLine::writeVal(ofh, iniKeywordFullscreen, toStr(sets->fullscreen));
+	IniLine::writeVal(ofh, iniKeywordScreen, Settings::screenModeNames[sizet(sets->screen)]);
+	for (const auto& [id, rect] : sets->displays)
+		IniLine::writeKeyVal(ofh, iniKeywordDisplay, id, toStr(rect.toVec()));
 	IniLine::writeVal(ofh, iniKeywordResolution, sets->resolution.x, ' ', sets->resolution.y);
+	IniLine::writeVal(ofh, iniKeywordVSync, Settings::vsyncNames[sizet(sets->vsync) + 1]);
+	IniLine::writeVal(ofh, iniKeywordRenderer, Settings::rendererNames[sizet(sets->renderer)]);
+	IniLine::writeVal(ofh, iniKeywordGpuSelecting, toStr(sets->gpuSelecting));
 	IniLine::writeVal(ofh, iniKeywordZoom, sets->zoom);
 	IniLine::writeVal(ofh, iniKeywordPictureLimit, PicLim::names[uint8(sets->picLim.type)], ' ', sets->picLim.getCount(), ' ', PicLim::memoryString(sets->picLim.getSize()));
 	IniLine::writeVal(ofh, iniKeywordSpacing, sets->spacing);
@@ -223,7 +254,6 @@ void FileSys::saveSettings(const Settings* sets) const {
 	IniLine::writeVal(ofh, iniKeywordTheme, sets->getTheme());
 	IniLine::writeVal(ofh, iniKeywordShowHidden, toStr(sets->showHidden));
 	IniLine::writeVal(ofh, iniKeywordLibrary, sets->getDirLib().u8string());
-	IniLine::writeVal(ofh, iniKeywordRenderer, sets->renderer);
 	IniLine::writeVal(ofh, iniKeywordScrollSpeed, sets->scrollSpeed.x, ' ', sets->scrollSpeed.y);
 	IniLine::writeVal(ofh, iniKeywordDeadzone, sets->getDeadzone());
 }
@@ -273,7 +303,7 @@ void FileSys::saveBindings(const array<Binding, Binding::names.size()>& bindings
 	fs::path path = dirSets / fileBindings;
 	std::ofstream ofh(path, std::ios::binary);
 	if (!ofh.good()) {
-		std::cerr << "failed to write bindings file " << path << std::endl;
+		logError("failed to write bindings file ", path);
 		return;
 	}
 	for (sizet i = 0; i < bindings.size(); ++i) {
@@ -316,14 +346,14 @@ string FileSys::readTextFile(const fs::path& file, bool printMessage) {
 			return text;
 		}
 	if (printMessage)
-		std::cerr << "failed to open file " << file << std::endl;
+		logError("failed to open file ", file);
 	return string();
 }
 
 bool FileSys::writeTextFile(const fs::path& file, const vector<string>& lines) {
 	std::ofstream ofh(file, std::ios::binary);
 	if (!ofh.good()) {
-		std::cerr << "failed to write file " << file << std::endl;
+		logError("failed to write file ", file);
 		return false;
 	}
 
@@ -332,28 +362,6 @@ bool FileSys::writeTextFile(const fs::path& file, const vector<string>& lines) {
 		ofh.write(linend.data(), linend.length());
 	}
 	return true;
-}
-
-SDL_Color FileSys::readColor(string_view str) {
-	SDL_Color color = { 0, 0, 0, 255 };
-	sizet p = 0;
-	for (; p < str.length() && isSpace(str[p]); ++p);
-	if (p < str.length() && str[p] == '#') {
-		while (++p < str.length() && str[p] == '#');
-		uint32 num;
-		if (std::from_chars_result res = std::from_chars(str.data() + p, str.data() + str.length(), num, 0x10); res.ec == std::errc()) {
-			if (uint8 mov = (8 - (res.ptr - str.data() - p)) * 4)
-				num = (num << mov) + UINT8_MAX;
-			memcpy(&color, &num, sizeof(uint32));
-		}
-	} else for (uint i = 0; i < 4 && p < str.length();) {
-		if (std::from_chars_result res = std::from_chars(str.data() + p, str.data() + str.length(), reinterpret_cast<uint8*>(&color)[i]); res.ec == std::errc()) {
-			++i;
-			for (p = res.ptr - str.data(); p < str.length() && isSpace(str[p]); ++p);
-		} else
-			++p;
-	}
-	return color;
 }
 
 vector<fs::path> FileSys::listDir(const fs::path &drc, bool files, bool dirs, bool showHidden) {
@@ -553,7 +561,7 @@ void FileSys::moveContentThreaded(bool* running, fs::path src, fs::path dst) {
 #else
 		if (fs::path path = src / files[i]; rename(path.c_str(), (dst / files[i]).c_str()))
 #endif
-			std::cerr << "failed no move " << path << std::endl;
+			logError("failed no move ", path);
 	}
 	pushEvent(UserCode::moveFinished);
 	*running = false;
@@ -610,7 +618,7 @@ fs::path FileSys::searchFontDirs(string_view font, initlist<fs::path> dirs) {
 				if (!SDL_strcasecmp(it.path().stem().u8string().c_str(), font.data()) && isFont(it.path()))
 					return it.path();
 		} catch (const std::runtime_error& err) {
-			std::cerr << err.what() << std::endl;
+			logError(err.what());
 		}
 	}
 	return fs::path();
@@ -626,3 +634,27 @@ vector<fs::path> FileSys::listDrives() {
 	return letters;
 }
 #endif
+
+void SDLCALL FileSys::logWrite(void* userdata, int, SDL_LogPriority priority, const char* message) {
+	string prefix = currentDateTimeStr() + ' ';
+	switch (priority) {
+	case SDL_LOG_PRIORITY_VERBOSE:
+		prefix += "VERBOSE: ";
+		break;
+	case SDL_LOG_PRIORITY_DEBUG:
+		prefix += "DEBUG: ";
+		break;
+	case SDL_LOG_PRIORITY_INFO:
+		prefix += "INFO: ";
+		break;
+	case SDL_LOG_PRIORITY_WARN:
+		prefix += "WARN: ";
+		break;
+	case SDL_LOG_PRIORITY_ERROR:
+		prefix += "ERROR: ";
+		break;
+	case SDL_LOG_PRIORITY_CRITICAL:
+		prefix += "CRITICAL: ";
+	}
+	*static_cast<std::ofstream*>(userdata) << prefix << message << linend;
+}

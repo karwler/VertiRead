@@ -32,7 +32,7 @@ xmlDoc* WebSource::downloadHtml(const string& url) {
 	mainLock.unlock();
 
 	if (code) {
-		std::cerr << "CURL error: " << curl_easy_strerror(code) << std::endl;
+		logError("CURL error: ", curl_easy_strerror(code));
 		return nullptr;
 	}
 	return htmlReadDoc(reinterpret_cast<const xmlChar*>(data.c_str()), url.c_str(), nullptr, HTML_PARSE_RECOVER | HTML_PARSE_NOERROR | HTML_PARSE_NOWARNING);
@@ -53,7 +53,7 @@ DownloadState WebSource::downloadFile(const string& url, const fs::path& drc) {
 	CURLcode code = curl_easy_perform(curlFile);
 	fclose(ofh);
 	if (code) {
-		std::cerr << "CURL error: " << curl_easy_strerror(code) << std::endl;
+		logError("CURL error: ", curl_easy_strerror(code));
 		fs::remove(fpath);
 	}
 	return World::downloader()->getDlState();

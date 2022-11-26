@@ -11,7 +11,10 @@ option(DOWNLOADER "Build with downloader. (currently mostly broken)" OFF)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 	option(NATIVE "Build for the current CPU." OFF)
 endif()
-if(UNIX)
+if(CMAKE_SYSTEM_NAME MATCHES "Windows")
+	option(DIRECTX "Build with DirectX 11 support." ON)
+elseif(UNIX)
+	option(OPENGLES "Build for OpenGL ES 3.0 instead of OpenGL 3.0." OFF)
 	option(APPIMAGE "Package as an AppImage." OFF)
 endif()
 
@@ -25,6 +28,8 @@ set(SRC_FILES
 	"src/engine/fileSys.h"
 	"src/engine/inputSys.cpp"
 	"src/engine/inputSys.h"
+	"src/engine/renderer.cpp"
+	"src/engine/renderer.h"
 	"src/engine/scene.cpp"
 	"src/engine/scene.h"
 	"src/engine/windowSys.cpp"
@@ -55,9 +60,9 @@ endif()
 
 # dependencies
 set(VER_ARC "3.6.1")
-set(VER_SDL "2.0.22")
-set(VER_IMG "2.6.0")
-set(VER_TTF "2.20.0")
+set(VER_SDL "2.26.1")
+set(VER_IMG "2.6.2")
+set(VER_TTF "2.20.1")
 set(VER_GLM "0.9.9.8")
 set(VER_CURL "7.83.1")
 set(VER_LXML "2.9.14")
@@ -225,11 +230,15 @@ else()
 	endif()
 	set(ICONS_DIR "${DATA_DIR}/icons")
 	set(LICN_DIR "${DATA_DIR}/licenses")
+
 	include_directories($<$<BOOL:${DOWNLOADER}>:/usr/include/libxml2>)
 endif()
 
 # compiler flags
-add_compile_definitions($<$<BOOL:${DOWNLOADER}>:DOWNLOADER> "$<$<BOOL:${WIN32}>:UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;NOMINMAX;$<$<NOT:$<BOOL:${MSVC}>>:_WIN32_WINNT=0x600>>")
+add_compile_definitions($<$<BOOL:${DOWNLOADER}>:DOWNLOADER>
+						$<$<BOOL:${DIRECTX}>:WITH_DIRECTX>
+						$<$<BOOL:${OPENGLES}>:OPENGLES>
+						"$<$<BOOL:${WIN32}>:UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;NOMINMAX;$<$<NOT:$<BOOL:${MSVC}>>:_WIN32_WINNT=0x600>>")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 	add_compile_options(-Wall -Wextra -pedantic-errors -Wformat=2 -Wmissing-declarations -Wold-style-cast -Wshadow -Wunreachable-code -Wno-implicit-fallthrough -Wno-old-style-cast -Wno-switch $<$<NOT:$<BOOL:${MINGW}>>:-Wdouble-promotion>)
@@ -253,6 +262,8 @@ endif()
 add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES})
 target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image SDL2_ttf archive
 						"$<$<BOOL:${UNIX}>:pthread;dl>"
+						"$<IF:$<BOOL:${WIN32}>,opengl32,$<IF:$<BOOL:${OPENGLES}>,GLESv2,GL>>"
+						"$<$<BOOL:${DIRECTX}>:d3d11.lib;d3dcompiler.lib;dxgi.lib>"
 						"$<$<BOOL:${DOWNLOADER}>:$<IF:$<BOOL:${WIN32}>,libcurl;libxml2,curl;xml2>>")
 
 set_target_properties(${PROJECT_NAME} PROPERTIES

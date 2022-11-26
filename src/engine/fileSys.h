@@ -79,8 +79,6 @@ void IniLine::writeKeyVal(std::ofstream& ss, P&& prp, K&& key, T&&... val) {
 
 // handles all filesystem interactions
 class FileSys {
-public:
-	static constexpr char extIni[] = ".ini";
 private:
 	static constexpr char defaultFrMode[] = "rb";
 	static constexpr char defaultFwMode[] = "wb";
@@ -99,8 +97,12 @@ private:
 	static constexpr char fileBooks[] = "books.dat";
 
 	static constexpr char iniKeywordMaximized[] = "maximized";
-	static constexpr char iniKeywordFullscreen[] = "fullscreen";
+	static constexpr char iniKeywordScreen[] = "screen";
+	static constexpr char iniKeywordDisplay[] = "display";
 	static constexpr char iniKeywordResolution[] = "resolution";
+	static constexpr char iniKeywordVSync[] = "vsync";
+	static constexpr char iniKeywordRenderer[] = "renderer";
+	static constexpr char iniKeywordGpuSelecting[] = "gpu_selecting";
 	static constexpr char iniKeywordDirection[] = "direction";
 	static constexpr char iniKeywordZoom[] = "zoom";
 	static constexpr char iniKeywordSpacing[] = "spacing";
@@ -109,7 +111,6 @@ private:
 	static constexpr char iniKeywordTheme[] = "theme";
 	static constexpr char iniKeywordShowHidden[] = "show_hidden";
 	static constexpr char iniKeywordLibrary[] = "library";
-	static constexpr char iniKeywordRenderer[] = "renderer";
 	static constexpr char iniKeywordScrollSpeed[] = "scroll_speed";
 	static constexpr char iniKeywordDeadzone[] = "deadzone";
 
@@ -126,11 +127,13 @@ private:
 	fs::path dirBase;	// application base directory
 	fs::path dirSets;	// settings directory
 	fs::path dirConfs;	// internal config directory
+	std::ofstream logFile;
 public:
 	FileSys();
+	~FileSys();
 
 	vector<string> getAvailableThemes() const;
-	array<SDL_Color, Settings::defaultColors.size()> loadColors(string_view theme) const;	// updates settings' colors according to settings' theme
+	array<vec4, Settings::defaultColors.size()> loadColors(string_view theme) const;	// updates settings' colors according to settings' theme
 	bool getLastPage(string_view book, string& drc, string& fname) const;
 	bool saveLastPage(string_view book, string_view drc, string_view fname) const;
 	Settings* loadSettings() const;
@@ -162,12 +165,12 @@ private:
 	static vector<string> readFileLines(const fs::path& file, bool printMessage = true);
 	static string readTextFile(const fs::path& file, bool printMessage = true);
 	static bool writeTextFile(const fs::path& file, const vector<string>& lines);
-	static SDL_Color readColor(string_view str);
 
 	static fs::path searchFontDirs(string_view font, initlist<fs::path> dirs);
 #ifdef _WIN32
 	static vector<fs::path> listDrives();
 #endif
+	static void SDLCALL logWrite(void* userdata, int category, SDL_LogPriority priority, const char* message);
 };
 
 inline const fs::path& FileSys::getDirSets() const {

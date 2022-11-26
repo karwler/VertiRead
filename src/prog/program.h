@@ -75,6 +75,7 @@ public:
 	void eventDownloadListNext() {}
 	void eventDownloadListFinish() {}
 #endif
+
 	// settings
 	void eventOpenSettings(Button* but = nullptr);
 	void eventSwitchDirection(Button* but);
@@ -87,11 +88,14 @@ public:
 	void eventDontMoveComics(Button* but = nullptr);
 	void eventMoveProgress(uptrt prg, uptrt lim);
 	void eventMoveFinished();
-	void eventSetFullscreen(Button* but);
+	void eventSetScreenMode(Button* but);
+	void eventSetVsync(Button* but);
+	void eventSetRenderer(Button* but);
+	void eventSetGpuSelecting(Button* but);
+	void eventSetMultiFullscreen(Button* but);
 	void eventSetHide(Button* but);
 	void eventSetTheme(Button* but);
 	void eventSetFont(Button* but);
-	void eventSetRenderer(Button* but);
 	void eventSetScrollSpeed(Button* but);
 	void eventSetDeadzoneSL(Button* but);
 	void eventSetDeadzoneLE(Button* but);
@@ -119,6 +123,7 @@ public:
 private:
 	void switchPictures(bool fwd, string_view picname);
 	void offerMoveBooks(fs::path&& oldLib);
+	template <bool decomboboxify, class T, sizet N> T finishComboBox(Button* but, const array<const char*, N>& names, T defaultValue = T(N));
 	template <class T, class... A> void setState(A&&... args);
 	void reposizeWindow(ivec2 dres, ivec2 wsiz);
 };

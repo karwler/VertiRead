@@ -12,26 +12,26 @@ int WindowSys::start() {
 	program = nullptr;
 	scene = nullptr;
 	sets = nullptr;
-	window = nullptr;
 	int rc = EXIT_SUCCESS;
 	try {
 		init();
 		exec();
 	} catch (const std::runtime_error& e) {
+		logError(e.what());
 		std::cerr << e.what() << std::endl;
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", e.what(), window);
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", e.what(), !windows.empty() ? windows.begin()->second : nullptr);
 		rc = EXIT_FAILURE;
 #ifdef NDEBUG
 	} catch (...) {
-		std::cerr << "unknown error" << std::endl;
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "unknown error", window);
+		logError("unknown error");
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "unknown error", !windows.empty() ? windows.begin()->second : nullptr);
 		rc = EXIT_FAILURE;
 #endif
 	}
 	delete program;
 	delete scene;
 	delete inputSys;
-	destroyWindow();
+	destroyWindows();
 	delete fileSys;
 	delete sets;
 
@@ -59,30 +59,40 @@ void WindowSys::init() {
 	SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
 	SDL_SetHint(SDL_HINT_MAC_CTRL_CLICK_EMULATE_RIGHT_CLICK, "1");
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER))
-		throw std::runtime_error("Failed to initialize SDL:\n"s + SDL_GetError());
+		throw std::runtime_error(SDL_GetError());
 	if (TTF_Init())
-		throw std::runtime_error("Failed to initialize fonts:\n"s + TTF_GetError());
+		throw std::runtime_error(TTF_GetError());
 #if SDL_IMAGE_VERSION_ATLEAST(2, 6, 0)
 	int flags = IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP | IMG_INIT_JXL | IMG_INIT_AVIF);
 #else
 	int flags = IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP);
 #endif
 	if (!(flags & IMG_INIT_JPG))
-		std::cerr << "failed to initialize JPG:\n" << IMG_GetError() << std::endl;
+		logError(IMG_GetError());
 	if (!(flags & IMG_INIT_PNG))
-		std::cerr << "failed to initialize PNG:\n" << IMG_GetError() << std::endl;
+		logError(IMG_GetError());
 	if (!(flags & IMG_INIT_TIF))
-		std::cerr << "failed to initialize TIF:\n" << IMG_GetError() << std::endl;
+		logError(IMG_GetError());
 	if (!(flags & IMG_INIT_WEBP))
-		std::cerr << "failed to initialize WEBP:\n" << IMG_GetError() << std::endl;
+		logError(IMG_GetError());
 #if SDL_IMAGE_VERSION_ATLEAST(2, 6, 0)
 	if (!(flags & IMG_INIT_JXL))
-		std::cerr << "failed to initialize JXL:\n" << IMG_GetError() << std::endl;
+		logError(IMG_GetError());
 	if (!(flags & IMG_INIT_AVIF))
-		std::cerr << "failed to initialize AVIF:\n" << IMG_GetError() << std::endl;
+		logError(IMG_GetError());
+#endif
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#ifdef OPENGLES
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+#else
+#ifdef NDEBUG
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+#else
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG | SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+#endif
 #endif
 	SDL_EventState(SDL_LOCALECHANGED, SDL_DISABLE);
-	SDL_EventState(SDL_DISPLAYEVENT, SDL_DISABLE);
 	SDL_EventState(SDL_SYSWMEVENT, SDL_DISABLE);
 	SDL_EventState(SDL_KEYUP, SDL_DISABLE);
 	SDL_EventState(SDL_KEYMAPCHANGED, SDL_DISABLE);
@@ -108,12 +118,15 @@ void WindowSys::init() {
 	SDL_EventState(SDL_RENDER_TARGETS_RESET, SDL_DISABLE);
 	SDL_EventState(SDL_RENDER_DEVICE_RESET, SDL_DISABLE);
 	if (SDL_RegisterEvents(1) == UINT32_MAX)
-		throw std::runtime_error("Failed to register application events:\n"s + SDL_GetError());
+		throw std::runtime_error(SDL_GetError());
 	SDL_StopTextInput();
 
 	fileSys = new FileSys;
 	sets = fileSys->loadSettings();
-	createWindow();
+	if (sets->screen != Settings::Screen::multiFullscreen)
+		createWindow();
+	else
+		createMultiWindow();
 	inputSys = new InputSys;
 	scene = new Scene;
 	program = new Program;
@@ -146,35 +159,66 @@ void WindowSys::exec() {
 }
 
 void WindowSys::createWindow() {
-	destroyWindow();	// make sure old window (if exists) is destroyed
-
-	// create new window
 	sets->resolution = clamp(sets->resolution, windowMinSize, displayResolution());
-	if (window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets->resolution.x, sets->resolution.y, SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | (sets->maximized ? SDL_WINDOW_MAXIMIZED : 0) | (sets->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0)); !window)
-		throw std::runtime_error("Failed to create window:\n"s + SDL_GetError());
+	SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, SDL_DISABLE);
+	SDL_Window* win = windows.emplace(Renderer::singleDspId, SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets->resolution.x, sets->resolution.y, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | (sets->maximized ? SDL_WINDOW_MAXIMIZED : 0) | (sets->screen != Settings::Screen::windowed ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0))).first->second;
+	if (!win)
+		throw std::runtime_error("Failed to create window:"s + linend + SDL_GetError());
 
-	// visual stuff
-	if (SDL_Surface* icon = IMG_Load((fileSys->dirIcons() / "vertiread.svg").u8string().c_str())) {
-		SDL_SetWindowIcon(window, icon);
-		SDL_FreeSurface(icon);
-	}
-	drawSys = new DrawSys(window, sets->getRendererInfo(), sets, fileSys);
-	SDL_SetWindowMinimumSize(window, windowMinSize.x, windowMinSize.y);	// for some reason this function has to be called after the renderer is created
-	if (SDL_GetDisplayDPI(SDL_GetWindowDisplayIndex(window), nullptr, nullptr, &winDpi))
+	SDL_Surface* icon = IMG_Load((fileSys->dirIcons() / "vertiread.svg").u8string().c_str());
+	SDL_SetWindowIcon(win, icon);
+	SDL_FreeSurface(icon);
+
+	drawSys = new DrawSys(windows, sets, fileSys, int(128.f / fallbackDpi * winDpi));
+	SDL_SetWindowMinimumSize(win, windowMinSize.x, windowMinSize.y);
+	if (SDL_GetDisplayDPI(SDL_GetWindowDisplayIndex(windows.begin()->second), nullptr, nullptr, &winDpi))
 		winDpi = fallbackDpi;
 }
 
-void WindowSys::destroyWindow() {
+void WindowSys::createMultiWindow() {
+	windows.reserve(sets->displays.size());
+	SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, SDL_ENABLE);
+	SDL_Surface* icon = IMG_Load((fileSys->dirIcons() / "vertiread.svg").u8string().c_str());
+	for (const auto& [id, rect] : sets->displays) {
+		SDL_Window* win = windows.emplace(id, SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED_DISPLAY(id), SDL_WINDOWPOS_UNDEFINED_DISPLAY(id), rect.w, rect.h, SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_FULLSCREEN_DESKTOP)).first->second;
+		if (!win) {
+			std::for_each(windows.begin(), windows.end(), [](pair<const int, SDL_Window*>& it) { SDL_DestroyWindow(it.second); });
+			SDL_FreeSurface(icon);
+			throw std::runtime_error("Failed to create window:"s + linend + SDL_GetError());
+		}
+		SDL_SetWindowIcon(win, icon);
+	}
+	SDL_FreeSurface(icon);
+
+	drawSys = new DrawSys(windows, sets, fileSys, int(128.f / fallbackDpi * winDpi));
+	if (SDL_GetDisplayDPI(SDL_GetWindowDisplayIndex(windows.begin()->second), nullptr, nullptr, &winDpi))
+		winDpi = fallbackDpi;
+}
+
+void WindowSys::destroyWindows() {
 	delete drawSys;
 	drawSys = nullptr;
-	SDL_DestroyWindow(window);
-	window = nullptr;
+	for (auto [id, win] : windows)
+		SDL_DestroyWindow(win);
+	windows.clear();
+}
+
+void WindowSys::recreateWindows() {
+	destroyWindows();
+	if (sets->screen != Settings::Screen::multiFullscreen)
+		createWindow();
+	else
+		createMultiWindow();
+	scene->resetLayouts();
 }
 
 void WindowSys::handleEvent(const SDL_Event& event) {
 	switch (event.type) {
 	case SDL_QUIT:
 		program->eventTryExit();
+		break;
+	case SDL_DISPLAYEVENT:
+		eventDisplay(event.display);
 		break;
 	case SDL_WINDOWEVENT:
 		eventWindow(event.window);
@@ -249,17 +293,26 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 	switch (winEvent.event) {
 	case SDL_WINDOWEVENT_RESIZED:
-		if (uint32 flags = SDL_GetWindowFlags(window); !(flags & SDL_WINDOW_FULLSCREEN_DESKTOP))
-			if (sets->maximized = flags & SDL_WINDOW_MAXIMIZED; !sets->maximized)
-				sets->resolution = ivec2(winEvent.data1, winEvent.data2);
+		if (windows.size() == 1)
+			if (uint32 flags = SDL_GetWindowFlags(windows.begin()->second); !(flags & SDL_WINDOW_FULLSCREEN_DESKTOP))
+				if (sets->maximized = flags & SDL_WINDOW_MAXIMIZED; !sets->maximized)
+					sets->resolution = ivec2(winEvent.data1, winEvent.data2);
 	case SDL_WINDOWEVENT_SIZE_CHANGED:
+		drawSys->updateView();
 		scene->onResize();
 		break;
 	case SDL_WINDOWEVENT_LEAVE:
 		scene->onMouseLeave();
 		break;
-	case SDL_WINDOWEVENT_CLOSE:
-		program->eventTryExit();
+	case SDL_WINDOWEVENT_FOCUS_GAINED:
+		if (sets->screen == Settings::Screen::multiFullscreen)
+			for (auto [id, win] : windows)
+				SDL_RaiseWindow(win);
+		break;
+	case SDL_WINDOWEVENT_FOCUS_LOST:
+		if (sets->screen == Settings::Screen::multiFullscreen)
+			for (auto [id, win] : windows)
+				SDL_HideWindow(win);
 		break;
 #if SDL_VERSION_ATLEAST(2, 0, 18)
 	case SDL_WINDOWEVENT_DISPLAY_CHANGED: {
@@ -276,38 +329,87 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 	} }
 }
 
+void WindowSys::eventDisplay(const SDL_DisplayEvent& dspEvent) {
+	if (dspEvent.type == SDL_DISPLAYEVENT_ORIENTATION || dspEvent.type == SDL_DISPLAYEVENT_CONNECTED || dspEvent.type == SDL_DISPLAYEVENT_DISCONNECTED) {
+		sets->unionDisplays();
+		if (windows.size() > 1)
+			recreateWindows();
+		scene->onDisplayChange();
+	}
+}
+
+ivec2 WindowSys::winViewOffset(uint32 wid) const {
+	if (SDL_Window* win = SDL_GetWindowFromID(wid))
+		if (umap<int, SDL_Window*>::const_iterator it = std::find_if(windows.begin(), windows.end(), [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; }); it != windows.end())
+			return drawSys->getView(it->first).pos();
+	return ivec2(INT_MIN);
+}
+
+ivec2 WindowSys::mousePos() const {
+	ivec2 mp;
+	SDL_GetMouseState(&mp.x, &mp.y);
+	SDL_Window* win = SDL_GetMouseFocus();
+	umap<int, SDL_Window*>::const_iterator it = std::find_if(windows.begin(), windows.end(), [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; });
+	return it != windows.end() ? mp + drawSys->getView(it->first).pos() : mp;
+}
+
 void WindowSys::moveCursor(ivec2 mov) {
-	int px, py;
-	SDL_GetMouseState(&px, &py);
-	SDL_WarpMouseInWindow(window, px + mov.x, py + mov.y);
+	SDL_Window* win = SDL_GetMouseFocus();
+	if (umap<int, SDL_Window*>::iterator it = std::find_if(windows.begin(), windows.end(), [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; }); it != windows.end()) {
+		ivec2 wpos;
+		SDL_GetMouseState(&wpos.x, &wpos.y);
+		wpos += drawSys->getView(it->first).pos() + mov;
+		int id = drawSys->findPointInView(wpos);
+		if (it = windows.find(id); it != windows.end()) {
+			ivec2 vpos = drawSys->getView(id).pos();
+			SDL_WarpMouseInWindow(it->second, wpos.x - vpos.x, wpos.y - vpos.y);
+		}
+	}
 }
 
 void WindowSys::toggleOpacity() {
-	if (float val; !SDL_GetWindowOpacity(window, &val))
-		SDL_SetWindowOpacity(window, val < 1.f ? 1.f : 0.f);
-	else
-		SDL_MinimizeWindow(window);
+	for (auto [id, win] : windows) {
+		if (float val; !SDL_GetWindowOpacity(win, &val))
+			SDL_SetWindowOpacity(win, val < 1.f ? 1.f : 0.f);
+		else
+			SDL_MinimizeWindow(win);
+	}
 }
 
-void WindowSys::setFullscreen(bool on) {
-	sets->fullscreen = on;
-	SDL_SetWindowFullscreen(window, on ? SDL_GetWindowFlags(window) | SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_GetWindowFlags(window) & ~SDL_WINDOW_FULLSCREEN_DESKTOP);
+void WindowSys::setScreenMode(Settings::Screen sm) {
+	bool changeFlag = sets->screen != Settings::Screen::multiFullscreen && sm != Settings::Screen::multiFullscreen;
+	sets->screen = sm;
+	if (changeFlag)
+		SDL_SetWindowFullscreen(windows.begin()->second, sm == Settings::Screen::fullscreen ? SDL_GetWindowFlags(windows.begin()->second) | SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_GetWindowFlags(windows.begin()->second) & ~SDL_WINDOW_FULLSCREEN_DESKTOP);
+	else
+		recreateWindows();
+}
+
+void WindowSys::setWindowPos(ivec2 pos) {
+	if (sets->screen != Settings::Screen::multiFullscreen)
+		SDL_SetWindowPosition(windows.begin()->second, pos.x, pos.y);
 }
 
 void WindowSys::setResolution(ivec2 res) {
 	sets->resolution = clamp(res, windowMinSize, displayResolution());
-	SDL_SetWindowSize(window, res.x, res.y);
+	if (sets->screen != Settings::Screen::multiFullscreen)
+		SDL_SetWindowSize(windows.begin()->second, res.x, res.y);
 }
 
-void WindowSys::setRenderer(string_view name) {
-	sets->renderer = name;
-	createWindow();
-	scene->resetLayouts();
+ivec2 WindowSys::displayResolution() const {
+	SDL_DisplayMode mode;
+	if (!windows.empty() && !SDL_GetDesktopDisplayMode(SDL_GetWindowDisplayIndex(windows.begin()->second), &mode))
+		return ivec2(mode.w, mode.h);
+
+	ivec2 res(0);
+	for (int i = 0; i < SDL_GetNumVideoDisplays(); ++i)
+		if (!SDL_GetDesktopDisplayMode(i, &mode))
+			res = glm::max(res, ivec2(mode.w, mode.h));
+	return res;
 }
 
 void WindowSys::resetSettings() {
 	delete sets;
 	sets = new Settings(fileSys->getDirSets(), fileSys->getAvailableThemes());
-	createWindow();
-	scene->resetLayouts();
+	recreateWindows();
 }

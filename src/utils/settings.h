@@ -28,10 +28,10 @@ public:
 		right
 	};
 	static constexpr array<const char*, right + 1> names = {
-		"Up",
-		"Down",
-		"Left",
-		"Right"
+		"up",
+		"down",
+		"left",
+		"right"
 	};
 
 private:
@@ -92,6 +92,7 @@ public:
 		nextDir,
 		prevDir,
 		fullscreen,
+		multiFullscreen,
 		hide,
 		boss,
 		refresh,
@@ -124,6 +125,7 @@ public:
 		"next directory",
 		"prev directory",
 		"fullscreen",
+		"multi fullscreen",
 		"show hidden",
 		"boss",
 		"refresh",
@@ -356,13 +358,13 @@ public:
 		'G'
 	};
 
-	Type type;
-private:
-	uptrt count, size;	// size in bytes
-
 	static constexpr uptrt defaultCount = 128;
 
+private:
+	uptrt count, size;	// size in bytes
 public:
+	Type type;
+
 	PicLim(Type ltype = Type::none, uptrt cnt = defaultCount);
 
 	uptrt getCount() const;
@@ -407,21 +409,15 @@ inline string PicLim::memoryString(uptrt num) {
 
 class Settings {
 public:
-	static constexpr float defaultZoom = 1.f;
-	static constexpr int defaultSpacing = 10;
-	static constexpr int axisLimit = SHRT_MAX + 1;
-	static constexpr char defaultFont[] = "BrisaSans";
-	static constexpr char defaultDirLib[] = "library";
-
-	static constexpr array<SDL_Color, sizet(Color::texture) + 1> defaultColors = {
-		SDL_Color{ 10, 10, 10, 255 },		// background
-		SDL_Color{ 90, 90, 90, 255 },		// normal
-		SDL_Color{ 60, 60, 60, 255 },		// dark
-		SDL_Color{ 120, 120, 120, 255 },	// light
-		SDL_Color{ 105, 105, 105, 255 },	// select
-		SDL_Color{ 75, 75, 75, 255 },		// tooltip
-		SDL_Color{ 210, 210, 210, 255 },	// text
-		SDL_Color{ 210, 210, 210, 255 }		// texture
+	static constexpr array<vec4, sizet(Color::texture) + 1> defaultColors = {
+		vec4(0.04f, 0.04f, 0.04f, 1.f),	// background
+		vec4(0.35f, 0.35f, 0.35f, 1.f),	// normal
+		vec4(0.24f, 0.24f, 0.24f, 1.f),	// dark
+		vec4(0.47f, 0.47f, 0.47f, 1.f),	// light
+		vec4(0.41f, 0.41f, 0.41f, 1.f),	// select
+		vec4(0.29f, 0.29f, 0.29f, 1.f),	// tooltip
+		vec4(0.82f, 0.82f, 0.82f, 1.f),	// text
+		vec4(0.82f, 0.82f, 0.82f, 1.f)	// texture
 	};
 	static constexpr array<const char*, defaultColors.size()> colorNames = {
 		"background",
@@ -434,23 +430,77 @@ public:
 		"texture"
 	};
 
-	bool maximized = false;
-	bool fullscreen = false;
-	bool showHidden = false;
-	Direction direction = Direction::down;
-	PicLim picLim;
-	float zoom = defaultZoom;
-	int spacing = defaultSpacing;
-	ivec2 resolution = { 800, 600 };
-	string renderer;
+	enum class Screen : uint8 {
+		windowed,
+		fullscreen,
+		multiFullscreen
+	};
+	static constexpr array<const char*, sizet(Screen::multiFullscreen) + 1> screenModeNames = {
+		"windowed",
+		"fullscreen",
+		"multi_fullscreen"
+	};
+
+	enum class VSync : int8 {
+		adaptive = -1,
+		immediate,
+		synchronized
+	};
+	static constexpr array<const char*, sizet(VSync::synchronized) + 2> vsyncNames = {	// add 1 to vsync value to get name
+		"adaptive",
+		"immediate",
+		"synchronized"
+	};
+
+	enum class Renderer : uint8 {
+#ifdef WITH_DIRECTX
+		directx,
+#endif
+		opengl
+	};
+	static constexpr array<const char*, sizet(Renderer::opengl) + 1> rendererNames = {
+#ifdef WITH_DIRECTX
+		"DirectX 11",
+#endif
+#ifdef OPENGLES
+		"OpenGL ES 3.0"
+#else
+		"OpenGL 3.0"
+#endif
+	};
+
+	static constexpr float defaultZoom = 1.f;
+	static constexpr int defaultSpacing = 10;
+	static constexpr int axisLimit = SHRT_MAX + 1;
+	static constexpr Screen defaultScreenMode = Screen::windowed;
+	static constexpr VSync defaultVSync = VSync::synchronized;
+	static constexpr Direction::Dir defaultDirection = Direction::down;
+	static constexpr Renderer defaultRenderer = Renderer::opengl;
+	static constexpr char defaultFont[] = "BrisaSans";
+	static constexpr char defaultDirLib[] = "library";
+
 	string font = defaultFont;
-	vec2 scrollSpeed = { 1600.f, 1600.f };
 private:
-	int deadzone = 256;
 	string theme;
 	fs::path dirLib;
-
 public:
+	umap<int, Rect> displays;
+	PicLim picLim;
+	ivec2 resolution = ivec2(800, 600);
+	vec2 scrollSpeed = vec2(1600.f, 1600.f);
+	float zoom = defaultZoom;
+	int spacing = defaultSpacing;
+private:
+	int deadzone = 256;
+public:
+	bool maximized = false;
+	Screen screen = defaultScreenMode;
+	bool showHidden = false;
+	Direction direction = defaultDirection;
+	VSync vsync = defaultVSync;
+	Renderer renderer = defaultRenderer;
+	bool gpuSelecting = false;
+
 	Settings(const fs::path& dirSets, vector<string>&& themes);
 
 	const string& getTheme() const;
@@ -458,7 +508,8 @@ public:
 	const fs::path& getDirLib() const;
 	const fs::path& setDirLib(const fs::path& drc, const fs::path& dirSets);
 
-	pair<int, uint32> getRendererInfo();
+	static umap<int, Rect> displayArrangement();
+	void unionDisplays();
 	string scrollSpeedString() const;
 	int getDeadzone() const;
 	void setDeadzone(int val);

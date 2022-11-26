@@ -57,6 +57,7 @@ public:
 	virtual void eventNextDir() {}
 	virtual void eventPrevDir() {}
 	virtual void eventFullscreen();
+	virtual void eventMultiFullscreen();
 	virtual void eventHide();
 	void eventBoss();
 	void eventRefresh();
@@ -74,8 +75,8 @@ public:
 	static Rect calcTextContextRect(const vector<Widget*>& items, ivec2 pos, ivec2 size, int margin);
 protected:
 	template <class T> static int findMaxLength(T pos, T end, int height);
-	SDL_Texture* makeTooltip(const char* str);
-	SDL_Texture* makeTooltipL(const char* str);
+	Texture* makeTooltip(const char* str);
+	Texture* makeTooltipL(const char* str);
 
 	bool eventCommonEscape();	// returns true if something happened
 private:
@@ -188,7 +189,7 @@ public:
 	Slider* deadzoneSL;
 	LabelEdit* deadzoneLE;
 private:
-	CheckBox* fullscreen;
+	ComboBox* screen;
 	CheckBox* showHidden;
 
 public:
@@ -196,12 +197,16 @@ public:
 
 	void eventEscape() final;
 	void eventFullscreen() final;
+	void eventMultiFullscreen() final;
 	void eventHide() final;
 	void eventFileDrop(const fs::path& file) final;
 
 	RootLayout* createLayout() final;
 
 	Widget* createLimitEdit();
+	static string decomboboxify(string name);
+private:
+	static string comboboxify(const char* name);
 };
 
 class ProgSearchDir : public ProgState {

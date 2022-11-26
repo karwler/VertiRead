@@ -27,12 +27,13 @@ public:
 	Layout(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), Direction dir = defaultDirection, Select select = Select::none, int space = defaultItemSpacing, bool pad = false);
 	~Layout() override;
 
-	void drawSelf() const override;
+	void drawSelf(const Rect& view) const override;
+	void drawAddr(const Rect& view) const override;
 	void onResize() override;
 	void tick(float dSec) override;
 	void postInit() override;
-
 	void onMouseMove(ivec2 mPos, ivec2 mMov) override;
+	void onDisplayChange() override;
 	void onNavSelect(Direction) override {}
 	bool navSelectable() const override;
 
@@ -50,10 +51,12 @@ public:
 	void selectWidget(sizet id);
 	void deselectWidget(sizet id);
 	int getSpacing() const;
+	bool isVertical() const;
 
 protected:
 	void initWidgets(vector<Widget*>&& wgts);
 	void clearWidgets();
+	virtual void calculateWidgetPositions();
 	virtual ivec2 listSize() const;
 
 	void navSelectWidget(sizet id, int mid, Direction dir);
@@ -85,6 +88,10 @@ inline int Layout::getSpacing() const {
 	return spacing;
 }
 
+inline bool Layout::isVertical() const {
+	return direction.vertical();
+}
+
 // top level layout
 class RootLayout : public Layout {
 public:
@@ -94,6 +101,7 @@ public:
 	ivec2 position() const override;
 	ivec2 size() const override;
 	Rect frame() const override;
+	void setSize(const Size& size) override;
 };
 
 // layout with background with free position/size (shouldn't have a parent)
@@ -108,7 +116,7 @@ public:
 	Popup(const svec2& size = svec2(0), vector<Widget*>&& children = vector<Widget*>(), Widget* first = nullptr, Color background = Color::normal, Direction dir = defaultDirection, int space = defaultItemSpacing, bool pad = true);
 	~Popup() override = default;
 
-	void drawSelf() const override;
+	void drawSelf(const Rect& view) const override;
 
 	ivec2 position() const override;
 	ivec2 size() const override;
@@ -167,7 +175,7 @@ public:
 	using Layout::Layout;
 	~ScrollArea() override = default;
 
-	void drawSelf() const override;
+	void drawSelf(const Rect& view) const override;
 	void onResize() override;
 	void tick(float dSec) override;
 	void postInit() override;
@@ -227,12 +235,12 @@ public:
 	TileBox(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), int childHeight = defaultItemHeight, Direction dir = defaultDirection, Select select = Select::none, int space = defaultItemSpacing, bool pad = false);
 	~TileBox() final = default;
 
-	void onResize() final;
-
 	void navSelectNext(sizet id, int mid, Direction dir) final;
 	void navSelectFrom(int mid, Direction dir) final;
 
 	ivec2 wgtSize(sizet id) const final;
+protected:
+	void calculateWidgetPositions() final;
 
 private:
 	void scanVertically(sizet id, int mid, Direction dir);
@@ -250,22 +258,22 @@ private:
 	static constexpr float menuHideTimeout = 3.f;
 	static inline const string emptyFile;
 
-	vector<Texture> pics;
+	vector<pair<string, Texture*>> pics;
 	float cursorTimer = menuHideTimeout;	// time left until cursor/overlay disappears
 	float zoom;
 	bool countDown = true;	// whether to decrease cursorTimer until cursor hide
 
 public:
-	ReaderBox(const Size& size = Size(), vector<Texture>&& imgs = vector<Texture>(), Direction dir = defaultDirection, float fzoom = Settings::defaultZoom, int space = Settings::defaultSpacing, bool pad = false);
+	ReaderBox(const Size& size = Size(), vector<pair<string, Texture*>>&& imgs = vector<pair<string, Texture*>>(), Direction dir = defaultDirection, float fzoom = Settings::defaultZoom, int space = Settings::defaultSpacing, bool pad = false);
 	~ReaderBox() final;
 
-	void drawSelf() const final;
+	void drawSelf(const Rect& view) const final;
 	void onResize() final;
 	void tick(float dSec) final;
 	void postInit() final;
 	void onMouseMove(ivec2 mPos, ivec2 mMov) final;
 
-	void setWidgets(vector<Texture>&& imgs);
+	void setWidgets(vector<pair<string, Texture*>>&& imgs);
 	bool showBar() const;
 	float getZoom() const;
 	void setZoom(float factor);
@@ -277,28 +285,24 @@ public:
 	ivec2 wgtSize(sizet id) const final;
 
 private:
-	void initWidgets(vector<Texture>&& imgs);
+	void initWidgets(vector<pair<string, Texture*>>&& imgs);
 	ivec2 listSize() const final;
 	int wgtRPos(sizet id) const final;
 	int wgtREnd(sizet id) const final;
 };
-
-inline bool ReaderBox::showBar() const {
-	return barRect().contain(mousePos()) || draggingSlider;
-}
 
 inline float ReaderBox::getZoom() const {
 	return zoom;
 }
 
 inline const string& ReaderBox::firstPage() const {
-	return !pics.empty() ? pics.front().name : emptyFile;
+	return !pics.empty() ? pics.front().first : emptyFile;
 }
 
 inline const string& ReaderBox::lastPage() const {
-	return !pics.empty() ? pics.back().name : emptyFile;
+	return !pics.empty() ? pics.back().first : emptyFile;
 }
 
 inline const string& ReaderBox::curPage() const {
-	return !pics.empty() ? pics[direction.positive() ? visibleWidgets().x : visibleWidgets().y - 1].name : emptyFile;
+	return !pics.empty() ? pics[direction.positive() ? visibleWidgets().x : visibleWidgets().y - 1].first : emptyFile;
 }

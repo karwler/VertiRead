@@ -74,7 +74,7 @@ void Program::eventOpenLastPage(Button*) {
 			browser = std::make_unique<Browser>(lbl ? World::sets()->getDirLib() / fs::u8path(lbl->getText()) : Browser::topDir, lbl ? World::sets()->getDirLib() / fs::u8path(lbl->getText()) / fs::u8path(drc) : fs::u8path(drc), fs::u8path(fname), &Program::eventOpenBookList, true);
 			eventStartLoadingReader(fname);
 		} catch (const std::runtime_error& e) {
-			std::cerr << e.what() << std::endl;
+			logError(e.what());
 			eventOpenPageBrowser(lbl);
 		}
 	} else
@@ -100,7 +100,7 @@ bool Program::openFile(const fs::path& file) {
 			browser = std::make_unique<Browser>(Browser::topDir, isPic ? parentPath(file) : file, isPic ? file.filename() : fs::path(), &Program::eventOpenBookList, false);
 			eventStartLoadingReader(file.u8string());
 		} catch (const std::runtime_error& e) {
-			std::cerr << e.what() << std::endl;
+			logError(e.what());
 			return false;
 		}
 		return true;
@@ -331,9 +331,7 @@ void Program::eventOpenSettings(Button*) {
 }
 
 void Program::eventSwitchDirection(Button* but) {
-	World::sets()->direction = strToEnum<Direction::Dir>(Direction::names, static_cast<Label*>(but)->getText(), Direction::down);
-	World::scene()->getContext()->owner<ComboBox>()->setCurOpt(World::sets()->direction);
-	World::scene()->setContext(nullptr);
+	World::sets()->direction = finishComboBox<true>(but, Direction::names, Settings::defaultDirection);
 }
 
 void Program::eventSetZoom(Button* but) {
@@ -408,8 +406,43 @@ void Program::eventMoveFinished() {
 	eventClosePopup();
 }
 
-void Program::eventSetFullscreen(Button* but) {
-	World::winSys()->setFullscreen(static_cast<CheckBox*>(but)->on);
+void Program::eventSetScreenMode(Button* but) {
+	if (Settings::Screen screen = finishComboBox<true>(but, Settings::screenModeNames, Settings::defaultScreenMode); World::sets()->screen != screen)
+		World::winSys()->setScreenMode(screen);
+}
+
+void Program::eventSetVsync(Button* but) {
+	if (Settings::VSync vsync = Settings::VSync(finishComboBox<true>(but, Settings::vsyncNames, int8(Settings::defaultVSync) + 1) - 1); World::sets()->vsync != vsync) {
+		World::sets()->vsync = vsync;
+		World::drawSys()->setVsync(World::sets()->vsync);
+	}
+}
+
+void Program::eventSetRenderer(Button* but) {
+	if (Settings::Renderer renderer = finishComboBox<false>(but, Settings::rendererNames, Settings::defaultRenderer); World::sets()->renderer != renderer) {
+		World::sets()->renderer = renderer;
+		World::winSys()->recreateWindows();
+	}
+}
+
+void Program::eventSetGpuSelecting(Button* but) {
+	World::sets()->gpuSelecting = static_cast<CheckBox*>(but)->on;
+}
+
+template <bool decomboboxify, class T, sizet N>
+T Program::finishComboBox(Button* but, const array<const char*, N>& names, T defaultValue) {
+	T val = strToEnum(names, decomboboxify ? ProgSettings::decomboboxify(static_cast<Label*>(but)->getText()) : static_cast<Label*>(but)->getText(), defaultValue);
+	World::scene()->getContext()->owner<ComboBox>()->setCurOpt(sizet(val));
+	World::scene()->setContext(nullptr);
+	return val;
+}
+
+void Program::eventSetMultiFullscreen(Button* but) {
+	if (umap<int, Rect> dsps = static_cast<WindowArranger*>(but)->getActiveDisps(); dsps != World::sets()->displays) {
+		World::sets()->displays = std::move(dsps);
+		if (World::sets()->screen == Settings::Screen::multiFullscreen)
+			World::winSys()->recreateWindows();
+	}
 }
 
 void Program::eventSetHide(Button* but) {
@@ -427,10 +460,6 @@ void Program::eventSetFont(Button* but) {
 	World::scene()->resetLayouts();
 	if (World::sets()->font != otxt)
 		World::scene()->setPopup(state->createPopupMessage("Invalid font", &Program::eventClosePopup));
-}
-
-void Program::eventSetRenderer(Button* but) {
-	World::winSys()->setRenderer(static_cast<ComboBox*>(but)->getText());
 }
 
 void Program::eventSetScrollSpeed(Button* but) {
@@ -486,11 +515,11 @@ void Program::eventSetFill(Button*) {
 }
 
 void Program::eventSetPicLimitType(Button* but) {
-	ProgSettings* ps = static_cast<ProgSettings*>(state);
-	World::sets()->picLim.type = strToEnum<PicLim::Type>(PicLim::names, static_cast<Label*>(but)->getText(), PicLim::Type::none);
-	World::scene()->getContext()->owner<ComboBox>()->setCurOpt(uint8(World::sets()->picLim.type));
-	World::scene()->setContext(nullptr);
-	ps->limitLine->replaceWidget(ps->limitLine->getWidgets().size() - 1, static_cast<ProgSettings*>(state)->createLimitEdit());
+	if (PicLim::Type plim = finishComboBox<true>(but, PicLim::names, PicLim::Type::none); plim != World::sets()->picLim.type) {
+		ProgSettings* ps = static_cast<ProgSettings*>(state);
+		World::sets()->picLim.type = plim;
+		ps->limitLine->replaceWidget(ps->limitLine->getWidgets().size() - 1, static_cast<ProgSettings*>(state)->createLimitEdit());
+	}
 }
 
 void Program::eventSetPicLimCount(Button* but) {

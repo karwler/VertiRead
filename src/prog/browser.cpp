@@ -40,7 +40,7 @@ fs::file_type Browser::goTo(const fs::path& path) {
 			return fs::file_type::directory;
 		}
 	} catch (const std::runtime_error& err) {
-		std::cerr << err.what() << std::endl;
+		logError(err.what());
 	}
 
 	if (FileSys::isArchive(path)) {
@@ -63,7 +63,7 @@ bool Browser::goIn(const fs::path& dname) {
 			return true;
 		}
 	} catch (const std::runtime_error& err) {
-		std::cerr << err.what() << std::endl;
+		logError(err.what());
 	}
 	return false;
 }
@@ -106,7 +106,7 @@ void Browser::goNext(bool fwd, bool showHidden) {
 		else if (curDir != rootDir)
 			shiftDir(fwd, showHidden);
 	} catch (const std::runtime_error& err) {
-		std::cerr << err.what() << std::endl;
+		logError(err.what());
 	}
 }
 

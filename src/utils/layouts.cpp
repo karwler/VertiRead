@@ -20,34 +20,17 @@ Layout::~Layout() {
 	clearWidgets();
 }
 
-void Layout::drawSelf() const {
-	for (Widget* it : widgets)
-		it->drawSelf();
+void Layout::drawSelf(const Rect& view) const {
+	for (const Widget* it : widgets)
+		it->drawSelf(view);
+}
+
+void Layout::drawAddr(const Rect& view) const {
+	World::drawSys()->drawLayoutAddr(this, view);
 }
 
 void Layout::onResize() {
-	// get amount of space for widgets with percent size and get total sum
-	int vi = direction.vertical();
-	int pad = margin ? spacing : 0;
-	ivec2 wsiz = size() - pad * 2;
-	int space = wsiz[vi] - (widgets.size() - 1) * spacing;
-	float total = 0;
-	for (Widget* it : widgets) {
-		if (it->getRelSize().usePix)
-			space -= it->getRelSize().pix;
-		else
-			total += it->getRelSize().prc;
-	}
-
-	// calculate positions for each widget and set last poss element to end position of the last widget
-	ivec2 pos(pad);
-	for (sizet i = 0; i < widgets.size(); ++i) {
-		positions[i] = pos;
-		pos[vi] += (widgets[i]->getRelSize().usePix ? widgets[i]->getRelSize().pix : int(widgets[i]->getRelSize().prc * float(space) / total)) + spacing;
-	}
-	positions.back() = vswap(wsiz[!vi], pos[vi], !vi);
-
-	// do the same for children
+	calculateWidgetPositions();
 	for (Widget* it : widgets)
 		it->onResize();
 }
@@ -58,14 +41,53 @@ void Layout::tick(float dSec) {
 }
 
 void Layout::postInit() {
-	onResize();
+	calculateWidgetPositions();
 	for (Widget* it : widgets)
 		it->postInit();
+}
+
+void Layout::calculateWidgetPositions() {
+	// get amount of space for widgets with percent size and get total sum
+	int vi = direction.vertical();
+	int pad = margin ? spacing : 0;
+	ivec2 wsiz = size() - pad * 2;
+	vector<int> pixSizes(widgets.size());
+	int space = wsiz[vi] - (widgets.size() - 1) * spacing;
+	float total = 0;
+	for (sizet i = 0; i < widgets.size(); ++i)
+		switch (const Size& siz = widgets[i]->getRelSize(); siz.mod) {
+		case Size::rela:
+			total += siz.prc;
+			break;
+		case Size::pixv:
+			pixSizes[i] = siz.pix;
+			space -= std::min(pixSizes[i], space);
+			break;
+		case Size::calc:
+			pixSizes[i] = siz(widgets[i]);
+			space -= std::min(pixSizes[i], space);
+		}
+
+	// calculate positions for each widget and set last poss element to end position of the last widget
+	ivec2 pos(pad);
+	for (sizet i = 0; i < widgets.size(); ++i) {
+		positions[i] = pos;
+		if (const Size& siz = widgets[i]->getRelSize(); siz.mod != Size::rela)
+			pos[vi] += pixSizes[i] + spacing;
+		else if (float val = siz.prc * float(space); val != 0.f)
+			pos[vi] += int(val / total) + spacing;
+	}
+	positions.back() = vswap(wsiz[!vi], pos[vi], !vi);
 }
 
 void Layout::onMouseMove(ivec2 mPos, ivec2 mMov) {
 	for (Widget* it : widgets)
 		it->onMouseMove(mPos, mMov);
+}
+
+void Layout::onDisplayChange() {
+	for (Widget* it : widgets)
+		it->onDisplayChange();
 }
 
 bool Layout::navSelectable() const {
@@ -228,11 +250,16 @@ ivec2 RootLayout::position() const {
 }
 
 ivec2 RootLayout::size() const {
-	return World::drawSys()->viewport().size();
+	return World::drawSys()->getViewRes();
 }
 
 Rect RootLayout::frame() const {
-	return World::drawSys()->viewport();
+	return Rect(ivec2(0), World::drawSys()->getViewRes());
+}
+
+void RootLayout::setSize(const Size& size) {
+	relSize = size;
+	onResize();
 }
 
 // POPUP
@@ -244,17 +271,17 @@ Popup::Popup(const svec2& size, vector<Widget*>&& children, Widget* first, Color
 	sizeY(size.y)
 {}
 
-void Popup::drawSelf() const {
-	World::drawSys()->drawPopup(this);
+void Popup::drawSelf(const Rect& view) const {
+	World::drawSys()->drawPopup(this, view);
 }
 
 ivec2 Popup::position() const {
-	return (World::drawSys()->viewport().size() - size()) / 2;
+	return (World::drawSys()->getViewRes() - size()) / 2;
 }
 
 ivec2 Popup::size() const {
-	vec2 res = World::drawSys()->viewport().size();
-	return ivec2(relSize.usePix ? relSize.pix : int(relSize.prc * res.x), sizeY.usePix ? sizeY.pix : int(sizeY.prc * res.y));
+	ivec2 res = World::drawSys()->getViewRes();
+	return ivec2(sizeToPixAbs(relSize, res.x), sizeToPixAbs(sizeY, res.y));
 }
 
 // OVERLAY
@@ -267,13 +294,13 @@ Overlay::Overlay(const svec2& position, const svec2& size, const svec2& activati
 {}
 
 ivec2 Overlay::position() const {
-	vec2 res = World::drawSys()->viewport().size();
-	return ivec2(pos.x.usePix ? pos.x.pix : int(pos.x.prc * res.x), pos.y.usePix ? pos.y.pix : int(pos.y.prc * res.y));
+	ivec2 res = World::drawSys()->getViewRes();
+	return ivec2(sizeToPixAbs(pos.x, res.x), sizeToPixAbs(pos.y, res.y));
 }
 
 Rect Overlay::actRect() const {
-	vec2 res = World::drawSys()->viewport().size();
-	return Rect(actPos.x.usePix ? actPos.x.pix : int(actPos.x.prc * res.x), actPos.y.usePix ? actPos.y.pix : int(actPos.y.prc * res.y), actSize.x.usePix ? actSize.x.pix : int(actSize.x.prc * res.x), actSize.y.usePix ? actSize.y.pix : int(actSize.y.prc * res.y));
+	ivec2 res = World::drawSys()->getViewRes();
+	return Rect(sizeToPixAbs(actPos.x, res.x), sizeToPixAbs(actPos.y, res.y), sizeToPixAbs(actSize.x, res.x), sizeToPixAbs(actSize.y, res.y));
 }
 
 // CONTEXT
@@ -292,8 +319,8 @@ void Context::onResize() {
 }
 
 ivec2 Context::position() const {
-	vec2 res = World::drawSys()->viewport().size();
-	return ivec2(pos.x.usePix ? pos.x.pix : int(pos.x.prc * res.x), pos.y.usePix ? pos.y.pix : int(pos.y.prc * res.y));
+	ivec2 res = World::drawSys()->getViewRes();
+	return ivec2(sizeToPixAbs(pos.x, res.x), sizeToPixAbs(pos.y, res.y));
 }
 
 void Context::setRect(const Rect& rct) {
@@ -304,8 +331,8 @@ void Context::setRect(const Rect& rct) {
 
 // SCROLL AREA
 
-void ScrollArea::drawSelf() const {
-	World::drawSys()->drawScrollArea(this);
+void ScrollArea::drawSelf(const Rect& view) const {
+	World::drawSys()->drawScrollArea(this, view);
 }
 
 void ScrollArea::onResize() {
@@ -354,7 +381,7 @@ void ScrollArea::onDrag(ivec2 mPos, ivec2 mMov) {
 
 void ScrollArea::onUndrag(uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
-		if (!World::scene()->cursorInClickRange(mousePos(), mBut) && !draggingSlider)
+		if (!World::scene()->cursorInClickRange(World::winSys()->mousePos(), mBut) && !draggingSlider)
 			motion = World::inputSys()->getMouseMove() * vswap(0, -1, direction.horizontal());
 
 		draggingSlider = false;
@@ -536,11 +563,12 @@ TileBox::TileBox(const Size& size, vector<Widget*>&& children, int childHeight, 
 	wheight(childHeight)
 {}
 
-void TileBox::onResize() {
+void TileBox::calculateWidgetPositions() {
+	positions[0] = ivec2(0);
 	int wsiz = size()[direction.horizontal()] - Slider::barSize;
-	ivec2 pos(0);
-	for (sizet i = 0; i < widgets.size(); ++i) {
-		if (int end = pos.x + widgets[i]->getRelSize().pix; end > wsiz && i && positions[i - 1].y == pos.y) {
+	ivec2 pos(!widgets.empty() ? widgets[0]->sizeToPixAbs(widgets[0]->getRelSize(), wsiz) + spacing : 0, 0);
+	for (sizet i = 1; i < widgets.size(); ++i) {
+		if (int end = pos.x + widgets[i]->sizeToPixAbs(widgets[i]->getRelSize(), wsiz); end > wsiz && positions[i - 1].y == pos.y) {
 			pos = ivec2(0, pos.y + wheight + spacing);
 			positions[i] = pos;
 			pos.x += widgets[i]->getRelSize().pix + spacing;
@@ -551,9 +579,6 @@ void TileBox::onResize() {
 	}
 	positions.back() = ivec2(wsiz, pos.y + wheight) + spacing;
 	listPos = min(listPos, listLim());
-
-	for (Widget* it : widgets)
-		it->onResize();
 }
 
 void TileBox::navSelectNext(sizet id, int mid, Direction dir) {
@@ -617,7 +642,7 @@ int TileBox::wgtREnd(sizet id) const {
 
 // READER BOX
 
-ReaderBox::ReaderBox(const Size& size, vector<Texture>&& imgs, Direction dir, float fzoom, int space, bool pad) :
+ReaderBox::ReaderBox(const Size& size, vector<pair<string, Texture*>>&& imgs, Direction dir, float fzoom, int space, bool pad) :
 	ScrollArea(size, {}, dir, Select::none, space, pad),
 	zoom(fzoom)
 {
@@ -625,26 +650,26 @@ ReaderBox::ReaderBox(const Size& size, vector<Texture>&& imgs, Direction dir, fl
 }
 
 ReaderBox::~ReaderBox() {
-	for (Texture& it : pics)
-		SDL_DestroyTexture(it.tex);
+	for (pair<string, Texture*>& it : pics)
+		it.second->free();
 }
 
-void ReaderBox::drawSelf() const {
-	World::drawSys()->drawReaderBox(this);
+void ReaderBox::drawSelf(const Rect& view) const {
+	World::drawSys()->drawReaderBox(this, view);
 }
 
 void ReaderBox::onResize() {
 	// figure out the width of the list
 	int hi = direction.horizontal();
 	int maxRSiz = size()[hi];
-	for (const Texture& it : pics)
-		if (int rsiz = int(float(it.res()[hi]) * zoom); rsiz > maxRSiz)
+	for (const pair<string, Texture*>& it : pics)
+		if (int rsiz = int(float(it.second->getRes()[hi]) * zoom); rsiz > maxRSiz)
 			maxRSiz = rsiz;
 
 	// set position of each picture
 	int rpos = 0;
 	for (sizet i = 0; i < widgets.size(); ++i) {
-		ivec2 psz = vec2(pics[i].res()) * zoom;
+		ivec2 psz = vec2(pics[i].second->getRes()) * zoom;
 		positions[i] = vswap((maxRSiz - psz[hi]) / 2, rpos, hi);
 		rpos += psz[!hi];
 	}
@@ -673,7 +698,7 @@ void ReaderBox::postInit() {
 
 	// scroll down to opened picture if it exists, otherwise start at beginning
 	string file = World::browser()->getCurFile().u8string();
-	if (size_t id = std::find_if(pics.begin(), pics.end(), [&file](const Texture& it) -> bool { return it.name == file; }) - pics.begin(); id < pics.size()) {
+	if (size_t id = std::find_if(pics.begin(), pics.end(), [&file](const pair<string, Texture*>& it) -> bool { return it.first == file; }) - pics.begin(); id < pics.size()) {
 		if (direction.positive())
 			scrollToWidgetPos(id);
 		else
@@ -692,9 +717,9 @@ void ReaderBox::onMouseMove(ivec2 mPos, ivec2 mMov) {
 	}
 }
 
-void ReaderBox::initWidgets(vector<Texture>&& imgs) {
-	for (Texture& it : pics)
-		SDL_DestroyTexture(it.tex);
+void ReaderBox::initWidgets(vector<pair<string, Texture*>>&& imgs) {
+	for (pair<string, Texture*>& it : pics)
+		it.second->free();
 	clearWidgets();
 
 	pics = std::move(imgs);
@@ -704,14 +729,18 @@ void ReaderBox::initWidgets(vector<Texture>&& imgs) {
 	if (direction.negative())
 		std::reverse(pics.begin(), pics.end());
 	for (sizet i = 0; i < pics.size(); ++i) {
-		widgets[i] = new Picture(0, false, pics[i].tex, 0);
+		widgets[i] = new Picture(0, false, pics[i].second, 0);
 		widgets[i]->setParent(this, i);
 	}
 }
 
-void ReaderBox::setWidgets(vector<Texture>&& imgs) {
+void ReaderBox::setWidgets(vector<pair<string, Texture*>>&& imgs) {
 	initWidgets(std::move(imgs));
 	postInit();
+}
+
+bool ReaderBox::showBar() const {
+	return barRect().contain(World::winSys()->mousePos()) || draggingSlider;
 }
 
 void ReaderBox::setZoom(float factor) {
@@ -731,7 +760,7 @@ ivec2 ReaderBox::wgtPosition(sizet id) const {
 }
 
 ivec2 ReaderBox::wgtSize(sizet id) const {
-	return vec2(pics[id].res()) * zoom;
+	return vec2(pics[id].second->getRes()) * zoom;
 }
 
 ivec2 ReaderBox::listSize() const {
