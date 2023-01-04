@@ -8,11 +8,6 @@ class World {
 private:
 	static inline WindowSys windowSys;			// the thing on which everything runs
 	static inline vector<string> vals;
-	static inline uset<string> flags;
-	static inline umap<string, string> opts;
-
-	static inline const uset<string> checkFlags;
-	static inline const umap<string, string> checkOpts;
 
 public:
 	static FileSys* fileSys();
@@ -27,8 +22,6 @@ public:
 	static Settings* sets();
 
 	static const vector<string>& getVals();
-	static bool hasFlag(const char* key);
-	static const char* getOpt(const char* key);
 	template <class C, class F> static void setArgs(int argc, C** argv, F conv);
 
 	template <class F, class... A> static void prun(F func, A... args);
@@ -79,15 +72,6 @@ inline Settings* World::sets() {
 
 inline const vector<string>& World::getVals() {
 	return vals;
-}
-
-inline bool World::hasFlag(const char* key) {
-	return flags.count(key);
-}
-
-inline const char* World::getOpt(const char* key) {
-	umap<string, string>::const_iterator it = opts.find(key);
-	return it != opts.end() ? it->second.c_str() : nullptr;
 }
 
 template <class F, class... A>

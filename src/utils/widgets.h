@@ -55,9 +55,9 @@ public:
 	Widget(const Size& size = Size());
 	virtual ~Widget() = default;
 
-	virtual void drawSelf(const Rect&) const {}	// calls appropriate drawing function(s) in DrawSys
-	virtual void drawTop(const Rect&) const {}
-	virtual void drawAddr(const Rect&) const {}
+	virtual void drawSelf(const Recti&) {}	// calls appropriate drawing function(s) in DrawSys
+	virtual void drawTop(const Recti&) {}
+	virtual void drawAddr(const Recti&) {}
 	virtual void onResize() {}	// for updating values when window size changed
 	virtual void tick(float) {}
 	virtual void postInit() {}	// gets called after parent is set and all set up
@@ -89,8 +89,8 @@ public:
 	virtual ivec2 position() const;
 	virtual ivec2 size() const;
 	ivec2 center() const;
-	Rect rect() const;			// the rectangle that is the widget
-	virtual Rect frame() const;	// the rectangle to restrain a widget's visibility (in Widget it returns the parent's frame and if in Layout, it returns a frame for it's children)
+	Recti rect() const;			// the rectangle that is the widget
+	virtual Recti frame() const;	// the rectangle to restrain a widget's visibility (in Widget it returns the parent's frame and if in Layout, it returns a frame for it's children)
 	virtual void setSize(const Size& size);
 	int sizeToPixAbs(const Size& siz, int res) const;
 };
@@ -115,8 +115,8 @@ inline ivec2 Widget::center() const {
 	return position() + size() / 2;
 }
 
-inline Rect Widget::rect() const {
-	return Rect(position(), size());
+inline Recti Widget::rect() const {
+	return Recti(position(), size());
 }
 
 // visible widget with texture and background color
@@ -133,17 +133,17 @@ public:
 	Picture(const Size& size = Size(), bool bg = true, const Texture* texture = nullptr, int margin = defaultIconMargin);
 	~Picture() override = default;
 
-	void drawSelf(const Rect& view) const override;
-	void drawAddr(const Rect& view) const override;
+	void drawSelf(const Recti& view) override;
+	void drawAddr(const Recti& view) override;
 
 	virtual Color color() const;
-	virtual Rect texRect() const;
+	virtual Recti texRect() const;
 };
 
 // clickable widget with function calls for left and right click (it's rect is drawn so you can use it like a spacer with color)
 class Button : public Picture {
 public:
-	static constexpr ivec2 tooltipMargin = { 4, 1 };
+	static constexpr ivec2 tooltipMargin = ivec2(4, 1);
 
 protected:
 	PCall lcall, rcall, dcall;
@@ -160,7 +160,7 @@ public:
 
 	Color color() const override;
 	virtual const Texture* getTooltip();
-	Rect tooltipRect() const;
+	Recti tooltipRect() const;
 };
 
 // if you don't know what a checkbox is then I don't know what to tell ya
@@ -171,10 +171,10 @@ public:
 	CheckBox(const Size& size = Size(), bool checked = false, PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, bool bg = true, const Texture* texture = nullptr, int margin = defaultIconMargin);
 	~CheckBox() final = default;
 
-	void drawSelf(const Rect& view) const final;
+	void drawSelf(const Recti& view) final;
 	void onClick(ivec2 mPos, uint8 mBut) final;
 
-	Rect boxRect() const;
+	Recti boxRect() const;
 	Color boxColor() const;
 	bool toggle();
 };
@@ -199,7 +199,7 @@ public:
 	Slider(const Size& size = Size(), int value = 0, int minimum = 0, int maximum = 255, PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, bool bg = true, const Texture* texture = nullptr, int margin = defaultIconMargin);
 	~Slider() final = default;
 
-	void drawSelf(const Rect& view) const final;
+	void drawSelf(const Recti& view) final;
 	void onClick(ivec2 mPos, uint8 mBut) final;
 	void onHold(ivec2 mPos, uint8 mBut) final;
 	void onDrag(ivec2 mPos, ivec2 mMov) final;
@@ -208,8 +208,8 @@ public:
 	int getVal() const;
 	void setVal(int value);
 
-	Rect barRect() const;
-	Rect sliderRect() const;
+	Recti barRect() const;
+	Recti sliderRect() const;
 
 private:
 	void setSlider(int xpos);
@@ -240,12 +240,12 @@ public:
 	ProgressBar(const Size& size = Size(), int value = 0, int minimum = 0, int maximum = 255, bool bg = true, const Texture* texture = nullptr, int margin = defaultIconMargin);
 	~ProgressBar() final = default;
 
-	void drawSelf(const Rect& view) const final;
+	void drawSelf(const Recti& view) final;
 
 	int getVal() const;
 	void setVal(int value);
 
-	Rect barRect() const;
+	Recti barRect() const;
 };
 
 inline int ProgressBar::getVal() const {
@@ -271,7 +271,7 @@ public:
 	Label(const Size& size = Size(), string line = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, Alignment alignment = Alignment::left, const Texture* texture = nullptr, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
 	~Label() override;
 
-	void drawSelf(const Rect& view) const override;
+	void drawSelf(const Recti& view) override;
 	void onResize() override;
 	void postInit() override;
 
@@ -279,9 +279,9 @@ public:
 	virtual void setText(string&& str);
 	virtual void setText(const string& str);
 	const Texture* getTextTex() const;
-	Rect textRect() const;
-	Rect textFrame() const;
-	Rect texRect() const override;
+	Recti textRect() const;
+	Recti textFrame() const;
+	Recti texRect() const override;
 	int textIconOffset() const;
 	int getTextMargin() const;
 protected:
@@ -309,6 +309,7 @@ private:
 
 public:
 	ComboBox(const Size& size = Size(), string curOption = string(), vector<string>&& opts = vector<string>(), PCall call = nullptr, Texture* tip = nullptr, Alignment alignment = Alignment::left, const Texture* texture = nullptr, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
+	ComboBox(const Size& size = Size(), sizet curOption = 0, vector<string>&& opts = vector<string>(), PCall call = nullptr, Texture* tip = nullptr, Alignment alignment = Alignment::left, const Texture* texture = nullptr, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
 	~ComboBox() final = default;
 
 	void onClick(ivec2 mPos, uint8 mBut) final;
@@ -354,7 +355,7 @@ public:
 	LabelEdit(const Size& size = Size(), string line = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, TextType type = TextType::text, bool focusLossConfirm = true, const Texture* texture = nullptr, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
 	~LabelEdit() final = default;
 
-	void drawTop(const Rect& view) const final;
+	void drawTop(const Recti& view) final;
 	void onClick(ivec2 mPos, uint8 mBut) final;
 	void onKeypress(const SDL_Keysym& key) final;
 	void onCompose(string_view str, uint olen) final;
@@ -370,7 +371,7 @@ public:
 private:
 	void onTextReset();
 	ivec2 textPos() const final;
-	int caretPos() const;	// caret's relative x position
+	int caretPos();	// caret's relative x position
 	void setCPos(uint cp);
 
 	static bool kmodCtrl(uint16 mod);
@@ -448,14 +449,14 @@ inline void KeyGetter::restoreText() {
 class WindowArranger : public Button {
 private:
 	struct Dsp {
-		Rect rect, full;
+		Recti rect, full;
 		Texture* txt = nullptr;
 		bool active;
 
 		Dsp() = default;
 		Dsp(const Dsp&) = default;
 		Dsp(Dsp&&) = default;
-		Dsp(const Rect& vdsp, bool on);
+		Dsp(const Recti& vdsp, bool on);
 
 		Dsp& operator=(const Dsp&) = default;
 		Dsp& operator=(Dsp&&) = default;
@@ -465,7 +466,7 @@ private:
 
 	umap<int, Dsp> disps;
 	ivec2 totalDim;
-	Rect dragr;
+	Recti dragr;
 	int dragging;
 	int selected;
 	float bscale;
@@ -475,8 +476,8 @@ public:
 	WindowArranger(const Size& size = Size(), float baseScale = 1.f, bool vertExp = true, PCall leftCall = nullptr, PCall rightCall = nullptr, Texture* tip = nullptr, bool bg = true, const Texture* texture = nullptr, int margin = defaultIconMargin);
 	~WindowArranger() final;
 
-	void drawSelf(const Rect& view) const final;
-	void drawTop(const Rect& view) const final;
+	void drawSelf(const Recti& view) final;
+	void drawTop(const Recti& view) final;
 	void onResize() final;
 	void postInit() final;
 	void onClick(ivec2 mPos, uint8 mBut) final;
@@ -492,10 +493,10 @@ public:
 	bool draggingDisp(int id) const;
 
 	const umap<int, Dsp>& getDisps() const;
-	umap<int, Rect> getActiveDisps() const;
-	Rect offsetDisp(const Rect& rect, ivec2 pos) const;
+	umap<int, Recti> getActiveDisps() const;
+	Recti offsetDisp(const Recti& rect, ivec2 pos) const;
 	int precalcSizeExpand(ivec2 siz) const;
-	tuple<Rect, Color, Rect, const Texture*> dispRect(int id, const Dsp& dsp) const;
+	tuple<Recti, Color, Recti, const Texture*> dispRect(int id, const Dsp& dsp) const;
 private:
 	int dispUnderPos(ivec2 pnt) const;
 	void calcDisplays();
@@ -503,16 +504,16 @@ private:
 	float entryScale(ivec2 siz) const;
 	void freeTextures();
 	ivec2 snapDrag() const;
-	static array<ivec2, 8> getSnapPoints(const Rect& rect);
-	template <sizet S> static void scanClosestSnapPoint(const array<pair<uint, uint>, S>& relations, const Rect& rect, const array<ivec2, 8>& snaps, uint& snapId, ivec2& snapPnt, float& minDist);
+	static array<ivec2, 8> getSnapPoints(const Recti& rect);
+	template <sizet S> static void scanClosestSnapPoint(const array<pair<uint, uint>, S>& relations, const Recti& rect, const array<ivec2, 8>& snaps, uint& snapId, ivec2& snapPnt, float& minDist);
 };
 
 inline const umap<int, WindowArranger::Dsp>& WindowArranger::getDisps() const {
 	return disps;
 }
 
-inline Rect WindowArranger::offsetDisp(const Rect& rect, ivec2 pos) const {
-	return Rect(rect.pos() + pos + winMargin, rect.size());
+inline Recti WindowArranger::offsetDisp(const Recti& rect, ivec2 pos) const {
+	return rect.translate(pos + winMargin);
 }
 
 inline int WindowArranger::precalcSizeExpand(ivec2 siz) const {

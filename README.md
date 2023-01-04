@@ -3,21 +3,38 @@ A simple comic/manga reader for Linux and Windows.
 It's basically just an image viewer that shows all pictures of a directory/archive.  
 Currently supported file formats are whatever SDL2_image and libarchive support.  
 
-Used libraries are SDL2, SDL2_image, SDL2_ttf, libarchive and by extension FreeType, HarfBuzz, libtiff, libwebp, stb_image and zlib and the included default font is BrisaSans.  
-The CMakeLists.txt is written for at least CMake 3.12.4 with Clang, GCC or MSVC which need to support C++17. You also need some version of Python 3 with Wand which requires ImageMagick to be installed.  
-You can create a Makefile for a debug build by running CMake with the "-DCMAKE_BUILD_TYPE=Debug" option. Otherwise it'll default to a release build.  
+## Build
+Used libraries are SDL2, SDL2_image, SDL2_ttf, libarchive, glm and by extension FreeType, HarfBuzz, libtiff, libwebp, stb_image and zlib. The included default font is BrisaSans.  
+The CMakeLists.txt is written for at least CMake 3.12.4 with Clang, GCC or MSVC which need to support C++17.  
+You can generate project files for a debug build by running CMake with the "-DCMAKE_BUILD_TYPE=Debug" option. Otherwise it'll default to a release build.  
+By default the Program uses OpenGL 3.0, which can be switched to OpenGL ES 3.0 with "-DOPENGLES=1" or entirely disabled with "-DOPENGL=0".  
+Support for DirectX 11 and Vulkan 1.0 can be enabled by setting the options "-DDIRECTX=1" and "-DVULKAN=1".  
 
-## Linux
-All dependencies need to be installed manually. Installing the development packages for libsdl2 libsdl2-image libsdl2-ttf and libarchive should do the trick.  
+### Linux
+Most dependencies need to be installed manually. Installing the development packages for libsdl2 libsdl2-image libsdl2-ttf and libarchive should do the trick.  
 To build an AppImage run CMake with the "-DAPPIMAGE=1" option.  
-Settings files are being saved in "~/.vertiread".  
+Settings files are being saved in "~/.local/share/vertiread".  
 
 There’s a launcher file, which is copied to the build directory after compilation.  
-If you want a menu entry for the program, just set the executable’s and icon’s path in the .desktop file and move it to either "/usr/share/applications" or "~/.local/share/applications".  
+If you want a menu entry for the program, set the executable’s and icon’s path in the .desktop file and move it to either "/usr/share/applications" or "~/.local/share/applications".  
 
-## Windows
+```bash
+mkdir build
+cd build
+cmake .. -DVULKAN=1
+make
+```
+
+### Windows
 Only MS Visual Studio and MinGW are supported. All necessary libraries are downloaded while running CMake.  
 Settings files are being saved in "%AppData%\VertiRead".  
+
+```batch
+mkdir build
+cd build
+cmake .. -G "NMake Makefiles" -DDIRECTX=1
+nmake
+```
 
 ## How to use it
 The idea is that you have a library directory in which you have your comics saved in form of pictures or archives of pictures. The location of this directory can be changed in the settings.  

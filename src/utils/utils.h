@@ -2,9 +2,9 @@
 
 #define SDL_MAIN_HANDLED
 #ifdef _WIN32
-#include <SDL_image.h>
+#include <SDL.h>
 #else
-#include <SDL2/SDL_image.h>
+#include <SDL2/SDL.h>
 #endif
 #include <glm/glm.hpp>
 #include <algorithm>
@@ -13,12 +13,11 @@
 #include <climits>
 #include <cstring>
 #include <filesystem>
-#include <iostream>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -35,6 +34,7 @@ using ldouble = long double;
 using wchar = wchar_t;
 
 using std::array;
+using std::optional;
 using std::pair;
 using std::string;
 using std::string_view;
@@ -55,7 +55,6 @@ using uint64 = uint64_t;
 template <class T> using initlist = std::initializer_list<T>;
 template <class... T> using umap = std::unordered_map<T...>;
 template <class... T> using uptr = std::unique_ptr<T...>;
-template <class... T> using uset = std::unordered_set<T...>;
 
 using sizet = size_t;
 using pdift = ptrdiff_t;
@@ -66,8 +65,9 @@ using pairPath = pair<fs::path, fs::path>;
 using mapFiles = umap<string, pair<sizet, uptrt>>;
 
 using glm::vec2;
-using glm::ivec2;
 using glm::uvec2;
+using glm::u32vec2;
+using glm::ivec2;
 using glm::vec4;
 using glm::u8vec4;
 using glm::ivec4;
@@ -190,7 +190,7 @@ template <class T>
 string operator+(std::basic_string_view<T> a, std::basic_string<T>&& b) {
 	sizet blen = b.length();
 	b.resize(a.length() + blen);
-	std::move_backward(b.begin(), b.begin() + blen, b.begin() + a.length());
+	std::move_backward(b.begin(), b.begin() + blen, b.end());
 	std::copy(a.begin(), a.end(), b.begin());
 	return b;
 }
@@ -210,89 +210,148 @@ inline void pushEvent(UserCode code, void* data1 = nullptr, void* data2 = nullpt
 	SDL_PushEvent(&event);
 }
 
+#ifndef NDEBUG
+inline void dbgPass() {}
+#endif
+
 // SDL_Rect wrapper
-struct Rect : SDL_Rect {
+template <class T>
+struct Rect {
+	using tvec2 = glm::vec<2, T, glm::defaultp>;
+	using tvec4 = glm::vec<4, T, glm::defaultp>;
+
+	T x, y, w, h;
+
 	Rect() = default;
-	constexpr Rect(int n);
-	constexpr Rect(int px, int py, int sw, int sh);
-	constexpr Rect(ivec2 pos, ivec2 size);
-	constexpr Rect(const ivec4& vec);
+	constexpr Rect(T n);
+	constexpr Rect(T px, T py, T sw, T sh);
+	constexpr Rect(T px, T py, const tvec2& sv);
+	constexpr Rect(const tvec2& pv, T sw, T sh);
+	constexpr Rect(const tvec2& pv, const tvec2& sv);
+	constexpr Rect(const tvec4& rv);
 
-	int& operator[](sizet i);
-	constexpr int operator[](sizet i) const;
-	constexpr bool operator==(const Rect& rect) const;
+	tvec2& pos();
+	constexpr tvec2 pos() const;
+	tvec2& size();
+	constexpr tvec2 size() const;
+	constexpr tvec2 end() const;
+	tvec4& toVec();
+	constexpr tvec4 toVec() const;
 
-	ivec2& pos();
-	constexpr ivec2 pos() const;
-	ivec2& size();
-	constexpr ivec2 size() const;
-	constexpr ivec2 end() const;
-	constexpr ivec4 toVec() const;
-
-	bool contain(ivec2 point) const;
-	bool overlap(const Rect& rect) const;
-	Rect intersect(const Rect& rect) const;
+	bool operator==(const Rect& rect) const;
+	constexpr bool empty() const;
+	constexpr bool contains(const tvec2& point) const;
+	constexpr bool overlaps(const Rect& rect) const;
+	constexpr Rect<T> intersect(const Rect& rect) const;
+	constexpr Rect<T> translate(const tvec2& mov) const;
 };
 
-constexpr Rect::Rect(int n) :
-	SDL_Rect{ n, n, n, n }
+using Recti = Rect<int>;
+using Rectu = Rect<uint>;
+
+template <class T>
+constexpr Rect<T>::Rect(T n) :
+	x(n), y(n), w(n), h(n)
 {}
 
-constexpr Rect::Rect(int px, int py, int sw, int sh) :
-	SDL_Rect{ px, py, sw, sh }
+template <class T>
+constexpr Rect<T>::Rect(T px, T py, T sw, T sh) :
+	x(px), y(py), w(sw), h(sh)
 {}
 
-constexpr Rect::Rect(ivec2 pos, ivec2 size) :
-	SDL_Rect{ pos.x, pos.y, size.x, size.y }
+template <class T>
+constexpr Rect<T>::Rect(T px, T py, const tvec2& sv) :
+	x(px), y(py), w(sv.x), h(sv.y)
 {}
 
-constexpr Rect::Rect(const ivec4& vec) :
-	SDL_Rect{ vec.x, vec.y, vec.z, vec.w }
+template <class T>
+constexpr Rect<T>::Rect(const tvec2& pv, T sw, T sh) :
+	x(pv.x), y(pv.y), w(sw), h(sh)
 {}
 
-inline int& Rect::operator[](sizet i) {
-	return reinterpret_cast<int*>(this)[i];
+template <class T>
+constexpr Rect<T>::Rect(const tvec2& pv, const tvec2& sv) :
+	x(pv.x), y(pv.y), w(sv.x), h(sv.y)
+{}
+
+template <class T>
+constexpr Rect<T>::Rect(const tvec4& rv) :
+	x(rv.x), y(rv.y), w(rv.z), h(rv.w)
+{}
+
+template <class T>
+typename Rect<T>::tvec2& Rect<T>::pos() {
+	return *reinterpret_cast<tvec2*>(this);
 }
 
-constexpr bool Rect::operator==(const Rect& rect) const {
-	return x == rect.x && y == rect.y && w == rect.w && h == rect.h;
+template <class T>
+constexpr typename Rect<T>::tvec2 Rect<T>::pos() const {
+	return tvec2(x, y);
 }
 
-inline ivec2& Rect::pos() {
-	return *reinterpret_cast<ivec2*>(this);
+template <class T>
+inline typename Rect<T>::tvec2& Rect<T>::size() {
+	return reinterpret_cast<tvec2*>(this)[1];
 }
 
-constexpr ivec2 Rect::pos() const {
-	return ivec2(x, y);
+template <class T>
+constexpr typename Rect<T>::tvec2 Rect<T>::size() const {
+	return tvec2(w, h);
 }
 
-inline ivec2& Rect::size() {
-	return reinterpret_cast<ivec2*>(this)[1];
-}
-
-constexpr ivec2 Rect::size() const {
-	return ivec2(w, h);
-}
-
-constexpr ivec2 Rect::end() const {
+template <class T>
+constexpr typename Rect<T>::tvec2 Rect<T>::end() const {
 	return pos() + size();
 }
 
-constexpr ivec4 Rect::toVec() const {
-	return ivec4(x, y, w, h);
+template <class T>
+typename Rect<T>::tvec4& Rect<T>::toVec() {
+	return *reinterpret_cast<tvec4*>(this);
 }
 
-inline bool Rect::contain(ivec2 point) const {
-	return SDL_PointInRect(reinterpret_cast<const SDL_Point*>(&point), this);
+template <class T>
+constexpr typename Rect<T>::tvec4 Rect<T>::toVec() const {
+	return tvec4(x, y, w, h);
 }
 
-inline bool Rect::overlap(const Rect& rect) const {
-	return SDL_HasIntersection(this, &rect);
+template <class T>
+bool Rect<T>::operator==(const Rect& rect) const {
+	return x == rect.x && y == rect.y && w == rect.w && h == rect.h;
 }
 
-inline Rect Rect::intersect(const Rect& rect) const {
-	Rect isct;
-	return SDL_IntersectRect(this, &rect, &isct) ? isct : Rect(0);
+template <class T>
+constexpr bool Rect<T>::empty() const {
+	return w <= T(0) || h <= T(0);
+}
+
+template <class T>
+constexpr bool Rect<T>::contains(const tvec2& point) const {
+	return point.x >= x && point.x < x + w && point.y >= y && point.y < y + h;
+}
+
+template <class T>
+constexpr bool Rect<T>::overlaps(const Rect& rect) const {
+	if (!empty() && !rect.empty()) {
+		tvec2 dpos = glm::max(pos(), rect.pos());
+		tvec2 dend = glm::min(end(), rect.end());
+		return dend.x > dpos.x && dend.y > dpos.y;
+	}
+	return false;
+}
+
+template <class T>
+constexpr Rect<T> Rect<T>::intersect(const Rect& rect) const {
+	if (!empty() && !rect.empty()) {
+		tvec2 dpos = glm::max(pos(), rect.pos());
+		tvec2 dend = glm::min(end(), rect.end());
+		return Rect(dpos, dend - dpos);
+	}
+	return false;
+}
+
+template <class T>
+constexpr Rect<T> Rect<T>::translate(const tvec2& mov) const {
+	return Rect(pos() + mov, size());
 }
 
 // files and strings
@@ -302,7 +361,7 @@ fs::path parentPath(const fs::path& path);
 string strEnclose(string_view str);
 vector<string> strUnenclose(string_view str);
 vector<string_view> getWords(string_view str);
-string currentDateTimeStr(char ts = ':', char sep = ' ', char ds = '-');
+tm currentDateTime();
 
 inline bool isSpace(int c) {
 	return (c > '\0' && c <= ' ') || c == 0x7F;
@@ -346,6 +405,7 @@ inline bool isSubpath(const fs::path& path, const fs::path& base) {
 string swtos(wstring_view wstr);
 wstring sstow(string_view str);
 #endif
+uint32 ceilPow2(uint32 val);
 
 inline string stos(string_view str) {	// dummy function for World::setArgs
 	return string(str);
@@ -366,7 +426,7 @@ string toStr(T num) {
 
 template <uint8 base = 10, class T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
 string toStr(T num) {
-	return toStr(std::underlying_type_t<T>(num));
+	return toStr<base>(std::underlying_type_t<T>(num));
 }
 
 template <uint8 base = 10, class T, std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, bool>, int> = 0>
@@ -404,12 +464,28 @@ string toStr(T num) {
 	return string(buf.data(), res.ptr);
 }
 
-template <glm::length_t L, class T, glm::qualifier Q, std::enable_if_t<(std::is_integral_v<T> && !std::is_same_v<T, bool>) || std::is_floating_point_v<T>, int> = 0>
-string toStr(const glm::vec<L, T, Q>& v, string_view sep = " ") {
+template <uint8 base = 10, glm::length_t L, class T, glm::qualifier Q, std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, bool>, int> = 0>
+string toStr(const glm::vec<L, T, Q>& v, const char* sep = " ") {
+	string str;
+	for (glm::length_t i = 0; i < L - 1; ++i)
+		str += toStr<base>(v[i]) + sep;
+	return str + toStr<base>(v[L - 1]);
+}
+
+template <glm::length_t L, class T, glm::qualifier Q, std::enable_if_t<std::is_floating_point_v<T>, int> = 0>
+string toStr(const glm::vec<L, T, Q>& v, const char* sep = " ") {
 	string str;
 	for (glm::length_t i = 0; i < L - 1; ++i)
 		str += toStr(v[i]) + sep;
 	return str + toStr(v[L - 1]);
+}
+
+inline string tmToDateStr(const tm& tim, char sep = '-') {
+	return toStr(tim.tm_year + 1900) + sep + toStr(tim.tm_mon, 2) + sep + toStr(tim.tm_mday, 2);
+}
+
+inline string tmToTimeStr(const tm& tim, char sep = ':') {
+	return toStr(tim.tm_hour, 2) + sep + toStr(tim.tm_min, 2) + sep + toStr(tim.tm_sec, 2);
 }
 
 template <class T, sizet N, std::enable_if_t<std::is_integral_v<T> || std::is_enum_v<T>, int> = 0>
@@ -437,7 +513,7 @@ T toNum(string_view str, A... args) {
 	return val;
 }
 
-template <class T, class N = typename T::value_type, class... A, std::enable_if_t<(std::is_integral_v<N> && !std::is_same_v<N, bool>) || std::is_floating_point_v<N>, int> = 0>
+template <class T, class... A, std::enable_if_t<(std::is_integral_v<typename T::value_type> && !std::is_same_v<typename T::value_type, bool>) || std::is_floating_point_v<typename T::value_type>, int> = 0>
 T toVec(string_view str, typename T::value_type fill = typename T::value_type(0), A... args) {
 	T vec(fill);
 	sizet p = 0;
@@ -468,12 +544,12 @@ template <class... A>
 void logInfo(A&&... args) {
 	std::ostringstream ss;
 	(ss << ... << std::forward<A>(args));
-	SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s%s", ss.str().c_str(), linend.data());
+	SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", ss.str().c_str());
 }
 
 template <class... A>
 void logError(A&&... args) {
 	std::ostringstream ss;
 	(ss << ... << std::forward<A>(args));
-	SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s%s", ss.str().c_str(), linend.data());
+	SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", ss.str().c_str());
 }

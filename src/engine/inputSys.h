@@ -4,9 +4,6 @@
 
 // handles input events and contains controls settings
 class InputSys {
-public:
-	bool mouseLast = false;		// last input was mouse or touch
-
 private:
 	struct Controller {
 		SDL_GameController* gamepad;
@@ -22,8 +19,9 @@ private:
 	array<Binding, Binding::names.size()> bindings;
 	ivec2 mouseMove = { 0, 0 };		// last mouse motion
 	uint32 moveTime = 0;			// timestamp of last recorded mouseMove
-
 public:
+	optional<uint32> mouseWin;		// last windows id the mouse was in
+
 	InputSys();
 	~InputSys();
 

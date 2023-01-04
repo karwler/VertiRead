@@ -2,6 +2,7 @@
 
 #include "browser.h"
 #include "downloader.h"
+#include <atomic>
 #include <thread>
 
 // handles the front-end
@@ -15,7 +16,7 @@ private:
 	ProgState* state = nullptr;
 	uptr<Browser> browser;
 	std::thread thread;
-	bool threadRunning = false;
+	std::atomic_bool threadRunning = false;
 
 public:
 	~Program();
@@ -89,11 +90,14 @@ public:
 	void eventMoveProgress(uptrt prg, uptrt lim);
 	void eventMoveFinished();
 	void eventSetScreenMode(Button* but);
-	void eventSetVsync(Button* but);
 	void eventSetRenderer(Button* but);
+	void eventSetDevice(Button* but);
+	void eventSetCompression(Button* but);
+	void eventSetVsync(Button* but);
 	void eventSetGpuSelecting(Button* but);
 	void eventSetMultiFullscreen(Button* but);
 	void eventSetHide(Button* but);
+	void eventSetTooltips(Button* but);
 	void eventSetTheme(Button* but);
 	void eventSetFont(Button* but);
 	void eventSetScrollSpeed(Button* but);
@@ -123,7 +127,7 @@ public:
 private:
 	void switchPictures(bool fwd, string_view picname);
 	void offerMoveBooks(fs::path&& oldLib);
-	template <bool decomboboxify, class T, sizet N> T finishComboBox(Button* but, const array<const char*, N>& names, T defaultValue = T(N));
+	static sizet finishComboBox(Button* but);
 	template <class T, class... A> void setState(A&&... args);
 	void reposizeWindow(ivec2 dres, ivec2 wsiz);
 };

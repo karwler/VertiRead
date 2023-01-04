@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/settings.h"
+#include <atomic>
 #include <fstream>
 
 /* For interpreting lines in ini files:
@@ -100,8 +101,10 @@ private:
 	static constexpr char iniKeywordScreen[] = "screen";
 	static constexpr char iniKeywordDisplay[] = "display";
 	static constexpr char iniKeywordResolution[] = "resolution";
-	static constexpr char iniKeywordVSync[] = "vsync";
 	static constexpr char iniKeywordRenderer[] = "renderer";
+	static constexpr char iniKeywordDevice[] = "device";
+	static constexpr char iniKeywordCompression[] = "compression";
+	static constexpr char iniKeywordVSync[] = "vsync";
 	static constexpr char iniKeywordGpuSelecting[] = "gpu_selecting";
 	static constexpr char iniKeywordDirection[] = "direction";
 	static constexpr char iniKeywordZoom[] = "zoom";
@@ -110,6 +113,7 @@ private:
 	static constexpr char iniKeywordFont[] = "font";
 	static constexpr char iniKeywordTheme[] = "theme";
 	static constexpr char iniKeywordShowHidden[] = "show_hidden";
+	static constexpr char iniKeywordTooltips[] = "tooltips";
 	static constexpr char iniKeywordLibrary[] = "library";
 	static constexpr char iniKeywordScrollSpeed[] = "scroll_speed";
 	static constexpr char iniKeywordDeadzone[] = "deadzone";
@@ -157,7 +161,7 @@ public:
 	static mapFiles listArchivePictures(const fs::path& file, vector<string>& names);
 	static SDL_Surface* loadArchivePicture(archive* arch, archive_entry* entry);
 
-	static void moveContentThreaded(bool* running, fs::path src, fs::path dst);
+	static void moveContentThreaded(std::atomic_bool& running, fs::path src, fs::path dst);
 	const fs::path& getDirSets() const;
 	fs::path dirIcons() const;
 

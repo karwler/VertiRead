@@ -29,7 +29,7 @@ bool ProgState::eventCommonEscape() {
 }
 
 void ProgState::eventSelect(Direction dir) {
-	World::inputSys()->mouseLast = false;
+	World::inputSys()->mouseWin = std::nullopt;
 	if (World::scene()->select && !dynamic_cast<Layout*>(World::scene()->select))
 		World::scene()->select->onNavSelect(dir);
 	else
@@ -141,7 +141,7 @@ Context* ProgState::createContext(vector<pair<string, PCall>>&& items, Widget* p
 		wgts[i] = new Label(lineHeight, std::move(items[i].first), items[i].second, &Program::eventCloseContext);
 
 	Widget* first = wgts[0];
-	Rect rect = calcTextContextRect(wgts, World::winSys()->mousePos(), ivec2(0, lineHeight), contextMargin);
+	Recti rect = calcTextContextRect(wgts, World::winSys()->mousePos(), ivec2(0, lineHeight), contextMargin);
 	return new Context(rect.pos(), rect.size(), vector<Widget*>{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, Layout::Select::none, 0) }, first, parent, Color::dark, nullptr, Layout::defaultDirection, contextMargin);
 }
 
@@ -152,11 +152,11 @@ Context* ProgState::createComboContext(ComboBox* parent, PCall kcal) {
 		wgts[i] = new Label(size.y, parent->getOptions()[i], kcal, &Program::eventCloseContext);
 
 	Widget* first = wgts[0];
-	Rect rect = calcTextContextRect(wgts, parent->position(), size, contextMargin);
+	Recti rect = calcTextContextRect(wgts, parent->position(), size, contextMargin);
 	return new Context(rect.pos(), rect.size(), vector<Widget*>{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, Layout::Select::none, 0) }, first, parent, Color::dark, &Program::eventResizeComboContext, Layout::defaultDirection, contextMargin);
 }
 
-Rect ProgState::calcTextContextRect(const vector<Widget*>& items, ivec2 pos, ivec2 size, int margin) {
+Recti ProgState::calcTextContextRect(const vector<Widget*>& items, ivec2 pos, ivec2 size, int margin) {
 	for (Widget* it : items)
 		if (Label* lbl = dynamic_cast<Label*>(it))
 			if (int w = World::drawSys()->textLength(lbl->getText(), size.y) + lbl->getTextMargin() * 2 + Slider::barSize + margin * 2; w > size.x)
@@ -166,7 +166,7 @@ Rect ProgState::calcTextContextRect(const vector<Widget*>& items, ivec2 pos, ive
 	ivec2 res = World::drawSys()->getViewRes();
 	calcContextPos(pos.x, size.x, res.x);
 	calcContextPos(pos.y, size.y, res.y);
-	return Rect(pos, size);
+	return Recti(pos, size);
 }
 
 void ProgState::calcContextPos(int& pos, int& siz, int limit) {
@@ -188,10 +188,13 @@ int ProgState::findMaxLength(T pos, T end, int height) {
 }
 
 Texture* ProgState::makeTooltip(const char* str) {
-	return World::drawSys()->renderText(str, tooltipHeight, maxTooltipLength);
+	return World::sets()->tooltips ? World::drawSys()->renderText(str, tooltipHeight, maxTooltipLength) : nullptr;
 }
 
 Texture* ProgState::makeTooltipL(const char* str) {
+	if (!World::sets()->tooltips)
+		return nullptr;
+
 	uint width = 0;
 	while (*str) {
 		sizet len = strcspn(str, "\n");
@@ -395,11 +398,12 @@ void ProgReader::eventClosing() {
 		string::iterator nxt = std::find_if(mid, path.end(), notDsep);
 		World::fileSys()->saveLastPage(string(path.begin(), mid), string(nxt, path.end()), reader->curPage());
 	}
+	World::drawSys()->freeRpicTextures(reader->extractPictures());
 	SDL_ShowCursor(SDL_ENABLE);
 }
 
 RootLayout* ProgReader::createLayout() {
-	vector<Widget*> cont = { reader = new ReaderBox(1.f, {}, World::sets()->direction, World::sets()->zoom, World::sets()->spacing) };
+	vector<Widget*> cont = { reader = new ReaderBox(1.f, World::sets()->direction, World::sets()->zoom, World::sets()->spacing) };
 	return new RootLayout(1.f, std::move(cont), Direction::right, Layout::Select::none, 0);
 }
 
@@ -641,50 +645,47 @@ RootLayout* ProgSettings::createLayout() {
 	Text tsizs("Square", lineHeight);
 	Text tsizf("Fill", lineHeight);
 	static constexpr initlist<const char*> txs = {
-		"Monitors",
 		"Direction",
 		"Zoom",
 		"Spacing",
 		"Picture limit",
 		"Screen",
-		"VSync",
 		"Renderer",
+		"Device",
+		"Compress images",
+		"VSync",
 		"GPU selecting",
 		"Size",
 		"Theme",
 		"Show hidden",
+		"Show tooltips",
 		"Font",
 		"Library",
 		"Scroll speed",
 		"Deadzone"
 	};
 	initlist<const char*>::iterator itxs = txs.begin();
-	vector<string> dnames(Direction::names.size());
-	std::transform(Direction::names.begin(), Direction::names.end(), dnames.begin(), comboboxify);
-	vector<string> pnames(PicLim::names.size());
-	std::transform(PicLim::names.begin(), PicLim::names.end(), pnames.begin(), comboboxify);
-	vector<string> snames(Settings::screenModeNames.size());
-	std::transform(Settings::screenModeNames.begin(), Settings::screenModeNames.end(), snames.begin(), comboboxify);
-	vector<string> vnames(Settings::vsyncNames.size());
-	std::transform(Settings::vsyncNames.begin(), Settings::vsyncNames.end(), vnames.begin(), comboboxify);
-	array<string, Binding::names.size()> bnames;
-	std::transform(Binding::names.begin(), Binding::names.end(), bnames.begin(), comboboxify);
-	int plimLength = findMaxLength(pnames.begin(), pnames.end(), lineHeight);
-	int descLength = std::max(findMaxLength(txs.begin(), txs.end(), lineHeight), findMaxLength(bnames.begin(), bnames.end(), lineHeight));
 
+	bool compression;
+	World::drawSys()->getAdditionalSettings(compression, devices);
+	vector<string> dnames(devices.size());
+	std::transform(devices.begin(), devices.end(), dnames.begin(), [](pair<u32vec2, string>& it) -> string { return std::move(it.second); });
+	vector<pair<u32vec2, string>>::iterator curDev = std::find_if(devices.begin(), devices.end(), [](const pair<u32vec2, string>& it) -> bool { return World::sets()->device == it.first; });
+
+	array<string, Binding::names.size()> bnames;
+	for (uint8 i = 0; i < Binding::names.size(); ++i) {
+		bnames[i] = Binding::names[i];
+		bnames[i][0] = toupper(bnames[i][0]);
+		std::replace(bnames[i].begin() + 1, bnames[i].end(), '_', ' ');
+	}
+	int plimLength = findMaxLength(PicLim::names.begin(), PicLim::names.end(), lineHeight);
+	int descLength = std::max(findMaxLength(txs.begin(), txs.end(), lineHeight), findMaxLength(Binding::names.begin(), Binding::names.end(), lineHeight));
 	constexpr char tipPicLim[] = "Picture limit per batch:\n"
 		"- none: all pictures in directory/archive\n"
 		"- count: number of pictures\n"
 		"- size: total size of pictures";
-	constexpr char vsyncTip[] = "Immediate: off\n"
-		"Synchronized: on\n"
-		"Adaptive: on and smooth (works on fewer computers)";
 	constexpr char tipDeadzon[] = "Controller axis deadzone";
 
-	vector<Widget*> monitorLeftSide = {
-		new Label(lineHeight, *itxs++),
-		new Widget(1.f)
-	};
 	Size monitorSize = Size([](const Widget* wgt) -> int {
 		const Layout* box = static_cast<const Layout*>(wgt);
 		return static_cast<WindowArranger*>(box->getWidget(1))->precalcSizeExpand(box->size());
@@ -694,78 +695,106 @@ RootLayout* ProgSettings::createLayout() {
 	vector<string> themes = World::fileSys()->getAvailableThemes();
 	Text dots(KeyGetter::ellipsisStr, lineHeight);
 	Text dznum(toStr(Settings::axisLimit), lineHeight);
-	pair<Size, vector<Widget*>> lx[txs.size()] = {
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		new ComboBox(1.f, comboboxify(Direction::names[uint8(World::sets()->direction)]), std::move(dnames), &Program::eventSwitchDirection, makeTooltip("Reading direction"))
-	} },
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, toStr(World::sets()->zoom), &Program::eventSetZoom, nullptr, nullptr, makeTooltip("Default reader zoom"), LabelEdit::TextType::uFloat)
-	} },
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, toStr(World::sets()->spacing), &Program::eventSetSpacing, nullptr, nullptr, makeTooltip("Picture spacing in reader"), LabelEdit::TextType::uInt)
-	} },
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		new ComboBox(plimLength, comboboxify(PicLim::names[uint8(World::sets()->picLim.type)]), std::move(pnames), &Program::eventSetPicLimitType, makeTooltipL(tipPicLim)),
-		createLimitEdit()
-	} },
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		screen = new ComboBox(1.f, comboboxify(Settings::screenModeNames[sizet(World::sets()->screen)]), std::move(snames), &Program::eventSetScreenMode, makeTooltip("Window screen mode"))
-	} },
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		new ComboBox(1.f, comboboxify(Settings::vsyncNames[uint8(World::sets()->vsync) + 1]), std::move(vnames), &Program::eventSetVsync, makeTooltipL(vsyncTip))
-	} },
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		new ComboBox(1.f, Settings::rendererNames[uint8(World::sets()->renderer)], vector<string>(Settings::rendererNames.begin(), Settings::rendererNames.end()), &Program::eventSetRenderer, makeTooltip("Rendering backend"))
-	} },
-	{ monitorSize, {
-		new Layout(descLength, std::move(monitorLeftSide)),
-		new WindowArranger(1.f, float(lineHeight * 2) / 1080.f, true, &Program::eventSetMultiFullscreen, &Program::eventSetMultiFullscreen, makeTooltip("Monitor arrangement for multi fullscreen"))
-	} },
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		new CheckBox(lineHeight, World::sets()->gpuSelecting, &Program::eventSetGpuSelecting, nullptr, nullptr, makeTooltip("Use the graphics process to determine which widget is being selected"))
-	} },
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		new Label(tsizp.length, std::move(tsizp.text), &Program::eventSetPortrait, nullptr, nullptr, makeTooltip("Portrait window size")),
-		new Label(tsizl.length, std::move(tsizl.text), &Program::eventSetLandscape, nullptr, nullptr, makeTooltip("Landscape window size")),
-		new Label(tsizs.length, std::move(tsizs.text), &Program::eventSetSquare, nullptr, nullptr, makeTooltip("Square window size")),
-		new Label(tsizf.length, std::move(tsizf.text), &Program::eventSetFill, nullptr, nullptr, makeTooltip("Fill screen with window"))
-	} },
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		new ComboBox(1.f, World::sets()->getTheme(), std::move(themes), &Program::eventSetTheme, makeTooltip("Color scheme"))
-	} },
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		showHidden = new CheckBox(lineHeight, World::sets()->showHidden, &Program::eventSetHide, nullptr, nullptr, makeTooltip("Show hidden files"))
-	} },
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, World::sets()->font, &Program::eventSetFont, nullptr, nullptr, makeTooltip("Font name or path"))
-	} },
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, World::sets()->getDirLib().u8string(), &Program::eventSetLibraryDirLE, nullptr, nullptr, makeTooltip("Library path")),
-		new Label(dots.length, std::move(dots.text), &Program::eventOpenLibDirBrowser, nullptr, nullptr, makeTooltip("Browse for library"), Alignment::center)
-	} },
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, World::sets()->scrollSpeedString(), &Program::eventSetScrollSpeed, nullptr, nullptr, makeTooltip("Scroll speed for button presses or axes"), LabelEdit::TextType::sFloatSpaced)
-	} },
-	{ lineHeight, {
-		new Label(descLength, *itxs++),
-		deadzoneSL = new Slider(1.f, World::sets()->getDeadzone(), 0, Settings::axisLimit, &Program::eventSetDeadzoneSL, nullptr, nullptr, makeTooltip(tipDeadzon)),
-		deadzoneLE = new LabelEdit(dznum.length + LabelEdit::caretWidth, toStr(World::sets()->getDeadzone()), &Program::eventSetDeadzoneLE, nullptr, nullptr, makeTooltip(tipDeadzon), LabelEdit::TextType::uInt)
-	} } };
-	sizet lcnt = txs.size();
+	vector<pair<Size, vector<Widget*>>> lx;
+	lx.reserve(txs.size());
+	lx.insert(lx.end(), {
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			new ComboBox(1.f, sizet(World::sets()->direction), vector<string>(Direction::names.begin(), Direction::names.end()), &Program::eventSwitchDirection, makeTooltip("Reading direction"))
+		} },
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			new LabelEdit(1.f, toStr(World::sets()->zoom), &Program::eventSetZoom, nullptr, nullptr, makeTooltip("Default reader zoom"), LabelEdit::TextType::uFloat)
+		} },
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			new LabelEdit(1.f, toStr(World::sets()->spacing), &Program::eventSetSpacing, nullptr, nullptr, makeTooltip("Picture spacing in reader"), LabelEdit::TextType::uInt)
+		} },
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			new ComboBox(plimLength, sizet(World::sets()->picLim.type), vector<string>(PicLim::names.begin(), PicLim::names.end()), &Program::eventSetPicLimitType, makeTooltipL(tipPicLim)),
+			createLimitEdit()
+		} },
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			screen = new ComboBox(1.f, sizet(World::sets()->screen), vector<string>(Settings::screenModeNames.begin(), Settings::screenModeNames.end()), &Program::eventSetScreenMode, makeTooltip("Window screen mode"))
+		} },
+		{ monitorSize, {
+			new Widget(descLength),
+			new WindowArranger(1.f, float(lineHeight * 2) / 1080.f, true, &Program::eventSetMultiFullscreen, &Program::eventSetMultiFullscreen, makeTooltip("Monitor arrangement for multi fullscreen"))
+		} }
+	});
+
+	if constexpr (Settings::rendererNames.size() > 1) {
+		lx.push_back({ lineHeight, {
+			new Label(descLength, *itxs),
+			new ComboBox(1.f, sizet(World::sets()->renderer), vector<string>(Settings::rendererNames.begin(), Settings::rendererNames.end()), &Program::eventSetRenderer, makeTooltip("Rendering backend"))
+		} });
+	}
+	++itxs;
+	if (!devices.empty()) {
+		lx.push_back({ lineHeight, {
+			new Label(descLength, *itxs),
+			new ComboBox(1.f, curDev != devices.end() ? curDev - devices.begin() : 0, std::move(dnames),& Program::eventSetDevice, makeTooltip("Rendering devices"))
+		} });
+	}
+	++itxs;
+	if (compression) {
+		lx.push_back({ lineHeight, {
+			new Label(descLength, *itxs),
+			new CheckBox(lineHeight, World::sets()->compression, &Program::eventSetCompression, nullptr, nullptr, makeTooltip("Compress pictures to reduce memory usage"))
+		} });
+	}
+	++itxs;
+
+	lx.insert(lx.end(), {
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			new CheckBox(lineHeight, World::sets()->vsync, &Program::eventSetVsync, nullptr, nullptr, makeTooltip("Vertical synchronization"))
+		} },
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			new CheckBox(lineHeight, World::sets()->gpuSelecting, &Program::eventSetGpuSelecting, nullptr, nullptr, makeTooltip("Use the graphics process to determine which widget is being selected"))
+		} },
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			new Label(tsizp.length, std::move(tsizp.text), &Program::eventSetPortrait, nullptr, nullptr, makeTooltip("Portrait window size")),
+			new Label(tsizl.length, std::move(tsizl.text), &Program::eventSetLandscape, nullptr, nullptr, makeTooltip("Landscape window size")),
+			new Label(tsizs.length, std::move(tsizs.text), &Program::eventSetSquare, nullptr, nullptr, makeTooltip("Square window size")),
+			new Label(tsizf.length, std::move(tsizf.text), &Program::eventSetFill, nullptr, nullptr, makeTooltip("Fill screen with window"))
+		} },
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			new ComboBox(1.f, World::sets()->getTheme(), std::move(themes), &Program::eventSetTheme, makeTooltip("Color scheme"))
+		} },
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			showHidden = new CheckBox(lineHeight, World::sets()->showHidden, &Program::eventSetHide, nullptr, nullptr, makeTooltip("Show hidden files"))
+		} },
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			new CheckBox(lineHeight, World::sets()->tooltips, &Program::eventSetTooltips, nullptr, nullptr, makeTooltip("Display tooltips on hover"))
+		} },
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			new LabelEdit(1.f, World::sets()->font, &Program::eventSetFont, nullptr, nullptr, makeTooltip("Font name or path"))
+		} },
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			new LabelEdit(1.f, World::sets()->getDirLib().u8string(), &Program::eventSetLibraryDirLE, nullptr, nullptr, makeTooltip("Library path")),
+			new Label(dots.length, std::move(dots.text), &Program::eventOpenLibDirBrowser, nullptr, nullptr, makeTooltip("Browse for library"), Alignment::center)
+		} },
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			new LabelEdit(1.f, World::sets()->scrollSpeedString(), &Program::eventSetScrollSpeed, nullptr, nullptr, makeTooltip("Scroll speed for button presses or axes"), LabelEdit::TextType::sFloatSpaced)
+		} },
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
+			deadzoneSL = new Slider(1.f, World::sets()->getDeadzone(), 0, Settings::axisLimit, &Program::eventSetDeadzoneSL, nullptr, nullptr, makeTooltip(tipDeadzon)),
+			deadzoneLE = new LabelEdit(dznum.length + LabelEdit::caretWidth, toStr(World::sets()->getDeadzone()), &Program::eventSetDeadzoneLE, nullptr, nullptr, makeTooltip(tipDeadzon), LabelEdit::TextType::uInt)
+		} }
+	});
+	sizet lcnt = lx.size();
 	vector<Widget*> lns(lcnt + 1 + bnames.size() + 2);
 	for (sizet i = 0; i < lcnt; ++i)
 		lns[i] = new Layout(lx[i].first, std::move(lx[i].second), Direction::right);
@@ -806,18 +835,6 @@ Widget* ProgSettings::createLimitEdit() {
 		return new LabelEdit(1.f, PicLim::memoryString(World::sets()->picLim.getSize()), &Program::eventSetPicLimSize, nullptr, nullptr, makeTooltip("Total size of pictures per batch"));
 	}
 	return new Widget();
-}
-
-string ProgSettings::comboboxify(const char* name) {
-	string str = name;
-	str[0] = toupper(str[0]);
-	std::replace(str.begin() + 1, str.end(), '_', ' ');
-	return str;
-}
-
-string ProgSettings::decomboboxify(string name) {
-	std::replace(name.begin() + 1, name.end(), ' ', '_');
-	return name;
 }
 
 // PROG SEARCH DIR

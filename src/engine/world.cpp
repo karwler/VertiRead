@@ -5,18 +5,8 @@
 
 template <class C, class F>
 void World::setArgs(int argc, C** argv, F conv) {
-	for (int i = 1; i < argc; ++i) {
-		if (argv[i][0] == '-') {
-			if (string key = conv(argv[i] + 1); checkOpts.count(key) && i + 1 < argc)
-				opts.emplace(key, conv(argv[++i]));
-			else if (checkFlags.count(key))
-				flags.insert(key);
-			else
-				vals.push_back(conv(argv[i]));
-		} else
-			vals.push_back(conv(argv[i]));
-	}
-	vals.shrink_to_fit();
+	vals.resize(argc);
+	std::transform(argv, argv + argc, vals.begin(), conv);
 }
 
 #ifdef _WIN32
@@ -24,7 +14,7 @@ void World::setArgs(int argc, C** argv, F conv) {
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, int) {
 	if (int argc; LPWSTR* argv = CommandLineToArgvW(sstow(lpCmdLine).c_str(), &argc)) {
 #else
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
+int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR pCmdLine, int) {
 	if (int argc; LPWSTR* argv = CommandLineToArgvW(pCmdLine, &argc)) {
 #endif
 		World::setArgs(argc, argv, swtos);
@@ -32,7 +22,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	}
 #else
 int main(int argc, char** argv) {
-	World::setArgs(argc, argv, stos);
+	World::setArgs(argc - 1, argv + 1, stos);
 #endif
 	return World::winSys()->start();
 }

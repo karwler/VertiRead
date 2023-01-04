@@ -44,6 +44,8 @@ public:
 	Widget* getCapture() const;
 	void setCapture(Widget* inter);
 	void resetLayouts();
+	void clearLayouts();
+	void setLayouts();
 	RootLayout* getLayout();
 	Overlay* getOverlay();
 	Popup* getPopup();
@@ -56,12 +58,11 @@ public:
 	void updateSelect(ivec2 mPos);
 	void selectFirst();
 	sizet findSelectedID(Layout* box) const;	// get id of possibly select or selects parent in relation to box
-	bool cursorDisableable() const;
 	bool cursorInClickRange(ivec2 mPos, uint8 mBut);
 
+	ScrollArea* getSelectedScrollArea() const;
 private:
 	Widget* getSelected(ivec2 mPos);
-	ScrollArea* getSelectedScrollArea() const;
 	bool overlayFocused(ivec2 mPos) const;
 };
 

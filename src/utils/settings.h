@@ -114,31 +114,31 @@ public:
 		"right",
 		"enter",
 		"escape",
-		"center view",
-		"next page",
-		"prev page",
-		"zoom in",
-		"zoom out",
-		"zoom reset",
-		"to start",
-		"to end",
-		"next directory",
-		"prev directory",
+		"center_view",
+		"next_page",
+		"prev_page",
+		"zoom_in",
+		"zoom_out",
+		"zoom_reset",
+		"to_start",
+		"to_end",
+		"next_directory",
+		"prev_directory",
 		"fullscreen",
-		"multi fullscreen",
-		"show hidden",
+		"multi_fullscreen",
+		"show_hidden",
 		"boss",
 		"refresh",
-		"scroll up",
-		"scroll down",
-		"scroll left",
-		"scroll right",
-		"cursor up",
-		"cursor down",
-		"cursor left",
-		"cursor right",
-		"scroll fast",
-		"scroll slow"
+		"scroll_up",
+		"scroll_down",
+		"scroll_left",
+		"scroll_right",
+		"cursor_up",
+		"cursor_down",
+		"cursor_left",
+		"cursor_right",
+		"scroll_fast",
+		"scroll_slow"
 	};
 
 	enum Assignment : uint8 {
@@ -373,8 +373,8 @@ public:
 	void setSize(string_view str);
 	void set(string_view str);
 
-	static sizet memSizeMag(uptrt num);
-	static string memoryString(uptrt num, sizet mag);
+	static uint8 memSizeMag(uptrt num);
+	static string memoryString(uptrt num, uint8 mag);
 	static string memoryString(uptrt num);
 
 private:
@@ -438,34 +438,34 @@ public:
 	static constexpr array<const char*, sizet(Screen::multiFullscreen) + 1> screenModeNames = {
 		"windowed",
 		"fullscreen",
-		"multi_fullscreen"
-	};
-
-	enum class VSync : int8 {
-		adaptive = -1,
-		immediate,
-		synchronized
-	};
-	static constexpr array<const char*, sizet(VSync::synchronized) + 2> vsyncNames = {	// add 1 to vsync value to get name
-		"adaptive",
-		"immediate",
-		"synchronized"
+		"multi fullscreen"
 	};
 
 	enum class Renderer : uint8 {
 #ifdef WITH_DIRECTX
 		directx,
 #endif
-		opengl
+#ifdef WITH_OPENGL
+		opengl,
+#endif
+#ifdef WITH_VULKAN
+		vulkan,
+#endif
+		max
 	};
-	static constexpr array<const char*, sizet(Renderer::opengl) + 1> rendererNames = {
+	static constexpr array<const char*, sizet(Renderer::max)> rendererNames = {
 #ifdef WITH_DIRECTX
 		"DirectX 11",
 #endif
+#ifdef WITH_OPENGL
 #ifdef OPENGLES
-		"OpenGL ES 3.0"
+		"OpenGL ES 3.0",
 #else
-		"OpenGL 3.0"
+		"OpenGL 3.0",
+#endif
+#endif
+#ifdef WITH_VULKAN
+		"Vulkan 1.0"
 #endif
 	};
 
@@ -473,9 +473,16 @@ public:
 	static constexpr int defaultSpacing = 10;
 	static constexpr int axisLimit = SHRT_MAX + 1;
 	static constexpr Screen defaultScreenMode = Screen::windowed;
-	static constexpr VSync defaultVSync = VSync::synchronized;
 	static constexpr Direction::Dir defaultDirection = Direction::down;
+#ifdef WITH_OPENGL
 	static constexpr Renderer defaultRenderer = Renderer::opengl;
+#elif defined(WITH_DIRECTX)
+	static constexpr Renderer defaultRenderer = Renderer::directx;
+#elif defined(WITH_VULKAN)
+	static constexpr Renderer defaultRenderer = Renderer::vulkan;
+#else
+#error "No renderer supported"
+#endif
 	static constexpr char defaultFont[] = "BrisaSans";
 	static constexpr char defaultDirLib[] = "library";
 
@@ -484,8 +491,9 @@ private:
 	string theme;
 	fs::path dirLib;
 public:
-	umap<int, Rect> displays;
+	umap<int, Recti> displays;
 	PicLim picLim;
+	u32vec2 device = u32vec2(0);
 	ivec2 resolution = ivec2(800, 600);
 	vec2 scrollSpeed = vec2(1600.f, 1600.f);
 	float zoom = defaultZoom;
@@ -496,8 +504,10 @@ public:
 	bool maximized = false;
 	Screen screen = defaultScreenMode;
 	bool showHidden = false;
+	bool tooltips = true;
 	Direction direction = defaultDirection;
-	VSync vsync = defaultVSync;
+	bool compression = true;
+	bool vsync = true;
 	Renderer renderer = defaultRenderer;
 	bool gpuSelecting = false;
 
@@ -508,7 +518,7 @@ public:
 	const fs::path& getDirLib() const;
 	const fs::path& setDirLib(const fs::path& drc, const fs::path& dirSets);
 
-	static umap<int, Rect> displayArrangement();
+	static umap<int, Recti> displayArrangement();
 	void unionDisplays();
 	string scrollSpeedString() const;
 	int getDeadzone() const;

@@ -1,6 +1,9 @@
 #pragma once
 
 #include "widgets.h"
+#include <unordered_set>
+
+template <class... T> using uset = std::unordered_set<T...>;
 
 // container for other widgets
 class Layout : public Widget {
@@ -27,8 +30,8 @@ public:
 	Layout(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), Direction dir = defaultDirection, Select select = Select::none, int space = defaultItemSpacing, bool pad = false);
 	~Layout() override;
 
-	void drawSelf(const Rect& view) const override;
-	void drawAddr(const Rect& view) const override;
+	void drawSelf(const Recti& view) override;
+	void drawAddr(const Recti& view) override;
 	void onResize() override;
 	void tick(float dSec) override;
 	void postInit() override;
@@ -100,7 +103,7 @@ public:
 
 	ivec2 position() const override;
 	ivec2 size() const override;
-	Rect frame() const override;
+	Recti frame() const override;
 	void setSize(const Size& size) override;
 };
 
@@ -116,7 +119,7 @@ public:
 	Popup(const svec2& size = svec2(0), vector<Widget*>&& children = vector<Widget*>(), Widget* first = nullptr, Color background = Color::normal, Direction dir = defaultDirection, int space = defaultItemSpacing, bool pad = true);
 	~Popup() override = default;
 
-	void drawSelf(const Rect& view) const override;
+	void drawSelf(const Recti& view) override;
 
 	ivec2 position() const override;
 	ivec2 size() const override;
@@ -135,7 +138,7 @@ public:
 	~Overlay() override = default;
 
 	ivec2 position() const override;
-	Rect actRect() const;
+	Recti actRect() const;
 };
 
 // mix between popup and overlay for context menus
@@ -152,7 +155,7 @@ public:
 	ivec2 position() const final;
 
 	template <class T = Widget> T* owner() const;
-	void setRect(const Rect& rct);
+	void setRect(const Recti& rct);
 };
 
 template <class T>
@@ -164,9 +167,9 @@ inline T* Context::owner() const {
 class ScrollArea : public Layout {
 protected:
 	bool draggingSlider = false;
-	ivec2 listPos{ 0, 0 };
+	ivec2 listPos = ivec2(0);
 private:
-	vec2 motion = { 0.f, 0.f };	// how much the list scrolls over time
+	vec2 motion = vec2(0.f);	// how much the list scrolls over time
 	int diffSliderMouse = 0;	// space between slider and mouse position
 
 	static constexpr float scrollThrottle = 10.f;
@@ -175,7 +178,7 @@ public:
 	using Layout::Layout;
 	~ScrollArea() override = default;
 
-	void drawSelf(const Rect& view) const override;
+	void drawSelf(const Recti& view) override;
 	void onResize() override;
 	void tick(float dSec) override;
 	void postInit() override;
@@ -192,11 +195,11 @@ public:
 	bool scrollToPrevious();			// scroll to previous widget (returns false if at scroll limit)
 	void scrollToLimit(bool start);		// scroll to start or end of the list relative to it's direction
 
-	Rect frame() const override;
+	Recti frame() const override;
 	ivec2 wgtPosition(sizet id) const override;
 	ivec2 wgtSize(sizet id) const override;
-	Rect barRect() const;
-	Rect sliderRect() const;
+	Recti barRect() const;
+	Recti sliderRect() const;
 	mvec2 visibleWidgets() const;
 	void moveListPos(ivec2 mov);
 
@@ -217,7 +220,7 @@ private:
 };
 
 inline void ScrollArea::moveListPos(ivec2 mov) {
-	listPos = clamp(listPos + mov, ivec2(0), listLim());
+	listPos = glm::clamp(listPos + mov, ivec2(0), listLim());
 }
 
 inline int ScrollArea::sliderLim() const {
@@ -258,22 +261,21 @@ private:
 	static constexpr float menuHideTimeout = 3.f;
 	static inline const string emptyFile;
 
-	vector<pair<string, Texture*>> pics;
+	vector<pair<string, Texture*>> pics;	// textures should be freed externally
 	float cursorTimer = menuHideTimeout;	// time left until cursor/overlay disappears
 	float zoom;
 	bool countDown = true;	// whether to decrease cursorTimer until cursor hide
 
 public:
-	ReaderBox(const Size& size = Size(), vector<pair<string, Texture*>>&& imgs = vector<pair<string, Texture*>>(), Direction dir = defaultDirection, float fzoom = Settings::defaultZoom, int space = Settings::defaultSpacing, bool pad = false);
-	~ReaderBox() final;
+	ReaderBox(const Size& size = Size(), Direction dir = defaultDirection, float fzoom = Settings::defaultZoom, int space = Settings::defaultSpacing, bool pad = false);
 
-	void drawSelf(const Rect& view) const final;
-	void onResize() final;
+	void drawSelf(const Recti& view) final;
 	void tick(float dSec) final;
 	void postInit() final;
 	void onMouseMove(ivec2 mPos, ivec2 mMov) final;
 
 	void setWidgets(vector<pair<string, Texture*>>&& imgs);
+	vector<pair<string, Texture*>> extractPictures();
 	bool showBar() const;
 	float getZoom() const;
 	void setZoom(float factor);
@@ -285,7 +287,7 @@ public:
 	ivec2 wgtSize(sizet id) const final;
 
 private:
-	void initWidgets(vector<pair<string, Texture*>>&& imgs);
+	void calculateWidgetPositions() final;
 	ivec2 listSize() const final;
 	int wgtRPos(sizet id) const final;
 	int wgtREnd(sizet id) const final;

@@ -28,7 +28,7 @@ ivec2 Widget::size() const {
 	return parent->wgtSize(index);
 }
 
-Rect Widget::frame() const {
+Recti Widget::frame() const {
 	return parent->frame();
 }
 
@@ -62,11 +62,11 @@ Picture::Picture(const Size& size, bool bg, const Texture* texture, int margin) 
 	texMargin(margin)
 {}
 
-void Picture::drawSelf(const Rect& view) const {
+void Picture::drawSelf(const Recti& view) {
 	World::drawSys()->drawPicture(this, view);
 }
 
-void Picture::drawAddr(const Rect& view) const {
+void Picture::drawAddr(const Recti& view) {
 	World::drawSys()->drawPictureAddr(this, view);
 }
 
@@ -74,9 +74,9 @@ Color Picture::color() const {
 	return Color::normal;
 }
 
-Rect Picture::texRect() const {
-	Rect rct = rect();
-	return Rect(rct.pos() + texMargin, rct.size() - texMargin * 2);
+Recti Picture::texRect() const {
+	Recti rct = rect();
+	return Recti(rct.pos() + texMargin, rct.size() - texMargin * 2);
 }
 
 // BUTTON
@@ -91,7 +91,7 @@ Button::Button(const Size& size, PCall leftCall, PCall rightCall, PCall doubleCa
 
 Button::~Button() {
 	if (tooltip)
-		tooltip->free();
+		World::drawSys()->freeTextTexture(tooltip);
 }
 
 void Button::onClick(ivec2, uint8 mBut) {
@@ -129,9 +129,9 @@ const Texture* Button::getTooltip() {
 	return tooltip;
 }
 
-Rect Button::tooltipRect() const {
+Recti Button::tooltipRect() const {
 	ivec2 view = World::drawSys()->getViewRes();
-	Rect rct(World::winSys()->mousePos() + ivec2(0, DrawSys::cursorHeight), tooltip ? tooltip->getRes() + tooltipMargin * 2 : ivec2(0));
+	Recti rct(World::winSys()->mousePos() + ivec2(0, DrawSys::cursorHeight), tooltip ? tooltip->getRes() + tooltipMargin * 2 : ivec2(0));
 	if (rct.x + rct.w > view.x)
 		rct.x = view.x - rct.w;
 	if (rct.y + rct.h > view.y)
@@ -146,7 +146,7 @@ CheckBox::CheckBox(const Size& size, bool checked, PCall leftCall, PCall rightCa
 	on(checked)
 {}
 
-void CheckBox::drawSelf(const Rect& view) const {
+void CheckBox::drawSelf(const Recti& view) {
 	World::drawSys()->drawCheckBox(this, view);
 }
 
@@ -156,10 +156,10 @@ void CheckBox::onClick(ivec2 mPos, uint8 mBut) {
 	Button::onClick(mPos, mBut);
 }
 
-Rect CheckBox::boxRect() const {
+Recti CheckBox::boxRect() const {
 	ivec2 siz = size();
 	int margin = (siz.x > siz.y ? siz.y : siz.x) / 4;
-	return Rect(position() + margin, siz - margin * 2);
+	return Recti(position() + margin, siz - margin * 2);
 }
 
 // SLIDER
@@ -171,7 +171,7 @@ Slider::Slider(const Size& size, int value, int minimum, int maximum, PCall left
 	vmax(maximum)
 {}
 
-void Slider::drawSelf(const Rect& view) const {
+void Slider::drawSelf(const Recti& view) {
 	World::drawSys()->drawSlider(this, view);
 }
 
@@ -203,15 +203,15 @@ void Slider::setSlider(int xpos) {
 	World::prun(lcall, this);
 }
 
-Rect Slider::barRect() const {
+Recti Slider::barRect() const {
 	ivec2 siz = size();
 	int height = siz.y / 2;
-	return Rect(position() + siz.y / 4, ivec2(siz.x - height, height));
+	return Recti(position() + siz.y / 4, ivec2(siz.x - height, height));
 }
 
-Rect Slider::sliderRect() const {
+Recti Slider::sliderRect() const {
 	ivec2 pos = position(), siz = size();
-	return Rect(sliderPos(), pos.y, barSize, siz.y);
+	return Recti(sliderPos(), pos.y, barSize, siz.y);
 }
 
 int Slider::sliderLim() const {
@@ -228,14 +228,14 @@ ProgressBar::ProgressBar(const Size& size, int value, int minimum, int maximum, 
 	vmax(maximum)
 {}
 
-void ProgressBar::drawSelf(const Rect& view) const {
+void ProgressBar::drawSelf(const Recti& view) {
 	World::drawSys()->drawProgressBar(this, view);
 }
 
-Rect ProgressBar::barRect() const {
+Recti ProgressBar::barRect() const {
 	ivec2 siz = size();
 	int margin = siz.y / barMarginFactor;
-	return Rect(position() + margin, ivec2(val * (siz.x - margin * 2) / (vmax - vmin), siz.y - margin * 2));
+	return Recti(position() + margin, ivec2(val * (siz.x - margin * 2) / (vmax - vmin), siz.y - margin * 2));
 }
 
 // LABEL
@@ -249,10 +249,10 @@ Label::Label(const Size& size, string line, PCall leftCall, PCall rightCall, PCa
 
 Label::~Label() {
 	if (textTex)
-		textTex->free();
+		World::drawSys()->freeTextTexture(textTex);
 }
 
-void Label::drawSelf(const Rect& view) const {
+void Label::drawSelf(const Recti& view) {
 	World::drawSys()->drawLabel(this, view);
 }
 
@@ -274,20 +274,20 @@ void Label::setText(const string& str) {
 	updateTextTex();
 }
 
-Rect Label::textRect() const {
-	return Rect(textPos(), textTex->getRes());
+Recti Label::textRect() const {
+	return Recti(textPos(), textTex->getRes());
 }
 
-Rect Label::textFrame() const {
-	Rect rct = rect();
+Recti Label::textFrame() const {
+	Recti rct = rect();
 	int ofs = textIconOffset();
-	return Rect(rct.x + ofs + textMargin, rct.y, rct.w - ofs - textMargin * 2, rct.h).intersect(frame());
+	return Recti(rct.x + ofs + textMargin, rct.y, rct.w - ofs - textMargin * 2, rct.h).intersect(frame());
 }
 
-Rect Label::texRect() const {
-	Rect rct = rect();
+Recti Label::texRect() const {
+	Recti rct = rect();
 	rct.h -= texMargin * 2;
-	return Rect(rct.pos() + texMargin, ivec2(float(rct.h * tex->getRes().x) / float(tex->getRes().y), rct.h));
+	return Recti(rct.pos() + texMargin, ivec2(float(rct.h * tex->getRes().x) / float(tex->getRes().y), rct.h));
 }
 
 int Label::textIconOffset() const {
@@ -309,7 +309,7 @@ ivec2 Label::textPos() const {
 
 void Label::updateTextTex() {
 	if (textTex)
-		textTex->free();
+		World::drawSys()->freeTextTexture(textTex);
 	textTex = World::drawSys()->renderText(text, size().y);
 }
 
@@ -319,6 +319,12 @@ ComboBox::ComboBox(const Size& size, string curOption, vector<string>&& opts, PC
 	Label(size, std::move(curOption), call, call, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
 	options(std::move(opts)),
 	curOpt(std::min(sizet(std::find(options.begin(), options.end(), text) - options.begin()), options.size()))
+{}
+
+ComboBox::ComboBox(const Size& size, sizet curOption, vector<string>&& opts, PCall call, Texture* tip, Alignment alignment, const Texture* texture, bool bg, int lineMargin, int iconMargin) :
+	Label(size, opts[curOption], call, call, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
+	options(std::move(opts)),
+	curOpt(curOption)
 {}
 
 void ComboBox::onClick(ivec2, uint8 mBut) {
@@ -342,17 +348,17 @@ LabelEdit::LabelEdit(const Size& size, string line, PCall leftCall, PCall rightC
 	cleanText();
 }
 
-void LabelEdit::drawTop(const Rect& view) const {
+void LabelEdit::drawTop(const Recti& view) {
 	ivec2 ps = position();
-	World::drawSys()->drawCaret(Rect(caretPos() + ps.x + textIconOffset() + textMargin, ps.y, caretWidth, size().y), frame(), view);
+	World::drawSys()->drawCaret(Recti(caretPos() + ps.x + textIconOffset() + textMargin, ps.y, caretWidth, size().y), frame(), view);
 }
 
 void LabelEdit::onClick(ivec2, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
-		Rect rct = rect();
+		Recti rct = rect();
 		World::scene()->setCapture(this);
 		SDL_StartTextInput();
-		SDL_SetTextInputRect(&rct);
+		SDL_SetTextInputRect(reinterpret_cast<SDL_Rect*>(&rct));
 		setCPos(text.length());
 	} else if (mBut == SDL_BUTTON_RIGHT)
 		World::prun(rcall, this);
@@ -486,7 +492,7 @@ void LabelEdit::setCPos(uint cp) {
 		textOfs -= ce - sx;
 }
 
-int LabelEdit::caretPos() const {
+int LabelEdit::caretPos() {
 	return World::drawSys()->textLength(text, cpos, size().y) + textOfs;
 }
 
@@ -792,7 +798,7 @@ string KeyGetter::bindingText(Binding::Type binding, KeyGetter::AcceptType accep
 
 // WINDOW ARRANGER
 
-WindowArranger::Dsp::Dsp(const Rect& vdsp, bool on) :
+WindowArranger::Dsp::Dsp(const Recti& vdsp, bool on) :
 	full(vdsp),
 	active(on)
 {}
@@ -812,23 +818,22 @@ WindowArranger::~WindowArranger() {
 void WindowArranger::freeTextures() {
 	for (auto& [id, dsp] : disps)
 		if (dsp.txt)
-			dsp.txt->free();
+			World::drawSys()->freeTextTexture(dsp.txt);
 }
 
 void WindowArranger::calcDisplays() {
-	umap<int, Rect> all = Settings::displayArrangement();
+	umap<int, Recti> all = Settings::displayArrangement();
 	disps.reserve(all.size());
 	totalDim = ivec2(0);
 
-	const umap<int, Rect>& sadisp = World::sets()->displays;
-	for (auto& [id, rect] : sadisp) {
+	for (auto& [id, rect] : World::sets()->displays) {
 		disps.emplace(id, Dsp(rect, true));
 		totalDim = glm::max(totalDim, rect.end());
 	}
 	ivec2 border = vswap(totalDim[vertical], 0, vertical);
 	for (auto& [id, rect] : all) {
-		Rect dst = rect;
-		if (std::any_of(disps.begin(), disps.end(), [&dst](const pair<int, Dsp>& p) -> bool { return p.second.full.overlap(dst); })) {
+		Recti dst = rect;
+		if (std::any_of(disps.begin(), disps.end(), [&dst](const pair<int, Dsp>& p) -> bool { return p.second.full.overlaps(dst); })) {
 			dst.pos() = border;
 			border[vertical] += dst.size()[vertical];
 		}
@@ -840,18 +845,18 @@ void WindowArranger::calcDisplays() {
 void WindowArranger::buildEntries() {
 	float scale = entryScale(size());
 	for (auto& [id, dsp] : disps) {
-		dsp.rect = Rect(vec2(dsp.full.pos()) * scale, vec2(dsp.full.size()) * scale);
+		dsp.rect = Recti(vec2(dsp.full.pos()) * scale, vec2(dsp.full.size()) * scale);
 		dsp.txt = World::drawSys()->renderText(toStr(id), dsp.rect.h);
 	}
 }
 
-void WindowArranger::drawSelf(const Rect& view) const {
+void WindowArranger::drawSelf(const Recti& view) {
 	World::drawSys()->drawWindowArranger(this, view);
 }
 
-void WindowArranger::drawTop(const Rect& view) const {
+void WindowArranger::drawTop(const Recti& view) {
 	const Dsp& dsp = disps.at(dragging);
-	World::drawSys()->drawWaDisp(dragr, Color::light, dsp.txt ? Rect(dragr.pos() + (dragr.size() - dsp.txt->getRes()) / 2, dsp.txt->getRes()) : Rect(0), dsp.txt, frame(), view);
+	World::drawSys()->drawWaDisp(dragr, Color::light, dsp.txt ? Recti(dragr.pos() + (dragr.size() - dsp.txt->getRes()) / 2, dsp.txt->getRes()) : Recti(0), dsp.txt, frame(), view);
 }
 
 void WindowArranger::onResize() {
@@ -882,7 +887,7 @@ void WindowArranger::onHold(ivec2 mPos, uint8 mBut) {
 		dragging = dispUnderPos(mPos);
 		if (umap<int, Dsp>::iterator it = disps.find(dragging); it != disps.end()) {
 			World::scene()->setCapture(this);
-			dragr = Rect(it->second.rect.pos() + position() + winMargin, it->second.rect.size());
+			dragr = it->second.rect.translate(position() + winMargin);
 		}
 	}
 }
@@ -934,20 +939,20 @@ ivec2 WindowArranger::snapDrag() const {
 	};
 
 	umap<int, Dsp>::const_iterator snapFrom = disps.find(dragging);
-	array<ivec2, 8> snaps = getSnapPoints(Rect(vec2(dragr.pos() - position() - winMargin) / entryScale(size()), snapFrom->second.full.size()));
+	array<ivec2, 8> snaps = getSnapPoints(Recti(vec2(dragr.pos() - position() - winMargin) / entryScale(size()), snapFrom->second.full.size()));
 	uint snapId;
 	ivec2 snapPnt;
 	float minDist = FLT_MAX;
 	for (umap<int, Dsp>::const_iterator it = disps.begin(); it != disps.end(); ++it)
 		if (it->first != dragging)
 			scanClosestSnapPoint(snapRelationsOuter, it->second.full, snaps, snapId, snapPnt, minDist);
-	scanClosestSnapPoint(snapRelationsInner, Rect(ivec2(0), totalDim), snaps, snapId, snapPnt, minDist);
+	scanClosestSnapPoint(snapRelationsInner, Recti(ivec2(0), totalDim), snaps, snapId, snapPnt, minDist);
 	return minDist <= float(std::min(snapFrom->second.full.w, snapFrom->second.full.h)) / 3.f
 		? offsetCalc[snapId](snapFrom->second.full.size(), snapPnt)
 		: ivec2(INT_MIN);
 }
 
-array<ivec2, 8> WindowArranger::getSnapPoints(const Rect& rect) {
+array<ivec2, 8> WindowArranger::getSnapPoints(const Recti& rect) {
 	return {
 		rect.pos(),
 		ivec2(rect.x + rect.w / 2, rect.y),
@@ -961,7 +966,7 @@ array<ivec2, 8> WindowArranger::getSnapPoints(const Rect& rect) {
 }
 
 template <sizet S>
-void WindowArranger::scanClosestSnapPoint(const array<pair<uint, uint>, S>& relations, const Rect& rect, const array<ivec2, 8>& snaps, uint& snapId, ivec2& snapPnt, float& minDist) {
+void WindowArranger::scanClosestSnapPoint(const array<pair<uint, uint>, S>& relations, const Recti& rect, const array<ivec2, 8>& snaps, uint& snapId, ivec2& snapPnt, float& minDist) {
 	array<ivec2, 8> rpnts = getSnapPoints(rect);
 	for (auto [from, to] : relations)
 		if (float dist = glm::length(vec2(rpnts[to] - snaps[from])); dist < minDist) {
@@ -997,7 +1002,7 @@ bool WindowArranger::draggingDisp(int id) const {
 int WindowArranger::dispUnderPos(ivec2 pnt) const {
 	ivec2 pos = position();
 	for (const auto& [id, dsp] : disps)
-		if (offsetDisp(dsp.rect, pos).contain(pnt))
+		if (offsetDisp(dsp.rect, pos).contains(pnt))
 			return id;
 	return Renderer::singleDspId;
 }
@@ -1007,15 +1012,15 @@ float WindowArranger::entryScale(ivec2 siz) const {
 	return int(float(totalDim[!vertical]) * bscale) <= fsiz ? bscale : float(totalDim[!vertical]) / float(fsiz);
 }
 
-tuple<Rect, Color, Rect, const Texture*> WindowArranger::dispRect(int id, const Dsp& dsp) const {
+tuple<Recti, Color, Recti, const Texture*> WindowArranger::dispRect(int id, const Dsp& dsp) const {
 	ivec2 offs = position() + winMargin;
-	Rect rct = Rect(dsp.rect.pos() + offs, dsp.rect.size());
+	Recti rct = dsp.rect.translate(offs);
 	Color clr = id != selected || World::scene()->select != this || World::scene()->getCapture() != this ? dsp.active ? Color::light : Color::normal : Color::select;
-	return tuple(rct, clr, dsp.txt ? Rect(rct.pos() + (rct.size() - dsp.txt->getRes()) / 2, dsp.txt->getRes()) : Rect(0), dsp.txt);
+	return tuple(rct, clr, dsp.txt ? Recti(rct.pos() + (rct.size() - dsp.txt->getRes()) / 2, dsp.txt->getRes()) : Recti(0), dsp.txt);
 }
 
-umap<int, Rect> WindowArranger::getActiveDisps() const {
-	umap<int, Rect> act;
+umap<int, Recti> WindowArranger::getActiveDisps() const {
+	umap<int, Recti> act;
 	for (auto& [id, dsp] : disps)
 		if (dsp.active)
 			act.emplace(id, dsp.full);

@@ -72,7 +72,7 @@ public:
 	Context* createContext(vector<pair<string, PCall>>&& items, Widget* parent);
 	Context* createComboContext(ComboBox* parent, PCall kcal);
 
-	static Rect calcTextContextRect(const vector<Widget*>& items, ivec2 pos, ivec2 size, int margin);
+	static Recti calcTextContextRect(const vector<Widget*>& items, ivec2 pos, ivec2 size, int margin);
 protected:
 	template <class T> static int findMaxLength(T pos, T end, int height);
 	Texture* makeTooltip(const char* str);
@@ -191,6 +191,7 @@ public:
 private:
 	ComboBox* screen;
 	CheckBox* showHidden;
+	vector<pair<u32vec2, string>> devices;
 
 public:
 	~ProgSettings() final = default;
@@ -204,10 +205,12 @@ public:
 	RootLayout* createLayout() final;
 
 	Widget* createLimitEdit();
-	static string decomboboxify(string name);
-private:
-	static string comboboxify(const char* name);
+	u32vec2 getDvice(sizet id) const;
 };
+
+inline u32vec2 ProgSettings::getDvice(sizet id) const {
+	return devices[id].first;
+}
 
 class ProgSearchDir : public ProgState {
 public:

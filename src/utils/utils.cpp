@@ -3,20 +3,6 @@
 #include <windows.h>
 #endif
 
-constexpr int Rect::operator[](sizet i) const {
-	switch (i) {
-	case 0:
-		return x;
-	case 1:
-		return y;
-	case 2:
-		return w;
-	case 3:
-		return h;
-	}
-	throw std::out_of_range("Rect index " + toStr(i) + " out of range" + linend);
-}
-
 bool isDriveLetter(const fs::path& path) {
 	if (const fs::path::value_type* p = path.c_str(); isalpha(p[0]) && p[1] == ':') {
 		for (p += 2; isDsep(*p); ++p);
@@ -85,7 +71,7 @@ vector<string_view> getWords(string_view str) {
 	return words;
 }
 
-string currentDateTimeStr(char ts, char sep, char ds) {
+tm currentDateTime() {
 	time_t rawt = time(nullptr);
 	tm tim;
 #ifdef _WIN32
@@ -93,7 +79,7 @@ string currentDateTimeStr(char ts, char sep, char ds) {
 #else
 	localtime_r(&rawt, &tim);
 #endif
-	return toStr(tim.tm_year + 1900) + ds + toStr(tim.tm_mon, 2) + ds + toStr(tim.tm_mday, 2) + sep + toStr(tim.tm_hour, 2) + ts + toStr(tim.tm_min, 2) + ts + toStr(tim.tm_sec, 2);
+	return tim;
 }
 
 #ifdef _WIN32
@@ -115,3 +101,13 @@ wstring sstow(string_view src) {
 	return dst;
 }
 #endif
+
+uint32 ceilPow2(uint32 val) {
+	--val;
+	val |= val >> 1;
+	val |= val >> 2;
+	val |= val >> 4;
+	val |= val >> 8;
+	val |= val >> 16;
+	return val + 1;
+}

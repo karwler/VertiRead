@@ -11,12 +11,14 @@ option(DOWNLOADER "Build with downloader. (currently mostly broken)" OFF)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 	option(NATIVE "Build for the current CPU." OFF)
 endif()
-if(CMAKE_SYSTEM_NAME MATCHES "Windows")
+if(WIN32)
 	option(DIRECTX "Build with DirectX 11 support." ON)
 elseif(UNIX)
 	option(OPENGLES "Build for OpenGL ES 3.0 instead of OpenGL 3.0." OFF)
 	option(APPIMAGE "Package as an AppImage." OFF)
 endif()
+option(OPENGL "Build with OpenGL 3.0 support." ON)
+option(VULKAN "Build with Vulkan 1.0 support." ON)
 
 string(TOLOWER ${PROJECT_NAME} PROJECT_NAME_LOWER)
 
@@ -30,12 +32,34 @@ set(SRC_FILES
 	"src/engine/inputSys.h"
 	"src/engine/renderer.cpp"
 	"src/engine/renderer.h"
+	"src/engine/rendererDx.cpp"
+	"src/engine/rendererDx.h"
+	"src/engine/rendererGl.cpp"
+	"src/engine/rendererGl.h"
+	"src/engine/rendererVk.cpp"
+	"src/engine/rendererVk.h"
 	"src/engine/scene.cpp"
 	"src/engine/scene.h"
 	"src/engine/windowSys.cpp"
 	"src/engine/windowSys.h"
 	"src/engine/world.cpp"
 	"src/engine/world.h"
+	"src/engine/shaders/dx.gui.pixl.dbg.h"
+	"src/engine/shaders/dx.gui.pixl.rel.h"
+	"src/engine/shaders/dx.gui.vert.dbg.h"
+	"src/engine/shaders/dx.gui.vert.rel.h"
+	"src/engine/shaders/dx.sel.pixl.dbg.h"
+	"src/engine/shaders/dx.sel.pixl.rel.h"
+	"src/engine/shaders/dx.sel.vert.dbg.h"
+	"src/engine/shaders/dx.sel.vert.rel.h"
+	"src/engine/shaders/vk.gui.frag.dbg.h"
+	"src/engine/shaders/vk.gui.frag.rel.h"
+	"src/engine/shaders/vk.gui.vert.dbg.h"
+	"src/engine/shaders/vk.gui.vert.rel.h"
+	"src/engine/shaders/vk.sel.frag.dbg.h"
+	"src/engine/shaders/vk.sel.frag.rel.h"
+	"src/engine/shaders/vk.sel.vert.dbg.h"
+	"src/engine/shaders/vk.sel.vert.rel.h"
 	"src/prog/browser.cpp"
 	"src/prog/browser.h"
 	"src/prog/downloader.cpp"
@@ -54,13 +78,13 @@ set(SRC_FILES
 	"src/utils/widgets.cpp"
 	"src/utils/widgets.h")
 
-if(CMAKE_SYSTEM_NAME MATCHES "Windows")
+if(WIN32)
 	list(APPEND SRC_FILES "rsc/resource.rc")
 endif()
 
 # dependencies
-set(VER_ARC "3.6.1")
-set(VER_SDL "2.26.1")
+set(VER_ARC "3.6.2")
+set(VER_SDL "2.26.2")
 set(VER_IMG "2.6.2")
 set(VER_TTF "2.20.1")
 set(VER_GLM "0.9.9.8")
@@ -125,11 +149,16 @@ function(compileLib URL LIBDIR CMDV WDIR ORIG_LIBDIR)
 	endif()
 endfunction()
 
+if(VULKAN)
+	find_package(Vulkan REQUIRED)
+	string(REPLACE "/Include" "" VULKAN_PATH "${Vulkan_INCLUDE_DIRS}")
+endif()
 file(MAKE_DIRECTORY "${DIR_LIB}")
 downloadLib("https://github.com/g-truc/glm/releases/download/${VER_GLM}/glm-${VER_GLM}.zip" "${DIR_LIB}/glm" "")
-include_directories("${CMAKE_SOURCE_DIR}/src" "${DIR_LIB}/glm")
+include_directories("${CMAKE_SOURCE_DIR}/src" "${DIR_LIB}/glm" "$<$<BOOL:${VULKAN}>:${Vulkan_INCLUDE_DIRS}>")
+link_directories("$<$<BOOL:${VULKAN}>:${VULKAN_PATH}/Lib>")
 
-if(CMAKE_SYSTEM_NAME MATCHES "Windows")
+if(WIN32)
 	set(PBOUT_DIR "${CMAKE_BINARY_DIR}/${PROJECT_NAME}")
 	set(TBIN_DIR "${PBOUT_DIR}")
 	set(DATA_DIR "${PBOUT_DIR}")
@@ -237,7 +266,8 @@ endif()
 # compiler flags
 add_compile_definitions($<$<BOOL:${DOWNLOADER}>:DOWNLOADER>
 						$<$<BOOL:${DIRECTX}>:WITH_DIRECTX>
-						$<$<BOOL:${OPENGLES}>:OPENGLES>
+						"$<$<BOOL:${OPENGL}>:WITH_OPENGL;$<$<BOOL:${OPENGLES}>:OPENGLES>>"
+						$<$<BOOL:${VULKAN}>:WITH_VULKAN>
 						"$<$<BOOL:${WIN32}>:UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;NOMINMAX;$<$<NOT:$<BOOL:${MSVC}>>:_WIN32_WINNT=0x600>>")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -262,8 +292,9 @@ endif()
 add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES})
 target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image SDL2_ttf archive
 						"$<$<BOOL:${UNIX}>:pthread;dl>"
-						"$<IF:$<BOOL:${WIN32}>,opengl32,$<IF:$<BOOL:${OPENGLES}>,GLESv2,GL>>"
-						"$<$<BOOL:${DIRECTX}>:d3d11.lib;d3dcompiler.lib;dxgi.lib>"
+						"$<$<BOOL:${DIRECTX}>:d3d11.lib;dxgi.lib>"
+						"$<$<BOOL:${OPENGL}>:$<IF:$<BOOL:${WIN32}>,opengl32,$<IF:$<BOOL:${OPENGLES}>,GLESv2,GL>>>"
+						"$<$<BOOL:${VULKAN}>:$<IF:$<BOOL:${WIN32}>,vulkan-1,vulkan>>"
 						"$<$<BOOL:${DOWNLOADER}>:$<IF:$<BOOL:${WIN32}>,libcurl;libxml2,curl;xml2>>")
 
 set_target_properties(${PROJECT_NAME} PROPERTIES

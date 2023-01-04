@@ -1,7 +1,15 @@
+#include "rendererDx.h"
+#include "rendererGl.h"
+#include "rendererVk.h"
 #include "drawSys.h"
 #include "fileSys.h"
 #include "scene.h"
 #include "utils/layouts.h"
+#ifdef _WIN32
+#include <SDL_image.h>
+#else
+#include <SDL2/SDL_image.h>
+#endif
 #include <archive.h>
 #include <archive_entry.h>
 
@@ -63,12 +71,12 @@ int FontSet::length(const char* text, int height) {
 	return len;
 }
 
-int FontSet::length(const char* text, sizet length, int height) {
+int FontSet::length(char* text, sizet length, int height) {
 	int len = 0;
 	char tmp = text[length];
-	const_cast<char*>(text)[length] = '\0';
+	text[length] = '\0';
 	TTF_SizeUTF8(getFont(height), text, &len, nullptr);
-	const_cast<char*>(text)[length] = tmp;
+	text[length] = tmp;
 	return len;
 }
 
@@ -83,15 +91,19 @@ PictureLoader::PictureLoader(fs::path cdrc, string pfirst, const PicLim& plim, b
 {}
 
 PictureLoader::~PictureLoader() {
-	for (pair<string, SDL_Surface*>& it : pics)
-		SDL_FreeSurface(it.second);
+	for (auto [id, img] : pics)
+		SDL_FreeSurface(img);
 }
 
-string PictureLoader::limitToStr(uptrt i, uptrt c, uptrt m, sizet mag) const {
+vector<pair<sizet, SDL_Surface*>> PictureLoader::extractPics() {
+	vector<pair<sizet, SDL_Surface*>> out = std::move(pics);
+	pics.clear();
+	return out;
+}
+
+string PictureLoader::limitToStr(uptrt c, uptrt m, sizet mag) const {
 	switch (picLim.type) {
-	case PicLim::Type::none:
-		return toStr(i);
-	case PicLim::Type::count:
+	case PicLim::Type::none: case PicLim::Type::count:
 		return toStr(c);
 	case PicLim::Type::size:
 		return PicLim::memoryString(m, mag);
@@ -99,55 +111,87 @@ string PictureLoader::limitToStr(uptrt i, uptrt c, uptrt m, sizet mag) const {
 	throw std::runtime_error("Invalid picture limit type: " + toStr(picLim.type));
 }
 
+char* PictureLoader::progressText(string_view val, string_view lim) {
+	char* text = new char[val.length() + lim.length() + 2];
+	std::copy(val.begin(), val.end(), text);
+	text[val.length()] = '/';
+	std::copy(lim.begin(), lim.end(), text + val.length() + 1);
+	text[val.length() + 1 + lim.length()] = '\0';
+	return text;
+}
+
 // DRAW SYS
 
 DrawSys::DrawSys(const umap<int, SDL_Window*>& windows, Settings* sets, const FileSys* fileSys, int iconSize) :
 	colors(fileSys->loadColors(sets->setTheme(sets->getTheme(), fileSys->getAvailableThemes())))
 {
+	ivec2 origin(INT_MAX);
+	for (auto [id, rct] : sets->displays)
+		origin = glm::min(origin, rct.pos());
+
 	switch (sets->renderer) {
 #ifdef WITH_DIRECTX
 	case Settings::Renderer::directx:
-		try {
-			renderer = new RendererDx(windows, sets, viewRes, colors[uint8(Color::background)]);	// TODO: exceptions here rely on the destructor being called
-			break;
-		} catch (const std::runtime_error& err) {
-			logError(err.what());
-			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", err.what(), !windows.empty() ? windows.begin()->second : nullptr);
-		}
+		renderer = new RendererDx(windows, sets, viewRes, origin, colors[uint8(Color::background)]);
+		break;
 #endif
-	default:
-		renderer = new RendererGl(windows, sets, viewRes, colors[uint8(Color::background)]);
+#ifdef WITH_OPENGL
+	case Settings::Renderer::opengl:
+		renderer = new RendererGl(windows, sets, viewRes, origin, colors[uint8(Color::background)]);
+		break;
+#endif
+#ifdef WITH_VULKAN
+	case Settings::Renderer::vulkan:
+		renderer = new RendererVk(windows, sets, viewRes, origin, colors[uint8(Color::background)]);
+#endif
 	}
 
-	blank = texes.emplace(string(), renderer->texFromColor(u8vec4(255))).first->second;
-	for (const fs::directory_entry& it : fs::directory_iterator(fileSys->dirIcons(), fs::directory_options::skip_permission_denied)) {
+	vector<pair<sizet, SDL_Surface*>> icons;
+	try {
+		sizet i = 0;
+		vector<string> names;
+		for (const fs::directory_entry& it : fs::directory_iterator(fileSys->dirIcons(), fs::directory_options::skip_permission_denied)) {
 #if SDL_IMAGE_VERSION_ATLEAST(2, 6, 0)
-		if (SDL_RWops* ifh = SDL_RWFromFile(it.path().u8string().c_str(), "rb")) {
-			if (Texture* atex = renderer->texFromIcon(IMG_LoadSizedSVG_RW(ifh, iconSize, iconSize)); atex)
-				texes.emplace(it.path().stem().u8string(), atex);
-			else {
-				SDL_RWseek(ifh, 0, RW_SEEK_SET);
-				if (Texture* btex = renderer->texFromIcon(IMG_Load_RW(ifh, SDL_FALSE)); btex)
-					texes.emplace(it.path().stem().u8string(), btex);
-				else
-					logError("failed to load texture ", it.path().filename(), linend, IMG_GetError());
+			if (SDL_RWops* ifh = SDL_RWFromFile(it.path().u8string().c_str(), "rb")) {
+				if (SDL_Surface* aimg = IMG_LoadSizedSVG_RW(ifh, iconSize, iconSize)) {
+					names.push_back(it.path().stem().u8string());
+					icons.emplace_back(i++, aimg);
+				} else if (SDL_RWseek(ifh, 0, RW_SEEK_SET); SDL_Surface* bimg = IMG_Load_RW(ifh, SDL_FALSE)) {
+					names.push_back(it.path().stem().u8string());
+					icons.emplace_back(i++, bimg);
+				}
+				SDL_RWclose(ifh);
 			}
-			SDL_RWclose(ifh);
-		} else
-			logError("failed to open texture ", it.path().filename(), linend, SDL_GetError());
 #else
-		if (Texture* tex = renderer->texFromIcon(IMG_Load(it.path().u8string().c_str())); tex)
-			texes.emplace(it.path().stem().u8string(), tex);
-		else
-			logError("failed to load texture ", it.path().filename(), linend, IMG_GetError());
+			if (SDL_Surface* img = IMG_Load(it.path().u8string().c_str())) {
+				names.push_back(it.path().stem().u8string());
+				icons.emplace_back(i++, img);
+			}
 #endif
+		}
+		names.emplace_back();
+		vector<pair<sizet, Texture*>> refs = renderer->initIconTextures(std::move(icons));
+		icons.clear();
+		texes.reserve(refs.size());
+		for (auto [id, tex] : refs)
+			texes.emplace(std::move(names[id]), tex);
+		try {
+			blank = texes.at(string());
+		} catch (const std::out_of_range&) {
+			throw std::runtime_error("Failed to create blank texture");
+		}
+		setFont(sets->font, sets, fileSys);
+	} catch (const std::runtime_error&) {
+		for (auto [id, img] : icons)
+			SDL_FreeSurface(img);
+		throw;
 	}
-	setFont(sets->font, sets, fileSys);
 }
 
 DrawSys::~DrawSys() {
-	for (auto& [name, tex] : texes)
-		tex->free();
+	if (renderer)
+		renderer->freeIconTextures(texes);
+	delete renderer;
 }
 
 int DrawSys::findPointInView(ivec2 pos) const {
@@ -180,51 +224,51 @@ const Texture* DrawSys::texture(const string& name) const {
 	return texes.at(string());
 }
 
-vector<pair<string, Texture*>> DrawSys::transferPictures(vector<pair<string, SDL_Surface*>>& pics) {
-	vector<pair<string, Texture*>> texs(pics.size());
-	size_t j = 0;
-	for (size_t i = 0; i < pics.size(); ++i) {
-		if (Texture* tex = renderer->texFromIcon(pics[i].second))
-			texs[j++] = pair(std::move(pics[i].first), tex);
-		else
-			logError(SDL_GetError());
-	}
-	texs.resize(j);
-	return texs;
+vector<pair<string, Texture*>> DrawSys::transferPictures(PictureLoader* pl) {
+	vector<pair<sizet, Texture*>> refs = renderer->initRpicTextures(pl->extractPics());
+	std::sort(refs.begin(), refs.end(), [](const pair<sizet, Texture*>& a, const pair<sizet, Texture*>& b) -> bool { return a.first < b.first; });
+
+	vector<pair<string, Texture*>> ptxv(refs.size());
+	for (sizet i = 0; i < ptxv.size(); ++i)
+		ptxv[i] = pair(std::move(pl->names[refs[i].first]), refs[i].second);
+	return ptxv;
 }
 
 void DrawSys::drawWidgets(Scene* scene, bool mouseLast) {
 	for (auto [id, view] : renderer->getViews()) {
-		renderer->startDraw(view);
+		try {
+			renderer->startDraw(view);
 
-		// draw main widgets and visible overlays
-		scene->getLayout()->drawSelf(view->rect);
-		if (scene->getOverlay() && scene->getOverlay()->on)
-			scene->getOverlay()->drawSelf(view->rect);
+			// draw main widgets and visible overlays
+			scene->getLayout()->drawSelf(view->rect);
+			if (scene->getOverlay() && scene->getOverlay()->on)
+				scene->getOverlay()->drawSelf(view->rect);
 
-		// draw popup if exists and dim main widgets
-		if (scene->getPopup()) {
-			renderer->drawRect(blank, view->rect, view->rect, colorPopupDim);
-			scene->getPopup()->drawSelf(view->rect);
-		}
+			// draw popup if exists and dim main widgets
+			if (scene->getPopup()) {
+				renderer->drawRect(blank, view->rect, view->rect, colorPopupDim);
+				scene->getPopup()->drawSelf(view->rect);
+			}
 
-		// draw context menu
-		if (scene->getContext())
-			scene->getContext()->drawSelf(view->rect);
+			// draw context menu
+			if (scene->getContext())
+				scene->getContext()->drawSelf(view->rect);
 
-		// draw extra stuff on top
-		if (scene->getCapture())
-			scene->getCapture()->drawTop(view->rect);
-		else if (Button* but = dynamic_cast<Button*>(scene->select); mouseLast && but)
-			drawTooltip(but, view->rect);
+			// draw extra stuff on top
+			if (scene->getCapture())
+				scene->getCapture()->drawTop(view->rect);
+			else if (Button* but = dynamic_cast<Button*>(scene->select); mouseLast && but)
+				drawTooltip(but, view->rect);
 
-		renderer->finishDraw(view);
+			renderer->finishDraw(view);
+		} catch (const Renderer::ErrorSkip&) {}
 	}
+	renderer->finishRender();
 }
 
-bool DrawSys::drawPicture(const Picture* wgt, const Rect& view) {
-	if (Rect rect = wgt->rect(); rect.overlap(view)) {
-		Rect frame = wgt->frame();
+bool DrawSys::drawPicture(const Picture* wgt, const Recti& view) {
+	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
+		Recti frame = wgt->frame();
 		if (wgt->showBG)
 			renderer->drawRect(blank, rect, frame, colors[uint8(wgt->color())]);
 		if (wgt->tex)
@@ -234,40 +278,40 @@ bool DrawSys::drawPicture(const Picture* wgt, const Rect& view) {
 	return false;
 }
 
-void DrawSys::drawCheckBox(const CheckBox* wgt, const Rect& view) {
+void DrawSys::drawCheckBox(const CheckBox* wgt, const Recti& view) {
 	if (drawPicture(wgt, view))																		// draw background
 		renderer->drawRect(blank, wgt->boxRect(), wgt->frame(), colors[uint8(wgt->boxColor())]);	// draw checkbox
 }
 
-void DrawSys::drawSlider(const Slider* wgt, const Rect& view) {
+void DrawSys::drawSlider(const Slider* wgt, const Recti& view) {
 	if (drawPicture(wgt, view)) {															// draw background
-		Rect frame = wgt->frame();
+		Recti frame = wgt->frame();
 		renderer->drawRect(blank, wgt->barRect(), frame, colors[uint8(Color::dark)]);		// draw bar
 		renderer->drawRect(blank, wgt->sliderRect(), frame, colors[uint8(Color::light)]);	// draw slider
 	}
 }
 
-void DrawSys::drawProgressBar(const ProgressBar* wgt, const Rect& view) {
-	if (Rect rect = wgt->rect(); rect.overlap(view)) {
-		Rect frame = wgt->frame();
+void DrawSys::drawProgressBar(const ProgressBar* wgt, const Recti& view) {
+	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
+		Recti frame = wgt->frame();
 		renderer->drawRect(blank, rect, frame, colors[uint8(Color::normal)]);			// draw background
 		renderer->drawRect(blank, wgt->barRect(), frame, colors[uint8(Color::light)]);	// draw bar
 	}
 }
 
-void DrawSys::drawLabel(const Label* wgt, const Rect& view) {
+void DrawSys::drawLabel(const Label* wgt, const Recti& view) {
 	if (drawPicture(wgt, view) && wgt->getTextTex())
 		renderer->drawRect(wgt->getTextTex(), wgt->textRect(), wgt->textFrame(), colors[uint8(Color::text)]);
 }
 
-void DrawSys::drawCaret(const Rect& rect, const Rect& frame, const Rect& view) {
-	if (rect.overlap(view))
+void DrawSys::drawCaret(const Recti& rect, const Recti& frame, const Recti& view) {
+	if (rect.overlaps(view))
 		renderer->drawRect(blank, rect, frame, colors[uint8(Color::light)]);
 }
 
-void DrawSys::drawWindowArranger(const WindowArranger* wgt, const Rect& view) {
-	if (Rect rect = wgt->rect(); rect.overlap(view)) {
-		Rect frame = wgt->frame();
+void DrawSys::drawWindowArranger(const WindowArranger* wgt, const Recti& view) {
+	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
+		Recti frame = wgt->frame();
 		renderer->drawRect(blank, rect, frame, colors[uint8(wgt->color())]);
 		for (const auto& [id, dsp] : wgt->getDisps())
 			if (!wgt->draggingDisp(id)) {
@@ -277,175 +321,156 @@ void DrawSys::drawWindowArranger(const WindowArranger* wgt, const Rect& view) {
 	}
 }
 
-void DrawSys::drawWaDisp(const Rect& rect, Color color, const Rect& text, const Texture* tex, const Rect& frame, const Rect& view) {
-	if (rect.overlap(view)) {
+void DrawSys::drawWaDisp(const Recti& rect, Color color, const Recti& text, const Texture* tex, const Recti& frame, const Recti& view) {
+	if (rect.overlaps(view)) {
 		renderer->drawRect(blank, rect, frame, colors[uint8(color)]);
 		if (tex)
 			renderer->drawRect(tex, text, frame, colors[uint8(Color::text)]);
 	}
 }
 
-void DrawSys::drawScrollArea(const ScrollArea* box, const Rect& view) {
+void DrawSys::drawScrollArea(const ScrollArea* box, const Recti& view) {
 	mvec2 vis = box->visibleWidgets();	// get index interval of items on screen and draw children
 	for (sizet i = vis.x; i < vis.y; ++i)
 		box->getWidget(i)->drawSelf(view);
 
-	if (Rect bar = box->barRect(); bar.overlap(view)) {
-		Rect frame = box->frame();
+	if (Recti bar = box->barRect(); bar.overlaps(view)) {
+		Recti frame = box->frame();
 		renderer->drawRect(blank, bar, frame, colors[uint8(Color::dark)]);					// draw scroll bar
 		renderer->drawRect(blank, box->sliderRect(), frame, colors[uint8(Color::light)]);	// draw scroll slider
 	}
 }
 
-void DrawSys::drawReaderBox(const ReaderBox* box, const Rect& view) {
+void DrawSys::drawReaderBox(const ReaderBox* box, const Recti& view) {
 	mvec2 vis = box->visibleWidgets();
 	for (sizet i = vis.x; i < vis.y; ++i)
 		box->getWidget(i)->drawSelf(view);
 
-	if (Rect bar = box->barRect(); box->showBar() && bar.overlap(view)) {
-		Rect frame = box->frame();
+	if (Recti bar = box->barRect(); box->showBar() && bar.overlaps(view)) {
+		Recti frame = box->frame();
 		renderer->drawRect(blank, bar, frame, colors[uint8(Color::dark)]);
 		renderer->drawRect(blank, box->sliderRect(), frame, colors[uint8(Color::light)]);
 	}
 }
 
-void DrawSys::drawPopup(const Popup* box, const Rect& view) {
-	if (Rect rect = box->rect(); rect.overlap(view)) {
+void DrawSys::drawPopup(const Popup* box, const Recti& view) {
+	if (Recti rect = box->rect(); rect.overlaps(view)) {
 		renderer->drawRect(blank, rect, box->frame(), colors[uint8(box->bgColor)]);	// draw background
-		for (const Widget* it : box->getWidgets())									// draw children
+		for (Widget* it : box->getWidgets())										// draw children
 			it->drawSelf(view);
 	}
 }
 
-void DrawSys::drawTooltip(Button* but, const Rect& view) {
+void DrawSys::drawTooltip(Button* but, const Recti& view) {
 	const Texture* tip = but->getTooltip();
-	if (Rect rct = but->tooltipRect(); tip && rct.overlap(view)) {
+	if (Recti rct = but->tooltipRect(); tip && rct.overlaps(view)) {
 		renderer->drawRect(blank, rct, view, colors[uint8(Color::tooltip)]);
-		renderer->drawRect(tip, Rect(rct.pos() + Button::tooltipMargin, tip->getRes()), rct, colors[uint8(Color::text)]);
+		renderer->drawRect(tip, Recti(rct.pos() + Button::tooltipMargin, tip->getRes()), rct, colors[uint8(Color::text)]);
 	}
 }
 
-Widget* DrawSys::getSelectedWidget(const Layout* box, ivec2 mPos) {
+Widget* DrawSys::getSelectedWidget(Layout* box, ivec2 mPos) {
 	umap<int, Renderer::View*>::const_iterator vit = findViewForPoint(mPos);
 	if (vit == renderer->getViews().end())
 		return nullptr;
 
-	renderer->startSelDraw(vit->second, mPos);
+	renderer->startSelDraw(vit->second, mPos - vit->second->rect.pos());
 	box->drawAddr(vit->second->rect);
 	return renderer->finishSelDraw(vit->second);
 }
 
-void DrawSys::drawPictureAddr(const Picture* wgt, const Rect& view) {
-	if (Rect rect = wgt->rect(); rect.overlap(view))
+void DrawSys::drawPictureAddr(const Picture* wgt, const Recti& view) {
+	if (Recti rect = wgt->rect(); rect.overlaps(view))
 		renderer->drawSelRect(wgt, rect, wgt->frame());
 }
 
-void DrawSys::drawLayoutAddr(const Layout* wgt, const Rect& view) {
+void DrawSys::drawLayoutAddr(const Layout* wgt, const Recti& view) {
 	renderer->drawSelRect(wgt, wgt->rect(), wgt->frame());	// invisible background to set selection area
-	for (const Widget* it : wgt->getWidgets())
+	for (Widget* it : wgt->getWidgets())
 		it->drawAddr(view);
 }
 
-void DrawSys::loadTexturesDirectoryThreaded(bool* running, uptr<PictureLoader> pl) {
+void DrawSys::loadTexturesDirectoryThreaded(std::atomic_bool& running, uptr<PictureLoader> pl) {
 	vector<fs::path> files = FileSys::listDir(pl->curDir, true, false, pl->showHidden);
-	uptrt lim, mem;	// picture count limit, picture size limit
-	sizet sizMag = initLoadLimits(pl.get(), files, lim, mem);
-	pl->progLim = pl->limitToStr(lim, lim, mem, sizMag);
+	auto [lim, mem, sizMag] = initLoadLimits(pl.get(), files);	// picture count limit, picture size limit, magnitude index
+	string progLim = pl->limitToStr(lim, mem, sizMag);
+	pl->names.resize(files.size());
+	std::transform(files.begin(), files.end(), pl->names.begin(), [](const fs::path& it) -> string { return it.u8string(); });
 
 	// iterate over files until one of the limits is hit (it should be the one associated with the setting)
-	for (uptrt mov = btom<uptrt>(pl->fwd), i = pl->fwd ? 0 : files.size() - 1, c = 0, m = 0; i < files.size() && c < lim && m < mem; i += mov) {
-		if (!*running)
+	uptrt m = 0;
+	for (sizet mov = btom<uptrt>(pl->fwd), i = pl->fwd ? 0 : files.size() - 1, c = 0; i < files.size() && c < lim && m < mem; i += mov) {
+		if (!running)
 			return;
-		pl->progVal = pl->limitToStr(pl->fwd ? i : files.size() - i - 1, c, m, sizMag);
-		pushEvent(UserCode::readerProgress, pl.get());
+		pushEvent(UserCode::readerProgress, PictureLoader::progressText(pl->limitToStr(c, m, sizMag), progLim));
 
-		SDL_Surface* img = IMG_Load((pl->curDir / files[i]).u8string().c_str());
-		if (img) {
-			pl->pics.emplace_back(files[i].u8string(), img);
-			m += uptrt(img->w) * uptrt(img->h) * img->format->BytesPerPixel;
+		if (SDL_Surface* img = IMG_Load((pl->curDir / files[i]).u8string().c_str())) {
+			pl->pics.emplace_back(i, img);
+			m += uptrt(img->w) * uptrt(img->h) * uptrt(img->format->BytesPerPixel);
 			++c;
 		}
 	}
-	if (!pl->fwd)
-		std::reverse(pl->pics.begin(), pl->pics.end());
-
 	pushEvent(UserCode::readerFinished, pl.release());
-	*running = false;
+	running = false;
 }
 
-void DrawSys::loadTexturesArchiveThreaded(bool* running, uptr<PictureLoader> pl) {
+void DrawSys::loadTexturesArchiveThreaded(std::atomic_bool& running, uptr<PictureLoader> pl) {
+	mapFiles files = FileSys::listArchivePictures(pl->curDir, pl->names);
+	auto [start, end, lim, mem, sizMag] = initLoadLimits(pl.get(), files);
+	string progLim = pl->limitToStr(lim, mem, sizMag);
 	archive* arch = FileSys::openArchive(pl->curDir);
 	if (!arch)
 		return;
-	uptrt start, end, lim, mem;	// start must be less than end (end does not get iterated over, unlike start)
-	mapFiles files = initLoadLimits(pl.get(), start, end, lim, mem);
-	sizet sizMag = PicLim::memSizeMag(mem);
-	uptrt c = 0, m = 0;
-	pl->progLim = pl->limitToStr(lim, lim, mem, sizMag);
 
+	sizet c = 0;
+	uptrt m = 0;
 	for (archive_entry* entry; !archive_read_next_header(arch, &entry) && c < lim && m < mem;) {
-		if (!*running) {
+		if (!running) {
 			archive_read_free(arch);
 			return;
 		}
-		pl->progVal = pl->limitToStr(c, c, m, sizMag);
-		pushEvent(UserCode::readerProgress, pl.get());
+		pushEvent(UserCode::readerProgress, PictureLoader::progressText(pl->limitToStr(c, m, sizMag), progLim));
 
 		string pname = archive_entry_pathname_utf8(entry);
 		if (pair<sizet, uptrt>& ent = files[pname]; ent.first >= start && ent.first < end)
 			if (SDL_Surface* img = FileSys::loadArchivePicture(arch, entry)) {
-				pl->pics.emplace_back(std::move(pname), img);
+				pl->pics.emplace_back(ent.first, img);
 				m += ent.second;
 				++c;
 			}
 	}
 	archive_read_free(arch);
-	std::sort(pl->pics.begin(), pl->pics.end(), [&files](const pair<string, SDL_Surface*>& a, const pair<string, SDL_Surface*>& b) -> bool { return files[a.first].first < files[b.first].first; });
-
 	pushEvent(UserCode::readerFinished, pl.release());
-	*running = false;
+	running = false;
 }
 
-sizet DrawSys::initLoadLimits(const PictureLoader* pl, vector<fs::path>& files, uptrt& lim, uptrt& mem) {
+tuple<sizet, uptrt, uint8> DrawSys::initLoadLimits(const PictureLoader* pl, vector<fs::path>& files) {
 	if (pl->picLim.type != PicLim::Type::none)
-		if (vector<fs::path>::iterator it = std::find(files.begin(), files.end(),fs::u8path(pl->firstPic)); it != files.end())
+		if (vector<fs::path>::iterator it = std::find(files.begin(), files.end(), fs::u8path(pl->firstPic)); it != files.end())
 			pl->fwd ? files.erase(files.begin(), it) : files.erase(it + 1, files.end());
 
 	switch (pl->picLim.type) {
 	case PicLim::Type::none:
-		mem = UINTPTR_MAX;
-		lim = files.size();
-		break;
+		return tuple(files.size(), UINTPTR_MAX, 0);
 	case PicLim::Type::count:
-		mem = UINTPTR_MAX;
-		lim = pl->picLim.getCount() <= files.size() ? pl->picLim.getCount() : files.size();
-		break;
+		return tuple(std::min(pl->picLim.getCount(), files.size()), UINTPTR_MAX, 0);
 	case PicLim::Type::size:
-		mem = pl->picLim.getSize();
-		lim = files.size();
-		break;
-	default:
-		throw std::runtime_error("Invalid picture limit type: " + toStr(pl->picLim.type));
+		return tuple(files.size(), pl->picLim.getSize(), PicLim::memSizeMag(pl->picLim.getSize()));
 	}
-	return PicLim::memSizeMag(mem);
+	throw std::runtime_error("Invalid picture limit type: " + toStr(pl->picLim.type));
 }
 
-mapFiles DrawSys::initLoadLimits(const PictureLoader* pl, uptrt& start, uptrt& end, uptrt& lim, uptrt& mem) {
-	vector<string> names;
-	mapFiles files = FileSys::listArchivePictures(pl->curDir, names);
-	start = 0;
+tuple<sizet, sizet, sizet, uptrt, uint8> DrawSys::initLoadLimits(PictureLoader* pl, const mapFiles& files) {
+	sizet start = 0;
 	if (pl->picLim.type != PicLim::Type::none)
-		if (mapFiles::iterator it = files.find(pl->firstPic); it != files.end())
+		if (mapFiles::const_iterator it = files.find(pl->firstPic); it != files.end())
 			start = it->second.first;
 
 	switch (pl->picLim.type) {
 	case PicLim::Type::none:
-		mem = UINTPTR_MAX;
-		lim = files.size();
-		end = lim;
-		break;
-	case PicLim::Type::count:
-		mem = UINTPTR_MAX;
+		return tuple(start, files.size(), files.size(), UINTPTR_MAX, 0);
+	case PicLim::Type::count: {
+		sizet lim, end;
 		if (pl->fwd) {
 			lim = pl->picLim.getCount() + start <= files.size() ? pl->picLim.getCount() : files.size() - start;
 			end = start + lim;
@@ -455,20 +480,17 @@ mapFiles DrawSys::initLoadLimits(const PictureLoader* pl, uptrt& start, uptrt& e
 			if (start -= lim - 1; start > end)
 				start = 0;
 		}
-		break;
-	case PicLim::Type::size:
-		mem = pl->picLim.getSize();
-		lim = files.size();
+		return tuple(start, end, lim, UINTPTR_MAX, 0); }
+	case PicLim::Type::size: {
+		sizet end;
 		if (pl->fwd) {
 			end = start;
-			for (uptrt m = 0; end < lim && m < mem; m += files[names[end]].second, ++end);
+			for (uptrt m = 0; end < files.size() && m < pl->picLim.getSize(); m += files.at(pl->names[end]).second, ++end);
 		} else {
 			end = start + 1;
-			for (uptrt m = 0; start > 0 && m < mem; m += files[names[start]].second, --start);
+			for (uptrt m = 0; start > 0 && m < pl->picLim.getSize(); m += files.at(pl->names[start]).second, --start);
 		}
-		break;
-	default:
-		throw std::runtime_error("Invalid picture limit type: " + toStr(pl->picLim.type));
-	}
-	return files;
+		return tuple(start, end, files.size(), pl->picLim.getSize(), PicLim::memSizeMag(pl->picLim.getSize()));
+	} }
+	throw std::runtime_error("Invalid picture limit type: " + toStr(pl->picLim.type));
 }

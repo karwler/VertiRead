@@ -5,7 +5,10 @@
 #include <archive_entry.h>
 #include <queue>
 #include <regex>
-#ifndef _WIN32
+#ifdef _WIN32
+#include <SDL_image.h>
+#else
+#include <SDL2/SDL_image.h>
 #include <dirent.h>
 #include <dlfcn.h>
 #include <fontconfig/fontconfig.h>
@@ -95,12 +98,12 @@ FileSys::FileSys() {
 #endif
 
 	try {
-		std::regex rgx(R"r(log_[\d\-_]+\.txt)r", std::regex::icase | std::regex::optimize);
+		std::regex rgx(R"r(log_[\d-]+\.txt)r", std::regex::icase | std::regex::optimize);
 		for (const fs::directory_entry& it : fs::directory_iterator(dirSets, fs::directory_options::skip_permission_denied))
 			if (std::error_code ec; std::regex_match(it.path().filename().u8string(), rgx) && it.is_regular_file(ec))
 				fs::remove(it.path(), ec);
 
-		fs::path logPath = dirSets / ("log_" + currentDateTimeStr('-', '_') + ".txt");
+		fs::path logPath = dirSets / ("log_" + tmToDateStr(currentDateTime()) + ".txt");
 		if (logFile.open(logPath); logFile.good())
 			SDL_LogSetOutputFunction(logWrite, &logFile);
 		else
@@ -189,43 +192,51 @@ bool FileSys::saveLastPage(string_view book, string_view drc, string_view fname)
 Settings* FileSys::loadSettings() const {
 	Settings* sets = new Settings(dirSets, getAvailableThemes());
 	for (IniLine& il : IniLine::readLines(readTextFile(dirSets / fileSettings, false))) {
-		if (il.getType() != IniLine::Type::prpVal)
-			continue;
-
-		if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordMaximized))
-			sets->maximized = toBool(il.getVal());
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordScreen))
-			sets->screen = strToEnum(Settings::screenModeNames, il.getVal(), Settings::defaultScreenMode);
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordDisplay))
-			sets->displays[toNum<int>(il.getKey())] = toVec<ivec4>(il.getVal());
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordResolution))
-			sets->resolution = toVec<ivec2, uint>(il.getVal());
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordVSync))
-			sets->vsync = Settings::VSync(strToEnum(Settings::vsyncNames, il.getVal(), int8(Settings::defaultVSync) + 1) - 1);
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordRenderer))
-			sets->renderer = strToEnum(Settings::rendererNames, il.getVal(), Settings::defaultRenderer);
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordGpuSelecting))
-			sets->gpuSelecting = toBool(il.getVal());
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordDirection))
-			sets->direction = strToEnum(Direction::names, il.getVal(), Settings::defaultDirection);
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordZoom))
-			sets->zoom = toNum<float>(il.getVal());
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordSpacing))
-			sets->spacing = toNum<ushort>(il.getVal());
-		else if (!SDL_strcasecmp(il.getPrp().c_str(),iniKeywordPictureLimit))
-			sets->picLim.set(il.getVal());
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordFont))
-			sets->font = FileSys::isFont(findFont(il.getVal())) ? il.getVal() : Settings::defaultFont;
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordTheme))
-			sets->setTheme(il.getVal(), getAvailableThemes());
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordShowHidden))
-			sets->showHidden = toBool(il.getVal());
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordLibrary))
-			sets->setDirLib(fs::u8path(il.getVal()), dirSets);
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordScrollSpeed))
-			sets->scrollSpeed = toVec<vec2>(il.getVal());
-		else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordDeadzone))
-			sets->setDeadzone(toNum<uint>(il.getVal()));
+		switch (il.getType()) {
+		case IniLine::Type::prpVal:
+			if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordMaximized))
+				sets->maximized = toBool(il.getVal());
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordScreen))
+				sets->screen = strToEnum(Settings::screenModeNames, il.getVal(), Settings::defaultScreenMode);
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordResolution))
+				sets->resolution = toVec<ivec2>(il.getVal());
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordRenderer))
+				sets->renderer = strToEnum(Settings::rendererNames, il.getVal(), Settings::defaultRenderer);
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordDevice))
+				sets->device = toVec<u32vec2>(il.getVal(), 0, 0x10);
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordCompression))
+				sets->compression = toBool(il.getVal());
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordVSync))
+				sets->vsync = toBool(il.getVal());
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordGpuSelecting))
+				sets->gpuSelecting = toBool(il.getVal());
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordDirection))
+				sets->direction = strToEnum(Direction::names, il.getVal(), Settings::defaultDirection);
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordZoom))
+				sets->zoom = toNum<float>(il.getVal());
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordSpacing))
+				sets->spacing = toNum<ushort>(il.getVal());
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordPictureLimit))
+				sets->picLim.set(il.getVal());
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordFont))
+				sets->font = FileSys::isFont(findFont(il.getVal())) ? il.getVal() : Settings::defaultFont;
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordTheme))
+				sets->setTheme(il.getVal(), getAvailableThemes());
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordShowHidden))
+				sets->showHidden = toBool(il.getVal());
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordTooltips))
+				sets->tooltips = toBool(il.getVal());
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordLibrary))
+				sets->setDirLib(fs::u8path(il.getVal()), dirSets);
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordScrollSpeed))
+				sets->scrollSpeed = toVec<vec2>(il.getVal());
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordDeadzone))
+				sets->setDeadzone(toNum<uint>(il.getVal()));
+			break;
+		case IniLine::Type::prpKeyVal:
+			if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordDisplay))
+				sets->displays[toNum<int>(il.getKey())] = toVec<ivec4>(il.getVal());
+		}
 	}
 	sets->unionDisplays();
 	return sets;
@@ -243,8 +254,10 @@ void FileSys::saveSettings(const Settings* sets) const {
 	for (const auto& [id, rect] : sets->displays)
 		IniLine::writeKeyVal(ofh, iniKeywordDisplay, id, toStr(rect.toVec()));
 	IniLine::writeVal(ofh, iniKeywordResolution, sets->resolution.x, ' ', sets->resolution.y);
-	IniLine::writeVal(ofh, iniKeywordVSync, Settings::vsyncNames[sizet(sets->vsync) + 1]);
 	IniLine::writeVal(ofh, iniKeywordRenderer, Settings::rendererNames[sizet(sets->renderer)]);
+	IniLine::writeVal(ofh, iniKeywordDevice, toStr<0x10>(sets->device));
+	IniLine::writeVal(ofh, iniKeywordCompression, toStr(sets->compression));
+	IniLine::writeVal(ofh, iniKeywordVSync, toStr(sets->vsync));
 	IniLine::writeVal(ofh, iniKeywordGpuSelecting, toStr(sets->gpuSelecting));
 	IniLine::writeVal(ofh, iniKeywordZoom, sets->zoom);
 	IniLine::writeVal(ofh, iniKeywordPictureLimit, PicLim::names[uint8(sets->picLim.type)], ' ', sets->picLim.getCount(), ' ', PicLim::memoryString(sets->picLim.getSize()));
@@ -253,6 +266,7 @@ void FileSys::saveSettings(const Settings* sets) const {
 	IniLine::writeVal(ofh, iniKeywordFont, sets->font);
 	IniLine::writeVal(ofh, iniKeywordTheme, sets->getTheme());
 	IniLine::writeVal(ofh, iniKeywordShowHidden, toStr(sets->showHidden));
+	IniLine::writeVal(ofh, iniKeywordTooltips, toStr(sets->tooltips));
 	IniLine::writeVal(ofh, iniKeywordLibrary, sets->getDirLib().u8string());
 	IniLine::writeVal(ofh, iniKeywordScrollSpeed, sets->scrollSpeed.x, ' ', sets->scrollSpeed.y);
 	IniLine::writeVal(ofh, iniKeywordDeadzone, sets->getDeadzone());
@@ -524,7 +538,7 @@ mapFiles FileSys::listArchivePictures(const fs::path& file, vector<string>& name
 		for (archive_entry* entry; !archive_read_next_header(arch, &entry);) {
 			if (SDL_Surface* img = loadArchivePicture(arch, entry)) {
 				string pname = archive_entry_pathname_utf8(entry);
-				files.emplace(pname, pair(SIZE_MAX, uptrt(img->w) * uptrt(img->h) * img->format->BytesPerPixel));
+				files.emplace(pname, pair(SIZE_MAX, uptrt(img->w) * uptrt(img->h) * uptrt(img->format->BytesPerPixel)));
 				names.push_back(std::move(pname));
 				SDL_FreeSurface(img);
 			}
@@ -549,10 +563,10 @@ SDL_Surface* FileSys::loadArchivePicture(archive* arch, archive_entry* entry) {
 	return pic;
 }
 
-void FileSys::moveContentThreaded(bool* running, fs::path src, fs::path dst) {
+void FileSys::moveContentThreaded(std::atomic_bool& running, fs::path src, fs::path dst) {
 	vector<fs::path> files = listDir(src);
 	for (uptrt i = 0, lim = files.size(); i < lim; ++i) {
-		if (!*running)
+		if (!running)
 			break;
 
 		pushEvent(UserCode::moveProgress, reinterpret_cast<void*>(i), reinterpret_cast<void*>(lim));
@@ -564,7 +578,7 @@ void FileSys::moveContentThreaded(bool* running, fs::path src, fs::path dst) {
 			logError("failed no move ", path);
 	}
 	pushEvent(UserCode::moveFinished);
-	*running = false;
+	running = false;
 }
 
 fs::path FileSys::findFont(string_view font) const {
@@ -636,25 +650,26 @@ vector<fs::path> FileSys::listDrives() {
 #endif
 
 void SDLCALL FileSys::logWrite(void* userdata, int, SDL_LogPriority priority, const char* message) {
-	string prefix = currentDateTimeStr() + ' ';
+	std::ofstream& ofs = *static_cast<std::ofstream*>(userdata);
+	ofs << tmToTimeStr(currentDateTime()) << ' ';
 	switch (priority) {
 	case SDL_LOG_PRIORITY_VERBOSE:
-		prefix += "VERBOSE: ";
+		ofs << "VERBOSE: ";
 		break;
 	case SDL_LOG_PRIORITY_DEBUG:
-		prefix += "DEBUG: ";
+		ofs << "DEBUG: ";
 		break;
 	case SDL_LOG_PRIORITY_INFO:
-		prefix += "INFO: ";
+		ofs << "INFO: ";
 		break;
 	case SDL_LOG_PRIORITY_WARN:
-		prefix += "WARN: ";
+		ofs << "WARN: ";
 		break;
 	case SDL_LOG_PRIORITY_ERROR:
-		prefix += "ERROR: ";
+		ofs << "ERROR: ";
 		break;
 	case SDL_LOG_PRIORITY_CRITICAL:
-		prefix += "CRITICAL: ";
+		ofs << "CRITICAL: ";
 	}
-	*static_cast<std::ofstream*>(userdata) << prefix << message << linend;
+	ofs << message << std::endl;
 }

@@ -20,7 +20,8 @@ void Program::start() {
 void Program::eventUser(const SDL_UserEvent& user) {
 	switch (UserCode(user.code)) {
 	case UserCode::readerProgress:
-		World::scene()->setPopup(state->createPopupMessage("Loading " + static_cast<PictureLoader*>(user.data1)->progVal + '/' + static_cast<PictureLoader*>(user.data1)->progLim, &Program::eventReaderLoadingCancelled, "Cancel", Alignment::center));
+		World::scene()->setPopup(state->createPopupMessage("Loading "s + static_cast<char*>(user.data1), &Program::eventReaderLoadingCancelled, "Cancel", Alignment::center));
+		delete[] static_cast<char*>(user.data1);
 		break;
 	case UserCode::readerFinished:
 		eventReaderLoadingFinished(static_cast<PictureLoader*>(user.data1));
@@ -159,9 +160,12 @@ void Program::eventExitBrowser(Button*) {
 // READER
 
 void Program::eventStartLoadingReader(const string& first, bool fwd) {
+	if (ProgReader* pr = dynamic_cast<ProgReader*>(state))
+		World::drawSys()->freeRpicTextures(pr->reader->extractPictures());
+
 	World::scene()->setPopup(state->createPopupMessage("Loading...", &Program::eventReaderLoadingCancelled, "Cancel", Alignment::center));
 	threadRunning = true;
-	thread = std::thread(browser->getInArchive() ? &DrawSys::loadTexturesArchiveThreaded : &DrawSys::loadTexturesDirectoryThreaded, &threadRunning, std::make_unique<PictureLoader>(browser->getCurDir(), first, World::sets()->picLim, fwd, World::sets()->showHidden));
+	thread = std::thread(browser->getInArchive() ? &DrawSys::loadTexturesArchiveThreaded : &DrawSys::loadTexturesDirectoryThreaded, std::ref(threadRunning), std::make_unique<PictureLoader>(browser->getCurDir(), first, World::sets()->picLim, fwd, World::sets()->showHidden));
 }
 
 void Program::eventReaderLoadingCancelled(Button*) {
@@ -174,7 +178,7 @@ void Program::eventReaderLoadingFinished(PictureLoader* pl) {
 	thread.join();
 	setState<ProgReader>();
 
-	static_cast<ProgReader*>(state)->reader->setWidgets(World::drawSys()->transferPictures(pl->pics));
+	static_cast<ProgReader*>(state)->reader->setWidgets(World::drawSys()->transferPictures(pl));
 	delete pl;
 }
 
@@ -331,7 +335,7 @@ void Program::eventOpenSettings(Button*) {
 }
 
 void Program::eventSwitchDirection(Button* but) {
-	World::sets()->direction = finishComboBox<true>(but, Direction::names, Settings::defaultDirection);
+	World::sets()->direction = Direction::Dir(finishComboBox(but));
 }
 
 void Program::eventSetZoom(Button* but) {
@@ -371,7 +375,7 @@ void Program::eventSetLibraryDirBW(Button*) {
 void Program::offerMoveBooks(fs::path&& oldLib) {
 	if (World::sets()->getDirLib() != oldLib) {
 		static_cast<ProgSettings*>(state)->oldPathBuffer = std::move(oldLib);
-		World::scene()->setPopup(state->createPopupChoice("Move comics to new location?", &Program::eventMoveComics, &Program::eventClosePopup));
+		World::scene()->setPopup(state->createPopupChoice("Move books to new location?", &Program::eventMoveComics, &Program::eventClosePopup));
 	}
 }
 
@@ -388,7 +392,7 @@ void Program::eventMoveComics(Button*) {
 	World::scene()->setPopup(state->createPopupMessage("Moving...", &Program::eventReaderLoadingCancelled, "Cancel", Alignment::center));
 	ProgSettings* ps = static_cast<ProgSettings*>(state);
 	threadRunning = true;
-	thread = std::thread(&FileSys::moveContentThreaded, &threadRunning, ps->oldPathBuffer, World::sets()->getDirLib());
+	thread = std::thread(&FileSys::moveContentThreaded, std::ref(threadRunning), ps->oldPathBuffer, World::sets()->getDirLib());
 	ps->oldPathBuffer.clear();
 }
 
@@ -407,38 +411,47 @@ void Program::eventMoveFinished() {
 }
 
 void Program::eventSetScreenMode(Button* but) {
-	if (Settings::Screen screen = finishComboBox<true>(but, Settings::screenModeNames, Settings::defaultScreenMode); World::sets()->screen != screen)
+	if (Settings::Screen screen = Settings::Screen(finishComboBox(but)); World::sets()->screen != screen)
 		World::winSys()->setScreenMode(screen);
 }
 
-void Program::eventSetVsync(Button* but) {
-	if (Settings::VSync vsync = Settings::VSync(finishComboBox<true>(but, Settings::vsyncNames, int8(Settings::defaultVSync) + 1) - 1); World::sets()->vsync != vsync) {
-		World::sets()->vsync = vsync;
-		World::drawSys()->setVsync(World::sets()->vsync);
-	}
-}
-
 void Program::eventSetRenderer(Button* but) {
-	if (Settings::Renderer renderer = finishComboBox<false>(but, Settings::rendererNames, Settings::defaultRenderer); World::sets()->renderer != renderer) {
+	if (Settings::Renderer renderer = Settings::Renderer(finishComboBox(but)); World::sets()->renderer != renderer) {
 		World::sets()->renderer = renderer;
 		World::winSys()->recreateWindows();
 	}
+}
+
+void Program::eventSetDevice(Button* but) {
+	if (u32vec2 device = static_cast<ProgSettings*>(state)->getDvice(finishComboBox(but)); World::sets()->device != device) {
+		World::sets()->device = device;
+		World::winSys()->recreateWindows();
+	}
+}
+
+void Program::eventSetCompression(Button* but) {
+	World::sets()->compression = static_cast<CheckBox*>(but)->on;
+	World::drawSys()->setCompression(World::sets()->compression);
+}
+
+void Program::eventSetVsync(Button* but) {
+	World::sets()->vsync = static_cast<CheckBox*>(but)->on;
+	World::drawSys()->setVsync(World::sets()->vsync);
 }
 
 void Program::eventSetGpuSelecting(Button* but) {
 	World::sets()->gpuSelecting = static_cast<CheckBox*>(but)->on;
 }
 
-template <bool decomboboxify, class T, sizet N>
-T Program::finishComboBox(Button* but, const array<const char*, N>& names, T defaultValue) {
-	T val = strToEnum(names, decomboboxify ? ProgSettings::decomboboxify(static_cast<Label*>(but)->getText()) : static_cast<Label*>(but)->getText(), defaultValue);
-	World::scene()->getContext()->owner<ComboBox>()->setCurOpt(sizet(val));
+sizet Program::finishComboBox(Button* but) {
+	sizet val = but->getIndex();
+	World::scene()->getContext()->owner<ComboBox>()->setCurOpt(val);
 	World::scene()->setContext(nullptr);
 	return val;
 }
 
 void Program::eventSetMultiFullscreen(Button* but) {
-	if (umap<int, Rect> dsps = static_cast<WindowArranger*>(but)->getActiveDisps(); dsps != World::sets()->displays) {
+	if (umap<int, Recti> dsps = static_cast<WindowArranger*>(but)->getActiveDisps(); dsps != World::sets()->displays) {
 		World::sets()->displays = std::move(dsps);
 		if (World::sets()->screen == Settings::Screen::multiFullscreen)
 			World::winSys()->recreateWindows();
@@ -447,6 +460,11 @@ void Program::eventSetMultiFullscreen(Button* but) {
 
 void Program::eventSetHide(Button* but) {
 	World::sets()->showHidden = static_cast<CheckBox*>(but)->on;
+}
+
+void Program::eventSetTooltips(Button* but) {
+	World::sets()->tooltips = static_cast<CheckBox*>(but)->on;
+	World::scene()->resetLayouts();
 }
 
 void Program::eventSetTheme(Button* but) {
@@ -515,7 +533,7 @@ void Program::eventSetFill(Button*) {
 }
 
 void Program::eventSetPicLimitType(Button* but) {
-	if (PicLim::Type plim = finishComboBox<true>(but, PicLim::names, PicLim::Type::none); plim != World::sets()->picLim.type) {
+	if (PicLim::Type plim = PicLim::Type(finishComboBox(but)); plim != World::sets()->picLim.type) {
 		ProgSettings* ps = static_cast<ProgSettings*>(state);
 		World::sets()->picLim.type = plim;
 		ps->limitLine->replaceWidget(ps->limitLine->getWidgets().size() - 1, static_cast<ProgSettings*>(state)->createLimitEdit());

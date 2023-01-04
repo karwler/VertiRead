@@ -34,14 +34,14 @@ InputSys::~InputSys() {
 }
 
 void InputSys::eventMouseMotion(const SDL_MouseMotionEvent& motion) {
-	mouseLast = motion.type == SDL_MOUSEMOTION;
+	mouseWin = motion.type == SDL_MOUSEMOTION ? optional(motion.windowID) : std::nullopt;
 	mouseMove = ivec2(motion.xrel, motion.yrel);
 	moveTime = motion.timestamp;
 	World::scene()->onMouseMove(ivec2(motion.x, motion.y) + World::winSys()->winViewOffset(motion.windowID), mouseMove);
 }
 
 void InputSys::eventMouseButtonDown(const SDL_MouseButtonEvent& button) {
-	mouseLast = button.type == SDL_MOUSEBUTTONDOWN;
+	mouseWin = button.type == SDL_MOUSEBUTTONDOWN ? optional(button.windowID) : std::nullopt;
 	switch (button.button) {
 	case SDL_BUTTON_LEFT: case SDL_BUTTON_MIDDLE: case SDL_BUTTON_RIGHT:
 		World::scene()->onMouseDown(ivec2(button.x, button.y) + World::winSys()->winViewOffset(button.windowID), button.button, button.clicks);
@@ -55,14 +55,15 @@ void InputSys::eventMouseButtonDown(const SDL_MouseButtonEvent& button) {
 }
 
 void InputSys::eventMouseButtonUp(const SDL_MouseButtonEvent& button) {
-	if (mouseLast = button.type == SDL_MOUSEBUTTONUP; button.button < SDL_BUTTON_X1)
+	mouseWin = button.type == SDL_MOUSEBUTTONUP ? optional(button.windowID) : std::nullopt;
+	if (button.button < SDL_BUTTON_X1)
 		World::scene()->onMouseUp(ivec2(button.x, button.y) + World::winSys()->winViewOffset(button.windowID), button.button, button.clicks);
 }
 
 void InputSys::eventMouseWheel(const SDL_MouseWheelEvent& wheel) {
-	mouseLast = true;
+	mouseWin = wheel.windowID;
 #if SDL_VERSION_ATLEAST(2, 26, 0)
-	World::scene()->onMouseWheel(ivec2(wheel.mouseX, wheel.mouseY), ivec2(wheel.x, -wheel.y));
+	World::scene()->onMouseWheel(ivec2(wheel.mouseX, wheel.mouseY) + World::winSys()->winViewOffset(wheel.windowID), ivec2(wheel.x, -wheel.y));
 #else
 	World::scene()->onMouseWheel(World::winSys()->mousePos(), ivec2(wheel.x, -wheel.y));
 #endif
@@ -279,8 +280,9 @@ int InputSys::checkAxisValue(int value) const {
 void InputSys::simulateMouseMove() {
 	SDL_MouseMotionEvent event{};
 	event.timestamp = SDL_GetTicks();
-	if (mouseLast) {
+	if (mouseWin) {
 		event.type = SDL_MOUSEMOTION;
+		event.windowID = *mouseWin;
 		event.state = SDL_GetMouseState(&event.x, &event.y);
 	} else {
 		event.type = SDL_FINGERMOTION;

@@ -52,7 +52,8 @@ private:
 	void exec();
 
 	void createWindow();
-	void createMultiWindow();
+	void createSingleWindow(uint32 flags, SDL_Surface* icon);
+	void createMultiWindow(uint32 flags, SDL_Surface* icon);
 	void destroyWindows();
 	void handleEvent(const SDL_Event& event);	// pass events to their specific handlers
 	void eventWindow(const SDL_WindowEvent& winEvent);

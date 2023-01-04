@@ -262,13 +262,13 @@ uptrt PicLim::toSize(string_view str) {
 	return mit == str.end() || *mit != 'b' ? num : num / 8;
 }
 
-sizet PicLim::memSizeMag(uptrt num) {
-	sizet m;
-	for (m = 0; m + 1 < sizeLetters.size() && (!(num % 1000) && (num /= 1000)); ++m);
+uint8 PicLim::memSizeMag(uptrt num) {
+	uint8 m;
+	for (m = 0; m + 1u < sizeLetters.size() && (!(num % 1000) && (num /= 1000)); ++m);
 	return m;
 }
 
-string PicLim::memoryString(uptrt num, sizet mag) {
+string PicLim::memoryString(uptrt num, uint8 mag) {
 	string str = toStr(num / sizeFactors[mag]);
 	return (mag ? str + sizeLetters[mag] : str) + sizeLetters[0];
 }
@@ -299,11 +299,11 @@ const fs::path& Settings::setDirLib(const fs::path& drc, const fs::path& dirSets
 	return dirLib;
 }
 
-umap<int, Rect> Settings::displayArrangement() {
+umap<int, Recti> Settings::displayArrangement() {
 	ivec2 origin(INT_MAX);
-	umap<int, Rect> dsps;
+	umap<int, Recti> dsps;
 	for (int i = 0; i < SDL_GetNumVideoDisplays(); ++i)
-		if (Rect rect; !SDL_GetDisplayBounds(i, &rect)) {
+		if (Recti rect; !SDL_GetDisplayBounds(i, reinterpret_cast<SDL_Rect*>(&rect))) {
 			dsps.emplace(i, rect);
 			origin = glm::min(origin, rect.pos());
 		}
@@ -313,12 +313,12 @@ umap<int, Rect> Settings::displayArrangement() {
 }
 
 void Settings::unionDisplays() {
-	umap<int, Rect> dsps = displayArrangement();
-	for (umap<int, Rect>::iterator it = displays.begin(); it != displays.end(); ++it)
+	umap<int, Recti> dsps = displayArrangement();
+	for (umap<int, Recti>::iterator it = displays.begin(); it != displays.end(); ++it)
 		if (!dsps.count(it->first))
 			displays.erase(it);
-	for (umap<int, Rect>::const_iterator ds = dsps.begin(); ds != dsps.end(); ++ds)
-		if (umap<int, Rect>::iterator it = displays.find(ds->first); it != displays.end() && it->second.size() != ds->second.size())
+	for (umap<int, Recti>::const_iterator ds = dsps.begin(); ds != dsps.end(); ++ds)
+		if (umap<int, Recti>::iterator it = displays.find(ds->first); it != displays.end() && it->second.size() != ds->second.size())
 			displays.erase(it);
 	if (displays.empty())
 		displays = std::move(dsps);
