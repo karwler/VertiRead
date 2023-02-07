@@ -2,8 +2,6 @@
 
 #include "browser.h"
 #include "downloader.h"
-#include <atomic>
-#include <thread>
 
 // handles the front-end
 class Program {
@@ -16,13 +14,12 @@ private:
 	ProgState* state = nullptr;
 	uptr<Browser> browser;
 	std::thread thread;
-	std::atomic_bool threadRunning = false;
+	std::atomic_bool threadRunning;
 
 public:
 	~Program();
 
 	void start();
-	void eventUser(const SDL_UserEvent& user);
 
 	// books
 	void eventOpenBookList(Button* but = nullptr);
@@ -37,12 +34,14 @@ public:
 	void eventBrowserGoIn(Button* but);
 	void eventBrowserGoFile(Button* but);
 	void eventBrowserGoTo(Button* but);
+	void eventPreviewProgress(const SDL_UserEvent& user);
 	void eventExitBrowser(Button* but = nullptr);
 
 	// reader
 	void eventStartLoadingReader(const string& first, bool fwd = true);
 	void eventReaderLoadingCancelled(Button* but = nullptr);
-	void eventReaderLoadingFinished(PictureLoader* pl);
+	void eventReaderProgress(const SDL_UserEvent& user);
+	void eventReaderFinished(const SDL_UserEvent& user);
 	void eventZoomIn(Button* but = nullptr);
 	void eventZoomOut(Button* but = nullptr);
 	void eventZoomReset(Button* but = nullptr);
@@ -50,6 +49,7 @@ public:
 	void eventNextDir(Button* but = nullptr);
 	void eventPrevDir(Button* but = nullptr);
 	void eventExitReader(Button* but = nullptr);
+
 #ifdef DOWNLOADER
 	// downloader
 	void eventOpenDownloader(Button* but = nullptr);
@@ -64,17 +64,13 @@ public:
 
 	// downloads
 	void eventOpenDownloadList(Button* but = nullptr);
-	void eventDownloadListProgress();
-	void eventDownloadListNext();
-	void eventDownloadListFinish();
+	void eventDownloadProgress();
+	void eventDownloadNext();
+	void eventDownloadFinish();
 	void eventDownloadDelete(Button* but);
 	void eventResumeDownloads(Button* but = nullptr);
 	void eventStopDownloads(Button* but = nullptr);
 	void eventClearDownloads(Button* but = nullptr);
-#else
-	void eventDownloadListProgress() {}
-	void eventDownloadListNext() {}
-	void eventDownloadListFinish() {}
 #endif
 
 	// settings
@@ -87,7 +83,7 @@ public:
 	void eventOpenLibDirBrowser(Button* but = nullptr);
 	void eventMoveComics(Button* but = nullptr);
 	void eventDontMoveComics(Button* but = nullptr);
-	void eventMoveProgress(uptrt prg, uptrt lim);
+	void eventMoveProgress(const SDL_UserEvent& user);
 	void eventMoveFinished();
 	void eventSetScreenMode(Button* but);
 	void eventSetRenderer(Button* but);
@@ -96,6 +92,7 @@ public:
 	void eventSetVsync(Button* but);
 	void eventSetGpuSelecting(Button* but);
 	void eventSetMultiFullscreen(Button* but);
+	void eventSetPreview(Button* but);
 	void eventSetHide(Button* but);
 	void eventSetTooltips(Button* but);
 	void eventSetTheme(Button* but);

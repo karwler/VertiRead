@@ -5,8 +5,8 @@
 
 template <class C, class F>
 void World::setArgs(int argc, C** argv, F conv) {
-	vals.resize(argc);
-	std::transform(argv, argv + argc, vals.begin(), conv);
+	vals.resize(argc - 1);
+	std::transform(argv + 1, argv + argc, vals.begin(), conv);
 }
 
 #ifdef _WIN32
@@ -22,7 +22,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR pCmdLine, int) {
 	}
 #else
 int main(int argc, char** argv) {
-	World::setArgs(argc - 1, argv + 1, stos);
+	World::setArgs(argc, argv, stos);
 #endif
 	return World::winSys()->start();
 }

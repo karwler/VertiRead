@@ -17,35 +17,6 @@ void Program::start() {
 		eventOpenBookList();
 }
 
-void Program::eventUser(const SDL_UserEvent& user) {
-	switch (UserCode(user.code)) {
-	case UserCode::readerProgress:
-		World::scene()->setPopup(state->createPopupMessage("Loading "s + static_cast<char*>(user.data1), &Program::eventReaderLoadingCancelled, "Cancel", Alignment::center));
-		delete[] static_cast<char*>(user.data1);
-		break;
-	case UserCode::readerFinished:
-		eventReaderLoadingFinished(static_cast<PictureLoader*>(user.data1));
-		break;
-	case UserCode::downloadProgress:
-		eventDownloadListProgress();
-		break;
-	case UserCode::downloadNext:
-		eventDownloadListNext();
-		break;
-	case UserCode::downlaodFinished:
-		eventDownloadListFinish();
-		break;
-	case UserCode::moveProgress:
-		eventMoveProgress(uptrt(user.data1), uptrt(user.data2));
-		break;
-	case UserCode::moveFinished:
-		eventMoveFinished();
-		break;
-	default:
-		throw std::runtime_error("Invalid user event code: " + toStr(user.code));
-	}
-}
-
 // BOOKS
 
 void Program::eventOpenBookList(Button*) {
@@ -151,6 +122,14 @@ void Program::eventBrowserGoTo(Button* but) {
 	}
 }
 
+void Program::eventPreviewProgress(const SDL_UserEvent& user) {
+	ProgPageBrowser* pb = static_cast<ProgPageBrowser*>(state);
+	if (Texture* tex = World::drawSys()->texFromImg(static_cast<SDL_Surface*>(user.data2))) {
+		browser->pushPreviewTexture(tex);
+		static_cast<Label*>(pb->fileList->getWidget(uptrt(user.data1)))->tex = tex;
+	}
+}
+
 void Program::eventExitBrowser(Button*) {
 	PCall call = browser->exCall;
 	browser.reset();
@@ -160,9 +139,6 @@ void Program::eventExitBrowser(Button*) {
 // READER
 
 void Program::eventStartLoadingReader(const string& first, bool fwd) {
-	if (ProgReader* pr = dynamic_cast<ProgReader*>(state))
-		World::drawSys()->freeRpicTextures(pr->reader->extractPictures());
-
 	World::scene()->setPopup(state->createPopupMessage("Loading...", &Program::eventReaderLoadingCancelled, "Cancel", Alignment::center));
 	threadRunning = true;
 	thread = std::thread(browser->getInArchive() ? &DrawSys::loadTexturesArchiveThreaded : &DrawSys::loadTexturesDirectoryThreaded, std::ref(threadRunning), std::make_unique<PictureLoader>(browser->getCurDir(), first, World::sets()->picLim, fwd, World::sets()->showHidden));
@@ -174,10 +150,16 @@ void Program::eventReaderLoadingCancelled(Button*) {
 	eventClosePopup();
 }
 
-void Program::eventReaderLoadingFinished(PictureLoader* pl) {
+void Program::eventReaderProgress(const SDL_UserEvent& user) {
+	World::scene()->setPopup(state->createPopupMessage("Loading "s + static_cast<char*>(user.data1), &Program::eventReaderLoadingCancelled, "Cancel", Alignment::center));
+	delete[] static_cast<char*>(user.data1);
+}
+
+void Program::eventReaderFinished(const SDL_UserEvent& user) {
 	thread.join();
 	setState<ProgReader>();
 
+	PictureLoader* pl = static_cast<PictureLoader*>(user.data1);
 	static_cast<ProgReader*>(state)->reader->setWidgets(World::drawSys()->transferPictures(pl));
 	delete pl;
 }
@@ -209,11 +191,11 @@ void Program::eventPrevDir(Button*) {
 
 void Program::switchPictures(bool fwd, string_view picname) {
 	if (!picname.empty())
-		if (string file = browser->nextFile(picname, fwd, World::sets()->showHidden); !file.empty()) {
+		if (string file = browser->nextFile(picname, fwd); !file.empty()) {
 			eventStartLoadingReader(file, fwd);
 			return;
 		}
-	browser->goNext(fwd, World::sets()->showHidden);
+	browser->goNext(fwd);
 	eventStartLoadingReader(string(), fwd);
 }
 
@@ -285,14 +267,14 @@ void Program::eventOpenDownloadList(Button*) {
 	setState<ProgDownloads>();
 }
 
-void Program::eventDownloadListProgress() {
+void Program::eventDownloadProgress() {
 	if (ProgDownloads* pd = dynamic_cast<ProgDownloads*>(state)) {
 		Label* lb = static_cast<Label*>(static_cast<Layout*>(pd->list->getWidget(0))->getWidget(0));
 		lb->setText(lb->getText() + " - " + toStr(downloader.getDlProg().x) + '/' + toStr(downloader.getDlProg().y));
 	}
 }
 
-void Program::eventDownloadListNext() {
+void Program::eventDownloadNext() {
 	if (ProgDownloads* pd = dynamic_cast<ProgDownloads*>(state)) {
 		pd->list->deleteWidget(0);
 		if (!pd->list->getWidgets().empty()) {
@@ -302,7 +284,7 @@ void Program::eventDownloadListNext() {
 	}
 }
 
-void Program::eventDownloadListFinish() {
+void Program::eventDownloadFinish() {
 	downloader.finishProc();
 	if (ProgDownloads* pd = dynamic_cast<ProgDownloads*>(state))
 		pd->list->deleteWidget(0);
@@ -350,7 +332,7 @@ void Program::eventSetLibraryDirLE(Button* but) {
 	fs::path oldLib = World::sets()->getDirLib();
 #ifdef DOWNLOADER
 	if (downloader.getDlState() != DownloadState::stop) {
-		World::scene()->setPopup(ProgState::createPopupMessage("Can't change while downloading.", &Program::eventClosePopup));
+		World::scene()->setPopup(state->createPopupMessage("Can't change while downloading.", &Program::eventClosePopup));
 		return;
 	}
 #endif
@@ -401,8 +383,8 @@ void Program::eventDontMoveComics(Button*) {
 	eventClosePopup();
 }
 
-void Program::eventMoveProgress(uptrt prg, uptrt lim) {
-	World::scene()->setPopup(state->createPopupMessage("Moving " + toStr(prg) + '/' + toStr(lim), &Program::eventReaderLoadingCancelled, "Cancel", Alignment::center));
+void Program::eventMoveProgress(const SDL_UserEvent& user) {
+	World::scene()->setPopup(state->createPopupMessage("Moving " + toStr(uptrt(user.data1)) + '/' + toStr(uptrt(user.data2)), &Program::eventReaderLoadingCancelled, "Cancel", Alignment::center));
 }
 
 void Program::eventMoveFinished() {
@@ -456,6 +438,10 @@ void Program::eventSetMultiFullscreen(Button* but) {
 		if (World::sets()->screen == Settings::Screen::multiFullscreen)
 			World::winSys()->recreateWindows();
 	}
+}
+
+void Program::eventSetPreview(Button* but) {
+	World::sets()->preview = static_cast<CheckBox*>(but)->on;
 }
 
 void Program::eventSetHide(Button* but) {
@@ -565,7 +551,7 @@ void Program::reposizeWindow(ivec2 dres, ivec2 wsiz) {
 // OTHER
 
 bool Program::tryClosePopupThread() {
-	bool tp = threadRunning;
+	bool tp = thread.joinable();
 	if (tp) {
 		threadRunning = false;
 		thread.join();
@@ -594,7 +580,7 @@ void Program::eventTryExit(Button*) {
 	if (downloader.getDlState() == DownloadState::stop)
 		eventForceExit();
 	else
-		World::scene()->setPopup(ProgState::createPopupChoice("Cancel downloads?", &Program::eventForceExit, &Program::eventClosePopup));
+		World::scene()->setPopup(state->createPopupChoice("Cancel downloads?", &Program::eventForceExit, &Program::eventClosePopup));
 #else
 	eventForceExit();
 #endif

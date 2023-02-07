@@ -146,51 +146,37 @@ DrawSys::DrawSys(const umap<int, SDL_Window*>& windows, Settings* sets, const Fi
 #endif
 	}
 
-	vector<pair<sizet, SDL_Surface*>> icons;
-	try {
-		sizet i = 0;
-		vector<string> names;
-		for (const fs::directory_entry& it : fs::directory_iterator(fileSys->dirIcons(), fs::directory_options::skip_permission_denied)) {
+	SDL_Surface* white = SDL_CreateRGBSurfaceWithFormat(0, 2, 2, 32, SDL_PIXELFORMAT_RGBA32);
+	if (!white)
+		throw std::runtime_error("Failed to create blank texture: "s + SDL_GetError());
+	SDL_FillRect(white, nullptr, 0xFFFFFFFF);
+	Texture* tex = renderer->texFromImg(white);
+	if (!tex)
+		throw std::runtime_error("Failed to create blank texture");
+	texes.emplace(string(), tex);
+	blank = tex;
+
+	for (const fs::directory_entry& it : fs::directory_iterator(fileSys->dirIcons(), fs::directory_options::skip_permission_denied)) {
 #if SDL_IMAGE_VERSION_ATLEAST(2, 6, 0)
-			if (SDL_RWops* ifh = SDL_RWFromFile(it.path().u8string().c_str(), "rb")) {
-				if (SDL_Surface* aimg = IMG_LoadSizedSVG_RW(ifh, iconSize, iconSize)) {
-					names.push_back(it.path().stem().u8string());
-					icons.emplace_back(i++, aimg);
-				} else if (SDL_RWseek(ifh, 0, RW_SEEK_SET); SDL_Surface* bimg = IMG_Load_RW(ifh, SDL_FALSE)) {
-					names.push_back(it.path().stem().u8string());
-					icons.emplace_back(i++, bimg);
-				}
-				SDL_RWclose(ifh);
-			}
+		if (SDL_RWops* ifh = SDL_RWFromFile(it.path().u8string().c_str(), "rb")) {
+			if (SDL_Surface* aimg = IMG_LoadSizedSVG_RW(ifh, iconSize, iconSize))
+				texes.emplace(it.path().stem().u8string(), renderer->texFromImg(aimg));
+			else if (SDL_RWseek(ifh, 0, RW_SEEK_SET); SDL_Surface* bimg = IMG_Load_RW(ifh, SDL_FALSE))
+				texes.emplace(it.path().stem().u8string(), renderer->texFromImg(bimg));
+			SDL_RWclose(ifh);
+		}
 #else
-			if (SDL_Surface* img = IMG_Load(it.path().u8string().c_str())) {
-				names.push_back(it.path().stem().u8string());
-				icons.emplace_back(i++, img);
-			}
+		if (SDL_Surface* img = IMG_Load(it.path().u8string().c_str()))
+			texes.emplace(it.path().stem().u8string(), renderer->texFromImg(img));
 #endif
-		}
-		names.emplace_back();
-		vector<pair<sizet, Texture*>> refs = renderer->initIconTextures(std::move(icons));
-		icons.clear();
-		texes.reserve(refs.size());
-		for (auto [id, tex] : refs)
-			texes.emplace(std::move(names[id]), tex);
-		try {
-			blank = texes.at(string());
-		} catch (const std::out_of_range&) {
-			throw std::runtime_error("Failed to create blank texture");
-		}
-		setFont(sets->font, sets, fileSys);
-	} catch (const std::runtime_error&) {
-		for (auto [id, img] : icons)
-			SDL_FreeSurface(img);
-		throw;
 	}
+	setFont(sets->font, sets, fileSys);
 }
 
 DrawSys::~DrawSys() {
 	if (renderer)
-		renderer->freeIconTextures(texes);
+		for (auto& [name, tex] : texes)
+			renderer->freeTexture(tex);
 	delete renderer;
 }
 
@@ -225,12 +211,12 @@ const Texture* DrawSys::texture(const string& name) const {
 }
 
 vector<pair<string, Texture*>> DrawSys::transferPictures(PictureLoader* pl) {
-	vector<pair<sizet, Texture*>> refs = renderer->initRpicTextures(pl->extractPics());
-	std::sort(refs.begin(), refs.end(), [](const pair<sizet, Texture*>& a, const pair<sizet, Texture*>& b) -> bool { return a.first < b.first; });
+	vector<pair<sizet, SDL_Surface*>> refs = pl->extractPics();
+	std::sort(refs.begin(), refs.end(), [](const pair<sizet, SDL_Surface*>& a, const pair<sizet, SDL_Surface*>& b) -> bool { return a.first < b.first; });
 
 	vector<pair<string, Texture*>> ptxv(refs.size());
 	for (sizet i = 0; i < ptxv.size(); ++i)
-		ptxv[i] = pair(std::move(pl->names[refs[i].first]), refs[i].second);
+		ptxv[i] = pair(std::move(pl->names[refs[i].first]), renderer->texFromImg(refs[i].second));
 	return ptxv;
 }
 
@@ -402,7 +388,7 @@ void DrawSys::loadTexturesDirectoryThreaded(std::atomic_bool& running, uptr<Pict
 	for (sizet mov = btom<uptrt>(pl->fwd), i = pl->fwd ? 0 : files.size() - 1, c = 0; i < files.size() && c < lim && m < mem; i += mov) {
 		if (!running)
 			return;
-		pushEvent(UserCode::readerProgress, PictureLoader::progressText(pl->limitToStr(c, m, sizMag), progLim));
+		pushEvent(SDL_USEREVENT_READER_PROGRESS, PictureLoader::progressText(pl->limitToStr(c, m, sizMag), progLim));
 
 		if (SDL_Surface* img = IMG_Load((pl->curDir / files[i]).u8string().c_str())) {
 			pl->pics.emplace_back(i, img);
@@ -410,7 +396,7 @@ void DrawSys::loadTexturesDirectoryThreaded(std::atomic_bool& running, uptr<Pict
 			++c;
 		}
 	}
-	pushEvent(UserCode::readerFinished, pl.release());
+	pushEvent(SDL_USEREVENT_READER_FINISHED, pl.release());
 	running = false;
 }
 
@@ -429,7 +415,7 @@ void DrawSys::loadTexturesArchiveThreaded(std::atomic_bool& running, uptr<Pictur
 			archive_read_free(arch);
 			return;
 		}
-		pushEvent(UserCode::readerProgress, PictureLoader::progressText(pl->limitToStr(c, m, sizMag), progLim));
+		pushEvent(SDL_USEREVENT_READER_PROGRESS, PictureLoader::progressText(pl->limitToStr(c, m, sizMag), progLim));
 
 		string pname = archive_entry_pathname_utf8(entry);
 		if (pair<sizet, uptrt>& ent = files[pname]; ent.first >= start && ent.first < end)
@@ -440,7 +426,7 @@ void DrawSys::loadTexturesArchiveThreaded(std::atomic_bool& running, uptr<Pictur
 			}
 	}
 	archive_read_free(arch);
-	pushEvent(UserCode::readerFinished, pl.release());
+	pushEvent(SDL_USEREVENT_READER_FINISHED, pl.release());
 	running = false;
 }
 

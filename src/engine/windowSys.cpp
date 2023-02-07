@@ -121,7 +121,7 @@ void WindowSys::init() {
 	SDL_EventState(SDL_SENSORUPDATE, SDL_DISABLE);
 	SDL_EventState(SDL_RENDER_TARGETS_RESET, SDL_DISABLE);
 	SDL_EventState(SDL_RENDER_DEVICE_RESET, SDL_DISABLE);
-	if (SDL_RegisterEvents(1) == UINT32_MAX)
+	if (SDL_RegisterEvents(SDL_USEREVENT_MAX - SDL_USEREVENT) == UINT32_MAX)
 		throw std::runtime_error(SDL_GetError());
 	SDL_StopTextInput();
 
@@ -348,8 +348,31 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 		scene->onText(event.drop.file);
 		SDL_free(event.drop.file);
 		break;
-	case SDL_USEREVENT:
-		program->eventUser(event.user);
+	case SDL_USEREVENT_READER_PROGRESS:
+		program->eventReaderProgress(event.user);
+		break;
+	case SDL_USEREVENT_READER_FINISHED:
+		program->eventReaderFinished(event.user);
+		break;
+	case SDL_USEREVENT_PREVIEW_PROGRESS:
+		program->eventPreviewProgress(event.user);
+		break;
+#ifdef DOWNLOADER
+	case SDL_USEREVENT_DOWNLOAD_PROGRESS:
+		program->eventDownloadProgress();
+		break;
+	case SDL_USEREVENT_DOWNLOAD_NEXT:
+		program->eventDownloadNext();
+		break;
+	case SDL_USEREVENT_DOWNLOAD_FINISHED:
+		program->eventDownloadFinish();
+		break;
+#endif
+	case SDL_USEREVENT_MOVE_PROGRESS:
+		program->eventMoveProgress(event.user);
+		break;
+	case SDL_USEREVENT_MOVE_FINISHED:
+		program->eventMoveFinished();
 	}
 }
 

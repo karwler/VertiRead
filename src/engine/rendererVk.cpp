@@ -10,381 +10,6 @@
 #include <list>
 #include <set>
 
-// TEXTURE COL CONST
-
-vector<pair<sizet, TexLoc>> TextureColConst::init(const RendererVk* rend, vector<pair<sizet, SDL_Surface*>>&& imgs, bool addBlank) {
-	VkBuffer stagingBuffer = VK_NULL_HANDLE;
-	VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
-	VkCommandBuffer cmdBuffer = VK_NULL_HANDLE;
-	try {
-		VkPhysicalDeviceProperties props;
-		vkGetPhysicalDeviceProperties(rend->getPhysicalDevice(), &props);
-		res = u32vec2(0);
-		for (pair<sizet, SDL_Surface*>& it : imgs) {
-			if (it.second && (uint32(it.second->w) > props.limits.maxImageDimension2D || uint32(it.second->h) > props.limits.maxImageDimension2D)) {
-				u32vec2 size = it.second->w > it.second->h
-					? u32vec2(props.limits.maxImageDimension2D, std::floor(float(it.second->h) * float(props.limits.maxImageDimension2D) / float(it.second->w)))
-					: u32vec2(std::floor(float(it.second->w) * float(props.limits.maxImageDimension2D) / float(it.second->h)), props.limits.maxImageDimension2D);
-				SDL_Surface* dst = SDL_CreateRGBSurfaceWithFormat(0, size.x, size.y, bpp * 8, it.second->format->format);
-				if (dst)
-					SDL_BlitScaled(it.second, nullptr, dst, nullptr);
-				SDL_FreeSurface(it.second);
-				it.second = dst;
-			}
-			if (it.second) {
-				if (it.second->format->format != pformat) {
-					SDL_Surface* dst = SDL_ConvertSurfaceFormat(it.second, pformat, 0);
-					SDL_FreeSurface(it.second);
-					it.second = dst;
-				}
-				res = glm::max(res, u32vec2(it.second->w, it.second->h));
-			}
-		}
-		imgs.erase(std::remove_if(imgs.begin(), imgs.end(), [](const pair<sizet, SDL_Surface*> it) -> bool { return !it.second; }), imgs.end());
-		std::sort(imgs.begin(), imgs.end(), [](const pair<sizet, SDL_Surface*>& a, const pair<sizet, SDL_Surface*>& b) -> bool { return a.second->h < b.second->h; });
-
-		vector<pair<sizet, TexLoc>> entries(imgs.size() + addBlank);
-		u32vec2 pos = u32vec2(0);
-		if (addBlank) {
-			if (!imgs.empty()) {
-				entries[0] = pair(imgs.size(), TexLoc(0, Rectu(0, 0, imgs[0].second->h, imgs[0].second->h)));
-				pos = u32vec2(imgs[0].second->h + pad, 0);
-			} else {
-				entries[0] = pair(imgs.size(), TexLoc(0, Rectu(0, 0, 2, 2)));
-				res = entries[0].second.rct.size();
-			}
-		} else if (imgs.empty())
-			return entries;
-
-		uint32 curh = entries[0].second.rct.h;
-		uint32 page = 0;
-		for (sizet i = addBlank; i < entries.size(); ++i) {
-			auto [id, img] = imgs[i - addBlank];
-			uint32 endx = pos.x + img->w;
-			if (curh != uint32(img->h) || endx > res.x) {
-				if (uint32 endy = pos.y + curh + pad; endy + img->h <= res.y)
-					pos = u32vec2(0, endy);
-				else {
-					pos = u32vec2(0);
-					++page;
-				}
-				curh = img->h;
-			}
-			entries[i] = pair(id, TexLoc(page, Rectu(pos, img->w, img->h)));
-			pos.x = endx + pad;
-		}
-		uint32 numPages = entries.back().second.tid == page ? page + 1 : page;
-		if (numPages > props.limits.maxImageArrayLayers)
-			throw std::runtime_error("Number of pages exceeds the device's limit");
-
-		std::tie(stagingBuffer, stagingMemory) = rend->createBuffer(VkDeviceSize(res.x) * VkDeviceSize(res.y) * bpp, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		std::tie(texImg, texMem) = rend->createImage(res, numPages, VK_IMAGE_TYPE_2D, iformat, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		uint32* data;
-		if (VkResult rs = vkMapMemory(rend->getLogicalDevice(), stagingMemory, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&data)); rs != VK_SUCCESS)
-			throw std::runtime_error("Failed to map constant texture memory: "s + string_VkResult(rs));
-		rend->allocateCommandBuffers(&cmdBuffer, 1);
-
-		page = 0;
-		VkDeviceSize offs = 0;
-		vector<VkBufferImageCopy> regions;
-		if (addBlank) {
-			u32vec2 size = glm::min(entries[0].second.rct.size() + pad / 2, res);
-			offs = sizet(size.x) * sizet(size.y);
-			std::fill_n(data, offs, UINT32_MAX);
-			regions.push_back(makeRegion(0, size.x, 0, 0, size.x, size.y, page));
-		}
-
-		for (sizet i = addBlank; i < entries.size(); ++i) {
-			if (entries[i].second.tid != page) {
-				rend->beginSingleTimeCommands(cmdBuffer);
-				RendererVk::transitionImageLayout<VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL>(cmdBuffer, texImg, page);
-				vkCmdCopyBufferToImage(cmdBuffer, stagingBuffer, texImg, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, regions.size(), regions.data());
-				RendererVk::transitionImageLayout<VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL>(cmdBuffer, texImg, page);
-				rend->submitSingleTimeCommands(cmdBuffer);
-				offs = 0;
-				page = entries[i].second.tid;
-				regions.clear();
-			}
-
-			const Rectu& rect = entries[i].second.rct;
-			SDL_Surface* img = imgs[i - addBlank].second;
-			packCopy(data + offs, static_cast<uint32*>(img->pixels), u32vec2(img->w, img->h), img->pitch / bpp);
-			regions.push_back(makeRegion(offs, rect.w, rect.x, rect.y, rect.w, rect.h, page));
-
-			u32vec2 entEnd = rect.end();
-			bool left = rect.x != 0, right = entEnd.x != res.x;
-			bool top = rect.y != 0, bottom = entEnd.y != res.y;
-			if (top && left)
-				regions.push_back(makeRegion(offs, rect.w, rect.x - 1, rect.y - 1, 1, 1, page));
-			if (top)
-				regions.push_back(makeRegion(offs, rect.w, rect.x, rect.y - 1, rect.w, 1, page));
-			if (top && right)
-				regions.push_back(makeRegion(offs + VkDeviceSize(rect.w - 1), rect.w, entEnd.x, rect.y - 1, 1, 1, page));
-			if (left)
-				regions.push_back(makeRegion(offs, rect.w, rect.x - 1, rect.y, 1, rect.h, page));
-			if (right)
-				regions.push_back(makeRegion(offs + VkDeviceSize(rect.w - 1), rect.w, entEnd.x, rect.y, 1, rect.h, page));
-			if (bottom && left)
-				regions.push_back(makeRegion(offs + VkDeviceSize(rect.w) * VkDeviceSize(rect.h - 1), rect.w, rect.x - 1, entEnd.y, 1, 1, page));
-			if (bottom)
-				regions.push_back(makeRegion(offs + VkDeviceSize(rect.w) * VkDeviceSize(rect.h - 1), rect.w, rect.x, entEnd.y, rect.w, 1, page));
-			if (bottom && right)
-				regions.push_back(makeRegion(offs + VkDeviceSize(rect.w) * VkDeviceSize(rect.h) - 1, rect.w, entEnd.x, entEnd.y, 1, 1, page));
-			offs += VkDeviceSize(img->w) * VkDeviceSize(img->h);
-		}
-		rend->beginSingleTimeCommands(cmdBuffer);
-		RendererVk::transitionImageLayout<VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL>(cmdBuffer, texImg, page);
-		vkCmdCopyBufferToImage(cmdBuffer, stagingBuffer, texImg, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, regions.size(), regions.data());
-		RendererVk::transitionImageLayout<VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL>(cmdBuffer, texImg, page);
-		rend->endSingleTimeCommands(cmdBuffer);
-
-		vkDestroyBuffer(rend->getLogicalDevice(), stagingBuffer, nullptr);
-		vkFreeMemory(rend->getLogicalDevice(), stagingMemory, nullptr);
-		for (auto [id, img] : imgs)
-			SDL_FreeSurface(img);
-
-		texView = rend->createImageView(texImg, VK_IMAGE_VIEW_TYPE_2D_ARRAY, iformat, numPages);
-		return entries;
-	} catch (const std::runtime_error&) {
-		rend->freeCommandBuffers(&cmdBuffer, 1);
-		vkDestroyBuffer(rend->getLogicalDevice(), stagingBuffer, nullptr);
-		vkFreeMemory(rend->getLogicalDevice(), stagingMemory, nullptr);
-		for (auto [id, img] : imgs)
-			SDL_FreeSurface(img);
-		free(rend->getLogicalDevice());
-		throw;
-	}
-}
-
-VkBufferImageCopy TextureColConst::makeRegion(VkDeviceSize offset, uint32 pitch, int32 x, int32 y, uint32 w, uint32 h, uint32 page) {
-	VkBufferImageCopy region{};
-	region.bufferOffset = offset * bpp;
-	region.bufferRowLength = pitch;
-	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	region.imageSubresource.mipLevel = 0;
-	region.imageSubresource.baseArrayLayer = page;
-	region.imageSubresource.layerCount = 1;
-	region.imageOffset = { x, y, 0 };
-	region.imageExtent = { w, h, 1 };
-	return region;
-}
-
-void TextureColConst::packCopy(uint32* dst, const uint32* src, u32vec2 size, uint32 pitch) {
-	for (const uint32* end = src + sizet(pitch) * sizet(size.y); src != end; src += pitch)
-		dst = std::copy_n(src, size.x, dst);
-}
-
-void TextureColConst::free(VkDevice dev) {
-	vkDestroyImageView(dev, texView, nullptr);
-	texView = VK_NULL_HANDLE;
-	vkDestroyImage(dev, texImg, nullptr);
-	texImg = VK_NULL_HANDLE;
-	vkFreeMemory(dev, texMem, nullptr);
-	texMem = VK_NULL_HANDLE;
-}
-
-// TEXTURE COL
-
-TextureCol::Find::Find(uint pg, uint id, const Rectu& posize) :
-	page(pg),
-	index(id),
-	rect(posize)
-{}
-
-void TextureCol::init(const RendererVk* rend, uint32 requestSize) {
-	try {
-		VkPhysicalDeviceProperties properties;
-		vkGetPhysicalDeviceProperties(rend->getPhysicalDevice(), &properties);
-		res = u32vec2(std::min(requestSize, properties.limits.maxImageDimension2D));
-		calcPageReserve();
-
-		std::tie(stagingBuffer, stagingMemory) = rend->createBuffer(VkDeviceSize(res.x) * VkDeviceSize(res.y) * bpp, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		std::tie(texImg, texMem, texView) = rend->createDummyTexture(res, pageReserve, iformat, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-		if (VkResult rs = vkMapMemory(rend->getLogicalDevice(), stagingMemory, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&mappedMemory)); rs != VK_SUCCESS)
-			throw std::runtime_error("Failed to map texture memory: "s + string_VkResult(rs));
-		rend->allocateCommandBuffers(&cmdBuffer, 1);
-	} catch (const std::runtime_error&) {
-		free(rend);
-		throw;
-	}
-}
-
-void TextureCol::free(const RendererVk* rend) {
-	pages.clear();
-	rend->freeCommandBuffers(&cmdBuffer, 1);
-	cmdBuffer = VK_NULL_HANDLE;
-	vkDestroyBuffer(rend->getLogicalDevice(), stagingBuffer, nullptr);
-	stagingBuffer = VK_NULL_HANDLE;
-	vkFreeMemory(rend->getLogicalDevice(), stagingMemory, nullptr);
-	stagingMemory = VK_NULL_HANDLE;
-	TextureColConst::free(rend->getLogicalDevice());
-}
-
-pair<TexLoc, bool> TextureCol::insert(const RendererVk* rend, SDL_Surface* img) {
-	pair<TexLoc, bool> loc = insert(rend, img, img ? u32vec2(img->w, img->h) : u32vec2());
-	SDL_FreeSurface(img);
-	return loc;
-}
-
-pair<TexLoc, bool> TextureCol::insert(const RendererVk* rend, const SDL_Surface* img, u32vec2 size, u32vec2 offset) {
-	bool refresh = false;
-	if (!img)
-		return pair(TexLoc(0, Rectu(0)), refresh);
-
-	Find fres = findLocation(size);
-	if (fres.page < pages.size())
-		pages[fres.page].insert(pages[fres.page].begin() + fres.index, fres.rect);
-	else {
-		pages.push_back({ fres.rect });
-		refresh = maybeResize(rend);
-	}
-	uploadSubTex(rend, img, offset, fres.rect, fres.page);
-	return pair(TexLoc(fres.page, fres.rect), refresh);
-}
-
-bool TextureCol::replace(const RendererVk* rend, TexLoc& loc, SDL_Surface* img) {
-	bool refresh = replace(rend, loc, img, img ? u32vec2(img->w, img->h) : u32vec2());
-	SDL_FreeSurface(img);
-	return refresh;
-}
-
-bool TextureCol::replace(const RendererVk* rend, TexLoc& loc, const SDL_Surface* img, u32vec2 size, u32vec2 offset) {
-	if (!img)
-		return erase(rend, loc);
-	bool refresh = false;
-	if (loc.empty()) {
-		std::tie(loc, refresh) = insert(rend, img, size, offset);
-		return refresh;
-	}
-
-	vector<Rectu>& page = pages[loc.tid];
-	if (auto [rit, ok] = findReplaceable(loc, size); ok) {
-		rit->w = size.x;
-		loc.rct.size() = size;
-		uploadSubTex(rend, img, offset, loc.rct, loc.tid);
-	} else {
-		if (rit != page.end() && rit->pos() == loc.rct.pos())
-			page.erase(rit);
-		std::tie(loc, refresh) = insert(rend, img, size, offset);
-	}
-	return refresh;
-}
-
-void TextureCol::uploadSubTex(const RendererVk* rend, const SDL_Surface* img, u32vec2 offset, const Rectu& loc, uint32 page) {
-	try {
-		VkBufferImageCopy regions[3];
-		u32vec2 darea = glm::min(u32vec2(img->w, img->h) - offset, loc.size());
-		packCopy(mappedMemory, static_cast<uint32*>(img->pixels) + VkDeviceSize(offset.y) * (VkDeviceSize(img->pitch) / bpp) + VkDeviceSize(offset.x), darea, img->pitch / bpp);
-		regions[0] = makeRegion(0, darea.x, loc.x, loc.y, darea.x, darea.y, page);
-
-		uint32 cnt = 1;
-		if (bool fillRight = darea.x < loc.w, fillBottom = darea.y < loc.h; fillRight || fillBottom) {
-			VkDeviceSize offs = VkDeviceSize(darea.x) * VkDeviceSize(darea.y);
-			u32vec2 right(loc.w - darea.x, darea.y);
-			u32vec2 bottom(loc.w, loc.h - darea.y);
-			std::fill_n(mappedMemory + offs, std::max(VkDeviceSize(right.x) * VkDeviceSize(right.y), VkDeviceSize(bottom.x) * VkDeviceSize(bottom.y)), 0);
-			if (fillRight)
-				regions[cnt++] = makeRegion(offs, right.x, loc.x + darea.x, loc.y, right.x, right.y, page);
-			if (fillBottom)
-				regions[cnt++] = makeRegion(offs, bottom.x, loc.x, loc.y + darea.y, bottom.x, bottom.y, page);
-		}
-		rend->beginSingleTimeCommands(cmdBuffer);
-		RendererVk::transitionImageLayout<VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL>(cmdBuffer, texImg, page);
-		vkCmdCopyBufferToImage(cmdBuffer, stagingBuffer, texImg, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, cnt, regions);
-		RendererVk::transitionImageLayout<VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL>(cmdBuffer, texImg, page);
-		rend->submitSingleTimeCommands(cmdBuffer);
-	} catch (const std::runtime_error&) {
-		free(rend);
-		throw;
-	}
-}
-
-pair<vector<Rectu>::iterator, bool> TextureCol::findReplaceable(const TexLoc& loc, u32vec2& size) {
-	vector<Rectu>& page = pages[loc.tid];
-	vector<Rectu>::iterator rit = std::lower_bound(page.begin(), page.end(), loc.rct, Less());
-	if (size = glm::min(size, res); rit != page.end() && rit->pos() == loc.rct.pos() && size.y == rit->h)
-		if (vector<Rectu>::iterator next = rit + 1; loc.rct.x + size.x <= (next != page.end() && next->y == rit->y ? next->x : res.x))
-			return pair(rit, true);
-	return pair(rit, false);
-}
-
-bool TextureCol::erase(const RendererVk* rend, TexLoc& loc) {
-	bool refresh = false;
-	if (!loc.empty()) {
-		vector<Rectu>& page = pages[loc.tid];
-		if (vector<Rectu>::iterator rit = std::lower_bound(page.begin(), page.end(), loc.rct, Less()); rit != page.end() && rit->pos() == loc.rct.pos()) {
-			if (page.erase(rit); loc.tid == pages.size() - 1 && page.empty()) {
-				pages.pop_back();
-				refresh = maybeResize(rend);
-			}
-			loc = TexLoc(0, Rectu(0));
-		}
-	}
-	return refresh;
-}
-
-TextureCol::Find TextureCol::findLocation(u32vec2 size) const {
-	size = glm::min(size, res);
-	for (sizet p = pages.size() - 1; p < pages.size(); --p) {
-		const vector<Rectu>& page = pages[p];
-		for (sizet i = 0; i < page.size();) {
-			if (u32vec2 pos(0, page[i].y); page[i].h == size.y) {
-				for (; i < page.size() && page[i].y == pos.y; ++i) {
-					if (page[i].x - pos.x >= size.x)
-						return Find(p, i, Rectu(pos, size));
-					pos.x = page[i].end().x;
-				}
-				if (res.x - pos.x >= size.x)
-					return Find(p, i, Rectu(pos, size));
-			} else
-				for (; i < page.size() && page[i].y == pos.y; ++i);
-
-			if (i < page.size())
-				if (uint32 endy = i ? page[i - 1].end().y : 0; page[i].y - endy >= size.y)
-					return Find(p, i, Rectu(0, endy, size));
-		}
-		if (uint32 endy = !page.empty() ? page.back().end().y : 0; res.y - endy >= size.y)
-			return Find(p, page.size(), Rectu(0, endy, size));
-	}
-	return Find(pages.size(), 0, Rectu(0, 0, size));
-}
-
-bool TextureCol::maybeResize(const RendererVk* rend) {
-	if (pages.size() <= pageReserve && pageReserve - pages.size() <= pageNumStep)
-		return false;
-	uint32 oldSize = pageReserve;
-	calcPageReserve();
-
-	VkPhysicalDeviceProperties properties;
-	vkGetPhysicalDeviceProperties(rend->getPhysicalDevice(), &properties);
-	if (pageReserve > properties.limits.maxImageArrayLayers)
-		throw std::runtime_error("Number of pages exceeds the device's limit");
-
-	VkImage dstImg = VK_NULL_HANDLE;
-	VkDeviceMemory dstMem = VK_NULL_HANDLE;
-	try {
-		std::tie(dstImg, dstMem) = rend->createImage(res, pageReserve, VK_IMAGE_TYPE_2D, iformat, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		rend->beginSingleTimeCommands(cmdBuffer);
-		RendererVk::transitionImageLayout<VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL>(cmdBuffer, texImg, 0, oldSize);
-		RendererVk::transitionImageLayout<VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL>(cmdBuffer, dstImg, 0, pageReserve);
-		RendererVk::copyImage(cmdBuffer, texImg, dstImg, res, std::min(oldSize, pageReserve));
-		RendererVk::transitionImageLayout<VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL>(cmdBuffer, texImg, 0, oldSize);
-		RendererVk::transitionImageLayout<VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL>(cmdBuffer, dstImg, 0, pageReserve);
-		rend->submitSingleTimeCommands(cmdBuffer);
-
-		TextureColConst::free(rend->getLogicalDevice());
-		std::swap(texImg, dstImg);
-		std::swap(texMem, dstMem);
-		texView = rend->createImageView(texImg, VK_IMAGE_VIEW_TYPE_2D_ARRAY, iformat, pageReserve);
-	} catch (const std::runtime_error&) {
-		vkDestroyImage(rend->getLogicalDevice(), dstImg, nullptr);
-		vkFreeMemory(rend->getLogicalDevice(), dstMem, nullptr);
-		free(rend);
-		throw;
-	}
-	return true;
-}
-
 // GENERIC PASS
 
 VkSampler GenericPass::createSampler(VkDevice dev, VkFilter filter) {
@@ -399,7 +24,6 @@ VkSampler GenericPass::createSampler(VkDevice dev, VkFilter filter) {
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
 	samplerInfo.minLod = 0.f;
 	samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
-	samplerInfo.mipLodBias = 0.f;
 
 	VkSampler sampler;
 	if (VkResult rs = vkCreateSampler(dev, &samplerInfo, nullptr, &sampler); rs != VK_SUCCESS)
@@ -421,14 +45,16 @@ VkShaderModule GenericPass::createShaderModule(VkDevice dev, const uint32* code,
 
 // RENDER PASS
 
+RenderPass::DescriptorSetBlock::DescriptorSetBlock(const array<VkDescriptorSet, textureSetStep>& descriptorSets) :
+	used(descriptorSets.begin(), descriptorSets.begin() + 1),
+	free(descriptorSets.begin() + 1, descriptorSets.end())
+{}
+
 vector<VkDescriptorSet> RenderPass::init(const RendererVk* rend, VkFormat format, uint32 numViews) {
 	createRenderPass(rend->getLogicalDevice(), format);
-	iconSampler = createSampler(rend->getLogicalDevice(), VK_FILTER_LINEAR);
-	textSampler = createSampler(rend->getLogicalDevice(), VK_FILTER_NEAREST);
-	std::tie(dummyImg, dummyMem, dummyView) = rend->createDummyTexture(u32vec2(2), 1, VK_FORMAT_A8B8G8R8_UNORM_PACK32, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+	samplers = { createSampler(rend->getLogicalDevice(), VK_FILTER_LINEAR), createSampler(rend->getLogicalDevice(), VK_FILTER_NEAREST) };
 	createDescriptorSetLayout(rend->getLogicalDevice());
 	createPipeline(rend->getLogicalDevice());
-	createUniformBuffer(rend);
 	return createDescriptorPoolAndSets(rend->getLogicalDevice(), numViews);
 }
 
@@ -473,26 +99,16 @@ void RenderPass::createRenderPass(VkDevice dev, VkFormat format) {
 }
 
 void RenderPass::createDescriptorSetLayout(VkDevice dev) {
-	array<VkDescriptorSetLayoutBinding, 4> bindings0{};
-	bindings0[bindingUdat].binding = bindingUdat;
-	bindings0[bindingUdat].descriptorCount = 1;
-	bindings0[bindingUdat].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	bindings0[bindingUdat].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	bindings0[bindingIcon].binding = bindingIcon;
-	bindings0[bindingIcon].descriptorCount = 1;
-	bindings0[bindingIcon].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	bindings0[bindingIcon].pImmutableSamplers = &iconSampler;
-	bindings0[bindingIcon].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-	bindings0[bindingText].binding = bindingText;
-	bindings0[bindingText].descriptorCount = 1;
-	bindings0[bindingText].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	bindings0[bindingText].pImmutableSamplers = &textSampler;
-	bindings0[bindingText].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-	bindings0[bindingRpic].binding = bindingRpic;
-	bindings0[bindingRpic].descriptorCount = 1;
-	bindings0[bindingRpic].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	bindings0[bindingRpic].pImmutableSamplers = &iconSampler;
-	bindings0[bindingRpic].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	array<VkDescriptorSetLayoutBinding, 2> bindings0{};
+	bindings0[0].binding = 0;
+	bindings0[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	bindings0[0].descriptorCount = 1;
+	bindings0[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	bindings0[1].binding = 1;
+	bindings0[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+	bindings0[1].descriptorCount = samplers.size();
+	bindings0[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	bindings0[1].pImmutableSamplers = samplers.data();
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -502,10 +118,10 @@ void RenderPass::createDescriptorSetLayout(VkDevice dev) {
 		throw std::runtime_error("Failed to create descriptor set layout 0: "s + string_VkResult(rs));
 
 	VkDescriptorSetLayoutBinding binding1{};
-	binding1.binding = bindingUdat;
+	binding1.binding = 0;
+	binding1.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	binding1.descriptorCount = 1;
-	binding1.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	binding1.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	binding1.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	layoutInfo.bindingCount = 1;
 	layoutInfo.pBindings = &binding1;
@@ -619,118 +235,116 @@ void RenderPass::createPipeline(VkDevice dev) {
 	vkDestroyShaderModule(dev, vertShaderModule, nullptr);
 }
 
-void RenderPass::createUniformBuffer(const RendererVk* rend) {
-	std::tie(uniformBuffer0, uniformMemory0) = rend->createBuffer(sizeof(UniformData0), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-	if (VkResult rs = vkMapMemory(rend->getLogicalDevice(), uniformMemory0, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&uniformMapped0)); rs != VK_SUCCESS)
-		throw std::runtime_error("Failed to map uniform buffer memory 0: "s + string_VkResult(rs));
-}
-
 vector<VkDescriptorSet> RenderPass::createDescriptorPoolAndSets(VkDevice dev, uint32 numViews) {
 	array<VkDescriptorPoolSize, 2> poolSizes{};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = 1 + numViews;
-	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = 3;
+	poolSizes[0].descriptorCount = numViews;
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_SAMPLER;
+	poolSizes[1].descriptorCount = samplers.size() * numViews;
 
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = poolSizes.size();
 	poolInfo.pPoolSizes = poolSizes.data();
-	poolInfo.maxSets = 1 + numViews;
+	poolInfo.maxSets = numViews;
 	if (VkResult rs = vkCreateDescriptorPool(dev, &poolInfo, nullptr, &descriptorPool); rs != VK_SUCCESS)
-		throw std::runtime_error("Failed to create descriptor pool: "s + string_VkResult(rs));
+		throw std::runtime_error("Failed to create view descriptor pool: "s + string_VkResult(rs));
 
+	vector<VkDescriptorSetLayout> layouts(poolInfo.maxSets, descriptorSetLayouts[0]);
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = descriptorPool;
-	allocInfo.descriptorSetCount = 1;
-	allocInfo.pSetLayouts = &descriptorSetLayouts[0];
-	if (VkResult rs = vkAllocateDescriptorSets(dev, &allocInfo, &descriptorSet0); rs != VK_SUCCESS)
-		throw std::runtime_error("Failed to allocate descriptor set 0: "s + string_VkResult(rs));
-
-	vector<VkDescriptorSetLayout> layouts(numViews, descriptorSetLayouts[1]);
 	allocInfo.descriptorSetCount = layouts.size();
 	allocInfo.pSetLayouts = layouts.data();
 
 	vector<VkDescriptorSet> descriptorSets(layouts.size());
 	if (VkResult rs = vkAllocateDescriptorSets(dev, &allocInfo, descriptorSets.data()); rs != VK_SUCCESS)
-		throw std::runtime_error("Failed to allocate descriptor sets 1: "s + string_VkResult(rs));
+		throw std::runtime_error("Failed to allocate view descriptor sets: "s + string_VkResult(rs));
 	return descriptorSets;
 }
 
-void RenderPass::updateDescriptorSet(VkDevice dev, const array<pair<VkImageView, u32vec2>, 3>& images) {
-	for (sizet i = 0; i < images.size(); ++i)
-		uniformMapped0->tbounds[i] = vec4(images[i].second, 0.f, 0.f);
+pair<VkDescriptorPool, VkDescriptorSet> RenderPass::newDescriptorSetTex(VkDevice dev) {
+	if (umap<VkDescriptorPool, DescriptorSetBlock>::iterator psit = std::find_if(poolSetTex.begin(), poolSetTex.end(), [](const pair<const VkDescriptorPool, DescriptorSetBlock>& it) -> bool { return !it.second.free.empty(); }); psit != poolSetTex.end()) {
+		VkDescriptorSet descriptorSet = *psit->second.free.begin();
+		psit->second.free.erase(psit->second.free.begin());
+		return pair(psit->first, *psit->second.used.insert(descriptorSet).first);
+	}
 
-	VkDescriptorBufferInfo bufferInfo{};
-	bufferInfo.buffer = uniformBuffer0;
-	bufferInfo.range = sizeof(UniformData0);
+	VkDescriptorPoolSize poolSize{};
+	poolSize.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	poolSize.descriptorCount = textureSetStep;
 
-	array<VkDescriptorImageInfo, 3> imageInfos{};
-	imageInfos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	imageInfos[0].imageView = images[0].first ? images[0].first : dummyView;
-	imageInfos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	imageInfos[1].imageView = images[1].first ? images[1].first : dummyView;
-	imageInfos[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	imageInfos[2].imageView = images[2].first ? images[2].first : dummyView;
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.poolSizeCount = 1;
+	poolInfo.pPoolSizes = &poolSize;
+	poolInfo.maxSets = textureSetStep;
 
-	array<VkWriteDescriptorSet, 4> descriptorWrites{};
-	descriptorWrites[bindingUdat].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrites[bindingUdat].dstSet = descriptorSet0;
-	descriptorWrites[bindingUdat].dstBinding = bindingUdat;
-	descriptorWrites[bindingUdat].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	descriptorWrites[bindingUdat].descriptorCount = 1;
-	descriptorWrites[bindingUdat].pBufferInfo = &bufferInfo;
-	descriptorWrites[bindingIcon].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrites[bindingIcon].dstSet = descriptorSet0;
-	descriptorWrites[bindingIcon].dstBinding = bindingIcon;
-	descriptorWrites[bindingIcon].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	descriptorWrites[bindingIcon].descriptorCount = 1;
-	descriptorWrites[bindingIcon].pImageInfo = &imageInfos[0];
-	descriptorWrites[bindingText].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrites[bindingText].dstSet = descriptorSet0;
-	descriptorWrites[bindingText].dstBinding = bindingText;
-	descriptorWrites[bindingText].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	descriptorWrites[bindingText].descriptorCount = 1;
-	descriptorWrites[bindingText].pImageInfo = &imageInfos[1];
-	descriptorWrites[bindingRpic].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrites[bindingRpic].dstSet = descriptorSet0;
-	descriptorWrites[bindingRpic].dstBinding = bindingRpic;
-	descriptorWrites[bindingRpic].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	descriptorWrites[bindingRpic].descriptorCount = 1;
-	descriptorWrites[bindingRpic].pImageInfo = &imageInfos[2];
-	vkUpdateDescriptorSets(dev, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
+	VkDescriptorPool descPool;
+	if (VkResult rs = vkCreateDescriptorPool(dev, &poolInfo, nullptr, &descPool); rs != VK_SUCCESS)
+		throw std::runtime_error("Failed to create texture descriptor pool: "s + string_VkResult(rs));
+
+	array<VkDescriptorSetLayout, textureSetStep> layouts;
+	layouts.fill(descriptorSetLayouts[1]);
+
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = descPool;
+	allocInfo.descriptorSetCount = layouts.size();
+	allocInfo.pSetLayouts = layouts.data();
+
+	array<VkDescriptorSet, textureSetStep> descriptorSets;
+	if (VkResult rs = vkAllocateDescriptorSets(dev, &allocInfo, descriptorSets.data()); rs != VK_SUCCESS) {
+		vkDestroyDescriptorPool(dev, descPool, nullptr);
+		throw std::runtime_error("Failed to allocate texture descriptor sets: "s + string_VkResult(rs));
+	}
+	return pair(descPool, *poolSetTex.emplace(descPool, descriptorSets).first->second.used.begin());
 }
 
-void RenderPass::updateDescriptorSetImage(VkDevice dev, uint32 binding, VkImageView imageView, u32vec2 imageSize) {
-	uniformMapped0->tbounds[binding - bindingIcon] = vec4(imageSize, 0.f, 0.f);
+void RenderPass::freeDescriptorSetTex(VkDevice dev, VkDescriptorPool pool, VkDescriptorSet dset) {
+	umap<VkDescriptorPool, DescriptorSetBlock>::iterator psit = poolSetTex.find(pool);
+	if (psit == poolSetTex.end())
+		return;
+	uset<VkDescriptorSet>::iterator duit = psit->second.used.find(dset);
+	if (duit == psit->second.used.end())
+		return;
 
-	VkDescriptorImageInfo imageInfo{};
-	imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	imageInfo.imageView = imageView ? imageView : dummyView;
+	VkDescriptorSet descriptorSet = *duit;
+	if (psit->second.used.erase(duit); !psit->second.used.empty())
+		psit->second.free.insert(descriptorSet);
+	else {
+		vkDestroyDescriptorPool(dev, pool, nullptr);
+		poolSetTex.erase(psit);
+	}
+}
+
+void RenderPass::updateDescriptorSet(VkDevice dev, VkDescriptorSet descriptorSet, VkBuffer uniformBuffer) {
+	VkDescriptorBufferInfo bufferInfo{};
+	bufferInfo.buffer = uniformBuffer;
+	bufferInfo.range = sizeof(UniformData);
 
 	VkWriteDescriptorSet descriptorWrite{};
 	descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrite.dstSet = descriptorSet0;
-	descriptorWrite.dstBinding = binding;
-	descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	descriptorWrite.descriptorCount = 1;
-	descriptorWrite.pImageInfo = &imageInfo;
-	vkUpdateDescriptorSets(dev, 1, &descriptorWrite, 0, nullptr);
-}
-
-void RenderPass::updateDescriptorSet(VkDevice dev, VkDescriptorSet descriptorSet1, VkBuffer uniformBuffer1) {
-	VkDescriptorBufferInfo bufferInfo{};
-	bufferInfo.buffer = uniformBuffer1;
-	bufferInfo.range = sizeof(UniformData1);
-
-	VkWriteDescriptorSet descriptorWrite{};
-	descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrite.dstSet = descriptorSet1;
-	descriptorWrite.dstBinding = bindingUdat;
+	descriptorWrite.dstSet = descriptorSet;
+	descriptorWrite.dstBinding = 0;
 	descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	descriptorWrite.descriptorCount = 1;
 	descriptorWrite.pBufferInfo = &bufferInfo;
+	vkUpdateDescriptorSets(dev, 1, &descriptorWrite, 0, nullptr);
+}
+
+void RenderPass::updateDescriptorSet(VkDevice dev, VkDescriptorSet descriptorSet, VkImageView imageView) {
+	VkDescriptorImageInfo imageInfo{};
+	imageInfo.imageView = imageView;
+	imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+	VkWriteDescriptorSet descriptorWrite{};
+	descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrite.dstSet = descriptorSet;
+	descriptorWrite.dstBinding = 0;
+	descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	descriptorWrite.descriptorCount = 1;
+	descriptorWrite.pImageInfo = &imageInfo;
 	vkUpdateDescriptorSets(dev, 1, &descriptorWrite, 0, nullptr);
 }
 
@@ -739,17 +353,13 @@ void RenderPass::free(VkDevice dev) {
 	vkDestroyPipelineLayout(dev, pipelineLayout, nullptr);
 	vkDestroyRenderPass(dev, handle, nullptr);
 
-	vkDestroyBuffer(dev, uniformBuffer0, nullptr);
-	vkFreeMemory(dev, uniformMemory0, nullptr);
+	for (auto& [pool, block] : poolSetTex)
+		vkDestroyDescriptorPool(dev, pool, nullptr);
 	vkDestroyDescriptorPool(dev, descriptorPool, nullptr);
 	for (VkDescriptorSetLayout it : descriptorSetLayouts)
 		vkDestroyDescriptorSetLayout(dev, it, nullptr);
-
-	vkDestroySampler(dev, iconSampler, nullptr);
-	vkDestroySampler(dev, textSampler, nullptr);
-	vkDestroyImageView(dev, dummyView, nullptr);
-	vkDestroyImage(dev, dummyImg, nullptr);
-	vkFreeMemory(dev, dummyMem, nullptr);
+	for (VkSampler it : samplers)
+		vkDestroySampler(dev, it, nullptr);
 }
 
 // ADDRESS PASS
@@ -806,8 +416,8 @@ void AddressPass::createRenderPass(VkDevice dev) {
 void AddressPass::createDescriptorSetLayout(VkDevice dev) {
 	VkDescriptorSetLayoutBinding binding{};
 	binding.binding = bindingUdat;
-	binding.descriptorCount = 1;
 	binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	binding.descriptorCount = 1;
 	binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -854,7 +464,6 @@ void AddressPass::createPipeline(VkDevice dev) {
 	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 
 	VkRect2D scissor{};
-	scissor.offset = { 0, 0 };
 	scissor.extent = { 1, 1 };
 
 	VkPipelineViewportStateCreateInfo viewportState{};
@@ -978,11 +587,14 @@ void AddressPass::free(VkDevice dev) {
 
 // RENDERER VK
 
-RendererVk::TextureVk::TextureVk(ivec2 size, ivec2 location, uint pageId, uint8 arrayId) :
+RendererVk::TextureVk::TextureVk(ivec2 size, VkImage img, VkDeviceMemory mem, VkImageView imageView, VkDescriptorPool descriptorPool, VkDescriptorSet descriptorSet, uint samplerId) :
 	Texture(size),
-	pos(location),
-	page(pageId),
-	type(arrayId)
+	image(img),
+	memory(mem),
+	view(imageView),
+	pool(descriptorPool),
+	set(descriptorSet),
+	sid(samplerId)
 {}
 
 RendererVk::RendererVk(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor) :
@@ -1027,15 +639,14 @@ RendererVk::RendererVk(const umap<int, SDL_Window*>& windows, Settings* sets, iv
 		}
 
 		createUniformBuffer(vw);
-		vw->uniformMapped1->pview = vec4(vw->rect.pos(), vec2(vw->rect.size()) / 2.f);
-		vw->descriptorSet1 = descriptorSets[d++];
-		renderPass.updateDescriptorSet(ldev, vw->descriptorSet1, vw->uniformBuffer1);
+		vw->uniformMapped->pview = vec4(vw->rect.pos(), vec2(vw->rect.size()) / 2.f);
+		vw->descriptorSet = descriptorSets[d++];
+		renderPass.updateDescriptorSet(ldev, vw->descriptorSet, vw->uniformBuffer);
 	}
-	texts.init(this, recommendTextTexSize());
 
 	addressPass.init(this);
-	std::tie(addrImage, addrImageMemory) = createImage(u32vec2(1), 1, VK_IMAGE_TYPE_1D, AddressPass::format, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	addrView = createImageView(addrImage, VK_IMAGE_VIEW_TYPE_1D, AddressPass::format, 1);
+	std::tie(addrImage, addrImageMemory) = createImage(u32vec2(1), VK_IMAGE_TYPE_1D, AddressPass::format, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	addrView = createImageView(addrImage, VK_IMAGE_VIEW_TYPE_1D, AddressPass::format);
 	addrFramebuffer = createFramebuffer(addressPass.getHandle(), addrView, u32vec2(1));
 	std::tie(addrBuffer, addrBufferMemory) = createBuffer(sizeof(u32vec2), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	if (VkResult rs = vkMapMemory(ldev, addrBufferMemory, 0, sizeof(u32vec2), 0, reinterpret_cast<void**>(&addrMappedMemory)); rs != VK_SUCCESS)
@@ -1055,8 +666,8 @@ RendererVk::~RendererVk() {
 	renderPass.free(ldev);
 	for (auto [id, view] : views) {
 		ViewVk* vw = static_cast<ViewVk*>(view);
-		vkDestroyBuffer(ldev, vw->uniformBuffer1, nullptr);
-		vkFreeMemory(ldev, vw->uniformMemory1, nullptr);
+		vkDestroyBuffer(ldev, vw->uniformBuffer, nullptr);
+		vkFreeMemory(ldev, vw->uniformMemory, nullptr);
 
 		for (uint i = 0; i < ViewVk::maxFrames; ++i) {
 			vkDestroySemaphore(ldev, vw->renderFinishedSemaphores[i], nullptr);
@@ -1064,9 +675,6 @@ RendererVk::~RendererVk() {
 			vkDestroyFence(ldev, vw->frameFences[i], nullptr);
 		}
 	}
-	icons.free(ldev);
-	texts.free(this);
-	rpics.free(ldev);
 
 	addressPass.free(ldev);
 	vkDestroyFramebuffer(ldev, addrFramebuffer, nullptr);
@@ -1145,6 +753,8 @@ void RendererVk::pickPhysicalDevice(u32vec2& preferred) {
 
 	VkPhysicalDevice lastDev = VK_NULL_HANDLE;
 	uint32 gfam, pfam;
+	VkPhysicalDeviceProperties devProp;
+	VkPhysicalDeviceMemoryProperties devMemp;
 	uint score = 0;
 	for (VkPhysicalDevice dev : devices) {
 		uint32 extensionCount;
@@ -1160,7 +770,7 @@ void RendererVk::pickPhysicalDevice(u32vec2& preferred) {
 
 		VkPhysicalDeviceProperties prop;
 		vkGetPhysicalDeviceProperties(dev, &prop);
-		if (prop.limits.maxUniformBufferRange < std::max(std::max(sizeof(RenderPass::UniformData0), sizeof(RenderPass::UniformData1)), sizeof(AddressPass::UniformData)))
+		if (prop.limits.maxUniformBufferRange < std::max(sizeof(RenderPass::UniformData), sizeof(AddressPass::UniformData)))
 			continue;
 		if (prop.limits.maxPushConstantsSize < std::max(sizeof(RenderPass::PushData), sizeof(AddressPass::PushData)))
 			continue;
@@ -1189,24 +799,16 @@ void RendererVk::pickPhysicalDevice(u32vec2& preferred) {
 			continue;
 
 		if (prop.vendorID == preferred.x && prop.deviceID == preferred.y) {
-			pdev = dev;
-			gfamilyIndex = gid;
-			pfamilyIndex = pid;
+			std::tie(pdev, gfamilyIndex, pfamilyIndex, pdevProperties, pdevMemProperties) = tuple(dev, gid, pid, prop, memp);
 			return;
 		}
-		if (uint points = scoreDevice(prop, memp); points > score) {
-			score = points;
-			lastDev = dev;
-			gfam = gid;
-			pfam = pid;
-		}
+		if (uint points = scoreDevice(prop, memp); points > score)
+			std::tie(score, lastDev, gfam, pfam, devProp, devMemp) = tuple(points, dev, gid, pid, prop, memp);
 	}
 	if (lastDev == VK_NULL_HANDLE)
 		throw std::runtime_error("Failed to find a suitable device");
 
-	pdev = lastDev;
-	gfamilyIndex = gfam;
-	pfamilyIndex = pfam;
+	std::tie(pdev, gfamilyIndex, pfamilyIndex, pdevProperties, pdevMemProperties) = tuple(lastDev, gfam, pfam, devProp, devMemp);
 	if (preferred != u32vec2(0))
 		preferred = u32vec2(0);
 }
@@ -1293,7 +895,7 @@ VkFormat RendererVk::createSwapchain(ViewVk* view, VkSwapchainKHR oldSwapchain) 
 	view->framebuffers = std::make_unique<pair<VkImageView, VkFramebuffer>[]>(view->imageCount);
 	vkGetSwapchainImagesKHR(ldev, view->swapchain, &view->imageCount, view->images.get());
 	for (uint32 i = 0; i < view->imageCount; ++i)
-		view->framebuffers[i].first = createImageView(view->images[i], VK_IMAGE_VIEW_TYPE_2D, surfaceFormat.format, 1);
+		view->framebuffers[i].first = createImageView(view->images[i], VK_IMAGE_VIEW_TYPE_2D, surfaceFormat.format);
 	return surfaceFormat.format;
 }
 
@@ -1320,7 +922,7 @@ void RendererVk::recreateSwapchain(ViewVk* view) {
 		throw;
 	}
 	createFramebuffers(view);
-	view->uniformMapped1->pview = vec4(view->rect.pos(), vec2(view->rect.size()) / 2.f);
+	view->uniformMapped->pview = vec4(view->rect.pos(), vec2(view->rect.size()) / 2.f);
 	refreshFramebuffer = false;
 }
 
@@ -1330,8 +932,8 @@ void RendererVk::createFramebuffers(ViewVk* view) {
 }
 
 void RendererVk::createUniformBuffer(ViewVk* view) {
-	std::tie(view->uniformBuffer1, view->uniformMemory1) = createBuffer(sizeof(RenderPass::UniformData1), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-	if (VkResult rs = vkMapMemory(ldev, view->uniformMemory1, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&view->uniformMapped1)); rs != VK_SUCCESS)
+	std::tie(view->uniformBuffer, view->uniformMemory) = createBuffer(sizeof(RenderPass::UniformData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	if (VkResult rs = vkMapMemory(ldev, view->uniformMemory, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&view->uniformMapped)); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to map uniform buffer memory 1: "s + string_VkResult(rs));
 }
 
@@ -1389,7 +991,6 @@ void RendererVk::startDraw(View* view) {
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassInfo.renderPass = renderPass.getHandle();
 	renderPassInfo.framebuffer = currentView->framebuffers[imageIndex].second;
-	renderPassInfo.renderArea.offset = { 0, 0 };
 	renderPassInfo.renderArea.extent = currentView->extent;
 	renderPassInfo.clearValueCount = 1;
 	renderPassInfo.pClearValues = &bgColor;
@@ -1402,22 +1003,19 @@ void RendererVk::startDraw(View* view) {
 	vkCmdSetViewport(currentView->commandBuffers[currentFrame], 0, 1, &viewport);
 
 	VkRect2D scissor{};
-	scissor.offset = { 0, 0 };
 	scissor.extent = currentView->extent;
 	vkCmdSetScissor(currentView->commandBuffers[currentFrame], 0, 1, &scissor);
-
-	array<VkDescriptorSet, 2> descriptorSets = { renderPass.getDescriptorSet0(), currentView->descriptorSet1 };
-	vkCmdBindDescriptorSets(currentView->commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.getPipelineLayout(), 0, descriptorSets.size(), descriptorSets.data(), 0, nullptr);
+	vkCmdBindDescriptorSets(currentView->commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.getPipelineLayout(), 0, 1, &currentView->descriptorSet, 0, nullptr);
 }
 
 void RendererVk::drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) {
-	const TextureVk* vktx = static_cast<const TextureVk*>(tex);
+	const TextureVk* vtx = static_cast<const TextureVk*>(tex);
 	RenderPass::PushData pd;
 	pd.rect = rect.toVec();
 	pd.frame = frame.toVec();
-	pd.txloc = ivec4(vktx->pos, vktx->getRes());
 	pd.color = color;
-	pd.tid = uvec2(vktx->type, vktx->page);
+	pd.sid = vtx->sid;
+	vkCmdBindDescriptorSets(currentView->commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.getPipelineLayout(), 1, 1, &vtx->set, 0, nullptr);
 	vkCmdPushConstants(currentView->commandBuffers[currentFrame], renderPass.getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(RenderPass::PushData), &pd);
 	vkCmdDraw(currentView->commandBuffers[currentFrame], 4, 1, 0, 0);
 }
@@ -1475,7 +1073,6 @@ void RendererVk::startSelDraw(View* view, ivec2 pos) {
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassInfo.renderPass = addressPass.getHandle();
 	renderPassInfo.framebuffer = addrFramebuffer;
-	renderPassInfo.renderArea.offset = { 0, 0 };
 	renderPassInfo.renderArea.extent = { 1, 1 };
 	renderPassInfo.clearValueCount = 1;
 	renderPassInfo.pClearValues = &zero;
@@ -1504,8 +1101,8 @@ void RendererVk::drawSelRect(const Widget* wgt, const Recti& rect, const Recti& 
 
 Widget* RendererVk::finishSelDraw(View*) {
 	vkCmdEndRenderPass(commandBufferAddr);
-	transitionImageLayout<VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL>(commandBufferAddr, addrImage, 0, 1);
-	copyImageToBuffer(commandBufferAddr, addrImage, addrBuffer, u32vec2(1), 1);
+	transitionImageLayout<VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL>(commandBufferAddr, addrImage);
+	copyImageToBuffer(commandBufferAddr, addrImage, addrBuffer, u32vec2(1));
 	if (VkResult rs = vkEndCommandBuffer(commandBufferAddr); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to end recording command buffer: "s + string_VkResult(rs));
 
@@ -1521,85 +1118,80 @@ Widget* RendererVk::finishSelDraw(View*) {
 	return reinterpret_cast<Widget*>(uptrt(addrMappedMemory->x) | (uptrt(addrMappedMemory->y) << 32));
 }
 
-vector<pair<sizet, Texture*>> RendererVk::initIconTextures(vector<pair<sizet, SDL_Surface*>>&& iconImp) {
-	vector<pair<sizet, TexLoc>> iloc = icons.init(this, std::move(iconImp), true);
-	renderPass.updateDescriptorSet(ldev, { pair(icons.getTexView(), icons.getRes()), pair(texts.getTexView(), texts.getRes()), pair(rpics.getTexView(), rpics.getRes()) });
-	vector<pair<sizet, Texture*>> ictx(iloc.size());
-	for (sizet i = 0; i < ictx.size(); ++i)
-		ictx[i] = pair(iloc[i].first, new TextureVk(iloc[i].second.rct.size(), iloc[i].second.rct.pos(), iloc[i].second.tid, 0));
-	return ictx;
-}
-
-vector<pair<sizet, Texture*>> RendererVk::initRpicTextures(vector<pair<sizet, SDL_Surface*>>&& rpicImp) {
-	vector<pair<sizet, TexLoc>> iloc = rpics.init(this, std::move(rpicImp), false);
-	vkQueueWaitIdle(gqueue);
-	renderPass.updateDescriptorSetImage(ldev, RenderPass::bindingRpic, rpics.getTexView(), rpics.getRes());
-	vector<pair<sizet, Texture*>> ictx(iloc.size());
-	for (sizet i = 0; i < ictx.size(); ++i)
-		ictx[i] = pair(iloc[i].first, new TextureVk(iloc[i].second.rct.size(), iloc[i].second.rct.pos(), iloc[i].second.tid, 2));
-	return ictx;
+Texture* RendererVk::texFromImg(SDL_Surface* img) {
+	if (auto [pic, fmt] = pickPixFormat(img); pic)
+		return createTexture(pic, u32vec2(pic->w, pic->h), fmt, false);
+	return nullptr;
 }
 
 Texture* RendererVk::texFromText(SDL_Surface* img) {
-	auto [loc, refresh] = texts.insert(this, img);
-	if (refresh) {
-		vkQueueWaitIdle(gqueue);
-		renderPass.updateDescriptorSetImage(ldev, RenderPass::bindingText, texts.getTexView(), texts.getRes());
-	}
-	return !loc.empty() ? new TextureVk(loc.rct.size(), loc.rct.pos(), loc.tid, 1) : nullptr;
+	return img ? createTexture(img, glm::min(u32vec2(img->w, img->h), u32vec2(pdevProperties.limits.maxImageDimension2D)), VK_FORMAT_A8B8G8R8_UNORM_PACK32, true) : nullptr;
 }
 
-void RendererVk::freeIconTextures(umap<string, Texture*>& texes) {
+void RendererVk::freeTexture(Texture* tex) {
+	TextureVk* vtx = static_cast<TextureVk*>(tex);
 	vkQueueWaitIdle(gqueue);
-	icons.free(ldev);
-	for (auto& [name, tex] : texes)
-		delete tex;
+	renderPass.freeDescriptorSetTex(ldev, vtx->pool, vtx->set);
+	vkDestroyImageView(ldev, vtx->view, nullptr);
+	vkDestroyImage(ldev, vtx->image, nullptr);
+	vkFreeMemory(ldev, vtx->memory, nullptr);
+	delete vtx;
 }
 
-void RendererVk::freeRpicTextures(vector<pair<string, Texture*>>&& texes) {
-	vkQueueWaitIdle(gqueue);
-	rpics.free(ldev);
-	for (auto& [name, tex] : texes)
-		delete tex;
-	renderPass.updateDescriptorSetImage(ldev, RenderPass::bindingRpic, rpics.getTexView(), rpics.getRes());
-}
-
-void RendererVk::freeTextTexture(Texture* tex) {
-	TextureVk* vktx = static_cast<TextureVk*>(tex);
-	if (TexLoc tloc(vktx->page, Rectu(vktx->pos, vktx->getRes())); texts.erase(this, tloc))
-		renderPass.updateDescriptorSetImage(ldev, RenderPass::bindingText, texts.getTexView(), texts.getRes());
-	delete vktx;
-}
-
-tuple<VkImage, VkDeviceMemory, VkImageView> RendererVk::createDummyTexture(u32vec2 size, uint32 layers, VkFormat format, VkBufferUsageFlags usage) const {
+RendererVk::TextureVk* RendererVk::createTexture(SDL_Surface* img, u32vec2 res, VkFormat format, bool nearest) {
+	VkBuffer stagingBuffer = VK_NULL_HANDLE;
+	VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
+	VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
 	VkImage image = VK_NULL_HANDLE;
 	VkDeviceMemory memory = VK_NULL_HANDLE;
 	VkImageView view = VK_NULL_HANDLE;
-	VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+	VkDescriptorPool pool = VK_NULL_HANDLE;
+	VkDescriptorSet dset = VK_NULL_HANDLE;
 	try {
-		std::tie(image, memory) = createImage(size, layers, VK_IMAGE_TYPE_2D, format, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		VkDeviceSize bufferSize = VkDeviceSize(img->pitch) * VkDeviceSize(res.y);
+		std::tie(stagingBuffer, stagingMemory) = createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		void* stagingMapped;
+		if (VkResult rs = vkMapMemory(ldev, stagingMemory, 0, VK_WHOLE_SIZE, 0, &stagingMapped); rs != VK_SUCCESS)
+			throw std::runtime_error("Failed to map texture staging memory: "s + string_VkResult(rs));
+		memcpy(stagingMapped, img->pixels, bufferSize);
+		vkUnmapMemory(ldev, stagingMemory);
+
+		std::tie(image, memory) = createImage(res, VK_IMAGE_TYPE_2D, format, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		commandBuffer = beginSingleTimeCommands();
-		RendererVk::transitionImageLayout<VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL>(commandBuffer, image, 0, layers);
-		RendererVk::transitionImageLayout<VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL>(commandBuffer, image, 0, layers);
+		transitionImageLayout<VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL>(commandBuffer, image);
+		copyBufferToImage(commandBuffer, stagingBuffer, image, res, img->pitch / img->format->BytesPerPixel);
+		transitionImageLayout<VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL>(commandBuffer, image);
 		endSingleTimeCommands(commandBuffer);
-		view = createImageView(image, VK_IMAGE_VIEW_TYPE_2D_ARRAY, format, layers);
-	} catch (const std::runtime_error&) {
+
+		view = createImageView(image, VK_IMAGE_VIEW_TYPE_2D, format);
+		std::tie(pool, dset) = renderPass.newDescriptorSetTex(ldev);
+		RenderPass::updateDescriptorSet(ldev, dset, view);
+
+		vkDestroyBuffer(ldev, stagingBuffer, nullptr);
+		vkFreeMemory(ldev, stagingMemory, nullptr);
+		SDL_FreeSurface(img);
+	} catch (const std::runtime_error& err) {
+		logError(err.what());
 		freeCommandBuffers(&commandBuffer, 1);
+		renderPass.freeDescriptorSetTex(ldev, pool, dset);
 		vkDestroyImageView(ldev, view, nullptr);
 		vkDestroyImage(ldev, image, nullptr);
 		vkFreeMemory(ldev, memory, nullptr);
-		throw;
+		vkDestroyBuffer(ldev, stagingBuffer, nullptr);
+		vkFreeMemory(ldev, stagingMemory, nullptr);
+		SDL_FreeSurface(img);
+		return nullptr;
 	}
-	return tuple(image, memory, view);
+	return new TextureVk(res, image, memory, view, pool, dset, nearest);
 }
 
-pair<VkImage, VkDeviceMemory> RendererVk::createImage(u32vec2 size, uint32 layers, VkImageType type, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags properties) const {
+pair<VkImage, VkDeviceMemory> RendererVk::createImage(u32vec2 size, VkImageType type, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags properties) const {
 	VkImageCreateInfo imageInfo{};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = type;
 	imageInfo.extent = { size.x, size.y, 1 };
 	imageInfo.mipLevels = 1;
-	imageInfo.arrayLayers = layers;
+	imageInfo.arrayLayers = 1;
 	imageInfo.format = format;
 	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -1628,17 +1220,15 @@ pair<VkImage, VkDeviceMemory> RendererVk::createImage(u32vec2 size, uint32 layer
 	return pair(image, memory);
 }
 
-VkImageView RendererVk::createImageView(VkImage image, VkImageViewType type, VkFormat format, uint32 layers) const {
+VkImageView RendererVk::createImageView(VkImage image, VkImageViewType type, VkFormat format) const {
 	VkImageViewCreateInfo viewInfo{};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	viewInfo.image = image;
 	viewInfo.viewType = type;
 	viewInfo.format = format;
 	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	viewInfo.subresourceRange.baseMipLevel = 0;
 	viewInfo.subresourceRange.levelCount = 1;
-	viewInfo.subresourceRange.baseArrayLayer = 0;
-	viewInfo.subresourceRange.layerCount = layers;
+	viewInfo.subresourceRange.layerCount = 1;
 
 	VkImageView imageView;
 	if (VkResult rs = vkCreateImageView(ldev, &viewInfo, nullptr, &imageView); rs != VK_SUCCESS)
@@ -1695,10 +1285,8 @@ pair<VkBuffer, VkDeviceMemory> RendererVk::createBuffer(VkDeviceSize size, VkBuf
 }
 
 uint32 RendererVk::findMemoryType(uint32 typeFilter, VkMemoryPropertyFlags properties) const {
-	VkPhysicalDeviceMemoryProperties memProperties;
-	vkGetPhysicalDeviceMemoryProperties(pdev, &memProperties);
-	for (uint32 i = 0; i < memProperties.memoryTypeCount; ++i)
-		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+	for (uint32 i = 0; i < pdevMemProperties.memoryTypeCount; ++i)
+		if ((typeFilter & (1 << i)) && (pdevMemProperties.memoryTypes[i].propertyFlags & properties) == properties)
 			return i;
 	throw std::runtime_error("Failed to find suitable memory type for properties "s + string_VkMemoryPropertyFlags(properties));
 }
@@ -1790,7 +1378,7 @@ void RendererVk::submitSingleTimeCommands(VkCommandBuffer commandBuffer) const {
 }
 
 template <VkImageLayout srcLay, VkImageLayout dstLay>
-void RendererVk::transitionImageLayout(VkCommandBuffer commandBuffer, VkImage image, uint32 layer, uint32 numLayers) {
+void RendererVk::transitionImageLayout(VkCommandBuffer commandBuffer, VkImage image) {
 	VkImageMemoryBarrier barrier{};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 	barrier.oldLayout = srcLay;
@@ -1799,10 +1387,8 @@ void RendererVk::transitionImageLayout(VkCommandBuffer commandBuffer, VkImage im
 	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.image = image;
 	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	barrier.subresourceRange.baseMipLevel = 0;
 	barrier.subresourceRange.levelCount = 1;
-	barrier.subresourceRange.baseArrayLayer = layer;
-	barrier.subresourceRange.layerCount = numLayers;
+	barrier.subresourceRange.layerCount = 1;
 
 	VkPipelineStageFlags sourceStage;
 	VkPipelineStageFlags destinationStage;
@@ -1841,29 +1427,19 @@ void RendererVk::transitionImageLayout(VkCommandBuffer commandBuffer, VkImage im
 	vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 }
 
-void RendererVk::copyImage(VkCommandBuffer commandBuffer, VkImage src, VkImage dst, u32vec2 size, uint32 numLayers) {
-	VkImageCopy region{};
-	region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	region.srcSubresource.mipLevel = 0;
-	region.srcSubresource.baseArrayLayer = 0;
-	region.srcSubresource.layerCount = numLayers;
-	region.srcOffset = { 0, 0, 0 };
-	region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	region.dstSubresource.mipLevel = 0;
-	region.dstSubresource.baseArrayLayer = 0;
-	region.dstSubresource.layerCount = numLayers;
-	region.dstOffset = { 0, 0, 0 };
-	region.extent = { size.x, size.y, 1 };
-	vkCmdCopyImage(commandBuffer, src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+void RendererVk::copyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image, u32vec2 size, uint32 pitch) {
+	VkBufferImageCopy region{};
+	region.bufferRowLength = pitch;
+	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	region.imageSubresource.layerCount = 1;
+	region.imageExtent = { size.x, size.y, 1 };
+	vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 }
 
-void RendererVk::copyImageToBuffer(VkCommandBuffer commandBuffer, VkImage image, VkBuffer buffer, u32vec2 size, uint32 numLayers) {
+void RendererVk::copyImageToBuffer(VkCommandBuffer commandBuffer, VkImage image, VkBuffer buffer, u32vec2 size) {
 	VkBufferImageCopy region{};
 	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	region.imageSubresource.mipLevel = 0;
-	region.imageSubresource.baseArrayLayer = 0;
-	region.imageSubresource.layerCount = numLayers;
-	region.imageOffset = { 0, 0, 0 };
+	region.imageSubresource.layerCount = 1;
 	region.imageExtent = { size.x, size.y, 1 };
 	vkCmdCopyImageToBuffer(commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buffer, 1, &region);
 }
@@ -1987,13 +1563,13 @@ uint RendererVk::scoreDevice(const VkPhysicalDeviceProperties& prop, const VkPhy
 	return score;
 }
 
-uint32 RendererVk::recommendTextTexSize() {
-	uint32 size = 32;
-	SDL_DisplayMode mode;
-	for (int i = 0; i < SDL_GetNumVideoDisplays(); ++i)
-		if (!SDL_GetDesktopDisplayMode(i, &mode))
-			size = std::max(size, uint32(std::max(mode.w, mode.h)));
-	return ceilPow2(size) * 2;
+pair<SDL_Surface*, VkFormat> RendererVk::pickPixFormat(SDL_Surface* img) const {
+	if (img = limitSize(img, pdevProperties.limits.maxImageDimension2D); img && img->format->format != SDL_PIXELFORMAT_RGBA32) {
+		SDL_Surface* dst = SDL_ConvertSurfaceFormat(img, SDL_PIXELFORMAT_RGBA32, 0);
+		SDL_FreeSurface(img);
+		img = dst;
+	}
+	return pair(img, VK_FORMAT_A8B8G8R8_UNORM_PACK32);
 }
 
 #ifndef NDEBUG

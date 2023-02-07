@@ -36,6 +36,7 @@ RendererGl::RendererGl(const umap<int, SDL_Window*>& windows, const Settings* se
 #endif
 	initShader();
 	setCompression(sets->compression);
+	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTexSize);
 }
 
 RendererGl::~RendererGl() {
@@ -395,62 +396,22 @@ Widget* RendererGl::finishSelDraw(View* view) {
 	return reinterpret_cast<Widget*>(uptrt(val.x) | (uptrt(val.y) << 32));
 }
 
-Texture* RendererGl::texFromText(SDL_Surface* img) {
-	if (img) {
-		GLuint id = createTexture(img->pixels, img->w, img->h, img->pitch / img->format->BytesPerPixel, GL_RGBA8, textPixFormat, GL_NEAREST);
-		TextureGl* tex = new TextureGl(ivec2(img->w, img->h), id);
-		SDL_FreeSurface(img);
-		return tex;
-	}
+Texture* RendererGl::texFromImg(SDL_Surface* img) {
+	if (auto [pic, pfmt, ifmt] = pickPixFormat(img); pic)
+		return createTexture(pic, ivec2(pic->w, pic->h), ifmt, pfmt, GL_LINEAR);
 	return nullptr;
 }
 
-vector<pair<sizet, Texture*>> RendererGl::initIconTextures(vector<pair<sizet, SDL_Surface*>>&& iconImp) {
-	u8vec4 blank(UINT8_MAX);
-	vector<pair<sizet, Texture*>> ictx;
-	ictx.reserve(iconImp.size() + 1);
-	ictx.emplace_back(iconImp.size(), new TextureGl(ivec2(2), createTexture(array<u8vec4, 4>{ blank, blank, blank, blank }.data(), 2, 2, 0, GL_RGBA8, GL_RGBA, GL_NEAREST)));
-	massLoadTextures<true>(std::move(iconImp), ictx);
-	return ictx;
+Texture* RendererGl::texFromText(SDL_Surface* img) {
+	return img ? createTexture(img, glm::min(ivec2(img->w, img->h), ivec2(maxTexSize)), GL_RGBA8, textPixFormat, GL_NEAREST) : nullptr;
 }
 
-vector<pair<sizet, Texture*>> RendererGl::initRpicTextures(vector<pair<sizet, SDL_Surface*>>&& rpicImp) {
-	vector<pair<sizet, Texture*>> ictx;
-	ictx.reserve(rpicImp.size());
-	massLoadTextures<false>(std::move(rpicImp), ictx);
-	return ictx;
-}
-
-template <bool icons>
-void RendererGl::massLoadTextures(vector<pair<sizet, SDL_Surface*>>&& pics, vector<pair<sizet, Texture*>>& ictx) {
-	for (auto [id, pic] : pics)
-		if (auto [img, pfmt, ifmt] = pickPixFormat<icons>(pic); img) {
-			GLuint txid = createTexture(img->pixels, img->w, img->h, img->pitch / img->format->BytesPerPixel, ifmt, pfmt, GL_LINEAR);
-			ictx.emplace_back(id, new TextureGl(ivec2(img->w, img->h), txid));
-			SDL_FreeSurface(img);
-		}
-}
-
-void RendererGl::freeIconTextures(umap<string, Texture*>& texes) {
-	for (auto& [name, tex] : texes) {
-		glDeleteTextures(1, &static_cast<TextureGl*>(tex)->id);
-		delete tex;
-	}
-}
-
-void RendererGl::freeRpicTextures(vector<pair<string, Texture*>>&& texes) {
-	for (auto& [name, tex] : texes) {
-		glDeleteTextures(1, &static_cast<TextureGl*>(tex)->id);
-		delete tex;
-	}
-}
-
-void RendererGl::freeTextTexture(Texture* tex) {
+void RendererGl::freeTexture(Texture* tex) {
 	glDeleteTextures(1, &static_cast<TextureGl*>(tex)->id);
 	delete tex;
 }
 
-GLuint RendererGl::createTexture(const void* pixels, int width, int height, int pitch, GLint iform, GLenum pform, GLint filter) {
+RendererGl::TextureGl* RendererGl::createTexture(SDL_Surface* img, ivec2 res, GLint iform, GLenum pform, GLint filter) {
 	GLuint id;
 	glGenTextures(1, &id);
 	glBindTexture(GL_TEXTURE_2D, id);
@@ -459,33 +420,25 @@ GLuint RendererGl::createTexture(const void* pixels, int width, int height, int 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-	glPixelStorei(GL_UNPACK_ROW_LENGTH, pitch);
-	glTexImage2D(GL_TEXTURE_2D, 0, iform, width, height, 0, pform, GL_UNSIGNED_BYTE, pixels);
-	return id;
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, img->pitch / img->format->BytesPerPixel);
+	glTexImage2D(GL_TEXTURE_2D, 0, iform, res.x, res.y, 0, pform, GL_UNSIGNED_BYTE, img->pixels);
+	SDL_FreeSurface(img);
+	return new TextureGl(res, id);
 }
 
-template <bool icons>
 tuple<SDL_Surface*, GLenum, GLint> RendererGl::pickPixFormat(SDL_Surface* img) const {
-	if (img) {
+	if (img = limitSize(img, maxTexSize); img) {
 		switch (img->format->format) {
 #ifndef OPENGLES
 		case SDL_PIXELFORMAT_BGRA32:
-			if constexpr (icons)
-				return tuple(img, GL_BGRA, GL_RGBA8);
 			return tuple(img, GL_BGRA, iformRgba);
 #endif
 		case SDL_PIXELFORMAT_RGBA32:
-			if constexpr (icons)
-				return tuple(img, GL_RGBA, GL_RGBA8);
 			return tuple(img, GL_RGBA, iformRgba);
 #ifndef OPENGLES
 		case SDL_PIXELFORMAT_BGR24:
-			if constexpr (icons)
-				return tuple(img, GL_BGR, GL_RGB8);
 			return tuple(img, GL_BGR, iformRgb);
 		case SDL_PIXELFORMAT_RGB24:
-			if constexpr (icons)
-				return tuple(img, GL_RGB, GL_RGB8);
 			return tuple(img, GL_RGB, iformRgb);
 #endif
 		}
@@ -493,8 +446,6 @@ tuple<SDL_Surface*, GLenum, GLint> RendererGl::pickPixFormat(SDL_Surface* img) c
 		SDL_FreeSurface(img);
 		img = dst;
 	}
-	if constexpr (icons)
-		return tuple(img, GL_RGBA, GL_RGBA8);
 	return tuple(img, GL_RGBA, iformRgba);
 }
 

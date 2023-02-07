@@ -18,6 +18,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -55,6 +56,7 @@ using uint64 = uint64_t;
 template <class T> using initlist = std::initializer_list<T>;
 template <class... T> using umap = std::unordered_map<T...>;
 template <class... T> using uptr = std::unique_ptr<T...>;
+template <class... T> using uset = std::unordered_set<T...>;
 
 using sizet = size_t;
 using pdift = ptrdiff_t;
@@ -119,14 +121,18 @@ constexpr string_view linend = "\r\n";
 constexpr string_view linend = "\n";
 #endif
 
-enum class UserCode : int32 {
-	readerProgress,
-	readerFinished,
-	downloadProgress,
-	downloadNext,
-	downlaodFinished,
-	moveProgress,
-	moveFinished
+enum UserEvent : uint32 {
+	SDL_USEREVENT_READER_PROGRESS = SDL_USEREVENT,
+	SDL_USEREVENT_READER_FINISHED,
+	SDL_USEREVENT_PREVIEW_PROGRESS,
+#ifdef DOWNLOADER
+	SDL_USEREVENT_DOWNLOAD_PROGRESS,
+	SDL_USEREVENT_DOWNLOAD_NEXT,
+	SDL_USEREVENT_DOWNLOAD_FINISHED,
+#endif
+	SDL_USEREVENT_MOVE_PROGRESS,
+	SDL_USEREVENT_MOVE_FINISHED,
+	SDL_USEREVENT_MAX
 };
 
 template <class T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
@@ -204,12 +210,7 @@ string operator+(std::basic_string_view<T> a, const std::basic_string<T>& b) {
 	return r;
 }
 
-inline void pushEvent(UserCode code, void* data1 = nullptr, void* data2 = nullptr) {
-	SDL_Event event;
-	event.user = { SDL_USEREVENT, SDL_GetTicks(), 0, int32(code), data1, data2 };
-	SDL_PushEvent(&event);
-}
-
+void pushEvent(UserEvent code, void* data1 = nullptr, void* data2 = nullptr);
 #ifndef NDEBUG
 inline void dbgPass() {}
 #endif

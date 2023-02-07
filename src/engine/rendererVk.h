@@ -6,108 +6,6 @@
 
 class RendererVk;
 
-struct TexLoc {
-	uint tid;
-	Rectu rct;
-
-	TexLoc() = default;
-	constexpr TexLoc(uint page, const Rectu& posize);
-
-	constexpr bool empty() const;
-};
-
-constexpr TexLoc::TexLoc(uint page, const Rectu& posize) :
-	tid(page),
-	rct(posize)
-{}
-
-constexpr bool TexLoc::empty() const {
-	return rct.w == 0 || rct.h == 0;
-}
-
-class TextureColConst {
-protected:
-	static constexpr VkDeviceSize bpp = 4;
-	static constexpr VkFormat iformat = VK_FORMAT_A8B8G8R8_UNORM_PACK32;
-	static constexpr SDL_PixelFormatEnum pformat = SDL_PIXELFORMAT_RGBA32;
-
-	VkImage texImg = VK_NULL_HANDLE;
-	VkDeviceMemory texMem = VK_NULL_HANDLE;
-	VkImageView texView = VK_NULL_HANDLE;
-	u32vec2 res;
-
-private:
-	static constexpr uint32 pad = 2;
-
-public:
-	vector<pair<sizet, TexLoc>> init(const RendererVk* rend, vector<pair<sizet, SDL_Surface*>>&& imgs, bool addBlank);
-	void free(VkDevice dev);
-
-	u32vec2 getRes() const;
-	VkImageView getTexView() const;
-
-protected:
-	static VkBufferImageCopy makeRegion(VkDeviceSize offset, uint32 pitch, int32 x, int32 y, uint32 w, uint32 h, uint32 page);
-	static void packCopy(uint32* dst, const uint32* src, u32vec2 size, uint32 pitch);
-};
-
-inline u32vec2 TextureColConst::getRes() const {
-	return res;
-}
-
-inline VkImageView TextureColConst::getTexView() const {
-	return texView;
-}
-
-class TextureCol : public TextureColConst {
-private:
-	struct Less {
-		bool operator()(const Rectu& a, const Rectu& b) const;
-	};
-
-	struct Find {
-		uint page, index;
-		Rectu rect;
-
-		Find() = default;
-		Find(uint pg, uint id, const Rectu& posize);
-	};
-
-	static constexpr uint32 pageNumStep = 4;
-
-	VkBuffer stagingBuffer = VK_NULL_HANDLE;
-	VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
-	uint32* mappedMemory;
-	VkCommandBuffer cmdBuffer = VK_NULL_HANDLE;
-	vector<vector<Rectu>> pages;
-	uint32 pageReserve;
-
-public:
-	void init(const RendererVk* rend, uint32 requestSize);
-	void free(const RendererVk* rend);
-
-	pair<TexLoc, bool> insert(const RendererVk* rend, SDL_Surface* img);
-	pair<TexLoc, bool> insert(const RendererVk* rend, const SDL_Surface* img, u32vec2 size, u32vec2 offset = u32vec2(0));
-	bool replace(const RendererVk* rend, TexLoc& loc, SDL_Surface* img);
-	bool replace(const RendererVk* rend, TexLoc& loc, const SDL_Surface* img, u32vec2 size, u32vec2 offset = u32vec2(0));
-	bool erase(const RendererVk* rend, TexLoc& loc);
-
-private:
-	void uploadSubTex(const RendererVk* rend, const SDL_Surface* img, u32vec2 offset, const Rectu& loc, uint32 page);
-	pair<vector<Rectu>::iterator, bool> findReplaceable(const TexLoc& loc, u32vec2& size);	// returns previous location and whether it can be replaced
-	Find findLocation(u32vec2 size) const;
-	bool maybeResize(const RendererVk* rend);
-	void calcPageReserve();
-};
-
-inline bool TextureCol::Less::operator()(const Rectu& a, const Rectu& b) const {
-	return a.y < b.y || (a.y == b.y && a.x < b.x);
-}
-
-inline void TextureCol::calcPageReserve() {
-	pageReserve = (pages.size() / pageNumStep + 1) * pageNumStep;
-}
-
 class GenericPass {
 protected:
 	VkRenderPass handle = VK_NULL_HANDLE;
@@ -138,62 +36,46 @@ inline VkPipeline GenericPass::getPipeline() const {
 
 class RenderPass : public GenericPass {
 public:
-	static constexpr uint32 bindingUdat = 0;
-	static constexpr uint32 bindingIcon = 1;
-	static constexpr uint32 bindingText = 2;
-	static constexpr uint32 bindingRpic = 3;
-
 	struct PushData {
 		alignas(16) ivec4 rect;
 		alignas(16) ivec4 frame;
-		alignas(16) ivec4 txloc;
 		alignas(16) vec4 color;
-		alignas(8) uvec2 tid;
+		alignas(4) uint sid;
 	};
 
-	struct UniformData0 {
-		alignas(16) vec4 tbounds[3];
-	};
-
-	struct UniformData1 {
+	struct UniformData {
 		alignas(16) vec4 pview;
 	};
 
 private:
+	static constexpr uint32 textureSetStep = 128;
+
+	struct DescriptorSetBlock {
+		uset<VkDescriptorSet> used;
+		uset<VkDescriptorSet> free;
+
+		DescriptorSetBlock(const array<VkDescriptorSet, textureSetStep>& descriptorSets);
+	};
+
 	array<VkDescriptorSetLayout, 2> descriptorSetLayouts{};
 	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
-	VkDescriptorSet descriptorSet0 = VK_NULL_HANDLE;
-
-	VkBuffer uniformBuffer0 = VK_NULL_HANDLE;
-	VkDeviceMemory uniformMemory0 = VK_NULL_HANDLE;
-	UniformData0* uniformMapped0;
-
-	VkSampler iconSampler = VK_NULL_HANDLE;
-	VkSampler textSampler = VK_NULL_HANDLE;
-	VkImage dummyImg = VK_NULL_HANDLE;
-	VkDeviceMemory dummyMem = VK_NULL_HANDLE;
-	VkImageView dummyView = VK_NULL_HANDLE;
+	umap<VkDescriptorPool, DescriptorSetBlock> poolSetTex;
+	array<VkSampler, 2> samplers{};
 
 public:
 	vector<VkDescriptorSet> init(const RendererVk* rend, VkFormat format, uint32 numViews);
-	void updateDescriptorSet(VkDevice dev, const array<pair<VkImageView, u32vec2>, 3>& images);
-	void updateDescriptorSetImage(VkDevice dev, uint32 binding, VkImageView imageView, u32vec2 imageSize);
-	static void updateDescriptorSet(VkDevice dev, VkDescriptorSet descriptorSet1, VkBuffer uniformBuffer1);
+	pair<VkDescriptorPool, VkDescriptorSet> newDescriptorSetTex(VkDevice dev);
+	void freeDescriptorSetTex(VkDevice dev, VkDescriptorPool pool, VkDescriptorSet dset);
+	static void updateDescriptorSet(VkDevice dev, VkDescriptorSet descriptorSet, VkBuffer uniformBuffer);
+	static void updateDescriptorSet(VkDevice dev, VkDescriptorSet descriptorSet, VkImageView imageView);
 	void free(VkDevice dev);
-
-	VkDescriptorSet getDescriptorSet0() const;
 
 private:
 	void createRenderPass(VkDevice dev, VkFormat format);
 	void createDescriptorSetLayout(VkDevice dev);
 	void createPipeline(VkDevice dev);
-	void createUniformBuffer(const RendererVk* rend);
 	vector<VkDescriptorSet> createDescriptorPoolAndSets(VkDevice dev, uint32 numViews);
 };
-
-inline VkDescriptorSet RenderPass::getDescriptorSet0() const {
-	return descriptorSet0;
-}
 
 class AddressPass : public GenericPass {
 public:
@@ -252,11 +134,14 @@ private:
 
 	class TextureVk : public Texture {
 	private:
-		ivec2 pos;
-		uint page;
-		uint8 type;
+		VkImage image;
+		VkDeviceMemory memory;
+		VkImageView view;
+		VkDescriptorPool pool;
+		VkDescriptorSet set;
+		uint sid;
 
-		TextureVk(ivec2 size, ivec2 location, uint pageId, uint8 arrayId);
+		TextureVk(ivec2 size, VkImage img, VkDeviceMemory mem, VkImageView imageView, VkDescriptorPool descriptorPool, VkDescriptorSet descriptorSet, uint samplerId);
 
 		friend class RendererVk;
 	};
@@ -271,10 +156,10 @@ private:
 		uptr<pair<VkImageView, VkFramebuffer>[]> framebuffers;
 		uint32 imageCount = 0;
 
-		VkDescriptorSet descriptorSet1 = VK_NULL_HANDLE;
-		VkBuffer uniformBuffer1 = VK_NULL_HANDLE;
-		VkDeviceMemory uniformMemory1 = VK_NULL_HANDLE;
-		RenderPass::UniformData1* uniformMapped1;
+		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+		VkBuffer uniformBuffer = VK_NULL_HANDLE;
+		VkDeviceMemory uniformMemory = VK_NULL_HANDLE;
+		RenderPass::UniformData* uniformMapped;
 
 		array<VkCommandBuffer, maxFrames> commandBuffers{};
 		array<VkSemaphore, maxFrames> imageAvailableSemaphores{};
@@ -308,8 +193,8 @@ private:
 	VkCommandBuffer commandBufferAddr = VK_NULL_HANDLE;
 	VkFence addrFence = VK_NULL_HANDLE;
 
-	TextureColConst icons, rpics;
-	TextureCol texts;
+	VkPhysicalDeviceProperties pdevProperties;
+	VkPhysicalDeviceMemoryProperties pdevMemProperties;
 	ViewVk* currentView;
 	uint currentFrame = 0;
 	uint32 imageIndex;
@@ -335,19 +220,13 @@ public:
 	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) final;
 	Widget* finishSelDraw(View* view) final;
 
-	vector<pair<sizet, Texture*>> initIconTextures(vector<pair<sizet, SDL_Surface*>>&& iconImp) final;
-	vector<pair<sizet, Texture*>> initRpicTextures(vector<pair<sizet, SDL_Surface*>>&& rpicImp) final;
+	Texture* texFromImg(SDL_Surface* img) final;
 	Texture* texFromText(SDL_Surface* img) final;
-	void freeIconTextures(umap<string, Texture*>& texes) final;
-	void freeRpicTextures(vector<pair<string, Texture*>>&& texes) final;
-	void freeTextTexture(Texture* tex) final;
+	void freeTexture(Texture* tex) final;
 
-	VkPhysicalDevice getPhysicalDevice() const;
 	VkDevice getLogicalDevice() const;
-
-	tuple<VkImage, VkDeviceMemory, VkImageView> createDummyTexture(u32vec2 size, uint32 layers, VkFormat format, VkBufferUsageFlags usage) const;
-	pair<VkImage, VkDeviceMemory> createImage(u32vec2 size, uint32 layers, VkImageType type, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags properties) const;
-	VkImageView createImageView(VkImage image, VkImageViewType type, VkFormat format, uint32 layers) const;
+	pair<VkImage, VkDeviceMemory> createImage(u32vec2 size, VkImageType type, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags properties) const;
+	VkImageView createImageView(VkImage image, VkImageViewType type, VkFormat format) const;
 	VkFramebuffer createFramebuffer(VkRenderPass rpass, VkImageView view, u32vec2 size) const;
 	pair<VkBuffer, VkDeviceMemory> createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const;
 	uint32 findMemoryType(uint32 typeFilter, VkMemoryPropertyFlags properties) const;
@@ -360,9 +239,9 @@ public:
 	void beginSingleTimeCommands(VkCommandBuffer commandBuffer) const;
 	void endSingleTimeCommands(VkCommandBuffer commandBuffer) const;
 	void submitSingleTimeCommands(VkCommandBuffer commandBuffer) const;
-	template <VkImageLayout srcLay, VkImageLayout dstLay> static void transitionImageLayout(VkCommandBuffer commandBuffer, VkImage image, uint32 layer = 0, uint32 numLayers = 1);
-	static void copyImage(VkCommandBuffer commandBuffer, VkImage src, VkImage dst, u32vec2 size, uint32 numLayers);
-	static void copyImageToBuffer(VkCommandBuffer commandBuffer, VkImage image, VkBuffer buffer, u32vec2 size, uint32 numLayers = 1);
+	template <VkImageLayout srcLay, VkImageLayout dstLay> static void transitionImageLayout(VkCommandBuffer commandBuffer, VkImage image);
+	static void copyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image, u32vec2 size, uint32 pitch);
+	static void copyImageToBuffer(VkCommandBuffer commandBuffer, VkImage image, VkBuffer buffer, u32vec2 size);
 
 private:
 	void createInstance(SDL_Window* window);
@@ -387,16 +266,13 @@ private:
 	static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR chooseSwapPresentMode(const vector<VkPresentModeKHR>& availablePresentModes) const;
 	static uint scoreDevice(const VkPhysicalDeviceProperties& prop, const VkPhysicalDeviceMemoryProperties& memp);
-	static uint32 recommendTextTexSize();
+	TextureVk* createTexture(SDL_Surface* img, u32vec2 res, VkFormat format, bool nearest);
+	pair<SDL_Surface*, VkFormat> pickPixFormat(SDL_Surface* img) const;
 #ifndef NDEBUG
 	static bool checkValidationLayerSupport();
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
 #endif
 };
-
-inline VkPhysicalDevice RendererVk::getPhysicalDevice() const {
-	return pdev;
-}
 
 inline VkDevice RendererVk::getLogicalDevice() const {
 	return ldev;

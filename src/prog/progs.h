@@ -101,6 +101,8 @@ public:
 
 class ProgPageBrowser : public ProgState {
 public:
+	ScrollArea* fileList;
+
 	~ProgPageBrowser() final = default;
 
 	void eventEscape() final;

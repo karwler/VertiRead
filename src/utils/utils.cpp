@@ -3,6 +3,16 @@
 #include <windows.h>
 #endif
 
+void pushEvent(UserEvent code, void* data1, void* data2) {
+	SDL_Event event{};
+	event.user.type = code;
+	event.user.timestamp = SDL_GetTicks();
+	event.user.data1 = data1;
+	event.user.data2 = data2;
+	if (int rc = SDL_PushEvent(&event); rc <= 0)
+		throw std::runtime_error(rc ? SDL_GetError() : "Event queue full");
+}
+
 bool isDriveLetter(const fs::path& path) {
 	if (const fs::path::value_type* p = path.c_str(); isalpha(p[0]) && p[1] == ':') {
 		for (p += 2; isDsep(*p); ++p);

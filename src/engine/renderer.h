@@ -4,7 +4,7 @@
 
 class Texture {
 private:
-	ivec2 res = ivec2(0);
+	ivec2 res;
 
 protected:
 	Texture(ivec2 size);
@@ -52,13 +52,13 @@ public:
 	virtual void startSelDraw(View* view, ivec2 pos) = 0;
 	virtual void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) = 0;
 	virtual Widget* finishSelDraw(View* view) = 0;
-	virtual vector<pair<sizet, Texture*>> initIconTextures(vector<pair<sizet, SDL_Surface*>>&& iconImp) = 0;
-	virtual vector<pair<sizet, Texture*>> initRpicTextures(vector<pair<sizet, SDL_Surface*>>&& rpicImp) = 0;
+	virtual Texture* texFromImg(SDL_Surface* img) = 0;
 	virtual Texture* texFromText(SDL_Surface* img) = 0;
-	virtual void freeIconTextures(umap<string, Texture*>& texes) = 0;
-	virtual void freeRpicTextures(vector<pair<string, Texture*>>&& texes) = 0;
-	virtual void freeTextTexture(Texture* tex) = 0;
+	virtual void freeTexture(Texture* tex) = 0;
+
 	const umap<int, View*>& getViews() const;
+protected:
+	static SDL_Surface* limitSize(SDL_Surface* img, uint32 limit);
 };
 
 inline const umap<int, Renderer::View*>& Renderer::getViews() const {

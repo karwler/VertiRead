@@ -43,6 +43,7 @@ private:
 	GLuint vao = 0;
 	GLint iformRgb;
 	GLint iformRgba;
+	int maxTexSize;
 
 #ifndef OPENGLES
 	void (APIENTRY* glActiveTexture)(GLenum texture);
@@ -97,12 +98,9 @@ public:
 	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) final;
 	Widget* finishSelDraw(View* view) final;
 
-	vector<pair<sizet, Texture*>> initIconTextures(vector<pair<sizet, SDL_Surface*>>&& iconImp) final;
-	vector<pair<sizet, Texture*>> initRpicTextures(vector<pair<sizet, SDL_Surface*>>&& rpicImp) final;
+	Texture* texFromImg(SDL_Surface* img) final;
 	Texture* texFromText(SDL_Surface* img) final;
-	void freeIconTextures(umap<string, Texture*>& texes) final;
-	void freeRpicTextures(vector<pair<string, Texture*>>&& texes) final;
-	void freeTextTexture(Texture* tex) final;
+	void freeTexture(Texture* tex) final;
 
 private:
 	void initGl(ivec2 res, bool vsync, const vec4& bgcolor);
@@ -115,9 +113,8 @@ private:
 	void checkFramebufferStatus(const char* name);
 
 	template <class C, class I> static void checkStatus(GLuint id, GLenum stat, C check, I info, const string& name);
-	template <bool icons> void massLoadTextures(vector<pair<sizet, SDL_Surface*>>&& pics, vector<pair<sizet, Texture*>>& ictx);
-	static GLuint createTexture(const void* pixels, int width, int height, int pitch, GLint iform, GLenum pform, GLint filter);
-	template <bool icons> tuple<SDL_Surface*, GLenum, GLint> pickPixFormat(SDL_Surface* img) const;
+	static TextureGl* createTexture(SDL_Surface* img, ivec2 res, GLint iform, GLenum pform, GLint filter);
+	tuple<SDL_Surface*, GLenum, GLint> pickPixFormat(SDL_Surface* img) const;
 #ifndef OPENGLES
 #ifndef NDEBUG
 	static void APIENTRY debugMessage(GLenum source, GLenum type, uint id, GLenum severity, GLsizei length, const char* message, const void* userParam);

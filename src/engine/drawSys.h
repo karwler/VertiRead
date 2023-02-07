@@ -95,8 +95,8 @@ public:
 #endif
 	const Texture* texture(const string& name) const;
 	vector<pair<string, Texture*>> transferPictures(PictureLoader* pl);
-	void freeRpicTextures(vector<pair<string, Texture*>>&& texv);
-	void freeTextTexture(Texture* tex);
+	Texture* texFromImg(SDL_Surface* img);
+	void freeTexture(Texture* tex);
 	void setCompression(bool on);
 	void getAdditionalSettings(bool& compression, vector<pair<u32vec2, string>>& devices);
 
@@ -178,12 +178,12 @@ inline Texture* DrawSys::renderText(const string& text, int height, uint length)
 	return renderText(text.c_str(), height, length);
 }
 
-inline void DrawSys::freeRpicTextures(vector<pair<string, Texture*>>&& texv) {
-	renderer->freeRpicTextures(std::move(texv));
+inline Texture* DrawSys::texFromImg(SDL_Surface* img) {
+	return renderer->texFromImg(img);
 }
 
-inline void DrawSys::freeTextTexture(Texture* tex) {
-	renderer->freeTextTexture(tex);
+inline void DrawSys::freeTexture(Texture* tex) {
+	renderer->freeTexture(tex);
 }
 
 inline void DrawSys::setCompression(bool on) {

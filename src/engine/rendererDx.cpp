@@ -378,59 +378,22 @@ void RendererDx::uploadBuffer(ID3D11Buffer* buffer, const T& data) {
 	ctx->Unmap(buffer, 0);
 }
 
-vector<pair<sizet, Texture*>> RendererDx::initIconTextures(vector<pair<sizet, SDL_Surface*>>&& iconImp) {
-	vector<pair<sizet, Texture*>> ictx;
-	ictx.reserve(iconImp.size() + 1);
-	if (u8vec4 blank(UINT8_MAX); TextureDx* tex = createTexture(array<u8vec4, 4>{ blank, blank, blank, blank }.data(), uvec2(2), sizeof(uint8) * 8, DXGI_FORMAT_B8G8R8A8_UNORM))
-		ictx.emplace_back(iconImp.size(), tex);
-	massLoadTextures(std::move(iconImp), ictx);
-	return ictx;
-}
-
-vector<pair<sizet, Texture*>> RendererDx::initRpicTextures(vector<pair<sizet, SDL_Surface*>>&& rpicImp) {
-	vector<pair<sizet, Texture*>> ictx;
-	ictx.reserve(rpicImp.size());
-	massLoadTextures(std::move(rpicImp), ictx);
-	return ictx;
-}
-
-void RendererDx::massLoadTextures(vector<pair<sizet, SDL_Surface*>>&& pics, vector<pair<sizet, Texture*>>& ictx) {
-	for (auto [id, pic] : pics)
-		if (auto [img, fmt] = pickPixFormat(pic); img) {
-			ictx.emplace_back(id, createTexture(img->pixels, uvec2(img->w, img->h), img->pitch, fmt));
-			SDL_FreeSurface(img);
-		}
-}
-
-Texture* RendererDx::texFromText(SDL_Surface* img) {
-	if (img) {
-		TextureDx* tex = createTexture(img->pixels, uvec2(img->w, img->h), img->pitch, DXGI_FORMAT_B8G8R8A8_UNORM);
-		SDL_FreeSurface(img);
-		return tex;
-	}
+Texture* RendererDx::texFromImg(SDL_Surface* img) {
+	if (auto [pic, fmt] = pickPixFormat(img); pic)
+		return createTexture(img, uvec2(pic->w, pic->h), fmt);
 	return nullptr;
 }
 
-void RendererDx::freeIconTextures(umap<string, Texture*>& texes) {
-	for (auto& [name, tex] : texes) {
-		static_cast<TextureDx*>(tex)->view->Release();
-		delete tex;
-	}
+Texture* RendererDx::texFromText(SDL_Surface* img) {
+	return img ? createTexture(img, glm::min(uvec2(img->w, img->h), uvec2(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)), DXGI_FORMAT_B8G8R8A8_UNORM) : nullptr;
 }
 
-void RendererDx::freeRpicTextures(vector<pair<string, Texture*>>&& texes) {
-	for (auto& [name, tex] : texes) {
-		static_cast<TextureDx*>(tex)->view->Release();
-		delete tex;
-	}
-}
-
-void RendererDx::freeTextTexture(Texture* tex) {
+void RendererDx::freeTexture(Texture* tex) {
 	static_cast<TextureDx*>(tex)->view->Release();
 	delete tex;
 }
 
-RendererDx::TextureDx* RendererDx::createTexture(const void* pixels, uvec2 res, uint pitch, DXGI_FORMAT format) {
+RendererDx::TextureDx* RendererDx::createTexture(SDL_Surface* img, uvec2 res, DXGI_FORMAT format) {
 	try {
 		D3D11_TEXTURE2D_DESC texDesc{};
 		texDesc.Width = res.x;
@@ -443,8 +406,8 @@ RendererDx::TextureDx* RendererDx::createTexture(const void* pixels, uvec2 res, 
 		texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 
 		D3D11_SUBRESOURCE_DATA subrscData{};
-		subrscData.pSysMem = pixels;
-		subrscData.SysMemPitch = pitch;
+		subrscData.pSysMem = img->pixels;
+		subrscData.SysMemPitch = img->pitch;
 
 		ComPtr<ID3D11Texture2D> texture;
 		if (HRESULT rs = dev->CreateTexture2D(&texDesc, &subrscData, &texture); FAILED(rs))
@@ -458,26 +421,28 @@ RendererDx::TextureDx* RendererDx::createTexture(const void* pixels, uvec2 res, 
 		ComPtr<ID3D11ShaderResourceView> textureView;
 		if (HRESULT rs = dev->CreateShaderResourceView(texture.Get(), &srvDesc, &textureView); FAILED(rs))
 			throw std::runtime_error(hresultToStr(rs));
-		return new TextureDx(res, textureView.Detach());
+		SDL_FreeSurface(img);
+		return new TextureDx(ivec2(texDesc.Width, texDesc.Height), textureView.Detach());
 	} catch (const std::runtime_error& err) {
 		logError(err.what());
+		SDL_FreeSurface(img);
 	}
 	return nullptr;
 }
 
 pair<SDL_Surface*, DXGI_FORMAT> RendererDx::pickPixFormat(SDL_Surface* img) {
-	if (img) {
+	if (img = limitSize(img, D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION); img) {
 		switch (img->format->format) {
 		case SDL_PIXELFORMAT_BGRA32:
 			return pair(img, DXGI_FORMAT_B8G8R8A8_UNORM);
 		case SDL_PIXELFORMAT_RGBA32:
 			return pair(img, DXGI_FORMAT_R8G8B8A8_UNORM);
 		}
-		SDL_Surface* dst = SDL_ConvertSurfaceFormat(img, SDL_PIXELFORMAT_BGRA32, 0);
+		SDL_Surface* dst = SDL_ConvertSurfaceFormat(img, SDL_PIXELFORMAT_RGBA32, 0);
 		SDL_FreeSurface(img);
 		img = dst;
 	}
-	return pair(img, DXGI_FORMAT_B8G8R8A8_UNORM);
+	return pair(img, DXGI_FORMAT_R8G8B8A8_UNORM);
 }
 
 void RendererDx::getAdditionalSettings(bool& compression, vector<pair<u32vec2, string>>& devices) {

@@ -222,6 +222,8 @@ Settings* FileSys::loadSettings() const {
 				sets->font = FileSys::isFont(findFont(il.getVal())) ? il.getVal() : Settings::defaultFont;
 			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordTheme))
 				sets->setTheme(il.getVal(), getAvailableThemes());
+			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordPreview))
+				sets->preview = toBool(il.getVal());
 			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordShowHidden))
 				sets->showHidden = toBool(il.getVal());
 			else if (!SDL_strcasecmp(il.getPrp().c_str(), iniKeywordTooltips))
@@ -265,6 +267,7 @@ void FileSys::saveSettings(const Settings* sets) const {
 	IniLine::writeVal(ofh, iniKeywordDirection, Direction::names[uint8(sets->direction)]);
 	IniLine::writeVal(ofh, iniKeywordFont, sets->font);
 	IniLine::writeVal(ofh, iniKeywordTheme, sets->getTheme());
+	IniLine::writeVal(ofh, iniKeywordPreview, toStr(sets->preview));
 	IniLine::writeVal(ofh, iniKeywordShowHidden, toStr(sets->showHidden));
 	IniLine::writeVal(ofh, iniKeywordTooltips, toStr(sets->tooltips));
 	IniLine::writeVal(ofh, iniKeywordLibrary, sets->getDirLib().u8string());
@@ -569,7 +572,7 @@ void FileSys::moveContentThreaded(std::atomic_bool& running, fs::path src, fs::p
 		if (!running)
 			break;
 
-		pushEvent(UserCode::moveProgress, reinterpret_cast<void*>(i), reinterpret_cast<void*>(lim));
+		pushEvent(SDL_USEREVENT_MOVE_PROGRESS, reinterpret_cast<void*>(i), reinterpret_cast<void*>(lim));
 #ifdef _WIN32
 		if (fs::path path = src / files[i]; _wrename(path.c_str(), (dst / files[i]).c_str()))
 #else
@@ -577,7 +580,7 @@ void FileSys::moveContentThreaded(std::atomic_bool& running, fs::path src, fs::p
 #endif
 			logError("failed no move ", path);
 	}
-	pushEvent(UserCode::moveFinished);
+	pushEvent(SDL_USEREVENT_MOVE_FINISHED);
 	running = false;
 }
 

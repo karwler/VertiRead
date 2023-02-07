@@ -112,6 +112,7 @@ private:
 	static constexpr char iniKeywordPictureLimit[] = "picture_limit";
 	static constexpr char iniKeywordFont[] = "font";
 	static constexpr char iniKeywordTheme[] = "theme";
+	static constexpr char iniKeywordPreview[] = "preview";
 	static constexpr char iniKeywordShowHidden[] = "show_hidden";
 	static constexpr char iniKeywordTooltips[] = "tooltips";
 	static constexpr char iniKeywordLibrary[] = "library";

@@ -78,12 +78,9 @@ public:
 	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) final;
 	Widget* finishSelDraw(View* view) final;
 
-	vector<pair<sizet, Texture*>> initIconTextures(vector<pair<sizet, SDL_Surface*>>&& iconImp) final;
-	vector<pair<sizet, Texture*>> initRpicTextures(vector<pair<sizet, SDL_Surface*>>&& rpicImp) final;
+	Texture* texFromImg(SDL_Surface* img) final;
 	Texture* texFromText(SDL_Surface* img) final;
-	void freeIconTextures(umap<string, Texture*>& texes) final;
-	void freeRpicTextures(vector<pair<string, Texture*>>&& texes) final;
-	void freeTextTexture(Texture* tex) final;
+	void freeTexture(Texture* tex) final;
 
 private:
 	static IDXGIFactory* createFactory();
@@ -92,8 +89,7 @@ private:
 	void initShader();
 
 	template <class T> void uploadBuffer(ID3D11Buffer* buffer, const T& data);
-	void massLoadTextures(vector<pair<sizet, SDL_Surface*>>&& pics, vector<pair<sizet, Texture*>>& ictx);
-	TextureDx* createTexture(const void* pixels, uvec2 res, uint pitch, DXGI_FORMAT format);
+	TextureDx* createTexture(SDL_Surface* img, uvec2 res, DXGI_FORMAT format);
 	static pair<SDL_Surface*, DXGI_FORMAT> pickPixFormat(SDL_Surface* img);
 	static string hresultToStr(HRESULT rs);
 };

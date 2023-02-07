@@ -84,9 +84,9 @@ endif()
 
 # dependencies
 set(VER_ARC "3.6.2")
-set(VER_SDL "2.26.2")
-set(VER_IMG "2.6.2")
-set(VER_TTF "2.20.1")
+set(VER_SDL "2.26.3")
+set(VER_IMG "2.6.3")
+set(VER_TTF "2.20.2")
 set(VER_GLM "0.9.9.8")
 set(VER_CURL "7.83.1")
 set(VER_LXML "2.9.14")
@@ -260,7 +260,10 @@ else()
 	set(ICONS_DIR "${DATA_DIR}/icons")
 	set(LICN_DIR "${DATA_DIR}/licenses")
 
-	include_directories($<$<BOOL:${DOWNLOADER}>:/usr/include/libxml2>)
+	if(DOWNLOADER)
+		find_package(LibXml2 REQUIRED)
+		include_directories("${LIBXML2_INCLUDE_DIRS}")
+	endif()
 endif()
 
 # compiler flags

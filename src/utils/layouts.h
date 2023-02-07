@@ -1,9 +1,6 @@
 #pragma once
 
 #include "widgets.h"
-#include <unordered_set>
-
-template <class... T> using uset = std::unordered_set<T...>;
 
 // container for other widgets
 class Layout : public Widget {
@@ -268,6 +265,7 @@ private:
 
 public:
 	ReaderBox(const Size& size = Size(), Direction dir = defaultDirection, float fzoom = Settings::defaultZoom, int space = Settings::defaultSpacing, bool pad = false);
+	~ReaderBox() final;
 
 	void drawSelf(const Recti& view) final;
 	void tick(float dSec) final;
@@ -275,7 +273,6 @@ public:
 	void onMouseMove(ivec2 mPos, ivec2 mMov) final;
 
 	void setWidgets(vector<pair<string, Texture*>>&& imgs);
-	vector<pair<string, Texture*>> extractPictures();
 	bool showBar() const;
 	float getZoom() const;
 	void setZoom(float factor);

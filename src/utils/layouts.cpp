@@ -647,6 +647,11 @@ ReaderBox::ReaderBox(const Size& size, Direction dir, float fzoom, int space, bo
 	zoom(fzoom)
 {}
 
+ReaderBox::~ReaderBox() {
+	for (auto& [name, tex] : pics)
+		World::drawSys()->freeTexture(tex);
+}
+
 void ReaderBox::drawSelf(const Recti& view) {
 	World::drawSys()->drawReaderBox(this, view);
 }
@@ -718,13 +723,6 @@ void ReaderBox::setWidgets(vector<pair<string, Texture*>>&& imgs) {
 		widgets[i]->setParent(this, i);
 	}
 	postInit();
-}
-
-vector<pair<string, Texture*>> ReaderBox::extractPictures() {
-	vector<pair<string, Texture*>> out = std::move(pics);
-	clearWidgets();
-	pics.clear();
-	return out;
 }
 
 bool ReaderBox::showBar() const {

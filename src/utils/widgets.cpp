@@ -91,7 +91,7 @@ Button::Button(const Size& size, PCall leftCall, PCall rightCall, PCall doubleCa
 
 Button::~Button() {
 	if (tooltip)
-		World::drawSys()->freeTextTexture(tooltip);
+		World::drawSys()->freeTexture(tooltip);
 }
 
 void Button::onClick(ivec2, uint8 mBut) {
@@ -249,7 +249,7 @@ Label::Label(const Size& size, string line, PCall leftCall, PCall rightCall, PCa
 
 Label::~Label() {
 	if (textTex)
-		World::drawSys()->freeTextTexture(textTex);
+		World::drawSys()->freeTexture(textTex);
 }
 
 void Label::drawSelf(const Recti& view) {
@@ -286,12 +286,13 @@ Recti Label::textFrame() const {
 
 Recti Label::texRect() const {
 	Recti rct = rect();
-	rct.h -= texMargin * 2;
-	return Recti(rct.pos() + texMargin, ivec2(float(rct.h * tex->getRes().x) / float(tex->getRes().y), rct.h));
+	vec2 res = tex->getRes();
+	ivec2 siz = res * float(rct.h - texMargin * 2) / std::max(res.x, res.y);
+	return Recti(rct.pos() + (rct.h - siz) / 2, siz);
 }
 
 int Label::textIconOffset() const {
-	return tex ? int(float(size().y * tex->getRes().x) / float(tex->getRes().y)) : 0;
+	return tex ? size().y : 0;
 }
 
 ivec2 Label::textPos() const {
@@ -309,7 +310,7 @@ ivec2 Label::textPos() const {
 
 void Label::updateTextTex() {
 	if (textTex)
-		World::drawSys()->freeTextTexture(textTex);
+		World::drawSys()->freeTexture(textTex);
 	textTex = World::drawSys()->renderText(text, size().y);
 }
 
@@ -818,7 +819,7 @@ WindowArranger::~WindowArranger() {
 void WindowArranger::freeTextures() {
 	for (auto& [id, dsp] : disps)
 		if (dsp.txt)
-			World::drawSys()->freeTextTexture(dsp.txt);
+			World::drawSys()->freeTexture(dsp.txt);
 }
 
 void WindowArranger::calcDisplays() {

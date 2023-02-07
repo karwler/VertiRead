@@ -196,12 +196,12 @@ Texture* ProgState::makeTooltipL(const char* str) {
 		return nullptr;
 
 	uint width = 0;
-	while (*str) {
-		sizet len = strcspn(str, "\n");
-		if (uint siz = World::drawSys()->textLength(string(str, len), tooltipHeight) + Label::tooltipMargin.x * 2; siz > width)
+	for (const char* pos = str; *pos;) {
+		sizet len = strcspn(pos, "\n");
+		if (uint siz = World::drawSys()->textLength(string(pos, len), tooltipHeight) + Label::tooltipMargin.x * 2; siz > width)
 			if (width = std::min(siz, maxTooltipLength); width == maxTooltipLength)
 				break;
-		str += str[len] ? len + 1 : len;
+		pos += pos[len] ? len + 1 : len;
 	}
 	return World::drawSys()->renderText(str, tooltipHeight, width);
 }
@@ -282,7 +282,9 @@ RootLayout* ProgPageBrowser::createLayout() {
 	};
 
 	// list of files and directories
-	auto [files, dirs] = World::browser()->listCurDir(World::sets()->showHidden);
+	auto [files, dirs] = World::browser()->listCurDir();
+	if (World::sets()->preview)
+		World::browser()->startPreview(files, dirs, lineHeight);
 	vector<Widget*> items(files.size() + dirs.size());
 	for (sizet i = 0; i < dirs.size(); ++i)
 		items[i] = new Label(lineHeight, std::move(dirs[i]), &Program::eventBrowserGoIn, nullptr, nullptr, nullptr, Alignment::left, World::drawSys()->texture("folder"));
@@ -292,7 +294,7 @@ RootLayout* ProgPageBrowser::createLayout() {
 	// main content
 	vector<Widget*> mid = {
 		new Layout(txsWidth, std::move(bar)),
-		new ScrollArea(1.f, std::move(items))
+		fileList = new ScrollArea(1.f, std::move(items))
 	};
 
 	// root layout
@@ -398,7 +400,6 @@ void ProgReader::eventClosing() {
 		string::iterator nxt = std::find_if(mid, path.end(), notDsep);
 		World::fileSys()->saveLastPage(string(path.begin(), mid), string(nxt, path.end()), reader->curPage());
 	}
-	World::drawSys()->freeRpicTextures(reader->extractPictures());
 	SDL_ShowCursor(SDL_ENABLE);
 }
 
@@ -657,6 +658,7 @@ RootLayout* ProgSettings::createLayout() {
 		"GPU selecting",
 		"Size",
 		"Theme",
+		"Preview",
 		"Show hidden",
 		"Show tooltips",
 		"Font",
@@ -769,6 +771,10 @@ RootLayout* ProgSettings::createLayout() {
 		} },
 		{ lineHeight, {
 			new Label(descLength, *itxs++),
+			new CheckBox(lineHeight, World::sets()->preview, &Program::eventSetPreview, nullptr, nullptr, makeTooltip("Show preview icons of pictures in browser"))
+		} },
+		{ lineHeight, {
+			new Label(descLength, *itxs++),
 			showHidden = new CheckBox(lineHeight, World::sets()->showHidden, &Program::eventSetHide, nullptr, nullptr, makeTooltip("Show hidden files"))
 		} },
 		{ lineHeight, {
@@ -795,10 +801,11 @@ RootLayout* ProgSettings::createLayout() {
 		} }
 	});
 	sizet lcnt = lx.size();
-	vector<Widget*> lns(lcnt + 1 + bnames.size() + 2);
+	vector<Widget*> lns(lcnt + 2 + bnames.size() + 2);
 	for (sizet i = 0; i < lcnt; ++i)
 		lns[i] = new Layout(lx[i].first, std::move(lx[i].second), Direction::right);
 	lns[lcnt] = new Widget(0);
+	lns[lcnt + 1] = new Layout(lineHeight, { new Widget(descLength), new Label(1.f, "Keyboard", nullptr, nullptr, nullptr, nullptr, Alignment::center, nullptr, false), new Label(1.f, "DirectInput", nullptr, nullptr, nullptr, nullptr, Alignment::center, nullptr, false), new Label(1.f, "XInput", nullptr, nullptr, nullptr, nullptr, Alignment::center, nullptr, false) }, Direction::right);
 	limitLine = static_cast<Layout*>(lns[3]);
 
 	// shortcut entries
@@ -810,9 +817,9 @@ RootLayout* ProgSettings::createLayout() {
 			new KeyGetter(1.f, KeyGetter::AcceptType::joystick, Binding::Type(i), makeTooltip((lbl->getText() + " joystick binding").c_str())),
 			new KeyGetter(1.f, KeyGetter::AcceptType::gamepad, Binding::Type(i), makeTooltip((lbl->getText() + " gamepad binding").c_str()))
 		};
-		lns[lcnt + 1 + i] = new Layout(lineHeight, std::move(lin), Direction::right);
+		lns[lcnt + 2 + i] = new Layout(lineHeight, std::move(lin), Direction::right);
 	}
-	lcnt += 1 + Binding::names.size();
+	lcnt += 2 + Binding::names.size();
 
 	// reset button
 	Text resbut("Reset", lineHeight);

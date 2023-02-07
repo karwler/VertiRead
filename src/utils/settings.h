@@ -503,6 +503,7 @@ private:
 public:
 	bool maximized = false;
 	Screen screen = defaultScreenMode;
+	bool preview = true;
 	bool showHidden = false;
 	bool tooltips = true;
 	Direction direction = defaultDirection;

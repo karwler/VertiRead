@@ -1,5 +1,12 @@
 #include "browser.h"
+#include "engine/drawSys.h"
 #include "engine/fileSys.h"
+#include "engine/world.h"
+#ifdef _WIN32
+#include <SDL_image.h>
+#else
+#include <SDL2/SDL_image.h>
+#endif
 
 Browser::Browser(fs::path rootDirectory, fs::path curDirectory, PCall exitCall) :
 	exCall(exitCall),
@@ -99,29 +106,29 @@ bool Browser::goUp() {
 	return true;
 }
 
-void Browser::goNext(bool fwd, bool showHidden) {
+void Browser::goNext(bool fwd) {
 	try {
 		if (inArchive)
-			shiftArchive(fwd, showHidden);
+			shiftArchive(fwd);
 		else if (curDir != rootDir)
-			shiftDir(fwd, showHidden);
+			shiftDir(fwd);
 	} catch (const std::runtime_error& err) {
 		logError(err.what());
 	}
 }
 
-void Browser::shiftDir(bool fwd, bool showHidden) {
+void Browser::shiftDir(bool fwd) {
 	// find id of current directory and set it to the path of the next valid directory in the parent directory
 	fs::path dir = parentPath(curDir);
-	vector<fs::path> dirs = FileSys::listDir(dir, false, true, showHidden);
+	vector<fs::path> dirs = FileSys::listDir(dir, false, true, World::sets()->showHidden);
 	if (vector<fs::path>::iterator di = std::find_if(dirs.begin(), dirs.end(), [this, &dir](const fs::path& it) -> bool { return dir / it == curDir; }); di != dirs.end())
-		foreachAround(dirs, di, fwd, this, &Browser::nextDir, dir, showHidden);
+		foreachAround(dirs, di, fwd, this, &Browser::nextDir, dir);
 	curFile.clear();
 }
 
-bool Browser::nextDir(const fs::path& dit, const fs::path& pdir, bool showHidden) {
+bool Browser::nextDir(const fs::path& dit, const fs::path& pdir) {
 	fs::path idir = pdir / dit;
-	vector<fs::path> files = FileSys::listDir(idir, true, false, showHidden);
+	vector<fs::path> files = FileSys::listDir(idir, true, false, World::sets()->showHidden);
 	if (vector<fs::path>::iterator fi = std::find_if(files.begin(), files.end(), [&idir](const fs::path& it) -> bool { return FileSys::isPicture(idir / it);}); fi != files.end()) {
 		curDir = std::move(idir);
 		return true;
@@ -129,10 +136,10 @@ bool Browser::nextDir(const fs::path& dit, const fs::path& pdir, bool showHidden
 	return false;
 }
 
-void Browser::shiftArchive(bool fwd, bool showHidden) {
+void Browser::shiftArchive(bool fwd) {
 	// get list of archive files in the same directory and find id of the current file and select the next one
 	fs::path dir = parentPath(curDir);
-	vector<fs::path> files = FileSys::listDir(dir, true, false, showHidden);
+	vector<fs::path> files = FileSys::listDir(dir, true, false, World::sets()->showHidden);
 	if (vector<fs::path>::iterator fi = std::find_if(files.begin(), files.end(), [this, &dir](const fs::path& it) -> bool { return curDir == dir / it; }); fi != files.end())
 		foreachAround(files, fi, fwd, this, &Browser::nextArchive, dir);
 	curFile.clear();
@@ -146,9 +153,9 @@ bool Browser::nextArchive(const fs::path& ait, const fs::path& pdir) {
 	return false;
 }
 
-string Browser::nextDirFile(string_view file, bool fwd, bool showHidden) const {
+string Browser::nextDirFile(string_view file, bool fwd) const {
 	if (!file.empty()) {
-		vector<fs::path> files = FileSys::listDir(curDir, true, false, showHidden);
+		vector<fs::path> files = FileSys::listDir(curDir, true, false, World::sets()->showHidden);
 		for (sizet mov = btom<sizet>(fwd), i = std::find(files.begin(), files.end(), fs::u8path(file)) - files.begin() + mov; i < files.size(); i += mov)
 			if (FileSys::isPicture(curDir / files[i]))
 				return files[i].u8string();
@@ -165,15 +172,69 @@ string Browser::nextArchiveFile(string_view file, bool fwd) const {
 	return string();
 }
 
-pair<vector<string>, vector<string>> Browser::listCurDir(bool showHidden) const {
+pair<vector<string>, vector<string>> Browser::listCurDir() const {
 	if (inArchive)
 		return pair(FileSys::listArchive(curDir), vector<string>());
 
-	auto [files, dirs] = FileSys::listDirSep(curDir, showHidden);
+	auto [files, dirs] = FileSys::listDirSep(curDir, World::sets()->showHidden);
 	pair<vector<string>, vector<string>> out(files.size(), dirs.size());
 	std::transform(files.begin(), files.end(), out.first.begin(), [](const fs::path& it) -> string { return it.u8string(); });
 	std::transform(dirs.begin(), dirs.end(), out.second.begin(), [](const fs::path& it) -> string { return it.u8string(); });
 	return out;
+}
+
+void Browser::startPreview(const vector<string>& files, const vector<string>& dirs, int maxHeight) {
+	stopPreview();
+	previewRunning = true;
+	previewProc = std::thread(&Browser::previewThread, std::ref(previewRunning), curDir, files, dirs, World::sets()->showHidden, maxHeight);
+}
+
+void Browser::stopPreview() {
+	if (previewProc.joinable()) {
+		previewRunning = false;
+		previewProc.join();
+	}
+	for (Texture* it : previewTexes)
+		World::drawSys()->freeTexture(it);
+	previewTexes.clear();
+
+	array<SDL_Event, 16> events;
+	while (int num = SDL_PeepEvents(events.data(), events.size(), SDL_GETEVENT, SDL_USEREVENT_PREVIEW_PROGRESS, SDL_USEREVENT_PREVIEW_PROGRESS)) {
+		if (num < 0)
+			throw std::runtime_error(SDL_GetError());
+		for (int i = 0; i < num; ++i)
+			SDL_FreeSurface(static_cast<SDL_Surface*>(events[i].user.data2));
+	}
+}
+
+void Browser::previewThread(std::atomic_bool& running, fs::path curDir, vector<string> files, vector<string> dirs, bool showHidden, int maxHeight) {
+	for (sizet i = 0; i < dirs.size(); ++i) {
+		if (!running)
+			return;
+		for (const fs::path& sit : FileSys::listDir(curDir / dirs[i], true, false, showHidden))
+			if (SDL_Surface* img = loadAndScale(curDir / dirs[i] / sit, maxHeight)) {
+				pushEvent(SDL_USEREVENT_PREVIEW_PROGRESS, reinterpret_cast<void*>(i), img);
+				break;
+			}
+	}
+	for (sizet i = 0; i < files.size(); ++i) {
+		if (!running)
+			return;
+		if (SDL_Surface* img = loadAndScale(curDir / files[i], maxHeight))
+			pushEvent(SDL_USEREVENT_PREVIEW_PROGRESS, reinterpret_cast<void*>(i + dirs.size()), img);
+	}
+	running = false;
+}
+
+SDL_Surface* Browser::loadAndScale(const fs::path& file, int maxHeight) {
+	SDL_Surface* img = IMG_Load(file.u8string().c_str());
+	if (img && img->h > maxHeight)
+		if (SDL_Surface* dst = SDL_CreateRGBSurfaceWithFormat(0, int(float(img->w) * float(maxHeight) / float(img->h)), maxHeight, img->format->BytesPerPixel, img->format->format)) {
+			SDL_BlitScaled(img, nullptr, dst, nullptr);
+			SDL_FreeSurface(img);
+			img = dst;
+		}
+	return img;
 }
 
 template <class T, class P, class F, class... A>

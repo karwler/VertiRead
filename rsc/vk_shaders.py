@@ -14,16 +14,11 @@ const vec2 vposs[4] = vec2[](
 layout(push_constant) uniform PushData {
 	ivec4 rect;
 	ivec4 frame;
-	ivec4 txloc;
 	vec4 color;
-	uvec2 tid;
+	uint sid;
 } pc;
 
-layout(set = 0, binding = 0) uniform UniformData0 {
-	vec2 tbounds[3];
-} u0;
-
-layout(set = 1, binding = 0) uniform UniformData1 {
+layout(set = 0, binding = 0) uniform UniformData {
 	vec4 pview;
 } u1;
 
@@ -37,9 +32,9 @@ void main() {
 	}
 
 	if (dsiz.x > 0.0 && dsiz.y > 0.0) {
-		vec2 uvpos = vec2(pc.txloc.xy) + (dpos - vec2(pc.rect.xy)) / vec2(pc.rect.zw) * vec2(pc.txloc.zw);
-		vec2 uvsiz = dsiz / vec2(pc.rect.zw) * vec2(pc.txloc.zw);
-		fragUV = (vposs[gl_VertexIndex] * uvsiz + uvpos) / u0.tbounds[pc.tid.x];
+		vec2 uvpos = (dpos - vec2(pc.rect.xy)) / vec2(pc.rect.zw);
+		vec2 uvsiz = dsiz / vec2(pc.rect.zw);
+		fragUV = vposs[gl_VertexIndex] * uvsiz + uvpos;
 		vec2 loc = vposs[gl_VertexIndex] * dsiz + dpos;
 		gl_Position = vec4((loc - u1.pview.xy) / u1.pview.zw - 1.0, 0.0, 1.0);
 	} else {
@@ -53,30 +48,19 @@ fsGui = '''#version 450
 layout(push_constant) uniform PushData {
 	ivec4 rect;
 	ivec4 frame;
-	ivec4 txloc;
 	vec4 color;
-	uvec2 tid;
+	uint sid;
 } pc;
 
-layout(set = 0, binding = 1) uniform sampler2DArray icons;
-layout(set = 0, binding = 2) uniform sampler2DArray texts;
-layout(set = 0, binding = 3) uniform sampler2DArray rpics;
+layout(set = 0, binding = 1) uniform sampler colorSamp[2];
+layout(set = 1, binding = 0) uniform texture2D colorTex;
 
 layout(location = 0) noperspective in vec2 fragUV;
 
 layout(location = 0) out vec4 outColor;
 
 void main() {
-	switch (pc.tid.x) {
-	case 0:
-		outColor = texture(icons, vec3(fragUV, pc.tid.y)) * pc.color;
-		break;
-	case 1:
-		outColor = texture(texts, vec3(fragUV, pc.tid.y));
-		break;
-	case 2:
-		outColor = texture(rpics, vec3(fragUV, pc.tid.y));
-	}
+	outColor = texture(sampler2D(colorTex, colorSamp[pc.sid]), fragUV) * pc.color;
 }'''
 
 vsSel = '''#version 450

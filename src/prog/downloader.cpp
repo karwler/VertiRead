@@ -449,7 +449,7 @@ int Downloader::downloadChaptersThread() {
 
 	while (!dlQueue.empty()) {	// iterate over comics in queue
 		dlProg = mvec2(0);
-		pushEvent(UserCode::downloadNext);
+		pushEvent(SDL_USEREVENT_DOWNLOAD_NEXT);
 
 		if (fs::path bdrc = World::sets()->getDirLib() / FileSys::validateFilename(fs::u8path(dlQueue.front().title)); fs::is_directory(bdrc) || fs::create_directories(bdrc)) {	// create comic base directory in library
 			vector<pairStr> chaps = dlQueue.front().chapters;
@@ -457,7 +457,7 @@ int Downloader::downloadChaptersThread() {
 
 			switch (downloadChapters(chaps, bdrc)) {
 			case DownloadState::stop:
-				pushEvent(UserCode::downlaodFinished);
+				pushEvent(SDL_USEREVENT_DOWNLOAD_FINISHED);
 				return 1;
 			case DownloadState::skip:
 				dlState = DownloadState::run;
@@ -468,7 +468,7 @@ int Downloader::downloadChaptersThread() {
 	}
 	queueLock.unlock();	// unlock after last dlPos check
 	dlState = DownloadState::stop;
-	pushEvent(UserCode::downlaodFinished);
+	pushEvent(SDL_USEREVENT_DOWNLOAD_FINISHED);
 	return 0;
 }
 
@@ -476,7 +476,7 @@ DownloadState Downloader::downloadChapters(const vector<pairStr>& chaps, const f
 	dlProg = mvec2(0, chaps.size());
 	for (sizet i = 0; i < chaps.size(); ++i) {	// iterate over chapters in currently selected comic
 		dlProg.x = i;
-		pushEvent(UserCode::downloadProgress);
+		pushEvent(SDL_USEREVENT_DOWNLOAD_PROGRESS);
 
 		if (fs::path cdrc = bdrc / FileSys::validateFilename(fs::u8path(chaps[i].first)); fs::is_directory(cdrc) || fs::create_directories(cdrc))	// create chapter directory
 			if (DownloadState state = source->downloadPictures(chaps[i].second, cdrc); state != DownloadState::run)	// download pictures of current chapter
