@@ -6,28 +6,90 @@
 
 class RendererVk;
 
-class GenericPass {
+class GenericPipeline {
+protected:
+	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+
+public:
+	VkPipelineLayout getPipelineLayout() const;
+
+protected:
+	static VkSampler createSampler(const RendererVk* rend, VkFilter filter);
+	static VkShaderModule createShaderModule(const RendererVk* rend, const uint32* code, size_t clen);
+};
+
+inline VkPipelineLayout GenericPipeline::getPipelineLayout() const {
+	return pipelineLayout;
+}
+
+class FormatConverter : public GenericPipeline {
+public:
+	static constexpr uint maxTransfers = 2;
+	static constexpr uint32 convWgrpSize = 32;
+	static constexpr uint32 convStep = convWgrpSize * 4;	// 4 texels per invocation
+
+	struct PushData {
+		alignas(4) uint offset;
+	};
+
+private:
+	struct SpecializationData {
+		VkBool32 orderRgb;
+	};
+
+	array<VkPipeline, 2> pipelines{};
+	VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+	array<VkDescriptorSet, maxTransfers> descriptorSets{};
+
+	array<VkBuffer, maxTransfers> outputBuffers{};
+	array<VkDeviceMemory, maxTransfers> outputMemory{};
+	array<VkDeviceSize, maxTransfers> outputSizesMax{};
+
+public:
+	void init(const RendererVk* rend);
+	void updateBufferSize(const RendererVk* rend, uint id, VkDeviceSize texSize, VkBuffer inputBuffer, VkDeviceSize inputSize, bool& update);
+	void free(VkDevice dev);
+
+	bool initialized() const;
+	VkPipeline getPipeline(bool rgb) const;
+	VkDescriptorSet getDescriptorSet(uint id) const;
+	VkBuffer getOutputBuffer(uint id) const;
+
+private:
+	void createDescriptorSetLayout(const RendererVk* rend);
+	void createPipelines(const RendererVk* rend);
+	void createDescriptorPoolAndSet(const RendererVk* rend);
+};
+
+inline bool FormatConverter::initialized() const {
+	return descriptorSets[maxTransfers - 1];	// cause it's the last thing to be initialized
+}
+
+inline VkPipeline FormatConverter::getPipeline(bool rgb) const {
+	return pipelines[rgb];
+}
+
+inline VkDescriptorSet FormatConverter::getDescriptorSet(uint id) const {
+	return descriptorSets[id];
+}
+
+inline VkBuffer FormatConverter::getOutputBuffer(uint id) const {
+	return outputBuffers[id];
+}
+
+class GenericPass : public GenericPipeline {
 protected:
 	VkRenderPass handle = VK_NULL_HANDLE;
-	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 	VkPipeline pipeline = VK_NULL_HANDLE;
 
 public:
 	VkRenderPass getHandle() const;
-	VkPipelineLayout getPipelineLayout() const;
 	VkPipeline getPipeline() const;
-
-protected:
-	static VkSampler createSampler(VkDevice dev, VkFilter filter);
-	static VkShaderModule createShaderModule(VkDevice dev, const uint32* code, sizet clen);
 };
 
 inline VkRenderPass GenericPass::getHandle() const {
 	return handle;
-}
-
-inline VkPipelineLayout GenericPass::getPipelineLayout() const {
-	return pipelineLayout;
 }
 
 inline VkPipeline GenericPass::getPipeline() const {
@@ -64,17 +126,18 @@ private:
 
 public:
 	vector<VkDescriptorSet> init(const RendererVk* rend, VkFormat format, uint32 numViews);
-	pair<VkDescriptorPool, VkDescriptorSet> newDescriptorSetTex(VkDevice dev);
+	pair<VkDescriptorPool, VkDescriptorSet> newDescriptorSetTex(const RendererVk* rend, VkImageView imageView);
 	void freeDescriptorSetTex(VkDevice dev, VkDescriptorPool pool, VkDescriptorSet dset);
 	static void updateDescriptorSet(VkDevice dev, VkDescriptorSet descriptorSet, VkBuffer uniformBuffer);
-	static void updateDescriptorSet(VkDevice dev, VkDescriptorSet descriptorSet, VkImageView imageView);
 	void free(VkDevice dev);
 
 private:
-	void createRenderPass(VkDevice dev, VkFormat format);
-	void createDescriptorSetLayout(VkDevice dev);
-	void createPipeline(VkDevice dev);
-	vector<VkDescriptorSet> createDescriptorPoolAndSets(VkDevice dev, uint32 numViews);
+	void createRenderPass(const RendererVk* rend, VkFormat format);
+	void createDescriptorSetLayout(const RendererVk* rend);
+	void createPipeline(const RendererVk* rend);
+	vector<VkDescriptorSet> createDescriptorPoolAndSets(const RendererVk* rend, uint32 numViews);
+	pair<VkDescriptorPool, VkDescriptorSet> getDescriptorSetTex(const RendererVk* rend);
+	static void updateDescriptorSet(VkDevice dev, VkDescriptorSet descriptorSet, VkImageView imageView);
 };
 
 class AddressPass : public GenericPass {
@@ -108,11 +171,11 @@ public:
 	UniformData* getUniformBufferMapped() const;
 
 private:
-	void createRenderPass(VkDevice dev);
-	void createDescriptorSetLayout(VkDevice dev);
-	void createPipeline(VkDevice dev);
+	void createRenderPass(const RendererVk* rend);
+	void createDescriptorSetLayout(const RendererVk* rend);
+	void createPipeline(const RendererVk* rend);
 	void createUniformBuffer(const RendererVk* rend);
-	void createDescriptorPoolAndSet(VkDevice dev);
+	void createDescriptorPoolAndSet(const RendererVk* rend);
 	void updateDescriptorSet(VkDevice dev);
 };
 
@@ -127,10 +190,18 @@ inline AddressPass::UniformData* AddressPass::getUniformBufferMapped() const {
 class RendererVk : public Renderer {
 private:
 	static constexpr array<const char*, 1> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-	static constexpr array<VkMemoryPropertyFlags, 2> deviceMemoryTypes = { VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
+	static constexpr array<VkMemoryPropertyFlags, 3> deviceMemoryTypes = { VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
 #ifndef NDEBUG
 	static constexpr array<const char*, 1> validationLayers = { "VK_LAYER_KHRONOS_validation" };
+	static constexpr array<VkValidationFeatureEnableEXT, 2> validationFeatureEnables = { VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT, VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT };
 #endif
+	static constexpr uint32 maxPossibleQueues = 3;
+
+	struct QueueInfo {
+		umap<uint32, u32vec2> idcnt;
+		optional<uint32> gfam, pfam, tfam;
+		bool canCompute = false;
+	};
 
 	class TextureVk : public Texture {
 	private:
@@ -174,14 +245,19 @@ private:
 	VkDevice ldev = VK_NULL_HANDLE;
 	VkQueue gqueue = VK_NULL_HANDLE;
 	VkQueue pqueue = VK_NULL_HANDLE;
-	VkCommandPool cmdPool = VK_NULL_HANDLE;
+	VkQueue tqueue = VK_NULL_HANDLE;
+	VkCommandPool gcmdPool = VK_NULL_HANDLE;
+	VkCommandPool tcmdPool = VK_NULL_HANDLE;
 #ifndef NDEBUG
 	VkDebugUtilsMessengerEXT dbgMessenger = VK_NULL_HANDLE;
+	PFN_vkSetDebugUtilsObjectNameEXT pfnSetDebugUtilsObjectNameEXT = nullptr;
+	vector<string> nextObjectDebugName;
 #endif
-	VkFence singleTimeFence = VK_NULL_HANDLE;
-	uint32 gfamilyIndex, pfamilyIndex;
+	uint32 gfamilyIndex, pfamilyIndex, tfamilyIndex;
 	RenderPass renderPass;
 	AddressPass addressPass;
+	FormatConverter fmtConv;
+	std::set<SDL_PixelFormatEnum> supportedFormats = { SDL_PIXELFORMAT_RGBA32, SDL_PIXELFORMAT_BGRA32 };
 
 	VkImage addrImage = VK_NULL_HANDLE;
 	VkDeviceMemory addrImageMemory = VK_NULL_HANDLE;
@@ -193,6 +269,14 @@ private:
 	VkCommandBuffer commandBufferAddr = VK_NULL_HANDLE;
 	VkFence addrFence = VK_NULL_HANDLE;
 
+	array<VkCommandBuffer, FormatConverter::maxTransfers> tcmdBuffers{};
+	array<VkFence, FormatConverter::maxTransfers> tfences{};
+	array<VkBuffer, FormatConverter::maxTransfers> inputBuffers{};
+	array<VkDeviceMemory, FormatConverter::maxTransfers> inputMemory{};
+	array<void*, FormatConverter::maxTransfers> inputsMapped;
+	array<VkDeviceSize, FormatConverter::maxTransfers> inputSizesMax{};
+	VkDeviceSize transferAtomSize;
+
 	VkPhysicalDeviceProperties pdevProperties;
 	VkPhysicalDeviceMemoryProperties pdevMemProperties;
 	ViewVk* currentView;
@@ -200,7 +284,9 @@ private:
 	uint32 imageIndex;
 	VkClearValue bgColor;
 	VkPresentModeKHR presentMode;
+	uint currentTransfer = 0;
 	bool refreshFramebuffer = false;
+	array<bool, FormatConverter::maxTransfers> rebindInputBuffer{};
 
 public:
 	RendererVk(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
@@ -209,7 +295,8 @@ public:
 	void setClearColor(const vec4& color) final;
 	void setVsync(bool vsync) final;
 	void updateView(ivec2& viewRes) final;
-	void getAdditionalSettings(bool& compression, vector<pair<u32vec2, string>>& devices) final;
+	void getSettings(uint& maxRes, bool& compression, vector<pair<u32vec2, string>>& devices) const final;
+	void setMaxPicRes(uint& size) final;
 
 	void startDraw(View* view) final;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) final;
@@ -220,65 +307,74 @@ public:
 	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) final;
 	Widget* finishSelDraw(View* view) final;
 
-	Texture* texFromImg(SDL_Surface* img) final;
+	Texture* texFromIcon(SDL_Surface* img) final;
+	Texture* texFromRpic(SDL_Surface* img) final;
 	Texture* texFromText(SDL_Surface* img) final;
 	void freeTexture(Texture* tex) final;
+	void synchTransfer() final;
 
 	VkDevice getLogicalDevice() const;
 	pair<VkImage, VkDeviceMemory> createImage(u32vec2 size, VkImageType type, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags properties) const;
 	VkImageView createImageView(VkImage image, VkImageViewType type, VkFormat format) const;
 	VkFramebuffer createFramebuffer(VkRenderPass rpass, VkImageView view, u32vec2 size) const;
+	void recreateBuffer(VkBuffer& buffer, VkDeviceMemory& memory, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const;
 	pair<VkBuffer, VkDeviceMemory> createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const;
 	uint32 findMemoryType(uint32 typeFilter, VkMemoryPropertyFlags properties) const;
-	void allocateCommandBuffers(VkCommandBuffer* cmdBuffers, uint32 count) const;
-	void freeCommandBuffers(VkCommandBuffer* cmdBuffers, uint32 count) const;
+	void allocateCommandBuffers(VkCommandPool commandPool, VkCommandBuffer* cmdBuffers, uint32 count) const;
 	VkSemaphore createSemaphore() const;
 	VkFence createFence(VkFenceCreateFlags flags = 0) const;
+#ifndef NDEBUG
+	template <class T, std::enable_if_t<std::is_pointer_v<T>, int> = 0> void setObjectDebugName(T object) const;
+	template <class T, std::enable_if_t<std::is_pointer_v<T>, int> = 0> void setObjectDebugName(T object, const char* name) const;
+#endif
 
-	VkCommandBuffer beginSingleTimeCommands() const;
-	void beginSingleTimeCommands(VkCommandBuffer commandBuffer) const;
-	void endSingleTimeCommands(VkCommandBuffer commandBuffer) const;
-	void submitSingleTimeCommands(VkCommandBuffer commandBuffer) const;
+	static void beginSingleTimeCommands(VkCommandBuffer cmdBuffer);
+	void endSingleTimeCommands(VkCommandBuffer cmdBuffer, VkFence fence, VkQueue queue) const;
+	void synchSingleTimeCommands(VkCommandBuffer cmdBuffer, VkFence fence) const;
 	template <VkImageLayout srcLay, VkImageLayout dstLay> static void transitionImageLayout(VkCommandBuffer commandBuffer, VkImage image);
-	static void copyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image, u32vec2 size, uint32 pitch);
+	template <VkImageLayout srcLay, VkImageLayout dstLay> static void transitionBufferToImageLayout(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image);
+	static void copyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image, u32vec2 size, uint32 pitch = 0);
 	static void copyImageToBuffer(VkCommandBuffer commandBuffer, VkImage image, VkBuffer buffer, u32vec2 size);
+
+protected:
+	pair<uint, const std::set<SDL_PixelFormatEnum>*> getLimits() const final;
 
 private:
 	void createInstance(SDL_Window* window);
-	void pickPhysicalDevice(u32vec2& preferred);
-	void createDevice();
-	void createCommandPool();
+	QueueInfo pickPhysicalDevice(u32vec2& preferred);
+	void createDevice(QueueInfo& queueInfo);
+	VkCommandPool createCommandPool(uint32 family) const;
 	VkFormat createSwapchain(ViewVk* view, VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE);
 	void freeFramebuffers(ViewVk* view);
 	void recreateSwapchain(ViewVk* view);
+	void initView(ViewVk* view, VkDescriptorSet descriptorSet);
+	void freeView(ViewVk* view);
 	void createFramebuffers(ViewVk* view);
-	void createUniformBuffer(ViewVk* view);
 	void setPresentMode(bool vsync);
 
 #ifdef NDEBUG
 	static vector<const char*> getRequiredExtensions(SDL_Window* win);
 #else
-	static vector<const char*> getRequiredExtensions(SDL_Window* win, bool validation);
+	static vector<const char*> getRequiredExtensions(SDL_Window* win, bool debugUtils, bool validationFeatures);
 #endif
-	tuple<uint32, uint32, bool> findQueueFamilies(VkPhysicalDevice dev) const;
+	QueueInfo findQueueFamilies(VkPhysicalDevice dev) const;
+	pair<uint32, VkQueue> acquireNextQueue(QueueInfo& queueInfo, uint32 family) const;
 	static vector<VkSurfaceFormatKHR> querySurfaceFormatSupport(VkPhysicalDevice dev, VkSurfaceKHR surf);
 	static vector<VkPresentModeKHR> queryPresentModeSupport(VkPhysicalDevice dev, VkSurfaceKHR surf);
 	static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR chooseSwapPresentMode(const vector<VkPresentModeKHR>& availablePresentModes) const;
 	static uint scoreDevice(const VkPhysicalDeviceProperties& prop, const VkPhysicalDeviceMemoryProperties& memp);
-	TextureVk* createTexture(SDL_Surface* img, u32vec2 res, VkFormat format, bool nearest);
+	TextureVk* createTextureDirect(SDL_Surface* img, u32vec2 res, VkFormat format, bool nearest);
+	TextureVk* createTextureIndirect(SDL_Surface* img, VkFormat format);
+	template <bool conv> void uploadInputData(const SDL_Surface* img);
 	pair<SDL_Surface*, VkFormat> pickPixFormat(SDL_Surface* img) const;
 #ifndef NDEBUG
-	static bool checkValidationLayerSupport();
+	static pair<bool, bool> checkValidationLayerSupport();
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
 #endif
 };
 
 inline VkDevice RendererVk::getLogicalDevice() const {
 	return ldev;
-}
-
-inline void RendererVk::freeCommandBuffers(VkCommandBuffer* cmdBuffers, uint32 count) const {
-	vkFreeCommandBuffers(ldev, cmdPool, count, cmdBuffers);
 }
 #endif

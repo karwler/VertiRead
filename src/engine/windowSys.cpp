@@ -27,8 +27,8 @@ int WindowSys::start() {
 		rc = EXIT_FAILURE;
 #ifdef NDEBUG
 	} catch (...) {
-		logError("unknown error");
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "unknown error", !windows.empty() ? windows.begin()->second : nullptr);
+		logError("Unknown fatal error");
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Unknown fatal error", !windows.empty() ? windows.begin()->second : nullptr);
 		rc = EXIT_FAILURE;
 #endif
 	}
@@ -146,6 +146,7 @@ void WindowSys::exec() {
 		drawSys->drawWidgets(scene, inputSys->mouseWin.has_value());
 		inputSys->tick();
 		scene->tick(dSec);
+		program->tick();
 
 		SDL_Event event;
 		uint32 timeout = SDL_GetTicks() + eventCheckTimeout;
@@ -169,7 +170,7 @@ void WindowSys::createWindow() {
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_SKIP_TASKBAR;
 	SDL_Surface* icon = IMG_Load((fileSys->dirIcons() / "vertiread.svg").u8string().c_str());
 
-	array<pair<Settings::Renderer, uint32>, sizet(Settings::Renderer::max)> renderers;
+	array<pair<Settings::Renderer, uint32>, size_t(Settings::Renderer::max)> renderers;
 	switch (sets->renderer) {
 #ifdef WITH_DIRECTX
 	case Settings::Renderer::directx:
@@ -357,6 +358,15 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 	case SDL_USEREVENT_PREVIEW_PROGRESS:
 		program->eventPreviewProgress(event.user);
 		break;
+	case SDL_USEREVENT_PREVIEW_FINISHED:
+		program->eventPreviewFinished();
+		break;
+	case SDL_USEREVENT_ARCHIVE_PROGRESS:
+		program->eventArchiveProgress(event.user);
+		break;
+	case SDL_USEREVENT_ARCHIVE_FINISHED:
+		program->eventArchiveFinished(event.user);
+		break;
 #ifdef DOWNLOADER
 	case SDL_USEREVENT_DOWNLOAD_PROGRESS:
 		program->eventDownloadProgress();
@@ -372,7 +382,7 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 		program->eventMoveProgress(event.user);
 		break;
 	case SDL_USEREVENT_MOVE_FINISHED:
-		program->eventMoveFinished();
+		program->eventMoveFinished(event.user);
 	}
 }
 
@@ -428,19 +438,19 @@ void WindowSys::eventDisplay(const SDL_DisplayEvent& dspEvent) {
 	}
 }
 
-ivec2 WindowSys::winViewOffset(uint32 wid) const {
+ivec2 WindowSys::winViewOffset(uint32 wid) {
 	if (SDL_Window* win = SDL_GetWindowFromID(wid))
 		if (umap<int, SDL_Window*>::const_iterator it = std::find_if(windows.begin(), windows.end(), [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; }); it != windows.end())
-			return drawSys->getView(it->first).pos();
+			return drawSys->getRenderer()->getViews().at(it->first)->rect.pos();
 	return ivec2(INT_MIN);
 }
 
-ivec2 WindowSys::mousePos() const {
+ivec2 WindowSys::mousePos() {
 	ivec2 mp;
 	SDL_GetMouseState(&mp.x, &mp.y);
 	SDL_Window* win = SDL_GetMouseFocus();
 	umap<int, SDL_Window*>::const_iterator it = std::find_if(windows.begin(), windows.end(), [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; });
-	return it != windows.end() ? mp + drawSys->getView(it->first).pos() : mp;
+	return it != windows.end() ? mp + drawSys->getRenderer()->getViews().at(it->first)->rect.pos() : mp;
 }
 
 void WindowSys::moveCursor(ivec2 mov) {
@@ -448,10 +458,10 @@ void WindowSys::moveCursor(ivec2 mov) {
 	if (umap<int, SDL_Window*>::iterator it = std::find_if(windows.begin(), windows.end(), [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; }); it != windows.end()) {
 		ivec2 wpos;
 		SDL_GetMouseState(&wpos.x, &wpos.y);
-		wpos += drawSys->getView(it->first).pos() + mov;
+		wpos += drawSys->getRenderer()->getViews().at(it->first)->rect.pos() + mov;
 		int id = drawSys->findPointInView(wpos);
 		if (it = windows.find(id); it != windows.end()) {
-			ivec2 vpos = drawSys->getView(id).pos();
+			ivec2 vpos = drawSys->getRenderer()->getViews().at(id)->rect.pos();
 			SDL_WarpMouseInWindow(it->second, wpos.x - vpos.x, wpos.y - vpos.y);
 		}
 	}

@@ -8,6 +8,10 @@ public:
 	template <class C, class T, class A> bool operator()(const std::basic_string<C, T, A>& a, const std::basic_string<C, T, A>& b) const;
 	template <class C> bool operator()(const C* a, const C* b) const;
 
+	static bool less(const fs::path& a, const fs::path& b);
+	template <class C, class T, class A> static bool less(const std::basic_string<C, T, A>& a, const std::basic_string<C, T, A>& b);
+	template <class C> static bool less(const C* a, const C* b);
+
 private:
 	template <class C> static int cmp(const C* a, const C* b);
 	template <class C> static int cmpLeft(const C* a, const C* b);
@@ -16,16 +20,30 @@ private:
 };
 
 inline bool StrNatCmp::operator()(const fs::path& a, const fs::path& b) const {
-	return cmp(a.c_str(), b.c_str()) < 0;
+	return less(a, b);
 }
 
 template <class C, class T, class A>
 bool StrNatCmp::operator()(const std::basic_string<C, T, A>& a, const std::basic_string<C, T, A>& b) const {
-	return cmp(a.c_str(), b.c_str()) < 0;
+	return less(a, b);
 }
 
 template <class C>
 bool StrNatCmp::operator()(const C* a, const C* b) const {
+	return less(a, b);
+}
+
+inline bool StrNatCmp::less(const fs::path& a, const fs::path& b) {
+	return cmp(a.c_str(), b.c_str()) < 0;
+}
+
+template <class C, class T, class A>
+bool StrNatCmp::less(const std::basic_string<C, T, A>& a, const std::basic_string<C, T, A>& b) {
+	return cmp(a.c_str(), b.c_str()) < 0;
+}
+
+template <class C>
+bool StrNatCmp::less(const C* a, const C* b) {
 	return cmp(a, b) < 0;
 }
 
@@ -82,7 +100,7 @@ template <class C>
 int StrNatCmp::cmpLetter(C a, C b) {
 	if (a != b) {
 		int au = toupper(a), bu = toupper(b);
-		return au != bu ? ((au > bu) - (au < bu)) : ((a > b) - (a < b));
+		return au != bu ? (int(au > bu) - int(au < bu)) : (int(a > b) - int(a < b));
 	}
 	return 0;
 }

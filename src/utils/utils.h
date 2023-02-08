@@ -53,18 +53,9 @@ using uint32 = uint32_t;
 using int64 = int64_t;
 using uint64 = uint64_t;
 
-template <class T> using initlist = std::initializer_list<T>;
 template <class... T> using umap = std::unordered_map<T...>;
 template <class... T> using uptr = std::unique_ptr<T...>;
 template <class... T> using uset = std::unordered_set<T...>;
-
-using sizet = size_t;
-using pdift = ptrdiff_t;
-using iptrt = intptr_t;
-using uptrt = uintptr_t;
-using pairStr = pair<string, string>;
-using pairPath = pair<fs::path, fs::path>;
-using mapFiles = umap<string, pair<sizet, uptrt>>;
 
 using glm::vec2;
 using glm::uvec2;
@@ -73,7 +64,7 @@ using glm::ivec2;
 using glm::vec4;
 using glm::u8vec4;
 using glm::ivec4;
-using mvec2 = glm::vec<2, sizet, glm::defaultp>;
+using mvec2 = glm::vec<2, size_t, glm::defaultp>;
 
 // forward declarations
 struct archive;
@@ -90,13 +81,14 @@ class Label;
 class LabelEdit;
 class Layout;
 class Overlay;
-struct PictureLoader;
 class Picture;
+class PicLim;
 class Popup;
 class Program;
 class ProgressBar;
 class ProgState;
 class ReaderBox;
+class Renderer;
 class RootLayout;
 class Scene;
 class ScrollArea;
@@ -125,6 +117,9 @@ enum UserEvent : uint32 {
 	SDL_USEREVENT_READER_PROGRESS = SDL_USEREVENT,
 	SDL_USEREVENT_READER_FINISHED,
 	SDL_USEREVENT_PREVIEW_PROGRESS,
+	SDL_USEREVENT_PREVIEW_FINISHED,
+	SDL_USEREVENT_ARCHIVE_PROGRESS,
+	SDL_USEREVENT_ARCHIVE_FINISHED,
 #ifdef DOWNLOADER
 	SDL_USEREVENT_DOWNLOAD_PROGRESS,
 	SDL_USEREVENT_DOWNLOAD_NEXT,
@@ -133,6 +128,14 @@ enum UserEvent : uint32 {
 	SDL_USEREVENT_MOVE_PROGRESS,
 	SDL_USEREVENT_MOVE_FINISHED,
 	SDL_USEREVENT_MAX
+};
+
+enum class ThreadType : uint8 {
+	none,
+	preview,
+	reader,
+	archive,
+	move
 };
 
 template <class T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
@@ -177,7 +180,7 @@ constexpr bool outRange(T val, T min, T max) {
 
 template <class T>
 string operator+(std::basic_string<T>&& a, std::basic_string_view<T> b) {
-	sizet alen = a.length();
+	size_t alen = a.length();
 	a.resize(alen + b.length());
 	std::copy(b.begin(), b.end(), a.begin() + alen);
 	return a;
@@ -194,7 +197,7 @@ string operator+(const std::basic_string<T>& a, std::basic_string_view<T> b) {
 
 template <class T>
 string operator+(std::basic_string_view<T> a, std::basic_string<T>&& b) {
-	sizet blen = b.length();
+	size_t blen = b.length();
 	b.resize(a.length() + blen);
 	std::move_backward(b.begin(), b.begin() + blen, b.end());
 	std::copy(a.begin(), a.end(), b.begin());
@@ -208,6 +211,28 @@ string operator+(std::basic_string_view<T> a, const std::basic_string<T>& b) {
 	std::copy(a.begin(), a.end(), r.begin());
 	std::copy(b.begin(), b.end(), r.begin() + a.length());
 	return r;
+}
+
+namespace std {
+
+template <>
+struct default_delete<SDL_Surface> {
+	void operator()(SDL_Surface* ptr) const {
+		SDL_FreeSurface(ptr);
+	}
+};
+
+}
+
+template <class F>
+void cleanupEvent(UserEvent type, F dealloc) {
+	array<SDL_Event, 16> events;
+	while (int num = SDL_PeepEvents(events.data(), events.size(), SDL_GETEVENT, type, type)) {
+		if (num < 0)
+			throw std::runtime_error(SDL_GetError());
+		for (int i = 0; i < num; ++i)
+			dealloc(events[i].user);
+	}
 }
 
 void pushEvent(UserEvent code, void* data1 = nullptr, void* data2 = nullptr);
@@ -355,10 +380,55 @@ constexpr Rect<T> Rect<T>::translate(const tvec2& mov) const {
 	return Rect(pos() + mov, size());
 }
 
+// size of a widget in pixels or relative to it's parent
+struct Size {
+	enum Mode : uint8 {
+		rela,	// relative to parent size
+		pixv,	// absolute pixel value
+		calc	// use the calculation function
+	};
+
+	union {
+		float prc;
+		int pix;
+		int (*cfn)(const Widget*);
+	};
+	Mode mod;
+
+	constexpr Size(float percent = 1.f);
+	constexpr Size(int pixels);
+	constexpr Size(int (*calcul)(const Widget*));
+
+	int operator()(const Widget* wgt) const;
+};
+using svec2 = glm::vec<2, Size, glm::defaultp>;
+
+constexpr Size::Size(float percent) :
+	prc(percent),
+	mod(rela)
+{}
+
+constexpr Size::Size(int pixels) :
+	pix(pixels),
+	mod(pixv)
+{}
+
+constexpr Size::Size(int (*calcul)(const Widget*)) :
+	cfn(calcul),
+	mod(calc)
+{}
+
+inline int Size::operator()(const Widget* wgt) const {
+	return cfn(wgt);
+}
+
 // files and strings
 
 bool isDriveLetter(const fs::path& path);
 fs::path parentPath(const fs::path& path);
+string_view filename(string_view path);
+string_view fileExtension(string_view path);
+string_view trim(string_view str);
 string strEnclose(string_view str);
 vector<string> strUnenclose(string_view str);
 vector<string_view> getWords(string_view str);
@@ -372,10 +442,7 @@ inline bool notSpace(int c) {
 	return uint(c) > ' ' && c != 0x7F;
 }
 
-inline string_view trim(string_view str) {
-	string_view::iterator pos = std::find_if(str.begin(), str.end(), notSpace);
-	return string_view(str.data() + (pos - str.begin()), std::find_if(str.rbegin(), std::make_reverse_iterator(pos), notSpace).base() - pos);
-}
+
 
 inline bool isDsep(int c) {
 #ifdef _WIN32
@@ -450,7 +517,7 @@ string toStr(T num, uint8 pad) {
 }
 
 template <class T = float, std::enable_if_t<std::is_floating_point_v<T>, int> = 0>
-constexpr sizet recommendedCharBufferSize() {
+constexpr size_t recommendedCharBufferSize() {
 	if constexpr (std::is_same_v<T, float>)
 		return 16;
 	if constexpr (std::is_same_v<T, double>)
@@ -482,14 +549,14 @@ string toStr(const glm::vec<L, T, Q>& v, const char* sep = " ") {
 }
 
 inline string tmToDateStr(const tm& tim, char sep = '-') {
-	return toStr(tim.tm_year + 1900) + sep + toStr(tim.tm_mon, 2) + sep + toStr(tim.tm_mday, 2);
+	return toStr(tim.tm_year + 1900) + sep + toStr(tim.tm_mon + 1, 2) + sep + toStr(tim.tm_mday, 2);
 }
 
 inline string tmToTimeStr(const tm& tim, char sep = ':') {
 	return toStr(tim.tm_hour, 2) + sep + toStr(tim.tm_min, 2) + sep + toStr(tim.tm_sec, 2);
 }
 
-template <class T, sizet N, std::enable_if_t<std::is_integral_v<T> || std::is_enum_v<T>, int> = 0>
+template <class T, size_t N, std::enable_if_t<std::is_integral_v<T> || std::is_enum_v<T>, int> = 0>
 T strToEnum(const array<const char*, N>& names, string_view str, T defaultValue = T(N)) {
 	typename array<const char*, N>::const_iterator p = std::find_if(names.begin(), names.end(), [str](const char* it) -> bool { return !SDL_strncasecmp(it, str.data(), str.length()) && !it[str.length()]; });
 	return p != names.end() ? T(p - names.begin()) : defaultValue;
@@ -508,7 +575,7 @@ inline bool toBool(string_view str) {
 template <class T, class... A, std::enable_if_t<(std::is_integral_v<T> && !std::is_same_v<T, bool>) || std::is_floating_point_v<T>, int> = 0>
 T toNum(string_view str, A... args) {
 	T val = T(0);
-	sizet i = 0;
+	size_t i = 0;
 	for (; i < str.length() && isSpace(str[i]); ++i);
 	std::from_chars(str.data() + i, str.data() + str.length(), val, args...);
 	return val;
@@ -517,7 +584,7 @@ T toNum(string_view str, A... args) {
 template <class T, class... A, std::enable_if_t<(std::is_integral_v<typename T::value_type> && !std::is_same_v<typename T::value_type, bool>) || std::is_floating_point_v<typename T::value_type>, int> = 0>
 T toVec(string_view str, typename T::value_type fill = typename T::value_type(0), A... args) {
 	T vec(fill);
-	sizet p = 0;
+	size_t p = 0;
 	for (glm::length_t i = 0; p < str.length() && i < vec.length(); ++i) {
 		for (; p < str.length() && isSpace(str[p]); ++p);
 		for (; p < str.length(); ++p)
@@ -539,6 +606,12 @@ T btom(bool b) {
 template <class T, glm::qualifier Q = glm::defaultp>
 glm::vec<2, T, Q> vswap(const T& x, const T& y, bool swap) {
 	return swap ? glm::vec<2, T, Q>(y, x) : glm::vec<2, T, Q>(x, y);
+}
+
+template <class T, std::enable_if_t<std::is_integral_v<T>, int> = 0>
+T roundToMulOf(T val, T mul) {
+	T rem = val % mul;
+	return rem ? val + mul - rem : val;
 }
 
 template <class... A>

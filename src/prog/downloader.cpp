@@ -7,7 +7,7 @@
 
 // COMIC
 
-Comic::Comic(string capt, vector<pairStr>&& chaps) :
+Comic::Comic(string capt, vector<pair<string, string>>&& chaps) :
 	title(std::move(capt)),
 	chapters(std::move(chaps))
 {}
@@ -146,8 +146,8 @@ WebSource::Type Mangahere::source() const {
 	return mangahere;
 }
 
-vector<pairStr> Mangahere::query(const string& text) {
-	vector<pairStr> results;
+vector<pair<string, string>> Mangahere::query(const string& text) {
+	vector<pair<string, string>> results;
 	for (string link = baseUrl() + "/search?title="s + toUrl(text); !link.empty();) {
 		xmlDoc* doc = downloadHtml(link);
 		xmlNode* root = xmlDocGetRootElement(doc);
@@ -169,8 +169,8 @@ vector<pairStr> Mangahere::query(const string& text) {
 	return results;
 }
 
-vector<pairStr> Mangahere::getChapters(const string& url) {
-	vector<pairStr> chapters;
+vector<pair<string, string>> Mangahere::getChapters(const string& url) {
+	vector<pair<string, string>> chapters;
 	xmlDoc* doc = downloadHtml(url);
 	xmlNode* root = xmlDocGetRootElement(doc);
 	if (!root)
@@ -222,8 +222,8 @@ WebSource::Type Mangamaster::source() const {
 	return mangamaster;
 }
 
-vector<pairStr> Mangamaster::query(const string& text) {
-	vector<pairStr> results;
+vector<pair<string, string>> Mangamaster::query(const string& text) {
+	vector<pair<string, string>> results;
 	for (string link = baseUrl() + "/comics?q[name_cont]="s + toUrl(text); !link.empty();) {
 		xmlDoc* doc = downloadHtml(link);
 		xmlNode* root = xmlDocGetRootElement(doc);
@@ -243,8 +243,8 @@ vector<pairStr> Mangamaster::query(const string& text) {
 	return results;
 }
 
-vector<pairStr> Mangamaster::getChapters(const string& url) {
-	vector<pairStr> chapters;
+vector<pair<string, string>> Mangamaster::getChapters(const string& url) {
+	vector<pair<string, string>> chapters;
 	xmlDoc* doc = downloadHtml(url);
 	xmlNode* root = xmlDocGetRootElement(doc);
 	if (!root)
@@ -282,8 +282,8 @@ WebSource::Type Nhentai::source() const {
 	return nhentai;
 }
 
-vector<pairStr> Nhentai::query(const string& text) {
-	vector<pairStr> results;
+vector<pair<string, string>> Nhentai::query(const string& text) {
+	vector<pair<string, string>> results;
 	for (string link = baseUrl() + "/search/?q="s + toUrl(text); !link.empty();) {
 		xmlDoc* doc = downloadHtml(link);
 		xmlNode* root = xmlDocGetRootElement(doc);
@@ -306,7 +306,7 @@ vector<pairStr> Nhentai::query(const string& text) {
 	return results;
 }
 
-vector<pairStr> Nhentai::getChapters(const string& url) {
+vector<pair<string, string>> Nhentai::getChapters(const string& url) {
 	return { pair("All", url) };
 }
 
@@ -397,8 +397,8 @@ void Downloader::setSource(WebSource::Type type) {
 	}
 }
 
-sizet Downloader::writeText(char* ptr, sizet size, sizet nmemb, void* userdata) {
-	sizet len = size * nmemb;
+size_t Downloader::writeText(char* ptr, size_t size, size_t nmemb, void* userdata) {
+	size_t len = size * nmemb;
 	static_cast<string*>(userdata)->append(ptr, len);
 	return len;
 }
@@ -429,11 +429,11 @@ void Downloader::interruptProc() {
 	}
 }
 
-void Downloader::deleteEntry(sizet id) {
+void Downloader::deleteEntry(size_t id) {
 	std::scoped_lock qsl(queueLock);
 	if (id < dlQueue.size()) {
 		if (id)
-			dlQueue.erase(dlQueue.begin() + pdift(id));
+			dlQueue.erase(dlQueue.begin() + ptrdiff_t(id));
 		else
 			dlState = DownloadState::skip;
 	}
@@ -452,7 +452,7 @@ int Downloader::downloadChaptersThread() {
 		pushEvent(SDL_USEREVENT_DOWNLOAD_NEXT);
 
 		if (fs::path bdrc = World::sets()->getDirLib() / FileSys::validateFilename(fs::u8path(dlQueue.front().title)); fs::is_directory(bdrc) || fs::create_directories(bdrc)) {	// create comic base directory in library
-			vector<pairStr> chaps = dlQueue.front().chapters;
+			vector<pair<string, string>> chaps = dlQueue.front().chapters;
 			queueLock.unlock();	// unlock after iteration check and copying chapter data
 
 			switch (downloadChapters(chaps, bdrc)) {
@@ -472,9 +472,9 @@ int Downloader::downloadChaptersThread() {
 	return 0;
 }
 
-DownloadState Downloader::downloadChapters(const vector<pairStr>& chaps, const fs::path& bdrc) {
+DownloadState Downloader::downloadChapters(const vector<pair<string, string>>& chaps, const fs::path& bdrc) {
 	dlProg = mvec2(0, chaps.size());
-	for (sizet i = 0; i < chaps.size(); ++i) {	// iterate over chapters in currently selected comic
+	for (size_t i = 0; i < chaps.size(); ++i) {	// iterate over chapters in currently selected comic
 		dlProg.x = i;
 		pushEvent(SDL_USEREVENT_DOWNLOAD_PROGRESS);
 

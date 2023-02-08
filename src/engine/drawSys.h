@@ -33,7 +33,7 @@ public:
 #endif
 	TTF_Font* getFont(int height);
 	int length(const char* text, int height);
-	int length(char* text, sizet length, int height);
+	int length(char* text, size_t length, int height);
 };
 
 inline FontSet::~FontSet() {
@@ -43,23 +43,6 @@ inline FontSet::~FontSet() {
 	clear();
 #endif
 }
-
-// data needed to load pictures
-struct PictureLoader {
-	vector<string> names;
-	vector<pair<sizet, SDL_Surface*>> pics;	// surfaces are freed by the renderer
-	fs::path curDir;
-	string firstPic;
-	PicLim picLim;
-	bool fwd, showHidden;
-
-	PictureLoader(fs::path cdrc, string pfirst, const PicLim& plim, bool forward, bool hidden);
-	~PictureLoader();
-
-	vector<pair<sizet, SDL_Surface*>> extractPics();
-	string limitToStr(uptrt c, uptrt m, sizet mag) const;
-	static char* progressText(string_view val, string_view lim);
-};
 
 // handles the drawing
 class DrawSys {
@@ -73,32 +56,27 @@ private:
 	array<vec4, Settings::defaultColors.size()> colors;
 	FontSet fonts;
 	umap<string, Texture*> texes;
-	const Texture* blank;
+	Texture* blank;		// reference to texes[""]
 
 public:
 	DrawSys(const umap<int, SDL_Window*>& windows, Settings* sets, const FileSys* fileSys, int iconSize);
 	~DrawSys();
 
+	Renderer* getRenderer();
 	ivec2 getViewRes() const;
-	const Recti& getView(int id) const;
 	void updateView();
 	int findPointInView(ivec2 pos) const;
-	void setVsync(bool vsync);
 	void setTheme(string_view name, Settings* sets, const FileSys* fileSys);
 	int textLength(const char* text, int height);
 	int textLength(const string& text, int height);
-	int textLength(char* text, sizet length, int height);
-	int textLength(string& text, sizet length, int height);
-	void setFont(string_view font, Settings* sets, const FileSys* fileSys);
+	int textLength(char* text, size_t length, int height);
+	int textLength(string& text, size_t length, int height);
+	void setFont(const string& font, Settings* sets, const FileSys* fileSys);
 #if !SDL_TTF_VERSION_ATLEAST(2, 0, 18)
 	void clearFonts();
 #endif
-	const Texture* texture(const string& name) const;
-	vector<pair<string, Texture*>> transferPictures(PictureLoader* pl);
-	Texture* texFromImg(SDL_Surface* img);
-	void freeTexture(Texture* tex);
-	void setCompression(bool on);
-	void getAdditionalSettings(bool& compression, vector<pair<u32vec2, string>>& devices);
+	SDL_Surface* loadIcon(const string& path, int size);
+	pair<Texture*, bool> texture(const string& name) const;
 
 	void drawWidgets(Scene* scene, bool mouseLast);
 	bool drawPicture(const Picture* wgt, const Recti& view);
@@ -122,28 +100,21 @@ public:
 	Texture* renderText(const string& text, int height);
 	Texture* renderText(const char* text, int height, uint length);
 	Texture* renderText(const string& text, int height, uint length);
-	static void loadTexturesDirectoryThreaded(std::atomic_bool& running, uptr<PictureLoader> pl);
-	static void loadTexturesArchiveThreaded(std::atomic_bool& running, uptr<PictureLoader> pl);
+
 private:
-	static tuple<sizet, uptrt, uint8> initLoadLimits(const PictureLoader* pl, vector<fs::path>& files);
-	static tuple<sizet, sizet, sizet, uptrt, uint8> initLoadLimits(PictureLoader* pl, const mapFiles& files);
 	umap<int, Renderer::View*>::const_iterator findViewForPoint(ivec2 pos) const;
 };
+
+inline Renderer* DrawSys::getRenderer() {
+	return renderer;
+}
 
 inline ivec2 DrawSys::getViewRes() const {
 	return viewRes;
 }
 
-inline const Recti& DrawSys::getView(int id) const {
-	return renderer->getViews().at(id)->rect;
-}
-
 inline void DrawSys::updateView() {
 	renderer->updateView(viewRes);
-}
-
-inline void DrawSys::setVsync(bool vsync) {
-	renderer->setVsync(vsync);
 }
 
 inline int DrawSys::textLength(const char* text, int height) {
@@ -154,11 +125,11 @@ inline int DrawSys::textLength(const string& text, int height) {
 	return fonts.length(text.c_str(), height);
 }
 
-inline int DrawSys::textLength(char* text, sizet length, int height) {
+inline int DrawSys::textLength(char* text, size_t length, int height) {
 	return fonts.length(text, length, height);
 }
 
-inline int DrawSys::textLength(string& text, sizet length, int height) {
+inline int DrawSys::textLength(string& text, size_t length, int height) {
 	return fonts.length(text.data(), length, height);
 }
 
@@ -176,22 +147,6 @@ inline Texture* DrawSys::renderText(const char* text, int height, uint length) {
 
 inline Texture* DrawSys::renderText(const string& text, int height, uint length) {
 	return renderText(text.c_str(), height, length);
-}
-
-inline Texture* DrawSys::texFromImg(SDL_Surface* img) {
-	return renderer->texFromImg(img);
-}
-
-inline void DrawSys::freeTexture(Texture* tex) {
-	renderer->freeTexture(tex);
-}
-
-inline void DrawSys::setCompression(bool on) {
-	renderer->setCompression(on);
-}
-
-inline void DrawSys::getAdditionalSettings(bool& compression, vector<pair<u32vec2, string>>& devices) {
-	return renderer->getAdditionalSettings(compression, devices);
 }
 
 inline umap<int, Renderer::View*>::const_iterator DrawSys::findViewForPoint(ivec2 pos) const {

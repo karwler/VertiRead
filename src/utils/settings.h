@@ -107,7 +107,7 @@ public:
 		scrollFast,
 		scrollSlow
 	};
-	static constexpr array<const char*, sizet(Type::scrollSlow) + 1> names = {
+	static constexpr array<const char*, size_t(Type::scrollSlow) + 1> names = {
 		"up",
 		"down",
 		"left",
@@ -339,13 +339,13 @@ public:
 		count,
 		size
 	};
-	static constexpr array<const char*, sizet(Type::size) + 1> names = {
+	static constexpr array<const char*, size_t(Type::size) + 1> names = {
 		"none",
 		"count",
 		"size"
 	};
 
-	static constexpr array<uptrt, 4> sizeFactors = {
+	static constexpr array<uintptr_t, 4> sizeFactors = {
 		1,
 		1'000,
 		1'000'000,
@@ -358,32 +358,32 @@ public:
 		'G'
 	};
 
-	static constexpr uptrt defaultCount = 128;
+	static constexpr uintptr_t defaultCount = 128;
 
 private:
-	uptrt count, size;	// size in bytes
+	uintptr_t count, size;	// size in bytes
 public:
 	Type type;
 
-	PicLim(Type ltype = Type::none, uptrt cnt = defaultCount);
+	PicLim(Type ltype = Type::none, uintptr_t cnt = defaultCount);
 
-	uptrt getCount() const;
+	uintptr_t getCount() const;
 	void setCount(string_view str);
-	uptrt getSize() const;
+	uintptr_t getSize() const;
 	void setSize(string_view str);
 	void set(string_view str);
 
-	static uint8 memSizeMag(uptrt num);
-	static string memoryString(uptrt num, uint8 mag);
-	static string memoryString(uptrt num);
+	static uint8 memSizeMag(uintptr_t num);
+	static string memoryString(uintptr_t num, uint8 mag);
+	static string memoryString(uintptr_t num);
 
 private:
-	static uptrt toCount(string_view str);
-	static uptrt toSize(string_view str);
-	static uptrt defaultSize();
+	static uintptr_t toCount(string_view str);
+	static uintptr_t toSize(string_view str);
+	static uintptr_t defaultSize();
 };
 
-inline uptrt PicLim::getCount() const {
+inline uintptr_t PicLim::getCount() const {
 	return count;
 }
 
@@ -391,7 +391,7 @@ inline void PicLim::setCount(string_view str) {
 	count = toCount(str);
 }
 
-inline uptrt PicLim::getSize() const {
+inline uintptr_t PicLim::getSize() const {
 	return size;
 }
 
@@ -399,17 +399,17 @@ inline void PicLim::setSize(string_view str) {
 	size = toSize(str);
 }
 
-inline uptrt PicLim::defaultSize() {
+inline uintptr_t PicLim::defaultSize() {
 	return SDL_GetSystemRAM() / 2 * 1'000'000;
 }
 
-inline string PicLim::memoryString(uptrt num) {
+inline string PicLim::memoryString(uintptr_t num) {
 	return memoryString(num, memSizeMag(num));
 }
 
 class Settings {
 public:
-	static constexpr array<vec4, sizet(Color::texture) + 1> defaultColors = {
+	static constexpr array<vec4, size_t(Color::texture) + 1> defaultColors = {
 		vec4(0.04f, 0.04f, 0.04f, 1.f),	// background
 		vec4(0.35f, 0.35f, 0.35f, 1.f),	// normal
 		vec4(0.24f, 0.24f, 0.24f, 1.f),	// dark
@@ -435,7 +435,7 @@ public:
 		fullscreen,
 		multiFullscreen
 	};
-	static constexpr array<const char*, sizet(Screen::multiFullscreen) + 1> screenModeNames = {
+	static constexpr array<const char*, size_t(Screen::multiFullscreen) + 1> screenModeNames = {
 		"windowed",
 		"fullscreen",
 		"multi fullscreen"
@@ -453,7 +453,7 @@ public:
 #endif
 		max
 	};
-	static constexpr array<const char*, sizet(Renderer::max)> rendererNames = {
+	static constexpr array<const char*, size_t(Renderer::max)> rendererNames = {
 #ifdef WITH_DIRECTX
 		"DirectX 11",
 #endif
@@ -471,6 +471,7 @@ public:
 
 	static constexpr float defaultZoom = 1.f;
 	static constexpr int defaultSpacing = 10;
+	static constexpr uint minPicRes = 1;
 	static constexpr int axisLimit = SHRT_MAX + 1;
 	static constexpr Screen defaultScreenMode = Screen::windowed;
 	static constexpr Direction::Dir defaultDirection = Direction::down;
@@ -496,6 +497,7 @@ public:
 	u32vec2 device = u32vec2(0);
 	ivec2 resolution = ivec2(800, 600);
 	vec2 scrollSpeed = vec2(1600.f, 1600.f);
+	uint maxPicRes = UINT_MAX;
 	float zoom = defaultZoom;
 	int spacing = defaultSpacing;
 private:

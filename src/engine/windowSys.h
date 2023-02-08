@@ -29,8 +29,8 @@ public:
 
 	float getDSec() const;
 	float getWinDpi() const;
-	ivec2 mousePos() const;
-	ivec2 winViewOffset(uint32 wid) const;
+	ivec2 mousePos();
+	ivec2 winViewOffset(uint32 wid);
 	ivec2 displayResolution() const;
 	void moveCursor(ivec2 mov);
 	void toggleOpacity();

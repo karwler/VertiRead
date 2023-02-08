@@ -220,7 +220,7 @@ void Binding::setGaxis(SDL_GameControllerAxis axis, bool positive) {
 
 // PICTURE LIMIT
 
-PicLim::PicLim(Type ltype, uptrt cnt) :
+PicLim::PicLim(Type ltype, uintptr_t cnt) :
 	count(cnt),
 	size(defaultSize()),
 	type(ltype)
@@ -233,15 +233,15 @@ void PicLim::set(string_view str) {
 	size = elems.size() > 2 ? toSize(elems[2]) : defaultSize();
 }
 
-uptrt PicLim::toCount(string_view str) {
-	uptrt cnt = toNum<uptrt>(str);
+uintptr_t PicLim::toCount(string_view str) {
+	uintptr_t cnt = toNum<uintptr_t>(str);
 	return cnt ? cnt : defaultCount;
 }
 
-uptrt PicLim::toSize(string_view str) {
-	sizet i = 0;
+uintptr_t PicLim::toSize(string_view str) {
+	size_t i = 0;
 	for (; i < str.length() && isSpace(str[i]); ++i);
-	uptrt num = 0;
+	uintptr_t num = 0;
 	std::from_chars_result res = std::from_chars(str.data() + i, str.data() + str.length(), num);
 	if (!num)
 		return defaultSize();
@@ -262,13 +262,13 @@ uptrt PicLim::toSize(string_view str) {
 	return mit == str.end() || *mit != 'b' ? num : num / 8;
 }
 
-uint8 PicLim::memSizeMag(uptrt num) {
+uint8 PicLim::memSizeMag(uintptr_t num) {
 	uint8 m;
 	for (m = 0; m + 1u < sizeLetters.size() && (!(num % 1000) && (num /= 1000)); ++m);
 	return m;
 }
 
-string PicLim::memoryString(uptrt num, uint8 mag) {
+string PicLim::memoryString(uintptr_t num, uint8 mag) {
 	string str = toStr(num / sizeFactors[mag]);
 	return (mag ? str + sizeLetters[mag] : str) + sizeLetters[0];
 }
@@ -292,7 +292,7 @@ const fs::path& Settings::setDirLib(const fs::path& drc, const fs::path& dirSets
 		if (dirLib = drc; !fs::is_directory(dirLib) && !fs::create_directories(dirLib))
 			if (dirLib = dirSets / defaultDirLib; !fs::is_directory(dirLib))
 				fs::create_directories(dirLib);
-	} catch (const std::runtime_error& err) {
+	} catch (const fs::filesystem_error& err) {
 		logError(err.what());
 		dirLib = dirSets / defaultDirLib;
 	}

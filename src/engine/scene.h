@@ -34,10 +34,11 @@ public:
 	void onMouseMove(ivec2 mPos, ivec2 mMov);
 	void onMouseDown(ivec2 mPos, uint8 mBut, uint8 mCnt);
 	void onMouseUp(ivec2 mPos, uint8 mBut, uint8 mCnt);
-	void onMouseWheel(ivec2 mPos, ivec2 wMov);
+	void onMouseWheel(ivec2 wMov);
 	void onMouseLeave();
 	void onCompose(string_view str);
 	void onText(string_view str);
+	void onCancel();
 	void onResize();
 	void onDisplayChange();
 
@@ -57,7 +58,7 @@ public:
 	void updateSelect();
 	void updateSelect(ivec2 mPos);
 	void selectFirst();
-	sizet findSelectedID(Layout* box) const;	// get id of possibly select or selects parent in relation to box
+	size_t findSelectedID(Layout* box) const;	// get id of possibly select or selects parent in relation to box
 	bool cursorInClickRange(ivec2 mPos, uint8 mBut);
 
 	ScrollArea* getSelectedScrollArea() const;

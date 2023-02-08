@@ -62,11 +62,7 @@ void InputSys::eventMouseButtonUp(const SDL_MouseButtonEvent& button) {
 
 void InputSys::eventMouseWheel(const SDL_MouseWheelEvent& wheel) {
 	mouseWin = wheel.windowID;
-#if SDL_VERSION_ATLEAST(2, 26, 0)
-	World::scene()->onMouseWheel(ivec2(wheel.mouseX, wheel.mouseY) + World::winSys()->winViewOffset(wheel.windowID), ivec2(wheel.x, -wheel.y));
-#else
-	World::scene()->onMouseWheel(World::winSys()->mousePos(), ivec2(wheel.x, -wheel.y));
-#endif
+	World::scene()->onMouseWheel(ivec2(wheel.x, -wheel.y));
 }
 
 void InputSys::eventKeypress(const SDL_KeyboardEvent& key) const {
@@ -165,7 +161,7 @@ SDL_MouseButtonEvent InputSys::toMouseEvent(const SDL_TouchFingerEvent& fin, uin
 
 void InputSys::tick() const {
 	// handle key hold
-	for (sizet i = uint8(Binding::holders); i < bindings.size(); ++i)
+	for (size_t i = uint8(Binding::holders); i < bindings.size(); ++i)
 		if (float amt = 1.f; isPressed(bindings[i], amt))
 			World::srun(bindings[i].acall, amt);
 }
@@ -256,7 +252,7 @@ int InputSys::getAxisG(SDL_GameControllerAxis gaxis) const {
 }
 
 void InputSys::resetBindings() {
-	for (sizet i = 0; i < bindings.size(); ++i)
+	for (size_t i = 0; i < bindings.size(); ++i)
 		bindings[i].reset(Binding::Type(i));
 }
 

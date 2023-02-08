@@ -1,23 +1,27 @@
 #pragma once
 
+#include "drawSys.h"
 #include "windowSys.h"
 #include "prog/program.h"
 
 // class that makes accessing stuff easier and holds command line arguments
 class World {
 private:
-	static inline WindowSys windowSys;			// the thing on which everything runs
+	static inline WindowSys windowSys;	// the thing on which everything runs
 	static inline vector<string> vals;
 
 public:
 	static FileSys* fileSys();
 	static DrawSys* drawSys();
+	static Renderer* renderer();
 	static InputSys* inputSys();
 	static WindowSys* winSys();
 	static Scene* scene();
 	static Program* program();
 	static ProgState* state();
+#ifdef DOWNLOADER
 	static Downloader* downloader();
+#endif
 	static Browser* browser();
 	static Settings* sets();
 
@@ -36,6 +40,10 @@ inline FileSys* World::fileSys() {
 
 inline DrawSys* World::drawSys() {
 	return windowSys.getDrawSys();
+}
+
+inline Renderer* World::renderer() {
+	return windowSys.getDrawSys()->getRenderer();
 }
 
 inline InputSys* World::inputSys() {
@@ -58,9 +66,11 @@ inline ProgState* World::state() {
 	return windowSys.getProgram()->getState();
 }
 
+#ifdef DOWNLOADER
 inline Downloader* World::downloader() {
 	return windowSys.getProgram()->getDownloader();
 }
+#endif
 
 inline Browser* World::browser() {
 	return windowSys.getProgram()->getBrowser();

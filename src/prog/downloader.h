@@ -1,7 +1,7 @@
 #pragma once
 
-#include "utils/utils.h"
 #ifdef DOWNLOADER
+#include "utils/utils.h"
 #include <deque>
 #include <mutex>
 #include <thread>
@@ -23,9 +23,9 @@ enum class DownloadState : uint8 {
 
 struct Comic {
 	string title;
-	vector<pairStr> chapters;	// name, url
+	vector<pair<string, string>> chapters;	// name, url
 
-	Comic(string capt = string(), vector<pairStr>&& chaps = vector<pairStr>());
+	Comic(string capt = string(), vector<pair<string, string>>&& chaps = vector<pair<string, string>>());
 };
 
 class WebSource {
@@ -59,8 +59,8 @@ public:
 	const char* baseUrl() const;
 	virtual Type source() const;	// dummy function
 
-	virtual vector<pairStr> query(const string& text) = 0;
-	virtual vector<pairStr> getChapters(const string& url) = 0;	// url needs to be of the comic's main info page; returned chapter lit has pairs of first name, second url
+	virtual vector<pair<string, string>> query(const string& text) = 0;
+	virtual vector<pair<string, string>> getChapters(const string& url) = 0;	// url needs to be of the comic's main info page; returned chapter lit has pairs of first name, second url
 	virtual DownloadState downloadPictures(const string& url, const fs::path& drc) = 0;	// returns non-zero if interrupted
 
 protected:
@@ -98,8 +98,8 @@ public:
 	~Mangahere() final = default;
 
 	Type source() const final;
-	vector<pairStr> query(const string& text) final;
-	vector<pairStr> getChapters(const string& url) final;
+	vector<pair<string, string>> query(const string& text) final;
+	vector<pair<string, string>> getChapters(const string& url) final;
 	DownloadState downloadPictures(const string& url, const fs::path& drc) final;
 };
 
@@ -109,8 +109,8 @@ public:
 	~Mangamaster() final = default;
 
 	Type source() const final;
-	vector<pairStr> query(const string& text) final;
-	vector<pairStr> getChapters(const string& url) final;
+	vector<pair<string, string>> query(const string& text) final;
+	vector<pair<string, string>> getChapters(const string& url) final;
 	DownloadState downloadPictures(const string& url, const fs::path& drc) final;
 };
 
@@ -120,8 +120,8 @@ public:
 	~Nhentai() final = default;
 
 	Type source() const final;
-	vector<pairStr> query(const string& text) final;
-	vector<pairStr> getChapters(const string& url) final;
+	vector<pair<string, string>> query(const string& text) final;
+	vector<pair<string, string>> getChapters(const string& url) final;
 	DownloadState downloadPictures(const string& url, const fs::path& drc) final;
 
 private:
@@ -151,14 +151,14 @@ public:
 	bool startProc();
 	void interruptProc();
 	void finishProc();
-	void deleteEntry(sizet id);
+	void deleteEntry(size_t id);
 	void clearQueue();
 
 private:
-	static sizet writeText(char* ptr, sizet size, sizet nmemb, void* userdata);
+	static size_t writeText(char* ptr, size_t size, size_t nmemb, void* userdata);
 	static int progress(void* clientp, cofft dltotal, cofft dlnow, cofft ultotal, cofft ulnow);
 	int downloadChaptersThread();
-	DownloadState downloadChapters(const vector<pairStr>& chaps, const fs::path& bdrc);	// returns non-zero if interrupted
+	DownloadState downloadChapters(const vector<pair<string, string>>& chaps, const fs::path& bdrc);	// returns non-zero if interrupted
 };
 
 inline WebSource* Downloader::getSource() const {
@@ -180,12 +180,4 @@ inline const mvec2& Downloader::getDlProg() const {
 inline void Downloader::finishProc() {
 	dlProc.join();
 }
-
-#else
-
-class Downloader {
-public:
-	void interruptProc() {}
-};
-
 #endif

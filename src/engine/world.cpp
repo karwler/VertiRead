@@ -1,7 +1,4 @@
 #include "world.h"
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 template <class C, class F>
 void World::setArgs(int argc, C** argv, F conv) {

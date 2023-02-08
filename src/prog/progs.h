@@ -2,6 +2,8 @@
 
 #include "downloader.h"
 #include "utils/settings.h"
+#include <atomic>
+#include <thread>
 
 // for handling program state specific things that occur in all states
 class ProgState {
@@ -14,6 +16,8 @@ protected:
 		int length;
 
 		Text(string str, int height);
+
+		static int measure(const char* str, int height);
 	};
 
 	int popupLineHeight;
@@ -30,10 +34,11 @@ private:
 
 public:
 	ProgState();
-	virtual ~ProgState() = default;	// to keep the compiler happy
+	virtual ~ProgState() = default;
 
 	void eventEnter();
-	virtual void eventEscape() {}
+	void eventEscape();
+	virtual void eventSpecEscape() {}
 	virtual void eventUp();
 	virtual void eventDown();
 	virtual void eventLeft();
@@ -68,17 +73,19 @@ public:
 	virtual RootLayout* createLayout() = 0;
 	virtual Overlay* createOverlay();
 	Popup* createPopupMessage(string msg, PCall ccal, string ctxt = "Okay", Alignment malign = Alignment::left);
+	Popup* createPopupMultiline(string msg, PCall ccal, string ctxt = "Okay", Alignment malign = Alignment::left);
 	Popup* createPopupChoice(string msg, PCall kcal, PCall ccal, Alignment malign = Alignment::left);
+	void updatePopupMessage(string msg);
 	Context* createContext(vector<pair<string, PCall>>&& items, Widget* parent);
 	Context* createComboContext(ComboBox* parent, PCall kcal);
 
+	int getLineHeight() const;
 	static Recti calcTextContextRect(const vector<Widget*>& items, ivec2 pos, ivec2 size, int margin);
 protected:
 	template <class T> static int findMaxLength(T pos, T end, int height);
 	Texture* makeTooltip(const char* str);
 	Texture* makeTooltipL(const char* str);
 
-	bool eventCommonEscape();	// returns true if something happened
 private:
 	void eventSelect(Direction dir);
 	static void calcContextPos(int& pos, int& siz, int limit);
@@ -88,28 +95,52 @@ inline ProgState::ProgState() {
 	onResize();
 }
 
-class ProgBooks : public ProgState {
+inline int ProgState::getLineHeight() const {
+	return lineHeight;
+}
+
+class ProgFileExplorer : public ProgState {
+public:
+	LabelEdit* locationBar = nullptr;
+	ScrollArea* fileList;
+	size_t dirEnd, fileEnd;
+
+	~ProgFileExplorer() override = default;
+
+	void eventHide() final;
+	void processFileChanges(const Browser* browser, vector<pair<bool, string>>& files, bool gone);
+
+protected:
+	virtual Label* makeDirectoryEntry(const Size& size, string&& name) = 0;
+	virtual Label* makeFileEntry(const Size& size, string&& name);
+	virtual Size fileEntrySize(const string& name);
+};
+
+class ProgBooks : public ProgFileExplorer {
 public:
 	~ProgBooks() final = default;
 
-	void eventEscape() final;
-	void eventHide() final;
+	void eventSpecEscape() final;
 	void eventFileDrop(const fs::path& file) final;
 
 	RootLayout* createLayout() final;
+protected:
+	Label* makeDirectoryEntry(const Size& size, string&& name) final;
+	Size fileEntrySize(const string& name) final;
 };
 
-class ProgPageBrowser : public ProgState {
+class ProgPageBrowser : public ProgFileExplorer {
 public:
-	ScrollArea* fileList;
-
 	~ProgPageBrowser() final = default;
 
-	void eventEscape() final;
-	void eventHide() final;
+	void eventSpecEscape() final;
 	void eventFileDrop(const fs::path& file) final;
+	void resetFileIcons();
 
 	RootLayout* createLayout() final;
+protected:
+	Label* makeDirectoryEntry(const Size& size, string&& name) final;
+	Label* makeFileEntry(const Size& size, string&& name) final;
 };
 
 class ProgReader : public ProgState {
@@ -121,7 +152,7 @@ private:
 public:
 	~ProgReader() final = default;
 
-	void eventEscape() final;
+	void eventSpecEscape() final;
 	void eventUp() final;
 	void eventDown() final;
 	void eventLeft() final;
@@ -167,8 +198,8 @@ public:
 
 	RootLayout* createLayout() final;
 	Comic curInfo() const;
-	void printResults(vector<pairStr>&& comics);
-	void printInfo(vector<pairStr>&& chaps);
+	void printResults(vector<pair<string, string>>&& comics);
+	void printInfo(vector<pair<string, string>>&& chaps);
 };
 
 class ProgDownloads : public ProgState {
@@ -187,41 +218,44 @@ public:
 class ProgSettings : public ProgState {
 public:
 	fs::path oldPathBuffer;	// for keeping old library path between decisions
+	std::thread thread;
+	std::atomic<ThreadType> threadType;
+
 	Layout* limitLine;
-	Slider* deadzoneSL;
-	LabelEdit* deadzoneLE;
 private:
 	ComboBox* screen;
 	CheckBox* showHidden;
 	vector<pair<u32vec2, string>> devices;
 
 public:
-	~ProgSettings() final = default;
+	~ProgSettings() final;
 
-	void eventEscape() final;
+	void eventSpecEscape() final;
 	void eventFullscreen() final;
 	void eventMultiFullscreen() final;
 	void eventHide() final;
 	void eventFileDrop(const fs::path& file) final;
 
 	RootLayout* createLayout() final;
-
 	Widget* createLimitEdit();
-	u32vec2 getDvice(sizet id) const;
+	u32vec2 getDvice(size_t id) const;
+
+	void startMove();
+	void stopMove();
+	static void logMoveErrors(const string* errors);
 };
 
-inline u32vec2 ProgSettings::getDvice(sizet id) const {
+inline u32vec2 ProgSettings::getDvice(size_t id) const {
 	return devices[id].first;
 }
 
-class ProgSearchDir : public ProgState {
+class ProgSearchDir : public ProgFileExplorer {
 public:
-	ScrollArea* list;
-
 	~ProgSearchDir() final = default;
 
-	void eventEscape() final;
-	void eventHide() final;
+	void eventSpecEscape() final;
 
 	RootLayout* createLayout() final;
+protected:
+	Label* makeDirectoryEntry(const Size& size, string&& name) final;
 };

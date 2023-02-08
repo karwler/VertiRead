@@ -16,9 +16,11 @@ private:
 #ifdef OPENGLES
 	static constexpr GLenum textPixFormat = GL_RGBA;
 	static constexpr GLenum addrTargetType = GL_TEXTURE_2D;
+	static inline const std::set<SDL_PixelFormatEnum> supportedFormats = { SDL_PIXELFORMAT_RGBA32 };
 #else
 	static constexpr GLenum textPixFormat = GL_BGRA;
 	static constexpr GLenum addrTargetType = GL_TEXTURE_1D;
+	static inline const std::set<SDL_PixelFormatEnum> supportedFormats = { SDL_PIXELFORMAT_RGBA32, SDL_PIXELFORMAT_BGRA32, SDL_PIXELFORMAT_RGB24, SDL_PIXELFORMAT_BGR24 };
 #endif
 
 	class TextureGl : public Texture {
@@ -81,14 +83,15 @@ private:
 	void (APIENTRY* glUseProgram)(GLuint program);
 #endif
 public:
-	RendererGl(const umap<int, SDL_Window*>& windows, const Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
+	RendererGl(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
 	~RendererGl() final;
 
 	void setClearColor(const vec4& color) final;
 	void setVsync(bool vsync) final;
 	void updateView(ivec2& viewRes) final;
 	void setCompression(bool on) final;
-	void getAdditionalSettings(bool& compression, vector<pair<u32vec2, string>>& devices) final;
+	void getSettings(uint& maxRes, bool& compression, vector<pair<u32vec2, string>>& devices) const final;
+	void setMaxPicRes(uint& size) final;
 
 	void startDraw(View* view) final;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) final;
@@ -98,9 +101,13 @@ public:
 	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) final;
 	Widget* finishSelDraw(View* view) final;
 
-	Texture* texFromImg(SDL_Surface* img) final;
+	Texture* texFromIcon(SDL_Surface* img) final;
+	Texture* texFromRpic(SDL_Surface* img) final;
 	Texture* texFromText(SDL_Surface* img) final;
 	void freeTexture(Texture* tex) final;
+
+protected:
+	pair<uint, const std::set<SDL_PixelFormatEnum>*> getLimits() const final;
 
 private:
 	void initGl(ivec2 res, bool vsync, const vec4& bgcolor);

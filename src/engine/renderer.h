@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/utils.h"
+#include <set>
 
 class Texture {
 private:
@@ -36,6 +37,7 @@ public:
 
 protected:
 	umap<int, View*> views;
+	uint maxPicRes;	// should only get accessed from one thread at a time
 
 public:
 	virtual ~Renderer() = default;
@@ -44,7 +46,8 @@ public:
 	virtual void setVsync(bool vsync) = 0;
 	virtual void updateView(ivec2& viewRes) = 0;
 	virtual void setCompression(bool);
-	virtual void getAdditionalSettings(bool& compression, vector<pair<u32vec2, string>>& devices) = 0;
+	virtual void getSettings(uint& maxRes, bool& compression, vector<pair<u32vec2, string>>& devices) const = 0;
+	virtual void setMaxPicRes(uint& size) = 0;
 	virtual void startDraw(View* view) = 0;
 	virtual void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) = 0;
 	virtual void finishDraw(View* view) = 0;
@@ -52,12 +55,17 @@ public:
 	virtual void startSelDraw(View* view, ivec2 pos) = 0;
 	virtual void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) = 0;
 	virtual Widget* finishSelDraw(View* view) = 0;
-	virtual Texture* texFromImg(SDL_Surface* img) = 0;
-	virtual Texture* texFromText(SDL_Surface* img) = 0;
+	virtual Texture* texFromIcon(SDL_Surface* img) = 0;	// scales down image to largest possible size
+	virtual Texture* texFromRpic(SDL_Surface* img) = 0;	// image must have been scaled down in advance
+	virtual Texture* texFromText(SDL_Surface* img) = 0;	// cuts off image if it's too large and uses nearest filter if possible
 	virtual void freeTexture(Texture* tex) = 0;
+	virtual void synchTransfer();
 
 	const umap<int, View*>& getViews() const;
+	SDL_Surface* makeCompatible(SDL_Surface* img, bool rpic) const;	// must be thread safe
 protected:
+	virtual pair<uint, const std::set<SDL_PixelFormatEnum>*> getLimits() const = 0;
+	static SDL_Surface* convertToDefault(SDL_Surface* img);
 	static SDL_Surface* limitSize(SDL_Surface* img, uint32 limit);
 };
 

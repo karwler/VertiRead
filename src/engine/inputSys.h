@@ -85,7 +85,7 @@ inline ivec2 InputSys::getMouseMove() const {
 }
 
 inline Binding& InputSys::getBinding(Binding::Type type) {
-	return bindings[sizet(type)];
+	return bindings[size_t(type)];
 }
 
 inline const array<Binding, Binding::names.size()>& InputSys::getBindings() const {

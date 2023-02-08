@@ -70,17 +70,14 @@ void Scene::onMouseDown(ivec2 mPos, uint8 mBut, uint8 mCnt) {
 
 void Scene::onMouseUp(ivec2 mPos, uint8 mBut, uint8 mCnt) {
 	if (capture)
-		capture->onUndrag(mBut);
+		capture->onUndrag(mPos, mBut);
 	if (select && stamps[mBut - 1].widget == select && cursorInClickRange(mPos, mBut) && (mCnt != 2 || !select->hasDoubleclick()))
 		select->onClick(mPos, mBut);
 }
 
-void Scene::onMouseWheel(ivec2 mPos, ivec2 wMov) {
-	if (ScrollArea* box = getSelectedScrollArea()) {
+void Scene::onMouseWheel(ivec2 wMov) {
+	if (Widget* box = context ? dynamic_cast<Context*>(select) : dynamic_cast<TextBox*>(select) ? select : getSelectedScrollArea())
 		box->onScroll(wMov * scrollFactorWheel);
-		updateSelect(mPos);
-	} else if (select)
-		select->onScroll(wMov * scrollFactorWheel);
 }
 
 void Scene::onMouseLeave() {
@@ -103,6 +100,15 @@ void Scene::onText(string_view str) {
 	}
 }
 
+void Scene::onCancel() {
+	if (context)
+		setContext(nullptr);
+	else if (popup)
+		World::prun(popup->ccall, nullptr);
+	else
+		World::state()->eventSpecEscape();
+}
+
 void Scene::onResize() {
 	World::state()->onResize();
 	layout->onResize();
@@ -112,6 +118,7 @@ void Scene::onResize() {
 		overlay->onResize();
 	if (context)
 		context->onResize();
+	World::renderer()->synchTransfer();
 }
 
 void Scene::onDisplayChange() {
@@ -120,6 +127,7 @@ void Scene::onDisplayChange() {
 		popup->onDisplayChange();
 	if (overlay)
 		overlay->onDisplayChange();
+	World::renderer()->synchTransfer();
 }
 
 void Scene::resetLayouts() {
@@ -149,6 +157,7 @@ void Scene::setLayouts() {
 	if (overlay)
 		overlay->postInit();
 	World::inputSys()->simulateMouseMove();
+	World::renderer()->synchTransfer();
 }
 
 void Scene::setCapture(Widget* inter) {
@@ -159,14 +168,17 @@ void Scene::setCapture(Widget* inter) {
 void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
 	if (context)
 		setContext(nullptr);
+	setCapture(nullptr);
 	delete popup;
+
 	if (popup = newPopup; popup)
 		popup->postInit();
-	if (capture = newCapture; capture)
-		capture->onClick(World::winSys()->mousePos(), SDL_BUTTON_LEFT);
+	if (newCapture)
+		newCapture->onClick(newCapture->position(), SDL_BUTTON_LEFT);
 	if (!World::inputSys()->mouseWin)
-		select = capture ? capture : popup ? popup->firstNavSelect : nullptr;
+		select = newCapture ? newCapture : popup ? popup->firstNavSelect : nullptr;
 	updateSelect();
+	World::renderer()->synchTransfer();
 }
 
 void Scene::setContext(Context* newContext) {
@@ -178,6 +190,7 @@ void Scene::setContext(Context* newContext) {
 	if (!World::inputSys()->mouseWin)
 		select = context ? context->firstNavSelect : nullptr;
 	updateSelect();
+	World::renderer()->synchTransfer();
 }
 
 void Scene::updateSelect() {
@@ -238,7 +251,7 @@ void Scene::selectFirst() {
 	else {
 		Layout* next = dynamic_cast<Layout*>(select);
 		Layout* lay = next ? next : layout;
-		for (sizet id = 0; lay;) {
+		for (size_t id = 0; lay;) {
 			if (id >= lay->getWidgets().size()) {
 				id = lay->getIndex() + 1;
 				lay = lay->getParent();
@@ -253,7 +266,7 @@ void Scene::selectFirst() {
 	}
 }
 
-sizet Scene::findSelectedID(Layout* box) const {
+size_t Scene::findSelectedID(Layout* box) const {
 	Widget* child = select;
 	while (child->getParent() && child->getParent() != box)
 		child = child->getParent();

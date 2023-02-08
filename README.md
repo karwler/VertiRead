@@ -5,7 +5,7 @@ Currently supported file formats are whatever SDL2_image and libarchive support.
 
 ## Build
 Used libraries are SDL2, SDL2_image, SDL2_ttf, libarchive, glm and by extension FreeType, HarfBuzz, libtiff, libwebp, stb_image and zlib. The included default font is BrisaSans.  
-The CMakeLists.txt is written for at least CMake 3.12.4 with Clang, GCC or MSVC which need to support C++17.  
+The CMakeLists.txt is written for at least CMake 3.12.4 with Clang, GCC, MinGW or MSVC which need to support C++17.  
 You can generate project files for a debug build by running CMake with the "-DCMAKE_BUILD_TYPE=Debug" option. Otherwise it'll default to a release build.  
 By default the Program uses OpenGL 3.0, which can be switched to OpenGL ES 3.0 with "-DOPENGLES=1" or entirely disabled with "-DOPENGL=0".  
 Support for DirectX 11 and Vulkan 1.0 can be enabled by setting the options "-DDIRECTX=1" and "-DVULKAN=1".  
@@ -26,7 +26,7 @@ make
 ```
 
 ### Windows
-Only MS Visual Studio and MinGW are supported. All necessary libraries are downloaded while running CMake.  
+All necessary libraries are downloaded while running CMake.  
 Settings files are being saved in "%AppData%\VertiRead".  
 
 ```batch
@@ -34,6 +34,17 @@ mkdir build
 cd build
 cmake .. -G "NMake Makefiles" -DDIRECTX=1
 nmake
+```
+
+### Recompiling shaders
+The shader code for DirectX and Vulkan is stored in the header files in "src/engine/shaders".  
+These files can be recreated with these python scripts, as long as fxc or glslc are installed.  
+
+```batch
+python rsc/dx_shaders.py
+```
+```bash
+python rsc/vk_shaders.py
 ```
 
 ## How to use it

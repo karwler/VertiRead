@@ -10,16 +10,17 @@ private:
 	static constexpr float resModeBorder = 0.85f;
 	static constexpr float resModeRatio = 0.75f;
 
+#ifdef DOWNLOADER
 	Downloader downloader;
+#endif
 	ProgState* state = nullptr;
 	uptr<Browser> browser;
-	std::thread thread;
-	std::atomic_bool threadRunning;
 
 public:
 	~Program();
 
 	void start();
+	void tick();
 
 	// books
 	void eventOpenBookList(Button* but = nullptr);
@@ -27,19 +28,21 @@ public:
 	void eventOpenBookContext(Button* but);
 	void eventOpenLastPage(Button* but = nullptr);
 	void eventDeleteBook(Button* but = nullptr);
-	bool openFile(const fs::path& file);
+	void openFile(const fs::path& file);
 
 	// browser
+	void eventArchiveProgress(const SDL_UserEvent& user);
+	void eventArchiveFinished(const SDL_UserEvent& user);
+	void eventFileLoadingCancelled(Button* but = nullptr);
 	void eventBrowserGoUp(Button* but = nullptr);
 	void eventBrowserGoIn(Button* but);
 	void eventBrowserGoFile(Button* but);
 	void eventBrowserGoTo(Button* but);
 	void eventPreviewProgress(const SDL_UserEvent& user);
+	void eventPreviewFinished();
 	void eventExitBrowser(Button* but = nullptr);
 
 	// reader
-	void eventStartLoadingReader(const string& first, bool fwd = true);
-	void eventReaderLoadingCancelled(Button* but = nullptr);
 	void eventReaderProgress(const SDL_UserEvent& user);
 	void eventReaderFinished(const SDL_UserEvent& user);
 	void eventZoomIn(Button* but = nullptr);
@@ -82,9 +85,9 @@ public:
 	void eventSetLibraryDirBW(Button* but);
 	void eventOpenLibDirBrowser(Button* but = nullptr);
 	void eventMoveComics(Button* but = nullptr);
-	void eventDontMoveComics(Button* but = nullptr);
+	void eventMoveCancelled(Button* but = nullptr);
 	void eventMoveProgress(const SDL_UserEvent& user);
-	void eventMoveFinished();
+	void eventMoveFinished(const SDL_UserEvent& user);
 	void eventSetScreenMode(Button* but);
 	void eventSetRenderer(Button* but);
 	void eventSetDevice(Button* but);
@@ -107,24 +110,28 @@ public:
 	void eventSetPicLimitType(Button* but);
 	void eventSetPicLimCount(Button* but);
 	void eventSetPicLimSize(Button* but);
+	void eventSetMaxPicResSL(Button* but);
+	void eventSetMaxPicResLE(Button* but);
 	void eventResetSettings(Button* but);
 
 	// other
-	bool tryClosePopupThread();
 	void eventClosePopup(Button* but = nullptr);
 	void eventCloseContext(Button* but = nullptr);
 	void eventResizeComboContext(Layout* lay = nullptr);
 	void eventTryExit(Button* but = nullptr);
 	void eventForceExit(Button* but = nullptr);
+	void setPopupLoading();
 
+#ifdef DOWNLOADER
 	Downloader* getDownloader();
+#endif
 	ProgState* getState();
 	Browser* getBrowser();
 
 private:
 	void switchPictures(bool fwd, string_view picname);
 	void offerMoveBooks(fs::path&& oldLib);
-	static sizet finishComboBox(Button* but);
+	static size_t finishComboBox(Button* but);
 	template <class T, class... A> void setState(A&&... args);
 	void reposizeWindow(ivec2 dres, ivec2 wsiz);
 };
@@ -137,6 +144,8 @@ inline Browser* Program::getBrowser() {
 	return browser.get();
 }
 
+#ifdef DOWNLOADER
 inline Downloader* Program::getDownloader() {
 	return &downloader;
 }
+#endif

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "prog/types.h"
 #include "utils/settings.h"
 #include <atomic>
 #include <fstream>
@@ -83,7 +84,7 @@ class FileSys {
 private:
 	static constexpr char defaultFrMode[] = "rb";
 	static constexpr char defaultFwMode[] = "wb";
-	static constexpr sizet archiveReadBlockSize = 10240;
+	static constexpr size_t archiveReadBlockSize = 10240;
 #ifdef _WIN32
 	static constexpr array<string_view, 22> takenFilenames = {
 		"CON", "PRN", "AUX", "NUL",
@@ -110,6 +111,7 @@ private:
 	static constexpr char iniKeywordZoom[] = "zoom";
 	static constexpr char iniKeywordSpacing[] = "spacing";
 	static constexpr char iniKeywordPictureLimit[] = "picture_limit";
+	static constexpr char iniKeywordMaxPictureRes[] = "max_picture_res";
 	static constexpr char iniKeywordFont[] = "font";
 	static constexpr char iniKeywordTheme[] = "theme";
 	static constexpr char iniKeywordPreview[] = "preview";
@@ -139,13 +141,13 @@ public:
 
 	vector<string> getAvailableThemes() const;
 	array<vec4, Settings::defaultColors.size()> loadColors(string_view theme) const;	// updates settings' colors according to settings' theme
-	bool getLastPage(string_view book, string& drc, string& fname) const;
+	tuple<bool, string, string> getLastPage(string_view book) const;
 	bool saveLastPage(string_view book, string_view drc, string_view fname) const;
 	Settings* loadSettings() const;
 	void saveSettings(const Settings* sets) const;
 	array<Binding, Binding::names.size()> getBindings() const;
 	void saveBindings(const array<Binding, Binding::names.size()>& bindings) const;
-	fs::path findFont(string_view font) const;	// on success returns absolute path to font file, otherwise returns empty path
+	fs::path findFont(const string& font) const;	// on success returns absolute path to font file, otherwise returns empty path
 
 	static vector<fs::path> listDir(const fs::path& drc, bool files = true, bool dirs = true, bool showHidden = true);
 	static pair<vector<fs::path>, vector<fs::path>> listDirSep(const fs::path& drc, bool showHidden = true);	// first is list of files, second is list of directories
@@ -158,11 +160,12 @@ public:
 	static bool isArchivePicture(const fs::path& file, string_view pname);
 
 	static archive* openArchive(const fs::path& file);
-	static vector<string> listArchive(const fs::path& file);
-	static mapFiles listArchivePictures(const fs::path& file, vector<string>& names);
+	static vector<string> listArchiveFiles(const fs::path& file);
+	static void makeArchiveTreeThread(std::atomic<ThreadType>& mode, BrowserResultAsync ra, uintptr_t maxRes);
+	static SDL_Surface* loadArchivePicture(const fs::path& file, string_view pname);
 	static SDL_Surface* loadArchivePicture(archive* arch, archive_entry* entry);
 
-	static void moveContentThreaded(std::atomic_bool& running, fs::path src, fs::path dst);
+	static void moveContentThread(std::atomic<ThreadType>& mode, fs::path src, fs::path dst);
 	const fs::path& getDirSets() const;
 	fs::path dirIcons() const;
 
@@ -171,7 +174,10 @@ private:
 	static string readTextFile(const fs::path& file, bool printMessage = true);
 	static bool writeTextFile(const fs::path& file, const vector<string>& lines);
 
-	static fs::path searchFontDirs(string_view font, initlist<fs::path> dirs);
+	static bool isPicture(SDL_RWops* ifh, string_view ext);
+	static bool isPicture(archive* arch, archive_entry* entry);
+	static pair<uptr<uint8[]>, int64> readArchiveEntry(archive* arch, archive_entry* entry);
+	static fs::path searchFontDirs(const string& font, std::initializer_list<fs::path> dirs);
 #ifdef _WIN32
 	static vector<fs::path> listDrives();
 #endif
@@ -184,4 +190,8 @@ inline const fs::path& FileSys::getDirSets() const {
 
 inline fs::path FileSys::dirIcons() const {
 	return dirConfs / "icons";
+}
+
+inline bool FileSys::isPicture(const fs::path& file) {
+	return isPicture(SDL_RWFromFile(file.u8string().c_str(), "rb"), file.extension().u8string());
 }

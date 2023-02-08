@@ -113,6 +113,44 @@ void main() {
 		discard;
 }'''
 
+csConv = '''#version 450
+
+layout(constant_id = 0) const bool orderRgb = true;
+layout(local_size_x = 32) in;
+
+layout(push_constant) uniform PushData {
+	uint offset;
+} psData;
+
+layout(set = 0, binding = 0) readonly buffer InputData {
+	uint pixels[];
+} inData;
+
+layout(set = 0, binding = 1) writeonly buffer OutputData {
+	uint pixels[];
+} outData;
+
+void main() {
+	uint cid = (gl_WorkGroupID.x + psData.offset) * gl_WorkGroupSize.x + gl_LocalInvocationID.x;
+	uint iid = cid * 3;
+	uint oid = cid * 4;
+	uint p0 = inData.pixels[iid];
+	uint p1 = inData.pixels[iid + 1];
+	uint p2 = inData.pixels[iid + 2];
+
+	if (orderRgb) {
+		outData.pixels[oid] = p0 | 0xFF000000;
+		outData.pixels[oid + 1] = (p0 >> 24) | (p1 << 8) | 0xFF000000;
+		outData.pixels[oid + 2] = (p1 >> 16) | (p2 << 16) | 0xFF000000;
+		outData.pixels[oid + 3] = (p2 >> 8) | 0xFF000000;
+	} else {
+		outData.pixels[oid] = ((p0 >> 16) & 0x000000FF) | (p0 & 0x0000FF00) | ((p0 << 16) & 0x00FF0000) | 0xFF000000;
+		outData.pixels[oid + 1] = ((p1 >> 8) & 0x000000FF) | ((p1 << 8) & 0x0000FF00) | ((p0 >> 8) & 0x00FF0000) | 0xFF000000;
+		outData.pixels[oid + 2] = (p2 & 0x000000FF) | ((p1 >> 16) & 0x0000FF00) | (p1 & 0x00FF0000) | 0xFF000000;
+		outData.pixels[oid + 3] = ((p2 >> 16) & 0x000000FF) | ((p2 >> 8) & 0x0000FF00) | ((p2 << 8) & 0x00FF0000) | 0xFF000000;
+	}
+}'''
+
 def compile_source(glslc: str, code: str, name: str):
 	with open(name, 'w') as fh:
 		fh.write(code)
@@ -147,5 +185,5 @@ def compile_source(glslc: str, code: str, name: str):
 if __name__ == '__main__':
 	glslc = shutil.which('glslc')
 	os.chdir(os.path.join(os.path.dirname(__file__), os.pardir, 'src', 'engine', 'shaders'))
-	for it in [ (vsGui, 'vk.gui.vert'), (fsGui, 'vk.gui.frag'), (vsSel, 'vk.sel.vert'), (fsSel, 'vk.sel.frag') ]:
+	for it in [ (vsGui, 'vk.gui.vert'), (fsGui, 'vk.gui.frag'), (vsSel, 'vk.sel.vert'), (fsSel, 'vk.sel.frag'), (csConv, 'vk.conv.comp') ]:
 		compile_source(glslc, it[0], it[1])

@@ -8,11 +8,10 @@
 #include <SDL2/SDL_vulkan.h>
 #endif
 #include <list>
-#include <set>
 
-// GENERIC PASS
+// GENERIC PIPELINE
 
-VkSampler GenericPass::createSampler(VkDevice dev, VkFilter filter) {
+VkSampler GenericPipeline::createSampler(const RendererVk* rend, VkFilter filter) {
 	VkSamplerCreateInfo samplerInfo{};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 	samplerInfo.magFilter = filter;
@@ -26,21 +25,193 @@ VkSampler GenericPass::createSampler(VkDevice dev, VkFilter filter) {
 	samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
 
 	VkSampler sampler;
-	if (VkResult rs = vkCreateSampler(dev, &samplerInfo, nullptr, &sampler); rs != VK_SUCCESS)
+	if (VkResult rs = vkCreateSampler(rend->getLogicalDevice(), &samplerInfo, nullptr, &sampler); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create texture sampler: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(sampler);
+#endif
 	return sampler;
 }
 
-VkShaderModule GenericPass::createShaderModule(VkDevice dev, const uint32* code, sizet clen) {
+VkShaderModule GenericPipeline::createShaderModule(const RendererVk* rend, const uint32* code, size_t clen) {
 	VkShaderModuleCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 	createInfo.codeSize = clen;
 	createInfo.pCode = code;
 
 	VkShaderModule shaderModule;
-	if (VkResult rs = vkCreateShaderModule(dev, &createInfo, nullptr, &shaderModule); rs != VK_SUCCESS)
+	if (VkResult rs = vkCreateShaderModule(rend->getLogicalDevice(), &createInfo, nullptr, &shaderModule); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create shader module: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(shaderModule);
+#endif
 	return shaderModule;
+}
+
+// FORMAT CONVERTER
+
+void FormatConverter::init(const RendererVk* rend) {
+	createDescriptorSetLayout(rend);
+	createPipelines(rend);
+	createDescriptorPoolAndSet(rend);
+}
+
+void FormatConverter::createDescriptorSetLayout(const RendererVk* rend) {
+	array<VkDescriptorSetLayoutBinding, 2> bindings{};
+	bindings[0].binding = 0;
+	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	bindings[0].descriptorCount = 1;
+	bindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	bindings[1].binding = 1;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	bindings[1].descriptorCount = 1;
+	bindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	VkDescriptorSetLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutInfo.bindingCount = bindings.size();
+	layoutInfo.pBindings = bindings.data();
+	if (VkResult rs = vkCreateDescriptorSetLayout(rend->getLogicalDevice(), &layoutInfo, nullptr, &descriptorSetLayout); rs != VK_SUCCESS)
+		throw std::runtime_error("Failed to create converter descriptor set layout: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(descriptorSetLayout);
+#endif
+}
+
+void FormatConverter::createPipelines(const RendererVk* rend) {
+	constexpr uint32 compCode[] = {
+#ifdef NDEBUG
+#include "shaders/vk.conv.comp.rel.h"
+#else
+#include "shaders/vk.conv.comp.dbg.h"
+#endif
+	};
+	VkShaderModule compShaderModule = createShaderModule(rend, compCode, sizeof(compCode));
+
+	VkPushConstantRange pushConstant{};
+	pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	pushConstant.size = sizeof(PushData);
+
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
+	if (VkResult rs = vkCreatePipelineLayout(rend->getLogicalDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout); rs != VK_SUCCESS)
+		throw std::runtime_error("Failed to create converter pipeline layout: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(pipelineLayout);
+#endif
+
+	for (uint i = 0; i < pipelines.size(); ++i) {
+		VkSpecializationMapEntry specializationEntry{};
+		specializationEntry.constantID = 0;
+		specializationEntry.offset = offsetof(SpecializationData, orderRgb);
+		specializationEntry.size = sizeof(SpecializationData::orderRgb);
+
+		SpecializationData specializationData = { i };
+		VkSpecializationInfo specializationInfo{};
+		specializationInfo.mapEntryCount = 1;
+		specializationInfo.pMapEntries = &specializationEntry;
+		specializationInfo.dataSize = sizeof(specializationData);
+		specializationInfo.pData = &specializationData;
+
+		VkComputePipelineCreateInfo pipelineInfo{};
+		pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		pipelineInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		pipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+		pipelineInfo.stage.module = compShaderModule;
+		pipelineInfo.stage.pName = "main";
+		pipelineInfo.stage.pSpecializationInfo = &specializationInfo;
+		pipelineInfo.layout = pipelineLayout;
+		if (VkResult rs = vkCreateComputePipelines(rend->getLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipelines[i]); rs != VK_SUCCESS)
+			throw std::runtime_error("Failed to create converter pipeline " + toStr(i) + ": " + string_VkResult(rs));
+#ifndef NDEBUG
+		rend->setObjectDebugName(pipelines[i]);
+#endif
+	}
+	vkDestroyShaderModule(rend->getLogicalDevice(), compShaderModule, nullptr);
+}
+
+void FormatConverter::createDescriptorPoolAndSet(const RendererVk* rend) {
+	array<VkDescriptorPoolSize, 2> poolSizes{};
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	poolSizes[0].descriptorCount = maxTransfers;
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	poolSizes[1].descriptorCount = maxTransfers;
+
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.poolSizeCount = poolSizes.size();
+	poolInfo.pPoolSizes = poolSizes.data();
+	poolInfo.maxSets = maxTransfers;
+	if (VkResult rs = vkCreateDescriptorPool(rend->getLogicalDevice(), &poolInfo, nullptr, &descriptorPool); rs != VK_SUCCESS)
+		throw std::runtime_error("Failed to create converter descriptor pool: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(descriptorPool);
+#endif
+
+	array<VkDescriptorSetLayout, maxTransfers> layouts;
+	layouts.fill(descriptorSetLayout);
+
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = descriptorPool;
+	allocInfo.descriptorSetCount = layouts.size();
+	allocInfo.pSetLayouts = layouts.data();
+	if (VkResult rs = vkAllocateDescriptorSets(rend->getLogicalDevice(), &allocInfo, descriptorSets.data()); rs != VK_SUCCESS)
+		throw std::runtime_error("Failed to allocate converter descriptor sets: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	for (VkDescriptorSet it : descriptorSets)
+		rend->setObjectDebugName(it);
+#endif
+}
+
+void FormatConverter::updateBufferSize(const RendererVk* rend, uint id, VkDeviceSize texSize, VkBuffer inputBuffer, VkDeviceSize inputSize, bool& update) {
+	VkDeviceSize outputSize = roundToMulOf(texSize * 4, convWgrpSize * 4 * sizeof(uint32));
+	if (outputSize > outputSizesMax[id]) {
+		rend->recreateBuffer(outputBuffers[id], outputMemory[id], outputSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		outputSizesMax[id] = outputSize;
+		update = true;
+	}
+	if (update) {
+		VkDescriptorBufferInfo inputBufferInfo{};
+		inputBufferInfo.buffer = inputBuffer;
+		inputBufferInfo.range = inputSize;
+
+		VkDescriptorBufferInfo outputBufferInfo{};
+		outputBufferInfo.buffer = outputBuffers[id];
+		outputBufferInfo.range = outputSize;
+
+		array<VkWriteDescriptorSet, 2> descriptorWrites{};
+		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[0].dstSet = descriptorSets[id];
+		descriptorWrites[0].dstBinding = 0;
+		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		descriptorWrites[0].descriptorCount = 1;
+		descriptorWrites[0].pBufferInfo = &inputBufferInfo;
+		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[1].dstSet = descriptorSets[id];
+		descriptorWrites[1].dstBinding = 1;
+		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		descriptorWrites[1].descriptorCount = 1;
+		descriptorWrites[1].pBufferInfo = &outputBufferInfo;
+		vkUpdateDescriptorSets(rend->getLogicalDevice(), descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
+		update = false;
+	}
+}
+
+void FormatConverter::free(VkDevice dev) {
+	for (VkPipeline it : pipelines)
+		vkDestroyPipeline(dev, it, nullptr);
+	vkDestroyPipelineLayout(dev, pipelineLayout, nullptr);
+	vkDestroyDescriptorPool(dev, descriptorPool, nullptr);
+	vkDestroyDescriptorSetLayout(dev, descriptorSetLayout, nullptr);
+	for (VkBuffer it : outputBuffers)
+		vkDestroyBuffer(dev, it, nullptr);
+	for (VkDeviceMemory it : outputMemory)
+		vkFreeMemory(dev, it, nullptr);
 }
 
 // RENDER PASS
@@ -51,14 +222,14 @@ RenderPass::DescriptorSetBlock::DescriptorSetBlock(const array<VkDescriptorSet, 
 {}
 
 vector<VkDescriptorSet> RenderPass::init(const RendererVk* rend, VkFormat format, uint32 numViews) {
-	createRenderPass(rend->getLogicalDevice(), format);
-	samplers = { createSampler(rend->getLogicalDevice(), VK_FILTER_LINEAR), createSampler(rend->getLogicalDevice(), VK_FILTER_NEAREST) };
-	createDescriptorSetLayout(rend->getLogicalDevice());
-	createPipeline(rend->getLogicalDevice());
-	return createDescriptorPoolAndSets(rend->getLogicalDevice(), numViews);
+	createRenderPass(rend, format);
+	samplers = { createSampler(rend, VK_FILTER_LINEAR), createSampler(rend, VK_FILTER_NEAREST) };
+	createDescriptorSetLayout(rend);
+	createPipeline(rend);
+	return createDescriptorPoolAndSets(rend, numViews);
 }
 
-void RenderPass::createRenderPass(VkDevice dev, VkFormat format) {
+void RenderPass::createRenderPass(const RendererVk* rend, VkFormat format) {
 	VkAttachmentDescription colorAttachment{};
 	colorAttachment.format = format;
 	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -94,11 +265,14 @@ void RenderPass::createRenderPass(VkDevice dev, VkFormat format) {
 	renderPassInfo.pSubpasses = &subpass;
 	renderPassInfo.dependencyCount = 1;
 	renderPassInfo.pDependencies = &dependency;
-	if (VkResult rs = vkCreateRenderPass(dev, &renderPassInfo, nullptr, &handle); rs != VK_SUCCESS)
+	if (VkResult rs = vkCreateRenderPass(rend->getLogicalDevice(), &renderPassInfo, nullptr, &handle); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create render pass: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(handle);
+#endif
 }
 
-void RenderPass::createDescriptorSetLayout(VkDevice dev) {
+void RenderPass::createDescriptorSetLayout(const RendererVk* rend) {
 	array<VkDescriptorSetLayoutBinding, 2> bindings0{};
 	bindings0[0].binding = 0;
 	bindings0[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -114,8 +288,11 @@ void RenderPass::createDescriptorSetLayout(VkDevice dev) {
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	layoutInfo.bindingCount = bindings0.size();
 	layoutInfo.pBindings = bindings0.data();
-	if (VkResult rs = vkCreateDescriptorSetLayout(dev, &layoutInfo, nullptr, &descriptorSetLayouts[0]); rs != VK_SUCCESS)
+	if (VkResult rs = vkCreateDescriptorSetLayout(rend->getLogicalDevice(), &layoutInfo, nullptr, &descriptorSetLayouts[0]); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create descriptor set layout 0: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(descriptorSetLayouts[0]);
+#endif
 
 	VkDescriptorSetLayoutBinding binding1{};
 	binding1.binding = 0;
@@ -125,11 +302,14 @@ void RenderPass::createDescriptorSetLayout(VkDevice dev) {
 
 	layoutInfo.bindingCount = 1;
 	layoutInfo.pBindings = &binding1;
-	if (VkResult rs = vkCreateDescriptorSetLayout(dev, &layoutInfo, nullptr, &descriptorSetLayouts[1]); rs != VK_SUCCESS)
+	if (VkResult rs = vkCreateDescriptorSetLayout(rend->getLogicalDevice(), &layoutInfo, nullptr, &descriptorSetLayouts[1]); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create descriptor set layout 1: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(descriptorSetLayouts[1]);
+#endif
 }
 
-void RenderPass::createPipeline(VkDevice dev) {
+void RenderPass::createPipeline(const RendererVk* rend) {
 	constexpr uint32 vertCode[] = {
 #ifdef NDEBUG
 #include "shaders/vk.gui.vert.rel.h"
@@ -144,8 +324,8 @@ void RenderPass::createPipeline(VkDevice dev) {
 #include "shaders/vk.gui.frag.dbg.h"
 #endif
 	};
-	VkShaderModule vertShaderModule = createShaderModule(dev, vertCode, sizeof(vertCode));
-	VkShaderModule fragShaderModule = createShaderModule(dev, fragCode, sizeof(fragCode));
+	VkShaderModule vertShaderModule = createShaderModule(rend, vertCode, sizeof(vertCode));
+	VkShaderModule fragShaderModule = createShaderModule(rend, fragCode, sizeof(fragCode));
 
 	array<VkPipelineShaderStageCreateInfo, 2> shaderStages{};
 	shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -211,8 +391,11 @@ void RenderPass::createPipeline(VkDevice dev) {
 	pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
 	pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
-	if (VkResult rs = vkCreatePipelineLayout(dev, &pipelineLayoutInfo, nullptr, &pipelineLayout); rs != VK_SUCCESS)
+	if (VkResult rs = vkCreatePipelineLayout(rend->getLogicalDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create pipeline layout: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(pipelineLayout);
+#endif
 
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -228,14 +411,17 @@ void RenderPass::createPipeline(VkDevice dev) {
 	pipelineInfo.layout = pipelineLayout;
 	pipelineInfo.renderPass = handle;
 	pipelineInfo.subpass = 0;
-	if (VkResult rs = vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline); rs != VK_SUCCESS)
+	if (VkResult rs = vkCreateGraphicsPipelines(rend->getLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create graphics pipeline: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(pipeline);
+#endif
 
-	vkDestroyShaderModule(dev, fragShaderModule, nullptr);
-	vkDestroyShaderModule(dev, vertShaderModule, nullptr);
+	vkDestroyShaderModule(rend->getLogicalDevice(), fragShaderModule, nullptr);
+	vkDestroyShaderModule(rend->getLogicalDevice(), vertShaderModule, nullptr);
 }
 
-vector<VkDescriptorSet> RenderPass::createDescriptorPoolAndSets(VkDevice dev, uint32 numViews) {
+vector<VkDescriptorSet> RenderPass::createDescriptorPoolAndSets(const RendererVk* rend, uint32 numViews) {
 	array<VkDescriptorPoolSize, 2> poolSizes{};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	poolSizes[0].descriptorCount = numViews;
@@ -247,8 +433,11 @@ vector<VkDescriptorSet> RenderPass::createDescriptorPoolAndSets(VkDevice dev, ui
 	poolInfo.poolSizeCount = poolSizes.size();
 	poolInfo.pPoolSizes = poolSizes.data();
 	poolInfo.maxSets = numViews;
-	if (VkResult rs = vkCreateDescriptorPool(dev, &poolInfo, nullptr, &descriptorPool); rs != VK_SUCCESS)
+	if (VkResult rs = vkCreateDescriptorPool(rend->getLogicalDevice(), &poolInfo, nullptr, &descriptorPool); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create view descriptor pool: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(descriptorPool);
+#endif
 
 	vector<VkDescriptorSetLayout> layouts(poolInfo.maxSets, descriptorSetLayouts[0]);
 	VkDescriptorSetAllocateInfo allocInfo{};
@@ -258,12 +447,22 @@ vector<VkDescriptorSet> RenderPass::createDescriptorPoolAndSets(VkDevice dev, ui
 	allocInfo.pSetLayouts = layouts.data();
 
 	vector<VkDescriptorSet> descriptorSets(layouts.size());
-	if (VkResult rs = vkAllocateDescriptorSets(dev, &allocInfo, descriptorSets.data()); rs != VK_SUCCESS)
+	if (VkResult rs = vkAllocateDescriptorSets(rend->getLogicalDevice(), &allocInfo, descriptorSets.data()); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to allocate view descriptor sets: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	for (VkDescriptorSet it : descriptorSets)
+		rend->setObjectDebugName(it);
+#endif
 	return descriptorSets;
 }
 
-pair<VkDescriptorPool, VkDescriptorSet> RenderPass::newDescriptorSetTex(VkDevice dev) {
+pair<VkDescriptorPool, VkDescriptorSet> RenderPass::newDescriptorSetTex(const RendererVk* rend, VkImageView imageView) {
+	pair<VkDescriptorPool, VkDescriptorSet> dpds = getDescriptorSetTex(rend);
+	updateDescriptorSet(rend->getLogicalDevice(), dpds.second, imageView);
+	return dpds;
+}
+
+pair<VkDescriptorPool, VkDescriptorSet> RenderPass::getDescriptorSetTex(const RendererVk* rend) {
 	if (umap<VkDescriptorPool, DescriptorSetBlock>::iterator psit = std::find_if(poolSetTex.begin(), poolSetTex.end(), [](const pair<const VkDescriptorPool, DescriptorSetBlock>& it) -> bool { return !it.second.free.empty(); }); psit != poolSetTex.end()) {
 		VkDescriptorSet descriptorSet = *psit->second.free.begin();
 		psit->second.free.erase(psit->second.free.begin());
@@ -281,8 +480,11 @@ pair<VkDescriptorPool, VkDescriptorSet> RenderPass::newDescriptorSetTex(VkDevice
 	poolInfo.maxSets = textureSetStep;
 
 	VkDescriptorPool descPool;
-	if (VkResult rs = vkCreateDescriptorPool(dev, &poolInfo, nullptr, &descPool); rs != VK_SUCCESS)
+	if (VkResult rs = vkCreateDescriptorPool(rend->getLogicalDevice(), &poolInfo, nullptr, &descPool); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create texture descriptor pool: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(descPool, "texture");
+#endif
 
 	array<VkDescriptorSetLayout, textureSetStep> layouts;
 	layouts.fill(descriptorSetLayouts[1]);
@@ -294,10 +496,14 @@ pair<VkDescriptorPool, VkDescriptorSet> RenderPass::newDescriptorSetTex(VkDevice
 	allocInfo.pSetLayouts = layouts.data();
 
 	array<VkDescriptorSet, textureSetStep> descriptorSets;
-	if (VkResult rs = vkAllocateDescriptorSets(dev, &allocInfo, descriptorSets.data()); rs != VK_SUCCESS) {
-		vkDestroyDescriptorPool(dev, descPool, nullptr);
+	if (VkResult rs = vkAllocateDescriptorSets(rend->getLogicalDevice(), &allocInfo, descriptorSets.data()); rs != VK_SUCCESS) {
+		vkDestroyDescriptorPool(rend->getLogicalDevice(), descPool, nullptr);
 		throw std::runtime_error("Failed to allocate texture descriptor sets: "s + string_VkResult(rs));
 	}
+#ifndef NDEBUG
+	for (VkDescriptorSet it : descriptorSets)
+		rend->setObjectDebugName(it, "texture");
+#endif
 	return pair(descPool, *poolSetTex.emplace(descPool, descriptorSets).first->second.used.begin());
 }
 
@@ -365,15 +571,15 @@ void RenderPass::free(VkDevice dev) {
 // ADDRESS PASS
 
 void AddressPass::init(const RendererVk* rend) {
-	createRenderPass(rend->getLogicalDevice());
-	createDescriptorSetLayout(rend->getLogicalDevice());
-	createPipeline(rend->getLogicalDevice());
+	createRenderPass(rend);
+	createDescriptorSetLayout(rend);
+	createPipeline(rend);
 	createUniformBuffer(rend);
-	createDescriptorPoolAndSet(rend->getLogicalDevice());
+	createDescriptorPoolAndSet(rend);
 	updateDescriptorSet(rend->getLogicalDevice());
 }
 
-void AddressPass::createRenderPass(VkDevice dev) {
+void AddressPass::createRenderPass(const RendererVk* rend) {
 	VkAttachmentDescription colorAttachment{};
 	colorAttachment.format = format;
 	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -409,11 +615,14 @@ void AddressPass::createRenderPass(VkDevice dev) {
 	renderPassInfo.pSubpasses = &subpass;
 	renderPassInfo.dependencyCount = 1;
 	renderPassInfo.pDependencies = &dependency;
-	if (VkResult rs = vkCreateRenderPass(dev, &renderPassInfo, nullptr, &handle); rs != VK_SUCCESS)
+	if (VkResult rs = vkCreateRenderPass(rend->getLogicalDevice(), &renderPassInfo, nullptr, &handle); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create render pass: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(handle);
+#endif
 }
 
-void AddressPass::createDescriptorSetLayout(VkDevice dev) {
+void AddressPass::createDescriptorSetLayout(const RendererVk* rend) {
 	VkDescriptorSetLayoutBinding binding{};
 	binding.binding = bindingUdat;
 	binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -424,11 +633,14 @@ void AddressPass::createDescriptorSetLayout(VkDevice dev) {
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	layoutInfo.bindingCount = 1;
 	layoutInfo.pBindings = &binding;
-	if (VkResult rs = vkCreateDescriptorSetLayout(dev, &layoutInfo, nullptr, &descriptorSetLayout); rs != VK_SUCCESS)
+	if (VkResult rs = vkCreateDescriptorSetLayout(rend->getLogicalDevice(), &layoutInfo, nullptr, &descriptorSetLayout); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create descriptor set layout: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(descriptorSetLayout);
+#endif
 }
 
-void AddressPass::createPipeline(VkDevice dev) {
+void AddressPass::createPipeline(const RendererVk* rend) {
 	constexpr uint32 vertCode[] = {
 #ifdef NDEBUG
 #include "shaders/vk.sel.vert.rel.h"
@@ -443,8 +655,8 @@ void AddressPass::createPipeline(VkDevice dev) {
 #include "shaders/vk.sel.frag.dbg.h"
 #endif
 	};
-	VkShaderModule vertShaderModule = createShaderModule(dev, vertCode, sizeof(vertCode));
-	VkShaderModule fragShaderModule = createShaderModule(dev, fragCode, sizeof(fragCode));
+	VkShaderModule vertShaderModule = createShaderModule(rend, vertCode, sizeof(vertCode));
+	VkShaderModule fragShaderModule = createShaderModule(rend, fragCode, sizeof(fragCode));
 
 	array<VkPipelineShaderStageCreateInfo, 2> shaderStages{};
 	shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -507,8 +719,11 @@ void AddressPass::createPipeline(VkDevice dev) {
 	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
 	pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
-	if (VkResult rs = vkCreatePipelineLayout(dev, &pipelineLayoutInfo, nullptr, &pipelineLayout); rs != VK_SUCCESS)
+	if (VkResult rs = vkCreatePipelineLayout(rend->getLogicalDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create pipeline layout: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(pipelineLayout);
+#endif
 
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -525,11 +740,14 @@ void AddressPass::createPipeline(VkDevice dev) {
 	pipelineInfo.renderPass = handle;
 	pipelineInfo.subpass = 0;
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
-	if (VkResult rs = vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline); rs != VK_SUCCESS)
+	if (VkResult rs = vkCreateGraphicsPipelines(rend->getLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create graphics pipeline: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(pipeline);
+#endif
 
-	vkDestroyShaderModule(dev, fragShaderModule, nullptr);
-	vkDestroyShaderModule(dev, vertShaderModule, nullptr);
+	vkDestroyShaderModule(rend->getLogicalDevice(), fragShaderModule, nullptr);
+	vkDestroyShaderModule(rend->getLogicalDevice(), vertShaderModule, nullptr);
 }
 
 void AddressPass::createUniformBuffer(const RendererVk* rend) {
@@ -538,7 +756,7 @@ void AddressPass::createUniformBuffer(const RendererVk* rend) {
 		throw std::runtime_error("Failed to map uniform buffer memory: "s + string_VkResult(rs));
 }
 
-void AddressPass::createDescriptorPoolAndSet(VkDevice dev) {
+void AddressPass::createDescriptorPoolAndSet(const RendererVk* rend) {
 	VkDescriptorPoolSize poolSize{};
 	poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	poolSize.descriptorCount = 1;
@@ -548,16 +766,22 @@ void AddressPass::createDescriptorPoolAndSet(VkDevice dev) {
 	poolInfo.poolSizeCount = 1;
 	poolInfo.pPoolSizes = &poolSize;
 	poolInfo.maxSets = 1;
-	if (VkResult rs = vkCreateDescriptorPool(dev, &poolInfo, nullptr, &descriptorPool); rs != VK_SUCCESS)
+	if (VkResult rs = vkCreateDescriptorPool(rend->getLogicalDevice(), &poolInfo, nullptr, &descriptorPool); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create descriptor pool: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(descriptorPool);
+#endif
 
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = descriptorPool;
 	allocInfo.descriptorSetCount = 1;
 	allocInfo.pSetLayouts = &descriptorSetLayout;
-	if (VkResult rs = vkAllocateDescriptorSets(dev, &allocInfo, &descriptorSet); rs != VK_SUCCESS)
+	if (VkResult rs = vkAllocateDescriptorSets(rend->getLogicalDevice(), &allocInfo, &descriptorSet); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to allocate descriptor sets: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	rend->setObjectDebugName(descriptorSet);
+#endif
 }
 
 void AddressPass::updateDescriptorSet(VkDevice dev) {
@@ -616,34 +840,43 @@ RendererVk::RendererVk(const umap<int, SDL_Window*>& windows, Settings* sets, iv
 			viewRes = glm::max(viewRes, wrect.end());
 		}
 	}
-	pickPhysicalDevice(sets->device);
-	createDevice();
-	singleTimeFence = createFence();
-	createCommandPool();
+	QueueInfo queueInfo = pickPhysicalDevice(sets->device);
+	createDevice(queueInfo);
 	setPresentMode(sets->vsync);
 
+#ifndef NDEBUG
+	nextObjectDebugName.emplace_back("transfer");
+#endif
+	tcmdPool = createCommandPool(*queueInfo.tfam);
+	allocateCommandBuffers(tcmdPool, tcmdBuffers.data(), tcmdBuffers.size());
+	std::generate(tfences.begin(), tfences.end(), [this]() -> VkFence { return createFence(VK_FENCE_CREATE_SIGNALED_BIT); });
+	if (queueInfo.canCompute) {
+		try {
+			fmtConv.init(this);
+			supportedFormats.insert({ SDL_PIXELFORMAT_RGB24, SDL_PIXELFORMAT_BGR24 });
+			transferAtomSize = roundToMulOf(FormatConverter::convWgrpSize * 3 * sizeof(uint32), pdevProperties.limits.nonCoherentAtomSize);
+		} catch (const std::runtime_error& err) {
+			logError(err.what());
+			fmtConv.free(ldev);
+			fmtConv = FormatConverter();
+		}
+	}
+
+#ifndef NDEBUG
+	nextObjectDebugName.back() = "graphics";
+#endif
+	gcmdPool = createCommandPool(*queueInfo.gfam);
 	umap<VkFormat, uint> formatCounter;
 	for (auto [id, view] : views)
 		++formatCounter[createSwapchain(static_cast<ViewVk*>(view))];
-
 	vector<VkDescriptorSet> descriptorSets = renderPass.init(this, std::max_element(formatCounter.begin(), formatCounter.end(), [](const pair<const VkFormat, uint>& a, const pair<const VkFormat, uint>& b) -> bool { return a.second < b.second; })->first, views.size());
-	sizet d = 0;
-	for (auto [id, view] : views) {
-		ViewVk* vw = static_cast<ViewVk*>(view);
-		createFramebuffers(vw);
-		allocateCommandBuffers(vw->commandBuffers.data(), vw->commandBuffers.size());
-		for (uint i = 0; i < ViewVk::maxFrames; ++i) {
-			vw->imageAvailableSemaphores[i] = createSemaphore();
-			vw->renderFinishedSemaphores[i] = createSemaphore();
-			vw->frameFences[i] = createFence(VK_FENCE_CREATE_SIGNALED_BIT);
-		}
+	size_t d = 0;
+	for (auto [id, view] : views)
+		initView(static_cast<ViewVk*>(view), descriptorSets[d++]);
 
-		createUniformBuffer(vw);
-		vw->uniformMapped->pview = vec4(vw->rect.pos(), vec2(vw->rect.size()) / 2.f);
-		vw->descriptorSet = descriptorSets[d++];
-		renderPass.updateDescriptorSet(ldev, vw->descriptorSet, vw->uniformBuffer);
-	}
-
+#ifndef NDEBUG
+	nextObjectDebugName.back() = "addr";
+#endif
 	addressPass.init(this);
 	std::tie(addrImage, addrImageMemory) = createImage(u32vec2(1), VK_IMAGE_TYPE_1D, AddressPass::format, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	addrView = createImageView(addrImage, VK_IMAGE_VIEW_TYPE_1D, AddressPass::format);
@@ -651,30 +884,16 @@ RendererVk::RendererVk(const umap<int, SDL_Window*>& windows, Settings* sets, iv
 	std::tie(addrBuffer, addrBufferMemory) = createBuffer(sizeof(u32vec2), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	if (VkResult rs = vkMapMemory(ldev, addrBufferMemory, 0, sizeof(u32vec2), 0, reinterpret_cast<void**>(&addrMappedMemory)); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to map address lookup memory: "s + string_VkResult(rs));
-	allocateCommandBuffers(&commandBufferAddr, 1);
+	allocateCommandBuffers(gcmdPool, &commandBufferAddr, 1);
 	addrFence = createFence();
+#ifndef NDEBUG
+	nextObjectDebugName.pop_back();
+#endif
+	setMaxPicRes(sets->maxPicRes);
 }
 
 RendererVk::~RendererVk() {
 	vkDeviceWaitIdle(ldev);
-	for (auto [id, view] : views) {
-		ViewVk* vw = static_cast<ViewVk*>(view);
-		freeFramebuffers(vw);
-		vkDestroySwapchainKHR(ldev, vw->swapchain, nullptr);
-	}
-
-	renderPass.free(ldev);
-	for (auto [id, view] : views) {
-		ViewVk* vw = static_cast<ViewVk*>(view);
-		vkDestroyBuffer(ldev, vw->uniformBuffer, nullptr);
-		vkFreeMemory(ldev, vw->uniformMemory, nullptr);
-
-		for (uint i = 0; i < ViewVk::maxFrames; ++i) {
-			vkDestroySemaphore(ldev, vw->renderFinishedSemaphores[i], nullptr);
-			vkDestroySemaphore(ldev, vw->imageAvailableSemaphores[i], nullptr);
-			vkDestroyFence(ldev, vw->frameFences[i], nullptr);
-		}
-	}
 
 	addressPass.free(ldev);
 	vkDestroyFramebuffer(ldev, addrFramebuffer, nullptr);
@@ -683,16 +902,32 @@ RendererVk::~RendererVk() {
 	vkFreeMemory(ldev, addrImageMemory, nullptr);
 	vkDestroyBuffer(ldev, addrBuffer, nullptr);
 	vkFreeMemory(ldev, addrBufferMemory, nullptr);
-	vkFreeCommandBuffers(ldev, cmdPool, 1, &commandBufferAddr);
 	vkDestroyFence(ldev, addrFence, nullptr);
 
-	vkDestroyCommandPool(ldev, cmdPool, nullptr);
-	vkDestroyFence(ldev, singleTimeFence, nullptr);
+	for (auto [id, view] : views) {
+		ViewVk* vw = static_cast<ViewVk*>(view);
+		freeFramebuffers(vw);
+		vkDestroySwapchainKHR(ldev, vw->swapchain, nullptr);
+	}
+	renderPass.free(ldev);
+	for (auto [id, view] : views)
+		freeView(static_cast<ViewVk*>(view));
+	vkDestroyCommandPool(ldev, gcmdPool, nullptr);
+
+	fmtConv.free(ldev);
+	for (VkBuffer it : inputBuffers)
+		vkDestroyBuffer(ldev, it, nullptr);
+	for (VkDeviceMemory it : inputMemory)
+		vkFreeMemory(ldev, it, nullptr);
+	for (VkFence it : tfences)
+		vkDestroyFence(ldev, it, nullptr);
+	vkDestroyCommandPool(ldev, tcmdPool, nullptr);
+
 	vkDestroyDevice(ldev, nullptr);
 #ifndef NDEBUG
 	if (dbgMessenger != VK_NULL_HANDLE)
-		if (PFN_vkDestroyDebugUtilsMessengerEXT destroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT")))
-			destroyDebugUtilsMessengerEXT(instance, dbgMessenger, nullptr);
+		if (PFN_vkDestroyDebugUtilsMessengerEXT pfnDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT")))
+			pfnDestroyDebugUtilsMessengerEXT(instance, dbgMessenger, nullptr);
 #endif
 	for (auto [id, view] : views) {
 		vkDestroySurfaceKHR(instance, static_cast<ViewVk*>(view)->surface, nullptr);
@@ -713,13 +948,20 @@ void RendererVk::createInstance(SDL_Window* window) {
 #ifdef NDEBUG
 	vector<const char*> extensions = getRequiredExtensions(window);
 #else
-	bool validation = checkValidationLayerSupport();
+	auto [debugUtils, validationFeatures] = checkValidationLayerSupport();
+	vector<const char*> extensions = getRequiredExtensions(window, debugUtils, validationFeatures);
+
 	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
 	debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-	debugCreateInfo.messageSeverity = /*VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |*/ VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+	debugCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 	debugCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
 	debugCreateInfo.pfnUserCallback = debugCallback;
-	vector<const char*> extensions = getRequiredExtensions(window, validation);
+
+	VkValidationFeaturesEXT validationFeaturesInfo{};
+	validationFeaturesInfo.pNext = &debugCreateInfo;
+	validationFeaturesInfo.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+	validationFeaturesInfo.enabledValidationFeatureCount = validationFeatureEnables.size();
+	validationFeaturesInfo.pEnabledValidationFeatures = validationFeatureEnables.data();
 #endif
 
 	VkInstanceCreateInfo createInfo{};
@@ -728,23 +970,26 @@ void RendererVk::createInstance(SDL_Window* window) {
 	createInfo.enabledExtensionCount = extensions.size();
 	createInfo.ppEnabledExtensionNames = extensions.data();
 #ifndef NDEBUG
-	if (validation) {
+	if (debugUtils) {
 		createInfo.enabledLayerCount = validationLayers.size();
 		createInfo.ppEnabledLayerNames = validationLayers.data();
-		createInfo.pNext = &debugCreateInfo;
+		createInfo.pNext = validationFeatures ? reinterpret_cast<void*>(&validationFeaturesInfo) : reinterpret_cast<void*>(&debugCreateInfo);
 	}
 #endif
 	if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create instance");
 
 #ifndef NDEBUG
-	if (validation)
-		if (PFN_vkCreateDebugUtilsMessengerEXT createDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT")); !createDebugUtilsMessengerEXT || createDebugUtilsMessengerEXT(instance, &debugCreateInfo, nullptr, &dbgMessenger) != VK_SUCCESS)
+	if (debugUtils) {
+		if (PFN_vkCreateDebugUtilsMessengerEXT pfnCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT")); !pfnCreateDebugUtilsMessengerEXT || pfnCreateDebugUtilsMessengerEXT(instance, &debugCreateInfo, nullptr, &dbgMessenger) != VK_SUCCESS)
 			throw std::runtime_error("Failed to set up debug messenger");
+		if (pfnSetDebugUtilsObjectNameEXT = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT")); !pfnSetDebugUtilsObjectNameEXT)
+			logError("Failed to get address of vkSetDebugUtilsObjectNameEXT");
+	}
 #endif
 }
 
-void RendererVk::pickPhysicalDevice(u32vec2& preferred) {
+RendererVk::QueueInfo RendererVk::pickPhysicalDevice(u32vec2& preferred) {
 	uint32 deviceCount;
 	if (VkResult rs = vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to find devices: "s + string_VkResult(rs));
@@ -752,7 +997,7 @@ void RendererVk::pickPhysicalDevice(u32vec2& preferred) {
 	vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
 
 	VkPhysicalDevice lastDev = VK_NULL_HANDLE;
-	uint32 gfam, pfam;
+	QueueInfo queueInfo;
 	VkPhysicalDeviceProperties devProp;
 	VkPhysicalDeviceMemoryProperties devMemp;
 	uint score = 0;
@@ -763,8 +1008,8 @@ void RendererVk::pickPhysicalDevice(u32vec2& preferred) {
 		vector<VkExtensionProperties> availableExtensions(extensionCount);
 		vkEnumerateDeviceExtensionProperties(dev, nullptr, &extensionCount, availableExtensions.data());
 		std::set<string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
-		for (const VkExtensionProperties& extension : availableExtensions)
-			requiredExtensions.erase(extension.extensionName);
+		for (size_t i = 0; i < availableExtensions.size() && !requiredExtensions.empty(); ++i)
+			requiredExtensions.erase(availableExtensions[i].extensionName);
 		if (!requiredExtensions.empty())
 			continue;
 
@@ -780,14 +1025,26 @@ void RendererVk::pickPhysicalDevice(u32vec2& preferred) {
 		VkPhysicalDeviceMemoryProperties memp;
 		vkGetPhysicalDeviceMemoryProperties(dev, &memp);
 		std::list<VkMemoryPropertyFlags> requiredMemoryTypes(deviceMemoryTypes.begin(), deviceMemoryTypes.end());
-		for (uint32 i = 0; i < memp.memoryTypeCount; ++i)
+		for (uint32 i = 0; i < memp.memoryTypeCount && !requiredMemoryTypes.empty(); ++i)
 			if (std::list<VkMemoryPropertyFlags>::iterator it = std::find_if(requiredMemoryTypes.begin(), requiredMemoryTypes.end(), [&memp, i](VkMemoryPropertyFlags flg) -> bool { return (memp.memoryTypes[i].propertyFlags & flg) == flg; }); it != requiredMemoryTypes.end())
 				requiredMemoryTypes.erase(it);
 		if (!requiredMemoryTypes.empty())
 			continue;
 
-		auto [gid, pid, ok] = findQueueFamilies(dev);
+		VkImageFormatProperties imgp;
+		if (vkGetPhysicalDeviceImageFormatProperties(dev, VK_FORMAT_R32G32_UINT, VK_IMAGE_TYPE_1D, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, 0, &imgp) != VK_SUCCESS)
+			continue;
+		bool ok = true;
+		for (VkFormat fmt : { VK_FORMAT_A8B8G8R8_UNORM_PACK32, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8A8_UNORM })
+			if (vkGetPhysicalDeviceImageFormatProperties(dev, fmt, VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 0, &imgp) != VK_SUCCESS) {
+				ok = false;
+				break;
+			}
 		if (!ok)
+			continue;
+
+		QueueInfo qi = findQueueFamilies(dev);
+		if (!(qi.gfam && qi.pfam && qi.tfam))
 			continue;
 
 		for (auto [id, view] : views)
@@ -799,36 +1056,38 @@ void RendererVk::pickPhysicalDevice(u32vec2& preferred) {
 			continue;
 
 		if (prop.vendorID == preferred.x && prop.deviceID == preferred.y) {
-			std::tie(pdev, gfamilyIndex, pfamilyIndex, pdevProperties, pdevMemProperties) = tuple(dev, gid, pid, prop, memp);
-			return;
+			std::tie(pdev, pdevProperties, pdevMemProperties, transferAtomSize) = tuple(dev, prop, memp, prop.limits.nonCoherentAtomSize);
+			return queueInfo;
 		}
 		if (uint points = scoreDevice(prop, memp); points > score)
-			std::tie(score, lastDev, gfam, pfam, devProp, devMemp) = tuple(points, dev, gid, pid, prop, memp);
+			std::tie(score, lastDev, queueInfo, devProp, devMemp) = tuple(points, dev, std::move(qi), prop, memp);
 	}
 	if (lastDev == VK_NULL_HANDLE)
 		throw std::runtime_error("Failed to find a suitable device");
 
-	std::tie(pdev, gfamilyIndex, pfamilyIndex, pdevProperties, pdevMemProperties) = tuple(lastDev, gfam, pfam, devProp, devMemp);
+	std::tie(pdev, pdevProperties, pdevMemProperties, transferAtomSize) = tuple(lastDev, devProp, devMemp, devProp.limits.nonCoherentAtomSize);
 	if (preferred != u32vec2(0))
 		preferred = u32vec2(0);
+	return queueInfo;
 }
 
-void RendererVk::createDevice() {
-	vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-	float queuePriority = 1.f;
-	for (uint32 qfam : std::set<uint32>{ gfamilyIndex, pfamilyIndex }) {
-		VkDeviceQueueCreateInfo queueCreateInfo{};
-		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		queueCreateInfo.queueFamilyIndex = qfam;
-		queueCreateInfo.queueCount = 1;
-		queueCreateInfo.pQueuePriorities = &queuePriority;
-		queueCreateInfos.push_back(queueCreateInfo);
+void RendererVk::createDevice(QueueInfo& queueInfo) {
+	array<VkDeviceQueueCreateInfo, maxPossibleQueues> queueCreateInfos{};
+	array<float, maxPossibleQueues> queuePriorities;
+	queuePriorities.fill(1.f);
+
+	uint32 i = 0;
+	for (auto [qfam, qcnt] : queueInfo.idcnt) {
+		queueCreateInfos[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queueCreateInfos[i].queueFamilyIndex = qfam;
+		queueCreateInfos[i].queueCount = qcnt.y;
+		queueCreateInfos[i++].pQueuePriorities = queuePriorities.data();
 	}
 
 	VkPhysicalDeviceFeatures deviceFeatures{};
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	createInfo.queueCreateInfoCount = queueCreateInfos.size();
+	createInfo.queueCreateInfoCount = queueInfo.idcnt.size();
 	createInfo.pQueueCreateInfos = queueCreateInfos.data();
 	createInfo.pEnabledFeatures = &deviceFeatures;
 	createInfo.enabledExtensionCount = deviceExtensions.size();
@@ -841,18 +1100,39 @@ void RendererVk::createDevice() {
 #endif
 	if (VkResult rs = vkCreateDevice(pdev, &createInfo, nullptr, &ldev); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create logical device: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	string deviceName = toStr<0x10>(pdevProperties.vendorID, 4) + ':' + toStr<0x10>(pdevProperties.deviceID, 4);
+	setObjectDebugName(pdev, deviceName.c_str());
+	setObjectDebugName(ldev, deviceName.c_str());
+#endif
 
-	vkGetDeviceQueue(ldev, gfamilyIndex, 0, &gqueue);
-	vkGetDeviceQueue(ldev, pfamilyIndex, 0, &pqueue);
+	std::tie(gfamilyIndex, gqueue) = acquireNextQueue(queueInfo, *queueInfo.gfam);
+	std::tie(pfamilyIndex, pqueue) = acquireNextQueue(queueInfo, *queueInfo.pfam);
+	std::tie(tfamilyIndex, tqueue) = acquireNextQueue(queueInfo, *queueInfo.tfam);
 }
 
-void RendererVk::createCommandPool() {
+pair<uint32, VkQueue> RendererVk::acquireNextQueue(QueueInfo& queueInfo, uint32 family) const {
+	VkQueue queue;
+	u32vec2& cnt = queueInfo.idcnt.at(family);
+	vkGetDeviceQueue(ldev, family, cnt.x, &queue);
+	if (cnt.x + 1 < cnt.y)
+		++cnt.x;
+	return pair(family, queue);
+}
+
+VkCommandPool RendererVk::createCommandPool(uint32 family) const {
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	poolInfo.queueFamilyIndex = gfamilyIndex;
-	if (VkResult rs = vkCreateCommandPool(ldev, &poolInfo, nullptr, &cmdPool); rs != VK_SUCCESS)
+	poolInfo.queueFamilyIndex = family;
+
+	VkCommandPool commandPool;
+	if (VkResult rs = vkCreateCommandPool(ldev, &poolInfo, nullptr, &commandPool); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create command pool: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	setObjectDebugName(commandPool);
+#endif
+	return commandPool;
 }
 
 VkFormat RendererVk::createSwapchain(ViewVk* view, VkSwapchainKHR oldSwapchain) {
@@ -926,15 +1206,38 @@ void RendererVk::recreateSwapchain(ViewVk* view) {
 	refreshFramebuffer = false;
 }
 
-void RendererVk::createFramebuffers(ViewVk* view) {
-	for (uint32 i = 0; i < view->imageCount; ++i)
-		view->framebuffers[i].second = createFramebuffer(renderPass.getHandle(), view->framebuffers[i].first, u32vec2(view->extent.width, view->extent.height));
-}
+void RendererVk::initView(ViewVk* view, VkDescriptorSet descriptorSet) {
+	createFramebuffers(view);
+	allocateCommandBuffers(gcmdPool, view->commandBuffers.data(), view->commandBuffers.size());
+	for (uint i = 0; i < ViewVk::maxFrames; ++i) {
+		view->imageAvailableSemaphores[i] = createSemaphore();
+		view->renderFinishedSemaphores[i] = createSemaphore();
+		view->frameFences[i] = createFence(VK_FENCE_CREATE_SIGNALED_BIT);
+	}
 
-void RendererVk::createUniformBuffer(ViewVk* view) {
 	std::tie(view->uniformBuffer, view->uniformMemory) = createBuffer(sizeof(RenderPass::UniformData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	if (VkResult rs = vkMapMemory(ldev, view->uniformMemory, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&view->uniformMapped)); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to map uniform buffer memory 1: "s + string_VkResult(rs));
+
+	view->uniformMapped->pview = vec4(view->rect.pos(), vec2(view->rect.size()) / 2.f);
+	view->descriptorSet = descriptorSet;
+	renderPass.updateDescriptorSet(ldev, view->descriptorSet, view->uniformBuffer);
+}
+
+void RendererVk::freeView(ViewVk* view) {
+	vkDestroyBuffer(ldev, view->uniformBuffer, nullptr);
+	vkFreeMemory(ldev, view->uniformMemory, nullptr);
+
+	for (uint i = 0; i < ViewVk::maxFrames; ++i) {
+		vkDestroySemaphore(ldev, view->renderFinishedSemaphores[i], nullptr);
+		vkDestroySemaphore(ldev, view->imageAvailableSemaphores[i], nullptr);
+		vkDestroyFence(ldev, view->frameFences[i], nullptr);
+	}
+}
+
+void RendererVk::createFramebuffers(ViewVk* view) {
+	for (uint32 i = 0; i < view->imageCount; ++i)
+		view->framebuffers[i].second = createFramebuffer(renderPass.getHandle(), view->framebuffers[i].first, u32vec2(view->extent.width, view->extent.height));
 }
 
 void RendererVk::setClearColor(const vec4& color) {
@@ -1025,28 +1328,25 @@ void RendererVk::finishDraw(View*) {
 	if (VkResult rs = vkEndCommandBuffer(currentView->commandBuffers[currentFrame]); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to end recording command buffer: "s + string_VkResult(rs));
 
-	array<VkSemaphore, 1> waitSemaphores = { currentView->imageAvailableSemaphores[currentFrame] };
-	array<VkSemaphore, 1> signalSemaphores = { currentView->renderFinishedSemaphores[currentFrame] };
-	VkPipelineStageFlags waitStages[waitSemaphores.size()] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.waitSemaphoreCount = waitSemaphores.size();
-	submitInfo.pWaitSemaphores = waitSemaphores.data();
-	submitInfo.pWaitDstStageMask = waitStages;
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = &currentView->imageAvailableSemaphores[currentFrame];
+	submitInfo.pWaitDstStageMask = &waitStage;
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &currentView->commandBuffers[currentFrame];
-	submitInfo.signalSemaphoreCount = signalSemaphores.size();
-	submitInfo.pSignalSemaphores = signalSemaphores.data();
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &currentView->renderFinishedSemaphores[currentFrame];
 	if (VkResult rs = vkQueueSubmit(gqueue, 1, &submitInfo, currentView->frameFences[currentFrame]); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to submit draw command buffer: "s + string_VkResult(rs));
 
-	array<VkSwapchainKHR, 1> swapChains = { currentView->swapchain };
 	VkPresentInfoKHR presentInfo{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.waitSemaphoreCount = signalSemaphores.size();
-	presentInfo.pWaitSemaphores = signalSemaphores.data();
-	presentInfo.swapchainCount = swapChains.size();
-	presentInfo.pSwapchains = swapChains.data();
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &currentView->renderFinishedSemaphores[currentFrame];
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &currentView->swapchain;
 	presentInfo.pImageIndices = &imageIndex;
 	if (VkResult rs = vkQueuePresentKHR(pqueue, &presentInfo); rs == VK_ERROR_OUT_OF_DATE_KHR || rs == VK_SUBOPTIMAL_KHR || refreshFramebuffer)
 		recreateSwapchain(currentView);
@@ -1061,12 +1361,7 @@ void RendererVk::finishRender() {
 void RendererVk::startSelDraw(View* view, ivec2 pos) {
 	ViewVk* vkw = static_cast<ViewVk*>(view);
 	addressPass.getUniformBufferMapped()->pview = vec4(vkw->rect.pos(), vec2(vkw->rect.size()) / 2.f);
-
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	if (VkResult rs = vkBeginCommandBuffer(commandBufferAddr, &beginInfo); rs != VK_SUCCESS)
-		throw std::runtime_error("Failed to begin recording command buffer: "s + string_VkResult(rs));
+	beginSingleTimeCommands(commandBufferAddr);
 
 	VkClearValue zero{};
 	VkRenderPassBeginInfo renderPassInfo{};
@@ -1094,7 +1389,7 @@ void RendererVk::drawSelRect(const Widget* wgt, const Recti& rect, const Recti& 
 	AddressPass::PushData pd;
 	pd.rect = rect.toVec();
 	pd.frame = frame.toVec();
-	pd.addr = uvec2(uptrt(wgt), uptrt(wgt) >> 32);
+	pd.addr = uvec2(uintptr_t(wgt), uintptr_t(wgt) >> 32);
 	vkCmdPushConstants(commandBufferAddr, addressPass.getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(AddressPass::PushData), &pd);
 	vkCmdDraw(commandBufferAddr, 4, 1, 0, 0);
 }
@@ -1103,29 +1398,52 @@ Widget* RendererVk::finishSelDraw(View*) {
 	vkCmdEndRenderPass(commandBufferAddr);
 	transitionImageLayout<VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL>(commandBufferAddr, addrImage);
 	copyImageToBuffer(commandBufferAddr, addrImage, addrBuffer, u32vec2(1));
-	if (VkResult rs = vkEndCommandBuffer(commandBufferAddr); rs != VK_SUCCESS)
-		throw std::runtime_error("Failed to end recording command buffer: "s + string_VkResult(rs));
-
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBufferAddr;
-	if (VkResult rs = vkQueueSubmit(gqueue, 1, &submitInfo, addrFence); rs != VK_SUCCESS)
-		throw std::runtime_error("Failed to submit draw command buffer: "s + string_VkResult(rs));
-	vkWaitForFences(ldev, 1, &addrFence, VK_TRUE, UINT64_MAX);
-	vkResetFences(ldev, 1, &addrFence);
-	vkResetCommandBuffer(commandBufferAddr, 0);
-	return reinterpret_cast<Widget*>(uptrt(addrMappedMemory->x) | (uptrt(addrMappedMemory->y) << 32));
+	endSingleTimeCommands(commandBufferAddr, addrFence, gqueue);
+	synchSingleTimeCommands(commandBufferAddr, addrFence);
+	return reinterpret_cast<Widget*>(uintptr_t(addrMappedMemory->x) | (uintptr_t(addrMappedMemory->y) << 32));
 }
 
-Texture* RendererVk::texFromImg(SDL_Surface* img) {
-	if (auto [pic, fmt] = pickPixFormat(img); pic)
-		return createTexture(pic, u32vec2(pic->w, pic->h), fmt, false);
+Texture* RendererVk::texFromIcon(SDL_Surface* img) {
+	img = limitSize(img, pdevProperties.limits.maxImageDimension2D);
+	if (auto [pic, fmt] = pickPixFormat(img); pic) {
+#ifndef NDEBUG
+		nextObjectDebugName.emplace_back("icon");
+#endif
+		TextureVk* tex = fmt >= VK_FORMAT_R8G8B8A8_UNORM ? createTextureDirect(pic, u32vec2(pic->w, pic->h), fmt, false) : createTextureIndirect(pic, fmt);
+#ifndef NDEBUG
+		nextObjectDebugName.pop_back();
+#endif
+		return tex;
+	}
+	return nullptr;
+}
+
+Texture* RendererVk::texFromRpic(SDL_Surface* img) {
+	if (auto [pic, fmt] = pickPixFormat(img); pic) {
+#ifndef NDEBUG
+		nextObjectDebugName.emplace_back("rpic");
+#endif
+		TextureVk* tex = fmt >= VK_FORMAT_R8G8B8A8_UNORM ? createTextureDirect(pic, u32vec2(pic->w, pic->h), fmt, false) : createTextureIndirect(pic, fmt);
+#ifndef NDEBUG
+		nextObjectDebugName.pop_back();
+#endif
+		return tex;
+	}
 	return nullptr;
 }
 
 Texture* RendererVk::texFromText(SDL_Surface* img) {
-	return img ? createTexture(img, glm::min(u32vec2(img->w, img->h), u32vec2(pdevProperties.limits.maxImageDimension2D)), VK_FORMAT_A8B8G8R8_UNORM_PACK32, true) : nullptr;
+	if (img) {
+#ifndef NDEBUG
+		nextObjectDebugName.emplace_back("text");
+#endif
+		TextureVk* tex = createTextureDirect(img, glm::min(u32vec2(img->w, img->h), u32vec2(pdevProperties.limits.maxImageDimension2D)), VK_FORMAT_A8B8G8R8_UNORM_PACK32, true);
+#ifndef NDEBUG
+		nextObjectDebugName.pop_back();
+#endif
+		return tex;
+	}
+	return nullptr;
 }
 
 void RendererVk::freeTexture(Texture* tex) {
@@ -1138,51 +1456,129 @@ void RendererVk::freeTexture(Texture* tex) {
 	delete vtx;
 }
 
-RendererVk::TextureVk* RendererVk::createTexture(SDL_Surface* img, u32vec2 res, VkFormat format, bool nearest) {
-	VkBuffer stagingBuffer = VK_NULL_HANDLE;
-	VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
-	VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+void RendererVk::synchTransfer() {
+	vkWaitForFences(ldev, tfences.size(), tfences.data(), VK_TRUE, UINT64_MAX);
+}
+
+RendererVk::TextureVk* RendererVk::createTextureDirect(SDL_Surface* img, u32vec2 res, VkFormat format, bool nearest) {
 	VkImage image = VK_NULL_HANDLE;
 	VkDeviceMemory memory = VK_NULL_HANDLE;
 	VkImageView view = VK_NULL_HANDLE;
 	VkDescriptorPool pool = VK_NULL_HANDLE;
 	VkDescriptorSet dset = VK_NULL_HANDLE;
 	try {
-		VkDeviceSize bufferSize = VkDeviceSize(img->pitch) * VkDeviceSize(res.y);
-		std::tie(stagingBuffer, stagingMemory) = createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		void* stagingMapped;
-		if (VkResult rs = vkMapMemory(ldev, stagingMemory, 0, VK_WHOLE_SIZE, 0, &stagingMapped); rs != VK_SUCCESS)
-			throw std::runtime_error("Failed to map texture staging memory: "s + string_VkResult(rs));
-		memcpy(stagingMapped, img->pixels, bufferSize);
-		vkUnmapMemory(ldev, stagingMemory);
+		std::tie(image, memory) = createImage(res, VK_IMAGE_TYPE_2D, format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		synchSingleTimeCommands(tcmdBuffers[currentTransfer], tfences[currentTransfer]);
+		uploadInputData<false>(img);
 
-		std::tie(image, memory) = createImage(res, VK_IMAGE_TYPE_2D, format, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		commandBuffer = beginSingleTimeCommands();
-		transitionImageLayout<VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL>(commandBuffer, image);
-		copyBufferToImage(commandBuffer, stagingBuffer, image, res, img->pitch / img->format->BytesPerPixel);
-		transitionImageLayout<VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL>(commandBuffer, image);
-		endSingleTimeCommands(commandBuffer);
+		beginSingleTimeCommands(tcmdBuffers[currentTransfer]);
+		transitionImageLayout<VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL>(tcmdBuffers[currentTransfer], image);
+		copyBufferToImage(tcmdBuffers[currentTransfer], inputBuffers[currentTransfer], image, res, uint32(img->pitch) / uint32(img->format->BytesPerPixel));
+		transitionImageLayout<VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL>(tcmdBuffers[currentTransfer], image);
+		endSingleTimeCommands(tcmdBuffers[currentTransfer], tfences[currentTransfer], tqueue);
 
 		view = createImageView(image, VK_IMAGE_VIEW_TYPE_2D, format);
-		std::tie(pool, dset) = renderPass.newDescriptorSetTex(ldev);
-		RenderPass::updateDescriptorSet(ldev, dset, view);
-
-		vkDestroyBuffer(ldev, stagingBuffer, nullptr);
-		vkFreeMemory(ldev, stagingMemory, nullptr);
+		std::tie(pool, dset) = renderPass.newDescriptorSetTex(this, view);
 		SDL_FreeSurface(img);
+		currentTransfer = (currentTransfer + 1) % FormatConverter::maxTransfers;
 	} catch (const std::runtime_error& err) {
 		logError(err.what());
-		freeCommandBuffers(&commandBuffer, 1);
 		renderPass.freeDescriptorSetTex(ldev, pool, dset);
 		vkDestroyImageView(ldev, view, nullptr);
 		vkDestroyImage(ldev, image, nullptr);
 		vkFreeMemory(ldev, memory, nullptr);
-		vkDestroyBuffer(ldev, stagingBuffer, nullptr);
-		vkFreeMemory(ldev, stagingMemory, nullptr);
 		SDL_FreeSurface(img);
 		return nullptr;
 	}
 	return new TextureVk(res, image, memory, view, pool, dset, nearest);
+}
+
+RendererVk::TextureVk* RendererVk::createTextureIndirect(SDL_Surface* img, VkFormat format) {
+	VkImage image = VK_NULL_HANDLE;
+	VkDeviceMemory memory = VK_NULL_HANDLE;
+	VkImageView view = VK_NULL_HANDLE;
+	VkDescriptorPool pool = VK_NULL_HANDLE;
+	VkDescriptorSet dset = VK_NULL_HANDLE;
+	u32vec2 res(img->w, img->h);
+	try {
+		std::tie(image, memory) = createImage(res, VK_IMAGE_TYPE_2D, VK_FORMAT_A8B8G8R8_UNORM_PACK32, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		synchSingleTimeCommands(tcmdBuffers[currentTransfer], tfences[currentTransfer]);
+		uploadInputData<true>(img);
+
+		array<VkDescriptorSet, 1> descriptorSets = { fmtConv.getDescriptorSet(currentTransfer) };
+		beginSingleTimeCommands(tcmdBuffers[currentTransfer]);
+		vkCmdBindPipeline(tcmdBuffers[currentTransfer], VK_PIPELINE_BIND_POINT_COMPUTE, fmtConv.getPipeline(format == VK_FORMAT_R8G8B8_UNORM));
+		vkCmdBindDescriptorSets(tcmdBuffers[currentTransfer], VK_PIPELINE_BIND_POINT_COMPUTE, fmtConv.getPipelineLayout(), 0, descriptorSets.size(), descriptorSets.data(), 0, nullptr);
+
+		uint32 texels = res.x * res.y;
+		uint32 numGroups = texels / FormatConverter::convStep + bool(texels % FormatConverter::convStep);
+		for (uint32 gcnt, offs = 0; offs < numGroups; offs += gcnt) {
+			gcnt = std::min(numGroups - offs, pdevProperties.limits.maxComputeWorkGroupCount[0]);
+			FormatConverter::PushData pushData = { offs };
+			vkCmdPushConstants(tcmdBuffers[currentTransfer], fmtConv.getPipelineLayout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushData), &pushData);
+			vkCmdDispatch(tcmdBuffers[currentTransfer], gcnt, 1, 1);
+		}
+		transitionBufferToImageLayout<VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL>(tcmdBuffers[currentTransfer], fmtConv.getOutputBuffer(currentTransfer), image);
+		copyBufferToImage(tcmdBuffers[currentTransfer], fmtConv.getOutputBuffer(currentTransfer), image, res);
+		transitionImageLayout<VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL>(tcmdBuffers[currentTransfer], image);
+		endSingleTimeCommands(tcmdBuffers[currentTransfer], tfences[currentTransfer], tqueue);
+
+		view = createImageView(image, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_A8B8G8R8_UNORM_PACK32);
+		std::tie(pool, dset) = renderPass.newDescriptorSetTex(this, view);
+		SDL_FreeSurface(img);
+		currentTransfer = (currentTransfer + 1) % FormatConverter::maxTransfers;
+	} catch (const std::runtime_error& err) {
+		logError(err.what());
+		renderPass.freeDescriptorSetTex(ldev, pool, dset);
+		vkDestroyImageView(ldev, view, nullptr);
+		vkDestroyImage(ldev, image, nullptr);
+		vkFreeMemory(ldev, memory, nullptr);
+		SDL_FreeSurface(img);
+		return nullptr;
+	}
+	return new TextureVk(res, image, memory, view, pool, dset, false);
+}
+
+template <bool conv>
+void RendererVk::uploadInputData(const SDL_Surface* img) {
+	VkDeviceSize texSize, pixSize;
+	if constexpr (conv) {
+		texSize = VkDeviceSize(img->w) * VkDeviceSize(img->h);
+		pixSize = texSize * VkDeviceSize(img->format->BytesPerPixel);
+	} else
+		pixSize = VkDeviceSize(img->pitch) * VkDeviceSize(img->h);
+
+	VkDeviceSize inputSize = roundToMulOf(pixSize, transferAtomSize);
+	if (inputSize > inputSizesMax[currentTransfer]) {
+#ifndef NDEBUG
+		nextObjectDebugName.emplace_back("transfer");
+#endif
+		recreateBuffer(inputBuffers[currentTransfer], inputMemory[currentTransfer], inputSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+#ifndef NDEBUG
+		nextObjectDebugName.pop_back();
+#endif
+		if (VkResult rs = vkMapMemory(ldev, inputMemory[currentTransfer], 0, VK_WHOLE_SIZE, 0, &inputsMapped[currentTransfer]); rs != VK_SUCCESS)
+			throw std::runtime_error("Failed to map input buffer memory: "s + string_VkResult(rs));
+		inputSizesMax[currentTransfer] = inputSize;
+		rebindInputBuffer[currentTransfer] = true;
+	}
+	if constexpr (conv) {
+		fmtConv.updateBufferSize(this, currentTransfer, texSize, inputBuffers[currentTransfer], inputSizesMax[currentTransfer], rebindInputBuffer[currentTransfer]);
+
+		if (size_t packPitch = size_t(img->w) * size_t(img->format->BytesPerPixel); uint(img->pitch) == packPitch)
+			memcpy(inputsMapped[currentTransfer], img->pixels, pixSize);
+		else
+			for (size_t o = 0, i = 0, e = size_t(img->pitch) * size_t(img->h); i < e; i += img->pitch, o += packPitch)
+				memcpy(reinterpret_cast<uint8*>(inputsMapped[currentTransfer]) + o, static_cast<uint8*>(img->pixels) + i, packPitch);
+	} else
+		memcpy(inputsMapped[currentTransfer], img->pixels, pixSize);
+
+	VkMappedMemoryRange flushRange{};
+	flushRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+	flushRange.memory = inputMemory[currentTransfer];
+	flushRange.size = inputSize;
+	if (VkResult rs = vkFlushMappedMemoryRanges(ldev, 1, &flushRange); rs != VK_SUCCESS)
+		throw std::runtime_error("Failed to flush input memory: "s + string_VkResult(rs));
 }
 
 pair<VkImage, VkDeviceMemory> RendererVk::createImage(u32vec2 size, VkImageType type, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags properties) const {
@@ -1202,6 +1598,9 @@ pair<VkImage, VkDeviceMemory> RendererVk::createImage(u32vec2 size, VkImageType 
 	VkImage image;
 	if (VkResult rs = vkCreateImage(ldev, &imageInfo, nullptr, &image); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create image: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	setObjectDebugName(image);
+#endif
 
 	VkMemoryRequirements memRequirements;
 	vkGetImageMemoryRequirements(ldev, image, &memRequirements);
@@ -1216,7 +1615,14 @@ pair<VkImage, VkDeviceMemory> RendererVk::createImage(u32vec2 size, VkImageType 
 		vkDestroyImage(ldev, image, nullptr);
 		throw std::runtime_error("Failed to allocate image memory: "s + string_VkResult(rs));
 	}
-	vkBindImageMemory(ldev, image, memory, 0);
+#ifndef NDEBUG
+	setObjectDebugName(memory);
+#endif
+	if (VkResult rs = vkBindImageMemory(ldev, image, memory, 0); rs != VK_SUCCESS) {
+		vkDestroyImage(ldev, image, nullptr);
+		vkFreeMemory(ldev, memory, nullptr);
+		throw std::runtime_error("Failed to bind image memory: "s + string_VkResult(rs));
+	}
 	return pair(image, memory);
 }
 
@@ -1233,6 +1639,9 @@ VkImageView RendererVk::createImageView(VkImage image, VkImageViewType type, VkF
 	VkImageView imageView;
 	if (VkResult rs = vkCreateImageView(ldev, &viewInfo, nullptr, &imageView); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create image view: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	setObjectDebugName(imageView);
+#endif
 	return imageView;
 }
 
@@ -1249,7 +1658,18 @@ VkFramebuffer RendererVk::createFramebuffer(VkRenderPass rpass, VkImageView view
 	VkFramebuffer framebuffer;
 	if (VkResult rs = vkCreateFramebuffer(ldev, &framebufferInfo, nullptr, &framebuffer); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create framebuffer: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	setObjectDebugName(framebuffer);
+#endif
 	return framebuffer;
+}
+
+void RendererVk::recreateBuffer(VkBuffer& buffer, VkDeviceMemory& memory, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const {
+	vkDestroyBuffer(ldev, buffer, nullptr);
+	vkFreeMemory(ldev, memory, nullptr);
+	buffer = VK_NULL_HANDLE;
+	memory = VK_NULL_HANDLE;
+	std::tie(buffer, memory) = createBuffer(size, usage, properties);
 }
 
 pair<VkBuffer, VkDeviceMemory> RendererVk::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const {
@@ -1262,6 +1682,9 @@ pair<VkBuffer, VkDeviceMemory> RendererVk::createBuffer(VkDeviceSize size, VkBuf
 	VkBuffer buffer;
 	if (VkResult rs = vkCreateBuffer(ldev, &bufferInfo, nullptr, &buffer); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create buffer: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	setObjectDebugName(buffer);
+#endif
 
 	VkMemoryRequirements memRequirements;
 	vkGetBufferMemoryRequirements(ldev, buffer, &memRequirements);
@@ -1276,6 +1699,9 @@ pair<VkBuffer, VkDeviceMemory> RendererVk::createBuffer(VkDeviceSize size, VkBuf
 		vkDestroyBuffer(ldev, buffer, nullptr);
 		throw std::runtime_error("Failed to allocate buffer memory: "s + string_VkResult(rs));
 	}
+#ifndef NDEBUG
+	setObjectDebugName(memory);
+#endif
 	if (VkResult rs = vkBindBufferMemory(ldev, buffer, memory, 0); rs != VK_SUCCESS) {
 		vkDestroyBuffer(ldev, buffer, nullptr);
 		vkFreeMemory(ldev, memory, nullptr);
@@ -1291,14 +1717,18 @@ uint32 RendererVk::findMemoryType(uint32 typeFilter, VkMemoryPropertyFlags prope
 	throw std::runtime_error("Failed to find suitable memory type for properties "s + string_VkMemoryPropertyFlags(properties));
 }
 
-void RendererVk::allocateCommandBuffers(VkCommandBuffer* cmdBuffers, uint32 count) const {
+void RendererVk::allocateCommandBuffers(VkCommandPool commandPool, VkCommandBuffer* cmdBuffers, uint32 count) const {
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.commandPool = cmdPool;
+	allocInfo.commandPool = commandPool;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandBufferCount = count;
 	if (VkResult rs = vkAllocateCommandBuffers(ldev, &allocInfo, cmdBuffers); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to allocate command buffers: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	for (uint32 i = 0; i < count; ++i)
+		setObjectDebugName(cmdBuffers[i]);
+#endif
 }
 
 VkSemaphore RendererVk::createSemaphore() const {
@@ -1308,6 +1738,9 @@ VkSemaphore RendererVk::createSemaphore() const {
 	VkSemaphore semaphore;
 	if (VkResult rs = vkCreateSemaphore(ldev, &semaphoreInfo, nullptr, &semaphore); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create semaphore: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	setObjectDebugName(semaphore);
+#endif
 	return semaphore;
 }
 
@@ -1319,62 +1752,36 @@ VkFence RendererVk::createFence(VkFenceCreateFlags flags) const {
 	VkFence fence;
 	if (VkResult rs = vkCreateFence(ldev, &fenceInfo, nullptr, &fence); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to create fence: "s + string_VkResult(rs));
+#ifndef NDEBUG
+	setObjectDebugName(fence);
+#endif
 	return fence;
 }
 
-VkCommandBuffer RendererVk::beginSingleTimeCommands() const {
-	VkCommandBuffer commandBuffer;
-	allocateCommandBuffers(&commandBuffer, 1);
-	try {
-		beginSingleTimeCommands(commandBuffer);
-	} catch (const std::runtime_error&) {
-		freeCommandBuffers(&commandBuffer, 1);
-		throw;
-	}
-	return commandBuffer;
-}
-
-void RendererVk::beginSingleTimeCommands(VkCommandBuffer commandBuffer) const {
+void RendererVk::beginSingleTimeCommands(VkCommandBuffer cmdBuffer) {
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	if (VkResult rs = vkBeginCommandBuffer(commandBuffer, &beginInfo); rs != VK_SUCCESS)
+	if (VkResult rs = vkBeginCommandBuffer(cmdBuffer, &beginInfo); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to begin single time command buffer: "s + string_VkResult(rs));
 }
 
-void RendererVk::endSingleTimeCommands(VkCommandBuffer commandBuffer) const {
-	try {
-		if (VkResult rs = vkEndCommandBuffer(commandBuffer); rs != VK_SUCCESS)
-			throw std::runtime_error("Failed to end single time command buffer: "s + string_VkResult(rs));
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBuffer;
-		if (VkResult rs = vkQueueSubmit(gqueue, 1, &submitInfo, singleTimeFence); rs != VK_SUCCESS)
-			throw std::runtime_error("Failed to submit single time command buffer: "s + string_VkResult(rs));
-		vkWaitForFences(ldev, 1, &singleTimeFence, VK_TRUE, UINT64_MAX);
-		vkResetFences(ldev, 1, &singleTimeFence);
-		freeCommandBuffers(&commandBuffer, 1);
-	} catch (const std::runtime_error&) {
-		freeCommandBuffers(&commandBuffer, 1);
-		throw;
-	}
-}
-
-void RendererVk::submitSingleTimeCommands(VkCommandBuffer commandBuffer) const {
-	if (VkResult rs = vkEndCommandBuffer(commandBuffer); rs != VK_SUCCESS)
+void RendererVk::endSingleTimeCommands(VkCommandBuffer cmdBuffer, VkFence fence, VkQueue queue) const {
+	if (VkResult rs = vkEndCommandBuffer(cmdBuffer); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to end single time command buffer: "s + string_VkResult(rs));
 
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
-	if (VkResult rs = vkQueueSubmit(gqueue, 1, &submitInfo, singleTimeFence); rs != VK_SUCCESS)
+	submitInfo.pCommandBuffers = &cmdBuffer;
+	if (VkResult rs = vkQueueSubmit(queue, 1, &submitInfo, fence); rs != VK_SUCCESS)
 		throw std::runtime_error("Failed to submit single time command buffer: "s + string_VkResult(rs));
-	vkWaitForFences(ldev, 1, &singleTimeFence, VK_TRUE, UINT64_MAX);
-	vkResetFences(ldev, 1, &singleTimeFence);
-	vkResetCommandBuffer(commandBuffer, 0);
+}
+
+void RendererVk::synchSingleTimeCommands(VkCommandBuffer cmdBuffer, VkFence fence) const {
+	vkWaitForFences(ldev, 1, &fence, VK_TRUE, UINT64_MAX);
+	vkResetFences(ldev, 1, &fence);
+	vkResetCommandBuffer(cmdBuffer, 0);
 }
 
 template <VkImageLayout srcLay, VkImageLayout dstLay>
@@ -1423,8 +1830,42 @@ void RendererVk::transitionImageLayout(VkCommandBuffer commandBuffer, VkImage im
 		sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 	} else
-		throw std::invalid_argument("Unsupported layout transition from "s + string_VkImageLayout(srcLay) + " to " + string_VkImageLayout(dstLay));
+		throw std::invalid_argument("Unsupported layout transition from "s + string_VkImageLayout(srcLay) + " to " + string_VkImageLayout(dstLay) + " in " __func__);
 	vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+}
+
+template <VkImageLayout srcLay, VkImageLayout dstLay>
+void RendererVk::transitionBufferToImageLayout(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image) {
+	VkBufferMemoryBarrier bufferBarrier{};
+	bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+	bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	bufferBarrier.buffer = buffer;
+	bufferBarrier.size = VK_WHOLE_SIZE;
+
+	VkImageMemoryBarrier imageBarrier{};
+	imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	imageBarrier.oldLayout = srcLay;
+	imageBarrier.newLayout = dstLay;
+	imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	imageBarrier.image = image;
+	imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	imageBarrier.subresourceRange.levelCount = 1;
+	imageBarrier.subresourceRange.layerCount = 1;
+
+	VkPipelineStageFlags sourceStage;
+	VkPipelineStageFlags destinationStage;
+	if constexpr (srcLay == VK_IMAGE_LAYOUT_UNDEFINED && dstLay == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+		bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;;
+		bufferBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+		imageBarrier.srcAccessMask = VK_ACCESS_NONE;
+		imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		sourceStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+	} else
+		throw std::invalid_argument("Unsupported layout transition from "s + string_VkImageLayout(srcLay) + " to " + string_VkImageLayout(dstLay) + " in " __func__);
+	vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 1, &bufferBarrier, 1, &imageBarrier);
 }
 
 void RendererVk::copyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image, u32vec2 size, uint32 pitch) {
@@ -1447,7 +1888,7 @@ void RendererVk::copyImageToBuffer(VkCommandBuffer commandBuffer, VkImage image,
 #ifdef NDEBUG
 vector<const char*> RendererVk::getRequiredExtensions(SDL_Window* win) {
 #else
-vector<const char*> RendererVk::getRequiredExtensions(SDL_Window* win, bool validation) {
+vector<const char*> RendererVk::getRequiredExtensions(SDL_Window* win, bool debugUtils, bool validationFeatures) {
 #endif
 	uint count;
 	if (!SDL_Vulkan_GetInstanceExtensions(win, &count, nullptr))
@@ -1455,34 +1896,45 @@ vector<const char*> RendererVk::getRequiredExtensions(SDL_Window* win, bool vali
 	vector<const char*> extensions(count);
 	SDL_Vulkan_GetInstanceExtensions(win, &count, extensions.data());
 #ifndef NDEBUG
-	if (validation)
+	if (debugUtils) {
 		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+		if (validationFeatures)
+			extensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
+	}
 #endif
 	return extensions;
 }
 
-tuple<uint32, uint32, bool> RendererVk::findQueueFamilies(VkPhysicalDevice dev) const {
+RendererVk::QueueInfo RendererVk::findQueueFamilies(VkPhysicalDevice dev) const {
 	uint32 count;
 	vkGetPhysicalDeviceQueueFamilyProperties(dev, &count, nullptr);
 	vector<VkQueueFamilyProperties> families(count);
 	vkGetPhysicalDeviceQueueFamilyProperties(dev, &count, families.data());
 
-	optional<uint32> gid, pid;
-	bool done = false;
-	for (uint32 i = 0; i < count && !done; ++i, done = gid.has_value() && pid.has_value()) {
-		if (families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
-			gid = i;
-
-		bool presentSupport = true;
-		for (auto [id, view] : views)
-			if (VkBool32 support = false; vkGetPhysicalDeviceSurfaceSupportKHR(dev, i, static_cast<ViewVk*>(view)->surface, &support) != VK_SUCCESS || !support) {
-				presentSupport = false;
-				break;
-			}
-		if (presentSupport)
-			pid = i;
+	QueueInfo qi;
+	for (uint32 i = 0; i < count; ++i) {
+		if (!qi.pfam) {
+			bool presentSupport = true;
+			for (auto [id, view] : views)
+				if (VkBool32 support = false; vkGetPhysicalDeviceSurfaceSupportKHR(dev, i, static_cast<ViewVk*>(view)->surface, &support) != VK_SUCCESS || !support) {
+					presentSupport = false;
+					break;
+				}
+			if (presentSupport)
+				qi.pfam = i;
+		}
+		if ((families[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT)) == (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT) && (!qi.gfam || qi.gfam == qi.pfam))
+			qi.gfam = i;
+		if ((families[i].queueFlags & VK_QUEUE_TRANSFER_BIT) && (!qi.tfam || ((qi.tfam == qi.gfam || qi.tfam == qi.pfam) && !qi.canCompute && (families[i].queueFlags & VK_QUEUE_COMPUTE_BIT)))) {
+			qi.tfam = i;
+			qi.canCompute = families[i].queueFlags & VK_QUEUE_COMPUTE_BIT;
+		}
 	}
-	return done ? tuple(gid.value(), pid.value(), done) : tuple(UINT32_MAX, UINT32_MAX, done);
+	for (optional<uint32> fid : { qi.gfam, qi.pfam, qi.tfam })
+		if (fid)
+			if (auto [it, isnew] = qi.idcnt.emplace(*fid, u32vec2(0, 1)); !isnew && it->second.y < families[it->first].queueCount)
+				++it->second.y;
+	return qi;
 }
 
 vector<VkSurfaceFormatKHR> RendererVk::querySurfaceFormatSupport(VkPhysicalDevice dev, VkSurfaceKHR surf) {
@@ -1517,7 +1969,8 @@ VkPresentModeKHR RendererVk::chooseSwapPresentMode(const vector<VkPresentModeKHR
 	return availablePresentModes[0];
 }
 
-void RendererVk::getAdditionalSettings(bool& compression, vector<pair<u32vec2, string>>& devices) {
+void RendererVk::getSettings(uint& maxRes, bool& compression, vector<pair<u32vec2, string>>& devices) const {
+	maxRes = pdevProperties.limits.maxImageDimension2D;
 	compression = false;
 
 	uint32 count;
@@ -1533,6 +1986,11 @@ void RendererVk::getAdditionalSettings(bool& compression, vector<pair<u32vec2, s
 		vkGetPhysicalDeviceProperties(pdevs[i], &prop);
 		devices[i + 1] = pair(u32vec2(prop.vendorID, prop.deviceID), prop.deviceName);
 	}
+}
+
+void RendererVk::setMaxPicRes(uint& size) {
+	size = std::clamp(size, Settings::minPicRes, pdevProperties.limits.maxImageDimension2D);
+	maxPicRes = size;
 }
 
 uint RendererVk::scoreDevice(const VkPhysicalDeviceProperties& prop, const VkPhysicalDeviceMemoryProperties& memp) {
@@ -1564,29 +2022,139 @@ uint RendererVk::scoreDevice(const VkPhysicalDeviceProperties& prop, const VkPhy
 }
 
 pair<SDL_Surface*, VkFormat> RendererVk::pickPixFormat(SDL_Surface* img) const {
-	if (img = limitSize(img, pdevProperties.limits.maxImageDimension2D); img && img->format->format != SDL_PIXELFORMAT_RGBA32) {
-		SDL_Surface* dst = SDL_ConvertSurfaceFormat(img, SDL_PIXELFORMAT_RGBA32, 0);
-		SDL_FreeSurface(img);
-		img = dst;
+	if (img) {
+		switch (img->format->format) {
+		case SDL_PIXELFORMAT_RGBA32:
+			return pair(img, VK_FORMAT_A8B8G8R8_UNORM_PACK32);
+		case SDL_PIXELFORMAT_BGRA32:
+			return pair(img, VK_FORMAT_B8G8R8A8_UNORM);
+		case SDL_PIXELFORMAT_RGB24:
+			if (fmtConv.initialized())
+				return pair(img, VK_FORMAT_R8G8B8_UNORM);
+			break;
+		case SDL_PIXELFORMAT_BGR24:
+			if (fmtConv.initialized())
+				return pair(img, VK_FORMAT_B8G8R8_UNORM);
+		}
+		img = convertToDefault(img);
 	}
 	return pair(img, VK_FORMAT_A8B8G8R8_UNORM_PACK32);
 }
 
+pair<uint, const std::set<SDL_PixelFormatEnum>*> RendererVk::getLimits() const {
+	return pair(pdevProperties.limits.maxImageDimension2D, &supportedFormats);
+}
+
 #ifndef NDEBUG
-bool RendererVk::checkValidationLayerSupport() {
+pair<bool, bool> RendererVk::checkValidationLayerSupport() {
 	uint32 count;
 	if (VkResult rs = vkEnumerateInstanceLayerProperties(&count, nullptr); rs != VK_SUCCESS) {
 		logError("Failed to enumerate layers: "s + string_VkResult(rs));
-		return false;
+		return pair(false, false);
 	}
 	vector<VkLayerProperties> availableLayers(count);
 	vkEnumerateInstanceLayerProperties(&count, availableLayers.data());
-	for (const char* layerName : validationLayers)
-		if (!std::any_of(availableLayers.begin(), availableLayers.end(), [layerName](const VkLayerProperties& lp) -> bool { return !strcmp(lp.layerName, layerName); })) {
-			logError("Validation layers not available");
-			return false;
-		}
-	return true;
+	if (!std::any_of(availableLayers.begin(), availableLayers.end(), [](const VkLayerProperties& lp) -> bool { return !strcmp(lp.layerName, validationLayers[0]); })) {
+		logError("Validation layers not available");
+		return pair(false, false);
+	}
+
+	if (VkResult rs = vkEnumerateInstanceExtensionProperties(validationLayers[0], &count, nullptr); rs != VK_SUCCESS) {
+		logError("Failed to enumerate layer extensions: "s + string_VkResult(rs));
+		return pair(false, false);
+	}
+	vector<VkExtensionProperties> availableExtensions(count);
+	vkEnumerateInstanceExtensionProperties(validationLayers[0], &count, availableExtensions.data());
+
+	bool debugUtils = false, validationFeatures = false;
+	for (size_t i = 0; i < availableExtensions.size() && !(debugUtils && validationFeatures); ++i) {
+		if (!strcmp(availableExtensions[i].extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
+			debugUtils = true;
+		else if (!strcmp(availableExtensions[i].extensionName, VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME))
+			validationFeatures = true;
+	}
+	if (!debugUtils)
+		logError("Instance extension " VK_EXT_DEBUG_UTILS_EXTENSION_NAME " not available");
+	if (!validationFeatures)
+		logError("Instance extension " VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME " not available");
+	return pair(debugUtils, validationFeatures);
+}
+
+template <class T, std::enable_if_t<std::is_pointer_v<T>, int>>
+void RendererVk::setObjectDebugName(T object) const {
+	if (!nextObjectDebugName.empty())
+		setObjectDebugName(object, nextObjectDebugName.back().c_str());
+}
+
+template <class T, std::enable_if_t<std::is_pointer_v<T>, int>>
+void RendererVk::setObjectDebugName(T object, const char* name) const {
+	if (!pfnSetDebugUtilsObjectNameEXT || !name[0])
+		return;
+
+	VkDebugUtilsObjectNameInfoEXT objectNameInfo{};
+	objectNameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+	objectNameInfo.objectHandle = uintptr_t(object);
+	objectNameInfo.pObjectName = name;
+	if constexpr (std::is_same_v<T, VkInstance>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_INSTANCE;
+	else if constexpr (std::is_same_v<T, VkPhysicalDevice>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_PHYSICAL_DEVICE;
+	else if constexpr (std::is_same_v<T, VkDevice>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_DEVICE;
+	else if constexpr (std::is_same_v<T, VkQueue>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_QUEUE;
+	else if constexpr (std::is_same_v<T, VkSemaphore>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_SEMAPHORE;
+	else if constexpr (std::is_same_v<T, VkCommandBuffer>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_COMMAND_BUFFER;
+	else if constexpr (std::is_same_v<T, VkFence>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_FENCE;
+	else if constexpr (std::is_same_v<T, VkDeviceMemory>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_DEVICE_MEMORY;
+	else if constexpr (std::is_same_v<T, VkBuffer>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_BUFFER;
+	else if constexpr (std::is_same_v<T, VkImage>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_IMAGE;
+	else if constexpr (std::is_same_v<T, VkEvent>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_EVENT;
+	else if constexpr (std::is_same_v<T, VkQueryPool>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_QUERY_POOL;
+	else if constexpr (std::is_same_v<T, VkBufferView>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_BUFFER_VIEW;
+	else if constexpr (std::is_same_v<T, VkImageView>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
+	else if constexpr (std::is_same_v<T, VkShaderModule>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_SHADER_MODULE;
+	else if constexpr (std::is_same_v<T, VkPipelineCache>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_PIPELINE_CACHE;
+	else if constexpr (std::is_same_v<T, VkPipelineLayout>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_PIPELINE_LAYOUT;
+	else if constexpr (std::is_same_v<T, VkRenderPass>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_RENDER_PASS;
+	else if constexpr (std::is_same_v<T, VkPipeline>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_PIPELINE;
+	else if constexpr (std::is_same_v<T, VkDescriptorSetLayout>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT;
+	else if constexpr (std::is_same_v<T, VkSampler>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_SAMPLER;
+	else if constexpr (std::is_same_v<T, VkDescriptorPool>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_DESCRIPTOR_POOL;
+	else if constexpr (std::is_same_v<T, VkDescriptorSet>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET;
+	else if constexpr (std::is_same_v<T, VkFramebuffer>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_FRAMEBUFFER;
+	else if constexpr (std::is_same_v<T, VkCommandPool>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_COMMAND_POOL;
+	else if constexpr (std::is_same_v<T, VkSurfaceKHR>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_SURFACE_KHR;
+	else if constexpr (std::is_same_v<T, VkSwapchainKHR>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR;
+	else if constexpr (std::is_same_v<T, VkDebugUtilsMessengerEXT>)
+		objectNameInfo.objectType = VK_OBJECT_TYPE_DEBUG_UTILS_MESSENGER_EXT;
+	else
+		objectNameInfo.objectType = VK_OBJECT_TYPE_UNKNOWN;
+	if (VkResult rs = pfnSetDebugUtilsObjectNameEXT(ldev, &objectNameInfo); rs != VK_SUCCESS)
+		logError("Failed to set object debug name: "s + string_VkResult(rs));
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL RendererVk::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void*) {

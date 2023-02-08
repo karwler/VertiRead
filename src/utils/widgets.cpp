@@ -5,6 +5,81 @@
 #include "engine/world.h"
 #include "prog/progs.h"
 
+// SCROLL BAR
+
+bool ScrollBar::tick(float dSec, ivec2 listSize, ivec2 size) {
+	if (motion != vec2(0.f)) {
+		moveListPos(motion, listSize, size);
+		throttleMotion(motion.x, dSec);
+		throttleMotion(motion.y, dSec);
+		World::scene()->updateSelect();
+		return true;
+	}
+	return false;
+}
+
+bool ScrollBar::hold(ivec2 mPos, uint8 mBut, Widget* wgt, ivec2 listSize, ivec2 pos, ivec2 size, bool vert) {
+	bool moved = false;
+	motion = vec2(0.f);	// get rid of scroll motion
+	if (mBut == SDL_BUTTON_LEFT) {	// check scroll bar left click
+		World::scene()->setCapture(wgt);
+		SDL_CaptureMouse(SDL_TRUE);
+		if ((draggingSlider = barRect(listSize, pos, size, vert).contains(mPos))) {
+			int sp = sliderPos(listSize, pos, size, vert), ss = sliderSize(listSize, size, vert);
+			if (moved = outRange(mPos[vert], sp, sp + ss); moved)	// if mouse outside of slider but inside bar
+				setSlider(mPos[vert] - ss / 2, listSize, pos, size, vert);
+			diffSliderMouse = mPos.y - sliderPos(listSize, pos, size, vert);	// get difference between mouse y and slider y
+		}
+	}
+	return moved;
+}
+
+void ScrollBar::drag(ivec2 mPos, ivec2 mMov, ivec2 listSize, ivec2 pos, ivec2 size, bool vert) {
+	if (draggingSlider)
+		setSlider(mPos.y - diffSliderMouse, listSize, pos, size, vert);
+	else
+		moveListPos(mMov * vswap(0, -1, !vert), listSize, size);
+}
+
+void ScrollBar::undrag(ivec2 mPos, uint8 mBut, bool vert) {
+	if (mBut == SDL_BUTTON_LEFT) {
+		if (!World::scene()->cursorInClickRange(mPos, mBut) && !draggingSlider)
+			motion = World::inputSys()->getMouseMove() * vswap(0, -1, !vert);
+		SDL_CaptureMouse(SDL_FALSE);
+		World::scene()->setCapture(nullptr);	// should call cancelDrag through the captured widget
+	}
+}
+
+void ScrollBar::scroll(ivec2 wMov, ivec2 listSize, ivec2 size, bool vert) {
+	moveListPos(vswap(wMov.x, wMov.y, !vert), listSize, size);
+	motion = vec2(0.f);
+}
+
+void ScrollBar::throttleMotion(float& mov, float dSec) {
+	if (mov > 0.f) {
+		if (mov -= throttle * dSec; mov < 0.f)
+			mov = 0.f;
+	} else if (mov += throttle * dSec; mov > 0.f)
+		mov = 0.f;
+}
+
+void ScrollBar::setSlider(int spos, ivec2 listSize, ivec2 pos, ivec2 size, bool vert) {
+	int lim = listLim(listSize, size)[vert];
+	listPos[vert] = std::clamp((spos - pos[vert]) * lim / sliderLim(listSize, size, vert), 0, lim);
+}
+
+Recti ScrollBar::barRect(ivec2 listSize, ivec2 pos, ivec2 size, bool vert) {
+	int bs = barSize(listSize, size, vert);
+	return vert ? Rect(pos.x + size.x - bs, pos.y, bs, size.y) : Rect(pos.x, pos.y + size.y - bs, size.x, bs);
+}
+
+Recti ScrollBar::sliderRect(ivec2 listSize, ivec2 pos, ivec2 size, bool vert) const {
+	int bs = barSize(listSize, size, vert);
+	int sp = sliderPos(listSize, pos, size, vert);
+	int ss = sliderSize(listSize, size, vert);
+	return vert ? Rect(pos.x + size.x - bs, sp, bs, ss) : Rect(sp, pos.y + size.y - bs, ss, bs);
+}
+
 // WIDGET
 
 bool Widget::navSelectable() const {
@@ -15,7 +90,7 @@ bool Widget::hasDoubleclick() const {
 	return false;
 }
 
-void Widget::setParent(Layout* pnt, sizet id) {
+void Widget::setParent(Layout* pnt, size_t id) {
 	parent = pnt;
 	index = id;
 }
@@ -35,6 +110,7 @@ Recti Widget::frame() const {
 void Widget::setSize(const Size& size) {
 	relSize = size;
 	parent->onResize();
+	World::renderer()->synchTransfer();
 }
 
 void Widget::onNavSelect(Direction dir) {
@@ -55,12 +131,18 @@ int Widget::sizeToPixAbs(const Size& siz, int res) const {
 
 // PICTURE
 
-Picture::Picture(const Size& size, bool bg, const Texture* texture, int margin) :
+Picture::Picture(const Size& size, bool bg, pair<Texture*, bool> texture, int margin) :
 	Widget(size),
-	tex(texture),
+	tex(texture.first),
+	freeTex(texture.second),
 	showBG(bg),
 	texMargin(margin)
 {}
+
+Picture::~Picture() {
+	if (freeTex)
+		World::renderer()->freeTexture(tex);
+}
 
 void Picture::drawSelf(const Recti& view) {
 	World::drawSys()->drawPicture(this, view);
@@ -79,9 +161,16 @@ Recti Picture::texRect() const {
 	return Recti(rct.pos() + texMargin, rct.size() - texMargin * 2);
 }
 
+void Picture::setTex(Texture* texture, bool exclusive) {
+	if (freeTex)
+		World::renderer()->freeTexture(tex);
+	tex = texture;
+	freeTex = tex && exclusive;
+}
+
 // BUTTON
 
-Button::Button(const Size& size, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, bool bg, const Texture* texture, int margin) :
+Button::Button(const Size& size, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, bool bg, pair<Texture*, bool> texture, int margin) :
 	Picture(size, bg, texture, margin),
 	lcall(leftCall),
 	rcall(rightCall),
@@ -91,7 +180,7 @@ Button::Button(const Size& size, PCall leftCall, PCall rightCall, PCall doubleCa
 
 Button::~Button() {
 	if (tooltip)
-		World::drawSys()->freeTexture(tooltip);
+		World::renderer()->freeTexture(tooltip);
 }
 
 void Button::onClick(ivec2, uint8 mBut) {
@@ -141,7 +230,7 @@ Recti Button::tooltipRect() const {
 
 // CHECK BOX
 
-CheckBox::CheckBox(const Size& size, bool checked, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, bool bg, const Texture* texture, int margin) :
+CheckBox::CheckBox(const Size& size, bool checked, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, bool bg, pair<Texture*, bool> texture, int margin) :
 	Button(size, leftCall, rightCall, doubleCall, tip, bg, texture, margin),
 	on(checked)
 {}
@@ -164,7 +253,7 @@ Recti CheckBox::boxRect() const {
 
 // SLIDER
 
-Slider::Slider(const Size& size, int value, int minimum, int maximum, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, bool bg, const Texture* texture, int margin) :
+Slider::Slider(const Size& size, int value, int minimum, int maximum, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, bool bg, pair<Texture*, bool> texture, int margin) :
 	Button(size, leftCall, rightCall, doubleCall, tip, bg, texture, margin),
 	val(value),
 	vmin(minimum),
@@ -183,8 +272,9 @@ void Slider::onClick(ivec2, uint8 mBut) {
 void Slider::onHold(ivec2 mPos, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		World::scene()->setCapture(this);
-		if (int sp = sliderPos(); outRange(mPos.x, sp, sp + barSize))	// if mouse outside of slider
-			setSlider(mPos.x - barSize / 2);
+		SDL_CaptureMouse(SDL_TRUE);
+		if (int sp = sliderPos(); outRange(mPos.x, sp, sp + ScrollBar::barSizeVal))	// if mouse outside of slider
+			setSlider(mPos.x - ScrollBar::barSizeVal / 2);
 		diffSliderMouse = mPos.x - sliderPos();	// get difference between mouse x and slider x
 	}
 }
@@ -193,9 +283,11 @@ void Slider::onDrag(ivec2 mPos, ivec2) {
 	setSlider(mPos.x - diffSliderMouse);
 }
 
-void Slider::onUndrag(uint8 mBut) {
-	if (mBut == SDL_BUTTON_LEFT)	// if dragging slider stop dragging slider
+void Slider::onUndrag(ivec2, uint8 mBut) {
+	if (mBut == SDL_BUTTON_LEFT) {	// if dragging slider stop dragging slider
+		SDL_CaptureMouse(SDL_FALSE);
 		World::scene()->setCapture(nullptr);
+	}
 }
 
 void Slider::setSlider(int xpos) {
@@ -211,17 +303,17 @@ Recti Slider::barRect() const {
 
 Recti Slider::sliderRect() const {
 	ivec2 pos = position(), siz = size();
-	return Recti(sliderPos(), pos.y, barSize, siz.y);
+	return Recti(sliderPos(), pos.y, ScrollBar::barSizeVal, siz.y);
 }
 
 int Slider::sliderLim() const {
 	ivec2 siz = size();
-	return siz.x - siz.y/2 - barSize;
+	return siz.x - siz.y/2 - ScrollBar::barSizeVal;
 }
 
 // PROGRESS BAR
 
-ProgressBar::ProgressBar(const Size& size, int value, int minimum, int maximum, bool bg, const Texture* texture, int margin) :
+ProgressBar::ProgressBar(const Size& size, int value, int minimum, int maximum, bool bg, pair<Texture*, bool> texture, int margin) :
 	Picture(size, bg, texture, margin),
 	val(value),
 	vmin(minimum),
@@ -240,7 +332,7 @@ Recti ProgressBar::barRect() const {
 
 // LABEL
 
-Label::Label(const Size& size, string line, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, Alignment alignment, const Texture* texture, bool bg, int lineMargin, int iconMargin) :
+Label::Label(const Size& size, string&& line, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
 	Button(size, leftCall, rightCall, doubleCall, tip, bg, texture, iconMargin),
 	text(std::move(line)),
 	textMargin(lineMargin),
@@ -249,7 +341,7 @@ Label::Label(const Size& size, string line, PCall leftCall, PCall rightCall, PCa
 
 Label::~Label() {
 	if (textTex)
-		World::drawSys()->freeTexture(textTex);
+		World::renderer()->freeTexture(textTex);
 }
 
 void Label::drawSelf(const Recti& view) {
@@ -264,14 +356,14 @@ void Label::postInit() {
 	updateTextTex();
 }
 
-void Label::setText(string&& str) {
-	text = std::move(str);
-	updateTextTex();
-}
-
 void Label::setText(const string& str) {
 	text = str;
-	updateTextTex();
+	updateTextTexNow();
+}
+
+void Label::setText(string&& str) {
+	text = std::move(str);
+	updateTextTexNow();
 }
 
 Recti Label::textRect() const {
@@ -286,17 +378,18 @@ Recti Label::textFrame() const {
 
 Recti Label::texRect() const {
 	Recti rct = rect();
-	vec2 res = tex->getRes();
+	vec2 res = getTex()->getRes();
 	ivec2 siz = res * float(rct.h - texMargin * 2) / std::max(res.x, res.y);
 	return Recti(rct.pos() + (rct.h - siz) / 2, siz);
 }
 
 int Label::textIconOffset() const {
-	return tex ? size().y : 0;
+	return getTex() ? size().y : 0;
 }
 
 ivec2 Label::textPos() const {
-	switch (ivec2 pos = position(); align) {
+	ivec2 pos = position();
+	switch (align) {
 	case Alignment::left:
 		return ivec2(pos.x + textIconOffset() + textMargin, pos.y);
 	case Alignment::center: {
@@ -305,25 +398,98 @@ ivec2 Label::textPos() const {
 	case Alignment::right:
 		return ivec2(pos.x + size().x - textTex->getRes().x - textMargin, pos.y);
 	}
-	throw std::runtime_error("Invalid alignment type: " + toStr(align));
+	return pos;
 }
 
 void Label::updateTextTex() {
 	if (textTex)
-		World::drawSys()->freeTexture(textTex);
+		World::renderer()->freeTexture(textTex);
 	textTex = World::drawSys()->renderText(text, size().y);
+}
+
+void Label::updateTextTexNow() {
+	updateTextTex();
+	World::renderer()->synchTransfer();
+}
+
+// TEXT BOX
+
+TextBox::TextBox(const Size& size, int lineH, string&& lines, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
+	Label(size, std::move(lines), leftCall, rightCall, doubleCall, tip, alignment, texture, bg, lineMargin, iconMargin),
+	lineSize(lineH)
+{}
+
+void TextBox::tick(float dSec) {
+	scroll.tick(dSec, textTex->getRes(), size());
+}
+
+void TextBox::onResize() {
+	updateTextTex();
+	scroll.setListPos(scroll.listPos, textTex ? textTex->getRes() : ivec2(0), size());
+}
+
+void TextBox::postInit() {
+	updateTextTex();
+}
+
+void TextBox::onHold(ivec2 mPos, uint8 mBut) {
+	scroll.hold(mPos, mBut, this, textTex ? textTex->getRes() : ivec2(0), position(), size(), true);
+}
+
+void TextBox::onDrag(ivec2 mPos, ivec2 mMov) {
+	scroll.drag(mPos, mMov, textTex ? textTex->getRes() : ivec2(0), position(), size(), true);
+}
+
+void TextBox::onUndrag(ivec2 mPos, uint8 mBut) {
+	scroll.undrag(mPos, mBut, true);
+}
+
+void TextBox::onScroll(ivec2 wMov) {
+	scroll.scroll(wMov, textTex ? textTex->getRes() : ivec2(0), size(), true);
+}
+
+bool TextBox::navSelectable() const {
+	return true;
+}
+
+Recti TextBox::texRect() const {
+	return Picture::texRect();
+}
+
+int TextBox::textIconOffset() const {
+	return 0;
+}
+
+ivec2 TextBox::textPos() const {
+	return Label::textPos() - scroll.listPos;
+}
+
+void TextBox::setText(const string& str) {
+	text = str;
+	scroll.listPos = ivec2(0);
+}
+
+void TextBox::setText(string&& str) {
+	text = std::move(str);
+	scroll.listPos = ivec2(0);
+}
+
+void TextBox::updateTextTex() {
+	if (textTex)
+		World::renderer()->freeTexture(textTex);
+	textTex = World::drawSys()->renderText(text, lineSize, size().x);
 }
 
 // COMBO BOX
 
-ComboBox::ComboBox(const Size& size, string curOption, vector<string>&& opts, PCall call, Texture* tip, Alignment alignment, const Texture* texture, bool bg, int lineMargin, int iconMargin) :
+ComboBox::ComboBox(const Size& size, string&& curOption, vector<string>&& opts, PCall call, Texture* tip, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
 	Label(size, std::move(curOption), call, call, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
 	options(std::move(opts)),
-	curOpt(std::min(sizet(std::find(options.begin(), options.end(), text) - options.begin()), options.size()))
+	curOpt(std::min(size_t(std::find(options.begin(), options.end(), text) - options.begin()), options.size()))
 {}
 
-ComboBox::ComboBox(const Size& size, sizet curOption, vector<string>&& opts, PCall call, Texture* tip, Alignment alignment, const Texture* texture, bool bg, int lineMargin, int iconMargin) :
-	Label(size, opts[curOption], call, call, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
+ComboBox::ComboBox(const Size& size, size_t curOption, vector<string>&& opts, PCall call, Texture* tip, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
+	Label(size, string(opts[curOption]), call, call, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
 	options(std::move(opts)),
 	curOpt(curOption)
 {}
@@ -333,14 +499,14 @@ void ComboBox::onClick(ivec2, uint8 mBut) {
 		World::scene()->setContext(World::state()->createComboContext(this, mBut == SDL_BUTTON_LEFT ? lcall : rcall));
 }
 
-void ComboBox::setCurOpt(sizet id) {
+void ComboBox::setCurOpt(size_t id) {
 	curOpt = std::min(id, options.size());
 	setText(options[curOpt]);
 }
 
 // LABEL EDIT
 
-LabelEdit::LabelEdit(const Size& size, string line, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, TextType type, bool focusLossConfirm, const Texture* texture, bool bg, int lineMargin, int iconMargin) :
+LabelEdit::LabelEdit(const Size& size, string&& line, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, TextType type, bool focusLossConfirm, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
 	Label(size, std::move(line), leftCall, rightCall, doubleCall, tip, Alignment::left, texture, bg, lineMargin, iconMargin),
 	unfocusConfirm(focusLossConfirm),
 	textType(type),
@@ -387,29 +553,29 @@ void LabelEdit::onKeypress(const SDL_Keysym& key) {
 		if (kmodAlt(key.mod)) {	// if holding alt delete left word
 			uint id = findWordStart();
 			text.erase(id, cpos - id);
-			updateTextTex();
+			updateTextTexNow();
 			setCPos(id);
 		} else if (kmodCtrl(key.mod)) {	// if holding ctrl delete line to left
 			text.erase(0, cpos);
-			updateTextTex();
+			updateTextTexNow();
 			setCPos(0);
 		} else if (cpos > 0) {	// otherwise delete left character
 			uint id = jumpCharB(cpos);
 			text.erase(id, cpos - id);
-			updateTextTex();
+			updateTextTexNow();
 			setCPos(id);
 		}
 		break;
 	case SDL_SCANCODE_DELETE:	// delete right character
 		if (kmodAlt(key.mod)) {	// if holding alt delete right word
 			text.erase(cpos, findWordEnd() - cpos);
-			updateTextTex();
+			updateTextTexNow();
 		} else if (kmodCtrl(key.mod)) {	// if holding ctrl delete line to right
 			text.erase(cpos, text.length() - cpos);
-			updateTextTex();
+			updateTextTexNow();
 		} else if (cpos < text.length()) {	// otherwise delete right character
 			text.erase(cpos, jumpCharF(cpos) - cpos);
-			updateTextTex();
+			updateTextTexNow();
 		}
 		break;
 	case SDL_SCANCODE_HOME:	// move caret to beginning
@@ -451,14 +617,14 @@ void LabelEdit::onKeypress(const SDL_Keysym& key) {
 void LabelEdit::onCompose(string_view str, uint olen) {
 	text.erase(cpos, olen);
 	text.insert(cpos, str);
-	updateTextTex();
+	updateTextTexNow();
 }
 
 void LabelEdit::onText(string_view str, uint olen) {
 	text.erase(cpos, olen);
 	text.insert(cpos, str.data(), str.length());
 	cleanText();
-	updateTextTex();
+	updateTextTexNow();
 	setCPos(cpos + str.length());
 }
 
@@ -467,21 +633,21 @@ ivec2 LabelEdit::textPos() const {
 	return ivec2(pos.x + textOfs + textIconOffset() + textMargin, pos.y);
 }
 
-void LabelEdit::setText(string&& str) {
-	oldText = std::move(text);
-	text = std::move(str);
-	onTextReset();
-}
-
 void LabelEdit::setText(const string& str) {
 	oldText = std::move(text);
 	text = str;
 	onTextReset();
 }
 
+void LabelEdit::setText(string&& str) {
+	oldText = std::move(text);
+	text = std::move(str);
+	onTextReset();
+}
+
 void LabelEdit::onTextReset() {
 	cleanText();
-	updateTextTex();
+	updateTextTexNow();
 	setCPos(text.length());
 }
 
@@ -507,7 +673,7 @@ void LabelEdit::confirm() {
 void LabelEdit::cancel() {
 	textOfs = 0;
 	text = oldText;
-	updateTextTex();
+	updateTextTexNow();
 
 	World::scene()->setCapture(nullptr);
 	SDL_StopTextInput();
@@ -545,7 +711,7 @@ uint LabelEdit::findWordEnd() {
 void LabelEdit::cleanText() {
 	switch (textType) {
 	case TextType::sInt:
-		text.erase(std::remove_if(text.begin() + pdift(text[0] == '-'), text.end(), [](char c) -> bool { return !isdigit(c); }), text.end());
+		text.erase(std::remove_if(text.begin() + ptrdiff_t(text[0] == '-'), text.end(), [](char c) -> bool { return !isdigit(c); }), text.end());
 		break;
 	case TextType::sIntSpaced:
 		cleanSIntSpacedText();
@@ -576,14 +742,14 @@ void LabelEdit::cleanText() {
 
 void LabelEdit::cleanSIntSpacedText() {
 	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
-	for (string::iterator it = text.begin() + pdift(text[0] == '-'); it != text.end();) {
+	for (string::iterator it = text.begin() + ptrdiff_t(text[0] == '-'); it != text.end();) {
 		if (isdigit(*it))
 			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
 		else if (*it == ' ') {
 			if (it = std::find_if(it + 1, text.end(), [](char c) -> bool { return c != ' '; }); it != text.end() && *it == '-')
 				++it;
 		} else {
-			pdift ofs = it - text.begin();
+			ptrdiff_t ofs = it - text.begin();
 			text.erase(it, std::find_if(it + 1, text.end(), [](char c) -> bool { return isdigit(c) || c == ' '; }));
 			it = text.begin() + ofs;
 		}
@@ -598,7 +764,7 @@ void LabelEdit::cleanUIntSpacedText() {
 		else if (*it == ' ')
 			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return c != ' '; });
 		else {
-			pdift ofs = it - text.begin();
+			ptrdiff_t ofs = it - text.begin();
 			text.erase(it, std::find_if(it + 1, text.end(), [](char c) -> bool { return isdigit(c) || c == ' '; }));
 			it = text.begin() + ofs;
 		}
@@ -608,14 +774,14 @@ void LabelEdit::cleanUIntSpacedText() {
 void LabelEdit::cleanSFloatText() {
 	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
 	bool dot = false;
-	for (string::iterator it = text.begin() + pdift(text[0] == '-'); it != text.end();) {
+	for (string::iterator it = text.begin() + ptrdiff_t(text[0] == '-'); it != text.end();) {
 		if (isdigit(*it))
 			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
 		else if (*it == '.'  && !dot) {
 			dot = true;
 			++it;
 		} else {
-			pdift ofs = it - text.begin();
+			ptrdiff_t ofs = it - text.begin();
 			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isdigit(c) || (c == '.' && !dot); }));
 			it = text.begin() + ofs;
 		}
@@ -625,7 +791,7 @@ void LabelEdit::cleanSFloatText() {
 void LabelEdit::cleanSFloatSpacedText() {
 	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
 	bool dot = false;
-	for (string::iterator it = text.begin() + pdift(text[0] == '-'); it != text.end();) {
+	for (string::iterator it = text.begin() + ptrdiff_t(text[0] == '-'); it != text.end();) {
 		if (isdigit(*it))
 			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
 		else if (*it == ' ') {
@@ -635,7 +801,7 @@ void LabelEdit::cleanSFloatSpacedText() {
 			dot = true;
 			++it;
 		} else {
-			pdift ofs = it - text.begin();
+			ptrdiff_t ofs = it - text.begin();
 			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isdigit(c) || c == ' ' || (c == '.' && !dot); }));
 			it = text.begin() + ofs;
 		}
@@ -652,7 +818,7 @@ void LabelEdit::cleanUFloatText() {
 			dot = true;
 			++it;
 		} else {
-			pdift ofs = it - text.begin();
+			ptrdiff_t ofs = it - text.begin();
 			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isdigit(c) || (c == '.' && !dot); }));
 			it = text.begin() + ofs;
 		}
@@ -671,7 +837,7 @@ void LabelEdit::cleanUFloatSpacedText() {
 			dot = true;
 			++it;
 		} else {
-			pdift ofs = it - text.begin();
+			ptrdiff_t ofs = it - text.begin();
 			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isdigit(c) || c == ' ' || (c == '.' && !dot); }));
 			it = text.begin() + ofs;
 		}
@@ -680,7 +846,7 @@ void LabelEdit::cleanUFloatSpacedText() {
 
 // KEY GETTER
 
-KeyGetter::KeyGetter(const Size& size, AcceptType type, Binding::Type binding, Texture* tip, Alignment alignment, const Texture* texture, bool bg, int lineMargin, int iconMargin) :
+KeyGetter::KeyGetter(const Size& size, AcceptType type, Binding::Type binding, Texture* tip, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
 	Label(size, bindingText(binding, type), nullptr, nullptr, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
 	acceptType(type),
 	bindingType(binding)
@@ -804,7 +970,7 @@ WindowArranger::Dsp::Dsp(const Recti& vdsp, bool on) :
 	active(on)
 {}
 
-WindowArranger::WindowArranger(const Size& size, float baseScale, bool vertExp, PCall leftCall, PCall rightCall, Texture* tip, bool bg, const Texture* texture, int margin) :
+WindowArranger::WindowArranger(const Size& size, float baseScale, bool vertExp, PCall leftCall, PCall rightCall, Texture* tip, bool bg, pair<Texture*, bool> texture, int margin) :
 	Button(size, leftCall, rightCall, nullptr, tip, bg, texture, margin),
 	bscale(baseScale),
 	vertical(vertExp)
@@ -819,7 +985,7 @@ WindowArranger::~WindowArranger() {
 void WindowArranger::freeTextures() {
 	for (auto& [id, dsp] : disps)
 		if (dsp.txt)
-			World::drawSys()->freeTexture(dsp.txt);
+			World::renderer()->freeTexture(dsp.txt);
 }
 
 void WindowArranger::calcDisplays() {
@@ -888,6 +1054,7 @@ void WindowArranger::onHold(ivec2 mPos, uint8 mBut) {
 		dragging = dispUnderPos(mPos);
 		if (umap<int, Dsp>::iterator it = disps.find(dragging); it != disps.end()) {
 			World::scene()->setCapture(this);
+			SDL_CaptureMouse(SDL_TRUE);
 			dragr = it->second.rect.translate(position() + winMargin);
 		}
 	}
@@ -899,8 +1066,9 @@ void WindowArranger::onDrag(ivec2 mPos, ivec2) {
 		dragr.pos() = ivec2(vec2(spos) * entryScale(size())) + position() + winMargin;
 }
 
-void WindowArranger::onUndrag(uint8 mBut) {
+void WindowArranger::onUndrag(ivec2, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
+		SDL_CaptureMouse(SDL_FALSE);
 		World::scene()->setCapture(nullptr);
 
 		ivec2 spos = snapDrag();
@@ -966,7 +1134,7 @@ array<ivec2, 8> WindowArranger::getSnapPoints(const Recti& rect) {
 	};
 }
 
-template <sizet S>
+template <size_t S>
 void WindowArranger::scanClosestSnapPoint(const array<pair<uint, uint>, S>& relations, const Recti& rect, const array<ivec2, 8>& snaps, uint& snapId, ivec2& snapPnt, float& minDist) {
 	array<ivec2, 8> rpnts = getSnapPoints(rect);
 	for (auto [from, to] : relations)

@@ -27,7 +27,7 @@ fs::path parentPath(const fs::path& path) {
 		return fs::path();
 #endif
 	const fs::path::value_type* p = path.c_str();
-	if (sizet len = std::char_traits<fs::path::value_type>::length(p); len && isDsep(p[--len])) {
+	if (size_t len = std::char_traits<fs::path::value_type>::length(p); len && isDsep(p[--len])) {
 		while (len && isDsep(p[--len]));
 		if (len)
 			return fs::path(p, p + len).parent_path();
@@ -35,22 +35,38 @@ fs::path parentPath(const fs::path& path) {
 	return path.parent_path();
 }
 
+string_view filename(string_view path) {
+	string_view::reverse_iterator end = std::find_if_not(path.rbegin(), path.rend(), isDsep);
+	string_view::iterator pos = std::find_if(end, path.rend(), isDsep).base();
+	return string_view(&*pos, end.base() - pos);
+}
+
+string_view fileExtension(string_view path) {
+	string_view::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
+	return it != path.rend() && *it == '.' && it + 1 != path.rend() && !isDsep(it[1]) ? string_view(&*it.base(), path.end() - it.base()) : string_view();
+}
+
+string_view trim(string_view str) {
+	string_view::iterator pos = std::find_if(str.begin(), str.end(), notSpace);
+	return string_view(str.data() + (pos - str.begin()), std::find_if(str.rbegin(), std::make_reverse_iterator(pos), notSpace).base() - pos);
+}
+
 string strEnclose(string_view str) {
 	string txt(str);
-	for (sizet i = txt.find_first_of("\"\\"); i < txt.length(); i = txt.find_first_of("\"\\", i + 2))
+	for (size_t i = txt.find_first_of("\"\\"); i < txt.length(); i = txt.find_first_of("\"\\", i + 2))
 		txt.insert(txt.begin() + i, '\\');
 	return '"' + txt + '"';
 }
 
 vector<string> strUnenclose(string_view str) {
 	vector<string> words;
-	for (sizet pos = 0;;) {
+	for (size_t pos = 0;;) {
 		// find next start
 		if (pos = str.find_first_of('"', pos); pos == string::npos)
 			break;
 
 		// find start's end
-		sizet end = ++pos;
+		size_t end = ++pos;
 		for (;; ++end)
 			if (end = str.find_first_of('"', end); end == string::npos || str[end - 1] != '\\')
 				break;
@@ -59,7 +75,7 @@ vector<string> strUnenclose(string_view str) {
 
 		// remove escapes and add to quote list
 		string quote(str.data() + pos, end - pos);
-		for (sizet i = quote.find_first_of('\\'); i < quote.length(); i = quote.find_first_of('\\', i + 1))
+		for (size_t i = quote.find_first_of('\\'); i < quote.length(); i = quote.find_first_of('\\', i + 1))
 			if (quote[i + 1] == '"')
 				quote.erase(i, 1);
 		words.push_back(std::move(quote));
@@ -70,10 +86,10 @@ vector<string> strUnenclose(string_view str) {
 
 vector<string_view> getWords(string_view str) {
 	vector<string_view> words;
-	sizet p = 0;
+	size_t p = 0;
 	for (; p < str.length() && isSpace(str[p]); ++p);
 	while (p < str.length()) {
-		sizet i = p;
+		size_t i = p;
 		for (; i < str.length() && notSpace(str[i]); ++i);
 		words.emplace_back(str.data() + p, i - p);
 		for (p = i; p < str.length() && isSpace(str[p]); ++p);

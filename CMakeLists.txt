@@ -60,6 +60,8 @@ set(SRC_FILES
 	"src/engine/shaders/vk.sel.frag.rel.h"
 	"src/engine/shaders/vk.sel.vert.dbg.h"
 	"src/engine/shaders/vk.sel.vert.rel.h"
+	"src/engine/shaders/vk.conv.comp.dbg.h"
+	"src/engine/shaders/vk.conv.comp.rel.h"
 	"src/prog/browser.cpp"
 	"src/prog/browser.h"
 	"src/prog/downloader.cpp"
@@ -68,6 +70,8 @@ set(SRC_FILES
 	"src/prog/program.h"
 	"src/prog/progs.cpp"
 	"src/prog/progs.h"
+	"src/prog/types.cpp"
+	"src/prog/types.h"
 	"src/utils/compare.h"
 	"src/utils/layouts.cpp"
 	"src/utils/layouts.h"
@@ -84,7 +88,7 @@ endif()
 
 # dependencies
 set(VER_ARC "3.6.2")
-set(VER_SDL "2.26.3")
+set(VER_SDL "2.26.5")
 set(VER_IMG "2.6.3")
 set(VER_TTF "2.20.2")
 set(VER_GLM "0.9.9.8")

@@ -2,53 +2,78 @@
 
 #include "settings.h"
 
-// size of a widget in pixels or relative to it's parent
-struct Size {
-	enum Mode : uint8 {
-		rela,	// relative to parent size
-		pixv,	// absolute pixel value
-		calc	// use the calculation function
-	};
+// scroll information
+class ScrollBar {
+public:
+	static constexpr int barSizeVal = 10;
 
-	union {
-		float prc;
-		int pix;
-		int (*cfn)(const Widget*);
-	};
-	Mode mod;
+	ivec2 listPos = ivec2(0);
+	vec2 motion = vec2(0.f);	// how much the list scrolls over time
+private:
+	int diffSliderMouse = 0;	// space between slider and mouse position
+	bool draggingSlider = false;
 
-	constexpr Size(float percent = 1.f);
-	constexpr Size(int pixels);
-	constexpr Size(int (*calcul)(const Widget*));
+	static constexpr float throttle = 10.f;
 
-	int operator()(const Widget* wgt) const;
+public:
+	bool tick(float dSec, ivec2 listSize, ivec2 size);	// returns whether the list has moved
+	bool hold(ivec2 mPos, uint8 mBut, Widget* wgt, ivec2 listSize, ivec2 pos, ivec2 size, bool vert);	// returns whether the list has moved
+	void drag(ivec2 mPos, ivec2 mMov, ivec2 listSize, ivec2 pos, ivec2 size, bool vert);
+	void undrag(ivec2 mPos, uint8 mBut, bool vert);
+	void scroll(ivec2 wMov, ivec2 listSize, ivec2 size, bool vert);
+
+	bool getDraggingSlider() const;
+	static ivec2 listLim(ivec2 listSize, ivec2 size);	// max list position
+	void setListPos(ivec2 pos, ivec2 listSize, ivec2 size);
+	void moveListPos(ivec2 mov, ivec2 listSize, ivec2 size);
+	static int barSize(ivec2 listSize, ivec2 size, bool vert);	// returns 0 if slider isn't needed
+	static Recti barRect(ivec2 listSize, ivec2 pos, ivec2 size, bool vert);
+	Recti sliderRect(ivec2 listSize, ivec2 pos, ivec2 size, bool vert) const;
+private:
+	void setSlider(int spos, ivec2 listSize, ivec2 pos, ivec2 size, bool vert);
+	static int sliderSize(ivec2 listSize, ivec2 size, bool vert);
+	int sliderPos(ivec2 listSize, ivec2 pos, ivec2 size, bool vert) const;
+	static int sliderLim(ivec2 listSize, ivec2 size, bool vert);	// max slider position
+	static void throttleMotion(float& mov, float dSec);
 };
-using svec2 = glm::vec<2, Size, glm::defaultp>;
 
-constexpr Size::Size(float percent) :
-	prc(percent),
-	mod(rela)
-{}
+inline bool ScrollBar::getDraggingSlider() const {
+	return draggingSlider;
+}
 
-constexpr Size::Size(int pixels) :
-	pix(pixels),
-	mod(pixv)
-{}
+inline ivec2 ScrollBar::listLim(ivec2 listSize, ivec2 size) {
+	return ivec2(size.x < listSize.x ? listSize.x - size.x : 0, size.y < listSize.y ? listSize.y - size.y : 0);
+}
 
-constexpr Size::Size(int (*calcul)(const Widget*)) :
-	cfn(calcul),
-	mod(calc)
-{}
+inline void ScrollBar::setListPos(ivec2 pos, ivec2 listSize, ivec2 size) {
+	listPos = glm::clamp(pos, ivec2(0), listLim(listSize, size));
+}
 
-inline int Size::operator()(const Widget* wgt) const {
-	return cfn(wgt);
+inline void ScrollBar::moveListPos(ivec2 mov, ivec2 listSize, ivec2 size) {
+	listPos = glm::clamp(listPos + mov, ivec2(0), listLim(listSize, size));
+}
+
+inline int ScrollBar::barSize(ivec2 listSize, ivec2 size, bool vert) {
+	return listSize[vert] > size[vert] ? barSizeVal : 0;
+}
+
+inline int ScrollBar::sliderSize(ivec2 listSize, ivec2 size, bool vert) {
+	return size[vert] < listSize[vert] ? size[vert] * size[vert] / listSize[vert] : size[vert];
+}
+
+inline int ScrollBar::sliderPos(ivec2 listSize, ivec2 pos, ivec2 size, bool vert) const {
+	return listSize[vert] > size[vert] ? pos[vert] + listPos[vert] * sliderLim(listSize, size, vert) / listLim(listSize, size)[vert] : pos[vert];
+}
+
+inline int ScrollBar::sliderLim(ivec2 listSize, ivec2 size, bool vert) {
+	return size[vert] - sliderSize(listSize, size, vert);
 }
 
 // can be used as spacer
 class Widget {
 protected:
 	Layout* parent = nullptr;	// every widget that isn't a Layout should have a parent
-	sizet index = SIZE_MAX;		// this widget's id in parent's widget list
+	size_t index = SIZE_MAX;		// this widget's id in parent's widget list
 	Size relSize;				// size relative to parent's parameters
 
 public:
@@ -66,7 +91,7 @@ public:
 	virtual void onMouseMove(ivec2, ivec2) {}
 	virtual void onHold(ivec2, uint8) {}
 	virtual void onDrag(ivec2, ivec2) {}	// mouse move while left button down
-	virtual void onUndrag(uint8) {}			// gets called on mouse button up if instance is Scene's capture
+	virtual void onUndrag(ivec2, uint8) {}	// gets called on mouse button up if instance is Scene's capture
 	virtual void onScroll(ivec2) {}	// on mouse wheel y movement
 	virtual void onKeypress(const SDL_Keysym&) {}
 	virtual void onJButton(uint8) {}
@@ -81,9 +106,9 @@ public:
 	virtual bool navSelectable() const;
 	virtual bool hasDoubleclick() const;
 
-	sizet getIndex() const;
+	size_t getIndex() const;
 	Layout* getParent() const;
-	void setParent(Layout* pnt, sizet id);
+	void setParent(Layout* pnt, size_t id);
 
 	const Size& getRelSize() const;
 	virtual ivec2 position() const;
@@ -99,7 +124,7 @@ inline Widget::Widget(const Size& size) :
 	relSize(size)
 {}
 
-inline sizet Widget::getIndex() const {
+inline size_t Widget::getIndex() const {
 	return index;
 }
 
@@ -123,22 +148,32 @@ inline Recti Widget::rect() const {
 class Picture : public Widget {
 public:
 	static constexpr int defaultIconMargin = 2;
+	static constexpr pair<Texture*, bool> nullTex = pair(nullptr, false);
 
-	const Texture* tex;
+private:
+	Texture* tex;
+	bool freeTex = false;
+public:
 	bool showBG;
 protected:
 	int texMargin;
 
 public:
-	Picture(const Size& size = Size(), bool bg = true, const Texture* texture = nullptr, int margin = defaultIconMargin);
-	~Picture() override = default;
+	Picture(const Size& size = Size(), bool bg = true, pair<Texture*, bool> texture = nullTex, int margin = defaultIconMargin);
+	~Picture() override;
 
 	void drawSelf(const Recti& view) override;
 	void drawAddr(const Recti& view) override;
 
 	virtual Color color() const;
 	virtual Recti texRect() const;
+	Texture* getTex() const;
+	void setTex(Texture* texture, bool exclusive);
 };
+
+inline Texture* Picture::getTex() const {
+	return tex;
+}
 
 // clickable widget with function calls for left and right click (it's rect is drawn so you can use it like a spacer with color)
 class Button : public Picture {
@@ -150,7 +185,7 @@ protected:
 	Texture* tooltip;
 
 public:
-	Button(const Size& size = Size(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, bool bg = true, const Texture* texture = nullptr, int margin = defaultIconMargin);
+	Button(const Size& size = Size(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, bool bg = true, pair<Texture*, bool> texture = nullTex, int margin = defaultIconMargin);
 	~Button() override;
 
 	void onClick(ivec2 mPos, uint8 mBut) override;
@@ -168,7 +203,7 @@ class CheckBox : public Button {
 public:
 	bool on;
 
-	CheckBox(const Size& size = Size(), bool checked = false, PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, bool bg = true, const Texture* texture = nullptr, int margin = defaultIconMargin);
+	CheckBox(const Size& size = Size(), bool checked = false, PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, bool bg = true, pair<Texture*, bool> texture = nullTex, int margin = defaultIconMargin);
 	~CheckBox() final = default;
 
 	void drawSelf(const Recti& view) final;
@@ -189,21 +224,19 @@ inline bool CheckBox::toggle() {
 
 // horizontal slider (maybe one day it'll be able to be vertical)
 class Slider : public Button {
-public:
-	static constexpr int barSize = 10;
 private:
 	int val, vmin, vmax;
 	int diffSliderMouse = 0;
 
 public:
-	Slider(const Size& size = Size(), int value = 0, int minimum = 0, int maximum = 255, PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, bool bg = true, const Texture* texture = nullptr, int margin = defaultIconMargin);
+	Slider(const Size& size = Size(), int value = 0, int minimum = 0, int maximum = 255, PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, bool bg = true, pair<Texture*, bool> texture = nullTex, int margin = defaultIconMargin);
 	~Slider() final = default;
 
 	void drawSelf(const Recti& view) final;
 	void onClick(ivec2 mPos, uint8 mBut) final;
 	void onHold(ivec2 mPos, uint8 mBut) final;
 	void onDrag(ivec2 mPos, ivec2 mMov) final;
-	void onUndrag(uint8 mBut) final;
+	void onUndrag(ivec2 mPos, uint8 mBut) final;
 
 	int getVal() const;
 	void setVal(int value);
@@ -237,7 +270,7 @@ private:
 	int val, vmin, vmax;
 
 public:
-	ProgressBar(const Size& size = Size(), int value = 0, int minimum = 0, int maximum = 255, bool bg = true, const Texture* texture = nullptr, int margin = defaultIconMargin);
+	ProgressBar(const Size& size = Size(), int value = 0, int minimum = 0, int maximum = 255, bool bg = true, pair<Texture*, bool> texture = nullTex, int margin = defaultIconMargin);
 	~ProgressBar() final = default;
 
 	void drawSelf(const Recti& view) final;
@@ -268,7 +301,7 @@ protected:
 	Alignment align;	// text alignment
 
 public:
-	Label(const Size& size = Size(), string line = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, Alignment alignment = Alignment::left, const Texture* texture = nullptr, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
+	Label(const Size& size = Size(), string&& line = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, Alignment alignment = Alignment::left, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
 	~Label() override;
 
 	void drawSelf(const Recti& view) override;
@@ -276,17 +309,18 @@ public:
 	void postInit() override;
 
 	const string& getText() const;
-	virtual void setText(string&& str);
-	virtual void setText(const string& str);
 	const Texture* getTextTex() const;
+	virtual void setText(const string& str);
+	virtual void setText(string&& str);
 	Recti textRect() const;
 	Recti textFrame() const;
-	Recti texRect() const override;
-	int textIconOffset() const;
 	int getTextMargin() const;
+	Recti texRect() const override;
 protected:
+	virtual int textIconOffset() const;
 	virtual ivec2 textPos() const;
 	virtual void updateTextTex();
+	void updateTextTexNow();
 };
 
 inline const string& Label::getText() const {
@@ -301,29 +335,57 @@ inline int Label::getTextMargin() const {
 	return textMargin;
 }
 
+// multi-line scrollable label
+class TextBox : public Label {
+private:
+	ScrollBar scroll;
+	int lineSize;
+
+public:
+	TextBox(const Size& size = 1.f, int lineH = 30, string&& lines = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, Alignment alignment = Alignment::left, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
+	~TextBox() final = default;
+
+	void tick(float dSec) final;
+	void onResize() final;
+	void postInit() final;
+	void onHold(ivec2 mPos, uint8 mBut) final;
+	void onDrag(ivec2 mPos, ivec2 mMov) final;
+	void onUndrag(ivec2 mPos, uint8 but) final;
+	void onScroll(ivec2 wMov) final;
+	bool navSelectable() const final;
+
+	void setText(const string& str) final;
+	void setText(string&& str) final;
+	Recti texRect() const final;
+protected:
+	int textIconOffset() const final;
+	ivec2 textPos() const final;
+	void updateTextTex() final;
+};
+
 // for switching between multiple options (kinda like a drop-down menu except I was too lazy to make an actual one)
 class ComboBox : public Label {
 private:
 	vector<string> options;
-	sizet curOpt;
+	size_t curOpt;
 
 public:
-	ComboBox(const Size& size = Size(), string curOption = string(), vector<string>&& opts = vector<string>(), PCall call = nullptr, Texture* tip = nullptr, Alignment alignment = Alignment::left, const Texture* texture = nullptr, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
-	ComboBox(const Size& size = Size(), sizet curOption = 0, vector<string>&& opts = vector<string>(), PCall call = nullptr, Texture* tip = nullptr, Alignment alignment = Alignment::left, const Texture* texture = nullptr, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
+	ComboBox(const Size& size = Size(), string&& curOption = string(), vector<string>&& opts = vector<string>(), PCall call = nullptr, Texture* tip = nullptr, Alignment alignment = Alignment::left, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
+	ComboBox(const Size& size = Size(), size_t curOption = 0, vector<string>&& opts = vector<string>(), PCall call = nullptr, Texture* tip = nullptr, Alignment alignment = Alignment::left, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
 	~ComboBox() final = default;
 
 	void onClick(ivec2 mPos, uint8 mBut) final;
 
 	const vector<string>& getOptions() const;
-	sizet getCurOpt() const;
-	void setCurOpt(sizet id);
+	size_t getCurOpt() const;
+	void setCurOpt(size_t id);
 };
 
 inline const vector<string>& ComboBox::getOptions() const {
 	return options;
 }
 
-inline sizet ComboBox::getCurOpt() const {
+inline size_t ComboBox::getCurOpt() const {
 	return curOpt;
 }
 
@@ -352,7 +414,7 @@ private:
 	string oldText;
 
 public:
-	LabelEdit(const Size& size = Size(), string line = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, TextType type = TextType::text, bool focusLossConfirm = true, const Texture* texture = nullptr, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
+	LabelEdit(const Size& size = Size(), string&& line = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, TextType type = TextType::text, bool focusLossConfirm = true, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
 	~LabelEdit() final = default;
 
 	void drawTop(const Recti& view) final;
@@ -362,8 +424,8 @@ public:
 	void onText(string_view str, uint olen) final;
 
 	const string& getOldText() const;
-	void setText(string&& str) final;
 	void setText(const string& str) final;
+	void setText(string&& str) final;
 
 	void confirm();
 	void cancel();
@@ -423,7 +485,7 @@ private:
 	Binding::Type bindingType;	// index of what is currently being edited
 
 public:
-	KeyGetter(const Size& size = Size(), AcceptType type = AcceptType::keyboard, Binding::Type binding = Binding::Type(-1), Texture* tip = nullptr, Alignment alignment = Alignment::center, const Texture* texture = nullptr, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
+	KeyGetter(const Size& size = Size(), AcceptType type = AcceptType::keyboard, Binding::Type binding = Binding::Type(-1), Texture* tip = nullptr, Alignment alignment = Alignment::center, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
 	~KeyGetter() final = default;
 
 	void onClick(ivec2 mPos, uint8 mBut) final;
@@ -473,7 +535,7 @@ private:
 	bool vertical;
 
 public:
-	WindowArranger(const Size& size = Size(), float baseScale = 1.f, bool vertExp = true, PCall leftCall = nullptr, PCall rightCall = nullptr, Texture* tip = nullptr, bool bg = true, const Texture* texture = nullptr, int margin = defaultIconMargin);
+	WindowArranger(const Size& size = Size(), float baseScale = 1.f, bool vertExp = true, PCall leftCall = nullptr, PCall rightCall = nullptr, Texture* tip = nullptr, bool bg = true, pair<Texture*, bool> texture = nullTex, int margin = defaultIconMargin);
 	~WindowArranger() final;
 
 	void drawSelf(const Recti& view) final;
@@ -484,7 +546,7 @@ public:
 	void onMouseMove(ivec2 mPos, ivec2 mMov) final;
 	void onHold(ivec2 mPos, uint8 mBut) final;
 	void onDrag(ivec2 mPos, ivec2 mMov) final;
-	void onUndrag(uint8 mBut) final;
+	void onUndrag(ivec2 mPos, uint8 mBut) final;
 	void onDisplayChange() final;
 	bool navSelectable() const final;
 
@@ -505,7 +567,7 @@ private:
 	void freeTextures();
 	ivec2 snapDrag() const;
 	static array<ivec2, 8> getSnapPoints(const Recti& rect);
-	template <sizet S> static void scanClosestSnapPoint(const array<pair<uint, uint>, S>& relations, const Recti& rect, const array<ivec2, 8>& snaps, uint& snapId, ivec2& snapPnt, float& minDist);
+	template <size_t S> static void scanClosestSnapPoint(const array<pair<uint, uint>, S>& relations, const Recti& rect, const array<ivec2, 8>& snaps, uint& snapId, ivec2& snapPnt, float& minDist);
 };
 
 inline const umap<int, WindowArranger::Dsp>& WindowArranger::getDisps() const {
