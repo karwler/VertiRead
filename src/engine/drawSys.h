@@ -2,47 +2,62 @@
 
 #include "renderer.h"
 #include "utils/settings.h"
-#ifdef _WIN32
-#include <SDL_ttf.h>
-#else
-#include <SDL2/SDL_ttf.h>
-#endif
 #include <atomic>
+
+struct FT_Bitmap_;
+struct FT_BitmapGlyphRec_;
+struct FT_FaceRec_;
+struct FT_LibraryRec_;
 
 // loads different font sizes from one file
 class FontSet {
-public:
-	static constexpr int fontTestHeight = 100;
 private:
-	static constexpr char fontTestString[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`~!@#$%^&*()_+-=[]{}'\\\"|;:,.<>/?";
+	static constexpr char fontTestString[] = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+	static constexpr uint fontTestHeight = 100;
+	static constexpr uint fontTestMinPad = 4, fontTestMaxPad = 10;
+	static constexpr uint tabsize = 4;
+	static constexpr uint cacheSize = 127 - ' ';
 
-#if SDL_TTF_VERSION_ATLEAST(2, 0, 18)
-	TTF_Font* font = nullptr;
-#else
-	fs::path file;
-	umap<int, TTF_Font*> fonts;
-#endif
-	float heightScale;	// for scaling down font size to fit requested height
+	FT_LibraryRec_* lib = nullptr;
+	FT_FaceRec_* face = nullptr;
+	umap<uint, array<FT_BitmapGlyphRec_*, cacheSize>> glyphCache;
+	vector<uint8> fontData;
+	float heightScale;
+	float baseScale;
+	uint height;
+	int mode;
+
+	const char* ptr;
+	const char* wordStart;
+	size_t len;
+	size_t cpos;
+	uint xpos, ypos;
+	uint mfin;
+	uint gXpos;
 
 public:
+	FontSet();
 	~FontSet();
 
-	void init(const fs::path& path);
-#if !SDL_TTF_VERSION_ATLEAST(2, 0, 18)
-	void clear();
-#endif
-	TTF_Font* getFont(int height);
-	int length(const char* text, int height);
-	int length(char* text, size_t length, int height);
-};
+	void init(const fs::path& path, Settings::Hinting hinting);
+	void clearCache();
+	void setMode(Settings::Hinting hinting);
+	uint measureText(string_view text, uint size);
+	pair<uint, vector<const char*>> measureText(string_view text, uint size, uint limit);
+	Pixmap renderText(string_view text, uint size);
+	Pixmap renderText(string_view text, uint size, uint limit);
 
-inline FontSet::~FontSet() {
-#if SDL_TTF_VERSION_ATLEAST(2, 0, 18)
-	TTF_CloseFont(font);
-#else
-	clear();
-#endif
-}
+private:
+	void advanceTab(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs);
+	template <bool cached> void advanceChar(char32_t ch, char32_t prev, long advance);
+	template <bool cached> void advanceChar(char32_t ch, char32_t prev, long advance, int left, uint width);
+	bool breakLine(vector<const char*>& ln, uint size, uint limit, int left, uint width);
+	void advanceLine(vector<const char*>& ln, const char* pos, uint size);
+	void resetLine();
+	bool setSize(string_view text, uint size);
+	void cacheGlyph(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs, char32_t ch, uint id);
+	void copyGlyph(Pixmap& pm, uint dpitch, const FT_Bitmap_& bmp, int top, int left);
+};
 
 // handles the drawing
 class DrawSys {
@@ -67,14 +82,8 @@ public:
 	void updateView();
 	int findPointInView(ivec2 pos) const;
 	void setTheme(string_view name, Settings* sets, const FileSys* fileSys);
-	int textLength(const char* text, int height);
-	int textLength(const string& text, int height);
-	int textLength(char* text, size_t length, int height);
-	int textLength(string& text, size_t length, int height);
 	void setFont(const string& font, Settings* sets, const FileSys* fileSys);
-#if !SDL_TTF_VERSION_ATLEAST(2, 0, 18)
-	void clearFonts();
-#endif
+	void setFontHinting(Settings::Hinting hinting);
 	SDL_Surface* loadIcon(const string& path, int size);
 	pair<Texture*, bool> texture(const string& name) const;
 
@@ -96,10 +105,9 @@ public:
 	void drawPictureAddr(const Picture* wgt, const Recti& view);
 	void drawLayoutAddr(const Layout* wgt, const Recti& view);
 
-	Texture* renderText(const char* text, int height);
-	Texture* renderText(const string& text, int height);
-	Texture* renderText(const char* text, int height, uint length);
-	Texture* renderText(const string& text, int height, uint length);
+	uint textLength(string_view text, uint height);
+	Texture* renderText(string_view text, uint height);
+	Texture* renderText(string_view text, uint height, uint length);
 
 private:
 	umap<int, Renderer::View*>::const_iterator findViewForPoint(ivec2 pos) const;
@@ -113,48 +121,22 @@ inline ivec2 DrawSys::getViewRes() const {
 	return viewRes;
 }
 
-inline void DrawSys::updateView() {
-	renderer->updateView(viewRes);
+inline uint DrawSys::textLength(string_view text, uint height) {
+	return fonts.measureText(text, height);
 }
 
-inline int DrawSys::textLength(const char* text, int height) {
-	return fonts.length(text, height);
+inline Texture* DrawSys::renderText(string_view text, uint height) {
+	return renderer->texFromText(fonts.renderText(text, height));
 }
 
-inline int DrawSys::textLength(const string& text, int height) {
-	return fonts.length(text.c_str(), height);
+inline Texture* DrawSys::renderText(string_view text, uint height, uint length) {
+	return renderer->texFromText(fonts.renderText(text, height, length));
 }
 
-inline int DrawSys::textLength(char* text, size_t length, int height) {
-	return fonts.length(text, length, height);
-}
-
-inline int DrawSys::textLength(string& text, size_t length, int height) {
-	return fonts.length(text.data(), length, height);
-}
-
-inline Texture* DrawSys::renderText(const char* text, int height) {
-	return renderer->texFromText(TTF_RenderUTF8_Blended(fonts.getFont(height), text, { 255, 255, 255, 255 }));
-}
-
-inline Texture* DrawSys::renderText(const string& text, int height) {
-	return renderText(text.c_str(), height);
-}
-
-inline Texture* DrawSys::renderText(const char* text, int height, uint length) {
-	return renderer->texFromText(TTF_RenderUTF8_Blended_Wrapped(fonts.getFont(height), text, { 255, 255, 255, 255 }, length));
-}
-
-inline Texture* DrawSys::renderText(const string& text, int height, uint length) {
-	return renderText(text.c_str(), height, length);
+inline void DrawSys::setFontHinting(Settings::Hinting hinting) {
+	fonts.setMode(hinting);
 }
 
 inline umap<int, Renderer::View*>::const_iterator DrawSys::findViewForPoint(ivec2 pos) const {
 	return std::find_if(renderer->getViews().begin(), renderer->getViews().end(), [&pos](const pair<int, Renderer::View*>& it) -> bool { return it.second->rect.contains(pos); });
 }
-
-#if !SDL_TTF_VERSION_ATLEAST(2, 0, 18)
-inline void DrawSys::clearFonts() {
-	fonts.clear();
-}
-#endif

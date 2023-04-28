@@ -14,7 +14,17 @@ RendererGl::ViewGl::ViewGl(SDL_Window* window, const Recti& area, SDL_GLContext 
 	ctx(context)
 {}
 
-RendererGl::RendererGl(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor) {
+RendererGl::RendererGl(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor) :
+	Renderer({
+#ifdef OPENGLES
+		SDL_PIXELFORMAT_RGBA32, SDL_PIXELFORMAT_RGB24,
+		SDL_PIXELFORMAT_RGBA5551, SDL_PIXELFORMAT_RGB565
+#else
+		SDL_PIXELFORMAT_RGBA32, SDL_PIXELFORMAT_BGRA32, SDL_PIXELFORMAT_RGB24, SDL_PIXELFORMAT_BGR24,
+		SDL_PIXELFORMAT_RGBA5551, SDL_PIXELFORMAT_BGRA5551, SDL_PIXELFORMAT_RGB565, SDL_PIXELFORMAT_BGR565
+#endif
+	})
+{
 	if (windows.size() == 1 && windows.begin()->first == singleDspId) {
 		SDL_GL_GetDrawableSize(windows.begin()->second, &viewRes.x, &viewRes.y);
 		if (!static_cast<ViewGl*>(views.emplace(singleDspId, new ViewGl(windows.begin()->second, Recti(ivec2(0), viewRes), SDL_GL_CreateContext(windows.begin()->second))).first->second)->ctx)
@@ -36,7 +46,7 @@ RendererGl::RendererGl(const umap<int, SDL_Window*>& windows, Settings* sets, iv
 #endif
 	initShader();
 	setCompression(sets->compression);
-	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTexSize);
+	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
 	setMaxPicRes(sets->maxPicRes);
 }
 
@@ -398,20 +408,25 @@ Widget* RendererGl::finishSelDraw(View* view) {
 }
 
 Texture* RendererGl::texFromIcon(SDL_Surface* img) {
-	img = limitSize(img, maxTexSize);
-	if (auto [pic, pfmt, ifmt] = pickPixFormat(img); pic)
-		return createTexture(pic, ivec2(pic->w, pic->h), ifmt, pfmt, GL_LINEAR);
+	if (auto [pic, ifmt, pfmt, type] = pickPixFormat<true>(limitSize(img, maxTextureSize)); pic) {
+		TextureGl* tex = createTexture(pic->pixels, uvec2(pic->w, pic->h), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, GL_LINEAR);
+		SDL_FreeSurface(pic);
+		return tex;
+	}
 	return nullptr;
 }
 
 Texture* RendererGl::texFromRpic(SDL_Surface* img) {
-	if (auto [pic, pfmt, ifmt] = pickPixFormat(img); pic)
-		return createTexture(pic, ivec2(pic->w, pic->h), ifmt, pfmt, GL_LINEAR);
+	if (auto [pic, ifmt, pfmt, type] = pickPixFormat<false>(img); pic) {
+		TextureGl* tex = createTexture(pic->pixels, uvec2(pic->w, pic->h), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, GL_LINEAR);
+		SDL_FreeSurface(pic);
+		return tex;
+	}
 	return nullptr;
 }
 
-Texture* RendererGl::texFromText(SDL_Surface* img) {
-	return img ? createTexture(img, glm::min(ivec2(img->w, img->h), ivec2(maxTexSize)), GL_RGBA8, textPixFormat, GL_NEAREST) : nullptr;
+Texture* RendererGl::texFromText(const Pixmap& pm) {
+	return pm.pix ? createTexture(pm.pix.get(), glm::min(pm.res, uvec2(maxTextureSize)), pm.res.x, GL_RGBA8, textPixFormat, GL_UNSIGNED_BYTE, GL_NEAREST) : nullptr;
 }
 
 void RendererGl::freeTexture(Texture* tex) {
@@ -419,7 +434,7 @@ void RendererGl::freeTexture(Texture* tex) {
 	delete tex;
 }
 
-RendererGl::TextureGl* RendererGl::createTexture(SDL_Surface* img, ivec2 res, GLint iform, GLenum pform, GLint filter) {
+RendererGl::TextureGl* RendererGl::createTexture(const void* pix, uvec2 res, uint tpitch, GLint iform, GLenum pform, GLenum type, GLint filter) {
 	GLuint id;
 	glGenTextures(1, &id);
 	glBindTexture(GL_TEXTURE_2D, id);
@@ -428,51 +443,95 @@ RendererGl::TextureGl* RendererGl::createTexture(SDL_Surface* img, ivec2 res, GL
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-	glPixelStorei(GL_UNPACK_ROW_LENGTH, img->pitch / img->format->BytesPerPixel);
-	glTexImage2D(GL_TEXTURE_2D, 0, iform, res.x, res.y, 0, pform, GL_UNSIGNED_BYTE, img->pixels);
-	SDL_FreeSurface(img);
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, tpitch);
+	glTexImage2D(GL_TEXTURE_2D, 0, iform, res.x, res.y, 0, pform, type, pix);
 	return new TextureGl(res, id);
 }
 
-tuple<SDL_Surface*, GLenum, GLint> RendererGl::pickPixFormat(SDL_Surface* img) const {
-	if (img) {
+template <bool keep>
+tuple<SDL_Surface*, GLint, GLenum, GLenum> RendererGl::pickPixFormat(SDL_Surface* img) const {
+	if (img)
 		switch (img->format->format) {
+		case SDL_PIXELFORMAT_RGBA32:
+			if constexpr (keep)
+				return tuple(img, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
+			else
+				return tuple(img, iformRgba, GL_RGBA, GL_UNSIGNED_BYTE);
 #ifndef OPENGLES
 		case SDL_PIXELFORMAT_BGRA32:
-			return tuple(img, GL_BGRA, iformRgba);
+			if constexpr (keep)
+				return tuple(img, GL_RGBA8, GL_BGRA, GL_UNSIGNED_BYTE);
+			else
+				return tuple(img, iformRgba, GL_BGRA, GL_UNSIGNED_BYTE);
 #endif
-		case SDL_PIXELFORMAT_RGBA32:
-			return tuple(img, GL_RGBA, iformRgba);
+		case SDL_PIXELFORMAT_RGB24:
+			if constexpr (keep)
+				return tuple(img, GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE);
+			else
+				return tuple(img, iformRgb, GL_RGB, GL_UNSIGNED_BYTE);
 #ifndef OPENGLES
 		case SDL_PIXELFORMAT_BGR24:
-			return tuple(img, GL_BGR, iformRgb);
-		case SDL_PIXELFORMAT_RGB24:
-			return tuple(img, GL_RGB, iformRgb);
+			if constexpr (keep)
+				return tuple(img, GL_RGB8, GL_BGR, GL_UNSIGNED_BYTE);
+			else
+				return tuple(img, iformRgb, GL_BGR, GL_UNSIGNED_BYTE);
 #endif
+		case SDL_PIXELFORMAT_RGBA5551:
+			return tuple(img, GL_RGB5_A1, GL_RGBA, GL_UNSIGNED_SHORT_5_6_5);
+#ifndef OPENGLES
+		case SDL_PIXELFORMAT_BGRA5551:
+			return tuple(img, GL_RGB5_A1, GL_BGRA, GL_UNSIGNED_SHORT_5_6_5);
+#endif
+		case SDL_PIXELFORMAT_RGB565:
+#ifdef OPENGLES
+			return tuple(img, GL_RGB565, GL_RGB, GL_UNSIGNED_SHORT_5_6_5);
+#else
+			return tuple(img, GL_RGB5, GL_RGB, GL_UNSIGNED_SHORT_5_6_5);
+#endif
+#ifndef OPENGLES
+		case SDL_PIXELFORMAT_BGR565:
+			return tuple(img, GL_RGB5, GL_BGR, GL_UNSIGNED_SHORT_5_6_5);
+#endif
+		default:
+			img = convertReplace(img);
 		}
-		img = convertToDefault(img);
+	if constexpr (keep)
+		return tuple(img, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
+	else
+		return tuple(img, iformRgba, GL_RGBA, GL_UNSIGNED_BYTE);
+}
+
+uint RendererGl::maxTexSize() const {
+	return maxTextureSize;
+}
+
+const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* RendererGl::getSquashableFormats() const {
+	return nullptr;
+}
+
+void RendererGl::setCompression(Settings::Compression compression) {
+	switch (compression) {
+	case Settings::Compression::none:
+		iformRgb = GL_RGB8;
+		iformRgba = GL_RGBA8;
+		break;
+	case Settings::Compression::b16:
+#ifdef OPENGLES
+		iformRgb = GL_RGB565;
+#else
+		iformRgb = GL_RGB5;
+#endif
+		iformRgba = GL_RGB5_A1;
+		break;
+	case Settings::Compression::compress:
+		iformRgb = GL_COMPRESSED_RGB;
+		iformRgba = GL_COMPRESSED_RGBA;
 	}
-	return tuple(img, GL_RGBA, iformRgba);
 }
 
-pair<uint, const std::set<SDL_PixelFormatEnum>*> RendererGl::getLimits() const {
-	return pair(maxTexSize, &supportedFormats);
-}
-
-void RendererGl::setCompression(bool on) {
-	iformRgb = on ? GL_COMPRESSED_RGB : GL_RGB8;
-	iformRgba = on ? GL_COMPRESSED_RGBA : GL_RGBA8;
-}
-
-void RendererGl::getSettings(uint& maxRes, bool& compression, vector<pair<u32vec2, string>>& devices) const {
-	maxRes = maxTexSize;
-	compression = true;
+pair<uint, Settings::Compression> RendererGl::getSettings(vector<pair<u32vec2, string>>& devices) const {
 	devices.clear();
-}
-
-void RendererGl::setMaxPicRes(uint& size) {
-	size = std::clamp(size, Settings::minPicRes, uint(maxTexSize));
-	maxPicRes = size;
+	return pair(maxTextureSize, Settings::Compression::compress);
 }
 
 #ifndef OPENGLES

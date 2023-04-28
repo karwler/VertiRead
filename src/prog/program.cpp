@@ -35,31 +35,42 @@ void Program::eventOpenBookList(Button*) {
 }
 
 void Program::eventOpenPageBrowser(Button* but) {
-	Label* lbl = dynamic_cast<Label*>(but);
-	if (browser = Browser::openExplorer(lbl ? World::sets()->getDirLib() / fs::u8path(lbl->getText()) : Browser::topDir, fs::path(), &Program::eventOpenBookList); browser)
+	if (browser = Browser::openExplorer(World::sets()->getDirLib() / fs::u8path(static_cast<Label*>(but)->getText()), fs::path(), &Program::eventOpenBookList); browser)
+		setState<ProgPageBrowser>();
+}
+
+void Program::eventOpenPageBrowserGeneral(Button*) {
+	if (browser = Browser::openExplorer(Browser::topDir, fs::path(), &Program::eventOpenBookList); browser)
 		setState<ProgPageBrowser>();
 }
 
 void Program::eventOpenBookContext(Button* but) {
-	vector<pair<string, PCall>> items = dynamic_cast<Label*>(but) ? vector<pair<string, PCall>>{
+	vector<pair<string, PCall>> items = {
 		pair("Continue", &Program::eventOpenLastPage),
 		pair("Delete", &Program::eventDeleteBook)
-	} : vector<pair<string, PCall>>{
-		pair("Continue", &Program::eventOpenLastPage)
 	};
 	World::scene()->setContext(state->createContext(std::move(items), but));
 }
 
+void Program::eventOpenBookContextGeneral(Button* but) {
+	World::scene()->setContext(state->createContext({ pair("Continue", &Program::eventOpenLastPageGeneral) }, but));
+}
+
 void Program::eventOpenLastPage(Button*) {
-	Label* lbl = dynamic_cast<Label*>(World::scene()->getContext()->owner());
-	if (auto [ok, drc, fname] = World::fileSys()->getLastPage(lbl ? lbl->getText() : ProgState::dotStr); ok) {
-		ok = lbl
-			? browser->openPicture(World::sets()->getDirLib() / fs::u8path(lbl->getText()), World::sets()->getDirLib() / fs::u8path(lbl->getText()) / fs::u8path(drc), fs::u8path(fname))
-			: browser->openPicture(Browser::topDir, fs::u8path(drc), fs::u8path(fname));
-		if (ok)
+	Label* lbl = static_cast<Label*>(World::scene()->getContext()->owner());
+	if (auto [ok, drc, fname] = World::fileSys()->getLastPage(lbl->getText()); ok) {
+		if (browser->openPicture(World::sets()->getDirLib() / fs::u8path(lbl->getText()), World::sets()->getDirLib() / fs::u8path(lbl->getText()) / fs::u8path(drc), fs::u8path(fname)))
 			setPopupLoading();
 	} else
-		eventOpenPageBrowser(World::scene()->getContext()->owner<Button>());
+		World::scene()->setPopup(state->createPopupMessage("No last page entry", &Program::eventClosePopup));
+}
+
+void Program::eventOpenLastPageGeneral(Button*) {
+	if (auto [ok, drc, fname] = World::fileSys()->getLastPage(ProgState::dotStr); ok) {
+		if (browser->openPicture(Browser::topDir, fs::u8path(drc), fs::u8path(fname)))
+			setPopupLoading();
+	} else
+		World::scene()->setPopup(state->createPopupMessage("No last page entry", &Program::eventClosePopup));
 }
 
 void Program::eventDeleteBook(Button*) {
@@ -152,7 +163,7 @@ void Program::eventPreviewProgress(const SDL_UserEvent& user) {
 		ProgFileExplorer* pe = static_cast<ProgFileExplorer*>(state);
 		const vector<Widget*>& wgts = pe->fileList->getWidgets();
 		auto [pos, end] = ndata[0] ? pair(wgts.begin() + pe->dirEnd, wgts.begin() + pe->fileEnd) : pair(wgts.begin(), wgts.begin() + pe->dirEnd);
-		if (vector<Widget*>::const_iterator it = std::lower_bound(pos, end, ndata + 1, [](const Widget* a, const char* b) -> bool { return StrNatCmp::less(static_cast<const Label*>(a)->getText().c_str(), b); }); it != end && static_cast<Label*>(*it)->getText() == ndata + 1) {
+		if (vector<Widget*>::const_iterator it = std::lower_bound(pos, end, ndata + 1, [](const Widget* a, const char* b) -> bool { return StrNatCmp::less(static_cast<const Label*>(a)->getText(), b); }); it != end && static_cast<Label*>(*it)->getText() == ndata + 1) {
 			static_cast<Label*>(*it)->setTex(tex, true);
 			World::renderer()->synchTransfer();
 		} else {
@@ -451,8 +462,10 @@ void Program::eventSetDevice(Button* but) {
 }
 
 void Program::eventSetCompression(Button* but) {
-	World::sets()->compression = static_cast<CheckBox*>(but)->on;
-	World::renderer()->setCompression(World::sets()->compression);
+	if (Settings::Compression compression = Settings::Compression(finishComboBox(but)); World::sets()->compression != compression) {
+		World::sets()->compression = compression;
+		World::renderer()->setCompression(compression);
+	}
 }
 
 void Program::eventSetVsync(Button* but) {
@@ -489,7 +502,7 @@ void Program::eventSetHide(Button* but) {
 
 void Program::eventSetTooltips(Button* but) {
 	World::sets()->tooltips = static_cast<CheckBox*>(but)->on;
-	World::scene()->resetLayouts();
+	state->eventRefresh();
 }
 
 void Program::eventSetTheme(Button* but) {
@@ -500,11 +513,17 @@ void Program::eventSetTheme(Button* but) {
 }
 
 void Program::eventSetFont(Button* but) {
-	string otxt = static_cast<LabelEdit*>(but)->getText();
+	string otxt = static_cast<Label*>(but)->getText();
 	World::drawSys()->setFont(otxt, World::sets(), World::fileSys());
-	World::scene()->resetLayouts();
+	state->eventRefresh();
 	if (World::sets()->font != otxt)
 		World::scene()->setPopup(state->createPopupMessage("Invalid font", &Program::eventClosePopup));
+}
+
+void Program::eventSetFontHinting(Button* but) {
+	World::sets()->hinting = Settings::Hinting(finishComboBox(but));
+	World::drawSys()->setFontHinting(World::sets()->hinting);
+	state->eventRefresh();
 }
 
 void Program::eventSetScrollSpeed(Button* but) {
@@ -645,5 +664,5 @@ template <class T, class... A>
 void Program::setState(A&&... args) {
 	delete state;
 	state = new T(std::forward<A>(args)...);
-	state->eventRefresh();
+	World::scene()->resetLayouts();
 }

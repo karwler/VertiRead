@@ -196,16 +196,14 @@ public:
 		SACall acall;
 	};
 private:
-	SDL_Scancode key;	// keyboard key
-	uint8 jctID;		// joystick control id
-	uint8 jHatVal;		// joystick hat value
-	uint8 gctID;		// gamepad control id
-	Assignment asg;		// stores data for checking whether key and/or button/axis are assigned
+	SDL_Scancode key;			// keyboard key
+	uint8 jctID;				// joystick control id
+	uint8 jHatVal;				// joystick hat value
+	uint8 gctID;				// gamepad control id
+	Assignment asg = ASG_NONE;	// stores data for checking whether key and/or button/axis are assigned
 	Type type;
 
 public:
-	Binding();
-
 	void reset(Type newType);
 
 	SDL_Scancode getKey() const;
@@ -243,10 +241,6 @@ public:
 	bool gnegAxisAssigned() const;
 	void setGaxis(SDL_GameControllerAxis axis, bool positive);
 };
-
-inline Binding::Binding() :
-	asg(ASG_NONE)
-{}
 
 inline SDL_Scancode Binding::getKey() const {
 	return key;
@@ -391,6 +385,10 @@ inline void PicLim::setCount(string_view str) {
 	count = toCount(str);
 }
 
+inline uintptr_t PicLim::toCount(string_view str) {
+	return coalesce(toNum<uintptr_t>(str), defaultCount);
+}
+
 inline uintptr_t PicLim::getSize() const {
 	return size;
 }
@@ -469,6 +467,34 @@ public:
 #endif
 	};
 
+	static constexpr array<const char*, 5> styleNames = {
+		"bold",
+		"italic",
+		"underline",
+		"strikethrough",
+		"normal"
+	};
+
+	enum class Hinting : uint8 {
+		normal,
+		mono
+	};
+	static constexpr array<const char*, size_t(Hinting::mono) + 1> hintingNames = {
+		"normal",
+		"mono"
+	};
+
+	enum class Compression : uint8 {
+		none,
+		b16,
+		compress
+	};
+	static constexpr array<const char*, size_t(Compression::compress) + 1> compressionNames = {
+		"none",
+		"16 b",
+		"compress"
+	};
+
 	static constexpr float defaultZoom = 1.f;
 	static constexpr int defaultSpacing = 10;
 	static constexpr uint minPicRes = 1;
@@ -485,6 +511,8 @@ public:
 #error "No renderer supported"
 #endif
 	static constexpr char defaultFont[] = "BrisaSans";
+	static constexpr Hinting defaultHinting = Hinting::normal;
+	static constexpr Compression defaultCompression = Compression::none;
 	static constexpr char defaultDirLib[] = "library";
 
 	string font = defaultFont;
@@ -499,20 +527,21 @@ public:
 	vec2 scrollSpeed = vec2(1600.f, 1600.f);
 	uint maxPicRes = UINT_MAX;
 	float zoom = defaultZoom;
-	int spacing = defaultSpacing;
 private:
 	int deadzone = 256;
 public:
+	ushort spacing = defaultSpacing;
 	bool maximized = false;
 	Screen screen = defaultScreenMode;
 	bool preview = true;
 	bool showHidden = false;
 	bool tooltips = true;
 	Direction direction = defaultDirection;
-	bool compression = true;
+	Compression compression = defaultCompression;
 	bool vsync = true;
 	Renderer renderer = defaultRenderer;
 	bool gpuSelecting = false;
+	Hinting hinting = defaultHinting;
 
 	Settings(const fs::path& dirSets, vector<string>&& themes);
 

@@ -69,7 +69,7 @@ private:
 };
 
 inline bool InputSys::isPressed(Binding::Type type, float& amt) const {
-	return type >= Binding::holders ? isPressed(bindings[uint8(type)], amt) : false;
+	return type >= Binding::holders ? isPressed(bindings[eint(type)], amt) : false;
 }
 
 inline bool InputSys::isPressedB(uint8 jbutton) const {
@@ -85,7 +85,7 @@ inline ivec2 InputSys::getMouseMove() const {
 }
 
 inline Binding& InputSys::getBinding(Binding::Type type) {
-	return bindings[size_t(type)];
+	return bindings[eint(type)];
 }
 
 inline const array<Binding, Binding::names.size()>& InputSys::getBindings() const {

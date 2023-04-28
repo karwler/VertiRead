@@ -40,7 +40,6 @@ int WindowSys::start() {
 	delete sets;
 
 	IMG_Quit();
-	TTF_Quit();
 	SDL_Quit();
 	return rc;
 }
@@ -64,8 +63,6 @@ void WindowSys::init() {
 	SDL_SetHint(SDL_HINT_MAC_CTRL_CLICK_EMULATE_RIGHT_CLICK, "1");
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER))
 		throw std::runtime_error(SDL_GetError());
-	if (TTF_Init())
-		throw std::runtime_error(TTF_GetError());
 #if SDL_IMAGE_VERSION_ATLEAST(2, 6, 0)
 	int flags = IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP | IMG_INIT_JXL | IMG_INIT_AVIF);
 #else
@@ -430,12 +427,19 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 }
 
 void WindowSys::eventDisplay(const SDL_DisplayEvent& dspEvent) {
-	if (dspEvent.type == SDL_DISPLAYEVENT_ORIENTATION || dspEvent.type == SDL_DISPLAYEVENT_CONNECTED || dspEvent.type == SDL_DISPLAYEVENT_DISCONNECTED) {
-		sets->unionDisplays();
-		if (windows.size() > 1)
-			recreateWindows();
-		scene->onDisplayChange();
-	}
+#if SDL_VERSION_ATLEAST(2, 28, 0)
+	constexpr uint32 last = SDL_DISPLAYEVENT_MOVED;
+#else
+	constexpr uint32 last = SDL_DISPLAYEVENT_DISCONNECTED;
+#endif
+	for (uint32 i = SDL_DISPLAYEVENT_ORIENTATION; i <= last; ++i)
+		if (dspEvent.type == i) {
+			sets->unionDisplays();
+			if (windows.size() > 1)
+				recreateWindows();
+			scene->onDisplayChange();
+			break;
+		}
 }
 
 ivec2 WindowSys::winViewOffset(uint32 wid) {

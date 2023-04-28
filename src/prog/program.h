@@ -25,8 +25,11 @@ public:
 	// books
 	void eventOpenBookList(Button* but = nullptr);
 	void eventOpenPageBrowser(Button* but);
+	void eventOpenPageBrowserGeneral(Button* but = nullptr);
 	void eventOpenBookContext(Button* but);
+	void eventOpenBookContextGeneral(Button* but);
 	void eventOpenLastPage(Button* but = nullptr);
+	void eventOpenLastPageGeneral(Button* but = nullptr);
 	void eventDeleteBook(Button* but = nullptr);
 	void openFile(const fs::path& file);
 
@@ -100,6 +103,7 @@ public:
 	void eventSetTooltips(Button* but);
 	void eventSetTheme(Button* but);
 	void eventSetFont(Button* but);
+	void eventSetFontHinting(Button* but);
 	void eventSetScrollSpeed(Button* but);
 	void eventSetDeadzoneSL(Button* but);
 	void eventSetDeadzoneLE(Button* but);

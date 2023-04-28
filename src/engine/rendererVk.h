@@ -196,6 +196,12 @@ private:
 	static constexpr array<VkValidationFeatureEnableEXT, 2> validationFeatureEnables = { VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT, VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT };
 #endif
 	static constexpr uint32 maxPossibleQueues = 3;
+	static inline const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum> squashableFormats = {
+		{ SDL_PIXELFORMAT_RGBA32, SDL_PIXELFORMAT_RGBA5551 },
+		{ SDL_PIXELFORMAT_BGRA32, SDL_PIXELFORMAT_BGRA5551 },
+		{ SDL_PIXELFORMAT_RGB24, SDL_PIXELFORMAT_RGB565 },
+		{ SDL_PIXELFORMAT_BGR24, SDL_PIXELFORMAT_BGR565 }
+	};
 
 	struct QueueInfo {
 		umap<uint32, u32vec2> idcnt;
@@ -257,7 +263,6 @@ private:
 	RenderPass renderPass;
 	AddressPass addressPass;
 	FormatConverter fmtConv;
-	std::set<SDL_PixelFormatEnum> supportedFormats = { SDL_PIXELFORMAT_RGBA32, SDL_PIXELFORMAT_BGRA32 };
 
 	VkImage addrImage = VK_NULL_HANDLE;
 	VkDeviceMemory addrImageMemory = VK_NULL_HANDLE;
@@ -287,6 +292,7 @@ private:
 	uint currentTransfer = 0;
 	bool refreshFramebuffer = false;
 	array<bool, FormatConverter::maxTransfers> rebindInputBuffer{};
+	bool squashPicTexels;
 
 public:
 	RendererVk(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
@@ -295,8 +301,8 @@ public:
 	void setClearColor(const vec4& color) final;
 	void setVsync(bool vsync) final;
 	void updateView(ivec2& viewRes) final;
-	void getSettings(uint& maxRes, bool& compression, vector<pair<u32vec2, string>>& devices) const final;
-	void setMaxPicRes(uint& size) final;
+	void setCompression(Settings::Compression compression) final;
+	pair<uint, Settings::Compression> getSettings(vector<pair<u32vec2, string>>& devices) const final;
 
 	void startDraw(View* view) final;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) final;
@@ -309,7 +315,7 @@ public:
 
 	Texture* texFromIcon(SDL_Surface* img) final;
 	Texture* texFromRpic(SDL_Surface* img) final;
-	Texture* texFromText(SDL_Surface* img) final;
+	Texture* texFromText(const Pixmap& pm) final;
 	void freeTexture(Texture* tex) final;
 	void synchTransfer() final;
 
@@ -337,7 +343,8 @@ public:
 	static void copyImageToBuffer(VkCommandBuffer commandBuffer, VkImage image, VkBuffer buffer, u32vec2 size);
 
 protected:
-	pair<uint, const std::set<SDL_PixelFormatEnum>*> getLimits() const final;
+	uint maxTexSize() const final;
+	const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* getSquashableFormats() const final;
 
 private:
 	void createInstance(SDL_Window* window);
@@ -364,9 +371,9 @@ private:
 	static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR chooseSwapPresentMode(const vector<VkPresentModeKHR>& availablePresentModes) const;
 	static uint scoreDevice(const VkPhysicalDeviceProperties& prop, const VkPhysicalDeviceMemoryProperties& memp);
-	TextureVk* createTextureDirect(SDL_Surface* img, u32vec2 res, VkFormat format, bool nearest);
+	TextureVk* createTextureDirect(const void* pix, u32vec2 res, uint32 pitch, uint8 bpp, VkFormat format, bool nearest);
 	TextureVk* createTextureIndirect(SDL_Surface* img, VkFormat format);
-	template <bool conv> void uploadInputData(const SDL_Surface* img);
+	template <bool conv> void uploadInputData(const void* pix, u32vec2 res, uint32 pitch, uint8 bpp);
 	pair<SDL_Surface*, VkFormat> pickPixFormat(SDL_Surface* img) const;
 #ifndef NDEBUG
 	static pair<bool, bool> checkValidationLayerSupport();

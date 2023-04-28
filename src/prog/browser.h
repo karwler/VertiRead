@@ -27,9 +27,9 @@ private:
 	ArchiveDir arch;	// archive directory tree root
 	ArchiveDir* curNode = nullptr;
 
+	FileWatch fwatch;
 	std::thread thread;
 	std::atomic<ThreadType> threadType;
-	FileWatch fwatch;
 
 public:
 	Browser(fs::path root, fs::path directory, PCall exit = nullptr);
@@ -106,5 +106,5 @@ inline const fs::path& Browser::getCurDir() const {
 }
 
 inline void Browser::startLoadPictures(const fs::path& first, bool fwd) {
-	startLoadPictures(new BrowserResultPicture(curNode, fs::path(), fs::path(curDir), fs::path(first)), fwd);
+	startLoadPictures(new BrowserResultPicture(curNode, fs::path(), valcp(curDir), fs::path(first)), fwd);
 }

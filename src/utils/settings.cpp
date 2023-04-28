@@ -233,11 +233,6 @@ void PicLim::set(string_view str) {
 	size = elems.size() > 2 ? toSize(elems[2]) : defaultSize();
 }
 
-uintptr_t PicLim::toCount(string_view str) {
-	uintptr_t cnt = toNum<uintptr_t>(str);
-	return cnt ? cnt : defaultCount;
-}
-
 uintptr_t PicLim::toSize(string_view str) {
 	size_t i = 0;
 	for (; i < str.length() && isSpace(str[i]); ++i);

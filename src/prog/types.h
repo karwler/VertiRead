@@ -4,8 +4,6 @@
 #include <mutex>
 #ifdef _WIN32
 #include <windows.h>
-#else
-#include <sys/inotify.h>
 #endif
 
 // archive file entry with size for pictures
@@ -81,13 +79,12 @@ private:
 #ifdef _WIN32
 	HANDLE dirc = INVALID_HANDLE_VALUE;
 	OVERLAPPED overlapped{};
-	FILE_NOTIFY_INFORMATION* ebuf = nullptr;
 	fs::path filter;
 	DWORD flags;
 #else
 	int ino = -1, watch = -1;
-	inotify_event* ebuf = nullptr;
 #endif
+	void* ebuf = nullptr;
 
 public:
 	FileWatch(const fs::path& path);

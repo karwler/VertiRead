@@ -76,7 +76,7 @@ void Scene::onMouseUp(ivec2 mPos, uint8 mBut, uint8 mCnt) {
 }
 
 void Scene::onMouseWheel(ivec2 wMov) {
-	if (Widget* box = context ? dynamic_cast<Context*>(select) : dynamic_cast<TextBox*>(select) ? select : getSelectedScrollArea())
+	if (Widget* box = dynamic_cast<TextBox*>(select) ? select : getSelectedScrollArea())
 		box->onScroll(wMov * scrollFactorWheel);
 }
 
@@ -136,9 +136,6 @@ void Scene::resetLayouts() {
 }
 
 void Scene::clearLayouts() {
-#if !SDL_TTF_VERSION_ATLEAST(2, 0, 18)
-	World::drawSys()->clearFonts();
-#endif
 	onMouseLeave();	// reset stamps
 	select = nullptr;
 	capture = nullptr;

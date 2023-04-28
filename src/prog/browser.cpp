@@ -363,7 +363,7 @@ bool Browser::finishArchive(BrowserResultAsync&& ra) {
 		rootDir = std::move(ra.rootDir);
 	curDir = std::move(ra.curDir);
 	arch = std::move(ra.arch);
-	curNode = dir ? dir : &arch;
+	curNode = coalesce(dir, &arch);
 	fwatch.set(curDir);
 	return true;
 }
@@ -518,7 +518,7 @@ void Browser::finishLoadPictures(BrowserResultPicture& rp) {
 		if (rp.archive) {
 			arch = std::move(rp.arch);
 			auto [dir, fil] = arch.find(rp.file.u8string());
-			curNode = dir ? dir : &arch;
+			curNode = coalesce(dir, &arch);
 		}
 	}
 }

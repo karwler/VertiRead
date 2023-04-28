@@ -19,6 +19,7 @@ elseif(UNIX)
 endif()
 option(OPENGL "Build with OpenGL 3.0 support." ON)
 option(VULKAN "Build with Vulkan 1.0 support." ON)
+option(USE_ICU "Build with ICU" OFF)
 
 string(TOLOWER ${PROJECT_NAME} PROJECT_NAME_LOWER)
 
@@ -72,6 +73,7 @@ set(SRC_FILES
 	"src/prog/progs.h"
 	"src/prog/types.cpp"
 	"src/prog/types.h"
+	"src/utils/compare.cpp"
 	"src/utils/compare.h"
 	"src/utils/layouts.cpp"
 	"src/utils/layouts.h"
@@ -88,9 +90,9 @@ endif()
 
 # dependencies
 set(VER_ARC "3.6.2")
-set(VER_SDL "2.26.5")
+set(VER_SDL "2.28.2")
 set(VER_IMG "2.6.3")
-set(VER_TTF "2.20.2")
+set(VER_FT2 "2.13.0")
 set(VER_GLM "0.9.9.8")
 set(VER_CURL "7.83.1")
 set(VER_LXML "2.9.14")
@@ -147,11 +149,31 @@ function(compileLib URL LIBDIR CMDV WDIR ORIG_LIBDIR)
 		message(STATUS "Found ${LIBDIR}")
 	else()
 		downloadLib("${URL}" "${LIBDIR}" "${ORIG_LIBDIR}")
+		if(NOT EXISTS "${WDIR}")
+			file(MAKE_DIRECTORY "${WDIR}")
+		endif()
 		foreach(CMD IN LISTS CMDV)
 			execute_process(COMMAND ${CMD} WORKING_DIRECTORY "${WDIR}")
 		endforeach()
 	endif()
 endfunction()
+
+if(USE_ICU)
+	if(WIN32)
+		find_package(ICU COMPONENTS uc in)
+	else()
+		find_package(ICU COMPONENTS uc i18n)
+	endif()
+	if(ICU_FOUND)
+		add_compile_definitions(WITH_ICU)
+		include_directories(${ICU_INCLUDE_DIRS})
+		if(WIN32)
+			string(REGEX REPLACE "\\.[0-9]+" "" ICU_VER_MAJ ${ICU_VERSION})
+			get_filename_component(BIN_ICU "${ICU_ICUPKG_EXECUTABLE}" DIRECTORY)
+			get_filename_component(LIC_ICU "${BIN_ICU}" DIRECTORY)
+		endif()
+	endif()
+endif()
 
 if(VULKAN)
 	find_package(Vulkan REQUIRED)
@@ -185,13 +207,13 @@ if(WIN32)
 		endif()
 		set(DIR_SDL "${DIR_LIB}/SDL2-${VER_SDL}-msvc")
 		set(DIR_IMG "${DIR_LIB}/SDL2_image-${VER_IMG}-msvc")
-		set(DIR_TTF "${DIR_LIB}/SDL2_ttf-${VER_TTF}-msvc")
+		set(DIR_FT2 "${DIR_LIB}/freetype-${VER_FT2}-${VMACHINE}-msvc")
 		set(DIR_CURL "${DIR_LIB}/curl-${VER_CURL}-${VMACHINE}-msvc")
 		set(DIR_LXML "${DIR_LIB}/libxml2-${VER_LXML}-${VMACHINE}-msvc")
 		set(OUT_CURL "${DIR_CURL}/builds/libcurl-vc-${VMACHINE}-release-dll-ipv6-sspi-schannel")
 		set(BIN_SDL "${DIR_SDL}/lib/${VMACHINE}")
 		set(BIN_IMG "${DIR_IMG}/lib/${VMACHINE}")
-		set(BIN_TTF "${DIR_TTF}/lib/${VMACHINE}")
+		set(BIN_FT2 "${DIR_FT2}/build")
 		set(BIN_CURL "${OUT_CURL}/bin")
 		set(BIN_LXML "${DIR_LXML}/win32/bin.msvc")
 
@@ -202,9 +224,9 @@ if(WIN32)
 		endif()
 		downloadLib("https://github.com/libsdl-org/SDL/releases/download/release-${VER_SDL}/SDL2-devel-${VER_SDL}-VC.zip" "${DIR_SDL}" "${DIR_LIB}/SDL2-${VER_SDL}")
 		downloadLib("https://github.com/libsdl-org/SDL_image/releases/download/release-${VER_IMG}/SDL2_image-devel-${VER_IMG}-VC.zip" "${DIR_IMG}" "${DIR_LIB}/SDL2_image-${VER_IMG}")
-		downloadLib("https://github.com/libsdl-org/SDL_ttf/releases/download/release-${VER_TTF}/SDL2_ttf-devel-${VER_TTF}-VC.zip" "${DIR_TTF}" "${DIR_LIB}/SDL2_ttf-${VER_TTF}")
-		link_directories("${LIB_ARC}" "${BIN_SDL}" "${BIN_IMG}" "${BIN_TTF}")
-		include_directories("${INC_ARC}" "${DIR_SDL}/include" "${DIR_IMG}/include" "${DIR_TTF}/include")
+		compileLib("https://download.savannah.gnu.org/releases/freetype/freetype-${VER_FT2}.tar.gz" "${DIR_FT2}" "cmake\;..\;-G\;NMake Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DFT_ENABLE_ERROR_STRINGS=1\;-DFT_DISABLE_ZLIB=1\;-DFT_DISABLE_BZIP2=1\;-DFT_DISABLE_PNG=1\;-DFT_DISABLE_HARFBUZZ=1\;-DFT_DISABLE_BROTLI=1;${MAKE_CMD}" "${BIN_FT2}" "${DIR_LIB}/freetype-${VER_FT2}")
+		link_directories("${LIB_ARC}" "${BIN_SDL}" "${BIN_IMG}" "${BIN_FT2}")
+		include_directories("${INC_ARC}" "${DIR_SDL}/include" "${DIR_IMG}/include" "${DIR_FT2}/include")
 		if(DOWNLOADER)
 			compileLib("https://curl.haxx.se/download/curl-${VER_CURL}.zip" "${DIR_CURL}" "${MAKE_CMD}\;/f\;Makefile.vc\;mode=dll\;MACHINE=${VMACHINE}" "${DIR_CURL}/winbuild" "${DIR_LIB}/curl-${VER_CURL}")
 			compileLib("https://gitlab.gnome.org/GNOME/libxml2/-/archive/v${VER_LXML}/libxml2-v${VER_LXML}.zip" "${DIR_LXML}" "cscript\;configure.js\;compiler=msvc\;iconv=no;${MAKE_CMD}\;/f\;Makefile.msvc" "${DIR_LXML}/win32" "${DIR_LIB}/libxml2-v${VER_LXML}")
@@ -221,23 +243,23 @@ if(WIN32)
 		endif()
 		set(DIR_SDL "${DIR_LIB}/SDL2-${VER_SDL}-mingw")
 		set(DIR_IMG "${DIR_LIB}/SDL2_image-${VER_IMG}-mingw")
-		set(DIR_TTF "${DIR_LIB}/SDL2_ttf-${VER_TTF}-mingw")
+		set(DIR_FT2 "${DIR_LIB}/freetype-${VER_FT2}-${VMACHINE}-mingw")
 		set(DIR_ARC "${DIR_LIB}/libarchive-${VER_ARC}-${VMACHINE}-mingw")
 		set(DIR_CURL "${DIR_LIB}/curl-${VER_CURL}-${VMACHINE}-mingw")
 		set(DIR_LXML "${DIR_LIB}/libxml2-${VER_LXML}-${VMACHINE}-mingw")
 		set(BIN_ARC "${DIR_ARC}/build/bin")
 		set(BIN_SDL "${DIR_SDL}/${VMARCH}-w64-mingw32/bin")
 		set(BIN_IMG "${DIR_IMG}/${VMARCH}-w64-mingw32/bin")
-		set(BIN_TTF "${DIR_TTF}/${VMARCH}-w64-mingw32/bin")
+		set(BIN_FT2 "${DIR_FT2}/build")
 		set(BIN_CURL "${DIR_CURL}/bin")
 		set(BIN_LXML "${DIR_LXML}/win32/bin.mingw")
 
 		compileLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-${VER_ARC}.zip" "${DIR_ARC}" "cmake\;..\;-G\;MinGW Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DENABLE_WERROR=0;${MAKE_CMD}\;archive" "${DIR_ARC}/build" "${DIR_LIB}/libarchive-${VER_ARC}")
 		downloadLib("https://github.com/libsdl-org/SDL/releases/download/release-${VER_SDL}/SDL2-devel-${VER_SDL}-mingw.zip" "${DIR_SDL}" "${DIR_LIB}/SDL2-${VER_SDL}")
 		downloadLib("https://github.com/libsdl-org/SDL_image/releases/download/release-${VER_IMG}/SDL2_image-devel-${VER_IMG}-mingw.zip" "${DIR_IMG}" "${DIR_LIB}/SDL2_image-${VER_IMG}")
-		downloadLib("https://github.com/libsdl-org/SDL_ttf/releases/download/release-${VER_TTF}/SDL2_ttf-devel-${VER_TTF}-mingw.zip" "${DIR_TTF}" "${DIR_LIB}/SDL2_ttf-${VER_TTF}")
-		link_directories("${DIR_ARC}/build/libarchive" "${DIR_SDL}/${VMARCH}-w64-mingw32/lib" "${DIR_IMG}/${VMARCH}-w64-mingw32/lib" "${DIR_TTF}/${VMARCH}-w64-mingw32/lib")
-		include_directories("${DIR_ARC}/libarchive" "${DIR_SDL}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_IMG}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_TTF}/${VMARCH}-w64-mingw32/include/SDL2")
+		compileLib("https://download.savannah.gnu.org/releases/freetype/freetype-${VER_FT2}.tar.gz" "${DIR_FT2}" "cmake\;..\;-G\;MinGW Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DFT_ENABLE_ERROR_STRINGS=1\;-DFT_DISABLE_ZLIB=1\;-DFT_DISABLE_BZIP2=1\;-DFT_DISABLE_PNG=1\;-DFT_DISABLE_HARFBUZZ=1\;-DFT_DISABLE_BROTLI=1;${MAKE_CMD}" "${BIN_FT2}" "${DIR_LIB}/freetype-${VER_FT2}")
+		link_directories("${DIR_ARC}/build/libarchive" "${DIR_SDL}/${VMARCH}-w64-mingw32/lib" "${DIR_IMG}/${VMARCH}-w64-mingw32/lib" "${BIN_FT2}")
+		include_directories("${DIR_ARC}/libarchive" "${DIR_SDL}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_IMG}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_FT2}/include")
 
 		if(DOWNLOADER)
 			downloadLib("https://curl.haxx.se/windows/dl-${VER_CURL}/curl-${VER_CURL}-${VMACHINE}-mingw.zip" "${DIR_CURL}" "")
@@ -264,6 +286,8 @@ else()
 	set(ICONS_DIR "${DATA_DIR}/icons")
 	set(LICN_DIR "${DATA_DIR}/licenses")
 
+	find_package(Freetype REQUIRED)
+	include_directories("${FREETYPE_INCLUDE_DIRS}")
 	if(DOWNLOADER)
 		find_package(LibXml2 REQUIRED)
 		include_directories("${LIBXML2_INCLUDE_DIRS}")
@@ -297,12 +321,19 @@ endif()
 
 # set main target
 add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES})
-target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image SDL2_ttf archive
+target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image freetype archive
 						"$<$<BOOL:${UNIX}>:pthread;dl>"
 						"$<$<BOOL:${DIRECTX}>:d3d11.lib;dxgi.lib>"
 						"$<$<BOOL:${OPENGL}>:$<IF:$<BOOL:${WIN32}>,opengl32,$<IF:$<BOOL:${OPENGLES}>,GLESv2,GL>>>"
 						"$<$<BOOL:${VULKAN}>:$<IF:$<BOOL:${WIN32}>,vulkan-1,vulkan>>"
 						"$<$<BOOL:${DOWNLOADER}>:$<IF:$<BOOL:${WIN32}>,libcurl;libxml2,curl;xml2>>")
+if(ICU_FOUND)
+	if(WIN32)
+		target_link_libraries(${PROJECT_NAME} ${ICU_UC_LIBRARIES} ${ICU_IN_LIBRARIES})
+	else()
+		target_link_libraries(${PROJECT_NAME} ${ICU_UC_LIBRARIES} ${ICU_I18N_LIBRARIES})
+	endif()
+endif()
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
 						RUNTIME_OUTPUT_DIRECTORY "${TBIN_DIR}"
@@ -327,13 +358,18 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 					COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.svg" "${DIR_ICN}/center.svg" "${DIR_ICN}/cross.svg" "${DIR_ICN}/file.svg" "${DIR_ICN}/folder.svg" "${DIR_ICN}/left.svg" "${DIR_ICN}/minus.svg" "${DIR_ICN}/plus.svg" "${DIR_ICN}/reset.svg" "${DIR_ICN}/right.svg" "${DIR_ICN}/search.svg" "${ICONS_DIR}")
 if(WIN32)
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ARC}/$<IF:$<BOOL:${MSVC}>,archive.dll,libarchive.dll>" "${BIN_SDL}/SDL2.dll" "${BIN_IMG}/SDL2_image.dll" "${BIN_TTF}/SDL2_ttf.dll" "$<$<BOOL:${MSVC}>:${BIN_IMG}/optional/libtiff-5.dll;${BIN_IMG}/optional/libwebp-7.dll>" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-						COMMAND "$<$<BOOL:${MSVC}>:${CMAKE_COMMAND};-E;copy_if_different;${BIN_IMG}/optional/LICENSE.tiff.txt;${BIN_IMG}/optional/LICENSE.webp.txt;${BIN_TTF}/LICENSE.freetype.txt;${BIN_TTF}/LICENSE.harfbuzz.txt;${BIN_TTF}/LICENSE.zlib.txt;${LICN_DIR}>"
+						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ARC}/$<IF:$<BOOL:${MSVC}>,archive.dll,libarchive.dll>" "${BIN_SDL}/SDL2.dll" "${BIN_IMG}/SDL2_image.dll" "$<$<BOOL:${MSVC}>:${BIN_IMG}/optional/libtiff-5.dll;${BIN_IMG}/optional/libwebp-7.dll>" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+						COMMAND "$<$<BOOL:${MSVC}>:${CMAKE_COMMAND};-E;copy_if_different;${BIN_IMG}/optional/LICENSE.tiff.txt;${BIN_IMG}/optional/LICENSE.webp.txt;${LICN_DIR}>"
 						COMMAND "$<$<BOOL:${MINGW}>:${CMAKE_COMMAND};-E;copy_if_different;${DIR_ARC}/COPYING;${LICN_DIR}/COPYING.libarchive.txt>"
 						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_SDL}/COPYING.txt" "${LICN_DIR}/COPYING.SDL.txt"
 						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_IMG}/LICENSE.txt" "${LICN_DIR}/LICENSE.SDL_image.txt"
-						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_TTF}/LICENSE.txt" "${LICN_DIR}/LICENSE.SDL_ttf.txt"
+						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_FT2}/LICENSE.txt" "${LICN_DIR}/LICENSE.freetype.txt"
 						COMMAND_EXPAND_LISTS)
+	if(ICU_FOUND)
+		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ICU}/icudt${ICU_VER_MAJ}.dll" "${BIN_ICU}/icuin${ICU_VER_MAJ}.dll" "${BIN_ICU}/icuuc${ICU_VER_MAJ}.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${LIC_ICU}/LICENSE" "${LICN_DIR}/LICENSE.icu.txt")
+	endif()
 	if(DOWNLOADER)
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 			                COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_LXML}/libxml2.dll" "${PBOUT_DIR}"
@@ -357,7 +393,7 @@ else()
 		find_program(STRIPPER "strip")
 		if(STRIPPER)
 			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-								COMMAND "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:${STRIPPER};-s;$<TARGET_FILE:${TARGET_NAME}>>"
+								COMMAND "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:${STRIPPER};-s;$<TARGET_FILE:${PROJECT_NAME}>>"
 								COMMAND_EXPAND_LISTS)
 		else()
 			message(WARNING "Can't strip the executable: Failed to find stip")
@@ -390,7 +426,7 @@ if(WIN32)
 	install(DIRECTORY "${ICONS_DIR}" DESTINATION "${DST_DIR}")
 	install(FILES "${DATA_DIR}/BrisaSans.otf" "${DATA_DIR}/themes.ini" "${PBOUT_DIR}/${PROJECT_NAME_LOWER}.png" DESTINATION "${DST_DIR}")
 	install(DIRECTORY "${LICN_DIR}" DESTINATION "${DST_DIR}")
-	install(FILES "${PBOUT_DIR}/archive.dll" "${PBOUT_DIR}/libfreetype-6.dll" "${PBOUT_DIR}/libjpeg-9.dll" "${PBOUT_DIR}/libpng16-16.dll" "${PBOUT_DIR}/libtiff-5.dll" "${PBOUT_DIR}/libwebp-7.dll" "${PBOUT_DIR}/SDL2.dll" "${PBOUT_DIR}/SDL2_image.dll" "${PBOUT_DIR}/SDL2_ttf.dll" "${PBOUT_DIR}/zlib1.dll" DESTINATION "${DST_DIR}")
+	install(FILES "${PBOUT_DIR}/archive.dll" "${PBOUT_DIR}/libfreetype-6.dll" "${PBOUT_DIR}/libjpeg-9.dll" "${PBOUT_DIR}/libpng16-16.dll" "${PBOUT_DIR}/libtiff-5.dll" "${PBOUT_DIR}/libwebp-7.dll" "${PBOUT_DIR}/SDL2.dll" "${PBOUT_DIR}/SDL2_image.dll" DESTINATION "${DST_DIR}")
 elseif(APPIMAGE)
 	install(FILES "${CMAKE_BINARY_DIR}/${PROJECT_NAME}-x86_64.AppImage" DESTINATION "${CMAKE_INSTALL_PREFIX}")
 else()

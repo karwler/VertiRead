@@ -6,9 +6,13 @@
 
 // class that makes accessing stuff easier and holds command line arguments
 class World {
+public:
+	static constexpr char flagLog[] = "l";
+
 private:
 	static inline WindowSys windowSys;	// the thing on which everything runs
 	static inline vector<string> vals;
+	static inline uset<string> flags;
 
 public:
 	static FileSys* fileSys();
@@ -26,6 +30,7 @@ public:
 	static Settings* sets();
 
 	static const vector<string>& getVals();
+	static bool hasFlag(const string& flag);
 	template <class C, class F> static void setArgs(int argc, C** argv, F conv);
 
 	template <class F, class... A> static void prun(F func, A... args);
@@ -82,6 +87,10 @@ inline Settings* World::sets() {
 
 inline const vector<string>& World::getVals() {
 	return vals;
+}
+
+inline bool World::hasFlag(const string& flag) {
+	return flags.count(flag);
 }
 
 template <class F, class... A>

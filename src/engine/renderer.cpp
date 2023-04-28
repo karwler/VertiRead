@@ -5,21 +5,26 @@ Renderer::View::View(SDL_Window* window, const Recti& area) :
 	rect(area)
 {}
 
-void Renderer::setCompression(bool) {}
-
 void Renderer::finishRender() {}
 
 void Renderer::synchTransfer() {}
 
-SDL_Surface* Renderer::makeCompatible(SDL_Surface* img, bool rpic) const {
-	auto [maxSize, formats] = getLimits();
-	if (img = limitSize(img, rpic ? maxPicRes : maxSize); img && !formats->count(SDL_PixelFormatEnum(img->format->format)))
-		img = convertToDefault(img);
-	return img;
+void Renderer::setMaxPicRes(uint& size) {
+	size = std::clamp(size, Settings::minPicRes, maxTexSize());
+	maxPicRes = size;
 }
 
-SDL_Surface* Renderer::convertToDefault(SDL_Surface* img) {
-	SDL_Surface* dst = SDL_ConvertSurfaceFormat(img, SDL_PIXELFORMAT_RGBA32, 0);
+SDL_Surface* Renderer::makeCompatible(SDL_Surface* img, bool rpic) const {
+	if (img = limitSize(img, rpic ? maxPicRes : maxTexSize()); !img)
+		return nullptr;
+	if (const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* sconv = getSquashableFormats())
+		if (umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>::const_iterator sit = sconv->find(SDL_PixelFormatEnum(img->format->format)); sit != sconv->end())
+			return convertReplace(img, sit->second);
+	return supportedFormats.count(SDL_PixelFormatEnum(img->format->format)) ? img : convertReplace(img);
+}
+
+SDL_Surface* Renderer::convertReplace(SDL_Surface* img, SDL_PixelFormatEnum format) {
+	SDL_Surface* dst = SDL_ConvertSurfaceFormat(img, format, 0);
 	SDL_FreeSurface(img);
 	return dst;
 }

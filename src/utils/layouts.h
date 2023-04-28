@@ -187,6 +187,8 @@ public:
 	bool scrollToNext();				// scroll to next widget (returns false if at scroll limit)
 	bool scrollToPrevious();			// scroll to previous widget (returns false if at scroll limit)
 	void scrollToLimit(bool start);		// scroll to start or end of the list relative to it's direction
+	float getScrollLocation() const;
+	void setScrollLocation(float loc);
 
 	Recti frame() const override;
 	ivec2 wgtPosition(size_t id) const override;

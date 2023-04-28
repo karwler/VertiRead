@@ -13,11 +13,11 @@ public:
 protected:
 	struct Text {
 		string text;
-		int length;
+		uint length;
 
-		Text(string str, int height);
+		Text(string&& str, uint height);
 
-		static int measure(const char* str, int height);
+		static uint measure(string_view str, uint height);
 	};
 
 	int popupLineHeight;
@@ -65,7 +65,7 @@ public:
 	virtual void eventMultiFullscreen();
 	virtual void eventHide();
 	void eventBoss();
-	void eventRefresh();
+	virtual void eventRefresh();
 	virtual void eventFileDrop(const fs::path&) {}
 	virtual void eventClosing() {}
 	void onResize();
@@ -108,12 +108,13 @@ public:
 	~ProgFileExplorer() override = default;
 
 	void eventHide() final;
+	void eventRefresh() final;
 	void processFileChanges(const Browser* browser, vector<pair<bool, string>>& files, bool gone);
 
 protected:
 	virtual Label* makeDirectoryEntry(const Size& size, string&& name) = 0;
 	virtual Label* makeFileEntry(const Size& size, string&& name);
-	virtual Size fileEntrySize(const string& name);
+	virtual Size fileEntrySize(string_view name);
 };
 
 class ProgBooks : public ProgFileExplorer {
@@ -126,7 +127,7 @@ public:
 	RootLayout* createLayout() final;
 protected:
 	Label* makeDirectoryEntry(const Size& size, string&& name) final;
-	Size fileEntrySize(const string& name) final;
+	Size fileEntrySize(string_view name) final;
 };
 
 class ProgPageBrowser : public ProgFileExplorer {
@@ -172,6 +173,7 @@ public:
 	void eventNextDir() final;
 	void eventPrevDir() final;
 	void eventHide() final;
+	void eventRefresh() final;
 	void eventClosing() final;
 
 	RootLayout* createLayout() final;
@@ -234,6 +236,7 @@ public:
 	void eventFullscreen() final;
 	void eventMultiFullscreen() final;
 	void eventHide() final;
+	void eventRefresh() final;
 	void eventFileDrop(const fs::path& file) final;
 
 	RootLayout* createLayout() final;

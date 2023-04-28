@@ -39,7 +39,12 @@ private:
 		alignas(16) uvec2 addr = uvec2(0);
 	};
 
-	static inline const std::set<SDL_PixelFormatEnum> supportedFormats = { SDL_PIXELFORMAT_RGBA32, SDL_PIXELFORMAT_BGRA32 };
+	static inline const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum> squashableFormats = {
+		{ SDL_PIXELFORMAT_RGBA32, SDL_PIXELFORMAT_BGRA5551 },
+		{ SDL_PIXELFORMAT_BGRA32, SDL_PIXELFORMAT_BGRA5551 },
+		{ SDL_PIXELFORMAT_RGB24, SDL_PIXELFORMAT_BGR565 },
+		{ SDL_PIXELFORMAT_BGR24, SDL_PIXELFORMAT_BGR565 }
+	};
 
 	ID3D11Device* dev = nullptr;
 	ID3D11DeviceContext* ctx = nullptr;
@@ -63,6 +68,7 @@ private:
 
 	vec4 bgColor;
 	uint syncInterval;
+	bool squashPicTexels;
 
 public:
 	RendererDx(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
@@ -71,8 +77,8 @@ public:
 	void setClearColor(const vec4& color) final;
 	void setVsync(bool vsync) final;
 	void updateView(ivec2& viewRes) final;
-	void getSettings(uint& maxRes, bool& compression, vector<pair<u32vec2, string>>& devices) const final;
-	void setMaxPicRes(uint& size) final;
+	void setCompression(Settings::Compression compression) final;
+	pair<uint, Settings::Compression> getSettings(vector<pair<u32vec2, string>>& devices) const final;
 
 	void startDraw(View* view) final;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) final;
@@ -84,11 +90,12 @@ public:
 
 	Texture* texFromIcon(SDL_Surface* img) final;
 	Texture* texFromRpic(SDL_Surface* img) final;
-	Texture* texFromText(SDL_Surface* img) final;
+	Texture* texFromText(const Pixmap& pm) final;
 	void freeTexture(Texture* tex) final;
 
 protected:
-	pair<uint, const std::set<SDL_PixelFormatEnum>*> getLimits() const final;
+	uint maxTexSize() const final;
+	const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* getSquashableFormats() const final;
 
 private:
 	static IDXGIFactory* createFactory();
@@ -100,8 +107,7 @@ private:
 	ID3D11ShaderResourceView* createTextureView(ID3D11Texture2D* tex, DXGI_FORMAT format);
 
 	template <class T> void uploadBuffer(ID3D11Buffer* buffer, const T& data);
-	TextureDx* createTexture(SDL_Surface* img, uvec2 res, DXGI_FORMAT format);
-	static pair<SDL_Surface*, DXGI_FORMAT> pickPixFormat(SDL_Surface* img);
+	TextureDx* createTexture(const void* pix, uvec2 res, uint pitch, DXGI_FORMAT format);
 	template <class T> static void comRelease(T*& obj);
 	static string hresultToStr(HRESULT rs);
 };

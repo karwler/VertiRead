@@ -16,11 +16,9 @@ private:
 #ifdef OPENGLES
 	static constexpr GLenum textPixFormat = GL_RGBA;
 	static constexpr GLenum addrTargetType = GL_TEXTURE_2D;
-	static inline const std::set<SDL_PixelFormatEnum> supportedFormats = { SDL_PIXELFORMAT_RGBA32 };
 #else
 	static constexpr GLenum textPixFormat = GL_BGRA;
 	static constexpr GLenum addrTargetType = GL_TEXTURE_1D;
-	static inline const std::set<SDL_PixelFormatEnum> supportedFormats = { SDL_PIXELFORMAT_RGBA32, SDL_PIXELFORMAT_BGRA32, SDL_PIXELFORMAT_RGB24, SDL_PIXELFORMAT_BGR24 };
 #endif
 
 	class TextureGl : public Texture {
@@ -45,7 +43,7 @@ private:
 	GLuint vao = 0;
 	GLint iformRgb;
 	GLint iformRgba;
-	int maxTexSize;
+	int maxTextureSize;
 
 #ifndef OPENGLES
 	void (APIENTRY* glActiveTexture)(GLenum texture);
@@ -89,9 +87,8 @@ public:
 	void setClearColor(const vec4& color) final;
 	void setVsync(bool vsync) final;
 	void updateView(ivec2& viewRes) final;
-	void setCompression(bool on) final;
-	void getSettings(uint& maxRes, bool& compression, vector<pair<u32vec2, string>>& devices) const final;
-	void setMaxPicRes(uint& size) final;
+	void setCompression(Settings::Compression compression) final;
+	pair<uint, Settings::Compression> getSettings(vector<pair<u32vec2, string>>& devices) const final;
 
 	void startDraw(View* view) final;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) final;
@@ -103,11 +100,12 @@ public:
 
 	Texture* texFromIcon(SDL_Surface* img) final;
 	Texture* texFromRpic(SDL_Surface* img) final;
-	Texture* texFromText(SDL_Surface* img) final;
+	Texture* texFromText(const Pixmap& pm) final;
 	void freeTexture(Texture* tex) final;
 
 protected:
-	pair<uint, const std::set<SDL_PixelFormatEnum>*> getLimits() const final;
+	uint maxTexSize() const final;
+	const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* getSquashableFormats() const final;
 
 private:
 	void initGl(ivec2 res, bool vsync, const vec4& bgcolor);
@@ -120,8 +118,8 @@ private:
 	void checkFramebufferStatus(const char* name);
 
 	template <class C, class I> static void checkStatus(GLuint id, GLenum stat, C check, I info, const string& name);
-	static TextureGl* createTexture(SDL_Surface* img, ivec2 res, GLint iform, GLenum pform, GLint filter);
-	tuple<SDL_Surface*, GLenum, GLint> pickPixFormat(SDL_Surface* img) const;
+	static TextureGl* createTexture(const void* pix, uvec2 res, uint tpitch, GLint iform, GLenum pform, GLenum type, GLint filter);
+	template <bool keep> tuple<SDL_Surface*, GLint, GLenum, GLenum> pickPixFormat(SDL_Surface* img) const;
 #ifndef OPENGLES
 #ifndef NDEBUG
 	static void APIENTRY debugMessage(GLenum source, GLenum type, uint id, GLenum severity, GLsizei length, const char* message, const void* userParam);

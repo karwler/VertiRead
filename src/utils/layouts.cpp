@@ -454,6 +454,17 @@ void ScrollArea::scrollToLimit(bool start) {
 	scroll.motion = vec2(0.f);
 }
 
+float ScrollArea::getScrollLocation() const {
+	int di = direction.vertical();
+	return float(scroll.listPos[di]) / float(size()[di]);
+}
+
+void ScrollArea::setScrollLocation(float loc) {
+	int di = direction.vertical();
+	ivec2 siz = size();
+	scroll.setListPos(vswap(int(loc * float(siz[di])), scroll.listPos[!di], di), listSize(), siz);
+}
+
 Recti ScrollArea::frame() const {
 	return parent ? rect().intersect(parent->frame()) : rect();
 }

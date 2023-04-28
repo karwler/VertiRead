@@ -1,5 +1,10 @@
 #include "types.h"
 #include "utils/compare.h"
+#ifndef _WIN32
+#include <sys/inotify.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
 
 // ARCHIVE NODES
 
@@ -99,10 +104,10 @@ BrowserPictureProgress::BrowserPictureProgress(BrowserResultPicture* rp, SDL_Sur
 
 FileWatch::FileWatch(const fs::path& path) :
 #ifdef _WIN32
-	ebuf(static_cast<FILE_NOTIFY_INFORMATION*>(HeapAlloc(GetProcessHeap(), HEAP_GENERATE_EXCEPTIONS, esiz)))
+	ebuf(HeapAlloc(GetProcessHeap(), HEAP_GENERATE_EXCEPTIONS, esiz))
 #else
 	ino(inotify_init1(IN_NONBLOCK)),
-	ebuf(static_cast<inotify_event*>(mmap(nullptr, esiz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_UNINITIALIZED, -1, 0)))
+	ebuf(static_cast<inotify_event*>(mmap(nullptr, esiz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)))
 #endif
 {
 #ifdef _WIN32
@@ -134,8 +139,8 @@ void FileWatch::set(const fs::path& path) {
 				dirc = CreateFileW(path.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
 				flags = FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME;
 				filter.clear();
-			} else {
-				dirc = CreateFileW(path.parent_path().c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
+			} else if (fs::path parent = parentPath(path); fs::is_directory(parent)) {
+				dirc = CreateFileW(parent.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
 				flags = FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_SIZE;
 				filter = path.filename();
 			}
@@ -168,6 +173,8 @@ void FileWatch::unset() {
 pair<vector<pair<bool, string>>, bool> FileWatch::changed() {
 	vector<pair<bool, string>> files;
 #ifdef _WIN32
+	if (dirc == INVALID_HANDLE_VALUE)
+		return pair(std::move(files), false);
 	while (dirc != INVALID_HANDLE_VALUE && WaitForSingleObject(overlapped.hEvent, 0) == WAIT_OBJECT_0) {
 		if (DWORD bytes; !GetOverlappedResult(dirc, &overlapped, &bytes, false)) {
 			files.clear();
@@ -175,7 +182,7 @@ pair<vector<pair<bool, string>>, bool> FileWatch::changed() {
 			break;
 		}
 
-		for (FILE_NOTIFY_INFORMATION* event = ebuf;; event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(reinterpret_cast<uint8*>(event) + event->NextEntryOffset)) {
+		for (FILE_NOTIFY_INFORMATION* event = static_cast<FILE_NOTIFY_INFORMATION*>(ebuf);; event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(reinterpret_cast<uint8*>(event) + event->NextEntryOffset)) {
 			switch (event->Action) {
 			case FILE_ACTION_ADDED: case FILE_ACTION_RENAMED_NEW_NAME:
 				if (filter.empty())
@@ -200,12 +207,16 @@ pair<vector<pair<bool, string>>, bool> FileWatch::changed() {
 	}
 	return pair(std::move(files), dirc == INVALID_HANDLE_VALUE);
 #else
-	while (watch != -1) {
-		ssize_t len = read(ino, event, esiz);
+	if (watch == -1)
+		return pair(std::move(files), false);
+	do {
+		ssize_t len = read(ino, ebuf, esiz);
 		if (len < 0)
 			break;
 
-		for (inotify_event* event = ebuf; event < reinterpret_cast<uint8*>(ebuf) + len; event = reinterpret_cast<inotify_event*>(reinterpret_cast<uint8*>(event) + sizeof(inotify_event) + event->len)) {
+		inotify_event* event;
+		for (ssize_t i = 0; i < len; i += sizeof(inotify_event) + event->len) {
+			event = reinterpret_cast<inotify_event*>(static_cast<void*>(reinterpret_cast<uint8*>(ebuf) + i));
 			if (int bias = bool(event->mask & IN_CREATE) + bool(event->mask & IN_MOVED_TO) - bool(event->mask & IN_DELETE) - bool(event->mask & IN_MOVED_FROM))
 				files.emplace_back(bias > 0, string(event->name, event->len));
 			if (event->mask & (IN_DELETE_SELF | IN_MODIFY | IN_MOVE_SELF)) {
@@ -214,7 +225,7 @@ pair<vector<pair<bool, string>>, bool> FileWatch::changed() {
 				break;
 			}
 		}
-	}
+	} while (watch != -1);
 	return pair(std::move(files), watch == -1);
 #endif
 }

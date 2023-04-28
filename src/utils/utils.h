@@ -25,6 +25,7 @@ using namespace std::string_view_literals;
 namespace fs = std::filesystem;
 
 // to make life easier
+using schar = signed char;
 using uchar = unsigned char;
 using ushort = unsigned short;
 using uint = unsigned int;
@@ -173,9 +174,19 @@ constexpr T operator^=(T& a, T b) {
 	return a = T(std::underlying_type_t<T>(a) ^ std::underlying_type_t<T>(b));
 }
 
+template <class T, std::enable_if_t<std::is_enum_v<T>, int> = 0>
+constexpr std::underlying_type_t<T> eint(T e) {
+	return std::underlying_type_t<T>(e);
+}
+
 template <class T, std::enable_if_t<std::is_integral_v<T> || std::is_floating_point_v<T>, int> = 0>
 constexpr bool outRange(T val, T min, T max) {
 	return val < min || val > max;
+}
+
+template <class T>
+T coalesce(T val, T alt) {
+	return val ? val : alt;
 }
 
 template <class T>
@@ -222,6 +233,11 @@ struct default_delete<SDL_Surface> {
 	}
 };
 
+}
+
+template <class T>
+T valcp(const T& v) {
+	return v;	// just to avoid useless type cast warning for copying
 }
 
 template <class F>
@@ -395,20 +411,22 @@ struct Size {
 	};
 	Mode mod;
 
-	constexpr Size(float percent = 1.f);
-	constexpr Size(int pixels);
+	template <class T = float, std::enable_if_t<std::is_floating_point_v<T>, int> = 0> constexpr Size(T percent = T(1));
+	template <class T, std::enable_if_t<std::is_integral_v<T>, int> = 0> constexpr Size(T pixels);
 	constexpr Size(int (*calcul)(const Widget*));
 
 	int operator()(const Widget* wgt) const;
 };
 using svec2 = glm::vec<2, Size, glm::defaultp>;
 
-constexpr Size::Size(float percent) :
+template <class T, std::enable_if_t<std::is_floating_point_v<T>, int>>
+constexpr Size::Size(T percent) :
 	prc(percent),
 	mod(rela)
 {}
 
-constexpr Size::Size(int pixels) :
+template <class T, std::enable_if_t<std::is_integral_v<T>, int>>
+constexpr Size::Size(T pixels) :
 	pix(pixels),
 	mod(pixv)
 {}
@@ -422,12 +440,24 @@ inline int Size::operator()(const Widget* wgt) const {
 	return cfn(wgt);
 }
 
+// RGBA buffer
+struct Pixmap {
+	uptr<uint32[]> pix;
+	uvec2 res = uvec2(0);
+
+	Pixmap() = default;
+	Pixmap(uvec2 size);
+};
+
 // files and strings
 
+bool strciequal(string_view a, string_view b);
+bool strnciequal(string_view a, string_view b, size_t n);
 bool isDriveLetter(const fs::path& path);
 fs::path parentPath(const fs::path& path);
 string_view filename(string_view path);
 string_view fileExtension(string_view path);
+string_view delExtension(string_view path);
 string_view trim(string_view str);
 string strEnclose(string_view str);
 vector<string> strUnenclose(string_view str);
@@ -441,8 +471,6 @@ inline bool isSpace(int c) {
 inline bool notSpace(int c) {
 	return uint(c) > ' ' && c != 0x7F;
 }
-
-
 
 inline bool isDsep(int c) {
 #ifdef _WIN32
@@ -500,7 +528,7 @@ string toStr(T num) {
 template <uint8 base = 10, class T, std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, bool>, int> = 0>
 string toStr(T num, uint8 pad) {
 	array<char, sizeof(T) * 8 + std::is_signed_v<T>> buf;
-	std::to_chars_result res = std::to_chars(buf.data(), buf.data() + buf.size(), num);
+	std::to_chars_result res = std::to_chars(buf.data(), buf.data() + buf.size(), num, base);
 	if constexpr (base > 10)
 		std::transform(buf.data(), res.ptr, buf.data(), toupper);
 
@@ -558,18 +586,18 @@ inline string tmToTimeStr(const tm& tim, char sep = ':') {
 
 template <class T, size_t N, std::enable_if_t<std::is_integral_v<T> || std::is_enum_v<T>, int> = 0>
 T strToEnum(const array<const char*, N>& names, string_view str, T defaultValue = T(N)) {
-	typename array<const char*, N>::const_iterator p = std::find_if(names.begin(), names.end(), [str](const char* it) -> bool { return !SDL_strncasecmp(it, str.data(), str.length()) && !it[str.length()]; });
+	typename array<const char*, N>::const_iterator p = std::find_if(names.begin(), names.end(), [str](const char* it) -> bool { return strciequal(it, str); });
 	return p != names.end() ? T(p - names.begin()) : defaultValue;
 }
 
 template <class T, std::enable_if_t<std::is_integral_v<T> || std::is_floating_point_v<T> || std::is_enum_v<T>, int> = 0>
 T strToVal(const umap<T, const char*>& names, string_view str, T defaultValue = T(0)) {
-	typename umap<T, const char*>::const_iterator it = std::find_if(names.begin(), names.end(), [str](const pair<const T, const char*>& nit) -> bool { return !SDL_strncasecmp(nit.second, str.data(), str.length()) && !nit.second[str.length()]; });
+	typename umap<T, const char*>::const_iterator it = std::find_if(names.begin(), names.end(), [str](const pair<const T, const char*>& nit) -> bool { return strciequal(nit.second, str); });
 	return it != names.end() ? it->first : defaultValue;
 }
 
 inline bool toBool(string_view str) {
-	return (str.length() >= 4 && !SDL_strncasecmp(str.data(), "true", 4)) || (str.length() >= 2 && !SDL_strncasecmp(str.data(), "on", 2)) || (!str.empty() && !SDL_strncasecmp(str.data(), "y", 1)) || std::any_of(str.begin(), str.end(), [](char c) -> bool { return c >= '1' && c <= '9'; });
+	return strciequal(str.data(), "true") || strciequal(str.data(), "on") || strciequal(str.data(), "y") || std::any_of(str.begin(), str.end(), [](char c) -> bool { return c >= '1' && c <= '9'; });
 }
 
 template <class T, class... A, std::enable_if_t<(std::is_integral_v<T> && !std::is_same_v<T, bool>) || std::is_floating_point_v<T>, int> = 0>

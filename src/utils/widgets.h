@@ -81,7 +81,7 @@ public:
 	virtual ~Widget() = default;
 
 	virtual void drawSelf(const Recti&) {}	// calls appropriate drawing function(s) in DrawSys
-	virtual void drawTop(const Recti&) {}
+	virtual void drawTop(const Recti&) const {}
 	virtual void drawAddr(const Recti&) {}
 	virtual void onResize() {}	// for updating values when window size changed
 	virtual void tick(float) {}
@@ -417,7 +417,7 @@ public:
 	LabelEdit(const Size& size = Size(), string&& line = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, TextType type = TextType::text, bool focusLossConfirm = true, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
 	~LabelEdit() final = default;
 
-	void drawTop(const Recti& view) final;
+	void drawTop(const Recti& view) const final;
 	void onClick(ivec2 mPos, uint8 mBut) final;
 	void onKeypress(const SDL_Keysym& key) final;
 	void onCompose(string_view str, uint olen) final;
@@ -433,7 +433,7 @@ public:
 private:
 	void onTextReset();
 	ivec2 textPos() const final;
-	int caretPos();	// caret's relative x position
+	int caretPos() const;	// caret's relative x position
 	void setCPos(uint cp);
 
 	static bool kmodCtrl(uint16 mod);
@@ -539,7 +539,7 @@ public:
 	~WindowArranger() final;
 
 	void drawSelf(const Recti& view) final;
-	void drawTop(const Recti& view) final;
+	void drawTop(const Recti& view) const final;
 	void onResize() final;
 	void postInit() final;
 	void onClick(ivec2 mPos, uint8 mBut) final;

@@ -822,7 +822,12 @@ RendererVk::TextureVk::TextureVk(ivec2 size, VkImage img, VkDeviceMemory mem, Vk
 {}
 
 RendererVk::RendererVk(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor) :
-	bgColor{ { { bgcolor.r, bgcolor.g, bgcolor.b, bgcolor.a } } }
+	Renderer({
+		SDL_PIXELFORMAT_RGBA32, SDL_PIXELFORMAT_BGRA32,
+		SDL_PIXELFORMAT_RGBA5551, SDL_PIXELFORMAT_BGRA5551, SDL_PIXELFORMAT_RGB565, SDL_PIXELFORMAT_BGR565
+	}),
+	bgColor{ { { bgcolor.r, bgcolor.g, bgcolor.b, bgcolor.a } } },
+	squashPicTexels(sets->compression == Settings::Compression::b16)
 {
 	createInstance(windows.begin()->second);	// using just one window to get extensions should be fine
 	if (windows.size() == 1 && windows.begin()->first == singleDspId) {
@@ -1409,7 +1414,8 @@ Texture* RendererVk::texFromIcon(SDL_Surface* img) {
 #ifndef NDEBUG
 		nextObjectDebugName.emplace_back("icon");
 #endif
-		TextureVk* tex = fmt >= VK_FORMAT_R8G8B8A8_UNORM ? createTextureDirect(pic, u32vec2(pic->w, pic->h), fmt, false) : createTextureIndirect(pic, fmt);
+		TextureVk* tex = fmt >= VK_FORMAT_R8G8B8A8_UNORM ? createTextureDirect(pic->pixels, u32vec2(pic->w, pic->h), pic->pitch, pic->format->BytesPerPixel, fmt, false) : createTextureIndirect(pic, fmt);
+		SDL_FreeSurface(pic);
 #ifndef NDEBUG
 		nextObjectDebugName.pop_back();
 #endif
@@ -1423,7 +1429,8 @@ Texture* RendererVk::texFromRpic(SDL_Surface* img) {
 #ifndef NDEBUG
 		nextObjectDebugName.emplace_back("rpic");
 #endif
-		TextureVk* tex = fmt >= VK_FORMAT_R8G8B8A8_UNORM ? createTextureDirect(pic, u32vec2(pic->w, pic->h), fmt, false) : createTextureIndirect(pic, fmt);
+		TextureVk* tex = fmt >= VK_FORMAT_R8G8B8A8_UNORM ? createTextureDirect(pic->pixels, u32vec2(pic->w, pic->h), pic->pitch, pic->format->BytesPerPixel, fmt, false) : createTextureIndirect(pic, fmt);
+		SDL_FreeSurface(pic);
 #ifndef NDEBUG
 		nextObjectDebugName.pop_back();
 #endif
@@ -1432,12 +1439,12 @@ Texture* RendererVk::texFromRpic(SDL_Surface* img) {
 	return nullptr;
 }
 
-Texture* RendererVk::texFromText(SDL_Surface* img) {
-	if (img) {
+Texture* RendererVk::texFromText(const Pixmap& pm) {
+	if (pm.pix) {
 #ifndef NDEBUG
 		nextObjectDebugName.emplace_back("text");
 #endif
-		TextureVk* tex = createTextureDirect(img, glm::min(u32vec2(img->w, img->h), u32vec2(pdevProperties.limits.maxImageDimension2D)), VK_FORMAT_A8B8G8R8_UNORM_PACK32, true);
+		TextureVk* tex = createTextureDirect(pm.pix.get(), glm::min(pm.res, u32vec2(pdevProperties.limits.maxImageDimension2D)), pm.res.x * 4, 4, VK_FORMAT_A8B8G8R8_UNORM_PACK32, true);
 #ifndef NDEBUG
 		nextObjectDebugName.pop_back();
 #endif
@@ -1460,7 +1467,7 @@ void RendererVk::synchTransfer() {
 	vkWaitForFences(ldev, tfences.size(), tfences.data(), VK_TRUE, UINT64_MAX);
 }
 
-RendererVk::TextureVk* RendererVk::createTextureDirect(SDL_Surface* img, u32vec2 res, VkFormat format, bool nearest) {
+RendererVk::TextureVk* RendererVk::createTextureDirect(const void* pix, u32vec2 res, uint32 pitch, uint8 bpp, VkFormat format, bool nearest) {
 	VkImage image = VK_NULL_HANDLE;
 	VkDeviceMemory memory = VK_NULL_HANDLE;
 	VkImageView view = VK_NULL_HANDLE;
@@ -1469,17 +1476,16 @@ RendererVk::TextureVk* RendererVk::createTextureDirect(SDL_Surface* img, u32vec2
 	try {
 		std::tie(image, memory) = createImage(res, VK_IMAGE_TYPE_2D, format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		synchSingleTimeCommands(tcmdBuffers[currentTransfer], tfences[currentTransfer]);
-		uploadInputData<false>(img);
+		uploadInputData<false>(pix, res, pitch, bpp);
 
 		beginSingleTimeCommands(tcmdBuffers[currentTransfer]);
 		transitionImageLayout<VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL>(tcmdBuffers[currentTransfer], image);
-		copyBufferToImage(tcmdBuffers[currentTransfer], inputBuffers[currentTransfer], image, res, uint32(img->pitch) / uint32(img->format->BytesPerPixel));
+		copyBufferToImage(tcmdBuffers[currentTransfer], inputBuffers[currentTransfer], image, res, pitch / bpp);
 		transitionImageLayout<VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL>(tcmdBuffers[currentTransfer], image);
 		endSingleTimeCommands(tcmdBuffers[currentTransfer], tfences[currentTransfer], tqueue);
 
 		view = createImageView(image, VK_IMAGE_VIEW_TYPE_2D, format);
 		std::tie(pool, dset) = renderPass.newDescriptorSetTex(this, view);
-		SDL_FreeSurface(img);
 		currentTransfer = (currentTransfer + 1) % FormatConverter::maxTransfers;
 	} catch (const std::runtime_error& err) {
 		logError(err.what());
@@ -1487,7 +1493,6 @@ RendererVk::TextureVk* RendererVk::createTextureDirect(SDL_Surface* img, u32vec2
 		vkDestroyImageView(ldev, view, nullptr);
 		vkDestroyImage(ldev, image, nullptr);
 		vkFreeMemory(ldev, memory, nullptr);
-		SDL_FreeSurface(img);
 		return nullptr;
 	}
 	return new TextureVk(res, image, memory, view, pool, dset, nearest);
@@ -1503,7 +1508,7 @@ RendererVk::TextureVk* RendererVk::createTextureIndirect(SDL_Surface* img, VkFor
 	try {
 		std::tie(image, memory) = createImage(res, VK_IMAGE_TYPE_2D, VK_FORMAT_A8B8G8R8_UNORM_PACK32, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		synchSingleTimeCommands(tcmdBuffers[currentTransfer], tfences[currentTransfer]);
-		uploadInputData<true>(img);
+		uploadInputData<true>(img, res, img->pitch, img->format->BytesPerPixel);
 
 		array<VkDescriptorSet, 1> descriptorSets = { fmtConv.getDescriptorSet(currentTransfer) };
 		beginSingleTimeCommands(tcmdBuffers[currentTransfer]);
@@ -1540,13 +1545,13 @@ RendererVk::TextureVk* RendererVk::createTextureIndirect(SDL_Surface* img, VkFor
 }
 
 template <bool conv>
-void RendererVk::uploadInputData(const SDL_Surface* img) {
+void RendererVk::uploadInputData(const void* pix, u32vec2 res, uint32 pitch, uint8 bpp) {
 	VkDeviceSize texSize, pixSize;
 	if constexpr (conv) {
-		texSize = VkDeviceSize(img->w) * VkDeviceSize(img->h);
-		pixSize = texSize * VkDeviceSize(img->format->BytesPerPixel);
+		texSize = VkDeviceSize(res.x) * VkDeviceSize(res.y);
+		pixSize = texSize * VkDeviceSize(bpp);
 	} else
-		pixSize = VkDeviceSize(img->pitch) * VkDeviceSize(img->h);
+		pixSize = VkDeviceSize(pitch) * VkDeviceSize(res.y);
 
 	VkDeviceSize inputSize = roundToMulOf(pixSize, transferAtomSize);
 	if (inputSize > inputSizesMax[currentTransfer]) {
@@ -1565,13 +1570,13 @@ void RendererVk::uploadInputData(const SDL_Surface* img) {
 	if constexpr (conv) {
 		fmtConv.updateBufferSize(this, currentTransfer, texSize, inputBuffers[currentTransfer], inputSizesMax[currentTransfer], rebindInputBuffer[currentTransfer]);
 
-		if (size_t packPitch = size_t(img->w) * size_t(img->format->BytesPerPixel); uint(img->pitch) == packPitch)
-			memcpy(inputsMapped[currentTransfer], img->pixels, pixSize);
+		if (size_t packPitch = size_t(res.x) * size_t(bpp); pitch == packPitch)
+			memcpy(inputsMapped[currentTransfer], pix, pixSize);
 		else
-			for (size_t o = 0, i = 0, e = size_t(img->pitch) * size_t(img->h); i < e; i += img->pitch, o += packPitch)
-				memcpy(reinterpret_cast<uint8*>(inputsMapped[currentTransfer]) + o, static_cast<uint8*>(img->pixels) + i, packPitch);
+			for (size_t o = 0, i = 0, e = size_t(pitch) * size_t(res.y); i < e; i += pitch, o += packPitch)
+				memcpy(reinterpret_cast<uint8*>(inputsMapped[currentTransfer]) + o, static_cast<const uint8*>(pix) + i, packPitch);
 	} else
-		memcpy(inputsMapped[currentTransfer], img->pixels, pixSize);
+		memcpy(inputsMapped[currentTransfer], pix, pixSize);
 
 	VkMappedMemoryRange flushRange{};
 	flushRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -1830,7 +1835,7 @@ void RendererVk::transitionImageLayout(VkCommandBuffer commandBuffer, VkImage im
 		sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 	} else
-		throw std::invalid_argument("Unsupported layout transition from "s + string_VkImageLayout(srcLay) + " to " + string_VkImageLayout(dstLay) + " in " __func__);
+		throw std::invalid_argument("Unsupported layout transition from "s + string_VkImageLayout(srcLay) + " to " + string_VkImageLayout(dstLay) + " in " + __func__);
 	vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 }
 
@@ -1864,7 +1869,7 @@ void RendererVk::transitionBufferToImageLayout(VkCommandBuffer commandBuffer, Vk
 		sourceStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 	} else
-		throw std::invalid_argument("Unsupported layout transition from "s + string_VkImageLayout(srcLay) + " to " + string_VkImageLayout(dstLay) + " in " __func__);
+		throw std::invalid_argument("Unsupported layout transition from "s + string_VkImageLayout(srcLay) + " to " + string_VkImageLayout(dstLay) + " in " + __func__);
 	vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 1, &bufferBarrier, 1, &imageBarrier);
 }
 
@@ -1923,7 +1928,7 @@ RendererVk::QueueInfo RendererVk::findQueueFamilies(VkPhysicalDevice dev) const 
 			if (presentSupport)
 				qi.pfam = i;
 		}
-		if ((families[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT)) == (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT) && (!qi.gfam || qi.gfam == qi.pfam))
+		if (VkQueueFlagBits(families[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT)) == (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT) && (!qi.gfam || qi.gfam == qi.pfam))
 			qi.gfam = i;
 		if ((families[i].queueFlags & VK_QUEUE_TRANSFER_BIT) && (!qi.tfam || ((qi.tfam == qi.gfam || qi.tfam == qi.pfam) && !qi.canCompute && (families[i].queueFlags & VK_QUEUE_COMPUTE_BIT)))) {
 			qi.tfam = i;
@@ -1969,13 +1974,13 @@ VkPresentModeKHR RendererVk::chooseSwapPresentMode(const vector<VkPresentModeKHR
 	return availablePresentModes[0];
 }
 
-void RendererVk::getSettings(uint& maxRes, bool& compression, vector<pair<u32vec2, string>>& devices) const {
-	maxRes = pdevProperties.limits.maxImageDimension2D;
-	compression = false;
+void RendererVk::setCompression(Settings::Compression compression) {
+	squashPicTexels = compression == Settings::Compression::b16;
+}
 
-	uint32 count;
-	if (vkEnumeratePhysicalDevices(instance, &count, nullptr) != VK_SUCCESS)
-		return;
+pair<uint, Settings::Compression> RendererVk::getSettings(vector<pair<u32vec2, string>>& devices) const {
+	uint32 count = 0;
+	vkEnumeratePhysicalDevices(instance, &count, nullptr);
 	vector<VkPhysicalDevice> pdevs(count);
 	vkEnumeratePhysicalDevices(instance, &count, pdevs.data());
 
@@ -1986,11 +1991,7 @@ void RendererVk::getSettings(uint& maxRes, bool& compression, vector<pair<u32vec
 		vkGetPhysicalDeviceProperties(pdevs[i], &prop);
 		devices[i + 1] = pair(u32vec2(prop.vendorID, prop.deviceID), prop.deviceName);
 	}
-}
-
-void RendererVk::setMaxPicRes(uint& size) {
-	size = std::clamp(size, Settings::minPicRes, pdevProperties.limits.maxImageDimension2D);
-	maxPicRes = size;
+	return pair(pdevProperties.limits.maxImageDimension2D, Settings::Compression::b16);
 }
 
 uint RendererVk::scoreDevice(const VkPhysicalDeviceProperties& prop, const VkPhysicalDeviceMemoryProperties& memp) {
@@ -2022,12 +2023,16 @@ uint RendererVk::scoreDevice(const VkPhysicalDeviceProperties& prop, const VkPhy
 }
 
 pair<SDL_Surface*, VkFormat> RendererVk::pickPixFormat(SDL_Surface* img) const {
-	if (img) {
+	if (img)
 		switch (img->format->format) {
 		case SDL_PIXELFORMAT_RGBA32:
 			return pair(img, VK_FORMAT_A8B8G8R8_UNORM_PACK32);
 		case SDL_PIXELFORMAT_BGRA32:
+#if SDL_BYTEORDER == SDL_LIL_ENDIAN
+			return pair(img, VK_FORMAT_R8G8B8A8_UNORM);	// TODO: check if these formats are correct
+#else
 			return pair(img, VK_FORMAT_B8G8R8A8_UNORM);
+#endif
 		case SDL_PIXELFORMAT_RGB24:
 			if (fmtConv.initialized())
 				return pair(img, VK_FORMAT_R8G8B8_UNORM);
@@ -2035,14 +2040,27 @@ pair<SDL_Surface*, VkFormat> RendererVk::pickPixFormat(SDL_Surface* img) const {
 		case SDL_PIXELFORMAT_BGR24:
 			if (fmtConv.initialized())
 				return pair(img, VK_FORMAT_B8G8R8_UNORM);
+			break;
+		case SDL_PIXELFORMAT_RGBA5551:
+			return pair(img, VK_FORMAT_R5G5B5A1_UNORM_PACK16);
+		case SDL_PIXELFORMAT_BGRA5551:
+			return pair(img, VK_FORMAT_B5G5R5A1_UNORM_PACK16);
+		case SDL_PIXELFORMAT_RGB565:
+			return pair(img, VK_FORMAT_R5G6B5_UNORM_PACK16);
+		case SDL_PIXELFORMAT_BGR565:
+			return pair(img, VK_FORMAT_B5G6R5_UNORM_PACK16);
+		default:
+			img = convertReplace(img);
 		}
-		img = convertToDefault(img);
-	}
 	return pair(img, VK_FORMAT_A8B8G8R8_UNORM_PACK32);
 }
 
-pair<uint, const std::set<SDL_PixelFormatEnum>*> RendererVk::getLimits() const {
-	return pair(pdevProperties.limits.maxImageDimension2D, &supportedFormats);
+uint RendererVk::maxTexSize() const {
+	return pdevProperties.limits.maxImageDimension2D;
+}
+
+const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* RendererVk::getSquashableFormats() const {
+	return !squashPicTexels ? nullptr : &squashableFormats;
 }
 
 #ifndef NDEBUG

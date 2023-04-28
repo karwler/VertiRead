@@ -47,10 +47,10 @@ void InputSys::eventMouseButtonDown(const SDL_MouseButtonEvent& button) {
 		World::scene()->onMouseDown(ivec2(button.x, button.y) + World::winSys()->winViewOffset(button.windowID), button.button, button.clicks);
 		break;
 	case SDL_BUTTON_X1:
-		World::srun(bindings[uint8(Binding::Type::escape)].bcall);
+		World::srun(bindings[eint(Binding::Type::escape)].bcall);
 		break;
 	case SDL_BUTTON_X2:
-		World::srun(bindings[uint8(Binding::Type::enter)].bcall);
+		World::srun(bindings[eint(Binding::Type::enter)].bcall);
 	}
 }
 

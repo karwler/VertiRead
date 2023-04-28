@@ -17,8 +17,10 @@ RendererDx::ViewDx::ViewDx(SDL_Window* window, const Recti& area, IDXGISwapChain
 {}
 
 RendererDx::RendererDx(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor) :
+	Renderer({ SDL_PIXELFORMAT_RGBA32, SDL_PIXELFORMAT_BGRA32, SDL_PIXELFORMAT_BGRA5551, SDL_PIXELFORMAT_BGR565 }),
 	bgColor(bgcolor),
-	syncInterval(sets->vsync)
+	syncInterval(sets->vsync),
+	squashPicTexels(sets->compression == Settings::Compression::b16)
 {
 	IDXGIFactory* factory = createFactory();
 	IDXGIAdapter* adapter = nullptr;
@@ -144,7 +146,7 @@ RendererDx::~RendererDx() {
 
 IDXGIFactory* RendererDx::createFactory() {
 	IDXGIFactory* factory;
-	if (HRESULT rs = CreateDXGIFactory(__uuidof(IDXGIFactory), reinterpret_cast<void**>(&factory)); FAILED(rs))
+	if (HRESULT rs = CreateDXGIFactory(IID_PPV_ARGS(&factory)); FAILED(rs))
 		throw std::runtime_error("Failed to create factory: " + hresultToStr(rs));
 	return factory;
 }
@@ -172,7 +174,7 @@ pair<IDXGISwapChain*, ID3D11RenderTargetView*> RendererDx::createSwapchain(IDXGI
 	try {
 		if (HRESULT rs = factory->CreateSwapChain(dev, &schainDesc, &swapchain); FAILED(rs))
 			throw std::runtime_error("Failed to create swapchain: " + hresultToStr(rs));
-		if (HRESULT rs = swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&scBackBuffer)); FAILED(rs))
+		if (HRESULT rs = swapchain->GetBuffer(0, IID_PPV_ARGS(&scBackBuffer)); FAILED(rs))
 			throw std::runtime_error("Failed get swapchain buffer: " + hresultToStr(rs));
 		if (HRESULT rs = dev->CreateRenderTargetView(scBackBuffer, nullptr, &tgtBackbuffer); FAILED(rs))
 			throw std::runtime_error("Failed to create render target: :" + hresultToStr(rs));
@@ -402,20 +404,39 @@ void RendererDx::uploadBuffer(ID3D11Buffer* buffer, const T& data) {
 }
 
 Texture* RendererDx::texFromIcon(SDL_Surface* img) {
-	img = limitSize(img, D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION);
-	if (auto [pic, fmt] = pickPixFormat(img); pic)
-		return createTexture(img, uvec2(pic->w, pic->h), fmt);
-	return nullptr;
+	return texFromRpic(limitSize(img, D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION));
 }
 
 Texture* RendererDx::texFromRpic(SDL_Surface* img) {
-	if (auto [pic, fmt] = pickPixFormat(img); pic)
-		return createTexture(img, uvec2(pic->w, pic->h), fmt);
-	return nullptr;
+	if (!img)
+		return nullptr;
+
+	DXGI_FORMAT fmt;
+	switch (img->format->format) {
+	case SDL_PIXELFORMAT_RGBA32:
+		fmt = DXGI_FORMAT_R8G8B8A8_UNORM;
+		break;
+	case SDL_PIXELFORMAT_BGRA32:
+		fmt = DXGI_FORMAT_B8G8R8A8_UNORM;
+		break;
+	case SDL_PIXELFORMAT_BGRA5551:
+		fmt = DXGI_FORMAT_B5G5R5A1_UNORM;
+		break;
+	case SDL_PIXELFORMAT_BGR565:
+		fmt = DXGI_FORMAT_B5G6R5_UNORM;
+		break;
+	default:
+		if (img = convertReplace(img); !img)
+			return nullptr;
+		fmt = DXGI_FORMAT_R8G8B8A8_UNORM;
+	}
+	TextureDx* tex = createTexture(img->pixels, uvec2(img->w, img->h), img->pitch, fmt);
+	SDL_FreeSurface(img);
+	return tex;
 }
 
-Texture* RendererDx::texFromText(SDL_Surface* img) {
-	return img ? createTexture(img, glm::min(uvec2(img->w, img->h), uvec2(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)), DXGI_FORMAT_B8G8R8A8_UNORM) : nullptr;
+Texture* RendererDx::texFromText(const Pixmap& pm) {
+	return pm.pix ? createTexture(pm.pix.get(), glm::min(pm.res, uvec2(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)), pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM) : nullptr;
 }
 
 void RendererDx::freeTexture(Texture* tex) {
@@ -423,51 +444,41 @@ void RendererDx::freeTexture(Texture* tex) {
 	delete tex;
 }
 
-RendererDx::TextureDx* RendererDx::createTexture(SDL_Surface* img, uvec2 res, DXGI_FORMAT format) {
+RendererDx::TextureDx* RendererDx::createTexture(const void* pix, uvec2 res, uint pitch, DXGI_FORMAT format) {
 	ID3D11Texture2D* texture = nullptr;
 	ID3D11ShaderResourceView* textureView = nullptr;
 	try {
 		D3D11_SUBRESOURCE_DATA subrscData{};
-		subrscData.pSysMem = img->pixels;
-		subrscData.SysMemPitch = img->pitch;
+		subrscData.pSysMem = pix;
+		subrscData.SysMemPitch = pitch;
 
 		texture = createTexture(res, format, D3D11_USAGE_IMMUTABLE, D3D11_BIND_SHADER_RESOURCE, 0, &subrscData);
 		textureView = createTextureView(texture, format);
 
 		comRelease(texture);
-		SDL_FreeSurface(img);
 		return new TextureDx(res, textureView);
 	} catch (const std::runtime_error& err) {
 		logError(err.what());
 		comRelease(textureView);
 		comRelease(texture);
-		SDL_FreeSurface(img);
 	}
 	return nullptr;
 }
 
-pair<SDL_Surface*, DXGI_FORMAT> RendererDx::pickPixFormat(SDL_Surface* img) {
-	if (img) {
-		switch (img->format->format) {
-		case SDL_PIXELFORMAT_BGRA32:
-			return pair(img, DXGI_FORMAT_B8G8R8A8_UNORM);
-		case SDL_PIXELFORMAT_RGBA32:
-			return pair(img, DXGI_FORMAT_R8G8B8A8_UNORM);
-		}
-		img = convertToDefault(img);
-	}
-	return pair(img, DXGI_FORMAT_R8G8B8A8_UNORM);
+uint RendererDx::maxTexSize() const {
+	return D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
 }
 
-pair<uint, const std::set<SDL_PixelFormatEnum>*> RendererDx::getLimits() const {
-	return pair(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION, &supportedFormats);
+const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* RendererDx::getSquashableFormats() const {
+	return !squashPicTexels ? nullptr : &squashableFormats;
 }
 
-void RendererDx::getSettings(uint& maxRes, bool& compression, vector<pair<u32vec2, string>>& devices) const {
-	maxRes = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
-	compression = false;
+void RendererDx::setCompression(Settings::Compression compression) {
+	squashPicTexels = compression == Settings::Compression::b16;
+}
+
+pair<uint, Settings::Compression> RendererDx::getSettings(vector<pair<u32vec2, string>>& devices) const {
 	devices = { pair(u32vec2(0), "auto")};
-
 	IDXGIFactory* factory = createFactory();
 	IDXGIAdapter* adapter = nullptr;
 	for (uint i = 0; factory->EnumAdapters(i, &adapter) == S_OK; ++i) {
@@ -476,11 +487,7 @@ void RendererDx::getSettings(uint& maxRes, bool& compression, vector<pair<u32vec
 		comRelease(adapter);
 	}
 	comRelease(factory);
-}
-
-void RendererDx::setMaxPicRes(uint& size) {
-	size = std::clamp(size, Settings::minPicRes, uint(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION));
-	maxPicRes = size;
+	return pair(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION, Settings::Compression::b16);
 }
 
 template <class T>

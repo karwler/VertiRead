@@ -13,6 +13,32 @@ void pushEvent(UserEvent code, void* data1, void* data2) {
 		throw std::runtime_error(rc ? SDL_GetError() : "Event queue full");
 }
 
+Pixmap::Pixmap(uvec2 size) :
+	pix(std::make_unique<uint32[]>(size.x * size.y)),
+	res(size)
+{
+	std::fill_n(pix.get(), res.x * res.y, 0);
+}
+
+bool strciequal(string_view a, string_view b) {
+	if (a.length() != b.length())
+		return false;
+	for (size_t i = 0; i < a.length(); ++i)
+		if (std::tolower(a[i]) != std::tolower(b[i]))
+			return false;
+	return true;
+}
+
+bool strnciequal(string_view a, string_view b, size_t n) {
+	size_t alen = std::min(a.length(), n);
+	if (alen != std::min(b.length(), n))
+		return false;
+	for (size_t i = 0; i < alen; ++i)
+		if (std::tolower(a[i]) != std::tolower(b[i]))
+			return false;
+	return true;
+}
+
 bool isDriveLetter(const fs::path& path) {
 	if (const fs::path::value_type* p = path.c_str(); isalpha(p[0]) && p[1] == ':') {
 		for (p += 2; isDsep(*p); ++p);
@@ -44,6 +70,11 @@ string_view filename(string_view path) {
 string_view fileExtension(string_view path) {
 	string_view::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
 	return it != path.rend() && *it == '.' && it + 1 != path.rend() && !isDsep(it[1]) ? string_view(&*it.base(), path.end() - it.base()) : string_view();
+}
+
+string_view delExtension(string_view path) {
+	string_view::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
+	return it != path.rend() ? *it == '.' && it + 1 != path.rend() && !isDsep(it[1]) ? string_view(path.data(), it.base() - 1 - path.begin()) : path : string_view();
 }
 
 string_view trim(string_view str) {

@@ -9,12 +9,12 @@
 
 // PROGRAM TEXT
 
-ProgState::Text::Text(string str, int height) :
+ProgState::Text::Text(string&& str, uint height) :
 	text(std::move(str)),
-	length(measure(text.c_str(), height))
+	length(measure(text, height))
 {}
 
-int ProgState::Text::measure(const char* str, int height) {
+uint ProgState::Text::measure(string_view str, uint height) {
 	return World::drawSys()->textLength(str, height) + Label::defaultTextMargin * 2;
 }
 
@@ -126,7 +126,7 @@ void ProgState::updatePopupMessage(string msg) {
 	if (Popup* popup = World::scene()->getPopup()) {
 		Text mg(std::move(msg), popupLineHeight);
 		popup->getWidget<Label>(0)->setText(std::move(mg.text));
-		popup->setSize(std::max(mg.length, Text::measure(popup->getWidget<Layout>(1)->getWidget<Label>(1)->getText().c_str(), popupLineHeight)) + Layout::defaultItemSpacing * 2);
+		popup->setSize(std::max(mg.length, Text::measure(popup->getWidget<Layout>(1)->getWidget<Label>(1)->getText(), popupLineHeight)) + Layout::defaultItemSpacing * 2);
 	}
 }
 
@@ -137,7 +137,7 @@ Popup* ProgState::createPopupMultiline(string msg, PCall ccal, string ctxt, Alig
 	for (size_t i = 0; i < msg.length();) {
 		++lines;
 		size_t end = std::min(msg.find('\n', i), msg.length());
-		if (int siz = World::drawSys()->textLength(msg.data() + i, end - i, lineHeight) + (Label::defaultTextMargin + Layout::defaultItemSpacing) * 2; siz > width)
+		if (int siz = World::drawSys()->textLength(string_view(msg.data() + i, end - i), lineHeight) + (Label::defaultTextMargin + Layout::defaultItemSpacing) * 2; siz > width)
 			if (width = std::min(siz, viewRes.x); width == viewRes.x)
 				break;
 		i = msg.find_first_not_of('\n', end);
@@ -247,7 +247,13 @@ Texture* ProgState::makeTooltipL(const char* str) {
 
 void ProgFileExplorer::eventHide() {
 	ProgState::eventHide();
+	eventRefresh();
+}
+
+void ProgFileExplorer::eventRefresh() {
+	float loc = fileList->getScrollLocation();
 	World::scene()->resetLayouts();
+	fileList->setScrollLocation(loc);
 }
 
 void ProgFileExplorer::processFileChanges(const Browser* browser, vector<pair<bool, string>>& files, bool gone) {
@@ -286,7 +292,7 @@ Label* ProgFileExplorer::makeFileEntry(const Size&, string&&) {
 	return nullptr;
 }
 
-Size ProgFileExplorer::fileEntrySize(const string& name) {
+Size ProgFileExplorer::fileEntrySize(string_view) {
 	return lineHeight;
 }
 
@@ -315,12 +321,12 @@ RootLayout* ProgBooks::createLayout() {
 
 	// book list
 	vector<fs::path> books = FileSys::listDir(World::sets()->getDirLib(), false, true, World::sets()->showHidden);
-	vector<Widget*> tiles(books.size()+1);
+	vector<Widget*> tiles(books.size() + 1);
 	for (size_t i = 0; i < books.size(); ++i) {
 		Text txt(books[i].u8string(), TileBox::defaultItemHeight);
 		tiles[i] = makeDirectoryEntry(txt.length, std::move(txt.text));
 	}
-	tiles.back() = new Button(TileBox::defaultItemHeight, &Program::eventOpenPageBrowser, &Program::eventOpenBookContext, nullptr, makeTooltip("Browse other directories"), true, World::drawSys()->texture("search"));
+	tiles.back() = new Button(TileBox::defaultItemHeight, &Program::eventOpenPageBrowserGeneral, &Program::eventOpenBookContextGeneral, nullptr, makeTooltip("Browse other directories"), true, World::drawSys()->texture("search"));
 	dirEnd = books.size();
 	fileEnd = dirEnd;
 
@@ -336,8 +342,8 @@ Label* ProgBooks::makeDirectoryEntry(const Size& size, string&& name) {
 	return new Label(size, std::move(name), &Program::eventOpenPageBrowser, &Program::eventOpenBookContext);
 }
 
-Size ProgBooks::fileEntrySize(const string& name) {
-	return Text::measure(name.c_str(), TileBox::defaultItemHeight);
+Size ProgBooks::fileEntrySize(string_view name) {
+	return Text::measure(name, TileBox::defaultItemHeight);
 }
 
 // PROG PAGE BROWSER
@@ -405,7 +411,7 @@ Label* ProgPageBrowser::makeDirectoryEntry(const Size& size, string&& name) {
 	return new Label(size, std::move(name), &Program::eventBrowserGoIn, nullptr, nullptr, nullptr, Alignment::left, World::drawSys()->texture("folder"));
 }
 
-Label* ProgPageBrowser::makeFileEntry(const Size& size, string&& name) {
+Label* ProgPageBrowser::makeFileEntry(const Size&, string&& name) {
 	return new Label(lineHeight, std::move(name), &Program::eventBrowserGoFile, nullptr, nullptr, nullptr, Alignment::left, World::drawSys()->texture("file"));
 }
 
@@ -493,6 +499,12 @@ void ProgReader::eventHide() {
 	ProgState::eventHide();
 	World::browser()->startLoadPictures(fs::u8path(reader->firstPage()));
 	World::program()->setPopupLoading();
+}
+
+void ProgReader::eventRefresh() {
+	float loc = reader->getScrollLocation();
+	World::scene()->resetLayouts();
+	reader->setScrollLocation(loc);
 }
 
 void ProgReader::eventClosing() {
@@ -718,10 +730,16 @@ void ProgSettings::eventHide() {
 	showHidden->on = World::sets()->showHidden;
 }
 
+void ProgSettings::eventRefresh() {
+	float loc = static_cast<ScrollArea*>(limitLine->getParent())->getScrollLocation();
+	World::scene()->resetLayouts();
+	static_cast<ScrollArea*>(limitLine->getParent())->setScrollLocation(loc);
+}
+
 void ProgSettings::eventFileDrop(const fs::path& file) {
 	if (FileSys::isFont(file)) {
 		World::drawSys()->setFont(file.u8string(), World::sets(), World::fileSys());
-		World::scene()->resetLayouts();
+		eventRefresh();
 	} else {
 		try {
 			if (fs::is_directory(file))
@@ -761,7 +779,7 @@ RootLayout* ProgSettings::createLayout() {
 		"Screen",
 		"Renderer",
 		"Device",
-		"Compress images",
+		"Image compression",
 		"VSync",
 		"GPU selecting",
 		"Size",
@@ -776,9 +794,7 @@ RootLayout* ProgSettings::createLayout() {
 	};
 	std::initializer_list<const char*>::iterator itxs = txs.begin();
 
-	uint maxRes;
-	bool compression;
-	World::renderer()->getSettings(maxRes, compression, devices);
+	auto [maxRes, maxCompress] = World::renderer()->getSettings(devices);
 	vector<string> dnames(devices.size());
 	std::transform(devices.begin(), devices.end(), dnames.begin(), [](pair<u32vec2, string>& it) -> string { return std::move(it.second); });
 	vector<pair<u32vec2, string>>::iterator curDev = std::find_if(devices.begin(), devices.end(), [](const pair<u32vec2, string>& it) -> bool { return World::sets()->device == it.first; });
@@ -795,8 +811,12 @@ RootLayout* ProgSettings::createLayout() {
 		"- none: all pictures in directory/archive\n"
 		"- count: number of pictures\n"
 		"- size: total size of pictures";
-	constexpr char tipDeadzon[] = "Controller axis deadzone";
+	constexpr char tipDeadzone[] = "Controller axis deadzone";
 	constexpr char tipMaxPicRes[] = "Maximum picture resolution";
+	constexpr char tipCompression[] = "Texture compression of pictures:\n"
+		"- none: load textures uncompressed\n"
+		"- 16 b: squash texels to 16 bits\n"
+		"- compress: use compressed textures";
 
 	Size monitorSize = Size([](const Widget* wgt) -> int {
 		const Layout* box = static_cast<const Layout*>(wgt);
@@ -805,8 +825,10 @@ RootLayout* ProgSettings::createLayout() {
 
 	// action fields for labels
 	vector<string> themes = World::fileSys()->getAvailableThemes();
+	vector<string> fonts = World::fileSys()->listFonts();
 	Text dots(KeyGetter::ellipsisStr, lineHeight);
 	int unumLen = Text::measure("0000000000", lineHeight) + LabelEdit::caretWidth;
+
 	vector<pair<Size, vector<Widget*>>> lx;
 	lx.reserve(txs.size());
 	lx.insert(lx.end(), {
@@ -824,7 +846,7 @@ RootLayout* ProgSettings::createLayout() {
 		} },
 		{ lineHeight, {
 			new Label(descLength, *itxs++),
-			new ComboBox(plimLength, size_t(World::sets()->picLim.type), vector<string>(PicLim::names.begin(), PicLim::names.end()), &Program::eventSetPicLimitType, makeTooltipL(tipPicLim)),
+			new ComboBox(plimLength, eint(World::sets()->picLim.type), vector<string>(PicLim::names.begin(), PicLim::names.end()), &Program::eventSetPicLimitType, makeTooltipL(tipPicLim)),
 			createLimitEdit()
 		} },
 		{ lineHeight, {
@@ -834,7 +856,7 @@ RootLayout* ProgSettings::createLayout() {
 		} },
 		{ lineHeight, {
 			new Label(descLength, *itxs++),
-			screen = new ComboBox(1.f, size_t(World::sets()->screen), vector<string>(Settings::screenModeNames.begin(), Settings::screenModeNames.end()), &Program::eventSetScreenMode, makeTooltip("Window screen mode"))
+			screen = new ComboBox(1.f, eint(World::sets()->screen), vector<string>(Settings::screenModeNames.begin(), Settings::screenModeNames.end()), &Program::eventSetScreenMode, makeTooltip("Window screen mode"))
 		} },
 		{ monitorSize, {
 			new Widget(descLength),
@@ -845,21 +867,21 @@ RootLayout* ProgSettings::createLayout() {
 	if constexpr (Settings::rendererNames.size() > 1) {
 		lx.push_back({ lineHeight, {
 			new Label(descLength, *itxs),
-			new ComboBox(1.f, size_t(World::sets()->renderer), vector<string>(Settings::rendererNames.begin(), Settings::rendererNames.end()), &Program::eventSetRenderer, makeTooltip("Rendering backend"))
+			new ComboBox(1.f, eint(World::sets()->renderer), vector<string>(Settings::rendererNames.begin(), Settings::rendererNames.end()), &Program::eventSetRenderer, makeTooltip("Rendering backend"))
 		} });
 	}
 	++itxs;
 	if (!devices.empty()) {
 		lx.push_back({ lineHeight, {
 			new Label(descLength, *itxs),
-			new ComboBox(1.f, curDev != devices.end() ? curDev - devices.begin() : 0, std::move(dnames),& Program::eventSetDevice, makeTooltip("Rendering devices"))
+			new ComboBox(1.f, curDev != devices.end() ? curDev - devices.begin() : 0, std::move(dnames), &Program::eventSetDevice, makeTooltip("Rendering devices"))
 		} });
 	}
 	++itxs;
-	if (compression) {
+	if (maxCompress > Settings::Compression::none) {
 		lx.push_back({ lineHeight, {
 			new Label(descLength, *itxs),
-			new CheckBox(lineHeight, World::sets()->compression, &Program::eventSetCompression, nullptr, nullptr, makeTooltip("Compress pictures to reduce memory usage"))
+			new ComboBox(1.f, eint(World::sets()->compression), vector<string>(Settings::compressionNames.begin(), Settings::compressionNames.begin() + eint(maxCompress) + 1), &Program::eventSetCompression, makeTooltipL(tipCompression))
 		} });
 	}
 	++itxs;
@@ -898,7 +920,10 @@ RootLayout* ProgSettings::createLayout() {
 		} },
 		{ lineHeight, {
 			new Label(descLength, *itxs++),
-			new LabelEdit(1.f, string(World::sets()->font), &Program::eventSetFont, nullptr, nullptr, makeTooltip("Font name or path"))
+			!fonts.empty()
+				? static_cast<Widget*>(new ComboBox(1.f, valcp(World::sets()->font), std::move(fonts), &Program::eventSetFont, makeTooltip("Font filename")))
+				: static_cast<Widget*>(new LabelEdit(1.f, valcp(World::sets()->font), &Program::eventSetFont, nullptr, nullptr, makeTooltip("Font name or path"))),
+			new ComboBox(findMaxLength(Settings::hintingNames.begin(), Settings::hintingNames.end(), lineHeight), eint(World::sets()->hinting), vector<string>(Settings::hintingNames.begin(), Settings::hintingNames.end()), &Program::eventSetFontHinting, makeTooltip("Font hinting"))
 		} },
 		{ lineHeight, {
 			new Label(descLength, *itxs++),
@@ -911,8 +936,8 @@ RootLayout* ProgSettings::createLayout() {
 		} },
 		{ lineHeight, {
 			new Label(descLength, *itxs++),
-			new Slider(1.f, World::sets()->getDeadzone(), 0, Settings::axisLimit, &Program::eventSetDeadzoneSL, nullptr, nullptr, makeTooltip(tipDeadzon)),
-			new LabelEdit(unumLen, toStr(World::sets()->getDeadzone()), &Program::eventSetDeadzoneLE, nullptr, nullptr, makeTooltip(tipDeadzon), LabelEdit::TextType::uInt)
+			new Slider(1.f, World::sets()->getDeadzone(), 0, Settings::axisLimit, &Program::eventSetDeadzoneSL, nullptr, nullptr, makeTooltip(tipDeadzone)),
+			new LabelEdit(unumLen, toStr(World::sets()->getDeadzone()), &Program::eventSetDeadzoneLE, nullptr, nullptr, makeTooltip(tipDeadzone), LabelEdit::TextType::uInt)
 		} }
 	});
 	size_t lcnt = lx.size();

@@ -489,7 +489,7 @@ ComboBox::ComboBox(const Size& size, string&& curOption, vector<string>&& opts, 
 {}
 
 ComboBox::ComboBox(const Size& size, size_t curOption, vector<string>&& opts, PCall call, Texture* tip, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
-	Label(size, string(opts[curOption]), call, call, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
+	Label(size, valcp(opts[curOption]), call, call, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
 	options(std::move(opts)),
 	curOpt(curOption)
 {}
@@ -515,7 +515,7 @@ LabelEdit::LabelEdit(const Size& size, string&& line, PCall leftCall, PCall righ
 	cleanText();
 }
 
-void LabelEdit::drawTop(const Recti& view) {
+void LabelEdit::drawTop(const Recti& view) const {
 	ivec2 ps = position();
 	World::drawSys()->drawCaret(Recti(caretPos() + ps.x + textIconOffset() + textMargin, ps.y, caretWidth, size().y), frame(), view);
 }
@@ -659,8 +659,8 @@ void LabelEdit::setCPos(uint cp) {
 		textOfs -= ce - sx;
 }
 
-int LabelEdit::caretPos() {
-	return World::drawSys()->textLength(text, cpos, size().y) + textOfs;
+int LabelEdit::caretPos() const {
+	return World::drawSys()->textLength(string_view(text.c_str(), cpos), size().y) + textOfs;
 }
 
 void LabelEdit::confirm() {
@@ -903,7 +903,7 @@ void KeyGetter::onJAxis(uint8 jaxis, bool positive) {
 void KeyGetter::onGButton(SDL_GameControllerButton gbutton) {
 	if (acceptType == AcceptType::gamepad) {
 		World::inputSys()->getBinding(bindingType).setGbutton(gbutton);
-		setText(Binding::gbuttonNames[uint8(gbutton)]);
+		setText(Binding::gbuttonNames[eint(gbutton)]);
 	}
 	World::scene()->setCapture(nullptr);
 }
@@ -911,7 +911,7 @@ void KeyGetter::onGButton(SDL_GameControllerButton gbutton) {
 void KeyGetter::onGAxis(SDL_GameControllerAxis gaxis, bool positive) {
 	if (acceptType == AcceptType::gamepad) {
 		World::inputSys()->getBinding(bindingType).setGaxis(gaxis, positive);
-		setText(string(1, (positive ? prefAxisPos : prefAxisNeg)) + Binding::gaxisNames[uint8(gaxis)]);
+		setText(string(1, (positive ? prefAxisPos : prefAxisNeg)) + Binding::gaxisNames[eint(gaxis)]);
 	}
 	World::scene()->setCapture(nullptr);
 }
@@ -953,9 +953,9 @@ string KeyGetter::bindingText(Binding::Type binding, KeyGetter::AcceptType accep
 		break;
 	case AcceptType::gamepad:
 		if (bind.gbuttonAssigned())
-			return Binding::gbuttonNames[uint8(bind.getGbutton())];
+			return Binding::gbuttonNames[eint(bind.getGbutton())];
 		else if (bind.gaxisAssigned())
-			return string(1, (bind.gposAxisAssigned() ? prefAxisPos : prefAxisNeg)) + Binding::gaxisNames[uint8(bind.getGaxis())];
+			return string(1, (bind.gposAxisAssigned() ? prefAxisPos : prefAxisNeg)) + Binding::gaxisNames[eint(bind.getGaxis())];
 		break;
 	default:
 		throw std::runtime_error("Invalid accept type: " + toStr(accept));
@@ -1021,7 +1021,7 @@ void WindowArranger::drawSelf(const Recti& view) {
 	World::drawSys()->drawWindowArranger(this, view);
 }
 
-void WindowArranger::drawTop(const Recti& view) {
+void WindowArranger::drawTop(const Recti& view) const {
 	const Dsp& dsp = disps.at(dragging);
 	World::drawSys()->drawWaDisp(dragr, Color::light, dsp.txt ? Recti(dragr.pos() + (dragr.size() - dsp.txt->getRes()) / 2, dsp.txt->getRes()) : Recti(0), dsp.txt, frame(), view);
 }
