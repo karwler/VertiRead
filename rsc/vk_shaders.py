@@ -2,167 +2,17 @@ import os
 import shutil
 import subprocess
 
-vsGui = '''#version 450
 
-const vec2 vposs[4] = vec2[](
-	vec2(0.0, 0.0),
-	vec2(1.0, 0.0),
-	vec2(0.0, 1.0),
-	vec2(1.0, 1.0)
-);
-
-layout(push_constant) uniform PushData {
-	ivec4 rect;
-	ivec4 frame;
-	vec4 color;
-	uint sid;
-} pc;
-
-layout(set = 0, binding = 0) uniform UniformData {
-	vec4 pview;
-} u1;
-
-layout(location = 0) noperspective out vec2 fragUV;
-
-void main() {
-	vec2 dpos, dsiz = vec2(0.0);
-	if (pc.rect[2] > 0 && pc.rect[3] > 0 && pc.frame[2] > 0 && pc.frame[3] > 0) {
-		dpos = vec2(max(pc.rect.xy, pc.frame.xy));
-		dsiz = vec2(min(pc.rect.xy + pc.rect.zw, pc.frame.xy + pc.frame.zw)) - dpos;
-	}
-
-	if (dsiz.x > 0.0 && dsiz.y > 0.0) {
-		vec2 uvpos = (dpos - vec2(pc.rect.xy)) / vec2(pc.rect.zw);
-		vec2 uvsiz = dsiz / vec2(pc.rect.zw);
-		fragUV = vposs[gl_VertexIndex] * uvsiz + uvpos;
-		vec2 loc = vposs[gl_VertexIndex] * dsiz + dpos;
-		gl_Position = vec4((loc - u1.pview.xy) / u1.pview.zw - 1.0, 0.0, 1.0);
-	} else {
-		fragUV = vec2(0.0);
-		gl_Position = vec4(-2.0, -2.0, 0.0, 1.0);
-	}
-}'''
-
-fsGui = '''#version 450
-
-layout(push_constant) uniform PushData {
-	ivec4 rect;
-	ivec4 frame;
-	vec4 color;
-	uint sid;
-} pc;
-
-layout(set = 0, binding = 1) uniform sampler colorSamp[2];
-layout(set = 1, binding = 0) uniform texture2D colorTex;
-
-layout(location = 0) noperspective in vec2 fragUV;
-
-layout(location = 0) out vec4 outColor;
-
-void main() {
-	outColor = texture(sampler2D(colorTex, colorSamp[pc.sid]), fragUV) * pc.color;
-}'''
-
-vsSel = '''#version 450
-
-const vec2 vposs[4] = vec2[](
-	vec2(0.0, 0.0),
-	vec2(1.0, 0.0),
-	vec2(0.0, 1.0),
-	vec2(1.0, 1.0)
-);
-
-layout(push_constant) uniform PushData {
-	ivec4 rect;
-	ivec4 frame;
-	uvec2 addr;
-} pc;
-
-layout(binding = 0) uniform UniformData {
-	vec4 pview;
-} ud;
-
-void main() {
-	vec2 dpos, dsiz = vec2(0.0);
-	if (pc.rect[2] > 0 && pc.rect[3] > 0 && pc.frame[2] > 0 && pc.frame[3] > 0) {
-		dpos = vec2(max(pc.rect.xy, pc.frame.xy));
-		dsiz = vec2(min(pc.rect.xy + pc.rect.zw, pc.frame.xy + pc.frame.zw)) - dpos;
-	}
-
-	if (dsiz.x > 0.0 && dsiz.y > 0.0) {
-		vec2 loc = vposs[gl_VertexIndex] * dsiz + dpos;
-		gl_Position = vec4((loc - ud.pview.xy) / ud.pview.zw - 1.0, 0.0, 1.0);
-   } else
-		gl_Position = vec4(-2.0, -2.0, 0.0, 1.0);
-}'''
-
-fsSel = '''#version 450
-
-layout(push_constant) uniform PushData {
-	ivec4 rect;
-	ivec4 frame;
-	uvec2 addr;
-} pc;
-
-layout(location = 0) out uvec2 outAddr;
-
-void main() {
-	if (pc.addr.x != 0u || pc.addr.y != 0u)
-		outAddr = pc.addr;
-	else
-		discard;
-}'''
-
-csConv = '''#version 450
-
-layout(constant_id = 0) const bool orderRgb = true;
-layout(local_size_x = 32) in;
-
-layout(push_constant) uniform PushData {
-	uint offset;
-} psData;
-
-layout(set = 0, binding = 0) readonly buffer InputData {
-	uint pixels[];
-} inData;
-
-layout(set = 0, binding = 1) writeonly buffer OutputData {
-	uint pixels[];
-} outData;
-
-void main() {
-	uint cid = (gl_WorkGroupID.x + psData.offset) * gl_WorkGroupSize.x + gl_LocalInvocationID.x;
-	uint iid = cid * 3;
-	uint oid = cid * 4;
-	uint p0 = inData.pixels[iid];
-	uint p1 = inData.pixels[iid + 1];
-	uint p2 = inData.pixels[iid + 2];
-
-	if (orderRgb) {
-		outData.pixels[oid] = p0 | 0xFF000000;
-		outData.pixels[oid + 1] = (p0 >> 24) | (p1 << 8) | 0xFF000000;
-		outData.pixels[oid + 2] = (p1 >> 16) | (p2 << 16) | 0xFF000000;
-		outData.pixels[oid + 3] = (p2 >> 8) | 0xFF000000;
-	} else {
-		outData.pixels[oid] = ((p0 >> 16) & 0x000000FF) | (p0 & 0x0000FF00) | ((p0 << 16) & 0x00FF0000) | 0xFF000000;
-		outData.pixels[oid + 1] = ((p1 >> 8) & 0x000000FF) | ((p1 << 8) & 0x0000FF00) | ((p0 >> 8) & 0x00FF0000) | 0xFF000000;
-		outData.pixels[oid + 2] = (p2 & 0x000000FF) | ((p1 >> 16) & 0x0000FF00) | (p1 & 0x00FF0000) | 0xFF000000;
-		outData.pixels[oid + 3] = ((p2 >> 16) & 0x000000FF) | ((p2 >> 8) & 0x0000FF00) | ((p2 << 8) & 0x00FF0000) | 0xFF000000;
-	}
-}'''
-
-def compile_source(glslc: str, code: str, name: str):
-	with open(name, 'w') as fh:
-		fh.write(code)
-
-	for dbg in [ True, False ]:
+def compile_source(glslc: str, name: str, src_dir: str, dst_dir: str):
+	src_file = os.path.join(src_dir, name)
+	for dbg in [True, False]:
 		try:
 			opt = '-g' if dbg else '-O'
 			ext = 'dbg' if dbg else 'rel'
-			spvFile = f'{name}.{ext}.spv'
-			cppFile = f'{name}.{ext}.h'
+			spv_file = os.path.join(dst_dir, f'{name}.{ext}.spv')
+			cpp_file = os.path.join(dst_dir, f'{name}.{ext}.h')
 
-			ret = subprocess.run([ glslc, '--target-env=vulkan1.0', '--target-spv=spv1.0', opt, '-o', spvFile, name ])
+			ret = subprocess.run([glslc, '--target-env=vulkan1.0', '--target-spv=spv1.0', opt, '-o', spv_file, src_file])
 			if ret.stdout:
 				print(f'stdout: {ret.stdout}')
 			if ret.stderr:
@@ -170,20 +20,24 @@ def compile_source(glslc: str, code: str, name: str):
 			if ret.returncode != 0:
 				print(f'returned: {ret.returncode}')
 
-			with open(spvFile, "rb") as fh:
+			with open(spv_file, "rb") as fh:
 				data = fh.read()
 			if len(data) % 4 != 0:
 				print('size not divisible by 4')
-			with open(cppFile, 'w') as fh:
+			with open(cpp_file, 'w') as fh:
 				fh.write(',\n'.join(f'0x{(data[i] | (data[i + 1] << 8) | (data[i + 2] << 16) | (data[i + 3] << 24)):X}' for i in range(0, len(data), 4)))
 				fh.write('\n')
-			os.remove(spvFile)
+			os.remove(spv_file)
 		except Exception as e:
 			print(e)
-	os.remove(name)
+
 
 if __name__ == '__main__':
-	glslc = shutil.which('glslc')
-	os.chdir(os.path.join(os.path.dirname(__file__), os.pardir, 'src', 'engine', 'shaders'))
-	for it in [ (vsGui, 'vk.gui.vert'), (fsGui, 'vk.gui.frag'), (vsSel, 'vk.sel.vert'), (fsSel, 'vk.sel.frag'), (csConv, 'vk.conv.comp') ]:
-		compile_source(glslc, it[0], it[1])
+	comp = shutil.which('glslc')
+	if not comp:
+		raise RuntimeError('Failed to find glslc')
+
+	srcd = os.path.join(os.path.dirname(__file__), 'shaders')
+	dstd = os.path.join(os.path.dirname(__file__), os.pardir, 'src', 'engine', 'shaders')
+	for it in ['vkConv.comp', 'vkGui.vert', 'vkGui.frag', 'vkSel.vert', 'vkSel.frag']:
+		compile_source(comp, it, srcd, dstd)

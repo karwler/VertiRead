@@ -1,7 +1,6 @@
 #pragma once
 
 #include "browser.h"
-#include "downloader.h"
 
 // handles the front-end
 class Program {
@@ -10,16 +9,13 @@ private:
 	static constexpr float resModeBorder = 0.85f;
 	static constexpr float resModeRatio = 0.75f;
 
-#ifdef DOWNLOADER
-	Downloader downloader;
-#endif
 	ProgState* state = nullptr;
 	uptr<Browser> browser;
 
 public:
 	~Program();
 
-	void start();
+	void start(const vector<string>& cmdVals);
 	void tick();
 
 	// books
@@ -31,7 +27,7 @@ public:
 	void eventOpenLastPage(Button* but = nullptr);
 	void eventOpenLastPageGeneral(Button* but = nullptr);
 	void eventDeleteBook(Button* but = nullptr);
-	void openFile(const fs::path& file);
+	void openFile(const char* file);
 
 	// browser
 	void eventArchiveProgress(const SDL_UserEvent& user);
@@ -55,29 +51,6 @@ public:
 	void eventNextDir(Button* but = nullptr);
 	void eventPrevDir(Button* but = nullptr);
 	void eventExitReader(Button* but = nullptr);
-
-#ifdef DOWNLOADER
-	// downloader
-	void eventOpenDownloader(Button* but = nullptr);
-	void eventSwitchSource(Button* but = nullptr);
-	void eventQuery(Button* but = nullptr);
-	void eventShowComicInfo(Button* but = nullptr);
-	void eventSelectAllChapters(Button* but);
-	void eventSelectChapter(Button* but);
-	void eventDownloadAllChapters(Button* but = nullptr);
-	void eventDownloadChapter(Button* but);
-	void eventDownloadComic(Button* but);
-
-	// downloads
-	void eventOpenDownloadList(Button* but = nullptr);
-	void eventDownloadProgress();
-	void eventDownloadNext();
-	void eventDownloadFinish();
-	void eventDownloadDelete(Button* but);
-	void eventResumeDownloads(Button* but = nullptr);
-	void eventStopDownloads(Button* but = nullptr);
-	void eventClearDownloads(Button* but = nullptr);
-#endif
 
 	// settings
 	void eventOpenSettings(Button* but = nullptr);
@@ -122,13 +95,9 @@ public:
 	void eventClosePopup(Button* but = nullptr);
 	void eventCloseContext(Button* but = nullptr);
 	void eventResizeComboContext(Layout* lay = nullptr);
-	void eventTryExit(Button* but = nullptr);
-	void eventForceExit(Button* but = nullptr);
+	void eventExit(Button* but = nullptr);
 	void setPopupLoading();
 
-#ifdef DOWNLOADER
-	Downloader* getDownloader();
-#endif
 	ProgState* getState();
 	Browser* getBrowser();
 
@@ -136,7 +105,7 @@ private:
 	void switchPictures(bool fwd, string_view picname);
 	void offerMoveBooks(fs::path&& oldLib);
 	static size_t finishComboBox(Button* but);
-	template <class T, class... A> void setState(A&&... args);
+	template <Derived<ProgState> T, class... A> void setState(A&&... args);
 	void reposizeWindow(ivec2 dres, ivec2 wsiz);
 };
 
@@ -147,9 +116,3 @@ inline ProgState* Program::getState() {
 inline Browser* Program::getBrowser() {
 	return browser.get();
 }
-
-#ifdef DOWNLOADER
-inline Downloader* Program::getDownloader() {
-	return &downloader;
-}
-#endif

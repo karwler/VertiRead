@@ -4,14 +4,14 @@ It's basically just an image viewer that shows all pictures of a directory/archi
 Currently supported file formats are whatever SDL2_image and libarchive support.  
 
 ## Build
-Used libraries are SDL2, SDL2_image, SDL2_ttf, libarchive, glm and by extension FreeType, HarfBuzz, libtiff, libwebp, stb_image and zlib. The included default font is BrisaSans.  
-The CMakeLists.txt is written for at least CMake 3.12.4 with Clang, GCC, MinGW or MSVC which need to support C++17.  
+Used libraries are SDL2, SDL2_image, FreeType, libarchive, glm and by extension libtiff, libwebp, stb_image and zlib. The included default font is BrisaSans.  
+The CMakeLists.txt is written for at least CMake 3.12.4 with Clang, GCC, MinGW or MSVC which need to support C++ 20.  
 You can generate project files for a debug build by running CMake with the "-DCMAKE_BUILD_TYPE=Debug" option. Otherwise it'll default to a release build.  
 By default the Program uses OpenGL 3.0, which can be switched to OpenGL ES 3.0 with "-DOPENGLES=1" or entirely disabled with "-DOPENGL=0".  
 Support for DirectX 11 and Vulkan 1.0 can be enabled by setting the options "-DDIRECTX=1" and "-DVULKAN=1".  
 
 ### Linux
-Most dependencies need to be installed manually. Installing the development packages for libsdl2 libsdl2-image libsdl2-ttf and libarchive should do the trick.  
+Most dependencies need to be installed manually. Installing the development packages for SDL 2, SDL_image 2, FreeType 2 and libarchive should do the trick.  
 To build an AppImage run CMake with the "-DAPPIMAGE=1" option.  
 Settings files are being saved in "~/.local/share/vertiread".  
 
@@ -37,18 +37,17 @@ nmake
 ```
 
 ### Recompiling shaders
-The shader code for DirectX and Vulkan is stored in the header files in "src/engine/shaders".  
-These files can be recreated with these python scripts, as long as fxc or glslc are installed.  
+The shader code for DirectX, OpenGL and Vulkan is stored in the header files in "src/engine/shaders".  
+These files can be recreated from the files in "rsc/shaders" with these python scripts, as long as fxc or glslc are installed.  
 
-```batch
-python rsc/dx_shaders.py
-```
 ```bash
+python rsc/dx_shaders.py
+python rsc/gl_shaders.py
 python rsc/vk_shaders.py
 ```
 
 ## How to use it
-The idea is that you have a library directory in which you have your comics saved in form of pictures or archives of pictures. The location of this directory can be changed in the settings.  
+The idea is that you have a library directory in which you have your books saved in form of pictures or archives of pictures. The location of this directory can be changed in the settings.  
 Left clicking on a book in the book list will take you to the file explorer, while right clicking on a book will show you further options, like going to the last viewed page.  
 The last button in the book list allows you to navigate through files outside of the library directory. While in the book list or browser view, you can drag and drop a folder or file into the window to browse/open it. It's also possible to start the program with a file/directory path as a command line argument to start in the page browser or reader.  
 The reader has a hidden side panel on the left.  
@@ -58,6 +57,13 @@ The direction in which pictures in the reader are stacked can be set in the sett
 The program supports keyboard and controller bindings. DirectInput and XInput are handled separately. The bindings can be changed in the settings.  
 To reset certain settings, edit or delete the corresponding ini files in the settings directory or use the reset button in the settings menu to reset all settings.  
 Among the program's resource files is a "themes.ini" file which can be used to edit the available color schemes. If there's a not empty "themes.ini" in the settings directory, it'll override the default themes file.  
+
+### Command line arguments
+|Argument|Description|
+|-|-|
+|&lt;path&gt;|Path to a file or directory to open.|
+|-c|Don't bypass the X11 compositor.|
+|-f|Don't write to a log file.|
 
 ## Supported files
 - images: bmp, gif, jpg, lbm, pcx, png, pnm, svg, tga, tiff, webp, xcf, xpm, xv

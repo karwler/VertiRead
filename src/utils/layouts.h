@@ -40,9 +40,9 @@ public:
 	virtual void navSelectNext(size_t id, int mid, Direction dir);
 	virtual void navSelectFrom(int mid, Direction dir);
 
-	template <class T = Widget> T* getWidget(size_t id) const;
+	template <Class T = Widget> T* getWidget(size_t id) const;
 	const vector<Widget*>& getWidgets() const;
-	void setWidgets(vector<Widget*>&& wgts);	// not suitable for using on a ReaderBox, use the overload
+	virtual void setWidgets(vector<Widget*>&& wgts);	// not suitable for using on a ReaderBox, use setPictures
 	void insertWidget(size_t id, Widget* wgt);
 	void replaceWidget(size_t id, Widget* widget);
 	void deleteWidget(size_t id);
@@ -59,7 +59,6 @@ protected:
 	void clearWidgets();
 	virtual void calculateWidgetPositions();
 	virtual void postWidgetsChange();
-	virtual ivec2 listSize() const;
 
 	void navSelectWidget(size_t id, int mid, Direction dir);
 private:
@@ -68,7 +67,7 @@ private:
 	mvec2 findMinMaxSelectedID() const;
 };
 
-template <class T>
+template <Class T>
 T* Layout::getWidget(size_t id) const {
 	return static_cast<T*>(widgets[id]);
 }
@@ -141,7 +140,7 @@ public:
 };
 
 // mix between popup and overlay for context menus
-class Context : public Popup {
+class Context final : public Popup {
 private:
 	svec2 pos;
 	LCall resizeCall;
@@ -153,20 +152,17 @@ public:
 	void onResize() final;
 	ivec2 position() const final;
 
-	template <class T = Widget> T* owner() const;
+	template <Class T = Widget> T* owner() const;
 	void setRect(const Recti& rct);
 };
 
-template <class T>
+template <Class T>
 inline T* Context::owner() const {
 	return reinterpret_cast<T*>(parent);
 }
 
 // places widgets vertically through which the user can scroll (DON"T PUT SCROLL AREAS INTO OTHER SCROLL AREAS)
-class ScrollArea : public Layout {
-protected:
-	ScrollBar scroll;
-
+class ScrollArea : public Layout, protected Scrollable {
 public:
 	using Layout::Layout;
 	~ScrollArea() override = default;
@@ -174,7 +170,6 @@ public:
 	void drawSelf(const Recti& view) override;
 	void onResize() override;
 	void tick(float dSec) override;
-	void postInit() override;
 	void onHold(ivec2 mPos, uint8 mBut) override;
 	void onDrag(ivec2 mPos, ivec2 mMov) override;
 	void onUndrag(ivec2 mPos, uint8 mBut) override;
@@ -190,6 +185,7 @@ public:
 	float getScrollLocation() const;
 	void setScrollLocation(float loc);
 
+	void setWidgets(vector<Widget*>&& wgts) override;
 	Recti frame() const override;
 	ivec2 wgtPosition(size_t id) const override;
 	ivec2 wgtSize(size_t id) const override;
@@ -199,26 +195,29 @@ public:
 
 protected:
 	void scrollToSelected();
+	void calculateWidgetPositions() override;
 	void postWidgetsChange() override;
 	virtual int wgtRPos(size_t id) const;
 	virtual int wgtREnd(size_t id) const;
+	size_t firstWidgetAt(int rpos) const;
 
 private:
 	void scrollToFollowing(size_t id, bool prev);
 };
 
 inline Recti ScrollArea::barRect() const {
-	return ScrollBar::barRect(listSize(), position(), size(), direction.vertical());
+	return Scrollable::barRect(position(), size(), direction.vertical());
 }
 
 inline Recti ScrollArea::sliderRect() const {
-	return scroll.sliderRect(listSize(), position(), size(), direction.vertical());
+	return Scrollable::sliderRect(position(), size(), direction.vertical());
 }
 
 // places items as tiles one after another
-class TileBox : public ScrollArea {
+class TileBox final : public ScrollArea {
 public:
 	static constexpr int defaultItemHeight = 30;
+
 private:
 	int wheight;
 
@@ -244,16 +243,16 @@ private:
 };
 
 // for scrolling through pictures
-class ReaderBox : public ScrollArea {
+class ReaderBox final : public ScrollArea {
 private:
 	static constexpr float menuHideTimeout = 3.f;
 	static inline const string emptyFile;
 
+	bool countDown = true;	// whether to decrease cursorTimer until cursor hide
 	vector<string> picNames;
 	size_t startPicId;
 	float cursorTimer = menuHideTimeout;	// time left until cursor/overlay disappears
 	float zoom;
-	bool countDown = true;	// whether to decrease cursorTimer until cursor hide
 
 public:
 	ReaderBox(const Size& size = Size(), Direction dir = defaultDirection, float fzoom = Settings::defaultZoom, int space = Settings::defaultSpacing, bool pad = false);
@@ -261,10 +260,9 @@ public:
 
 	void drawSelf(const Recti& view) final;
 	void tick(float dSec) final;
-	void postInit() final;
 	void onMouseMove(ivec2 mPos, ivec2 mMov) final;
 
-	void setWidgets(vector<pair<string, Texture*>>& imgs, const string& startPic);
+	void setPictures(vector<pair<string, Texture*>>& imgs, string_view startPic);
 	bool showBar() const;
 	float getZoom() const;
 	void setZoom(float factor);
@@ -272,14 +270,10 @@ public:
 	const string& firstPage() const;
 	const string& lastPage() const;
 	const string& curPage() const;
-	ivec2 wgtPosition(size_t id) const final;
 	ivec2 wgtSize(size_t id) const final;
 
 private:
 	void calculateWidgetPositions() final;
-	ivec2 listSize() const final;
-	int wgtRPos(size_t id) const final;
-	int wgtREnd(size_t id) const final;
 };
 
 inline float ReaderBox::getZoom() const {
@@ -295,5 +289,5 @@ inline const string& ReaderBox::lastPage() const {
 }
 
 inline const string& ReaderBox::curPage() const {
-	return !picNames.empty() ? picNames[direction.positive() ? visibleWidgets().x : visibleWidgets().y - 1] : emptyFile;
+	return !picNames.empty() ? picNames[direction.positive() ? firstWidgetAt(listPos[direction.vertical()]) : visibleWidgets().y - 1] : emptyFile;
 }

@@ -214,7 +214,7 @@ Widget* Scene::getSelected(ivec2 mPos) {
 
 	for (;;) {
 		Recti frame = box->frame();
-		if (vector<Widget*>::const_iterator it = std::find_if(box->getWidgets().begin(), box->getWidgets().end(), [&frame, &mPos](const Widget* wi) -> bool { return wi->rect().intersect(frame).contains(mPos); }); it != box->getWidgets().end()) {
+		if (vector<Widget*>::const_iterator it = rng::find_if(box->getWidgets(), [&frame, &mPos](const Widget* wi) -> bool { return wi->rect().intersect(frame).contains(mPos); }); it != box->getWidgets().end()) {
 			if (Layout* lay = dynamic_cast<Layout*>(*it))
 				box = lay;
 			else

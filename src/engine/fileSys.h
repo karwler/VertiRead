@@ -14,12 +14,11 @@ struct IniLine {
 	};
 
 	Type type = Type::empty;
-	string prp;
-	string key;
-	string val;
+	string_view prp;
+	string_view key;
+	string_view val;
 
 	Type setLine(string_view str);
-	static IniLine readLine(string_view& text);
 
 	template <class... T> static void writeTitle(std::ofstream& ofs, T&&... title);
 	template <class P, class... T> static void writeVal(std::ofstream& ofs, P&& prp, T&&... val);
@@ -28,17 +27,17 @@ struct IniLine {
 
 template <class... T>
 void IniLine::writeTitle(std::ofstream& ofs, T&&... title) {
-	((ofs << '[') << ... << std::forward<T>(title)) << ']' << linend;
+	((ofs << '[') << ... << std::forward<T>(title)) << ']' << LINEND;
 }
 
 template <class P, class... T>
 void IniLine::writeVal(std::ofstream& ofs, P&& prp, T&&... val) {
-	((ofs << std::forward<P>(prp) << '=') << ... << std::forward<T>(val)) << linend;
+	((ofs << std::forward<P>(prp) << '=') << ... << std::forward<T>(val)) << LINEND;
 }
 
 template <class P, class K, class... T>
 void IniLine::writeKeyVal(std::ofstream& ofs, P&& prp, K&& key, T&&... val) {
-	((ofs << std::forward<P>(prp) << '[' << std::forward<K>(key) << "]=") << ... << std::forward<T>(val)) << linend;
+	((ofs << std::forward<P>(prp) << '[' << std::forward<K>(key) << "]=") << ... << std::forward<T>(val)) << LINEND;
 }
 
 // handles all filesystem interactions
@@ -100,7 +99,7 @@ private:
 	void* fontconfig = nullptr;
 #endif
 public:
-	FileSys();
+	FileSys(const uset<string>& cmdFlags);
 	~FileSys();
 
 	vector<string> getAvailableThemes() const;
@@ -109,26 +108,25 @@ public:
 	void saveLastPage(string_view book, string_view drc, string_view fname) const;
 	Settings* loadSettings() const;
 	void saveSettings(const Settings* sets) const;
-	array<Binding, Binding::names.size()> getBindings() const;
+	array<Binding, Binding::names.size()> loadBindings() const;
 	void saveBindings(const array<Binding, Binding::names.size()>& bindings) const;
-	fs::path findFont(const string& font) const;	// on success returns absolute path to font file, otherwise returns empty path
+	fs::path findFont(const fs::path& font) const;	// on success returns absolute path to font file, otherwise returns empty path
 	vector<string> listFonts() const;
 
-	static vector<fs::path> listDir(const fs::path& drc, bool files = true, bool dirs = true, bool showHidden = true);
-	static pair<vector<fs::path>, vector<fs::path>> listDirSep(const fs::path& drc, bool showHidden = true);	// first is list of files, second is list of directories
+	static vector<string> listDir(const char* drc, bool files = true, bool dirs = true, bool showHidden = true);
+	static pair<vector<string>, vector<string>> listDirSep(const char* drc, bool showHidden = true);	// first is list of files, second is list of directories
 
-	static vector<uint8> readBinFile(const fs::path& file);
-	static fs::path validateFilename(const fs::path& file);
-	static bool isPicture(const fs::path& file);
+	static vector<cbyte> readBinFile(const fs::path& file);
+	static bool isPicture(const char* file);
 	static bool isFont(const fs::path& file);
-	static bool isArchive(const fs::path& file);
-	static bool isPictureArchive(const fs::path& file);
-	static bool isArchivePicture(const fs::path& file, string_view pname);
+	static bool isArchive(const char* file);
+	static bool isPictureArchive(const char* file);
+	static bool isArchivePicture(const char* file, string_view pname);
 
-	static archive* openArchive(const fs::path& file);
-	static vector<string> listArchiveFiles(const fs::path& file);
+	static archive* openArchive(const char* file);
+	static vector<string> listArchiveFiles(const char* file);
 	static void makeArchiveTreeThread(std::atomic<ThreadType>& mode, BrowserResultAsync ra, uintptr_t maxRes);
-	static SDL_Surface* loadArchivePicture(const fs::path& file, string_view pname);
+	static SDL_Surface* loadArchivePicture(const char* file, string_view pname);
 	static SDL_Surface* loadArchivePicture(archive* arch, archive_entry* entry);
 
 	static void moveContentThread(std::atomic<ThreadType>& mode, fs::path src, fs::path dst);
@@ -136,19 +134,19 @@ public:
 	fs::path dirIcons() const;
 
 private:
-	static vector<string> readFileLines(const fs::path& file);
+	static string_view readNextLine(string_view& text);
 	static string readTextFile(const fs::path& file);
-	template <class C, bool le> static string processTextFile(std::ifstream& ifs, std::streampos offs);
-	template <class C, bool le> static C readChar(std::ifstream& ifs, std::streampos& len);
+	template <Integer C, std::endian bo> static string processTextFile(std::ifstream& ifs, std::streampos offs);
+	template <Integer C, std::endian bo> static C readChar(std::ifstream& ifs, std::streampos& len);
 	static void writeChar8(string& str, char32_t ch);
-	template <class T> static void readFileContent(std::ifstream& ifs, T& data, std::streampos len);
+	template <Class T> static void readFileContent(std::ifstream& ifs, T& data, std::streampos len);
 
 	static bool isPicture(SDL_RWops* ifh, string_view ext);
 	static bool isPicture(archive* arch, archive_entry* entry);
-	static pair<uptr<uint8[]>, int64> readArchiveEntry(archive* arch, archive_entry* entry);
-	static fs::path searchFontDirs(string_view font, std::initializer_list<fs::path> dirs);
+	static pair<uptr<cbyte[]>, int64> readArchiveEntry(archive* arch, archive_entry* entry);
+	static string searchFontDirs(const fs::path& font, std::initializer_list<fs::path> dirs);
 #ifdef _WIN32
-	static vector<fs::path> listDrives();
+	static vector<string> listDrives();
 #endif
 	static void SDLCALL logWrite(void* userdata, int category, SDL_LogPriority priority, const char* message);
 };
@@ -161,6 +159,6 @@ inline fs::path FileSys::dirIcons() const {
 	return dirConfs / "icons";
 }
 
-inline bool FileSys::isPicture(const fs::path& file) {
-	return isPicture(SDL_RWFromFile(file.u8string().c_str(), "rb"), file.extension().u8string());
+inline bool FileSys::isPicture(const char* file) {
+	return isPicture(SDL_RWFromFile(file, "rb"), fileExtension(file));
 }

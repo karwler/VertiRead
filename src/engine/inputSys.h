@@ -17,10 +17,10 @@ private:
 
 	vector<Controller> controllers;	// currently connected game controllers
 	array<Binding, Binding::names.size()> bindings;
-	ivec2 mouseMove = { 0, 0 };		// last mouse motion
+	ivec2 mouseMove = ivec2(0);		// last mouse motion
 	uint32 moveTime = 0;			// timestamp of last recorded mouseMove
 public:
-	optional<uint32> mouseWin;		// last windows id the mouse was in
+	optional<uint32> mouseWin;		// last window id the mouse was in
 
 	InputSys();
 	~InputSys();
@@ -51,6 +51,7 @@ public:
 	ivec2 getMouseMove() const;
 	Binding& getBinding(Binding::Type type);
 	const array<Binding, Binding::names.size()>& getBindings() const;
+	string getBoundName(Binding::Type type) const;
 	void resetBindings();
 	void reloadControllers();
 	void simulateMouseMove();
@@ -73,11 +74,11 @@ inline bool InputSys::isPressed(Binding::Type type, float& amt) const {
 }
 
 inline bool InputSys::isPressedB(uint8 jbutton) const {
-	return std::find_if(controllers.begin(), controllers.end(), [jbutton](const Controller& it) -> bool { return !it.gamepad && SDL_JoystickGetButton(it.joystick, jbutton); }) != controllers.end();
+	return rng::find_if(controllers, [jbutton](const Controller& it) -> bool { return !it.gamepad && SDL_JoystickGetButton(it.joystick, jbutton); }) != controllers.end();
 }
 
 inline bool InputSys::isPressedG(SDL_GameControllerButton gbutton) const {
-	return std::find_if(controllers.begin(), controllers.end(), [gbutton](const Controller& it) -> bool { return !it.gamepad && SDL_GameControllerGetButton(it.gamepad, gbutton); }) != controllers.end();
+	return rng::find_if(controllers, [gbutton](const Controller& it) -> bool { return !it.gamepad && SDL_GameControllerGetButton(it.gamepad, gbutton); }) != controllers.end();
 }
 
 inline ivec2 InputSys::getMouseMove() const {

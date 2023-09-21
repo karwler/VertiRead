@@ -13,10 +13,10 @@ Program::~Program() {
 	delete state;
 }
 
-void Program::start() {
+void Program::start(const vector<string>& cmdVals) {
 	eventOpenBookList();
-	if (!World::getVals().empty())
-		openFile(fs::u8path(World::getVals()[0]));
+	if (!cmdVals.empty())
+		openFile(cmdVals[0].c_str());
 }
 
 void Program::tick() {
@@ -30,17 +30,17 @@ void Program::tick() {
 // BOOKS
 
 void Program::eventOpenBookList(Button*) {
-	browser = std::make_unique<Browser>(World::sets()->getDirLib(), World::sets()->getDirLib());
+	browser = std::make_unique<Browser>(valcp(World::sets()->getDirLib()), valcp(World::sets()->getDirLib()));
 	setState<ProgBooks>();
 }
 
 void Program::eventOpenPageBrowser(Button* but) {
-	if (browser = Browser::openExplorer(World::sets()->getDirLib() / fs::u8path(static_cast<Label*>(but)->getText()), fs::path(), &Program::eventOpenBookList); browser)
+	if (browser = Browser::openExplorer(World::sets()->getDirLib() / static_cast<Label*>(but)->getText(), string(), &Program::eventOpenBookList); browser)
 		setState<ProgPageBrowser>();
 }
 
 void Program::eventOpenPageBrowserGeneral(Button*) {
-	if (browser = Browser::openExplorer(Browser::topDir, fs::path(), &Program::eventOpenBookList); browser)
+	if (browser = Browser::openExplorer(Browser::topDir, string(), &Program::eventOpenBookList); browser)
 		setState<ProgPageBrowser>();
 }
 
@@ -59,7 +59,7 @@ void Program::eventOpenBookContextGeneral(Button* but) {
 void Program::eventOpenLastPage(Button*) {
 	Label* lbl = static_cast<Label*>(World::scene()->getContext()->owner());
 	if (auto [ok, drc, fname] = World::fileSys()->getLastPage(lbl->getText()); ok) {
-		if (browser->openPicture(World::sets()->getDirLib() / fs::u8path(lbl->getText()), World::sets()->getDirLib() / fs::u8path(lbl->getText()) / fs::u8path(drc), fs::u8path(fname)))
+		if (browser->openPicture(World::sets()->getDirLib() / lbl->getText(), World::sets()->getDirLib() / lbl->getText() / drc, std::move(fname)))
 			setPopupLoading();
 	} else
 		World::scene()->setPopup(state->createPopupMessage("No last page entry", &Program::eventClosePopup));
@@ -67,7 +67,7 @@ void Program::eventOpenLastPage(Button*) {
 
 void Program::eventOpenLastPageGeneral(Button*) {
 	if (auto [ok, drc, fname] = World::fileSys()->getLastPage(ProgState::dotStr); ok) {
-		if (browser->openPicture(Browser::topDir, fs::u8path(drc), fs::u8path(fname)))
+		if (browser->openPicture(Browser::topDir, std::move(drc), std::move(fname)))
 			setPopupLoading();
 	} else
 		World::scene()->setPopup(state->createPopupMessage("No last page entry", &Program::eventClosePopup));
@@ -76,7 +76,7 @@ void Program::eventOpenLastPageGeneral(Button*) {
 void Program::eventDeleteBook(Button*) {
 	try {
 		Label* lbl = World::scene()->getContext()->owner<Label>();
-		fs::remove_all(World::sets()->getDirLib() / fs::u8path(lbl->getText()));
+		fs::remove_all(toPath(World::sets()->getDirLib() / lbl->getText()));
 		World::scene()->setContext(nullptr);
 		lbl->getParent()->deleteWidget(lbl->getIndex());
 	} catch (const std::runtime_error& err) {
@@ -84,14 +84,15 @@ void Program::eventDeleteBook(Button*) {
 	}
 }
 
-void Program::openFile(const fs::path& file) {
+void Program::openFile(const char* file) {
 	switch (browser->openFile(file)) {
-	case Browser::RWAIT:
+	using enum Browser::Response;
+	case RWAIT:
 		if (ProgPageBrowser* pb = dynamic_cast<ProgPageBrowser*>(state))
 			pb->resetFileIcons();
 		setPopupLoading();
 		break;
-	case Browser::REXPLORER:
+	case REXPLORER:
 		setState<ProgPageBrowser>();
 	}
 }
@@ -99,7 +100,7 @@ void Program::openFile(const fs::path& file) {
 // BROWSER
 
 void Program::eventArchiveProgress(const SDL_UserEvent& user) {
-	state->updatePopupMessage("Loading " + toStr(uintptr_t(user.data1)));
+	state->updatePopupMessage(std::format("Loading {}", uintptr_t(user.data1)));
 }
 
 void Program::eventArchiveFinished(const SDL_UserEvent& user) {
@@ -131,12 +132,12 @@ void Program::eventBrowserGoUp(Button*) {
 }
 
 void Program::eventBrowserGoIn(Button* but) {
-	if (browser->goIn(fs::u8path(static_cast<Label*>(but)->getText())))
+	if (browser->goIn(static_cast<Label*>(but)->getText()))
 		World::scene()->resetLayouts();
 }
 
 void Program::eventBrowserGoFile(Button* but) {
-	if (browser->goFile(fs::u8path(static_cast<Label*>(but)->getText()))) {
+	if (browser->goFile(static_cast<Label*>(but)->getText())) {
 		static_cast<ProgPageBrowser*>(state)->resetFileIcons();
 		setPopupLoading();
 	}
@@ -144,7 +145,7 @@ void Program::eventBrowserGoFile(Button* but) {
 
 void Program::eventBrowserGoTo(Button* but) {
 	LabelEdit* le = static_cast<LabelEdit*>(but);
-	if (Browser::Response rs = browser->goTo(browser->getRootDir() == Browser::topDir ? fs::u8path(le->getText()) : World::sets()->getDirLib() / fs::u8path(le->getText())); rs & Browser::RERROR) {
+	if (Browser::Response rs = browser->goTo(browser->getRootDir() == Browser::topDir ? le->getText().c_str() : (World::sets()->getDirLib() / le->getText()).c_str()); rs & Browser::RERROR) {
 		le->setText(le->getOldText());
 		World::scene()->setPopup(state->createPopupMessage("Invalid path", &Program::eventClosePopup));
 	} else {
@@ -163,7 +164,7 @@ void Program::eventPreviewProgress(const SDL_UserEvent& user) {
 		ProgFileExplorer* pe = static_cast<ProgFileExplorer*>(state);
 		const vector<Widget*>& wgts = pe->fileList->getWidgets();
 		auto [pos, end] = ndata[0] ? pair(wgts.begin() + pe->dirEnd, wgts.begin() + pe->fileEnd) : pair(wgts.begin(), wgts.begin() + pe->dirEnd);
-		if (vector<Widget*>::const_iterator it = std::lower_bound(pos, end, ndata + 1, [](const Widget* a, const char* b) -> bool { return StrNatCmp::less(static_cast<const Label*>(a)->getText(), b); }); it != end && static_cast<Label*>(*it)->getText() == ndata + 1) {
+		if (vector<Widget*>::const_iterator it = std::lower_bound(pos, end, string_view(ndata + 1), [](const Widget* a, string_view b) -> bool { return StrNatCmp::less(static_cast<const Label*>(a)->getText(), b); }); it != end && static_cast<Label*>(*it)->getText() == ndata + 1) {
 			static_cast<Label*>(*it)->setTex(tex, true);
 			World::renderer()->synchTransfer();
 		} else {
@@ -194,7 +195,7 @@ void Program::eventReaderProgress(const SDL_UserEvent& user) {
 	delete pp;
 
 	char* text = static_cast<char*>(user.data2);
-	state->updatePopupMessage("Loading "s + text);
+	state->updatePopupMessage(std::format("Loading {}", text));
 	delete[] text;
 }
 
@@ -202,13 +203,13 @@ void Program::eventReaderFinished(const SDL_UserEvent& user) {
 	browser->stopThread();
 	if (BrowserResultPicture* rp = static_cast<BrowserResultPicture*>(user.data1)) {
 		if (rp->archive)
-			std::sort(rp->pics.begin(), rp->pics.end(), [](const pair<string, Texture*>& a, const pair<string, Texture*>& b) -> bool { return StrNatCmp::less(a.first, b.first); });
+			rng::sort(rp->pics, [](const pair<string, Texture*>& a, const pair<string, Texture*>& b) -> bool { return StrNatCmp::less(a.first, b.first); });
 		else if (!user.data2)
-			std::reverse(rp->pics.begin(), rp->pics.end());
+			rng::reverse(rp->pics);
 
 		browser->finishLoadPictures(*rp);
 		setState<ProgReader>();
-		static_cast<ProgReader*>(state)->reader->setWidgets(rp->pics, rp->file.filename().u8string());
+		static_cast<ProgReader*>(state)->reader->setPictures(rp->pics, filename(rp->file));
 		delete rp;
 	} else
 		World::scene()->setPopup(state->createPopupMessage("Failed to load pictures", &Program::eventClosePopup));
@@ -249,112 +250,6 @@ void Program::eventExitReader(Button*) {
 	setState<ProgPageBrowser>();
 }
 
-// DOWNLOADER
-
-#ifdef DOWNLOADER
-void Program::eventOpenDownloader(Button*) {
-	setState<ProgDownloader>();
-}
-
-void Program::eventSwitchSource(Button* but) {
-	ProgDownloader* pd = static_cast<ProgDownloader*>(state);
-	downloader.setSource(WebSource::Type(but->getIndex()));
-	World::scene()->getContext()->owner<ComboBox>()->setCurOpt(downloader.getSource()->source());
-	World::scene()->setContext(nullptr);
-	pd->printResults({});
-	pd->printInfo(vector<pair<string, string>>());
-}
-
-void Program::eventQuery(Button*) {
-	ProgDownloader* pd = static_cast<ProgDownloader*>(state);
-	pd->printResults(downloader.getSource()->query(pd->query->getText()));
-}
-
-void Program::eventShowComicInfo(Button* but) {
-	ProgDownloader* pd = static_cast<ProgDownloader*>(state);
-	WebSource* wsrc = downloader.getSource();
-	string url = pd->resultUrls[but->getIndex()];
-	pd->printInfo(wsrc->getChapters(url));
-}
-
-void Program::eventSelectAllChapters(Button* but) {
-	for (Widget* it : static_cast<ProgDownloader*>(state)->chapters->getWidgets())
-		static_cast<Layout*>(it)->getWidget<CheckBox>(0)->on = static_cast<CheckBox*>(but)->on;
-}
-
-void Program::eventSelectChapter(Button* but) {
-	static_cast<ProgDownloader*>(state)->chapters->getWidget<Layout>(but->getParent()->getIndex())->getWidget<CheckBox>(0)->toggle();
-}
-
-void Program::eventDownloadAllChapters(Button*) {
-	ProgDownloader* pd = static_cast<ProgDownloader*>(state);
-	downloader.downloadComic(pd->curInfo());
-
-	pd->chaptersTick->on = false;
-	for (Widget* it : pd->chapters->getWidgets())
-		static_cast<Layout*>(it)->getWidget<CheckBox>(0)->on = false;
-}
-
-void Program::eventDownloadChapter(Button* but) {
-	ProgDownloader* pd = static_cast<ProgDownloader*>(state);
-
-	downloader.downloadComic(Comic(static_cast<LabelEdit*>(*pd->results->getSelected().begin())->getText(), { pair(static_cast<Label*>(but)->getText(), pd->resultUrls[but->getParent()->getIndex()]) }));
-	but->getParent()->getWidget<CheckBox>(0)->on = false;
-}
-
-void Program::eventDownloadComic(Button* but) {
-	downloader.downloadComic(Comic(static_cast<LabelEdit*>(but)->getText(), downloader.getSource()->getChapters(static_cast<ProgDownloader*>(state)->resultUrls[but->getIndex()])));
-}
-
-// DOWNLOADS
-
-void Program::eventOpenDownloadList(Button*) {
-	setState<ProgDownloads>();
-}
-
-void Program::eventDownloadProgress() {
-	if (ProgDownloads* pd = dynamic_cast<ProgDownloads*>(state)) {
-		Label* lb = pd->list->getWidget<Layout>(0))->getWidget<Label>(0);
-		lb->setText(lb->getText() + " - " + toStr(downloader.getDlProg().x) + '/' + toStr(downloader.getDlProg().y));
-	}
-}
-
-void Program::eventDownloadNext() {
-	if (ProgDownloads* pd = dynamic_cast<ProgDownloads*>(state)) {
-		pd->list->deleteWidget(0);
-		if (!pd->list->getWidgets().empty()) {
-			Label* lb = pd->list->getWidget<Layout>(0)->getWidget<Label>(0);
-			lb->setText(lb->getText() + " - preparing");
-		}
-	}
-}
-
-void Program::eventDownloadFinish() {
-	downloader.finishProc();
-	if (ProgDownloads* pd = dynamic_cast<ProgDownloads*>(state))
-		pd->list->deleteWidget(0);
-}
-
-void Program::eventDownloadDelete(Button* but) {
-	size_t id = but->getParent()->getIndex();
-	static_cast<ProgDownloads*>(state)->list->deleteWidget(id);
-	downloader.deleteEntry(id);
-}
-
-void Program::eventResumeDownloads(Button*) {
-	downloader.startProc();
-}
-
-void Program::eventStopDownloads(Button*) {
-	downloader.interruptProc();
-}
-
-void Program::eventClearDownloads(Button*) {
-	downloader.clearQueue();
-	static_cast<ProgDownloads*>(state)->list->setWidgets({});
-}
-#endif
-
 // SETTINGS
 
 void Program::eventOpenSettings(Button*) {
@@ -374,33 +269,27 @@ void Program::eventSetSpacing(Button* but) {
 }
 
 void Program::eventSetLibraryDirLE(Button* but) {
-	fs::path oldLib = World::sets()->getDirLib();
-#ifdef DOWNLOADER
-	if (downloader.getDlState() != DownloadState::stop) {
-		World::scene()->setPopup(state->createPopupMessage("Can't change while downloading.", &Program::eventClosePopup));
-		return;
-	}
-#endif
+	fs::path oldLib = toPath(World::sets()->getDirLib());
 	LabelEdit* le = static_cast<LabelEdit*>(but);
-	if (fs::path path = fs::u8path(le->getText()); World::sets()->setDirLib(path, World::fileSys()->getDirSets()) != path) {
-		le->setText(World::sets()->getDirLib().u8string());
+	if (World::sets()->setDirLib(le->getText(), World::fileSys()->getDirSets()) != le->getText()) {
+		le->setText(World::sets()->getDirLib());
 		World::scene()->setPopup(state->createPopupMessage("Invalid directory", &Program::eventClosePopup));
 	} else
 		offerMoveBooks(std::move(oldLib));
 }
 
 void Program::eventSetLibraryDirBW(Button*) {
-	fs::path oldLib = World::sets()->getDirLib();
+	fs::path oldLib = toPath(World::sets()->getDirLib());
 	const uset<Widget*>& select = static_cast<ProgFileExplorer*>(state)->fileList->getSelected();
 
-	World::sets()->setDirLib(!select.empty() ? browser->getCurDir() / fs::u8path(static_cast<Label*>(*select.begin())->getText()) : browser->getCurDir(), World::fileSys()->getDirSets());
+	World::sets()->setDirLib(!select.empty() ? browser->getCurDir() / static_cast<Label*>(*select.begin())->getText() : browser->getCurDir(), World::fileSys()->getDirSets());
 	browser.reset();
 	eventOpenSettings();
 	offerMoveBooks(std::move(oldLib));
 }
 
 void Program::offerMoveBooks(fs::path&& oldLib) {
-	if (World::sets()->getDirLib() != oldLib) {
+	if (toPath(World::sets()->getDirLib()) != oldLib) {
 		static_cast<ProgSettings*>(state)->oldPathBuffer = std::move(oldLib);
 		World::scene()->setPopup(state->createPopupChoice("Move books to new location?", &Program::eventMoveComics, &Program::eventClosePopup));
 	}
@@ -427,7 +316,7 @@ void Program::eventMoveCancelled(Button*) {
 }
 
 void Program::eventMoveProgress(const SDL_UserEvent& user) {
-	state->updatePopupMessage("Moving " + toStr(uintptr_t(user.data1)) + '/' + toStr(uintptr_t(user.data2)));
+	state->updatePopupMessage(std::format("Moving {}/{}", uintptr_t(user.data1), uintptr_t(user.data2)));
 }
 
 void Program::eventMoveFinished(const SDL_UserEvent& user) {
@@ -506,15 +395,17 @@ void Program::eventSetTooltips(Button* but) {
 }
 
 void Program::eventSetTheme(Button* but) {
-	ComboBox* cmb = static_cast<ComboBox*>(but);
-	World::drawSys()->setTheme(cmb->getText(), World::sets(), World::fileSys());
+	ComboBox* cmb = World::scene()->getContext()->owner<ComboBox>();
+	Label* lbl = static_cast<Label*>(but);
+	World::drawSys()->setTheme(lbl->getText(), World::sets(), World::fileSys());
 	if (World::sets()->getTheme() != cmb->getText())
 		cmb->setText(World::sets()->getTheme());
+	World::scene()->setContext(nullptr);
 }
 
 void Program::eventSetFont(Button* but) {
 	string otxt = static_cast<Label*>(but)->getText();
-	World::drawSys()->setFont(otxt, World::sets(), World::fileSys());
+	World::drawSys()->setFont(toPath(otxt), World::sets(), World::fileSys());
 	state->eventRefresh();
 	if (World::sets()->font != otxt)
 		World::scene()->setPopup(state->createPopupMessage("Invalid font", &Program::eventClosePopup));
@@ -637,21 +528,7 @@ void Program::eventResizeComboContext(Layout* lay) {
 	ctx->setRect(ProgState::calcTextContextRect(ctx->getWidget<ScrollArea>(0)->getWidgets(), ctx->owner()->position(), ctx->owner()->size(), ctx->getSpacing()));
 }
 
-void Program::eventTryExit(Button*) {
-#ifdef DOWNLOADER
-	if (downloader.getDlState() == DownloadState::stop)
-		eventForceExit();
-	else
-		World::scene()->setPopup(state->createPopupChoice("Cancel downloads?", &Program::eventForceExit, &Program::eventClosePopup));
-#else
-	eventForceExit();
-#endif
-}
-
-void Program::eventForceExit(Button*) {
-#ifdef DOWNLOADER
-	downloader.interruptProc();
-#endif
+void Program::eventExit(Button*) {
 	state->eventClosing();
 	World::winSys()->close();
 }
@@ -660,7 +537,7 @@ void Program::setPopupLoading() {
 	World::scene()->setPopup(state->createPopupMessage("Loading...", &Program::eventFileLoadingCancelled, "Cancel", Alignment::center));
 }
 
-template <class T, class... A>
+template <Derived<ProgState> T, class... A>
 void Program::setState(A&&... args) {
 	delete state;
 	state = new T(std::forward<A>(args)...);

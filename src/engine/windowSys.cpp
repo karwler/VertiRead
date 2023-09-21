@@ -11,7 +11,7 @@
 #include <SDL2/SDL_image.h>
 #endif
 
-int WindowSys::start() {
+int WindowSys::start(vector<string>&& cmdVals,  uset<string>&& cmdFlags) {
 	fileSys = nullptr;
 	inputSys = nullptr;
 	program = nullptr;
@@ -19,7 +19,7 @@ int WindowSys::start() {
 	sets = nullptr;
 	int rc = EXIT_SUCCESS;
 	try {
-		init();
+		init(std::move(cmdVals), std::move(cmdFlags));
 		exec();
 	} catch (const std::runtime_error& e) {
 		logError(e.what());
@@ -44,7 +44,7 @@ int WindowSys::start() {
 	return rc;
 }
 
-void WindowSys::init() {
+void WindowSys::init(vector<string>&& cmdVals, uset<string>&& cmdFlags) {
 #if SDL_VERSION_ATLEAST(2, 0, 22)
 	SDL_SetHint(SDL_HINT_IME_SUPPORT_EXTENDED_TEXT, "1");
 #endif
@@ -61,6 +61,10 @@ void WindowSys::init() {
 	SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
 	SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
 	SDL_SetHint(SDL_HINT_MAC_CTRL_CLICK_EMULATE_RIGHT_CLICK, "1");
+#ifndef _WIN32
+	if (cmdFlags.contains(Settings::flagCompositor))
+		SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
+#endif
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER))
 		throw std::runtime_error(SDL_GetError());
 #if SDL_IMAGE_VERSION_ATLEAST(2, 6, 0)
@@ -118,17 +122,17 @@ void WindowSys::init() {
 	SDL_EventState(SDL_SENSORUPDATE, SDL_DISABLE);
 	SDL_EventState(SDL_RENDER_TARGETS_RESET, SDL_DISABLE);
 	SDL_EventState(SDL_RENDER_DEVICE_RESET, SDL_DISABLE);
-	if (SDL_RegisterEvents(SDL_USEREVENT_MAX - SDL_USEREVENT) == UINT32_MAX)
+	if (SDL_RegisterEvents(SDL_EventType(SDL_USEREVENT_MAX) - SDL_USEREVENT) == UINT32_MAX)
 		throw std::runtime_error(SDL_GetError());
 	SDL_StopTextInput();
 
-	fileSys = new FileSys;
+	fileSys = new FileSys(cmdFlags);
 	sets = fileSys->loadSettings();
 	createWindow();
 	inputSys = new InputSys;
 	scene = new Scene;
 	program = new Program;
-	program->start();
+	program->start(cmdVals);
 
 	SDL_PumpEvents();
 	SDL_FlushEvents(SDL_FIRSTEVENT, SDL_USEREVENT - 1);
@@ -165,45 +169,46 @@ void WindowSys::createWindow() {
 		flags |= SDL_WINDOW_RESIZABLE | (sets->maximized ? SDL_WINDOW_MAXIMIZED : 0) | (sets->screen != Settings::Screen::windowed ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
 	else
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_SKIP_TASKBAR;
-	SDL_Surface* icon = IMG_Load((fileSys->dirIcons() / "vertiread.svg").u8string().c_str());
+	SDL_Surface* icon = IMG_Load((fromPath(fileSys->dirIcons()) / "vertiread.svg").c_str());
 
 	array<pair<Settings::Renderer, uint32>, size_t(Settings::Renderer::max)> renderers;
 	switch (sets->renderer) {
+	using enum Settings::Renderer;
 #ifdef WITH_DIRECTX
-	case Settings::Renderer::directx:
+	case directx:
 		renderers = {
-			pair(Settings::Renderer::directx, 0),
+			pair(directx, 0),
 #ifdef WITH_OPENGL
-			pair(Settings::Renderer::opengl, SDL_WINDOW_OPENGL),
+			pair(opengl, SDL_WINDOW_OPENGL),
 #endif
 #ifdef WITH_VULKAN
-			pair(Settings::Renderer::vulkan, SDL_WINDOW_VULKAN)
+			pair(vulkan, SDL_WINDOW_VULKAN)
 #endif
 		};
 		break;
 #endif
 #ifdef WITH_OPENGL
-	case Settings::Renderer::opengl:
+	case opengl:
 		renderers = {
-			pair(Settings::Renderer::opengl, SDL_WINDOW_OPENGL),
+			pair(opengl, SDL_WINDOW_OPENGL),
 #ifdef WITH_DIRECTX
-			pair(Settings::Renderer::directx, 0),
+			pair(directx, 0),
 #endif
 #ifdef WITH_VULKAN
-			pair(Settings::Renderer::vulkan, SDL_WINDOW_VULKAN)
+			pair(vulkan, SDL_WINDOW_VULKAN)
 #endif
 		};
 		break;
 #endif
 #ifdef WITH_VULKAN
-	case Settings::Renderer::vulkan:
+	case vulkan:
 		renderers = {
-			pair(Settings::Renderer::vulkan, SDL_WINDOW_VULKAN),
+			pair(vulkan, SDL_WINDOW_VULKAN),
 #ifdef WITH_OPENGL
-			pair(Settings::Renderer::opengl, SDL_WINDOW_OPENGL),
+			pair(opengl, SDL_WINDOW_OPENGL),
 #endif
 #ifdef WITH_DIRECTX
-			pair(Settings::Renderer::directx, 0)
+			pair(directx, 0)
 #endif
 		};
 #endif
@@ -232,7 +237,7 @@ void WindowSys::createSingleWindow(uint32 flags, SDL_Surface* icon) {
 	SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, SDL_DISABLE);
 	SDL_Window* win = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets->resolution.x, sets->resolution.y, flags);
 	if (!win)
-		throw std::runtime_error("Failed to create window:"s + linend + SDL_GetError());
+		throw std::runtime_error(std::format("Failed to create window:" LINEND "{}", SDL_GetError()));
 	windows.emplace(Renderer::singleDspId, win);
 
 	drawSys = new DrawSys(windows, sets, fileSys, int(128.f / fallbackDpi * winDpi));
@@ -245,11 +250,11 @@ void WindowSys::createSingleWindow(uint32 flags, SDL_Surface* icon) {
 void WindowSys::createMultiWindow(uint32 flags, SDL_Surface* icon) {
 	windows.reserve(sets->displays.size());
 	SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, SDL_ENABLE);
-	int minId = std::min_element(sets->displays.begin(), sets->displays.end(), [](const pair<const int, Recti>& a, const pair<const int, Recti>& b) -> bool { return a.first < b.first; })->first;
+	int minId = rng::min_element(sets->displays, [](const pair<const int, Recti>& a, const pair<const int, Recti>& b) -> bool { return a.first < b.first; })->first;
 	for (const auto& [id, rect] : sets->displays) {
-		SDL_Window* win = windows.emplace(id, SDL_CreateWindow((title + toStr(id)).c_str(), SDL_WINDOWPOS_CENTERED_DISPLAY(id), SDL_WINDOWPOS_CENTERED_DISPLAY(id), rect.w, rect.h, id != minId ? flags : flags & ~SDL_WINDOW_SKIP_TASKBAR)).first->second;
+		SDL_Window* win = windows.emplace(id, SDL_CreateWindow(std::format("{} {}", title, id).c_str(), SDL_WINDOWPOS_CENTERED_DISPLAY(id), SDL_WINDOWPOS_CENTERED_DISPLAY(id), rect.w, rect.h, id != minId ? flags : flags & ~SDL_WINDOW_SKIP_TASKBAR)).first->second;
 		if (!win)
-			throw std::runtime_error("Failed to create window:"s + linend + SDL_GetError());
+			throw std::runtime_error(std::format("Failed to create window:" LINEND "{}", SDL_GetError()));
 		SDL_SetWindowIcon(win, icon);
 	}
 
@@ -276,7 +281,7 @@ void WindowSys::recreateWindows() {
 void WindowSys::handleEvent(const SDL_Event& event) {
 	switch (event.type) {
 	case SDL_QUIT:
-		program->eventTryExit();
+		program->eventExit();
 		break;
 	case SDL_DISPLAYEVENT:
 		eventDisplay(event.display);
@@ -339,7 +344,7 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 		inputSys->eventFingerMove(event.tfinger);
 		break;
 	case SDL_DROPFILE:
-		program->getState()->eventFileDrop(fs::u8path(event.drop.file));
+		program->getState()->eventFileDrop(event.drop.file);
 		SDL_free(event.drop.file);
 		break;
 	case SDL_DROPTEXT:
@@ -364,17 +369,6 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 	case SDL_USEREVENT_ARCHIVE_FINISHED:
 		program->eventArchiveFinished(event.user);
 		break;
-#ifdef DOWNLOADER
-	case SDL_USEREVENT_DOWNLOAD_PROGRESS:
-		program->eventDownloadProgress();
-		break;
-	case SDL_USEREVENT_DOWNLOAD_NEXT:
-		program->eventDownloadNext();
-		break;
-	case SDL_USEREVENT_DOWNLOAD_FINISHED:
-		program->eventDownloadFinish();
-		break;
-#endif
 	case SDL_USEREVENT_MOVE_PROGRESS:
 		program->eventMoveProgress(event.user);
 		break;
@@ -398,14 +392,14 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 		scene->onMouseLeave();
 		break;
 	case SDL_WINDOWEVENT_FOCUS_GAINED:
-		if (sets->screen == Settings::Screen::multiFullscreen && std::any_of(windows.begin(), windows.end(), [](const pair<const int, SDL_Window*>& it) -> bool { return SDL_GetWindowFlags(it.second) & SDL_WINDOW_MINIMIZED; })) {
+		if (sets->screen == Settings::Screen::multiFullscreen && rng::any_of(windows, [](const pair<const int, SDL_Window*>& it) -> bool { return SDL_GetWindowFlags(it.second) & SDL_WINDOW_MINIMIZED; })) {
 			for (auto [id, win] : windows)
 				SDL_MaximizeWindow(win);
 			SDL_FlushEvent(SDL_WINDOWEVENT);
 		}
 		break;
 	case SDL_WINDOWEVENT_FOCUS_LOST:
-		if (sets->screen == Settings::Screen::multiFullscreen && std::none_of(windows.begin(), windows.end(), [](const pair<const int, SDL_Window*>& it) -> bool { return SDL_GetWindowFlags(it.second) & SDL_WINDOW_INPUT_FOCUS; })) {
+		if (sets->screen == Settings::Screen::multiFullscreen && rng::none_of(windows, [](const pair<const int, SDL_Window*>& it) -> bool { return SDL_GetWindowFlags(it.second) & SDL_WINDOW_INPUT_FOCUS; })) {
 			for (auto [id, win] : windows)
 				SDL_MinimizeWindow(win);
 			SDL_FlushEvent(SDL_WINDOWEVENT);
@@ -444,7 +438,7 @@ void WindowSys::eventDisplay(const SDL_DisplayEvent& dspEvent) {
 
 ivec2 WindowSys::winViewOffset(uint32 wid) {
 	if (SDL_Window* win = SDL_GetWindowFromID(wid))
-		if (umap<int, SDL_Window*>::const_iterator it = std::find_if(windows.begin(), windows.end(), [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; }); it != windows.end())
+		if (umap<int, SDL_Window*>::const_iterator it = rng::find_if(windows, [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; }); it != windows.end())
 			return drawSys->getRenderer()->getViews().at(it->first)->rect.pos();
 	return ivec2(INT_MIN);
 }
@@ -453,13 +447,13 @@ ivec2 WindowSys::mousePos() {
 	ivec2 mp;
 	SDL_GetMouseState(&mp.x, &mp.y);
 	SDL_Window* win = SDL_GetMouseFocus();
-	umap<int, SDL_Window*>::const_iterator it = std::find_if(windows.begin(), windows.end(), [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; });
+	umap<int, SDL_Window*>::const_iterator it = rng::find_if(windows, [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; });
 	return it != windows.end() ? mp + drawSys->getRenderer()->getViews().at(it->first)->rect.pos() : mp;
 }
 
 void WindowSys::moveCursor(ivec2 mov) {
 	SDL_Window* win = SDL_GetMouseFocus();
-	if (umap<int, SDL_Window*>::iterator it = std::find_if(windows.begin(), windows.end(), [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; }); it != windows.end()) {
+	if (umap<int, SDL_Window*>::iterator it = rng::find_if(windows, [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; }); it != windows.end()) {
 		ivec2 wpos;
 		SDL_GetMouseState(&wpos.x, &wpos.y);
 		wpos += drawSys->getRenderer()->getViews().at(it->first)->rect.pos() + mov;
@@ -501,7 +495,7 @@ void WindowSys::setResolution(ivec2 res) {
 }
 
 ivec2 WindowSys::displayResolution() const {
-	SDL_DisplayMode mode;
+	SDL_DisplayMode mode{};
 	if (!windows.empty() && !SDL_GetDesktopDisplayMode(SDL_GetWindowDisplayIndex(windows.begin()->second), &mode))
 		return ivec2(mode.w, mode.h);
 

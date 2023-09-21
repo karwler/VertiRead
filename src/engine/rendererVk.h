@@ -187,10 +187,10 @@ inline AddressPass::UniformData* AddressPass::getUniformBufferMapped() const {
 	return uniformBufferMapped;
 }
 
-class RendererVk : public Renderer {
+class RendererVk final : public Renderer {
 private:
 	static constexpr array<const char*, 1> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-	static constexpr array<VkMemoryPropertyFlags, 3> deviceMemoryTypes = { VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
+	static constexpr array<VkMemoryPropertyFlags, 2> deviceMemoryTypes = { VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
 #ifndef NDEBUG
 	static constexpr array<const char*, 1> validationLayers = { "VK_LAYER_KHRONOS_validation" };
 	static constexpr array<VkValidationFeatureEnableEXT, 2> validationFeatureEnables = { VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT, VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT };
@@ -256,8 +256,6 @@ private:
 	VkCommandPool tcmdPool = VK_NULL_HANDLE;
 #ifndef NDEBUG
 	VkDebugUtilsMessengerEXT dbgMessenger = VK_NULL_HANDLE;
-	PFN_vkSetDebugUtilsObjectNameEXT pfnSetDebugUtilsObjectNameEXT = nullptr;
-	vector<string> nextObjectDebugName;
 #endif
 	uint32 gfamilyIndex, pfamilyIndex, tfamilyIndex;
 	RenderPass renderPass;
@@ -278,7 +276,7 @@ private:
 	array<VkFence, FormatConverter::maxTransfers> tfences{};
 	array<VkBuffer, FormatConverter::maxTransfers> inputBuffers{};
 	array<VkDeviceMemory, FormatConverter::maxTransfers> inputMemory{};
-	array<void*, FormatConverter::maxTransfers> inputsMapped;
+	array<cbyte*, FormatConverter::maxTransfers> inputsMapped;
 	array<VkDeviceSize, FormatConverter::maxTransfers> inputSizesMax{};
 	VkDeviceSize transferAtomSize;
 
@@ -329,10 +327,6 @@ public:
 	void allocateCommandBuffers(VkCommandPool commandPool, VkCommandBuffer* cmdBuffers, uint32 count) const;
 	VkSemaphore createSemaphore() const;
 	VkFence createFence(VkFenceCreateFlags flags = 0) const;
-#ifndef NDEBUG
-	template <class T, std::enable_if_t<std::is_pointer_v<T>, int> = 0> void setObjectDebugName(T object) const;
-	template <class T, std::enable_if_t<std::is_pointer_v<T>, int> = 0> void setObjectDebugName(T object, const char* name) const;
-#endif
 
 	static void beginSingleTimeCommands(VkCommandBuffer cmdBuffer);
 	void endSingleTimeCommands(VkCommandBuffer cmdBuffer, VkFence fence, VkQueue queue) const;
@@ -371,10 +365,10 @@ private:
 	static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR chooseSwapPresentMode(const vector<VkPresentModeKHR>& availablePresentModes) const;
 	static uint scoreDevice(const VkPhysicalDeviceProperties& prop, const VkPhysicalDeviceMemoryProperties& memp);
-	TextureVk* createTextureDirect(const void* pix, u32vec2 res, uint32 pitch, uint8 bpp, VkFormat format, bool nearest);
-	TextureVk* createTextureIndirect(SDL_Surface* img, VkFormat format);
-	template <bool conv> void uploadInputData(const void* pix, u32vec2 res, uint32 pitch, uint8 bpp);
-	pair<SDL_Surface*, VkFormat> pickPixFormat(SDL_Surface* img) const;
+	TextureVk* createTextureDirect(const cbyte* pix, u32vec2 res, uint32 pitch, uint8 bpp, VkFormat format, bool nearest);
+	TextureVk* createTextureIndirect(const SDL_Surface* img, VkFormat format);
+	template <bool conv> void uploadInputData(const cbyte* pix, u32vec2 res, uint32 pitch, uint8 bpp);
+	tuple<SDL_Surface*, VkFormat, bool> pickPixFormat(SDL_Surface* img) const;
 #ifndef NDEBUG
 	static pair<bool, bool> checkValidationLayerSupport();
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);

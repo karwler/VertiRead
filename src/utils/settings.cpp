@@ -4,176 +4,177 @@
 
 void Binding::reset(Type newType) {
 	switch (asg = ASG_NONE; type = newType) {
-	case Type::enter:
+	using enum Type;
+	case enter:
 		bcall = &ProgState::eventEnter;
 		setKey(SDL_SCANCODE_RETURN);
 		setJbutton(2);
 		setGbutton(SDL_CONTROLLER_BUTTON_A);
 		break;
-	case Type::escape:
+	case escape:
 		bcall = &ProgState::eventEscape;
 		setKey(SDL_SCANCODE_ESCAPE);
 		setJbutton(1);
 		setGbutton(SDL_CONTROLLER_BUTTON_B);
 		break;
-	case Type::up:
+	case up:
 		bcall = &ProgState::eventUp;
 		setKey(SDL_SCANCODE_UP);
 		setJhat(0, SDL_HAT_UP);
 		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_UP);
 		break;
-	case Type::down:
+	case down:
 		bcall = &ProgState::eventDown;
 		setKey(SDL_SCANCODE_DOWN);
 		setJhat(0, SDL_HAT_DOWN);
 		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_DOWN);
 		break;
-	case Type::left:
+	case left:
 		bcall = &ProgState::eventLeft;
 		setKey(SDL_SCANCODE_LEFT);
 		setJhat(0, SDL_HAT_LEFT);
 		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_LEFT);
 		break;
-	case Type::right:
+	case right:
 		bcall = &ProgState::eventRight;
 		setKey(SDL_SCANCODE_RIGHT);
 		setJhat(0, SDL_HAT_RIGHT);
 		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
 		break;
-	case Type::centerView:
+	case centerView:
 		bcall = &ProgState::eventCenterView;
 		setKey(SDL_SCANCODE_C);
 		setJbutton(10);
 		setGbutton(SDL_CONTROLLER_BUTTON_LEFTSTICK);
 		break;
-	case Type::nextPage:
+	case nextPage:
 		bcall = &ProgState::eventNextPage;
 		setKey(SDL_SCANCODE_PAGEDOWN);
 		break;
-	case Type::prevPage:
+	case prevPage:
 		bcall = &ProgState::eventPrevPage;
 		setKey(SDL_SCANCODE_PAGEUP);
 		break;
-	case Type::zoomIn:
+	case zoomIn:
 		bcall = &ProgState::eventZoomIn;
 		setKey(SDL_SCANCODE_W);
 		setJbutton(5);
 		setGbutton(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
 		break;
-	case Type::zoomOut:
+	case zoomOut:
 		bcall = &ProgState::eventZoomOut;
 		setKey(SDL_SCANCODE_S);
 		setJbutton(4);
 		setGbutton(SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
 		break;
-	case Type::zoomReset:
+	case zoomReset:
 		bcall = &ProgState::eventZoomReset;
 		setKey(SDL_SCANCODE_R);
 		setJbutton(11);
 		setGbutton(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
 		break;
-	case Type::toStart:
+	case toStart:
 		bcall = &ProgState::eventToStart;
 		setKey(SDL_SCANCODE_HOME);
 		break;
-	case Type::toEnd:
+	case toEnd:
 		bcall = &ProgState::eventToEnd;
 		setKey(SDL_SCANCODE_END);
 		break;
-	case Type::nextDir:
+	case nextDir:
 		bcall = &ProgState::eventNextDir;
 		setKey(SDL_SCANCODE_D);
 		setJbutton(7);
 		setGaxis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT, true);
 		break;
-	case Type::prevDir:
+	case prevDir:
 		bcall = &ProgState::eventPrevDir;
 		setKey(SDL_SCANCODE_A);
 		setJbutton(6);
 		setGaxis(SDL_CONTROLLER_AXIS_TRIGGERLEFT, true);
 		break;
-	case Type::fullscreen:
+	case fullscreen:
 		bcall = &ProgState::eventFullscreen;
 		setKey(SDL_SCANCODE_F);
 		setJbutton(8);
 		setGbutton(SDL_CONTROLLER_BUTTON_BACK);
 		break;
-	case Type::multiFullscreen:
+	case multiFullscreen:
 		bcall = &ProgState::eventMultiFullscreen;
 		setKey(SDL_SCANCODE_G);
 		setJbutton(9);
 		setGbutton(SDL_CONTROLLER_BUTTON_START);
 		break;
-	case Type::hide:
+	case hide:
 		bcall = &ProgState::eventHide;
 		setKey(SDL_SCANCODE_H);
 		break;
-	case Type::boss:
+	case boss:
 		bcall = &ProgState::eventBoss;
 		setKey(SDL_SCANCODE_B);
 		break;
-	case Type::refresh:
+	case refresh:
 		bcall = &ProgState::eventRefresh;
 		setKey(SDL_SCANCODE_F5);
 		break;
-	case Type::scrollUp:
+	case scrollUp:
 		acall = &ProgState::eventScrollUp;
 		setKey(SDL_SCANCODE_UP);
 		setJaxis(1, false);
 		setGaxis(SDL_CONTROLLER_AXIS_LEFTY, false);
 		break;
-	case Type::scrollDown:
+	case scrollDown:
 		acall = &ProgState::eventScrollDown;
 		setKey(SDL_SCANCODE_DOWN);
 		setJaxis(1, true);
 		setGaxis(SDL_CONTROLLER_AXIS_LEFTY, true);
 		break;
-	case Type::scrollLeft:
+	case scrollLeft:
 		acall = &ProgState::eventScrollLeft;
 		setKey(SDL_SCANCODE_LEFT);
 		setJaxis(0, false);
 		setGaxis(SDL_CONTROLLER_AXIS_LEFTX, false);
 		break;
-	case Type::scrollRight:
+	case scrollRight:
 		acall = &ProgState::eventScrollRight;
 		setKey(SDL_SCANCODE_RIGHT);
 		setJaxis(0, true);
 		setGaxis(SDL_CONTROLLER_AXIS_LEFTX, true);
 		break;
-	case Type::cursorUp:
+	case cursorUp:
 		acall = &ProgState::eventCursorUp;
 		setJaxis(2, false);
 		setGaxis(SDL_CONTROLLER_AXIS_RIGHTY, false);
 		break;
-	case Type::cursorDown:
+	case cursorDown:
 		acall = &ProgState::eventCursorDown;
 		setJaxis(2, true);
 		setGaxis(SDL_CONTROLLER_AXIS_RIGHTY, true);
 		break;
-	case Type::cursorLeft:
+	case cursorLeft:
 		acall = &ProgState::eventCursorLeft;
 		setJaxis(3, false);
 		setGaxis(SDL_CONTROLLER_AXIS_RIGHTX, false);
 		break;
-	case Type::cursorRight:
+	case cursorRight:
 		acall = &ProgState::eventCursorRight;
 		setJaxis(3, true);
 		setGaxis(SDL_CONTROLLER_AXIS_RIGHTX, true);
 		break;
-	case Type::scrollFast:
+	case scrollFast:
 		acall = nullptr;
 		setKey(SDL_SCANCODE_X);
 		setJbutton(0);
 		setGbutton(SDL_CONTROLLER_BUTTON_Y);
 		break;
-	case Type::scrollSlow:
+	case scrollSlow:
 		acall = nullptr;
 		setKey(SDL_SCANCODE_Z);
 		setJbutton(3);
 		setGbutton(SDL_CONTROLLER_BUTTON_X);
 		break;
 	default:
-		throw std::runtime_error("Invalid binding type: " + toStr(type));
+		throw std::runtime_error(std::format("Invalid binding type: {}", uint(type)));
 	}
 }
 
@@ -241,7 +242,7 @@ uintptr_t PicLim::toSize(string_view str) {
 	if (!num)
 		return defaultSize();
 
-	string_view::iterator mit = std::find_if(str.begin() + (res.ptr - str.data()), str.end(), [](char c) -> bool { return std::find(sizeLetters.begin(), sizeLetters.end(), toupper(c)) != sizeLetters.end(); });
+	string_view::iterator mit = std::find_if(str.begin() + (res.ptr - str.data()), str.end(), [](char c) -> bool { return rng::find(sizeLetters, toupper(c)) != sizeLetters.end(); });
 	if (mit != str.end())
 		switch (toupper(*mit)) {
 		case sizeLetters[1]:
@@ -271,25 +272,29 @@ string PicLim::memoryString(uintptr_t num, uint8 mag) {
 // SETTINGS
 
 Settings::Settings(const fs::path& dirSets, vector<string>&& themes) :
-	dirLib(dirSets / defaultDirLib)
+	dirLib(fromPath(dirSets / defaultDirLib))
 {
 	setTheme(string_view(), std::move(themes));
 }
 
 const string& Settings::setTheme(string_view name, vector<string>&& themes) {
-	if (vector<string>::const_iterator it = std::find(themes.begin(), themes.end(), name); it != themes.end())
+	if (vector<string>::const_iterator it = rng::find(themes, name); it != themes.end())
 		return theme = name;
 	return theme = themes.empty() ? string() : std::move(themes[0]);
 }
 
-const fs::path& Settings::setDirLib(const fs::path& drc, const fs::path& dirSets) {
+const string& Settings::setDirLib(string_view drc, const fs::path& dirSets) {
 	try {
-		if (dirLib = drc; !fs::is_directory(dirLib) && !fs::create_directories(dirLib))
-			if (dirLib = dirSets / defaultDirLib; !fs::is_directory(dirLib))
-				fs::create_directories(dirLib);
+		if (fs::path path = toPath(drc); fs::is_directory(path) || fs::create_directories(path))
+			dirLib = drc;
+		else {
+			dirLib = fromPath(dirSets) / defaultDirLib;
+			if (path = dirSets / defaultDirLib; !fs::is_directory(path))
+				fs::create_directories(path);
+		}
 	} catch (const fs::filesystem_error& err) {
 		logError(err.what());
-		dirLib = dirSets / defaultDirLib;
+		dirLib = fromPath(dirSets) / defaultDirLib;
 	}
 	return dirLib;
 }
@@ -310,9 +315,9 @@ umap<int, Recti> Settings::displayArrangement() {
 void Settings::unionDisplays() {
 	umap<int, Recti> dsps = displayArrangement();
 	for (umap<int, Recti>::iterator it = displays.begin(); it != displays.end(); ++it)
-		if (!dsps.count(it->first))
+		if (!dsps.contains(it->first))
 			displays.erase(it);
-	for (umap<int, Recti>::const_iterator ds = dsps.begin(); ds != dsps.end(); ++ds)
+	for (umap<int, Recti>::iterator ds = dsps.begin(); ds != dsps.end(); ++ds)
 		if (umap<int, Recti>::iterator it = displays.find(ds->first); it != displays.end() && it->second.size() != ds->second.size())
 			displays.erase(it);
 	if (displays.empty())

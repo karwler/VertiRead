@@ -45,12 +45,12 @@ struct ArchiveDir {
 
 // archive/picture info
 struct BrowserResultAsync {
-	fs::path rootDir;
-	fs::path curDir;
-	fs::path file;
+	string rootDir;
+	string curDir;
+	string file;
 	ArchiveDir arch;
 
-	BrowserResultAsync(fs::path&& root, fs::path&& directory, fs::path&& pname = fs::path(), ArchiveDir&& aroot = ArchiveDir());
+	BrowserResultAsync(string&& root, string&& directory, string&& pname = string(), ArchiveDir&& aroot = ArchiveDir());
 };
 
 // picture load info
@@ -59,7 +59,7 @@ struct BrowserResultPicture : public BrowserResultAsync {
 	std::mutex mpic;
 	const bool archive;
 
-	BrowserResultPicture(bool inArch, fs::path&& root, fs::path&& directory, fs::path&& pname = fs::path(), ArchiveDir&& aroot = ArchiveDir());
+	BrowserResultPicture(bool inArch, string&& root, string&& directory, string&& pname = string(), ArchiveDir&& aroot = ArchiveDir());
 };
 
 // intermediate picture load buffer
@@ -84,13 +84,13 @@ private:
 #else
 	int ino = -1, watch = -1;
 #endif
-	void* ebuf = nullptr;
+	cbyte* ebuf = nullptr;
 
 public:
-	FileWatch(const fs::path& path);
+	FileWatch(const char* path);
 	~FileWatch();
 
-	void set(const fs::path& path);
+	void set(const char* path);
 	void unset();
 	pair<vector<pair<bool, string>>, bool> changed();
 };

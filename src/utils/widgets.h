@@ -3,77 +3,77 @@
 #include "settings.h"
 
 // scroll information
-class ScrollBar {
+class Scrollable {
 public:
 	static constexpr int barSizeVal = 10;
 
 	ivec2 listPos = ivec2(0);
 	vec2 motion = vec2(0.f);	// how much the list scrolls over time
 private:
+	ivec2 listSize;
+	ivec2 listMax;
+	int sliderSize;
+	int sliderMax;
 	int diffSliderMouse = 0;	// space between slider and mouse position
 	bool draggingSlider = false;
 
 	static constexpr float throttle = 10.f;
 
 public:
-	bool tick(float dSec, ivec2 listSize, ivec2 size);	// returns whether the list has moved
-	bool hold(ivec2 mPos, uint8 mBut, Widget* wgt, ivec2 listSize, ivec2 pos, ivec2 size, bool vert);	// returns whether the list has moved
-	void drag(ivec2 mPos, ivec2 mMov, ivec2 listSize, ivec2 pos, ivec2 size, bool vert);
+	bool tick(float dSec);	// returns whether the list has moved
+	bool hold(ivec2 mPos, uint8 mBut, Widget* wgt, ivec2 pos, ivec2 size, bool vert);	// returns whether the list has moved
+	void drag(ivec2 mPos, ivec2 mMov, ivec2 pos, bool vert);
 	void undrag(ivec2 mPos, uint8 mBut, bool vert);
-	void scroll(ivec2 wMov, ivec2 listSize, ivec2 size, bool vert);
+	void scroll(ivec2 wMov, bool vert);
 
 	bool getDraggingSlider() const;
-	static ivec2 listLim(ivec2 listSize, ivec2 size);	// max list position
-	void setListPos(ivec2 pos, ivec2 listSize, ivec2 size);
-	void moveListPos(ivec2 mov, ivec2 listSize, ivec2 size);
-	static int barSize(ivec2 listSize, ivec2 size, bool vert);	// returns 0 if slider isn't needed
-	static Recti barRect(ivec2 listSize, ivec2 pos, ivec2 size, bool vert);
-	Recti sliderRect(ivec2 listSize, ivec2 pos, ivec2 size, bool vert) const;
+	void setLimits(ivec2 lsize, ivec2 wsize, bool vert);
+	ivec2 getListSize() const;
+	ivec2 getListMax() const;
+	void setListPos(ivec2 pos);
+	void moveListPos(ivec2 mov);
+	int barSize(ivec2 wsize, bool vert) const;	// returns 0 if slider isn't needed
+	Recti barRect(ivec2 pos, ivec2 size, bool vert) const;
+	Recti sliderRect(ivec2 pos, ivec2 size, bool vert) const;
 private:
-	void setSlider(int spos, ivec2 listSize, ivec2 pos, ivec2 size, bool vert);
-	static int sliderSize(ivec2 listSize, ivec2 size, bool vert);
-	int sliderPos(ivec2 listSize, ivec2 pos, ivec2 size, bool vert) const;
-	static int sliderLim(ivec2 listSize, ivec2 size, bool vert);	// max slider position
+	void setSlider(int spos, ivec2 pos, bool vert);
+	int sliderPos(ivec2 pos, ivec2 wsize, bool vert) const;
 	static void throttleMotion(float& mov, float dSec);
 };
 
-inline bool ScrollBar::getDraggingSlider() const {
+inline bool Scrollable::getDraggingSlider() const {
 	return draggingSlider;
 }
 
-inline ivec2 ScrollBar::listLim(ivec2 listSize, ivec2 size) {
-	return ivec2(size.x < listSize.x ? listSize.x - size.x : 0, size.y < listSize.y ? listSize.y - size.y : 0);
+inline ivec2 Scrollable::getListSize() const {
+	return listSize;
 }
 
-inline void ScrollBar::setListPos(ivec2 pos, ivec2 listSize, ivec2 size) {
-	listPos = glm::clamp(pos, ivec2(0), listLim(listSize, size));
+inline ivec2 Scrollable::getListMax() const {
+	return listMax;
 }
 
-inline void ScrollBar::moveListPos(ivec2 mov, ivec2 listSize, ivec2 size) {
-	listPos = glm::clamp(listPos + mov, ivec2(0), listLim(listSize, size));
+inline void Scrollable::setListPos(ivec2 pos) {
+	listPos = glm::clamp(pos, ivec2(0), listMax);
 }
 
-inline int ScrollBar::barSize(ivec2 listSize, ivec2 size, bool vert) {
-	return listSize[vert] > size[vert] ? barSizeVal : 0;
+inline void Scrollable::moveListPos(ivec2 mov) {
+	setListPos(listPos + mov);
 }
 
-inline int ScrollBar::sliderSize(ivec2 listSize, ivec2 size, bool vert) {
-	return size[vert] < listSize[vert] ? size[vert] * size[vert] / listSize[vert] : size[vert];
+inline int Scrollable::barSize(ivec2 wsize, bool vert) const {
+	return listSize[vert] > wsize[vert] ? barSizeVal : 0;
 }
 
-inline int ScrollBar::sliderPos(ivec2 listSize, ivec2 pos, ivec2 size, bool vert) const {
-	return listSize[vert] > size[vert] ? pos[vert] + listPos[vert] * sliderLim(listSize, size, vert) / listLim(listSize, size)[vert] : pos[vert];
-}
-
-inline int ScrollBar::sliderLim(ivec2 listSize, ivec2 size, bool vert) {
-	return size[vert] - sliderSize(listSize, size, vert);
+inline int Scrollable::sliderPos(ivec2 pos, ivec2 wsize, bool vert) const {
+	return listSize[vert] > wsize[vert] ? pos[vert] + listPos[vert] * sliderMax / listMax[vert] : 0;
 }
 
 // can be used as spacer
 class Widget {
 protected:
 	Layout* parent = nullptr;	// every widget that isn't a Layout should have a parent
-	size_t index = SIZE_MAX;		// this widget's id in parent's widget list
+	size_t index = SIZE_MAX;	// this widget's id in parent's widget list
 	Size relSize;				// size relative to parent's parameters
 
 public:
@@ -199,7 +199,7 @@ public:
 };
 
 // if you don't know what a checkbox is then I don't know what to tell ya
-class CheckBox : public Button {
+class CheckBox final : public Button {
 public:
 	bool on;
 
@@ -223,7 +223,7 @@ inline bool CheckBox::toggle() {
 }
 
 // horizontal slider (maybe one day it'll be able to be vertical)
-class Slider : public Button {
+class Slider final : public Button {
 private:
 	int val, vmin, vmax;
 	int diffSliderMouse = 0;
@@ -263,7 +263,7 @@ inline int Slider::sliderPos() const {
 }
 
 // horizontal progress bar
-class ProgressBar : public Picture {
+class ProgressBar final : public Picture {
 private:
 	static constexpr int barMarginFactor = 8;
 
@@ -336,9 +336,8 @@ inline int Label::getTextMargin() const {
 }
 
 // multi-line scrollable label
-class TextBox : public Label {
+class TextBox final : public Label, private Scrollable {
 private:
-	ScrollBar scroll;
 	int lineSize;
 
 public:
@@ -364,7 +363,7 @@ protected:
 };
 
 // for switching between multiple options (kinda like a drop-down menu except I was too lazy to make an actual one)
-class ComboBox : public Label {
+class ComboBox final : public Label {
 private:
 	vector<string> options;
 	size_t curOpt;
@@ -390,10 +389,10 @@ inline size_t ComboBox::getCurOpt() const {
 }
 
 // for editing a line of text (ignores Label's align), (calls Button's lcall on text confirm rather than on click)
-class LabelEdit : public Label {
+class LabelEdit final : public Label {
 public:
 	enum class TextType : uint8 {
-		text,
+		any,
 		sInt,
 		sIntSpaced,
 		uInt,
@@ -414,7 +413,7 @@ private:
 	string oldText;
 
 public:
-	LabelEdit(const Size& size = Size(), string&& line = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, TextType type = TextType::text, bool focusLossConfirm = true, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
+	LabelEdit(const Size& size = Size(), string&& line = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, TextType type = TextType::any, bool focusLossConfirm = true, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
 	~LabelEdit() final = default;
 
 	void drawTop(const Recti& view) const final;
@@ -464,7 +463,7 @@ inline bool LabelEdit::kmodAlt(uint16 mod) {
 }
 
 // for getting a key/button/axis
-class KeyGetter : public Label {
+class KeyGetter final : public Label {
 public:
 	enum class AcceptType : uint8 {
 		keyboard,
@@ -474,10 +473,9 @@ public:
 
 	static constexpr char ellipsisStr[] = "...";
 private:
-	static constexpr char prefButton[] = "B ";
-	static constexpr char prefHat[] = "H ";
-	static constexpr char prefSep = ' ';
-	static constexpr char prefAxis[] = "A ";
+	static constexpr char fmtButton[] = "B {:d}";
+	static constexpr char fmtHat[] = "H {:d} {}";
+	static constexpr char fmtAxis[] = "A {}{:d}";
 	static constexpr char prefAxisPos = '+';
 	static constexpr char prefAxisNeg = '-';
 
@@ -508,7 +506,7 @@ inline void KeyGetter::restoreText() {
 }
 
 // for arranging multi window setup
-class WindowArranger : public Button {
+class WindowArranger final : public Button {
 private:
 	struct Dsp {
 		Recti rect, full;
@@ -557,13 +555,13 @@ public:
 	const umap<int, Dsp>& getDisps() const;
 	umap<int, Recti> getActiveDisps() const;
 	Recti offsetDisp(const Recti& rect, ivec2 pos) const;
-	int precalcSizeExpand(ivec2 siz) const;
+	int precalcSizeExpand(int fsiz) const;
 	tuple<Recti, Color, Recti, const Texture*> dispRect(int id, const Dsp& dsp) const;
 private:
 	int dispUnderPos(ivec2 pnt) const;
 	void calcDisplays();
 	void buildEntries();
-	float entryScale(ivec2 siz) const;
+	float entryScale(int fsiz) const;
 	void freeTextures();
 	ivec2 snapDrag() const;
 	static array<ivec2, 8> getSnapPoints(const Recti& rect);
@@ -578,6 +576,6 @@ inline Recti WindowArranger::offsetDisp(const Recti& rect, ivec2 pos) const {
 	return rect.translate(pos + winMargin);
 }
 
-inline int WindowArranger::precalcSizeExpand(ivec2 siz) const {
-	return int(float(totalDim[vertical]) * entryScale(siz)) + winMargin * 2;
+inline int WindowArranger::precalcSizeExpand(int fsiz) const {
+	return int(float(totalDim[vertical]) * entryScale(fsiz)) + winMargin * 2;
 }

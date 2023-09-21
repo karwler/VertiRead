@@ -20,7 +20,7 @@ SDL_Surface* Renderer::makeCompatible(SDL_Surface* img, bool rpic) const {
 	if (const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* sconv = getSquashableFormats())
 		if (umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>::const_iterator sit = sconv->find(SDL_PixelFormatEnum(img->format->format)); sit != sconv->end())
 			return convertReplace(img, sit->second);
-	return supportedFormats.count(SDL_PixelFormatEnum(img->format->format)) ? img : convertReplace(img);
+	return supportedFormats.contains(SDL_PixelFormatEnum(img->format->format)) ? img : convertReplace(img);
 }
 
 SDL_Surface* Renderer::convertReplace(SDL_Surface* img, SDL_PixelFormatEnum format) {

@@ -398,7 +398,7 @@ inline void PicLim::setSize(string_view str) {
 }
 
 inline uintptr_t PicLim::defaultSize() {
-	return SDL_GetSystemRAM() / 2 * 1'000'000;
+	return uintptr_t(SDL_GetSystemRAM() / 2) * 1'000'000;
 }
 
 inline string PicLim::memoryString(uintptr_t num) {
@@ -407,6 +407,11 @@ inline string PicLim::memoryString(uintptr_t num) {
 
 class Settings {
 public:
+	static constexpr char flagLog[] = "l";
+#ifndef _WIN32
+	static constexpr char flagCompositor[] = "c";
+#endif
+
 	static constexpr array<vec4, size_t(Color::texture) + 1> defaultColors = {
 		vec4(0.04f, 0.04f, 0.04f, 1.f),	// background
 		vec4(0.35f, 0.35f, 0.35f, 1.f),	// normal
@@ -518,7 +523,7 @@ public:
 	string font = defaultFont;
 private:
 	string theme;
-	fs::path dirLib;
+	string dirLib;
 public:
 	umap<int, Recti> displays;
 	PicLim picLim;
@@ -547,8 +552,8 @@ public:
 
 	const string& getTheme() const;
 	const string& setTheme(string_view name, vector<string>&& themes);
-	const fs::path& getDirLib() const;
-	const fs::path& setDirLib(const fs::path& drc, const fs::path& dirSets);
+	const string& getDirLib() const;
+	const string& setDirLib(string_view drc, const fs::path& dirSets);
 
 	static umap<int, Recti> displayArrangement();
 	void unionDisplays();
@@ -561,12 +566,12 @@ inline const string& Settings::getTheme() const {
 	return theme;
 }
 
-inline const fs::path& Settings::getDirLib() const {
+inline const string& Settings::getDirLib() const {
 	return dirLib;
 }
 
 inline string Settings::scrollSpeedString() const {
-	return toStr(scrollSpeed.x) + ' ' + toStr(scrollSpeed.y);
+	return toStr(scrollSpeed);
 }
 
 inline int Settings::getDeadzone() const {

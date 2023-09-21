@@ -1,32 +1,46 @@
 #include "utils.h"
+#include <cwctype>
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
 void pushEvent(UserEvent code, void* data1, void* data2) {
-	SDL_Event event{};
-	event.user.type = code;
-	event.user.timestamp = SDL_GetTicks();
-	event.user.data1 = data1;
-	event.user.data2 = data2;
+	SDL_Event event = { .user = {
+		.type = code,
+		.timestamp = SDL_GetTicks(),
+		.data1 = data1,
+		.data2 = data2
+	} };
 	if (int rc = SDL_PushEvent(&event); rc <= 0)
 		throw std::runtime_error(rc ? SDL_GetError() : "Event queue full");
 }
 
 Pixmap::Pixmap(uvec2 size) :
-	pix(std::make_unique<uint32[]>(size.x * size.y)),
+	pix(std::make_unique<uint32[]>(size_t(size.x) * size_t(size.y))),
 	res(size)
-{
-	std::fill_n(pix.get(), res.x * res.y, 0);
+{}
+
+template <Integer C>
+bool tstrciequal(std::basic_string_view<C> a, std::basic_string_view<C> b) {
+	if (a.length() != b.length())
+		return false;
+	for (size_t i = 0; i < a.length(); ++i) {
+		if constexpr (sizeof(C) == sizeof(char)) {
+			if (std::tolower(a[i]) != std::tolower(b[i]))
+				return false;
+		} else
+			if (std::towlower(a[i]) != std::towlower(b[i]))
+				return false;
+	}
+	return true;
 }
 
 bool strciequal(string_view a, string_view b) {
-	if (a.length() != b.length())
-		return false;
-	for (size_t i = 0; i < a.length(); ++i)
-		if (std::tolower(a[i]) != std::tolower(b[i]))
-			return false;
-	return true;
+	return tstrciequal(a, b);
+}
+
+bool strciequal(wstring_view a, wstring_view b) {
+	return tstrciequal(a, b);
 }
 
 bool strnciequal(string_view a, string_view b, size_t n) {
@@ -39,47 +53,57 @@ bool strnciequal(string_view a, string_view b, size_t n) {
 	return true;
 }
 
-bool isDriveLetter(const fs::path& path) {
-	if (const fs::path::value_type* p = path.c_str(); isalpha(p[0]) && p[1] == ':') {
-		for (p += 2; isDsep(*p); ++p);
-		return !*p;
-	}
-	return false;
+string_view parentPath(string_view path) {
+	string_view::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), notDsep);
+	it = std::find_if(it, path.rend(), isDsep);
+	it = std::find_if(it, path.rend(), notDsep);
+	size_t len = it.base() - path.begin();
+	return len || path.empty() || notDsep(path[0]) ? string_view(path.data(), len) : "/";
 }
 
-fs::path parentPath(const fs::path& path) {
-#ifdef _WIN32
-	if (isDriveLetter(path))
-		return fs::path();
-#endif
-	const fs::path::value_type* p = path.c_str();
-	if (size_t len = std::char_traits<fs::path::value_type>::length(p); len && isDsep(p[--len])) {
-		while (len && isDsep(p[--len]));
-		if (len)
-			return fs::path(p, p + len).parent_path();
-	}
-	return path.parent_path();
+static bool pathCompareLoop(string_view as, string_view bs, string_view::iterator& ai, string_view::iterator& bi) {
+	do {
+		// comparee names of next entry
+		string_view::iterator an = std::find_if(ai, as.end(), isDsep);
+		string_view::iterator bn = std::find_if(bi, bs.end(), isDsep);
+		if (!std::equal(ai, an, bi, bn))
+			return false;
+
+		// skip directory separators
+		ai = std::find_if(an, as.end(), notDsep);
+		bi = std::find_if(bn, bs.end(), notDsep);
+	} while (ai != as.end() && bi != bs.end());
+	return true;	// one has reached it's end so don't forget to check later which one (paths are equal if both have ended)
+}
+
+string_view relativePath(string_view path, string_view base) {
+	string_view::iterator ai = path.begin(), bi = base.begin();
+	return pathCompareLoop(path, base, ai, bi) && bi == base.end() ? string_view(ai, path.end()) : string_view();
+}
+
+bool isSubpath(string_view path, string_view base) {
+	string_view::iterator ai = path.begin(), bi = base.begin();	// parent has to have reached its end while path was still matching
+	return pathCompareLoop(path, base, ai, bi) && bi == base.end();
 }
 
 string_view filename(string_view path) {
-	string_view::reverse_iterator end = std::find_if_not(path.rbegin(), path.rend(), isDsep);
-	string_view::iterator pos = std::find_if(end, path.rend(), isDsep).base();
-	return string_view(&*pos, end.base() - pos);
+	string_view::reverse_iterator end = std::find_if(path.rbegin(), path.rend(), notDsep);
+	return string_view(std::find_if(end, path.rend(), isDsep).base(), end.base());
 }
 
 string_view fileExtension(string_view path) {
 	string_view::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
-	return it != path.rend() && *it == '.' && it + 1 != path.rend() && !isDsep(it[1]) ? string_view(&*it.base(), path.end() - it.base()) : string_view();
+	return it != path.rend() && *it == '.' && it + 1 != path.rend() && notDsep(it[1]) ? string_view(it.base(), path.end()) : string_view();
 }
 
 string_view delExtension(string_view path) {
 	string_view::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
-	return it != path.rend() ? *it == '.' && it + 1 != path.rend() && !isDsep(it[1]) ? string_view(path.data(), it.base() - 1 - path.begin()) : path : string_view();
+	return it != path.rend() ? *it == '.' && it + 1 != path.rend() && notDsep(it[1]) ? string_view(path.begin(), it.base() - 1) : path : string_view();
 }
 
 string_view trim(string_view str) {
-	string_view::iterator pos = std::find_if(str.begin(), str.end(), notSpace);
-	return string_view(str.data() + (pos - str.begin()), std::find_if(str.rbegin(), std::make_reverse_iterator(pos), notSpace).base() - pos);
+	string_view::iterator pos = rng::find_if(str, notSpace);
+	return string_view(pos, std::find_if(str.rbegin(), std::make_reverse_iterator(pos), notSpace).base());
 }
 
 string strEnclose(string_view str) {
@@ -158,13 +182,3 @@ wstring sstow(string_view src) {
 	return dst;
 }
 #endif
-
-uint32 ceilPow2(uint32 val) {
-	--val;
-	val |= val >> 1;
-	val |= val >> 2;
-	val |= val >> 4;
-	val |= val >> 8;
-	val |= val >> 16;
-	return val + 1;
-}

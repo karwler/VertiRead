@@ -84,7 +84,7 @@ inline Popup* Scene::getPopup() {
 }
 
 inline void Scene::setPopup(pair<Popup*, Widget*> popcap) {
-	setPopup(std::move(popcap.first), popcap.second);
+	setPopup(popcap.first, popcap.second);
 }
 
 inline Context* Scene::getContext() {

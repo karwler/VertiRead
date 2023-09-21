@@ -40,7 +40,7 @@ RendererDx::RendererDx(const umap<int, SDL_Window*>& windows, Settings* sets, iv
 		uint flags = D3D11_CREATE_DEVICE_DEBUG;
 #endif
 		if (HRESULT rs = D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags, nullptr, 0, D3D11_SDK_VERSION, &dev, nullptr, &ctx); FAILED(rs))
-			throw std::runtime_error("Failed to create device: " + hresultToStr(rs));
+			throw std::runtime_error(std::format("Failed to create device: {}", hresultToStr(rs)));
 		comRelease(adapter);
 
 		if (windows.size() == 1 && windows.begin()->first == singleDspId) {
@@ -72,45 +72,50 @@ RendererDx::RendererDx(const umap<int, SDL_Window*>& windows, Settings* sets, iv
 		throw;
 	}
 
-	D3D11_BLEND_DESC blendDesc{};
-	blendDesc.RenderTarget[0].BlendEnable = TRUE;
-	blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
-	blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
-	blendDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
-	blendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
-	blendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
-	blendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
-	blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+	D3D11_BLEND_DESC blendDesc = {
+		.RenderTarget = { {
+			.BlendEnable = TRUE,
+			.SrcBlend = D3D11_BLEND_SRC_ALPHA,
+			.DestBlend = D3D11_BLEND_INV_SRC_ALPHA,
+			.BlendOp = D3D11_BLEND_OP_ADD,
+			.SrcBlendAlpha = D3D11_BLEND_ONE,
+			.DestBlendAlpha = D3D11_BLEND_ZERO,
+			.BlendOpAlpha = D3D11_BLEND_OP_ADD,
+			.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL
+		} }
+	};
 	if (HRESULT rs = dev->CreateBlendState(&blendDesc, &blendState); FAILED(rs))
-		throw std::runtime_error("Failed to create blend state: " + hresultToStr(rs));
+		throw std::runtime_error(std::format("Failed to create blend state: {}", hresultToStr(rs)));
 	ctx->OMSetBlendState(blendState, nullptr, 0xFFFFFFFF);
 
-	D3D11_RASTERIZER_DESC rasterizerDesc{};
-	rasterizerDesc.CullMode = D3D11_CULL_BACK;
-	rasterizerDesc.DepthClipEnable = TRUE;
-	rasterizerDesc.FillMode = D3D11_FILL_SOLID;
-	rasterizerDesc.FrontCounterClockwise = FALSE;
-	rasterizerDesc.ScissorEnable = FALSE;
+	D3D11_RASTERIZER_DESC rasterizerDesc = {
+		.FillMode = D3D11_FILL_SOLID,
+		.CullMode = D3D11_CULL_BACK,
+		.FrontCounterClockwise = FALSE,
+		.DepthClipEnable = TRUE,
+		.ScissorEnable = FALSE
+	};
 	if (HRESULT rs = dev->CreateRasterizerState(&rasterizerDesc, &rasterizerGui); FAILED(rs))
-		throw std::runtime_error("Failed to create graphics rasterizer: " + hresultToStr(rs));
+		throw std::runtime_error(std::format("Failed to create graphics rasterizer: {}", hresultToStr(rs)));
 	ctx->RSSetState(rasterizerGui);
 
 	rasterizerDesc.ScissorEnable = TRUE;
 	if (HRESULT rs = dev->CreateRasterizerState(&rasterizerDesc, &rasterizerSel); FAILED(rs))
-		throw std::runtime_error("Failed to create address rasterizer: " + hresultToStr(rs));
-	D3D11_RECT scissor = { 0, 0, 1, 1 };
+		throw std::runtime_error(std::format("Failed to create address rasterizer: {}", hresultToStr(rs)));
+	D3D11_RECT scissor = { .left = 0, .top = 0, .right = 1, .bottom = 1 };
 	ctx->RSSetScissorRects(1, &scissor);
 
-	D3D11_SAMPLER_DESC samplerDesc{};
-	samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-	samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-	samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-	samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-	samplerDesc.MaxAnisotropy = 1;
-	samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
-	samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+	D3D11_SAMPLER_DESC samplerDesc = {
+		.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+		.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP,
+		.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP,
+		.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP,
+		.MaxAnisotropy = 1,
+		.ComparisonFunc = D3D11_COMPARISON_ALWAYS,
+		.MaxLOD = D3D11_FLOAT32_MAX
+	};
 	if (HRESULT rs = dev->CreateSamplerState(&samplerDesc, &sampleState); FAILED(rs))
-		throw std::runtime_error("Failed to create sampler state" + hresultToStr(rs));
+		throw std::runtime_error(std::format("Failed to create sampler state: {}", hresultToStr(rs)));
 	ctx->PSSetSamplers(0, 1, &sampleState);
 
 	initShader();
@@ -147,7 +152,7 @@ RendererDx::~RendererDx() {
 IDXGIFactory* RendererDx::createFactory() {
 	IDXGIFactory* factory;
 	if (HRESULT rs = CreateDXGIFactory(IID_PPV_ARGS(&factory)); FAILED(rs))
-		throw std::runtime_error("Failed to create factory: " + hresultToStr(rs));
+		throw std::runtime_error(std::format("Failed to create factory: {}", hresultToStr(rs)));
 	return factory;
 }
 
@@ -157,27 +162,29 @@ pair<IDXGISwapChain*, ID3D11RenderTargetView*> RendererDx::createSwapchain(IDXGI
 	if (!SDL_GetWindowWMInfo(win, &wmInfo))
 		throw std::runtime_error(SDL_GetError());
 
-	DXGI_SWAP_CHAIN_DESC schainDesc{};
-	schainDesc.BufferCount = 2;
-	schainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	schainDesc.BufferDesc.Width = res.x;
-	schainDesc.BufferDesc.Height = res.y;
-	schainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	schainDesc.OutputWindow = wmInfo.info.win.window;
-	schainDesc.SampleDesc.Count = 1;
-	schainDesc.Windowed = TRUE;
-	schainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-
+	DXGI_SWAP_CHAIN_DESC schainDesc = {
+		.BufferDesc = {
+			.Width = res.x,
+			.Height = res.y,
+			.Format = DXGI_FORMAT_R8G8B8A8_UNORM
+		},
+		.SampleDesc = { .Count = 1 },
+		.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
+		.BufferCount = 2,
+		.OutputWindow = wmInfo.info.win.window,
+		.Windowed = TRUE,
+		.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL
+	};
 	IDXGISwapChain* swapchain = nullptr;
 	ID3D11Texture2D* scBackBuffer = nullptr;
 	ID3D11RenderTargetView* tgtBackbuffer = nullptr;
 	try {
 		if (HRESULT rs = factory->CreateSwapChain(dev, &schainDesc, &swapchain); FAILED(rs))
-			throw std::runtime_error("Failed to create swapchain: " + hresultToStr(rs));
+			throw std::runtime_error(std::format("Failed to create swapchain: {}", hresultToStr(rs)));
 		if (HRESULT rs = swapchain->GetBuffer(0, IID_PPV_ARGS(&scBackBuffer)); FAILED(rs))
-			throw std::runtime_error("Failed get swapchain buffer: " + hresultToStr(rs));
+			throw std::runtime_error(std::format("Failed get swapchain buffer: {}", hresultToStr(rs)));
 		if (HRESULT rs = dev->CreateRenderTargetView(scBackBuffer, nullptr, &tgtBackbuffer); FAILED(rs))
-			throw std::runtime_error("Failed to create render target: :" + hresultToStr(rs));
+			throw std::runtime_error(std::format("Failed to create render target: {}", hresultToStr(rs)));
 		comRelease(scBackBuffer);
 	} catch (const std::runtime_error&) {
 		comRelease(tgtBackbuffer);
@@ -195,43 +202,43 @@ void RendererDx::recreateSwapchain(IDXGIFactory* factory, ViewDx* view) {
 }
 
 void RendererDx::initShader() {
-	constexpr uint8 vertSrcGui[] = {
+	static constexpr uint8 vertSrcGui[] = {
 #ifdef NDEBUG
-#include "shaders/dx.gui.vert.rel.h"
+#include "shaders/dxGuiVs.rel.h"
 #else
-#include "shaders/dx.gui.vert.dbg.h"
+#include "shaders/dxGuiVs.dbg.h"
 #endif
 	};
-	constexpr uint8 pixlSrcGui[] = {
+	static constexpr uint8 pixlSrcGui[] = {
 #ifdef NDEBUG
-#include "shaders/dx.gui.pixl.rel.h"
+#include "shaders/dxGuiPs.rel.h"
 #else
-#include "shaders/dx.gui.pixl.dbg.h"
+#include "shaders/dxGuiPs.dbg.h"
 #endif
 	};
 	if (HRESULT rs = dev->CreateVertexShader(vertSrcGui, sizeof(vertSrcGui), nullptr, &vertGui); FAILED(rs))
-		throw std::runtime_error("Failed to create graphics vertex shader: " + hresultToStr(rs));
+		throw std::runtime_error(std::format("Failed to create graphics vertex shader: {}", hresultToStr(rs)));
 	if (HRESULT rs = dev->CreatePixelShader(pixlSrcGui, sizeof(pixlSrcGui), nullptr, &pixlGui); FAILED(rs))
-		throw std::runtime_error("Failed to create graphics pixel shader: " + hresultToStr(rs));
+		throw std::runtime_error(std::format("Failed to create graphics pixel shader: {}", hresultToStr(rs)));
 
-	constexpr uint8 vertSrcSel[] = {
+	static constexpr uint8 vertSrcSel[] = {
 #ifdef NDEBUG
-#include "shaders/dx.sel.vert.rel.h"
+#include "shaders/dxSelVs.rel.h"
 #else
-#include "shaders/dx.sel.vert.dbg.h"
+#include "shaders/dxSelVs.dbg.h"
 #endif
 	};
-	constexpr uint8 pixlSrcSel[] = {
+	static constexpr uint8 pixlSrcSel[] = {
 #ifdef NDEBUG
-#include "shaders/dx.sel.pixl.rel.h"
+#include "shaders/dxSelPs.rel.h"
 #else
-#include "shaders/dx.sel.pixl.dbg.h"
+#include "shaders/dxSelPs.dbg.h"
 #endif
 	};
 	if (HRESULT rs = dev->CreateVertexShader(vertSrcSel, sizeof(vertSrcSel), nullptr, &vertSel); FAILED(rs))
-		throw std::runtime_error("Failed to create address vertex shader: " + hresultToStr(rs));
+		throw std::runtime_error(std::format("Failed to create address vertex shader: {}", hresultToStr(rs)));
 	if (HRESULT rs = dev->CreatePixelShader(pixlSrcSel, sizeof(pixlSrcSel), nullptr, &pixlSel); FAILED(rs))
-		throw std::runtime_error("Failed to create address pixel shader: " + hresultToStr(rs));
+		throw std::runtime_error(std::format("Failed to create address pixel shader: {}", hresultToStr(rs)));
 
 	pviewBuf = createConstantBuffer(sizeof(Pview));
 	instBuf = createConstantBuffer(sizeof(Instance));
@@ -248,53 +255,54 @@ void RendererDx::initShader() {
 	texAddr = createTexture(uvec2(1), DXGI_FORMAT_R32G32_UINT, D3D11_USAGE_DEFAULT, D3D11_BIND_RENDER_TARGET);
 	outAddr = createTexture(uvec2(1), DXGI_FORMAT_R32G32_UINT, D3D11_USAGE_STAGING, 0, D3D11_CPU_ACCESS_READ);
 
-	D3D11_RENDER_TARGET_VIEW_DESC tgtDesc{};
-	tgtDesc.Format = DXGI_FORMAT_R32G32_UINT;
-	tgtDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+	D3D11_RENDER_TARGET_VIEW_DESC tgtDesc = {
+		.Format = DXGI_FORMAT_R32G32_UINT,
+		.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D
+	};
 	if (HRESULT rs = dev->CreateRenderTargetView(texAddr, &tgtDesc, &tgtAddr); FAILED(rs))
-		throw std::runtime_error("Failed to create address render target: " + hresultToStr(rs));
+		throw std::runtime_error(std::format("Failed to create address render target: {}", hresultToStr(rs)));
 }
 
 ID3D11Buffer* RendererDx::createConstantBuffer(uint size) const {
-	D3D11_BUFFER_DESC bufferDesc{};
-	bufferDesc.Usage = D3D11_USAGE_DYNAMIC;
-	bufferDesc.ByteWidth = size;
-	bufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
+	D3D11_BUFFER_DESC bufferDesc = {
+		.ByteWidth = size,
+		.Usage = D3D11_USAGE_DYNAMIC,
+		.BindFlags = D3D11_BIND_CONSTANT_BUFFER,
+		.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE
+	};
 	ID3D11Buffer* buffer;
 	if (HRESULT rs = dev->CreateBuffer(&bufferDesc, nullptr, &buffer); FAILED(rs))
-		throw std::runtime_error("Failed to create constant buffer: " + hresultToStr(rs));
+		throw std::runtime_error(std::format("Failed to create constant buffer: {}", hresultToStr(rs)));
 	return buffer;
 }
 
 ID3D11Texture2D* RendererDx::createTexture(uvec2 res, DXGI_FORMAT format, D3D11_USAGE usage, uint bindFlags, uint accessFlags, const D3D11_SUBRESOURCE_DATA* subrscData) const {
-	D3D11_TEXTURE2D_DESC texDesc{};
-	texDesc.Width = res.x;
-	texDesc.Height = res.y;
-	texDesc.MipLevels = 1;
-	texDesc.ArraySize = 1;
-	texDesc.Format = format;
-	texDesc.SampleDesc.Count = 1;
-	texDesc.Usage = usage;
-	texDesc.BindFlags = bindFlags;
-	texDesc.CPUAccessFlags = accessFlags;
-
+	D3D11_TEXTURE2D_DESC texDesc = {
+		.Width = res.x,
+		.Height = res.y,
+		.MipLevels = 1,
+		.ArraySize = 1,
+		.Format = format,
+		.SampleDesc = { .Count = 1 },
+		.Usage = usage,
+		.BindFlags = bindFlags,
+		.CPUAccessFlags = accessFlags
+	};
 	ID3D11Texture2D* tex;
 	if (HRESULT rs = dev->CreateTexture2D(&texDesc, subrscData, &tex); FAILED(rs))
-		throw std::runtime_error("Failed to create texture: " + hresultToStr(rs));
+		throw std::runtime_error(std::format("Failed to create texture: {}", hresultToStr(rs)));
 	return tex;
 }
 
 ID3D11ShaderResourceView* RendererDx::createTextureView(ID3D11Texture2D* tex, DXGI_FORMAT format) {
-	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-	srvDesc.Format = format;
-	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Texture2D.MipLevels = 1;
-
+	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {
+		.Format = format,
+		.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D,
+		.Texture2D = { .MipLevels = 1 }
+	};
 	ID3D11ShaderResourceView* view;
 	if (HRESULT rs = dev->CreateShaderResourceView(tex, &srvDesc, &view); FAILED(rs))
-		throw std::runtime_error("Failed to create texture view: " + hresultToStr(rs));
+		throw std::runtime_error(std::format("Failed to create texture view: {}", hresultToStr(rs)));
 	return view;
 }
 
@@ -333,10 +341,10 @@ void RendererDx::updateView(ivec2& viewRes) {
 
 void RendererDx::startDraw(View* view) {
 	ViewDx* vw = static_cast<ViewDx*>(view);
-	D3D11_VIEWPORT viewport{};
-	viewport.Width = float(vw->rect.w);
-	viewport.Height = float(vw->rect.h);
-
+	D3D11_VIEWPORT viewport = {
+		.Width = float(vw->rect.w),
+		.Height = float(vw->rect.h)
+	};
 	ctx->RSSetViewports(1, &viewport);
 	ctx->OMSetRenderTargets(1, &vw->tgt, nullptr);
 	ctx->ClearRenderTargetView(vw->tgt, glm::value_ptr(bgColor));
@@ -356,12 +364,12 @@ void RendererDx::finishDraw(View* view) {
 
 void RendererDx::startSelDraw(View* view, ivec2 pos) {
 	float zero[4] = { 0.f, 0.f, 0.f, 0.f };
-	D3D11_VIEWPORT viewport{};
-	viewport.TopLeftX = float(-pos.x);
-	viewport.TopLeftY = float(-pos.y);
-	viewport.Width = float(view->rect.w);
-	viewport.Height = float(view->rect.h);
-
+	D3D11_VIEWPORT viewport = {
+		.TopLeftX = float(-pos.x),
+		.TopLeftY = float(-pos.y),
+		.Width = float(view->rect.w),
+		.Height = float(view->rect.h)
+	};
 	ctx->VSSetShader(vertSel, nullptr, 0);
 	ctx->PSSetShader(pixlSel, nullptr, 0);
 	ctx->RSSetState(rasterizerSel);
@@ -382,7 +390,7 @@ Widget* RendererDx::finishSelDraw(View*) {
 	ctx->CopyResource(outAddr, texAddr);
 	D3D11_MAPPED_SUBRESOURCE mapRsc;
 	if (HRESULT rs = ctx->Map(outAddr, 0, D3D11_MAP_READ, 0, &mapRsc); FAILED(rs))
-		throw std::runtime_error("Failed to map address memory: " + hresultToStr(rs));
+		throw std::runtime_error(std::format("Failed to map address memory: {}", hresultToStr(rs)));
 	uvec2 val;
 	memcpy(&val, mapRsc.pData, sizeof(uvec2));
 	ctx->Unmap(outAddr, 0);
@@ -391,14 +399,14 @@ Widget* RendererDx::finishSelDraw(View*) {
 	ctx->PSSetShader(pixlGui, nullptr, 0);
 	ctx->RSSetState(rasterizerGui);
 	ctx->OMSetBlendState(blendState, nullptr, 0xFFFFFFFF);
-	return reinterpret_cast<Widget*>(uintptr_t(val.x) | (uintptr_t(val.y) << 32));
+	return std::bit_cast<Widget*>(uintptr_t(val.x) | (uintptr_t(val.y) << 32));
 }
 
 template <class T>
 void RendererDx::uploadBuffer(ID3D11Buffer* buffer, const T& data) {
 	D3D11_MAPPED_SUBRESOURCE mapRsc;
 	if (HRESULT rs = ctx->Map(buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapRsc); FAILED(rs))
-		throw std::runtime_error("Failed to map buffer: " + hresultToStr(rs));
+		throw std::runtime_error(std::format("Failed to map buffer: {}", hresultToStr(rs)));
 	memcpy(mapRsc.pData, &data, sizeof(T));
 	ctx->Unmap(buffer, 0);
 }
@@ -430,13 +438,13 @@ Texture* RendererDx::texFromRpic(SDL_Surface* img) {
 			return nullptr;
 		fmt = DXGI_FORMAT_R8G8B8A8_UNORM;
 	}
-	TextureDx* tex = createTexture(img->pixels, uvec2(img->w, img->h), img->pitch, fmt);
+	TextureDx* tex = createTexture(static_cast<cbyte*>(img->pixels), uvec2(img->w, img->h), img->pitch, fmt);
 	SDL_FreeSurface(img);
 	return tex;
 }
 
 Texture* RendererDx::texFromText(const Pixmap& pm) {
-	return pm.pix ? createTexture(pm.pix.get(), glm::min(pm.res, uvec2(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)), pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM) : nullptr;
+	return pm.pix ? createTexture(reinterpret_cast<cbyte*>(pm.pix.get()), glm::min(pm.res, uvec2(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)), pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM) : nullptr;
 }
 
 void RendererDx::freeTexture(Texture* tex) {
@@ -444,7 +452,7 @@ void RendererDx::freeTexture(Texture* tex) {
 	delete tex;
 }
 
-RendererDx::TextureDx* RendererDx::createTexture(const void* pix, uvec2 res, uint pitch, DXGI_FORMAT format) {
+RendererDx::TextureDx* RendererDx::createTexture(const cbyte* pix, uvec2 res, uint pitch, DXGI_FORMAT format) {
 	ID3D11Texture2D* texture = nullptr;
 	ID3D11ShaderResourceView* textureView = nullptr;
 	try {

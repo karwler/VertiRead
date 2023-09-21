@@ -23,7 +23,7 @@ void InputSys::Controller::close() {
 // INPUT SYS
 
 InputSys::InputSys() :
-	bindings(World::fileSys()->getBindings())
+	bindings(World::fileSys()->loadBindings())
 {
 	reloadControllers();
 }
@@ -249,6 +249,23 @@ int InputSys::getAxisG(SDL_GameControllerAxis gaxis) const {
 			if (int val = checkAxisValue(SDL_GameControllerGetAxis(it.gamepad, gaxis)); val)
 				return val;
 	return 0;
+}
+
+string InputSys::getBoundName(Binding::Type type) const {
+	const Binding& bind = bindings[eint(type)];
+	if (bind.keyAssigned())
+		return SDL_GetScancodeName(bind.getKey());
+	if (bind.jbuttonAssigned())
+		return toStr(bind.getJctID());
+	if (bind.jhatAssigned())
+		return std::format("{:d} {}", bind.getJctID(), Binding::hatNames.at(bind.getJhatVal()));
+	if (bind.jaxisAssigned())
+		return std::format("{}{:d}", bind.jposAxisAssigned() ? '+' : '-', bind.getJctID());
+	if (bind.gbuttonAssigned())
+		return Binding::gbuttonNames[eint(bind.getGbutton())];
+	if (bind.gbuttonAssigned())
+		return std::format("{}{}", bind.gposAxisAssigned() ? '+' : '-', Binding::gaxisNames[eint(bind.getGaxis())]);
+	return string();
 }
 
 void InputSys::resetBindings() {

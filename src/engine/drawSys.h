@@ -21,14 +21,14 @@ private:
 	FT_LibraryRec_* lib = nullptr;
 	FT_FaceRec_* face = nullptr;
 	umap<uint, array<FT_BitmapGlyphRec_*, cacheSize>> glyphCache;
-	vector<uint8> fontData;
+	vector<cbyte> fontData;
 	float heightScale;
 	float baseScale;
 	uint height;
 	int mode;
 
-	const char* ptr;
-	const char* wordStart;
+	string_view::iterator ptr;
+	string_view::iterator wordStart;
 	size_t len;
 	size_t cpos;
 	uint xpos, ypos;
@@ -43,16 +43,16 @@ public:
 	void clearCache();
 	void setMode(Settings::Hinting hinting);
 	uint measureText(string_view text, uint size);
-	pair<uint, vector<const char*>> measureText(string_view text, uint size, uint limit);
+	pair<uint, vector<string_view::iterator>> measureText(string_view text, uint size, uint limit);
 	Pixmap renderText(string_view text, uint size);
 	Pixmap renderText(string_view text, uint size, uint limit);
 
 private:
-	void advanceTab(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs);
+	template <bool ml> void advanceTab(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs);
 	template <bool cached> void advanceChar(char32_t ch, char32_t prev, long advance);
-	template <bool cached> void advanceChar(char32_t ch, char32_t prev, long advance, int left, uint width);
-	bool breakLine(vector<const char*>& ln, uint size, uint limit, int left, uint width);
-	void advanceLine(vector<const char*>& ln, const char* pos, uint size);
+	template <bool cached, bool ml> void advanceChar(char32_t ch, char32_t prev, long advance, int left, uint width);
+	bool breakLine(vector<string_view::iterator>& ln, uint size, uint limit, int left, uint width);
+	void advanceLine(vector<string_view::iterator>& ln, string_view::iterator pos, uint size);
 	void resetLine();
 	bool setSize(string_view text, uint size);
 	void cacheGlyph(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs, char32_t ch, uint id);
@@ -82,7 +82,7 @@ public:
 	void updateView();
 	int findPointInView(ivec2 pos) const;
 	void setTheme(string_view name, Settings* sets, const FileSys* fileSys);
-	void setFont(const string& font, Settings* sets, const FileSys* fileSys);
+	void setFont(const fs::path& font, Settings* sets, const FileSys* fileSys);
 	void setFontHinting(Settings::Hinting hinting);
 	SDL_Surface* loadIcon(const string& path, int size);
 	pair<Texture*, bool> texture(const string& name) const;
@@ -138,5 +138,5 @@ inline void DrawSys::setFontHinting(Settings::Hinting hinting) {
 }
 
 inline umap<int, Renderer::View*>::const_iterator DrawSys::findViewForPoint(ivec2 pos) const {
-	return std::find_if(renderer->getViews().begin(), renderer->getViews().end(), [&pos](const pair<int, Renderer::View*>& it) -> bool { return it.second->rect.contains(pos); });
+	return rng::find_if(renderer->getViews(), [&pos](const pair<int, Renderer::View*>& it) -> bool { return it.second->rect.contains(pos); });
 }

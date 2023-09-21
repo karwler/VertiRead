@@ -1,6 +1,7 @@
 #include "compare.h"
+#include <cwctype>
 
-char32_t mbstowc(const char*& mb, size_t& len) {
+char32_t mbstowc(string_view::iterator& mb, size_t& len) {
 	if (!len)
 		return '\0';
 
@@ -56,66 +57,65 @@ void StrNatCmp::init() {
 
 #else
 
-int StrNatCmp::u8strcicmp(string_view ls, string_view rs) {
-	size_t llen = ls.length();
-	size_t rlen = rs.length();
-	const char* lmb = ls.data();
-	const char* rmb = rs.data();
-	while (llen && rlen)
-		if (char32_t lwc = mbstowc(lmb, llen), rwc = mbstowc(rmb, rlen); lwc != rwc)
-			if (wint_t ll = std::towlower(lwc), rl = std::towlower(rwc); ll != rl)
-				return int(ll) - int(rl);
-	return llen == 0 && rlen == 0 ? 0 : llen == 0 ? -1 : 1;
-}
-
-int StrNatCmp::u8cmp(const char* a, size_t alen, const char* b, size_t blen) {
+std::strong_ordering StrNatCmp::cmp(string_view sa, string_view sb) {
+	string_view::iterator a = sa.begin(), b = sb.begin();
+	size_t alen = sa.length(), blen = sb.length();
 	while (alen && blen) {
-		char32_t ca, cb;
-		do {
-			ca = mbstowc(a, alen);
-		} while (alen && std::iswspace(ca));
-		do {
-			cb = mbstowc(b, blen);
-		} while (blen && std::iswspace(cb));
-
+		char32_t ca = skipSpaces(a, alen), cb = skipSpaces(b, blen);
 		if (std::iswdigit(ca) && std::iswdigit(cb))
-			if (int dif = ca == '0' || cb == '0' ? u8cmpLeft(ca, a, alen, cb, b, blen) : u8cmpRight(ca, a, alen, cb, b, blen))
+			if (std::strong_ordering dif = ca == '0' || cb == '0' ? cmpLeft(ca, a, alen, cb, b, blen) : cmpRight(ca, a, alen, cb, b, blen); dif != 0)
 				return dif;
-		if (int dif = cmpLetter(ca, cb))
+		if (std::strong_ordering dif = cmpLetter(ca, cb); dif != 0)
 			return dif;
 	}
-	return alen == 0 && blen == 0 ? 0 : alen == 0 ? -1 : 1;
+	return alen == 0 && blen == 0 ? std::strong_ordering::equal : alen == 0 ? std::strong_ordering::less : std::strong_ordering::greater;
 }
 
-int StrNatCmp::u8cmpLeft(char32_t ca, const char* a, size_t alen, char32_t cb, const char* b, size_t blen) {
+char32_t StrNatCmp::skipSpaces(string_view::iterator& p, size_t& l) {
+	char32_t c;
+	do {
+		c = mbstowc(p, l);
+	} while (l && std::iswspace(c));
+	return c;
+}
+
+std::strong_ordering StrNatCmp::cmpLeft(char32_t ca, string_view::iterator a, size_t alen, char32_t cb, string_view::iterator b, size_t blen) {
 	for (;; ca = mbstowc(a, alen), cb = mbstowc(b, blen)) {
 		bool nad = !std::iswdigit(ca), nbd = !std::iswdigit(cb);
 		if (nad && nbd)
-			return 0;
+			return std::strong_ordering::equal;
 		if (nad)
-			return -1;
+			return std::strong_ordering::less;
 		if (nbd)
-			return 1;
-		if (int dif = cmpLetter(ca, cb))
+			return std::strong_ordering::greater;
+		if (std::strong_ordering dif = cmpLetter(ca, cb); dif != 0)
 			return dif;
 		if (!(alen && blen))
-			return alen == 0 && blen == 0 ? 0 : alen == 0 ? -1 : 1;
+			return alen == 0 && blen == 0 ? std::strong_ordering::equal : alen == 0 ? std::strong_ordering::less : std::strong_ordering::greater;
 	}
 }
 
-int StrNatCmp::u8cmpRight(char32_t ca, const char* a, size_t alen, char32_t cb, const char* b, size_t blen) {
-	for (int bias = 0;; ca = mbstowc(a, alen), cb = mbstowc(b, blen)) {
+std::strong_ordering StrNatCmp::cmpRight(char32_t ca, string_view::iterator a, size_t alen, char32_t cb, string_view::iterator b, size_t blen) {
+	for (std::strong_ordering bias = std::strong_ordering::equal;; ca = mbstowc(a, alen), cb = mbstowc(b, blen)) {
 		bool nad = !std::iswdigit(ca), nbd = !std::iswdigit(cb);
 		if (nad && nbd)
 			return bias;
 		if (nad)
-			return -1;
+			return std::strong_ordering::less;
 		if (nbd)
-			return 1;
-		if (int dif = cmpLetter(ca, cb); dif && !bias)
+			return std::strong_ordering::greater;
+		if (std::strong_ordering dif = cmpLetter(ca, cb); dif != 0 && bias == 0)
 			bias = dif;
 		if (!(alen && blen))
-			return alen == 0 && blen == 0 ? bias : alen == 0 ? -1 : 1;
+			return alen == 0 && blen == 0 ? bias : alen == 0 ? std::strong_ordering::less : std::strong_ordering::greater;
 	}
+}
+
+std::strong_ordering StrNatCmp::cmpLetter(char32_t a, char32_t b) {
+	if (a != b) {
+		wint_t au = std::towlower(a), bu = std::towlower(b);
+		return au != bu ? au <=> bu : a <=> b;
+	}
+	return std::strong_ordering::equal;
 }
 #endif

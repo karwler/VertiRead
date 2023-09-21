@@ -28,7 +28,7 @@ RendererGl::RendererGl(const umap<int, SDL_Window*>& windows, Settings* sets, iv
 	if (windows.size() == 1 && windows.begin()->first == singleDspId) {
 		SDL_GL_GetDrawableSize(windows.begin()->second, &viewRes.x, &viewRes.y);
 		if (!static_cast<ViewGl*>(views.emplace(singleDspId, new ViewGl(windows.begin()->second, Recti(ivec2(0), viewRes), SDL_GL_CreateContext(windows.begin()->second))).first->second)->ctx)
-			throw std::runtime_error("Failed to create context:"s + linend + SDL_GetError());
+			throw std::runtime_error(std::format("Failed to create context:" LINEND "{}", SDL_GetError()));
 		initGl(viewRes, sets->vsync, bgcolor);
 	} else {
 		views.reserve(windows.size());
@@ -36,7 +36,7 @@ RendererGl::RendererGl(const umap<int, SDL_Window*>& windows, Settings* sets, iv
 			Recti wrect = sets->displays.at(id).translate(-origin);
 			SDL_GL_GetDrawableSize(windows.begin()->second, &wrect.w, &wrect.h);
 			if (!static_cast<ViewGl*>(views.emplace(id, new ViewGl(win, wrect, SDL_GL_CreateContext(win))).first->second)->ctx)
-				throw std::runtime_error("Failed to create context:"s + linend + SDL_GetError());
+				throw std::runtime_error(std::format("Failed to create context:" LINEND "{}", SDL_GetError()));
 			viewRes = glm::max(viewRes, wrect.end());
 			initGl(wrect.size(), sets->vsync, bgcolor);
 		}
@@ -151,50 +151,20 @@ void RendererGl::initFunctions() {
 #endif
 
 void RendererGl::initShader() {
-	const char* vertSrc = R"r(#version 130
-
-const vec2 vposs[4] = vec2[](
-	vec2(0.0, 0.0),
-	vec2(1.0, 0.0),
-	vec2(0.0, 1.0),
-	vec2(1.0, 1.0)
-);
-
-uniform vec4 pview;
-uniform ivec4 rect;
-uniform ivec4 frame;
-
-noperspective out vec2 fragUV;
-
-void main() {
-	vec4 dst = vec4(0.0);
-	if (rect[2] > 0 && rect[3] > 0 && frame[2] > 0 && frame[3] > 0) {
-		dst.xy = vec2(max(rect.xy, frame.xy));
-		dst.zw = vec2(min(rect.xy + rect.zw, frame.xy + frame.zw)) - dst.xy;
-	}
-
-	if (dst[2] > 0.0 && dst[3] > 0.0) {
-		vec4 uvrc = vec4(dst.xy - vec2(rect.xy), dst.zw) / vec4(rect.zwzw);
-		fragUV = vposs[gl_VertexID] * uvrc.zw + uvrc.xy;
-		vec2 loc = vposs[gl_VertexID] * dst.zw + dst.xy;
-		gl_Position = vec4((loc.x - pview.x) / pview[2] - 1.0, -(loc.y - pview.y) / pview[3] + 1.0, 0.0, 1.0);
-   } else {
-		fragUV = vec2(0.0);
-		gl_Position = vec4(-2.0, -2.0, 0.0, 1.0);
-	}
-})r";
-	const char* fragSrc = R"r(#version 130
-
-uniform sampler2D colorMap;
-uniform vec4 color;
-
-noperspective in vec2 fragUV;
-
-out vec4 outColor;
-
-void main() {
-	outColor = texture(colorMap, fragUV) * color;
-})r";
+	const char* vertSrc =
+#ifdef NDEBUG
+#include "shaders/glGui.vert.rel.h"
+#else
+#include "shaders/glGui.vert.dbg.h"
+#endif
+	;
+	const char* fragSrc =
+#ifdef NDEBUG
+#include "shaders/glGui.frag.rel.h"
+#else
+#include "shaders/glGui.frag.dbg.h"
+#endif
+	;
 	progGui = createShader(vertSrc, fragSrc, "gui");
 	uniPviewGui = glGetUniformLocation(progGui, "pview");
 	uniRectGui = glGetUniformLocation(progGui, "rect");
@@ -202,44 +172,20 @@ void main() {
 	uniColorGui = glGetUniformLocation(progGui, "color");
 	glUniform1i(glGetUniformLocation(progGui, "colorMap"), 0);
 
-	vertSrc = R"r(#version 130
-
-const vec2 vposs[4] = vec2[](
-	vec2(0.0, 0.0),
-	vec2(1.0, 0.0),
-	vec2(0.0, 1.0),
-	vec2(1.0, 1.0)
-);
-
-uniform vec4 pview;
-uniform ivec4 rect;
-uniform ivec4 frame;
-
-void main() {
-	vec4 dst = vec4(0.0);
-	if (rect[2] > 0 && rect[3] > 0 && frame[2] > 0 && frame[3] > 0) {
-		dst.xy = vec2(max(rect.xy, frame.xy));
-		dst.zw = vec2(min(rect.xy + rect.zw, frame.xy + frame.zw)) - dst.xy;
-	}
-
-	if (dst[2] > 0.0 && dst[3] > 0.0) {
-		vec2 loc = vposs[gl_VertexID] * dst.zw + dst.xy;
-		gl_Position = vec4((loc.x - pview.x) / pview[2] - 1.0, -(loc.y - pview.y) / pview[3] + 1.0, 0.0, 1.0);
-   } else
-		gl_Position = vec4(-2.0, -2.0, 0.0, 1.0);
-})r";
-	fragSrc = R"r(#version 130
-
-uniform uvec2 addr;
-
-out uvec2 outAddr;
-
-void main() {
-	if (addr.x != 0u || addr.y != 0u)
-		outAddr = addr;
-	else
-		discard;
-})r";
+	vertSrc =
+#ifdef NDEBUG
+#include "shaders/glSel.vert.rel.h"
+#else
+#include "shaders/glSel.vert.dbg.h"
+#endif
+	;
+	fragSrc =
+#ifdef NDEBUG
+#include "shaders/glSel.frag.rel.h"
+#else
+#include "shaders/glSel.frag.dbg.h"
+#endif
+	;
 	progSel = createShader(vertSrc, fragSrc, "sel");
 	uniPviewSel = glGetUniformLocation(progSel, "pview");
 	uniRectSel = glGetUniformLocation(progSel, "rect");
@@ -293,12 +239,12 @@ GLuint RendererGl::createShader(const char* vertSrc, const char* fragSrc, const 
 	GLuint vert = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vert, 1, &vertSrc, nullptr);
 	glCompileShader(vert);
-	checkStatus(vert, GL_COMPILE_STATUS, glGetShaderiv, glGetShaderInfoLog, name + ".vert"s);
+	checkStatus(vert, GL_COMPILE_STATUS, glGetShaderiv, glGetShaderInfoLog, std::format("{}.vert", name));
 
 	GLuint frag = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(frag, 1, &fragSrc, nullptr);
 	glCompileShader(frag);
-	checkStatus(frag, GL_COMPILE_STATUS, glGetShaderiv, glGetShaderInfoLog, name + ".frag"s);
+	checkStatus(frag, GL_COMPILE_STATUS, glGetShaderiv, glGetShaderInfoLog, std::format("{}.frag", name));
 
 	GLuint sprog = glCreateProgram();
 	glAttachShader(sprog, vert);
@@ -308,12 +254,12 @@ GLuint RendererGl::createShader(const char* vertSrc, const char* fragSrc, const 
 	glDetachShader(sprog, frag);
 	glDeleteShader(vert);
 	glDeleteShader(frag);
-	checkStatus(sprog, GL_LINK_STATUS, glGetProgramiv, glGetProgramInfoLog, name + " program"s);
+	checkStatus(sprog, GL_LINK_STATUS, glGetProgramiv, glGetProgramInfoLog, std::format("{} program", name));
 	glUseProgram(sprog);
 	return sprog;
 }
 
-template <class C, class I>
+template <Invocable<GLuint, GLenum, GLint*> C, Invocable<GLuint, GLsizei, GLsizei*, GLchar*> I>
 void RendererGl::checkStatus(GLuint id, GLenum stat, C check, I info, const string& name) {
 	int res;
 	if (check(id, stat, &res); res == GL_FALSE) {
@@ -323,7 +269,7 @@ void RendererGl::checkStatus(GLuint id, GLenum stat, C check, I info, const stri
 			info(id, res, nullptr, err.data());
 			err = trim(err);
 		}
-		err = !err.empty() ? name + ":" + linend + err : name + ": unknown error";
+		err = !err.empty() ? std::format("{}:" LINEND "{}", name, err) : std::format("{}: unknown error", name);
 		logError(err);
 		throw std::runtime_error(err);
 	}
@@ -332,28 +278,28 @@ void RendererGl::checkStatus(GLuint id, GLenum stat, C check, I info, const stri
 void RendererGl::checkFramebufferStatus(const char* name) {
 	switch (GLenum rc = glCheckFramebufferStatus(GL_FRAMEBUFFER)) {
 	case GL_FRAMEBUFFER_UNDEFINED:
-		throw std::runtime_error(name + ": GL_FRAMEBUFFER_UNDEFINED"s);
+		throw std::runtime_error(std::format("{}: GL_FRAMEBUFFER_UNDEFINED", name));
 	case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
-		throw std::runtime_error(name + ": GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT"s);
+		throw std::runtime_error(std::format("{}: GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT", name));
 	case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
-		throw std::runtime_error(name + ": GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT"s);
+		throw std::runtime_error(std::format("{}: GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT", name));
 #ifndef OPENGLES
 	case GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER:
-		throw std::runtime_error(name + ": GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER"s);
+		throw std::runtime_error(std::format("{}: GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER", name));
 	case GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER:
-		throw std::runtime_error(name + ": GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER"s);
+		throw std::runtime_error(std::format("{}: GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER", name));
 #endif
 	case GL_FRAMEBUFFER_UNSUPPORTED:
-		throw std::runtime_error(name + ": GL_FRAMEBUFFER_UNSUPPORTED"s);
+		throw std::runtime_error(std::format("{}: GL_FRAMEBUFFER_UNSUPPORTED", name));
 	case GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
-		throw std::runtime_error(name + ": GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE"s);
+		throw std::runtime_error(std::format("{}: GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE", name));
 #ifndef OPENGLES
 	case GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS:
-		throw std::runtime_error(name + ": GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS"s);
+		throw std::runtime_error(std::format("{}: GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS", name));
 #endif
 	default:
 		if (rc != GL_FRAMEBUFFER_COMPLETE)
-			throw std::runtime_error(name + ": unknown framebuffer error"s);
+			throw std::runtime_error(std::format("{}: unknown framebuffer error", name));
 	}
 }
 
@@ -404,12 +350,12 @@ Widget* RendererGl::finishSelDraw(View* view) {
 	glEnable(GL_BLEND);
 	glDisable(GL_SCISSOR_TEST);
 	glUseProgram(progGui);
-	return reinterpret_cast<Widget*>(uintptr_t(val.x) | (uintptr_t(val.y) << 32));
+	return std::bit_cast<Widget*>(uintptr_t(val.x) | (uintptr_t(val.y) << 32));
 }
 
 Texture* RendererGl::texFromIcon(SDL_Surface* img) {
 	if (auto [pic, ifmt, pfmt, type] = pickPixFormat<true>(limitSize(img, maxTextureSize)); pic) {
-		TextureGl* tex = createTexture(pic->pixels, uvec2(pic->w, pic->h), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, GL_LINEAR);
+		TextureGl* tex = createTexture(static_cast<cbyte*>(pic->pixels), uvec2(pic->w, pic->h), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, GL_LINEAR);
 		SDL_FreeSurface(pic);
 		return tex;
 	}
@@ -418,7 +364,7 @@ Texture* RendererGl::texFromIcon(SDL_Surface* img) {
 
 Texture* RendererGl::texFromRpic(SDL_Surface* img) {
 	if (auto [pic, ifmt, pfmt, type] = pickPixFormat<false>(img); pic) {
-		TextureGl* tex = createTexture(pic->pixels, uvec2(pic->w, pic->h), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, GL_LINEAR);
+		TextureGl* tex = createTexture(static_cast<cbyte*>(pic->pixels), uvec2(pic->w, pic->h), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, GL_LINEAR);
 		SDL_FreeSurface(pic);
 		return tex;
 	}
@@ -426,7 +372,7 @@ Texture* RendererGl::texFromRpic(SDL_Surface* img) {
 }
 
 Texture* RendererGl::texFromText(const Pixmap& pm) {
-	return pm.pix ? createTexture(pm.pix.get(), glm::min(pm.res, uvec2(maxTextureSize)), pm.res.x, GL_RGBA8, textPixFormat, GL_UNSIGNED_BYTE, GL_NEAREST) : nullptr;
+	return pm.pix ? createTexture(reinterpret_cast<cbyte*>(pm.pix.get()), glm::min(pm.res, uvec2(maxTextureSize)), pm.res.x, GL_RGBA8, textPixFormat, GL_UNSIGNED_BYTE, GL_NEAREST) : nullptr;
 }
 
 void RendererGl::freeTexture(Texture* tex) {
@@ -434,7 +380,7 @@ void RendererGl::freeTexture(Texture* tex) {
 	delete tex;
 }
 
-RendererGl::TextureGl* RendererGl::createTexture(const void* pix, uvec2 res, uint tpitch, GLint iform, GLenum pform, GLenum type, GLint filter) {
+RendererGl::TextureGl* RendererGl::createTexture(const cbyte* pix, uvec2 res, uint tpitch, GLint iform, GLenum pform, GLenum type, GLint filter) {
 	GLuint id;
 	glGenTextures(1, &id);
 	glBindTexture(GL_TEXTURE_2D, id);
@@ -511,11 +457,12 @@ const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* RendererGl::getSquashableF
 
 void RendererGl::setCompression(Settings::Compression compression) {
 	switch (compression) {
-	case Settings::Compression::none:
+	using enum Settings::Compression;
+	case none:
 		iformRgb = GL_RGB8;
 		iformRgba = GL_RGBA8;
 		break;
-	case Settings::Compression::b16:
+	case b16:
 #ifdef OPENGLES
 		iformRgb = GL_RGB565;
 #else
@@ -523,7 +470,7 @@ void RendererGl::setCompression(Settings::Compression compression) {
 #endif
 		iformRgba = GL_RGB5_A1;
 		break;
-	case Settings::Compression::compress:
+	case compress:
 		iformRgb = GL_COMPRESSED_RGB;
 		iformRgba = GL_COMPRESSED_RGBA;
 	}
@@ -539,9 +486,9 @@ pair<uint, Settings::Compression> RendererGl::getSettings(vector<pair<u32vec2, s
 void APIENTRY RendererGl::debugMessage(GLenum source, GLenum type, uint id, GLenum severity, GLsizei, const char* message, const void*) {
 	if (id == 131169 || id == 131185 || id == 131218 || id == 131204)
 		return;
-	string msg = "Debug message " + toStr(id) + ": " + message;
+	string msg = std::format("Debug message {}: {}", id, message);
 	if (msg.back() != '\n' && msg.back() != '\r')
-		msg += linend;
+		msg += LINEND;
 
 	switch (source) {
 	case GL_DEBUG_SOURCE_API:

@@ -11,7 +11,7 @@
 #include <SDL2/SDL_opengl.h>
 #endif
 
-class RendererGl : public Renderer {
+class RendererGl final : public Renderer {
 private:
 #ifdef OPENGLES
 	static constexpr GLenum textPixFormat = GL_RGBA;
@@ -117,8 +117,8 @@ private:
 	GLuint createShader(const char* vertSrc, const char* fragSrc, const char* name) const;
 	void checkFramebufferStatus(const char* name);
 
-	template <class C, class I> static void checkStatus(GLuint id, GLenum stat, C check, I info, const string& name);
-	static TextureGl* createTexture(const void* pix, uvec2 res, uint tpitch, GLint iform, GLenum pform, GLenum type, GLint filter);
+	template <Invocable<GLuint, GLenum, GLint*> C, Invocable<GLuint, GLsizei, GLsizei*, GLchar*> I> static void checkStatus(GLuint id, GLenum stat, C check, I info, const string& name);
+	static TextureGl* createTexture(const cbyte* pix, uvec2 res, uint tpitch, GLint iform, GLenum pform, GLenum type, GLint filter);
 	template <bool keep> tuple<SDL_Surface*, GLint, GLenum, GLenum> pickPixFormat(SDL_Surface* img) const;
 #ifndef OPENGLES
 #ifndef NDEBUG

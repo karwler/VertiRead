@@ -1,6 +1,5 @@
 #pragma once
 
-#include "downloader.h"
 #include "utils/settings.h"
 #include <atomic>
 #include <thread>
@@ -66,7 +65,7 @@ public:
 	virtual void eventHide();
 	void eventBoss();
 	virtual void eventRefresh();
-	virtual void eventFileDrop(const fs::path&) {}
+	virtual void eventFileDrop(const char*) {}
 	virtual void eventClosing() {}
 	void onResize();
 
@@ -82,9 +81,9 @@ public:
 	int getLineHeight() const;
 	static Recti calcTextContextRect(const vector<Widget*>& items, ivec2 pos, ivec2 size, int margin);
 protected:
-	template <class T> static int findMaxLength(T pos, T end, int height);
-	Texture* makeTooltip(const char* str);
-	Texture* makeTooltipL(const char* str);
+	template <Iterator T> static int findMaxLength(T pos, T end, int height);
+	Texture* makeTooltip(string_view str);
+	Texture* makeTooltipL(string_view str);
 
 private:
 	void eventSelect(Direction dir);
@@ -117,12 +116,12 @@ protected:
 	virtual Size fileEntrySize(string_view name);
 };
 
-class ProgBooks : public ProgFileExplorer {
+class ProgBooks final : public ProgFileExplorer {
 public:
 	~ProgBooks() final = default;
 
 	void eventSpecEscape() final;
-	void eventFileDrop(const fs::path& file) final;
+	void eventFileDrop(const char* file) final;
 
 	RootLayout* createLayout() final;
 protected:
@@ -130,12 +129,12 @@ protected:
 	Size fileEntrySize(string_view name) final;
 };
 
-class ProgPageBrowser : public ProgFileExplorer {
+class ProgPageBrowser final : public ProgFileExplorer {
 public:
 	~ProgPageBrowser() final = default;
 
 	void eventSpecEscape() final;
-	void eventFileDrop(const fs::path& file) final;
+	void eventFileDrop(const char* file) final;
 	void resetFileIcons();
 
 	RootLayout* createLayout() final;
@@ -144,7 +143,7 @@ protected:
 	Label* makeFileEntry(const Size& size, string&& name) final;
 };
 
-class ProgReader : public ProgState {
+class ProgReader final : public ProgState {
 public:
 	ReaderBox* reader;
 private:
@@ -180,44 +179,11 @@ public:
 	Overlay* createOverlay() final;
 
 private:
+	Texture* makeTooltipWithKey(const char* text, Binding::Type type);
 	static int modifySpeed(float value);	// change scroll speed depending on pressed bindings
 };
 
-#ifdef DOWNLOADER
-class ProgDownloader : public ProgState {
-public:
-	LabelEdit* query;
-	ScrollArea* results;
-	ScrollArea* chapters;
-	CheckBox* chaptersTick;
-
-	vector<string> resultUrls, chapterUrls;
-
-public:
-	~ProgDownloader() final = default;
-
-	void eventEscape() final;
-
-	RootLayout* createLayout() final;
-	Comic curInfo() const;
-	void printResults(vector<pair<string, string>>&& comics);
-	void printInfo(vector<pair<string, string>>&& chaps);
-};
-
-class ProgDownloads : public ProgState {
-public:
-	ScrollArea* list;
-
-public:
-	~ProgDownloads() final = default;
-
-	void eventEscape() final;
-
-	RootLayout* createLayout() final;
-};
-#endif
-
-class ProgSettings : public ProgState {
+class ProgSettings final : public ProgState {
 public:
 	fs::path oldPathBuffer;	// for keeping old library path between decisions
 	std::thread thread;
@@ -237,7 +203,7 @@ public:
 	void eventMultiFullscreen() final;
 	void eventHide() final;
 	void eventRefresh() final;
-	void eventFileDrop(const fs::path& file) final;
+	void eventFileDrop(const char* file) final;
 
 	RootLayout* createLayout() final;
 	Widget* createLimitEdit();
@@ -252,7 +218,7 @@ inline u32vec2 ProgSettings::getDvice(size_t id) const {
 	return devices[id].first;
 }
 
-class ProgSearchDir : public ProgFileExplorer {
+class ProgSearchDir final : public ProgFileExplorer {
 public:
 	~ProgSearchDir() final = default;
 

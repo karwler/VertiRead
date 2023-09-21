@@ -24,7 +24,7 @@ private:
 	bool run = true;		// whether the loop in which the program runs should continue
 
 public:
-	int start();
+	int start(vector<string>&& cmdVals, uset<string>&& cmdFlags);
 	void close();
 
 	float getDSec() const;
@@ -48,7 +48,7 @@ public:
 	Settings* getSets();
 
 private:
-	void init();
+	void init(vector<string>&& cmdVals, uset<string>&& cmdFlags);
 	void exec();
 
 	void createWindow();

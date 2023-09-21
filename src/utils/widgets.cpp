@@ -7,9 +7,9 @@
 
 // SCROLL BAR
 
-bool ScrollBar::tick(float dSec, ivec2 listSize, ivec2 size) {
+bool Scrollable::tick(float dSec) {
 	if (motion != vec2(0.f)) {
-		moveListPos(motion, listSize, size);
+		moveListPos(motion);
 		throttleMotion(motion.x, dSec);
 		throttleMotion(motion.y, dSec);
 		World::scene()->updateSelect();
@@ -18,30 +18,30 @@ bool ScrollBar::tick(float dSec, ivec2 listSize, ivec2 size) {
 	return false;
 }
 
-bool ScrollBar::hold(ivec2 mPos, uint8 mBut, Widget* wgt, ivec2 listSize, ivec2 pos, ivec2 size, bool vert) {
+bool Scrollable::hold(ivec2 mPos, uint8 mBut, Widget* wgt, ivec2 pos, ivec2 size, bool vert) {
 	bool moved = false;
 	motion = vec2(0.f);	// get rid of scroll motion
 	if (mBut == SDL_BUTTON_LEFT) {	// check scroll bar left click
 		World::scene()->setCapture(wgt);
 		SDL_CaptureMouse(SDL_TRUE);
-		if ((draggingSlider = barRect(listSize, pos, size, vert).contains(mPos))) {
-			int sp = sliderPos(listSize, pos, size, vert), ss = sliderSize(listSize, size, vert);
+		if ((draggingSlider = barRect(pos, size, vert).contains(mPos))) {
+			int sp = sliderPos(pos, size, vert), ss = sliderSize;
 			if (moved = outRange(mPos[vert], sp, sp + ss); moved)	// if mouse outside of slider but inside bar
-				setSlider(mPos[vert] - ss / 2, listSize, pos, size, vert);
-			diffSliderMouse = mPos.y - sliderPos(listSize, pos, size, vert);	// get difference between mouse y and slider y
+				setSlider(mPos[vert] - ss / 2, pos, vert);
+			diffSliderMouse = mPos.y - sliderPos(pos, size, vert);	// get difference between mouse y and slider y
 		}
 	}
 	return moved;
 }
 
-void ScrollBar::drag(ivec2 mPos, ivec2 mMov, ivec2 listSize, ivec2 pos, ivec2 size, bool vert) {
+void Scrollable::drag(ivec2 mPos, ivec2 mMov, ivec2 pos, bool vert) {
 	if (draggingSlider)
-		setSlider(mPos.y - diffSliderMouse, listSize, pos, size, vert);
+		setSlider(mPos.y - diffSliderMouse, pos, vert);
 	else
-		moveListPos(mMov * vswap(0, -1, !vert), listSize, size);
+		moveListPos(mMov * vswap(0, -1, !vert));
 }
 
-void ScrollBar::undrag(ivec2 mPos, uint8 mBut, bool vert) {
+void Scrollable::undrag(ivec2 mPos, uint8 mBut, bool vert) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		if (!World::scene()->cursorInClickRange(mPos, mBut) && !draggingSlider)
 			motion = World::inputSys()->getMouseMove() * vswap(0, -1, !vert);
@@ -50,12 +50,19 @@ void ScrollBar::undrag(ivec2 mPos, uint8 mBut, bool vert) {
 	}
 }
 
-void ScrollBar::scroll(ivec2 wMov, ivec2 listSize, ivec2 size, bool vert) {
-	moveListPos(vswap(wMov.x, wMov.y, !vert), listSize, size);
+void Scrollable::scroll(ivec2 wMov, bool vert) {
+	moveListPos(vswap(wMov.x, wMov.y, !vert));
 	motion = vec2(0.f);
 }
 
-void ScrollBar::throttleMotion(float& mov, float dSec) {
+void Scrollable::setLimits(ivec2 lsize, ivec2 wsize, bool vert) {
+	listSize = lsize;
+	listMax = ivec2(wsize.x < lsize.x ? lsize.x - wsize.x : 0, wsize.y < listSize.y ? lsize.y - wsize.y : 0);
+	sliderSize = wsize[vert] < lsize[vert] ? wsize[vert] * wsize[vert] / lsize[vert] : wsize[vert];
+	sliderMax = wsize[vert] - sliderSize;
+}
+
+void Scrollable::throttleMotion(float& mov, float dSec) {
 	if (mov > 0.f) {
 		if (mov -= throttle * dSec; mov < 0.f)
 			mov = 0.f;
@@ -63,21 +70,20 @@ void ScrollBar::throttleMotion(float& mov, float dSec) {
 		mov = 0.f;
 }
 
-void ScrollBar::setSlider(int spos, ivec2 listSize, ivec2 pos, ivec2 size, bool vert) {
-	int lim = listLim(listSize, size)[vert];
-	listPos[vert] = std::clamp((spos - pos[vert]) * lim / sliderLim(listSize, size, vert), 0, lim);
+void Scrollable::setSlider(int spos, ivec2 pos, bool vert) {
+	int lim = listMax[vert];
+	listPos[vert] = std::clamp((spos - pos[vert]) * lim / sliderMax, 0, lim);
 }
 
-Recti ScrollBar::barRect(ivec2 listSize, ivec2 pos, ivec2 size, bool vert) {
-	int bs = barSize(listSize, size, vert);
+Recti Scrollable::barRect(ivec2 pos, ivec2 size, bool vert) const {
+	int bs = barSize(size, vert);
 	return vert ? Rect(pos.x + size.x - bs, pos.y, bs, size.y) : Rect(pos.x, pos.y + size.y - bs, size.x, bs);
 }
 
-Recti ScrollBar::sliderRect(ivec2 listSize, ivec2 pos, ivec2 size, bool vert) const {
-	int bs = barSize(listSize, size, vert);
-	int sp = sliderPos(listSize, pos, size, vert);
-	int ss = sliderSize(listSize, size, vert);
-	return vert ? Rect(pos.x + size.x - bs, sp, bs, ss) : Rect(sp, pos.y + size.y - bs, ss, bs);
+Recti Scrollable::sliderRect(ivec2 pos, ivec2 size, bool vert) const {
+	int bs = barSize(size, vert);
+	int sp = sliderPos(pos, size, vert);
+	return vert ? Rect(pos.x + size.x - bs, sp, bs, sliderSize) : Rect(sp, pos.y + size.y - bs, sliderSize, bs);
 }
 
 // WIDGET
@@ -119,11 +125,12 @@ void Widget::onNavSelect(Direction dir) {
 
 int Widget::sizeToPixAbs(const Size& siz, int res) const {
 	switch (siz.mod) {
-	case Size::rela:
+	using enum Size::Mode;
+	case rela:
 		return int(siz.prc * float(res));
-	case Size::pixv:
+	case pixv:
 		return siz.pix;
-	case Size::calc:
+	case calc:
 		return siz(this);
 	}
 	return 0;
@@ -207,7 +214,7 @@ bool Button::hasDoubleclick() const {
 }
 
 Color Button::color() const {
-	if (parent->getSelected().count(const_cast<Button*>(this)))
+	if (parent->getSelected().contains(const_cast<Button*>(this)))
 		return Color::light;
 	if (navSelectable() && World::scene()->select == this)
 		return Color::select;
@@ -273,8 +280,8 @@ void Slider::onHold(ivec2 mPos, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		World::scene()->setCapture(this);
 		SDL_CaptureMouse(SDL_TRUE);
-		if (int sp = sliderPos(); outRange(mPos.x, sp, sp + ScrollBar::barSizeVal))	// if mouse outside of slider
-			setSlider(mPos.x - ScrollBar::barSizeVal / 2);
+		if (int sp = sliderPos(); outRange(mPos.x, sp, sp + Scrollable::barSizeVal))	// if mouse outside of slider
+			setSlider(mPos.x - Scrollable::barSizeVal / 2);
 		diffSliderMouse = mPos.x - sliderPos();	// get difference between mouse x and slider x
 	}
 }
@@ -303,12 +310,12 @@ Recti Slider::barRect() const {
 
 Recti Slider::sliderRect() const {
 	ivec2 pos = position(), siz = size();
-	return Recti(sliderPos(), pos.y, ScrollBar::barSizeVal, siz.y);
+	return Recti(sliderPos(), pos.y, Scrollable::barSizeVal, siz.y);
 }
 
 int Slider::sliderLim() const {
 	ivec2 siz = size();
-	return siz.x - siz.y/2 - ScrollBar::barSizeVal;
+	return siz.x - siz.y/2 - Scrollable::barSizeVal;
 }
 
 // PROGRESS BAR
@@ -390,12 +397,13 @@ int Label::textIconOffset() const {
 ivec2 Label::textPos() const {
 	ivec2 pos = position();
 	switch (align) {
-	case Alignment::left:
+	using enum Alignment;
+	case left:
 		return ivec2(pos.x + textIconOffset() + textMargin, pos.y);
-	case Alignment::center: {
+	case center: {
 		int iofs = textIconOffset();
 		return ivec2(pos.x + iofs + (size().x - iofs - textTex->getRes().x) / 2, pos.y); }
-	case Alignment::right:
+	case right:
 		return ivec2(pos.x + size().x - textTex->getRes().x - textMargin, pos.y);
 	}
 	return pos;
@@ -420,12 +428,12 @@ TextBox::TextBox(const Size& size, int lineH, string&& lines, PCall leftCall, PC
 {}
 
 void TextBox::tick(float dSec) {
-	scroll.tick(dSec, textTex->getRes(), size());
+	Scrollable::tick(dSec);
 }
 
 void TextBox::onResize() {
 	updateTextTex();
-	scroll.setListPos(scroll.listPos, textTex ? textTex->getRes() : ivec2(0), size());
+	setListPos(listPos);
 }
 
 void TextBox::postInit() {
@@ -433,19 +441,19 @@ void TextBox::postInit() {
 }
 
 void TextBox::onHold(ivec2 mPos, uint8 mBut) {
-	scroll.hold(mPos, mBut, this, textTex ? textTex->getRes() : ivec2(0), position(), size(), true);
+	hold(mPos, mBut, this, position(), size(), true);
 }
 
 void TextBox::onDrag(ivec2 mPos, ivec2 mMov) {
-	scroll.drag(mPos, mMov, textTex ? textTex->getRes() : ivec2(0), position(), size(), true);
+	drag(mPos, mMov, position(), true);
 }
 
 void TextBox::onUndrag(ivec2 mPos, uint8 mBut) {
-	scroll.undrag(mPos, mBut, true);
+	undrag(mPos, mBut, true);
 }
 
 void TextBox::onScroll(ivec2 wMov) {
-	scroll.scroll(wMov, textTex ? textTex->getRes() : ivec2(0), size(), true);
+	scroll(wMov, true);
 }
 
 bool TextBox::navSelectable() const {
@@ -461,23 +469,24 @@ int TextBox::textIconOffset() const {
 }
 
 ivec2 TextBox::textPos() const {
-	return Label::textPos() - scroll.listPos;
+	return Label::textPos() - listPos;
 }
 
 void TextBox::setText(const string& str) {
 	text = str;
-	scroll.listPos = ivec2(0);
+	listPos = ivec2(0);
 }
 
 void TextBox::setText(string&& str) {
 	text = std::move(str);
-	scroll.listPos = ivec2(0);
+	listPos = ivec2(0);
 }
 
 void TextBox::updateTextTex() {
 	if (textTex)
 		World::renderer()->freeTexture(textTex);
-	textTex = World::drawSys()->renderText(text, lineSize, size().x);
+	if (textTex = World::drawSys()->renderText(text, lineSize, size().x); textTex)
+		setLimits(textTex->getRes(), size(), true);
 }
 
 // COMBO BOX
@@ -485,7 +494,7 @@ void TextBox::updateTextTex() {
 ComboBox::ComboBox(const Size& size, string&& curOption, vector<string>&& opts, PCall call, Texture* tip, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
 	Label(size, std::move(curOption), call, call, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
 	options(std::move(opts)),
-	curOpt(std::min(size_t(std::find(options.begin(), options.end(), text) - options.begin()), options.size()))
+	curOpt(std::min(size_t(rng::find(options, text) - options.begin()), options.size()))
 {}
 
 ComboBox::ComboBox(const Size& size, size_t curOption, vector<string>&& opts, PCall call, Texture* tip, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
@@ -710,38 +719,35 @@ uint LabelEdit::findWordEnd() {
 
 void LabelEdit::cleanText() {
 	switch (textType) {
-	case TextType::sInt:
+	using enum TextType;
+	case sInt:
 		text.erase(std::remove_if(text.begin() + ptrdiff_t(text[0] == '-'), text.end(), [](char c) -> bool { return !isdigit(c); }), text.end());
 		break;
-	case TextType::sIntSpaced:
+	case sIntSpaced:
 		cleanSIntSpacedText();
 		break;
-	case TextType::uInt:
-		text.erase(std::remove_if(text.begin(), text.end(), [](char c) -> bool { return !isdigit(c); }), text.end());
+	case uInt:
+		text.erase(rng::remove_if(text, [](char c) -> bool { return !isdigit(c); }).begin(), text.end());
 		break;
-	case TextType::uIntSpaced:
+	case uIntSpaced:
 		cleanUIntSpacedText();
 		break;
-	case TextType::sFloat:
+	case sFloat:
 		cleanSFloatText();
 		break;
-	case TextType::sFloatSpaced:
+	case sFloatSpaced:
 		cleanSFloatSpacedText();
 		break;
-	case TextType::uFloat:
+	case uFloat:
 		cleanUFloatText();
 		break;
-	case TextType::uFloatSpaced:
+	case uFloatSpaced:
 		cleanUFloatSpacedText();
-		break;
-	default:
-		if (textType != TextType::text)
-			throw std::runtime_error("Invalid text type: " + toStr(textType));
 	}
 }
 
 void LabelEdit::cleanSIntSpacedText() {
-	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
+	text.erase(text.begin(), rng::find_if(text, notSpace));
 	for (string::iterator it = text.begin() + ptrdiff_t(text[0] == '-'); it != text.end();) {
 		if (isdigit(*it))
 			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
@@ -757,7 +763,7 @@ void LabelEdit::cleanSIntSpacedText() {
 }
 
 void LabelEdit::cleanUIntSpacedText() {
-	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
+	text.erase(text.begin(), rng::find_if(text, notSpace));
 	for (string::iterator it = text.begin(); it != text.end();) {
 		if (isdigit(*it))
 			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
@@ -772,7 +778,7 @@ void LabelEdit::cleanUIntSpacedText() {
 }
 
 void LabelEdit::cleanSFloatText() {
-	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
+	text.erase(text.begin(), rng::find_if(text, notSpace));
 	bool dot = false;
 	for (string::iterator it = text.begin() + ptrdiff_t(text[0] == '-'); it != text.end();) {
 		if (isdigit(*it))
@@ -789,7 +795,7 @@ void LabelEdit::cleanSFloatText() {
 }
 
 void LabelEdit::cleanSFloatSpacedText() {
-	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
+	text.erase(text.begin(), rng::find_if(text, notSpace));
 	bool dot = false;
 	for (string::iterator it = text.begin() + ptrdiff_t(text[0] == '-'); it != text.end();) {
 		if (isdigit(*it))
@@ -809,7 +815,7 @@ void LabelEdit::cleanSFloatSpacedText() {
 }
 
 void LabelEdit::cleanUFloatText() {
-	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
+	text.erase(text.begin(), rng::find_if(text, notSpace));
 	bool dot = false;
 	for (string::iterator it = text.begin(); it != text.end();) {
 		if (isdigit(*it))
@@ -826,7 +832,7 @@ void LabelEdit::cleanUFloatText() {
 }
 
 void LabelEdit::cleanUFloatSpacedText() {
-	text.erase(text.begin(), std::find_if(text.begin(), text.end(), notSpace));
+	text.erase(text.begin(), rng::find_if(text, notSpace));
 	bool dot = false;
 	for (string::iterator it = text.begin(); it != text.end();) {
 		if (isdigit(*it))
@@ -873,7 +879,7 @@ void KeyGetter::onKeypress(const SDL_Keysym& key) {
 void KeyGetter::onJButton(uint8 jbutton) {
 	if (acceptType == AcceptType::joystick) {
 		World::inputSys()->getBinding(bindingType).setJbutton(jbutton);
-		setText(prefButton + toStr(jbutton));
+		setText(std::format(fmtButton, jbutton));
 	}
 	World::scene()->setCapture(nullptr);
 }
@@ -887,7 +893,7 @@ void KeyGetter::onJHat(uint8 jhat, uint8 value) {
 				value = SDL_HAT_LEFT;
 		}
 		World::inputSys()->getBinding(bindingType).setJhat(jhat, value);
-		setText(prefHat + toStr(jhat) + prefSep + Binding::hatNames.at(value));
+		setText(std::format(fmtHat, jhat, Binding::hatNames.at(value)));
 	}
 	World::scene()->setCapture(nullptr);
 }
@@ -895,7 +901,7 @@ void KeyGetter::onJHat(uint8 jhat, uint8 value) {
 void KeyGetter::onJAxis(uint8 jaxis, bool positive) {
 	if (acceptType == AcceptType::joystick) {
 		World::inputSys()->getBinding(bindingType).setJaxis(jaxis, positive);
-		setText(string(prefAxis) + (positive ? prefAxisPos : prefAxisNeg) + toStr(jaxis));
+		setText(std::format(fmtAxis, positive ? prefAxisPos : prefAxisNeg, jaxis));
 	}
 	World::scene()->setCapture(nullptr);
 }
@@ -911,7 +917,7 @@ void KeyGetter::onGButton(SDL_GameControllerButton gbutton) {
 void KeyGetter::onGAxis(SDL_GameControllerAxis gaxis, bool positive) {
 	if (acceptType == AcceptType::gamepad) {
 		World::inputSys()->getBinding(bindingType).setGaxis(gaxis, positive);
-		setText(string(1, (positive ? prefAxisPos : prefAxisNeg)) + Binding::gaxisNames[eint(gaxis)]);
+		setText(std::format("{}{}", positive ? prefAxisPos : prefAxisNeg, Binding::gaxisNames[eint(gaxis)]));
 	}
 	World::scene()->setCapture(nullptr);
 }
@@ -922,43 +928,39 @@ bool KeyGetter::navSelectable() const {
 
 void KeyGetter::clearBinding() {
 	switch (acceptType) {
-	case AcceptType::keyboard:
+	using enum AcceptType;
+	case keyboard:
 		World::inputSys()->getBinding(bindingType).clearAsgKey();
 		break;
-	case AcceptType::joystick:
+	case joystick:
 		World::inputSys()->getBinding(bindingType).clearAsgJct();
 		break;
-	case AcceptType::gamepad:
+	case gamepad:
 		World::inputSys()->getBinding(bindingType).clearAsgGct();
-		break;
-	default:
-		throw std::runtime_error("Invalid accept type: " + toStr(acceptType));
 	}
 	setText(string());
 }
 
 string KeyGetter::bindingText(Binding::Type binding, KeyGetter::AcceptType accept) {
-	switch (Binding& bind = World::inputSys()->getBinding(binding); accept) {
-	case AcceptType::keyboard:
+	switch (const Binding& bind = World::inputSys()->getBinding(binding); accept) {
+	using enum AcceptType;
+	case keyboard:
 		if (bind.keyAssigned())
 			return SDL_GetScancodeName(bind.getKey());
 		break;
-	case AcceptType::joystick:
+	case joystick:
 		if (bind.jbuttonAssigned())
-			return prefButton + toStr(bind.getJctID());
+			return std::format(fmtButton, bind.getJctID());
 		else if (bind.jhatAssigned())
-			return prefHat + toStr(bind.getJctID()) + prefSep + Binding::hatNames.at(bind.getJhatVal());
+			return std::format(fmtHat, bind.getJctID(), Binding::hatNames.at(bind.getJhatVal()));
 		else if (bind.jaxisAssigned())
-			return string(prefAxis) + (bind.jposAxisAssigned() ? prefAxisPos : prefAxisNeg) + toStr(bind.getJctID());
+			return std::format(fmtAxis, bind.jposAxisAssigned() ? prefAxisPos : prefAxisNeg, bind.getJctID());
 		break;
-	case AcceptType::gamepad:
+	case gamepad:
 		if (bind.gbuttonAssigned())
 			return Binding::gbuttonNames[eint(bind.getGbutton())];
 		else if (bind.gaxisAssigned())
-			return string(1, (bind.gposAxisAssigned() ? prefAxisPos : prefAxisNeg)) + Binding::gaxisNames[eint(bind.getGaxis())];
-		break;
-	default:
-		throw std::runtime_error("Invalid accept type: " + toStr(accept));
+			return std::format("{}{}", bind.gposAxisAssigned() ? prefAxisPos : prefAxisNeg, Binding::gaxisNames[eint(bind.getGaxis())]);
 	}
 	return string();
 }
@@ -994,23 +996,23 @@ void WindowArranger::calcDisplays() {
 	totalDim = ivec2(0);
 
 	for (auto& [id, rect] : World::sets()->displays) {
-		disps.emplace(id, Dsp(rect, true));
+		disps.try_emplace(id, rect, true);
 		totalDim = glm::max(totalDim, rect.end());
 	}
 	ivec2 border = vswap(totalDim[vertical], 0, vertical);
 	for (auto& [id, rect] : all) {
 		Recti dst = rect;
-		if (std::any_of(disps.begin(), disps.end(), [&dst](const pair<int, Dsp>& p) -> bool { return p.second.full.overlaps(dst); })) {
+		if (rng::any_of(disps, [&dst](const pair<int, Dsp>& p) -> bool { return p.second.full.overlaps(dst); })) {
 			dst.pos() = border;
 			border[vertical] += dst.size()[vertical];
 		}
-		if (auto [it, ok] = disps.emplace(id, Dsp(dst, false)); ok)
+		if (auto [it, ok] = disps.try_emplace(id, dst, false); ok)
 			totalDim = glm::max(totalDim, dst.end());
 	}
 }
 
 void WindowArranger::buildEntries() {
-	float scale = entryScale(size());
+	float scale = entryScale(size()[!vertical]);
 	for (auto& [id, dsp] : disps) {
 		dsp.rect = Recti(vec2(dsp.full.pos()) * scale, vec2(dsp.full.size()) * scale);
 		dsp.txt = World::drawSys()->renderText(toStr(id), dsp.rect.h);
@@ -1063,7 +1065,7 @@ void WindowArranger::onHold(ivec2 mPos, uint8 mBut) {
 void WindowArranger::onDrag(ivec2 mPos, ivec2) {
 	dragr.pos() = mPos - disps.at(dragging).rect.size() / 2;
 	if (ivec2 spos = snapDrag(); spos.x >= 0 && spos.y >= 0)
-		dragr.pos() = ivec2(vec2(spos) * entryScale(size())) + position() + winMargin;
+		dragr.pos() = ivec2(vec2(spos) * entryScale(size()[!vertical])) + position() + winMargin;
 }
 
 void WindowArranger::onUndrag(ivec2, uint8 mBut) {
@@ -1072,7 +1074,7 @@ void WindowArranger::onUndrag(ivec2, uint8 mBut) {
 		World::scene()->setCapture(nullptr);
 
 		ivec2 spos = snapDrag();
-		float scale = entryScale(size());
+		float scale = entryScale(size()[!vertical]);
 		Dsp& dsp = disps.find(dragging)->second;
 		dsp.full.pos() = spos.x >= 0 && spos.y >= 0 ? spos : ivec2(vec2(dragr.pos() - position() - winMargin) / scale);
 		glm::clamp(dsp.full.pos(), ivec2(0), totalDim);
@@ -1083,7 +1085,7 @@ void WindowArranger::onUndrag(ivec2, uint8 mBut) {
 }
 
 ivec2 WindowArranger::snapDrag() const {
-	constexpr array<pair<uint, uint>, 24> snapRelationsOuter = {
+	static constexpr array<pair<uint, uint>, 24> snapRelationsOuter = {
 		pair(0, 2), pair(0, 5), pair(0, 7),	// top left to top right, bottom left, bottom right
 		pair(1, 5), pair(1, 6), pair(1, 7),	// top center to bottom left, bottom center, bottom right
 		pair(2, 0), pair(2, 5), pair(2, 7),	// top right to top left, bottom left, bottom right
@@ -1093,10 +1095,10 @@ ivec2 WindowArranger::snapDrag() const {
 		pair(6, 0), pair(6, 1), pair(6, 2),	// bottom center to top left, top center, top right
 		pair(7, 0), pair(7, 2), pair(7, 5)	// bottom right to top left, top right, bottom left
 	};
-	constexpr array<pair<uint, uint>, 8> snapRelationsInner = {
+	static constexpr array<pair<uint, uint>, 8> snapRelationsInner = {
 		pair(0, 0), pair(1, 1), pair(2, 2), pair(3, 3), pair(4, 4), pair(5, 5), pair(6, 6), pair(7, 7)
 	};
-	ivec2 (* const offsetCalc[8])(ivec2, ivec2) = {
+	static constexpr ivec2 (* const offsetCalc[8])(ivec2, ivec2) = {
 		[](ivec2, ivec2 pnt) -> ivec2 { return pnt; },
 		[](ivec2 siz, ivec2 pnt) -> ivec2 { return ivec2(pnt.x - siz.x / 2, pnt.y); },
 		[](ivec2 siz, ivec2 pnt) -> ivec2 { return ivec2(pnt.x - siz.x, pnt.y); },
@@ -1108,7 +1110,7 @@ ivec2 WindowArranger::snapDrag() const {
 	};
 
 	umap<int, Dsp>::const_iterator snapFrom = disps.find(dragging);
-	array<ivec2, 8> snaps = getSnapPoints(Recti(vec2(dragr.pos() - position() - winMargin) / entryScale(size()), snapFrom->second.full.size()));
+	array<ivec2, 8> snaps = getSnapPoints(Recti(vec2(dragr.pos() - position() - winMargin) / entryScale(size()[!vertical]), snapFrom->second.full.size()));
 	uint snapId;
 	ivec2 snapPnt;
 	float minDist = FLT_MAX;
@@ -1161,7 +1163,7 @@ Color WindowArranger::color() const {
 }
 
 const Texture* WindowArranger::getTooltip() {
-	return disps.count(selected) ? tooltip : nullptr;
+	return disps.contains(selected) ? tooltip : nullptr;
 }
 
 bool WindowArranger::draggingDisp(int id) const {
@@ -1176,8 +1178,8 @@ int WindowArranger::dispUnderPos(ivec2 pnt) const {
 	return Renderer::singleDspId;
 }
 
-float WindowArranger::entryScale(ivec2 siz) const {
-	int fsiz = siz[!vertical] - winMargin * 2;
+float WindowArranger::entryScale(int fsiz) const {
+	fsiz -= winMargin * 2;
 	return int(float(totalDim[!vertical]) * bscale) <= fsiz ? bscale : float(totalDim[!vertical]) / float(fsiz);
 }
 

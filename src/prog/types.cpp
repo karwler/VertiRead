@@ -19,8 +19,8 @@ ArchiveDir::ArchiveDir(ArchiveDir* daddy, string&& dirname) :
 {}
 
 void ArchiveDir::sort() {
-	std::sort(dirs.begin(), dirs.end(), [](const ArchiveDir& a, const ArchiveDir& b) -> bool { return StrNatCmp::less(a.name, b.name); });
-	std::sort(files.begin(), files.end(), [](const ArchiveFile& a, const ArchiveFile& b) -> bool { return StrNatCmp::less(a.name, b.name); });
+	rng::sort(dirs, [](const ArchiveDir& a, const ArchiveDir& b) -> bool { return StrNatCmp::less(a.name, b.name); });
+	rng::sort(files, [](const ArchiveFile& a, const ArchiveFile& b) -> bool { return StrNatCmp::less(a.name, b.name); });
 	for (ArchiveDir& it : dirs)
 		it.sort();
 }
@@ -41,7 +41,7 @@ string ArchiveDir::path() const {
 	for (const ArchiveDir* it = this; it->parent; it = it->parent) {
 		str[--len] = '/';
 		len -= it->name.length();
-		std::copy(it->name.begin(), it->name.end(), str.begin() + len);
+		rng::copy(it->name, str.begin() + len);
 	}
 	return str;
 }
@@ -56,14 +56,14 @@ pair<ArchiveDir*, ArchiveFile*> ArchiveDir::find(string_view path) {
 		vector<ArchiveDir>::iterator dit = node->findDir(path.substr(p, e - p));
 		if (dit == dirs.end())
 			return pair(nullptr, nullptr);
-		node = &*dit;
+		node = std::to_address(dit);
 	}
 	if (p < path.length()) {
 		string_view sname = path.substr(p);
 		if (vector<ArchiveDir>::iterator dit = node->findDir(sname); dit != dirs.end())
-			node = &*dit;
+			node = std::to_address(dit);
 		else if (vector<ArchiveFile>::iterator fit = node->findFile(sname); fit != files.end())
-			return pair(node, &*fit);
+			return pair(node, std::to_address(fit));
 		else
 			return pair(nullptr, nullptr);
 	}
@@ -82,14 +82,14 @@ vector<ArchiveFile>::iterator ArchiveDir::findFile(string_view fname) {
 
 // RESULT ASYNC
 
-BrowserResultAsync::BrowserResultAsync(fs::path&& root, fs::path&& directory, fs::path&& pname, ArchiveDir&& aroot) :
+BrowserResultAsync::BrowserResultAsync(string&& root, string&& directory, string&& pname, ArchiveDir&& aroot) :
 	rootDir(std::move(root)),
 	curDir(std::move(directory)),
 	file(std::move(pname)),
 	arch(std::move(aroot))
 {}
 
-BrowserResultPicture::BrowserResultPicture(bool inArch, fs::path&& root, fs::path&& directory, fs::path&& pname, ArchiveDir&& aroot) :
+BrowserResultPicture::BrowserResultPicture(bool inArch, string&& root, string&& directory, string&& pname, ArchiveDir&& aroot) :
 	BrowserResultAsync(std::move(root), std::move(directory), std::move(pname), std::move(aroot)),
 	archive(inArch)
 {}
@@ -102,12 +102,12 @@ BrowserPictureProgress::BrowserPictureProgress(BrowserResultPicture* rp, SDL_Sur
 
 // FILE WATCH
 
-FileWatch::FileWatch(const fs::path& path) :
+FileWatch::FileWatch(const char* path) :
 #ifdef _WIN32
-	ebuf(HeapAlloc(GetProcessHeap(), HEAP_GENERATE_EXCEPTIONS, esiz))
+	ebuf(static_cast<cbyte*>(HeapAlloc(GetProcessHeap(), HEAP_GENERATE_EXCEPTIONS, esiz)))
 #else
 	ino(inotify_init1(IN_NONBLOCK)),
-	ebuf(static_cast<inotify_event*>(mmap(nullptr, esiz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)))
+	ebuf(static_cast<cbyte*>(mmap(nullptr, esiz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)))
 #endif
 {
 #ifdef _WIN32
@@ -130,26 +130,26 @@ FileWatch::~FileWatch() {
 #endif
 }
 
-void FileWatch::set(const fs::path& path) {
+void FileWatch::set(const char* path) {
 	unset();
 	try {
 #ifdef _WIN32
 		if (overlapped.hEvent) {
-			if (fs::is_directory(path)) {
-				dirc = CreateFileW(path.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
+			if (fs::path wp = toPath(path); fs::is_directory(wp)) {
+				dirc = CreateFileW(wp.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
 				flags = FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME;
 				filter.clear();
-			} else if (fs::path parent = parentPath(path); fs::is_directory(parent)) {
-				dirc = CreateFileW(parent.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
+			} else if (wp = parentPath(path); fs::is_directory(wp)) {
+				dirc = CreateFileW(wp.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
 				flags = FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_SIZE;
-				filter = path.filename();
+				filter = wp.filename();
 			}
 			if (dirc != INVALID_HANDLE_VALUE && !ReadDirectoryChangesW(dirc, ebuf, esiz, true, flags, nullptr, &overlapped, nullptr))
 				unset();
 		}
 #else
 		if (ino != -1)
-			watch = inotify_add_watch(ino, path.c_str(), fs::is_directory(path) ? IN_CREATE | IN_DELETE | IN_DELETE_SELF | IN_MOVE_SELF | IN_MOVED_FROM | IN_MOVED_TO : IN_DELETE_SELF | IN_MODIFY | IN_MOVE_SELF);
+			watch = inotify_add_watch(ino, path, fs::is_directory(path) ? IN_CREATE | IN_DELETE | IN_DELETE_SELF | IN_MOVE_SELF | IN_MOVED_FROM | IN_MOVED_TO : IN_DELETE_SELF | IN_MODIFY | IN_MOVE_SELF);
 #endif
 	} catch (const fs::filesystem_error& err) {
 		logError(err.what());
@@ -182,7 +182,7 @@ pair<vector<pair<bool, string>>, bool> FileWatch::changed() {
 			break;
 		}
 
-		for (FILE_NOTIFY_INFORMATION* event = static_cast<FILE_NOTIFY_INFORMATION*>(ebuf);; event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(reinterpret_cast<uint8*>(event) + event->NextEntryOffset)) {
+		for (FILE_NOTIFY_INFORMATION* event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(ebuf);; event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(event + event->NextEntryOffset)) {
 			switch (event->Action) {
 			case FILE_ACTION_ADDED: case FILE_ACTION_RENAMED_NEW_NAME:
 				if (filter.empty())
@@ -216,7 +216,7 @@ pair<vector<pair<bool, string>>, bool> FileWatch::changed() {
 
 		inotify_event* event;
 		for (ssize_t i = 0; i < len; i += sizeof(inotify_event) + event->len) {
-			event = reinterpret_cast<inotify_event*>(static_cast<void*>(reinterpret_cast<uint8*>(ebuf) + i));
+			event = static_cast<inotify_event*>(static_cast<void*>(ebuf + i));
 			if (int bias = bool(event->mask & IN_CREATE) + bool(event->mask & IN_MOVED_TO) - bool(event->mask & IN_DELETE) - bool(event->mask & IN_MOVED_FROM))
 				files.emplace_back(bias > 0, string(event->name, event->len));
 			if (event->mask & (IN_DELETE_SELF | IN_MODIFY | IN_MOVE_SELF)) {

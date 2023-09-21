@@ -1,13 +1,12 @@
 cmake_minimum_required(VERSION 3.12.4)
 project(VertiRead VERSION 1.0.0 DESCRIPTION "Comic/Manga reader" HOMEPAGE_URL "https://github.com/karwler/vertiread" LANGUAGES CXX)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 if(NOT GENERATOR_IS_MULTI_CONFIG AND NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE Release)
 endif()
 
-option(DOWNLOADER "Build with downloader. (currently mostly broken)" OFF)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 	option(NATIVE "Build for the current CPU." OFF)
 endif()
@@ -45,28 +44,8 @@ set(SRC_FILES
 	"src/engine/windowSys.h"
 	"src/engine/world.cpp"
 	"src/engine/world.h"
-	"src/engine/shaders/dx.gui.pixl.dbg.h"
-	"src/engine/shaders/dx.gui.pixl.rel.h"
-	"src/engine/shaders/dx.gui.vert.dbg.h"
-	"src/engine/shaders/dx.gui.vert.rel.h"
-	"src/engine/shaders/dx.sel.pixl.dbg.h"
-	"src/engine/shaders/dx.sel.pixl.rel.h"
-	"src/engine/shaders/dx.sel.vert.dbg.h"
-	"src/engine/shaders/dx.sel.vert.rel.h"
-	"src/engine/shaders/vk.gui.frag.dbg.h"
-	"src/engine/shaders/vk.gui.frag.rel.h"
-	"src/engine/shaders/vk.gui.vert.dbg.h"
-	"src/engine/shaders/vk.gui.vert.rel.h"
-	"src/engine/shaders/vk.sel.frag.dbg.h"
-	"src/engine/shaders/vk.sel.frag.rel.h"
-	"src/engine/shaders/vk.sel.vert.dbg.h"
-	"src/engine/shaders/vk.sel.vert.rel.h"
-	"src/engine/shaders/vk.conv.comp.dbg.h"
-	"src/engine/shaders/vk.conv.comp.rel.h"
 	"src/prog/browser.cpp"
 	"src/prog/browser.h"
-	"src/prog/downloader.cpp"
-	"src/prog/downloader.h"
 	"src/prog/program.cpp"
 	"src/prog/program.h"
 	"src/prog/progs.cpp"
@@ -83,7 +62,47 @@ set(SRC_FILES
 	"src/utils/utils.h"
 	"src/utils/widgets.cpp"
 	"src/utils/widgets.h")
+if(DIRECTX)
+	list(APPEND SRC_FILES
+		"src/engine/shaders/dxGuiPs.dbg.h"
+		"src/engine/shaders/dxGuiPs.rel.h"
+		"src/engine/shaders/dxGuiVs.dbg.h"
+		"src/engine/shaders/dxGuiVs.rel.h"
+		"src/engine/shaders/dxSelPs.dbg.h"
+		"src/engine/shaders/dxSelPs.rel.h"
+		"src/engine/shaders/dxSelVs.dbg.h"
+		"src/engine/shaders/dxSelVs.rel.h")
+endif()
+if(OPENGL)
+	list(APPEND SRC_FILES
+		"src/engine/shaders/glGui.frag.dbg.h"
+		"src/engine/shaders/glGui.frag.rel.h"
+		"src/engine/shaders/glGui.vert.dbg.h"
+		"src/engine/shaders/glGui.vert.rel.h"
+		"src/engine/shaders/glSel.frag.dbg.h"
+		"src/engine/shaders/glSel.frag.rel.h"
+		"src/engine/shaders/glSel.vert.dbg.h"
+		"src/engine/shaders/glSel.vert.rel.h")
 
+	foreach(GLFILE "rsc/shaders/glGui.frag" "rsc/shaders/glGui.vert" "rsc/shaders/glSel.frag" "rsc/shaders/glSel.vert")
+		file(READ "${CMAKE_SOURCE_DIR}/${GLFILE}" GL_CODE)
+		get_filename_component(GLFILE_NAME ${GLFILE} NAME)
+		file(WRITE "${CMAKE_SOURCE_DIR}/src/engine/shaders/${GLFILE_NAME}.dbg.h" "R\"r(${GL_CODE})r\"")
+	endforeach()
+endif()
+if(VULKAN)
+	list(APPEND SRC_FILES
+		"src/engine/shaders/vkConv.comp.dbg.h"
+		"src/engine/shaders/vkConv.comp.rel.h"
+		"src/engine/shaders/vkGui.frag.dbg.h"
+		"src/engine/shaders/vkGui.frag.rel.h"
+		"src/engine/shaders/vkGui.vert.dbg.h"
+		"src/engine/shaders/vkGui.vert.rel.h"
+		"src/engine/shaders/vkSel.frag.dbg.h"
+		"src/engine/shaders/vkSel.frag.rel.h"
+		"src/engine/shaders/vkSel.vert.dbg.h"
+		"src/engine/shaders/vkSel.vert.rel.h")
+endif()
 if(WIN32)
 	list(APPEND SRC_FILES "rsc/resource.rc")
 endif()
@@ -227,12 +246,6 @@ if(WIN32)
 		compileLib("https://download.savannah.gnu.org/releases/freetype/freetype-${VER_FT2}.tar.gz" "${DIR_FT2}" "cmake\;..\;-G\;NMake Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DFT_ENABLE_ERROR_STRINGS=1\;-DFT_DISABLE_ZLIB=1\;-DFT_DISABLE_BZIP2=1\;-DFT_DISABLE_PNG=1\;-DFT_DISABLE_HARFBUZZ=1\;-DFT_DISABLE_BROTLI=1;${MAKE_CMD}" "${BIN_FT2}" "${DIR_LIB}/freetype-${VER_FT2}")
 		link_directories("${LIB_ARC}" "${BIN_SDL}" "${BIN_IMG}" "${BIN_FT2}")
 		include_directories("${INC_ARC}" "${DIR_SDL}/include" "${DIR_IMG}/include" "${DIR_FT2}/include")
-		if(DOWNLOADER)
-			compileLib("https://curl.haxx.se/download/curl-${VER_CURL}.zip" "${DIR_CURL}" "${MAKE_CMD}\;/f\;Makefile.vc\;mode=dll\;MACHINE=${VMACHINE}" "${DIR_CURL}/winbuild" "${DIR_LIB}/curl-${VER_CURL}")
-			compileLib("https://gitlab.gnome.org/GNOME/libxml2/-/archive/v${VER_LXML}/libxml2-v${VER_LXML}.zip" "${DIR_LXML}" "cscript\;configure.js\;compiler=msvc\;iconv=no;${MAKE_CMD}\;/f\;Makefile.msvc" "${DIR_LXML}/win32" "${DIR_LIB}/libxml2-v${VER_LXML}")
-			link_directories("${OUT_CURL}/lib" "${BIN_LXML}")
-			include_directories("${OUT_CURL}/include" "${DIR_LXML}/include")
-		endif()
 	else()
 		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 			set(VMACHINE "win64")
@@ -260,13 +273,6 @@ if(WIN32)
 		compileLib("https://download.savannah.gnu.org/releases/freetype/freetype-${VER_FT2}.tar.gz" "${DIR_FT2}" "cmake\;..\;-G\;MinGW Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DFT_ENABLE_ERROR_STRINGS=1\;-DFT_DISABLE_ZLIB=1\;-DFT_DISABLE_BZIP2=1\;-DFT_DISABLE_PNG=1\;-DFT_DISABLE_HARFBUZZ=1\;-DFT_DISABLE_BROTLI=1;${MAKE_CMD}" "${BIN_FT2}" "${DIR_LIB}/freetype-${VER_FT2}")
 		link_directories("${DIR_ARC}/build/libarchive" "${DIR_SDL}/${VMARCH}-w64-mingw32/lib" "${DIR_IMG}/${VMARCH}-w64-mingw32/lib" "${BIN_FT2}")
 		include_directories("${DIR_ARC}/libarchive" "${DIR_SDL}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_IMG}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_FT2}/include")
-
-		if(DOWNLOADER)
-			downloadLib("https://curl.haxx.se/windows/dl-${VER_CURL}/curl-${VER_CURL}-${VMACHINE}-mingw.zip" "${DIR_CURL}" "")
-			compileLib("https://gitlab.gnome.org/GNOME/libxml2/-/archive/v${VER_LXML}/libxml2-v${VER_LXML}.zip" "${DIR_LXML}" "cscript\;configure.js\;compiler=mingw\;iconv=no;${MAKE_CMD}\;-f\;Makefile.mingw" "${DIR_LXML}/win32" "${DIR_LIB}/libxml2-v${VER_LXML}")
-			link_directories("${OUT_CURL}/lib" "${BIN_LXML}")
-			include_directories("${OUT_CURL}/include" "${DIR_LXML}/include")
-		endif()
 	endif()
 else()
 	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -288,21 +294,16 @@ else()
 
 	find_package(Freetype REQUIRED)
 	include_directories("${FREETYPE_INCLUDE_DIRS}")
-	if(DOWNLOADER)
-		find_package(LibXml2 REQUIRED)
-		include_directories("${LIBXML2_INCLUDE_DIRS}")
-	endif()
 endif()
 
 # compiler flags
-add_compile_definitions($<$<BOOL:${DOWNLOADER}>:DOWNLOADER>
-						$<$<BOOL:${DIRECTX}>:WITH_DIRECTX>
+add_compile_definitions($<$<BOOL:${DIRECTX}>:WITH_DIRECTX>
 						"$<$<BOOL:${OPENGL}>:WITH_OPENGL;$<$<BOOL:${OPENGLES}>:OPENGLES>>"
 						$<$<BOOL:${VULKAN}>:WITH_VULKAN>
 						"$<$<BOOL:${WIN32}>:UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;NOMINMAX;$<$<NOT:$<BOOL:${MSVC}>>:_WIN32_WINNT=0x600>>")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	add_compile_options(-Wall -Wextra -pedantic-errors -Wformat=2 -Wmissing-declarations -Wold-style-cast -Wshadow -Wunreachable-code -Wno-implicit-fallthrough -Wno-old-style-cast -Wno-switch $<$<NOT:$<BOOL:${MINGW}>>:-Wdouble-promotion>)
+	add_compile_options(-Wall -Wextra -pedantic-errors -Wformat=2 -Wmissing-declarations -Wold-style-cast -Wshadow -Wunreachable-code -Wno-implicit-fallthrough -Wno-missing-field-initializers -Wno-old-style-cast -Wno-switch $<$<NOT:$<BOOL:${MINGW}>>:-Wdouble-promotion>)
 	if(NATIVE)
 		add_compile_options(-march=native)
 	elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -325,8 +326,7 @@ target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image freetype archive
 						"$<$<BOOL:${UNIX}>:pthread;dl>"
 						"$<$<BOOL:${DIRECTX}>:d3d11.lib;dxgi.lib>"
 						"$<$<BOOL:${OPENGL}>:$<IF:$<BOOL:${WIN32}>,opengl32,$<IF:$<BOOL:${OPENGLES}>,GLESv2,GL>>>"
-						"$<$<BOOL:${VULKAN}>:$<IF:$<BOOL:${WIN32}>,vulkan-1,vulkan>>"
-						"$<$<BOOL:${DOWNLOADER}>:$<IF:$<BOOL:${WIN32}>,libcurl;libxml2,curl;xml2>>")
+						"$<$<BOOL:${VULKAN}>:$<IF:$<BOOL:${WIN32}>,vulkan-1,vulkan>>")
 if(ICU_FOUND)
 	if(WIN32)
 		target_link_libraries(${PROJECT_NAME} ${ICU_UC_LIBRARIES} ${ICU_IN_LIBRARIES})
@@ -369,21 +369,6 @@ if(WIN32)
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ICU}/icudt${ICU_VER_MAJ}.dll" "${BIN_ICU}/icuin${ICU_VER_MAJ}.dll" "${BIN_ICU}/icuuc${ICU_VER_MAJ}.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
 							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${LIC_ICU}/LICENSE" "${LICN_DIR}/LICENSE.icu.txt")
-	endif()
-	if(DOWNLOADER)
-		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-			                COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_LXML}/libxml2.dll" "${PBOUT_DIR}"
-							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_LXML}/Copyright" "${LICN_DIR}/Copyright.libxml.txt"
-							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_CURL}/$<IF:$<BOOL:${MSVC}>,COPYING,COPYING.txt>" "${LICN_DIR}/COPYING.curl.txt"
-							COMMAND "$<$<NOT:$<BOOL:${MSVC}>>:${CMAKE_COMMAND};-E;copy_if_different;${DIR_CURL}/COPYING-brotli.txt;${DIR_CURL}/COPYING-libidn2.txt;${DIR_CURL}/COPYING-libssh2.txt;${DIR_CURL}/COPYING-nghttp2.txt;${DIR_CURL}/COPYING-openssl.txt;${DIR_CURL}/COPYING-zlib.txt;${LICN_DIR}>"
-							COMMAND_EXPAND_LISTS)
-		if(MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-								COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_CURL}/libcurl.dll" "${PBOUT_DIR}")
-		else()
-			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-								COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_CURL}/libcurl-x64.dll" "${PBOUT_DIR}/libcurl.dll")
-		endif()
 	endif()
 else()
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
