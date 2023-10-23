@@ -71,6 +71,16 @@ struct BrowserPictureProgress {
 	BrowserPictureProgress(BrowserResultPicture* rp, SDL_Surface* pic, size_t index);
 };
 
+// list of font families, files and which to select
+struct FontListResult {
+	vector<string> families;
+	uptr<string[]> files;
+	size_t select;
+	string error;
+
+	FontListResult(vector<string>&& fa, uptr<string[]>&& fl, size_t id, string&& msg);
+};
+
 // checks for filename changes
 class FileWatch {
 private:

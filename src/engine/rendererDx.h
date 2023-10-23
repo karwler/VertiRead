@@ -39,13 +39,6 @@ private:
 		alignas(16) uvec2 addr = uvec2(0);
 	};
 
-	static inline const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum> squashableFormats = {
-		{ SDL_PIXELFORMAT_RGBA32, SDL_PIXELFORMAT_BGRA5551 },
-		{ SDL_PIXELFORMAT_BGRA32, SDL_PIXELFORMAT_BGRA5551 },
-		{ SDL_PIXELFORMAT_RGB24, SDL_PIXELFORMAT_BGR565 },
-		{ SDL_PIXELFORMAT_BGR24, SDL_PIXELFORMAT_BGR565 }
-	};
-
 	ID3D11Device* dev = nullptr;
 	ID3D11DeviceContext* ctx = nullptr;
 	ID3D11BlendState* blendState = nullptr;
@@ -90,7 +83,7 @@ public:
 
 	Texture* texFromIcon(SDL_Surface* img) final;
 	Texture* texFromRpic(SDL_Surface* img) final;
-	Texture* texFromText(const Pixmap& pm) final;
+	Texture* texFromText(const PixmapRgba& pm) final;
 	void freeTexture(Texture* tex) final;
 
 protected:

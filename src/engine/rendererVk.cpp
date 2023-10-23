@@ -1375,9 +1375,9 @@ Texture* RendererVk::texFromRpic(SDL_Surface* img) {
 	return nullptr;
 }
 
-Texture* RendererVk::texFromText(const Pixmap& pm) {
+Texture* RendererVk::texFromText(const PixmapRgba& pm) {
 	if (pm.pix)
-		return createTextureDirect(reinterpret_cast<cbyte*>(pm.pix.get()), glm::min(pm.res, u32vec2(pdevProperties.limits.maxImageDimension2D)), pm.res.x * 4, 4, VK_FORMAT_A8B8G8R8_UNORM_PACK32, true);
+		return createTextureDirect(reinterpret_cast<const cbyte*>(pm.pix), glm::min(pm.res, u32vec2(pdevProperties.limits.maxImageDimension2D)), pm.res.x * 4, 4, VK_FORMAT_A8B8G8R8_UNORM_PACK32, true);
 	return nullptr;
 }
 

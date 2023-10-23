@@ -371,8 +371,8 @@ Texture* RendererGl::texFromRpic(SDL_Surface* img) {
 	return nullptr;
 }
 
-Texture* RendererGl::texFromText(const Pixmap& pm) {
-	return pm.pix ? createTexture(reinterpret_cast<cbyte*>(pm.pix.get()), glm::min(pm.res, uvec2(maxTextureSize)), pm.res.x, GL_RGBA8, textPixFormat, GL_UNSIGNED_BYTE, GL_NEAREST) : nullptr;
+Texture* RendererGl::texFromText(const PixmapRgba& pm) {
+	return pm.pix ? createTexture(reinterpret_cast<const cbyte*>(pm.pix), glm::min(pm.res, uvec2(maxTextureSize)), pm.res.x, GL_RGBA8, textPixFormat, GL_UNSIGNED_BYTE, GL_NEAREST) : nullptr;
 }
 
 void RendererGl::freeTexture(Texture* tex) {

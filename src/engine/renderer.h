@@ -3,6 +3,16 @@
 #include "utils/settings.h"
 #include <set>
 
+struct PixmapRgba {
+	const uint32* pix = nullptr;
+	uvec2 res;
+
+	PixmapRgba() = default;
+	PixmapRgba(const PixmapRgba&) = default;
+	PixmapRgba(PixmapRgba&&) = default;
+	PixmapRgba(const uint32* data, uvec2 size);
+};
+
 class Texture {
 private:
 	ivec2 res;
@@ -36,6 +46,13 @@ public:
 	struct ErrorSkip {};
 
 protected:
+	static inline const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum> squashableFormats = {
+		{ SDL_PIXELFORMAT_RGBA32, SDL_PIXELFORMAT_RGBA5551 },
+		{ SDL_PIXELFORMAT_BGRA32, SDL_PIXELFORMAT_BGRA5551 },
+		{ SDL_PIXELFORMAT_RGB24, SDL_PIXELFORMAT_RGB565 },
+		{ SDL_PIXELFORMAT_BGR24, SDL_PIXELFORMAT_BGR565 }
+	};
+
 	umap<int, View*> views;
 	std::set<SDL_PixelFormatEnum> supportedFormats;
 	uint maxPicRes;	// should only get accessed from one thread at a time
@@ -58,7 +75,7 @@ public:
 	virtual Widget* finishSelDraw(View* view) = 0;
 	virtual Texture* texFromIcon(SDL_Surface* img) = 0;	// scales down image to largest possible size
 	virtual Texture* texFromRpic(SDL_Surface* img) = 0;	// image must have been scaled down in advance
-	virtual Texture* texFromText(const Pixmap& pm) = 0;	// cuts off image if it's too large and uses nearest filter if possible
+	virtual Texture* texFromText(const PixmapRgba& pm) = 0;	// cuts off image if it's too large and uses nearest filter if possible
 	virtual void freeTexture(Texture* tex) = 0;
 	virtual void synchTransfer();
 

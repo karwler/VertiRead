@@ -5,26 +5,18 @@
 // container for other widgets
 class Layout : public Widget {
 public:
-	enum class Select : uint8 {
-		none,
-		one,
-		any
-	};
-
 	static constexpr int defaultItemSpacing = 5;
 	static constexpr Direction::Dir defaultDirection = Direction::down;
 
 protected:
 	vector<Widget*> widgets;
-	vector<ivec2> positions;	// widgets' positions. one element larger than widgets. last element is layout's size
-	uset<Widget*> selected;
+	uptr<ivec2[]> positions;	// widgets' positions. one element larger than widgets. last element is layout's size
 	int spacing;				// space between widgets
 	bool margin;				// use spacing around the widgets as well
-	Select selection;			// how many items can be selected at once
 	Direction direction;		// in what direction widgets are stacked (TileBox doesn't support horizontal)
 
 public:
-	Layout(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), Direction dir = defaultDirection, Select select = Select::none, int space = defaultItemSpacing, bool pad = false);
+	Layout(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), Direction dir = defaultDirection, int space = defaultItemSpacing, bool pad = false);
 	~Layout() override;
 
 	void drawSelf(const Recti& view) override;
@@ -37,20 +29,17 @@ public:
 	void onNavSelect(Direction) override {}
 	bool navSelectable() const override;
 
-	virtual void navSelectNext(size_t id, int mid, Direction dir);
+	virtual void navSelectNext(uint id, int mid, Direction dir);
 	virtual void navSelectFrom(int mid, Direction dir);
 
-	template <Class T = Widget> T* getWidget(size_t id) const;
+	template <Class T = Widget> T* getWidget(uint id) const;
 	const vector<Widget*>& getWidgets() const;
 	virtual void setWidgets(vector<Widget*>&& wgts);	// not suitable for using on a ReaderBox, use setPictures
-	void insertWidget(size_t id, Widget* wgt);
-	void replaceWidget(size_t id, Widget* widget);
-	void deleteWidget(size_t id);
-	const uset<Widget*>& getSelected() const;
-	virtual ivec2 wgtPosition(size_t id) const;
-	virtual ivec2 wgtSize(size_t id) const;
-	void selectWidget(size_t id);
-	void deselectWidget(size_t id);
+	void insertWidget(uint id, Widget* wgt);
+	void replaceWidget(uint id, Widget* widget);
+	void deleteWidget(uint id);
+	virtual ivec2 wgtPosition(uint id) const;
+	virtual ivec2 wgtSize(uint id) const;
 	int getSpacing() const;
 	bool isVertical() const;
 
@@ -60,28 +49,19 @@ protected:
 	virtual void calculateWidgetPositions();
 	virtual void postWidgetsChange();
 
-	void navSelectWidget(size_t id, int mid, Direction dir);
+	void navSelectWidget(uint id, int mid, Direction dir);
 private:
-	void scanSequential(size_t id, int mid, Direction dir);
+	void scanSequential(uint id, int mid, Direction dir);
 	void scanPerpendicular(int mid, Direction dir);
-	mvec2 findMinMaxSelectedID() const;
 };
 
 template <Class T>
-T* Layout::getWidget(size_t id) const {
+T* Layout::getWidget(uint id) const {
 	return static_cast<T*>(widgets[id]);
 }
 
 inline const vector<Widget*>& Layout::getWidgets() const {
 	return widgets;
-}
-
-inline const uset<Widget*>& Layout::getSelected() const {
-	return selected;
-}
-
-inline void Layout::deselectWidget(size_t id) {
-	selected.erase(widgets[id]);
 }
 
 inline int Layout::getSpacing() const {
@@ -164,7 +144,18 @@ inline T* Context::owner() const {
 // places widgets vertically through which the user can scroll (DON"T PUT SCROLL AREAS INTO OTHER SCROLL AREAS)
 class ScrollArea : public Layout, protected Scrollable {
 public:
-	using Layout::Layout;
+	enum class Select : uint8 {
+		none,
+		one,
+		any
+	};
+
+private:
+	uset<Widget*> selected;
+	Select selection;	// how many items can be selected at once
+
+public:
+	ScrollArea(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), Direction dir = defaultDirection, Select select = Select::none, int space = defaultItemSpacing, bool pad = false);
 	~ScrollArea() override = default;
 
 	void drawSelf(const Recti& view) override;
@@ -175,10 +166,10 @@ public:
 	void onUndrag(ivec2 mPos, uint8 mBut) override;
 	void onScroll(ivec2 wMov) override;
 
-	void navSelectNext(size_t id, int mid, Direction dir) override;
+	void navSelectNext(uint id, int mid, Direction dir) override;
 	void navSelectFrom(int mid, Direction dir) override;
-	void scrollToWidgetPos(size_t id);	// set listPos.y to the widget's position
-	void scrollToWidgetEnd(size_t id);
+	void scrollToWidgetPos(uint id);	// set listPos.y to the widget's position
+	void scrollToWidgetEnd(uint id);
 	bool scrollToNext();				// scroll to next widget (returns false if at scroll limit)
 	bool scrollToPrevious();			// scroll to previous widget (returns false if at scroll limit)
 	void scrollToLimit(bool start);		// scroll to start or end of the list relative to it's direction
@@ -187,22 +178,26 @@ public:
 
 	void setWidgets(vector<Widget*>&& wgts) override;
 	Recti frame() const override;
-	ivec2 wgtPosition(size_t id) const override;
-	ivec2 wgtSize(size_t id) const override;
-	mvec2 visibleWidgets() const;
+	ivec2 wgtPosition(uint id) const override;
+	ivec2 wgtSize(uint id) const override;
+	uvec2 visibleWidgets() const;
 	Recti barRect() const;
 	Recti sliderRect() const;
+	const uset<Widget*>& getSelected() const;
+	void selectWidget(uint id);
+	void deselectWidget(uint id);
 
 protected:
 	void scrollToSelected();
 	void calculateWidgetPositions() override;
 	void postWidgetsChange() override;
-	virtual int wgtRPos(size_t id) const;
-	virtual int wgtREnd(size_t id) const;
-	size_t firstWidgetAt(int rpos) const;
+	virtual int wgtRPos(uint id) const;
+	virtual int wgtREnd(uint id) const;
+	uint firstWidgetAt(int rpos) const;
 
 private:
-	void scrollToFollowing(size_t id, bool prev);
+	void scrollToFollowing(uint id, bool prev);
+	uvec2 findMinMaxSelectedID() const;
 };
 
 inline Recti ScrollArea::barRect() const {
@@ -211,6 +206,14 @@ inline Recti ScrollArea::barRect() const {
 
 inline Recti ScrollArea::sliderRect() const {
 	return Scrollable::sliderRect(position(), size(), direction.vertical());
+}
+
+inline const uset<Widget*>& ScrollArea::getSelected() const {
+	return selected;
+}
+
+inline void ScrollArea::deselectWidget(uint id) {
+	selected.erase(widgets[id]);
 }
 
 // places items as tiles one after another
@@ -225,32 +228,31 @@ public:
 	TileBox(const Size& size = Size(), vector<Widget*>&& children = vector<Widget*>(), int childHeight = defaultItemHeight, Direction dir = defaultDirection, Select select = Select::none, int space = defaultItemSpacing, bool pad = false);
 	~TileBox() final = default;
 
-	void navSelectNext(size_t id, int mid, Direction dir) final;
+	void navSelectNext(uint id, int mid, Direction dir) final;
 	void navSelectFrom(int mid, Direction dir) final;
 
-	ivec2 wgtSize(size_t id) const final;
+	ivec2 wgtSize(uint id) const final;
 protected:
 	void calculateWidgetPositions() final;
 
 private:
-	void scanVertically(size_t id, int mid, Direction dir);
-	void scanHorizontally(size_t id, int mid, Direction dir);
+	void scanVertically(uint id, int mid, Direction dir);
+	void scanHorizontally(uint id, int mid, Direction dir);
 	void scanFromStart(int mid, Direction dir);
 	void scanFromEnd(int mid, Direction dir);
-	void navSelectIfInRange(size_t id, int mid, Direction dir);
+	void navSelectIfInRange(uint id, int mid, Direction dir);
 
-	int wgtREnd(size_t id) const final;
+	int wgtREnd(uint id) const final;
 };
 
 // for scrolling through pictures
 class ReaderBox final : public ScrollArea {
 private:
 	static constexpr float menuHideTimeout = 3.f;
-	static inline const string emptyFile;
 
 	bool countDown = true;	// whether to decrease cursorTimer until cursor hide
-	vector<string> picNames;
-	size_t startPicId;
+	uptr<string[]> picNames;
+	uint startPicId;
 	float cursorTimer = menuHideTimeout;	// time left until cursor/overlay disappears
 	float zoom;
 
@@ -267,10 +269,10 @@ public:
 	float getZoom() const;
 	void setZoom(float factor);
 	void centerList();		// set listPos.x so that the view will be in the center
-	const string& firstPage() const;
-	const string& lastPage() const;
-	const string& curPage() const;
-	ivec2 wgtSize(size_t id) const final;
+	string_view firstPage() const;
+	string_view lastPage() const;
+	string_view curPage() const;
+	ivec2 wgtSize(uint id) const final;
 
 private:
 	void calculateWidgetPositions() final;
@@ -280,14 +282,14 @@ inline float ReaderBox::getZoom() const {
 	return zoom;
 }
 
-inline const string& ReaderBox::firstPage() const {
-	return !picNames.empty() ? picNames.front() : emptyFile;
+inline string_view ReaderBox::firstPage() const {
+	return !widgets.empty() ? picNames[0] : string_view();
 }
 
-inline const string& ReaderBox::lastPage() const {
-	return !picNames.empty() ? picNames.back() : emptyFile;
+inline string_view ReaderBox::lastPage() const {
+	return !widgets.empty() ? picNames[widgets.size() - 1] : string_view();
 }
 
-inline const string& ReaderBox::curPage() const {
-	return !picNames.empty() ? picNames[direction.positive() ? firstWidgetAt(listPos[direction.vertical()]) : visibleWidgets().y - 1] : emptyFile;
+inline string_view ReaderBox::curPage() const {
+	return !widgets.empty() ? picNames[direction.positive() ? firstWidgetAt(listPos[direction.vertical()]) : visibleWidgets().y - 1] : string_view();
 }

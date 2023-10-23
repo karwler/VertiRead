@@ -331,6 +331,17 @@ void Program::eventMoveFinished(const SDL_UserEvent& user) {
 	delete errors;
 }
 
+void Program::eventFontsFinished(const SDL_UserEvent& user) {
+	ProgSettings* ps = static_cast<ProgSettings*>(state);
+	ps->stopFonts();
+	FontListResult* flr = static_cast<FontListResult*>(user.data1);
+	if (flr->error.empty())
+		ps->setFontField(std::move(flr->families), std::move(flr->files), flr->select);
+	else
+		logError(flr->error);
+	delete flr;
+}
+
 void Program::eventSetScreenMode(Button* but) {
 	if (Settings::Screen screen = Settings::Screen(finishComboBox(but)); World::sets()->screen != screen)
 		World::winSys()->setScreenMode(screen);
@@ -344,7 +355,7 @@ void Program::eventSetRenderer(Button* but) {
 }
 
 void Program::eventSetDevice(Button* but) {
-	if (u32vec2 device = static_cast<ProgSettings*>(state)->getDvice(finishComboBox(but)); World::sets()->device != device) {
+	if (u32vec2 device = static_cast<ProgSettings*>(state)->getDevice(finishComboBox(but)); World::sets()->device != device) {
 		World::sets()->device = device;
 		World::winSys()->recreateWindows();
 	}
@@ -366,8 +377,8 @@ void Program::eventSetGpuSelecting(Button* but) {
 	World::sets()->gpuSelecting = static_cast<CheckBox*>(but)->on;
 }
 
-size_t Program::finishComboBox(Button* but) {
-	size_t val = but->getIndex();
+uint Program::finishComboBox(Button* but) {
+	uint val = but->getIndex();
 	World::scene()->getContext()->owner<ComboBox>()->setCurOpt(val);
 	World::scene()->setContext(nullptr);
 	return val;
@@ -397,15 +408,22 @@ void Program::eventSetTooltips(Button* but) {
 void Program::eventSetTheme(Button* but) {
 	ComboBox* cmb = World::scene()->getContext()->owner<ComboBox>();
 	Label* lbl = static_cast<Label*>(but);
-	World::drawSys()->setTheme(lbl->getText(), World::sets(), World::fileSys());
+	World::drawSys()->setTheme(lbl->getText());
 	if (World::sets()->getTheme() != cmb->getText())
 		cmb->setText(World::sets()->getTheme());
 	World::scene()->setContext(nullptr);
 }
 
-void Program::eventSetFont(Button* but) {
-	string otxt = static_cast<Label*>(but)->getText();
-	World::drawSys()->setFont(toPath(otxt), World::sets(), World::fileSys());
+void Program::eventSetFontCMB(Button* but) {
+	if (fs::path file = toPath(static_cast<ComboBox*>(but)->getTooltips()[finishComboBox(but)]); !file.empty()) {
+		World::drawSys()->setFont(file.native().starts_with(World::fileSys()->getDirConfs().native()) ? file.stem() : file);
+		state->eventRefresh();
+	}
+}
+
+void Program::eventSetFontLE(Button* but) {
+	string otxt = static_cast<LabelEdit*>(but)->getText();
+	World::drawSys()->setFont(toPath(otxt));
 	state->eventRefresh();
 	if (World::sets()->font != otxt)
 		World::scene()->setPopup(state->createPopupMessage("Invalid font", &Program::eventClosePopup));

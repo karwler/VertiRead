@@ -58,7 +58,6 @@ public:
 	void updateSelect();
 	void updateSelect(ivec2 mPos);
 	void selectFirst();
-	size_t findSelectedID(Layout* box) const;	// get id of possibly select or selects parent in relation to box
 	bool cursorInClickRange(ivec2 mPos, uint8 mBut);
 
 	ScrollArea* getSelectedScrollArea() const;

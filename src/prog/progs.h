@@ -186,14 +186,14 @@ private:
 class ProgSettings final : public ProgState {
 public:
 	fs::path oldPathBuffer;	// for keeping old library path between decisions
-	std::thread thread;
-	std::atomic<ThreadType> threadType;
-
 	Layout* limitLine;
 private:
 	ComboBox* screen;
 	CheckBox* showHidden;
+	ComboBox* fontList;
 	vector<pair<u32vec2, string>> devices;
+	std::thread moveThread, fontThread;
+	std::atomic<ThreadType> moveThreadType, fontThreadType;
 
 public:
 	~ProgSettings() final;
@@ -207,14 +207,18 @@ public:
 
 	RootLayout* createLayout() final;
 	Widget* createLimitEdit();
-	u32vec2 getDvice(size_t id) const;
+	u32vec2 getDevice(size_t id) const;
 
+	void stopFonts();
+	void setFontField(vector<string>&& families, uptr<string[]>&& files, size_t select);
 	void startMove();
 	void stopMove();
 	static void logMoveErrors(const string* errors);
+private:
+	void startFonts();
 };
 
-inline u32vec2 ProgSettings::getDvice(size_t id) const {
+inline u32vec2 ProgSettings::getDevice(size_t id) const {
 	return devices[id].first;
 }
 

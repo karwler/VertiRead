@@ -100,6 +100,13 @@ BrowserPictureProgress::BrowserPictureProgress(BrowserResultPicture* rp, SDL_Sur
 	id(index)
 {}
 
+FontListResult::FontListResult(vector<string>&& fa, uptr<string[]>&& fl, size_t id, string&& msg) :
+	families(std::move(fa)),
+	files(std::move(fl)),
+	select(id),
+	error(std::move(msg))
+{}
+
 // FILE WATCH
 
 FileWatch::FileWatch(const char* path) :

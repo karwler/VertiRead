@@ -1,5 +1,10 @@
 #include "renderer.h"
 
+PixmapRgba::PixmapRgba(const uint32* data, uvec2 size) :
+	pix(data),
+	res(size)
+{}
+
 Renderer::View::View(SDL_Window* window, const Recti& area) :
 	win(window),
 	rect(area)

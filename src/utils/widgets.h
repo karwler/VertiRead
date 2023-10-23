@@ -73,7 +73,6 @@ inline int Scrollable::sliderPos(ivec2 pos, ivec2 wsize, bool vert) const {
 class Widget {
 protected:
 	Layout* parent = nullptr;	// every widget that isn't a Layout should have a parent
-	size_t index = SIZE_MAX;	// this widget's id in parent's widget list
 	Size relSize;				// size relative to parent's parameters
 
 public:
@@ -106,10 +105,9 @@ public:
 	virtual bool navSelectable() const;
 	virtual bool hasDoubleclick() const;
 
-	size_t getIndex() const;
 	Layout* getParent() const;
-	void setParent(Layout* pnt, size_t id);
-
+	void setParent(Layout* pnt, uint id);
+	uint getIndex() const;
 	const Size& getRelSize() const;
 	virtual ivec2 position() const;
 	virtual ivec2 size() const;
@@ -124,12 +122,12 @@ inline Widget::Widget(const Size& size) :
 	relSize(size)
 {}
 
-inline size_t Widget::getIndex() const {
-	return index;
-}
-
 inline Layout* Widget::getParent() const {
 	return parent;
+}
+
+inline uint Widget::getIndex() const {
+	return relSize.id;
 }
 
 inline const Size& Widget::getRelSize() const {
@@ -196,6 +194,7 @@ public:
 	Color color() const override;
 	virtual const Texture* getTooltip();
 	Recti tooltipRect() const;
+	void setCalls(optional<PCall> lc, optional<PCall> rc, optional<PCall> dc);
 };
 
 // if you don't know what a checkbox is then I don't know what to tell ya
@@ -366,22 +365,29 @@ protected:
 class ComboBox final : public Label {
 private:
 	vector<string> options;
+	uptr<string[]> tooltips;
 	size_t curOpt;
 
 public:
-	ComboBox(const Size& size = Size(), string&& curOption = string(), vector<string>&& opts = vector<string>(), PCall call = nullptr, Texture* tip = nullptr, Alignment alignment = Alignment::left, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
-	ComboBox(const Size& size = Size(), size_t curOption = 0, vector<string>&& opts = vector<string>(), PCall call = nullptr, Texture* tip = nullptr, Alignment alignment = Alignment::left, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
+	ComboBox(const Size& size = Size(), string&& curOption = string(), vector<string>&& opts = vector<string>(), PCall call = nullptr, Texture* tip = nullptr, uptr<string[]> otips = nullptr, Alignment alignment = Alignment::left, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
+	ComboBox(const Size& size = Size(), size_t curOption = 0, vector<string>&& opts = vector<string>(), PCall call = nullptr, Texture* tip = nullptr, uptr<string[]> otips = nullptr, Alignment alignment = Alignment::left, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
 	~ComboBox() final = default;
 
 	void onClick(ivec2 mPos, uint8 mBut) final;
 
 	const vector<string>& getOptions() const;
+	void setOptions(size_t curOption, vector<string>&& opt, uptr<string[]> tips);
+	const string* getTooltips() const;
 	size_t getCurOpt() const;
 	void setCurOpt(size_t id);
 };
 
 inline const vector<string>& ComboBox::getOptions() const {
 	return options;
+}
+
+inline const string* ComboBox::getTooltips() const {
+	return tooltips.get();
 }
 
 inline size_t ComboBox::getCurOpt() const {

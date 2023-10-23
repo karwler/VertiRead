@@ -100,7 +100,7 @@ public:
 
 	Texture* texFromIcon(SDL_Surface* img) final;
 	Texture* texFromRpic(SDL_Surface* img) final;
-	Texture* texFromText(const Pixmap& pm) final;
+	Texture* texFromText(const PixmapRgba& pm) final;
 	void freeTexture(Texture* tex) final;
 
 protected:

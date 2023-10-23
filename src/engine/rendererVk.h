@@ -196,12 +196,6 @@ private:
 	static constexpr array<VkValidationFeatureEnableEXT, 2> validationFeatureEnables = { VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT, VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT };
 #endif
 	static constexpr uint32 maxPossibleQueues = 3;
-	static inline const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum> squashableFormats = {
-		{ SDL_PIXELFORMAT_RGBA32, SDL_PIXELFORMAT_RGBA5551 },
-		{ SDL_PIXELFORMAT_BGRA32, SDL_PIXELFORMAT_BGRA5551 },
-		{ SDL_PIXELFORMAT_RGB24, SDL_PIXELFORMAT_RGB565 },
-		{ SDL_PIXELFORMAT_BGR24, SDL_PIXELFORMAT_BGR565 }
-	};
 
 	struct QueueInfo {
 		umap<uint32, u32vec2> idcnt;
@@ -313,7 +307,7 @@ public:
 
 	Texture* texFromIcon(SDL_Surface* img) final;
 	Texture* texFromRpic(SDL_Surface* img) final;
-	Texture* texFromText(const Pixmap& pm) final;
+	Texture* texFromText(const PixmapRgba& pm) final;
 	void freeTexture(Texture* tex) final;
 	void synchTransfer() final;
 

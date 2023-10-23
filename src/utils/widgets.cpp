@@ -96,17 +96,17 @@ bool Widget::hasDoubleclick() const {
 	return false;
 }
 
-void Widget::setParent(Layout* pnt, size_t id) {
+void Widget::setParent(Layout* pnt, uint id) {
 	parent = pnt;
-	index = id;
+	relSize.id = id;
 }
 
 ivec2 Widget::position() const {
-	return parent->wgtPosition(index);
+	return parent->wgtPosition(relSize.id);
 }
 
 ivec2 Widget::size() const {
-	return parent->wgtSize(index);
+	return parent->wgtSize(relSize.id);
 }
 
 Recti Widget::frame() const {
@@ -120,7 +120,7 @@ void Widget::setSize(const Size& size) {
 }
 
 void Widget::onNavSelect(Direction dir) {
-	parent->navSelectNext(index, dir.vertical() ? center().x : center().y, dir);
+	parent->navSelectNext(relSize.id, dir.vertical() ? center().x : center().y, dir);
 }
 
 int Widget::sizeToPixAbs(const Size& siz, int res) const {
@@ -192,10 +192,12 @@ Button::~Button() {
 
 void Button::onClick(ivec2, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
-		parent->selectWidget(index);
+		if (ScrollArea* sa = dynamic_cast<ScrollArea*>(parent))
+			sa->selectWidget(relSize.id);
 		World::prun(lcall, this);
 	} else if (mBut == SDL_BUTTON_RIGHT) {
-		parent->deselectWidget(index);
+		if (ScrollArea* sa = dynamic_cast<ScrollArea*>(parent))
+			sa->deselectWidget(relSize.id);
 		World::prun(rcall, this);
 	}
 }
@@ -214,7 +216,7 @@ bool Button::hasDoubleclick() const {
 }
 
 Color Button::color() const {
-	if (parent->getSelected().contains(const_cast<Button*>(this)))
+	if (ScrollArea* sa = dynamic_cast<ScrollArea*>(parent); sa && sa->getSelected().contains(const_cast<Button*>(this)))
 		return Color::light;
 	if (navSelectable() && World::scene()->select == this)
 		return Color::select;
@@ -233,6 +235,15 @@ Recti Button::tooltipRect() const {
 	if (rct.y + rct.h > view.y)
 		rct.y = rct.y - DrawSys::cursorHeight - rct.h;
 	return rct;
+}
+
+void Button::setCalls(optional<PCall> lc, optional<PCall> rc, optional<PCall> dc) {
+	if (lc)
+		lcall = *lc;
+	if (rc)
+		rcall = *rc;
+	if (dc)
+		dcall = *dc;
 }
 
 // CHECK BOX
@@ -491,21 +502,30 @@ void TextBox::updateTextTex() {
 
 // COMBO BOX
 
-ComboBox::ComboBox(const Size& size, string&& curOption, vector<string>&& opts, PCall call, Texture* tip, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
+ComboBox::ComboBox(const Size& size, string&& curOption, vector<string>&& opts, PCall call, Texture* tip, uptr<string[]> otips, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
 	Label(size, std::move(curOption), call, call, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
 	options(std::move(opts)),
+	tooltips(std::move(otips)),
 	curOpt(std::min(size_t(rng::find(options, text) - options.begin()), options.size()))
 {}
 
-ComboBox::ComboBox(const Size& size, size_t curOption, vector<string>&& opts, PCall call, Texture* tip, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
+ComboBox::ComboBox(const Size& size, size_t curOption, vector<string>&& opts, PCall call, Texture* tip, uptr<string[]> otips, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
 	Label(size, valcp(opts[curOption]), call, call, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
 	options(std::move(opts)),
+	tooltips(std::move(otips)),
 	curOpt(curOption)
 {}
 
 void ComboBox::onClick(ivec2, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT || mBut == SDL_BUTTON_RIGHT)
 		World::scene()->setContext(World::state()->createComboContext(this, mBut == SDL_BUTTON_LEFT ? lcall : rcall));
+}
+
+void ComboBox::setOptions(size_t curOption, vector<string>&& opts, uptr<string[]> tips) {
+	setText(opts[curOption]);
+	curOpt = curOption;
+	options = std::move(opts);
+	tooltips = std::move(tips);
 }
 
 void ComboBox::setCurOpt(size_t id) {

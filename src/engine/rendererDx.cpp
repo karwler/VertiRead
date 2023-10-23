@@ -443,8 +443,8 @@ Texture* RendererDx::texFromRpic(SDL_Surface* img) {
 	return tex;
 }
 
-Texture* RendererDx::texFromText(const Pixmap& pm) {
-	return pm.pix ? createTexture(reinterpret_cast<cbyte*>(pm.pix.get()), glm::min(pm.res, uvec2(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)), pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM) : nullptr;
+Texture* RendererDx::texFromText(const PixmapRgba& pm) {
+	return pm.pix ? createTexture(reinterpret_cast<const cbyte*>(pm.pix), glm::min(pm.res, uvec2(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)), pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM) : nullptr;
 }
 
 void RendererDx::freeTexture(Texture* tex) {

@@ -68,7 +68,6 @@ using glm::ivec2;
 using glm::vec4;
 using glm::u8vec4;
 using glm::ivec4;
-using mvec2 = glm::vec<2, size_t, glm::defaultp>;
 
 // forward declarations
 struct archive;
@@ -143,6 +142,7 @@ enum UserEvent : uint32 {
 	SDL_USEREVENT_ARCHIVE_FINISHED,
 	SDL_USEREVENT_MOVE_PROGRESS,
 	SDL_USEREVENT_MOVE_FINISHED,
+	SDL_USEREVENT_FONTS_FINISHED,
 	SDL_USEREVENT_MAX
 };
 
@@ -151,7 +151,8 @@ enum class ThreadType : uint8 {
 	preview,
 	reader,
 	archive,
-	move
+	move,
+	font
 };
 
 template <Enumeration T>
@@ -424,6 +425,7 @@ struct Size {
 		int pix;
 		int (*cfn)(const Widget*);
 	};
+	uint id = UINT_MAX;	// a widget's id in its parent's widget list
 	Mode mod;
 
 	template <Floating T = float> constexpr Size(T percent = T(1));
@@ -455,15 +457,6 @@ inline int Size::operator()(const Widget* wgt) const {
 	return cfn(wgt);
 }
 
-// RGBA buffer
-struct Pixmap {
-	uptr<uint32[]> pix;
-	uvec2 res = uvec2(0);
-
-	Pixmap() = default;
-	Pixmap(uvec2 size);
-};
-
 // files and strings
 
 bool strciequal(string_view a, string_view b);
@@ -472,17 +465,14 @@ bool strnciequal(string_view a, string_view b, size_t n);
 string_view parentPath(string_view path);
 string_view relativePath(string_view path, string_view base);
 bool isSubpath(string_view path, string_view base);
-string_view filename(string_view path);
-string_view fileExtension(string_view path);
-string_view delExtension(string_view path);
-string_view trim(string_view str);
 string strEnclose(string_view str);
 vector<string> strUnenclose(string_view str);
 vector<string_view> getWords(string_view str);
 tm currentDateTime();
 
-inline bool strempty(const char* str) {
-	return !str || !str[0];
+template <Integer T>
+bool strempty(const T* str) {
+	return !(str && str[0]);
 }
 
 inline bool isSpace(int c) {
@@ -516,9 +506,73 @@ inline bool isDriveLetter(string_view path) {
 #endif
 
 template <Integer T>
+std::basic_string_view<T> filename(std::basic_string_view<T> path) {
+	typename std::basic_string_view<T>::reverse_iterator end = std::find_if(path.rbegin(), path.rend(), notDsep);
+	return std::basic_string_view<T>(std::find_if(end, path.rend(), isDsep).base(), end.base());
+}
+
+template <Integer T>
+std::basic_string_view<T> filename(const std::basic_string<T>& path) {
+	return filename(std::basic_string_view<T>(path));
+}
+
+template <Integer T>
+std::basic_string_view<T> filename(const T* path) {
+	return filename(std::basic_string_view<T>(path));
+}
+
+template <Integer T>
+std::basic_string_view<T> fileExtension(std::basic_string_view<T> path) {
+	typename std::basic_string_view<T>::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
+	return it != path.rend() && *it == '.' && it + 1 != path.rend() && notDsep(it[1]) ? std::basic_string_view<T>(it.base(), path.end()) : std::basic_string_view<T>();
+}
+
+template <Integer T>
+std::basic_string_view<T> fileExtension(const std::basic_string<T>& path) {
+	return fileExtension(std::basic_string_view<T>(path));
+}
+
+template <Integer T>
+std::basic_string_view<T> fileExtension(const T* path) {
+	return fileExtension(std::basic_string_view<T>(path));
+}
+
+template <Integer T>
+std::basic_string_view<T> delExtension(std::basic_string_view<T> path) {
+	typename std::basic_string_view<T>::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
+	return it != path.rend() ? *it == '.' && it + 1 != path.rend() && notDsep(it[1]) ? std::basic_string_view<T>(path.begin(), it.base() - 1) : path : std::basic_string_view<T>();
+}
+
+template <Integer T>
+std::basic_string_view<T> delExtension(const std::basic_string<T>& path) {
+	return delExtension(std::basic_string_view<T>(path));
+}
+
+template <Integer T>
+std::basic_string_view<T> delExtension(const T* path) {
+	return delExtension(std::basic_string_view<T>(path));
+}
+
+template <Integer T>
+std::basic_string_view<T> trim(std::basic_string_view<T> str) {
+	typename std::basic_string_view<T>::iterator pos = rng::find_if(str, notSpace);
+	return std::basic_string_view<T>(pos, std::find_if(str.rbegin(), std::make_reverse_iterator(pos), notSpace).base());
+}
+
+template <Integer T>
+std::basic_string_view<T> trim(const std::basic_string<T>& path) {
+	return delExtension(std::basic_string_view<T>(path));
+}
+
+template <Integer T>
+std::basic_string_view<T> trim(const T* path) {
+	return delExtension(std::basic_string_view<T>(path));
+}
+
+template <Integer T>
 std::basic_string<T> operator/(std::basic_string<T>&& a, std::basic_string_view<T> b) {
 	size_t alen = a.length();
-	unsigned nds = !alen || notDsep(a.back());
+	uint nds = alen && notDsep(a.back());
 	a.resize(alen + nds + b.length());
 	if (nds)
 		a[alen] = directorySeparator;
@@ -529,7 +583,7 @@ std::basic_string<T> operator/(std::basic_string<T>&& a, std::basic_string_view<
 template <Integer T>
 std::basic_string<T> operator/(const std::basic_string<T>& a, std::basic_string_view<T> b) {
 	std::basic_string<T> r;
-	unsigned nds = !a.length() || notDsep(a.back());
+	uint nds = !a.empty() && notDsep(a.back());
 	r.resize(a.length() + nds + b.length());
 	rng::copy(a, r.begin());
 	if (nds)
@@ -541,7 +595,7 @@ std::basic_string<T> operator/(const std::basic_string<T>& a, std::basic_string_
 template <Integer T>
 std::basic_string<T> operator/(std::basic_string_view<T> a, std::basic_string<T>&& b) {
 	size_t blen = b.length();
-	unsigned nds = !a.length() || notDsep(a.back());
+	uint nds = !a.empty() && notDsep(a.back());
 	b.resize(a.length() + nds + blen);
 	std::move_backward(b.begin(), b.begin() + blen, b.end());
 	rng::copy(a, b.begin());
@@ -553,7 +607,7 @@ std::basic_string<T> operator/(std::basic_string_view<T> a, std::basic_string<T>
 template <Integer T>
 std::basic_string<T> operator/(std::basic_string_view<T> a, const std::basic_string<T>& b) {
 	std::basic_string<T> r;
-	unsigned nds = !a.length() || notDsep(a.back());
+	uint nds = !a.empty() && notDsep(a.back());
 	r.resize(a.length() + nds + b.length());
 	rng::copy(a, r.begin());
 	if (nds)

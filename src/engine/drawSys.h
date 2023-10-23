@@ -18,15 +18,21 @@ private:
 	static constexpr uint tabsize = 4;
 	static constexpr uint cacheSize = 127 - ' ';
 
+	struct Font {
+		FT_FaceRec_* face;
+		vector<cbyte> data;
+	};
+
 	FT_LibraryRec_* lib = nullptr;
-	FT_FaceRec_* face = nullptr;
-	umap<uint, array<FT_BitmapGlyphRec_*, cacheSize>> glyphCache;
-	vector<cbyte> fontData;
+	vector<Font> fonts;
+	umap<uint, array<FT_BitmapGlyphRec_*, cacheSize>> asciiCache;
 	float heightScale;
 	float baseScale;
 	uint height;
 	int mode;
 
+	uptr<uint32[]> buffer;
+	size_t bufSize = 0;
 	string_view::iterator ptr;
 	string_view::iterator wordStart;
 	size_t len;
@@ -44,20 +50,28 @@ public:
 	void setMode(Settings::Hinting hinting);
 	uint measureText(string_view text, uint size);
 	pair<uint, vector<string_view::iterator>> measureText(string_view text, uint size, uint limit);
-	Pixmap renderText(string_view text, uint size);
-	Pixmap renderText(string_view text, uint size, uint limit);
+	PixmapRgba renderText(string_view text, uint size);
+	PixmapRgba renderText(string_view text, uint size, uint limit);
+	FT_LibraryRec_* getLib() const;
 
 private:
+	Font openFont(const fs::path& path, uint size) const;
+	uvec2 prepareBuffer(uint resx, uint resy);
 	template <bool ml> void advanceTab(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs);
-	template <bool cached> void advanceChar(char32_t ch, char32_t prev, long advance);
-	template <bool cached, bool ml> void advanceChar(char32_t ch, char32_t prev, long advance, int left, uint width);
+	template <bool cached> void advanceChar(FT_FaceRec_* face, char32_t ch, char32_t prev, long advance);
+	template <bool cached, bool ml> void advanceChar(FT_FaceRec_* face, char32_t ch, char32_t prev, long advance, int left, uint width);
 	bool breakLine(vector<string_view::iterator>& ln, uint size, uint limit, int left, uint width);
 	void advanceLine(vector<string_view::iterator>& ln, string_view::iterator pos, uint size);
 	void resetLine();
 	bool setSize(string_view text, uint size);
 	void cacheGlyph(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs, char32_t ch, uint id);
-	void copyGlyph(Pixmap& pm, uint dpitch, const FT_Bitmap_& bmp, int top, int left);
+	vector<Font>::iterator loadGlyph(char32_t ch, int32 flags);
+	void copyGlyph(uvec2 res, const FT_Bitmap_& bmp, int top, int left);
 };
+
+inline FT_LibraryRec_* FontSet::getLib() const {
+	return lib;
+}
 
 // handles the drawing
 class DrawSys {
@@ -74,20 +88,20 @@ private:
 	Texture* blank;		// reference to texes[""]
 
 public:
-	DrawSys(const umap<int, SDL_Window*>& windows, Settings* sets, const FileSys* fileSys, int iconSize);
+	DrawSys(const umap<int, SDL_Window*>& windows, int iconSize);
 	~DrawSys();
 
 	Renderer* getRenderer();
 	ivec2 getViewRes() const;
 	void updateView();
 	int findPointInView(ivec2 pos) const;
-	void setTheme(string_view name, Settings* sets, const FileSys* fileSys);
-	void setFont(const fs::path& font, Settings* sets, const FileSys* fileSys);
+	void setTheme(string_view name);
+	void setFont(const fs::path& font);
 	void setFontHinting(Settings::Hinting hinting);
 	SDL_Surface* loadIcon(const string& path, int size);
 	pair<Texture*, bool> texture(const string& name) const;
 
-	void drawWidgets(Scene* scene, bool mouseLast);
+	void drawWidgets(bool mouseLast);
 	bool drawPicture(const Picture* wgt, const Recti& view);
 	void drawCheckBox(const CheckBox* wgt, const Recti& view);
 	void drawSlider(const Slider* wgt, const Recti& view);
@@ -108,6 +122,7 @@ public:
 	uint textLength(string_view text, uint height);
 	Texture* renderText(string_view text, uint height);
 	Texture* renderText(string_view text, uint height, uint length);
+	FT_LibraryRec_* ftLib() const;
 
 private:
 	umap<int, Renderer::View*>::const_iterator findViewForPoint(ivec2 pos) const;
@@ -131,6 +146,10 @@ inline Texture* DrawSys::renderText(string_view text, uint height) {
 
 inline Texture* DrawSys::renderText(string_view text, uint height, uint length) {
 	return renderer->texFromText(fonts.renderText(text, height, length));
+}
+
+inline FT_LibraryRec_* DrawSys::ftLib() const {
+	return fonts.getLib();
 }
 
 inline void DrawSys::setFontHinting(Settings::Hinting hinting) {

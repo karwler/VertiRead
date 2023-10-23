@@ -248,7 +248,7 @@ void Scene::selectFirst() {
 	else {
 		Layout* next = dynamic_cast<Layout*>(select);
 		Layout* lay = next ? next : layout;
-		for (size_t id = 0; lay;) {
+		for (uint id = 0; lay;) {
 			if (id >= lay->getWidgets().size()) {
 				id = lay->getIndex() + 1;
 				lay = lay->getParent();
@@ -261,11 +261,4 @@ void Scene::selectFirst() {
 				++id;
 		}
 	}
-}
-
-size_t Scene::findSelectedID(Layout* box) const {
-	Widget* child = select;
-	while (child->getParent() && child->getParent() != box)
-		child = child->getParent();
-	return child->getParent() ? child->getIndex() : SIZE_MAX;
 }

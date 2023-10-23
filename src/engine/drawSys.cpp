@@ -4,6 +4,7 @@
 #include "drawSys.h"
 #include "fileSys.h"
 #include "scene.h"
+#include "world.h"
 #include "utils/compare.h"
 #include "utils/layouts.h"
 #include <cwctype>
@@ -25,28 +26,25 @@ FontSet::FontSet() {
 
 FontSet::~FontSet() {
 	clearCache();
-	FT_Done_Face(face);
+	for (Font& it : fonts)
+		FT_Done_Face(it.face);
 	FT_Done_FreeType(lib);
 }
 
 void FontSet::init(const fs::path& path, Settings::Hinting hinting) {
 	clearCache();
-	FT_Done_Face(face);
-	face = nullptr;
+	for (Font& it : fonts)
+		FT_Done_Face(it.face);
+	fonts.clear();
 	setMode(hinting);
 
-	fontData = FileSys::readBinFile(path);
-	if (FT_Error err = FT_New_Memory_Face(lib, reinterpret_cast<FT_Byte*>(fontData.data()), fontData.size(), 0, &face))
-		throw std::runtime_error(FT_Error_String(err));
-
-	if (FT_Error err = FT_Set_Pixel_Sizes(face, 0, fontTestHeight))
-		throw std::runtime_error(FT_Error_String(err));
+	fonts.push_back(openFont(path, fontTestHeight));
 	int ymin = 0, ymax = 0;
-	for (char it : fontTestString) {
-		if (FT_Error err = FT_Load_Char(face, it, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_BITMAP_METRICS_ONLY))
+	for (char ch : fontTestString) {
+		if (FT_Error err = FT_Load_Char(fonts[0].face, ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_BITMAP_METRICS_ONLY))
 			throw std::runtime_error(FT_Error_String(err));
-		ymin = std::min(ymin, face->glyph->bitmap_top - int(face->glyph->bitmap.rows));
-		ymax = std::max(ymax, face->glyph->bitmap_top);
+		ymin = std::min(ymin, fonts[0].face->glyph->bitmap_top - int(fonts[0].face->glyph->bitmap.rows));
+		ymax = std::max(ymax, fonts[0].face->glyph->bitmap_top);
 	}
 	ymin -= fontTestMinPad;
 	ymax += fontTestMaxPad;
@@ -56,26 +54,39 @@ void FontSet::init(const fs::path& path, Settings::Hinting hinting) {
 	baseScale = float(ymax) / ydiff;
 }
 
-void FontSet::clearCache() {
-	for (auto& [size, glyphs] : glyphCache)
-		for (FT_BitmapGlyph it : glyphs)
-			FT_Done_Glyph(&it->root);
-	glyphCache.clear();
-	height = 0;
+FontSet::Font FontSet::openFont(const fs::path& path, uint size) const {
+	Font face = { .data = FileSys::readBinFile(path) };
+	if (FT_Error err = FT_New_Memory_Face(lib, reinterpret_cast<FT_Byte*>(face.data.data()), face.data.size(), 0, &face.face))
+		throw std::runtime_error(FT_Error_String(err));
+	if (FT_Error err = FT_Set_Pixel_Sizes(face.face, 0, size)) {
+		FT_Done_Face(face.face);
+		throw std::runtime_error(FT_Error_String(err));
+	}
+	return face;
 }
 
-Pixmap FontSet::renderText(string_view text, uint size) {
+void FontSet::clearCache() {
+	for (auto& [size, glyphs] : asciiCache)
+		for (FT_BitmapGlyph it : glyphs)
+			FT_Done_Glyph(&it->root);
+	asciiCache.clear();
+	height = 0;
+	buffer.reset();
+	bufSize = 0;
+}
+
+PixmapRgba FontSet::renderText(string_view text, uint size) {
 	uint width = measureText(text, size);
 	if (!width)
-		return Pixmap();
+		return PixmapRgba();
 	ptr = text.begin();
 	len = text.length();
 	cpos = 0;
 	xpos = 0;
 	ypos = uint(float(size) * baseScale);
 
-	array<FT_BitmapGlyph, cacheSize>& glyphs = glyphCache.at(height);
-	Pixmap pm(uvec2(width, size));
+	array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
+	uvec2 res = prepareBuffer(width, size);
 	for (char32_t ch, prev = '\0'; len; prev = ch) {
 		ch = mbstowc(ptr, len);
 		if (std::iswcntrl(ch)) {
@@ -85,16 +96,15 @@ Pixmap FontSet::renderText(string_view text, uint size) {
 		}
 
 		if (uint id = ch - ' '; id < glyphs.size()) {
-			copyGlyph(pm, width, glyphs[id]->bitmap, glyphs[id]->top, glyphs[id]->left);
-			advanceChar<true>(ch, prev, glyphs[id]->root.advance.x);
+			copyGlyph(res, glyphs[id]->bitmap, glyphs[id]->top, glyphs[id]->left);
+			advanceChar<true>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x);
 		} else {
-			if (FT_Error err = FT_Load_Char(face, ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_RENDER | FT_LOAD_TARGET_(mode)))
-				throw std::runtime_error(FT_Error_String(err));
-			copyGlyph(pm, width, face->glyph->bitmap, face->glyph->bitmap_top, face->glyph->bitmap_left);
-			advanceChar<false>(ch, prev, face->glyph->advance.x);
+			vector<Font>::iterator ft = loadGlyph(ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_RENDER | FT_LOAD_TARGET_(mode));
+			copyGlyph(res, ft->face->glyph->bitmap, ft->face->glyph->bitmap_top, ft->face->glyph->bitmap_left);
+			advanceChar<false>(ft->face, ch, prev, ft->face->glyph->advance.x);
 		}
 	}
-	return pm;
+	return PixmapRgba(buffer.get(), res);
 }
 
 uint FontSet::measureText(string_view text, uint size) {
@@ -106,7 +116,7 @@ uint FontSet::measureText(string_view text, uint size) {
 	xpos = 0;
 	mfin = 0;
 
-	array<FT_BitmapGlyph, cacheSize>& glyphs = glyphCache.at(height);
+	array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
 	for (char32_t ch, prev = '\0'; len; prev = ch) {
 		ch = mbstowc(ptr, len);
 		if (std::iswcntrl(ch)) {
@@ -117,24 +127,23 @@ uint FontSet::measureText(string_view text, uint size) {
 
 		if (uint id = ch - ' '; id < glyphs.size()) {
 			cacheGlyph(glyphs, ch, id);
-			advanceChar<true, false>(ch, prev, glyphs[id]->root.advance.x, glyphs[id]->left, glyphs[id]->bitmap.width);
+			advanceChar<true, false>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x, glyphs[id]->left, glyphs[id]->bitmap.width);
 		} else {
-			if (FT_Error err = FT_Load_Char(face, ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_BITMAP_METRICS_ONLY))
-				throw std::runtime_error(FT_Error_String(err));
-			advanceChar<false, false>(ch, prev, face->glyph->advance.x, face->glyph->bitmap_left, face->glyph->bitmap.width);
+			vector<Font>::iterator ft = loadGlyph(ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_BITMAP_METRICS_ONLY);
+			advanceChar<false, false>(ft->face, ch, prev, ft->face->glyph->advance.x, ft->face->glyph->bitmap_left, ft->face->glyph->bitmap.width);
 		}
 	}
 	return mfin;
 }
 
-Pixmap FontSet::renderText(string_view text, uint size, uint limit) {
+PixmapRgba FontSet::renderText(string_view text, uint size, uint limit) {
 	auto [width, ln] = measureText(text, size, limit);
 	if (!width)
-		return Pixmap();
+		return PixmapRgba();
 	ypos = uint(float(size) * baseScale);
 
-	array<FT_BitmapGlyph, cacheSize>& glyphs = glyphCache.at(height);
-	Pixmap pm(uvec2(width, (ln.size() - 1) * size));
+	array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
+	uvec2 res = prepareBuffer(width, (ln.size() - 1) * size);
 	for (size_t i = 0; i < ln.size() - 1; ++i) {
 		ptr = ln[i];
 		len = ln[i + 1] - ln[i];
@@ -151,21 +160,20 @@ Pixmap FontSet::renderText(string_view text, uint size, uint limit) {
 
 			if (uint id = ch - ' '; id < glyphs.size()) {
 				if (xpos + glyphs[id]->left + glyphs[id]->bitmap.width <= width) {
-					copyGlyph(pm, width, glyphs[id]->bitmap, glyphs[id]->top, glyphs[id]->left);
-					advanceChar<true>(ch, prev, glyphs[id]->root.advance.x);
+					copyGlyph(res, glyphs[id]->bitmap, glyphs[id]->top, glyphs[id]->left);
+					advanceChar<true>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x);
 				}
 			} else {
-				if (FT_Error err = FT_Load_Char(face, ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_RENDER | FT_LOAD_TARGET_(mode)))
-					throw std::runtime_error(FT_Error_String(err));
-				if (xpos + face->glyph->bitmap_left + face->glyph->bitmap.width <= width) {
-					copyGlyph(pm, width, face->glyph->bitmap, face->glyph->bitmap_top, face->glyph->bitmap_left);
-					advanceChar<false>(ch, prev, face->glyph->advance.x);
+				vector<Font>::iterator ft = loadGlyph(ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_RENDER | FT_LOAD_TARGET_(mode));
+				if (xpos + ft->face->glyph->bitmap_left + ft->face->glyph->bitmap.width <= width) {
+					copyGlyph(res, ft->face->glyph->bitmap, ft->face->glyph->bitmap_top, ft->face->glyph->bitmap_left);
+					advanceChar<false>(ft->face, ch, prev, ft->face->glyph->advance.x);
 				}
 			}
 		}
 		ypos += size;
 	}
-	return pm;
+	return PixmapRgba(buffer.get(), res);
 }
 
 pair<uint, vector<string_view::iterator>> FontSet::measureText(string_view text, uint size, uint limit) {
@@ -179,7 +187,7 @@ pair<uint, vector<string_view::iterator>> FontSet::measureText(string_view text,
 	mfin = 0;
 	gXpos = 0;
 
-	array<FT_BitmapGlyph, cacheSize>& glyphs = glyphCache.at(height);
+	array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
 	vector<string_view::iterator> ln = { text.begin() };
 	for (char32_t ch, prev = '\0'; len; prev = ch) {
 		ch = mbstowc(ptr, len);
@@ -201,12 +209,11 @@ pair<uint, vector<string_view::iterator>> FontSet::measureText(string_view text,
 		if (uint id = ch - ' '; id < glyphs.size()) {
 			cacheGlyph(glyphs, ch, id);
 			if (breakLine(ln, size, limit, glyphs[id]->left, glyphs[id]->bitmap.width))
-				advanceChar<true, true>(ch, prev, glyphs[id]->root.advance.x, glyphs[id]->left, glyphs[id]->bitmap.width);
+				advanceChar<true, true>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x, glyphs[id]->left, glyphs[id]->bitmap.width);
 		} else {
-			if (FT_Error err = FT_Load_Char(face, ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_BITMAP_METRICS_ONLY))
-				throw std::runtime_error(FT_Error_String(err));
-			if (breakLine(ln, size, limit, face->glyph->bitmap_left, face->glyph->bitmap.width))
-				advanceChar<false, true>(ch, prev, face->glyph->advance.x, face->glyph->bitmap_left, face->glyph->bitmap.width);
+			vector<Font>::iterator ft = loadGlyph(ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_BITMAP_METRICS_ONLY);
+			if (breakLine(ln, size, limit, ft->face->glyph->bitmap_left, ft->face->glyph->bitmap.width))
+				advanceChar<false, true>(ft->face, ch, prev, ft->face->glyph->advance.x, ft->face->glyph->bitmap_left, ft->face->glyph->bitmap.width);
 		}
 
 		if (std::iswblank(ch) || std::iswpunct(ch)) {
@@ -217,6 +224,16 @@ pair<uint, vector<string_view::iterator>> FontSet::measureText(string_view text,
 	}
 	ln.push_back(text.end());
 	return pair(mfin, std::move(ln));
+}
+
+uvec2 FontSet::prepareBuffer(uint resx, uint resy) {
+	size_t size = size_t(resx) * size_t(resy);
+	if (size > bufSize) {
+		buffer = std::make_unique_for_overwrite<uint32[]>(size);
+		bufSize = size;
+	}
+	std::fill_n(buffer.get(), size, 0);
+	return uvec2(resx, resy);
 }
 
 template <bool ml>
@@ -234,7 +251,7 @@ void FontSet::advanceTab(array<FT_BitmapGlyph, cacheSize>& glyphs) {
 }
 
 template <bool cached>
-void FontSet::advanceChar(char32_t ch, char32_t prev, long advance) {
+void FontSet::advanceChar(FT_Face face, char32_t ch, char32_t prev, long advance) {
 	FT_Vector kerning;
 	if (FT_Error err = FT_Get_Kerning(face, prev, ch, FT_KERNING_DEFAULT, &kerning))
 		throw std::runtime_error(FT_Error_String(err));
@@ -246,13 +263,13 @@ void FontSet::advanceChar(char32_t ch, char32_t prev, long advance) {
 }
 
 template <bool cached, bool ml>
-void FontSet::advanceChar(char32_t ch, char32_t prev, long advance, int left, uint width) {
+void FontSet::advanceChar(FT_Face face, char32_t ch, char32_t prev, long advance, int left, uint width) {
 	if constexpr (ml)
 		mfin = gXpos + xpos;
 	else
 		mfin = xpos;
 	mfin += left + width;
-	advanceChar<cached>(ch, prev, advance);
+	advanceChar<cached>(face, ch, prev, advance);
 }
 
 bool FontSet::breakLine(vector<string_view::iterator>& ln, uint size, uint limit, int left, uint width) {
@@ -289,9 +306,10 @@ bool FontSet::setSize(string_view text, uint size) {
 		return false;
 
 	if (size != height) {
-		if (FT_Error err = FT_Set_Pixel_Sizes(face, 0, size))
-			throw std::runtime_error(FT_Error_String(err));
-		if (auto [it, isnew] = glyphCache.try_emplace(size); isnew)
+		for (Font& it : fonts)
+			if (FT_Error err = FT_Set_Pixel_Sizes(it.face, 0, size))
+				throw std::runtime_error(FT_Error_String(err));
+		if (auto [it, isnew] = asciiCache.try_emplace(size); isnew)
 			it->second.fill(nullptr);
 		height = size;
 	}
@@ -301,9 +319,9 @@ bool FontSet::setSize(string_view text, uint size) {
 void FontSet::cacheGlyph(array<FT_BitmapGlyph, cacheSize>& glyphs, char32_t ch, uint id) {
 	if (!glyphs[id]) {
 		FT_Glyph glyph;
-		if (FT_Error err = FT_Load_Char(face, ch, FT_LOAD_IGNORE_TRANSFORM))
+		if (FT_Error err = FT_Load_Char(fonts[0].face, ch, FT_LOAD_IGNORE_TRANSFORM))
 			throw std::runtime_error(FT_Error_String(err));
-		if (FT_Error err = FT_Get_Glyph(face->glyph, &glyph))
+		if (FT_Error err = FT_Get_Glyph(fonts[0].face->glyph, &glyph))
 			throw std::runtime_error(FT_Error_String(err));
 		if (glyph->format != FT_GLYPH_FORMAT_BITMAP)
 			if (FT_Error err = FT_Glyph_To_Bitmap(&glyph, FT_Render_Mode(mode), nullptr, true)) {
@@ -314,21 +332,48 @@ void FontSet::cacheGlyph(array<FT_BitmapGlyph, cacheSize>& glyphs, char32_t ch, 
 	}
 }
 
-void FontSet::copyGlyph(Pixmap& pm, uint dpitch, const FT_Bitmap_& bmp, int top, int left) {
+vector<FontSet::Font>::iterator FontSet::loadGlyph(char32_t ch, int32 flags) {
+	for (vector<Font>::iterator ft = fonts.begin(); ft != fonts.end(); ++ft) {
+		if (FT_Error err = FT_Load_Char(ft->face, ch, flags))
+			throw std::runtime_error(FT_Error_String(err));
+		if (ft->face->glyph->glyph_index)
+			return ft;
+	}
+
+	for (const fs::path& path : World::fileSys()->listFontFiles(lib, ch, ch)) {
+		try {
+			Font font = openFont(path, height);
+			if (FT_Error err = FT_Load_Char(font.face, ch, flags))
+				logError(FT_Error_String(err));
+			else if (font.face->glyph->glyph_index) {
+				fonts.push_back(std::move(font));
+				return fonts.end() - 1;
+			}
+			FT_Done_Face(font.face);
+		} catch (const std::runtime_error& err) {
+			logError(err.what());
+		}
+	}
+	if (FT_Error err = FT_Load_Char(fonts[0].face, ch, flags))
+		throw std::runtime_error(FT_Error_String(err));
+	return fonts.begin();
+}
+
+void FontSet::copyGlyph(uvec2 res, const FT_Bitmap_& bmp, int top, int left) {
 	uint32* dst;
 	cbyte* src;
 	int offs = ypos - top;
 	if (offs >= 0) {
-		dst = pm.pix.get() + uint(offs) * dpitch + xpos + left;
+		dst = buffer.get() + uint(offs) * res.x + xpos + left;
 		src = reinterpret_cast<cbyte*>(bmp.buffer);
 	} else {
-		dst = pm.pix.get() + xpos + left;
+		dst = buffer.get() + xpos + left;
 		src = reinterpret_cast<cbyte*>(bmp.buffer) + uint(-offs) * bmp.pitch;
 	}
 	uint bot = offs + bmp.rows;
-	uint rows = bot <= pm.res.y ? bmp.rows : bmp.rows - bot + pm.res.y;
+	uint rows = bot <= res.y ? bmp.rows : bmp.rows - bot + res.y;
 
-	for (uint r = 0; r < rows; ++r, dst += dpitch, src += bmp.pitch)
+	for (uint r = 0; r < rows; ++r, dst += res.x, src += bmp.pitch)
 		for (uint c = 0; c < bmp.width; ++c)
 			dst[c] = 0x00FFFFFF | (uint32(std::max(reinterpret_cast<cbyte*>(dst + c)[3], src[c])) << 24);
 }
@@ -340,28 +385,28 @@ void FontSet::setMode(Settings::Hinting hinting) {
 
 // DRAW SYS
 
-DrawSys::DrawSys(const umap<int, SDL_Window*>& windows, Settings* sets, const FileSys* fileSys, int iconSize) :
-	colors(fileSys->loadColors(sets->setTheme(sets->getTheme(), fileSys->getAvailableThemes())))
+DrawSys::DrawSys(const umap<int, SDL_Window*>& windows, int iconSize) :
+	colors(World::fileSys()->loadColors(World::sets()->setTheme(World::sets()->getTheme(), World::fileSys()->getAvailableThemes())))
 {
 	ivec2 origin(INT_MAX);
-	for (auto [id, rct] : sets->displays)
+	for (auto [id, rct] : World::sets()->displays)
 		origin = glm::min(origin, rct.pos());
 
-	switch (sets->renderer) {
+	switch (World::sets()->renderer) {
 	using enum Settings::Renderer;
 #ifdef WITH_DIRECTX
 	case directx:
-		renderer = new RendererDx(windows, sets, viewRes, origin, colors[eint(Color::background)]);
+		renderer = new RendererDx(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
 		break;
 #endif
 #ifdef WITH_OPENGL
 	case opengl:
-		renderer = new RendererGl(windows, sets, viewRes, origin, colors[eint(Color::background)]);
+		renderer = new RendererGl(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
 		break;
 #endif
 #ifdef WITH_VULKAN
 	case vulkan:
-		renderer = new RendererVk(windows, sets, viewRes, origin, colors[eint(Color::background)]);
+		renderer = new RendererVk(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
 #endif
 	}
 
@@ -373,10 +418,10 @@ DrawSys::DrawSys(const umap<int, SDL_Window*>& windows, Settings* sets, const Fi
 		throw std::runtime_error("Failed to create blank texture");
 	texes.emplace(string(), blank);
 
-	for (const fs::directory_entry& it : fs::directory_iterator(fileSys->dirIcons(), fs::directory_options::skip_permission_denied))
+	for (const fs::directory_entry& it : fs::directory_iterator(World::fileSys()->dirIcons(), fs::directory_options::skip_permission_denied))
 		if (Texture* tex = renderer->texFromIcon(loadIcon(fromPath(it.path()), iconSize)))
 			texes.emplace(fromPath(it.path().stem()), tex);
-	setFont(toPath(sets->font), sets, fileSys);
+	setFont(toPath(World::sets()->font));
 	renderer->synchTransfer();
 }
 
@@ -417,20 +462,20 @@ int DrawSys::findPointInView(ivec2 pos) const {
 	return vit != renderer->getViews().end() ? vit->first : Renderer::singleDspId;
 }
 
-void DrawSys::setTheme(string_view name, Settings* sets, const FileSys* fileSys) {
-	colors = fileSys->loadColors(sets->setTheme(name, fileSys->getAvailableThemes()));
+void DrawSys::setTheme(string_view name) {
+	colors = World::fileSys()->loadColors(World::sets()->setTheme(name, World::fileSys()->getAvailableThemes()));
 	renderer->setClearColor(colors[eint(Color::background)]);
 }
 
-void DrawSys::setFont(const fs::path& font, Settings* sets, const FileSys* fileSys) {
-	fs::path path = fileSys->findFont(font);
+void DrawSys::setFont(const fs::path& font) {
+	fs::path path = World::fileSys()->findFont(font);
 	if (FileSys::isFont(path))
-		sets->font = fromPath(font);
+		World::sets()->font = fromPath(font);
 	else {
-		sets->font = Settings::defaultFont;
-		path = fileSys->findFont(Settings::defaultFont);
+		World::sets()->font = Settings::defaultFont;
+		path = World::fileSys()->findFont(Settings::defaultFont);
 	}
-	fonts.init(path, sets->hinting);
+	fonts.init(path, World::sets()->hinting);
 }
 
 pair<Texture*, bool> DrawSys::texture(const string& name) const {
@@ -442,30 +487,30 @@ pair<Texture*, bool> DrawSys::texture(const string& name) const {
 	return pair(blank, false);
 }
 
-void DrawSys::drawWidgets(Scene* scene, bool mouseLast) {
+void DrawSys::drawWidgets(bool mouseLast) {
 	for (auto [id, view] : renderer->getViews()) {
 		try {
 			renderer->startDraw(view);
 
 			// draw main widgets and visible overlays
-			scene->getLayout()->drawSelf(view->rect);
-			if (scene->getOverlay() && scene->getOverlay()->on)
-				scene->getOverlay()->drawSelf(view->rect);
+			World::scene()->getLayout()->drawSelf(view->rect);
+			if (World::scene()->getOverlay() && World::scene()->getOverlay()->on)
+				World::scene()->getOverlay()->drawSelf(view->rect);
 
 			// draw popup if exists and dim main widgets
-			if (scene->getPopup()) {
+			if (World::scene()->getPopup()) {
 				renderer->drawRect(blank, view->rect, view->rect, colorPopupDim);
-				scene->getPopup()->drawSelf(view->rect);
+				World::scene()->getPopup()->drawSelf(view->rect);
 			}
 
 			// draw context menu
-			if (scene->getContext())
-				scene->getContext()->drawSelf(view->rect);
+			if (World::scene()->getContext())
+				World::scene()->getContext()->drawSelf(view->rect);
 
 			// draw extra stuff on top
-			if (scene->getCapture())
-				scene->getCapture()->drawTop(view->rect);
-			else if (Button* but = dynamic_cast<Button*>(scene->select); mouseLast && but)
+			if (World::scene()->getCapture())
+				World::scene()->getCapture()->drawTop(view->rect);
+			else if (Button* but = dynamic_cast<Button*>(World::scene()->select); mouseLast && but)
 				drawTooltip(but, view->rect);
 
 			renderer->finishDraw(view);
@@ -538,8 +583,8 @@ void DrawSys::drawWaDisp(const Recti& rect, Color color, const Recti& text, cons
 }
 
 void DrawSys::drawScrollArea(const ScrollArea* box, const Recti& view) {
-	mvec2 vis = box->visibleWidgets();	// get index interval of items on screen and draw children
-	for (size_t i = vis.x; i < vis.y; ++i)
+	uvec2 vis = box->visibleWidgets();	// get index interval of items on screen and draw children
+	for (uint i = vis.x; i < vis.y; ++i)
 		box->getWidget(i)->drawSelf(view);
 
 	if (Recti bar = box->barRect(); bar.overlaps(view)) {
@@ -550,8 +595,8 @@ void DrawSys::drawScrollArea(const ScrollArea* box, const Recti& view) {
 }
 
 void DrawSys::drawReaderBox(const ReaderBox* box, const Recti& view) {
-	mvec2 vis = box->visibleWidgets();
-	for (size_t i = vis.x; i < vis.y; ++i)
+	uvec2 vis = box->visibleWidgets();
+	for (uint i = vis.x; i < vis.y; ++i)
 		box->getWidget(i)->drawSelf(view);
 
 	if (Recti bar = box->barRect(); box->showBar() && bar.overlaps(view)) {

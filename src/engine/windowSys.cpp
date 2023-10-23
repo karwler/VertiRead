@@ -144,7 +144,7 @@ void WindowSys::exec() {
 		dSec = float(newTime - oldTime) / ticksPerSec;
 		oldTime = newTime;
 
-		drawSys->drawWidgets(scene, inputSys->mouseWin.has_value());
+		drawSys->drawWidgets(inputSys->mouseWin.has_value());
 		inputSys->tick();
 		scene->tick(dSec);
 		program->tick();
@@ -240,7 +240,7 @@ void WindowSys::createSingleWindow(uint32 flags, SDL_Surface* icon) {
 		throw std::runtime_error(std::format("Failed to create window:" LINEND "{}", SDL_GetError()));
 	windows.emplace(Renderer::singleDspId, win);
 
-	drawSys = new DrawSys(windows, sets, fileSys, int(128.f / fallbackDpi * winDpi));
+	drawSys = new DrawSys(windows, int(128.f / fallbackDpi * winDpi));
 	SDL_SetWindowIcon(win, icon);
 	SDL_SetWindowMinimumSize(win, windowMinSize.x, windowMinSize.y);
 	if (SDL_GetDisplayDPI(SDL_GetWindowDisplayIndex(windows.begin()->second), nullptr, nullptr, &winDpi))
@@ -258,7 +258,7 @@ void WindowSys::createMultiWindow(uint32 flags, SDL_Surface* icon) {
 		SDL_SetWindowIcon(win, icon);
 	}
 
-	drawSys = new DrawSys(windows, sets, fileSys, int(128.f / fallbackDpi * winDpi));
+	drawSys = new DrawSys(windows, int(128.f / fallbackDpi * winDpi));
 	if (SDL_GetDisplayDPI(SDL_GetWindowDisplayIndex(windows.begin()->second), nullptr, nullptr, &winDpi))
 		winDpi = fallbackDpi;
 }
@@ -374,6 +374,9 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 		break;
 	case SDL_USEREVENT_MOVE_FINISHED:
 		program->eventMoveFinished(event.user);
+		break;
+	case SDL_USEREVENT_FONTS_FINISHED:
+		program->eventFontsFinished(event.user);
 	}
 }
 

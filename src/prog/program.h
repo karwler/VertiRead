@@ -64,6 +64,7 @@ public:
 	void eventMoveCancelled(Button* but = nullptr);
 	void eventMoveProgress(const SDL_UserEvent& user);
 	void eventMoveFinished(const SDL_UserEvent& user);
+	void eventFontsFinished(const SDL_UserEvent& user);
 	void eventSetScreenMode(Button* but);
 	void eventSetRenderer(Button* but);
 	void eventSetDevice(Button* but);
@@ -75,7 +76,8 @@ public:
 	void eventSetHide(Button* but);
 	void eventSetTooltips(Button* but);
 	void eventSetTheme(Button* but);
-	void eventSetFont(Button* but);
+	void eventSetFontCMB(Button* but);
+	void eventSetFontLE(Button* but);
 	void eventSetFontHinting(Button* but);
 	void eventSetScrollSpeed(Button* but);
 	void eventSetDeadzoneSL(Button* but);
@@ -104,7 +106,7 @@ public:
 private:
 	void switchPictures(bool fwd, string_view picname);
 	void offerMoveBooks(fs::path&& oldLib);
-	static size_t finishComboBox(Button* but);
+	static uint finishComboBox(Button* but);
 	template <Derived<ProgState> T, class... A> void setState(A&&... args);
 	void reposizeWindow(ivec2 dres, ivec2 wsiz);
 };

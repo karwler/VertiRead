@@ -5,6 +5,9 @@
 #include <atomic>
 #include <fstream>
 
+struct FT_FaceRec_;
+struct FT_LibraryRec_;
+
 struct IniLine {
 	enum class Type : uint8 {
 		empty,
@@ -44,12 +47,8 @@ void IniLine::writeKeyVal(std::ofstream& ofs, P&& prp, K&& key, T&&... val) {
 class FileSys {
 private:
 #ifdef _WIN32
-	static constexpr array<string_view, 22> takenFilenames = {
-		"CON", "PRN", "AUX", "NUL",
-		"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-		"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
-	};
 	static constexpr char drivesMax = 26;
+	static constexpr wchar fontsKey[] = L"Software\\Microsoft\\Windows NT\\CurrentVersion\\Fonts";
 #endif
 	static constexpr size_t archiveReadBlockSize = 10240;
 	static constexpr char fileThemes[] = "themes.ini";
@@ -96,7 +95,7 @@ private:
 	fs::path dirConfs;	// internal config directory
 	std::ofstream logFile;
 #ifndef _WIN32
-	void* fontconfig = nullptr;
+	void* fontconfig = nullptr;	// is class Fontconfig
 #endif
 public:
 	FileSys(const uset<string>& cmdFlags);
@@ -111,7 +110,8 @@ public:
 	array<Binding, Binding::names.size()> loadBindings() const;
 	void saveBindings(const array<Binding, Binding::names.size()>& bindings) const;
 	fs::path findFont(const fs::path& font) const;	// on success returns absolute path to font file, otherwise returns empty path
-	vector<string> listFonts() const;
+	vector<fs::path> listFontFiles(FT_LibraryRec_* lib, char32_t first, char32_t last) const;
+	static void listFontFamiliesThread(std::atomic<ThreadType>& mode, fs::path cdir, string selected, char32_t first, char32_t last);
 
 	static vector<string> listDir(const char* drc, bool files = true, bool dirs = true, bool showHidden = true);
 	static pair<vector<string>, vector<string>> listDirSep(const char* drc, bool showHidden = true);	// first is list of files, second is list of directories
@@ -131,6 +131,7 @@ public:
 
 	static void moveContentThread(std::atomic<ThreadType>& mode, fs::path src, fs::path dst);
 	const fs::path& getDirSets() const;
+	const fs::path& getDirConfs() const;
 	fs::path dirIcons() const;
 
 private:
@@ -144,15 +145,27 @@ private:
 	static bool isPicture(SDL_RWops* ifh, string_view ext);
 	static bool isPicture(archive* arch, archive_entry* entry);
 	static pair<uptr<cbyte[]>, int64> readArchiveEntry(archive* arch, archive_entry* entry);
-	static string searchFontDirs(const fs::path& font, std::initializer_list<fs::path> dirs);
+	static fs::path searchFontDirectory(const fs::path& font, const fs::path& drc);
+	static void listFontFilesInDirectory(FT_LibraryRec_* lib, const fs::path& drc, char32_t first, char32_t last, vector<fs::path>& fonts);
+	static void listFontFamiliesInDirectoryThread(std::atomic<ThreadType>& mode, FT_LibraryRec_* lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<string, string>>& fonts);
+	static FT_FaceRec_* openFace(FT_LibraryRec_* lib, const fs::path& file, char32_t first, char32_t last, vector<cbyte>& fdata);
 #ifdef _WIN32
+	static fs::path searchFontRegistry(const fs::path& font);
+	template <HKEY root> static void listFontFilesInRegistry(FT_LibraryRec_* lib, char32_t first, char32_t last, vector<fs::path>& fonts);
+	template <HKEY root> static void listFontFamiliesInRegistryThread(std::atomic<ThreadType>& mode, FT_LibraryRec_* lib, char32_t first, char32_t last, vector<pair<string, string>>& fonts);
 	static vector<string> listDrives();
 #endif
+	static fs::path localFontDir();
+	static fs::path systemFontDir();
 	static void SDLCALL logWrite(void* userdata, int category, SDL_LogPriority priority, const char* message);
 };
 
 inline const fs::path& FileSys::getDirSets() const {
 	return dirSets;
+}
+
+inline const fs::path& FileSys::getDirConfs() const {
+	return dirConfs;
 }
 
 inline fs::path FileSys::dirIcons() const {
@@ -161,4 +174,20 @@ inline fs::path FileSys::dirIcons() const {
 
 inline bool FileSys::isPicture(const char* file) {
 	return isPicture(SDL_RWFromFile(file, "rb"), fileExtension(file));
+}
+
+inline fs::path FileSys::localFontDir() {
+#ifdef _WIN32
+	return fs::path(_wgetenv(L"LocalAppdata")) / L"Microsoft\\Windows\\Fonts";
+#else
+	return fs::path(getenv("HOME")) / ".fonts";
+#endif
+}
+
+inline fs::path FileSys::systemFontDir() {
+#ifdef _WIN32
+	return fs::path(_wgetenv(L"SystemDrive")) / L"Windows\\Fonts";
+#else
+	return "/usr/share/fonts";
+#endif
 }

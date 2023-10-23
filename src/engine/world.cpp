@@ -1,5 +1,5 @@
 #include "world.h"
-#ifndef WITH_ICU
+#ifdef WITH_ICU
 #include "utils/compare.h"
 #endif
 
@@ -24,14 +24,15 @@ pair<vector<string>, uset<string>> getArgs(int argc, C** argv, F conv) {
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, int) {
 #else
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR pCmdLine, int) {
+	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
 	vector<string> vals;
 	uset<string> flags;
 #ifdef __MINGW32__
-	if (lpCmdLine && lpCmdLine[0])
+	if (!strempty(lpCmdLine))
 		if (int argc; LPWSTR* argv = CommandLineToArgvW(sstow(lpCmdLine).c_str(), &argc)) {
 #else
-	if (pCmdLine && pCmdLine[0])
+	if (!strempty(pCmdLine))
 		if (int argc; LPWSTR* argv = CommandLineToArgvW(pCmdLine, &argc)) {
 #endif
 			std::tie(vals, flags) = getArgs(argc, argv, swtos);

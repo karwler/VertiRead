@@ -15,11 +15,6 @@ void pushEvent(UserEvent code, void* data1, void* data2) {
 		throw std::runtime_error(rc ? SDL_GetError() : "Event queue full");
 }
 
-Pixmap::Pixmap(uvec2 size) :
-	pix(std::make_unique<uint32[]>(size_t(size.x) * size_t(size.y))),
-	res(size)
-{}
-
 template <Integer C>
 bool tstrciequal(std::basic_string_view<C> a, std::basic_string_view<C> b) {
 	if (a.length() != b.length())
@@ -62,7 +57,7 @@ string_view parentPath(string_view path) {
 }
 
 static bool pathCompareLoop(string_view as, string_view bs, string_view::iterator& ai, string_view::iterator& bi) {
-	do {
+	while (ai != as.end() && bi != bs.end()) {
 		// comparee names of next entry
 		string_view::iterator an = std::find_if(ai, as.end(), isDsep);
 		string_view::iterator bn = std::find_if(bi, bs.end(), isDsep);
@@ -72,7 +67,7 @@ static bool pathCompareLoop(string_view as, string_view bs, string_view::iterato
 		// skip directory separators
 		ai = std::find_if(an, as.end(), notDsep);
 		bi = std::find_if(bn, bs.end(), notDsep);
-	} while (ai != as.end() && bi != bs.end());
+	}
 	return true;	// one has reached it's end so don't forget to check later which one (paths are equal if both have ended)
 }
 
@@ -84,26 +79,6 @@ string_view relativePath(string_view path, string_view base) {
 bool isSubpath(string_view path, string_view base) {
 	string_view::iterator ai = path.begin(), bi = base.begin();	// parent has to have reached its end while path was still matching
 	return pathCompareLoop(path, base, ai, bi) && bi == base.end();
-}
-
-string_view filename(string_view path) {
-	string_view::reverse_iterator end = std::find_if(path.rbegin(), path.rend(), notDsep);
-	return string_view(std::find_if(end, path.rend(), isDsep).base(), end.base());
-}
-
-string_view fileExtension(string_view path) {
-	string_view::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
-	return it != path.rend() && *it == '.' && it + 1 != path.rend() && notDsep(it[1]) ? string_view(it.base(), path.end()) : string_view();
-}
-
-string_view delExtension(string_view path) {
-	string_view::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
-	return it != path.rend() ? *it == '.' && it + 1 != path.rend() && notDsep(it[1]) ? string_view(path.begin(), it.base() - 1) : path : string_view();
-}
-
-string_view trim(string_view str) {
-	string_view::iterator pos = rng::find_if(str, notSpace);
-	return string_view(pos, std::find_if(str.rbegin(), std::make_reverse_iterator(pos), notSpace).base());
 }
 
 string strEnclose(string_view str) {
