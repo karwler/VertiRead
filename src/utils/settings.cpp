@@ -283,22 +283,6 @@ const string& Settings::setTheme(string_view name, vector<string>&& themes) {
 	return theme = themes.empty() ? string() : std::move(themes[0]);
 }
 
-const string& Settings::setDirLib(string_view drc, const fs::path& dirSets) {
-	try {
-		if (fs::path path = toPath(drc); fs::is_directory(path) || fs::create_directories(path))
-			dirLib = drc;
-		else {
-			dirLib = fromPath(dirSets) / defaultDirLib;
-			if (path = dirSets / defaultDirLib; !fs::is_directory(path))
-				fs::create_directories(path);
-		}
-	} catch (const fs::filesystem_error& err) {
-		logError(err.what());
-		dirLib = fromPath(dirSets) / defaultDirLib;
-	}
-	return dirLib;
-}
-
 umap<int, Recti> Settings::displayArrangement() {
 	ivec2 origin(INT_MAX);
 	umap<int, Recti> dsps;

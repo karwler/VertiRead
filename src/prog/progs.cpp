@@ -1,4 +1,5 @@
 #include "progs.h"
+#include "program.h"
 #include "engine/drawSys.h"
 #include "engine/fileSys.h"
 #include "engine/inputSys.h"
@@ -106,7 +107,7 @@ Overlay* ProgState::createOverlay() {
 	return nullptr;
 }
 
-Popup* ProgState::createPopupMessage(string msg, PCall ccal, string ctxt, Alignment malign) {
+Popup* ProgState::createPopupMessage(string&& msg, PCall ccal, string ctxt, Alignment malign) {
 	Text ok(std::move(ctxt), popupLineHeight);
 	Text mg(std::move(msg), popupLineHeight);
 	Widget* first;
@@ -122,7 +123,7 @@ Popup* ProgState::createPopupMessage(string msg, PCall ccal, string ctxt, Alignm
 	return new Popup(svec2(std::max(mg.length, ok.length) + Layout::defaultItemSpacing * 2, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), ccal, first);
 }
 
-void ProgState::updatePopupMessage(string msg) {
+void ProgState::updatePopupMessage(string&& msg) {
 	if (Popup* popup = World::scene()->getPopup()) {
 		Text mg(std::move(msg), popupLineHeight);
 		popup->getWidget<Label>(0)->setText(std::move(mg.text));
@@ -130,7 +131,7 @@ void ProgState::updatePopupMessage(string msg) {
 	}
 }
 
-Popup* ProgState::createPopupMultiline(string msg, PCall ccal, string ctxt, Alignment malign) {
+Popup* ProgState::createPopupMultiline(string&& msg, PCall ccal, string ctxt, Alignment malign) {
 	Text ok(std::move(ctxt), popupLineHeight);
 	ivec2 viewRes = World::drawSys()->getViewRes();
 	int width = ok.length, lines = 0;
@@ -156,7 +157,7 @@ Popup* ProgState::createPopupMultiline(string msg, PCall ccal, string ctxt, Alig
 	return new Popup(svec2(width, std::min(lineHeight * lines + popupLineHeight + Layout::defaultItemSpacing * 3, viewRes.y)), std::move(con), ccal, first);
 }
 
-Popup* ProgState::createPopupChoice(string msg, PCall kcal, PCall ccal, Alignment malign) {
+Popup* ProgState::createPopupChoice(string&& msg, PCall kcal, PCall ccal, Alignment malign) {
 	Text mg(std::move(msg), popupLineHeight);
 	Text yes("Yes", popupLineHeight);
 	Text no("No", popupLineHeight);
@@ -170,6 +171,124 @@ Popup* ProgState::createPopupChoice(string msg, PCall kcal, PCall ccal, Alignmen
 		new Layout(1.f, std::move(bot), Direction::right, 0)
 	};
 	return new Popup(svec2(std::max(mg.length, yes.length + no.length) + Layout::defaultItemSpacing * 3, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), ccal, first);
+}
+
+Popup* ProgState::createPopupInput(string&& msg, string&& text, PCall kcal, PCall ccal, string&& ktxt, Alignment malign) {
+	Text mg(std::move(msg), popupLineHeight);
+	Text yes(std::move(ktxt), popupLineHeight);
+	Text no("Cancel", popupLineHeight);
+	Widget* first;
+	vector<Widget*> bot = {
+		new Label(1.f, std::move(yes.text), kcal, nullptr, nullptr, nullptr, Alignment::center),
+		new Label(1.f, std::move(no.text), ccal, nullptr, nullptr, nullptr, Alignment::center)
+	};
+	vector<Widget*> con = {
+		new Label(1.f, std::move(mg.text), nullptr, nullptr, nullptr, nullptr, malign),
+		first = new LabelEdit(1.f, std::move(text), kcal, ccal),
+		new Layout(1.f, std::move(bot), Direction::right, 0)
+	};
+	return new Popup(svec2(0.75f, popupLineHeight * 3 + Layout::defaultItemSpacing * 4), std::move(con), ccal, first);
+}
+
+const string& ProgState::inputFromPopup() {
+	return World::scene()->getPopup()->getWidget<LabelEdit>(1)->getText();
+}
+
+Popup* ProgState::createPopupRemoteLogin(RemoteLocation&& rl, PCall kcal, PCall ccal) {
+	static constexpr std::initializer_list<const char*> txs = {
+		"User",
+		"Password",
+		"Server",
+		"Path",
+		"Port",
+		"Workgroup",
+		"Family",
+		"Save"
+	};
+	std::initializer_list<const char*>::iterator itxs = txs.begin();
+	int descLength = findMaxLength(txs.begin(), txs.end(), popupLineHeight);
+	int protocolLength = findMaxLength(protocolNames.begin(), protocolNames.end(), popupLineHeight);
+	int portLength = Text::measure("00000", popupLineHeight) + LabelEdit::caretWidth;
+	int familyLblLength = Text::measure(txs.end()[-1], popupLineHeight);
+	int familyValLength = findMaxLength(familyNames.begin(), familyNames.end(), popupLineHeight);
+	int valLength = std::max(protocolLength + Layout::defaultItemSpacing + descLength * 2, portLength + familyLblLength + familyValLength + Layout::defaultItemSpacing * 2);
+
+	Text mg(std::format("{} Login", rl.protocol == Protocol::smb ? "SMB" : "SFTP"), popupLineHeight);
+	Text yes("Log In", popupLineHeight);
+	Text no("Cancel", popupLineHeight);
+	vector<Widget*> user = {
+		new Label(descLength, *itxs++),
+		new LabelEdit(1.f, std::move(rl.user), nullptr, nullptr, nullptr, makeTooltip("Username"))
+	};
+	vector<Widget*> password = {
+		new Label(descLength, *itxs++),
+		new LabelEdit(1.f, std::move(rl.password), nullptr, nullptr, nullptr, makeTooltip("Password"), LabelEdit::TextType::password)
+	};
+	vector<Widget*> server = {
+		new Label(descLength, *itxs++),
+		new LabelEdit(1.f, std::move(rl.server), nullptr, nullptr, nullptr, makeTooltip("Server address"))
+	};
+	vector<Widget*> path = {
+		new Label(descLength, *itxs++),
+		new LabelEdit(1.f, std::move(rl.path), nullptr, nullptr, nullptr, makeTooltip("Directory to open0"s + (rl.protocol == Protocol::smb ? " (must start with the share name)" : "")))
+	};
+	vector<Widget*> port = {
+		new Label(descLength, *itxs++),
+		new LabelEdit(1.f, toStr(rl.port), nullptr, nullptr, nullptr, makeTooltip("Port"), rl.protocol == Protocol::smb ? LabelEdit::TextType::uInt : LabelEdit::TextType::any)
+	};
+	if (rl.protocol == Protocol::sftp)
+		port.insert(port.end(), {
+			new Label(familyLblLength, *++itxs),
+			new ComboBox(familyValLength, eint(Family::any), vector<string>(familyNames.begin(), familyNames.end()), &Program::eventConfirmComboBox, makeTooltip("Family for resolving the server address"))
+		});
+	vector<Widget*> bot = {
+		new Label(1.f, std::move(yes.text), kcal, nullptr, nullptr, nullptr, Alignment::center),
+		new Label(1.f, std::move(no.text), ccal, nullptr, nullptr, nullptr, Alignment::center)
+	};
+	Widget* first = rl.user.empty() ? user[1] : password[1];
+
+	vector<Widget*> con {
+		new Label(popupLineHeight, std::move(mg.text), nullptr, nullptr, nullptr, nullptr, Alignment::center),
+		new Layout(popupLineHeight, std::move(user), Direction::right),
+		new Layout(popupLineHeight, std::move(password), Direction::right),
+		new Layout(popupLineHeight, std::move(server), Direction::right),
+		new Layout(popupLineHeight, std::move(path), Direction::right),
+		new Layout(popupLineHeight, std::move(port), Direction::right),
+		new Layout(popupLineHeight, std::move(bot), Direction::right),
+	};
+	if (rl.protocol == Protocol::smb) {
+		vector<Widget*> workgroup = {
+			new Label(descLength, *itxs),
+			new LabelEdit(1.f, std::move(rl.workgroup), nullptr, nullptr, nullptr, makeTooltip("Workgroup"))
+		};
+		con.insert(con.begin() + 2, new Layout(popupLineHeight, std::move(workgroup), Direction::right));
+	}
+	++itxs;
+	if (World::program()->canStoreCredentials()) {
+		vector<Widget*> saveCredentials {
+			new Label(descLength, *itxs),
+			new CheckBox(popupLineHeight, false, nullptr, nullptr, nullptr, makeTooltip("Remember credentials"))
+		};
+		con.insert(con.end() - 1, new Layout(popupLineHeight, std::move(saveCredentials), Direction::right));
+	}
+	uint numLines = con.size();
+	return new Popup(svec2(std::max(std::max(mg.length, yes.length + no.length), uint(descLength + valLength)) + Layout::defaultItemSpacing * 3, popupLineHeight * numLines + Layout::defaultItemSpacing * (numLines + 1)), std::move(con), ccal, first);
+}
+
+pair<RemoteLocation, bool> ProgState::remoteLocationFromPopup() {
+	const vector<Widget*>& con = World::scene()->getPopup()->getWidgets();
+	uint offs = con.size() == uint(8 + World::program()->canStoreCredentials());
+	const vector<Widget*>& portfam = static_cast<Layout*>(con[5 + offs])->getWidgets();
+	return pair(RemoteLocation{
+		.server = static_cast<Layout*>(con[2 + offs])->getWidget<LabelEdit>(2)->getText(),
+		.path = static_cast<Layout*>(con[4 + offs])->getWidget<LabelEdit>(1)->getText(),
+		.user = static_cast<Layout*>(con[1])->getWidget<LabelEdit>(1)->getText(),
+		.workgroup = offs ? static_cast<Layout*>(con[2])->getWidget<LabelEdit>(1)->getText() : string(),
+		.password = static_cast<Layout*>(con[2 + offs])->getWidget<LabelEdit>(1)->getText(),
+		.port = toNum<uint16>(static_cast<LabelEdit*>(portfam[1])->getText()),
+		.protocol = offs ? Protocol::smb : Protocol::sftp,
+		.family = !offs ? Family(static_cast<ComboBox*>(portfam[3])->getCurOpt()) : Family::any
+	}, World::program()->canStoreCredentials() ? static_cast<Layout*>(con[con.size() - 2])->getWidget<CheckBox>(1)->on : false);
 }
 
 Context* ProgState::createContext(vector<pair<string, PCall>>&& items, Widget* parent) {
@@ -261,34 +380,43 @@ void ProgFileExplorer::eventRefresh() {
 	World::scene()->updateSelect();
 }
 
-void ProgFileExplorer::processFileChanges(const Browser* browser, vector<pair<bool, string>>& files, bool gone) {
-	if (gone) {
+void ProgFileExplorer::processFileChanges(Browser* browser) {
+	optional<vector<FileChange>> files = browser->directoryUpdate();
+	if (!files) {
 		fileList->setWidgets(vector<Widget*>());
 		if (locationBar)
 			locationBar->setText(browser->currentLocation());
 		return;
 	}
 
+	auto compare = [](const Widget* a, const string& b) -> bool { return StrNatCmp::less(static_cast<const Label*>(a)->getText(), b); };
 	const vector<Widget*>& wgts = fileList->getWidgets();
-	for (auto& [add, name] : files) {
-		bool directory = fs::is_directory(browser->getCurDir() / name);
-		auto [pos, end] = directory ? pair(wgts.begin(), wgts.begin() + dirEnd) : pair(wgts.begin() + dirEnd, wgts.begin() + fileEnd);
-		if (add) {
-			uint id = std::lower_bound(pos, end, name, [](const Widget* a, const string& b) -> bool { return StrNatCmp::less(static_cast<const Label*>(a)->getText(), b); }) - wgts.begin();
-			Size size = fileEntrySize(name);
-			if (directory) {
-				fileList->insertWidget(id, makeDirectoryEntry(size, std::move(name)));
-				++dirEnd;
-				++fileEnd;
-			} else if (Label* flbl = makeFileEntry(size, std::move(name))) {
-				fileList->insertWidget(id, flbl);
-				++fileEnd;
+	for (FileChange& fc : *files) {
+		if (fc.type == FileChange::deleteEntry) {
+			vector<Widget*>::const_iterator sp = wgts.begin() + dirEnd;
+			vector<Widget*>::const_iterator it = std::lower_bound(wgts.begin(), sp, fc.name, compare);
+			bool directory = it != sp && static_cast<const Label*>(*it)->getText() == fc.name;
+			if (!directory) {
+				vector<Widget*>::const_iterator ef = wgts.begin() + fileEnd;
+				if (it = std::lower_bound(sp, ef, fc.name, compare); it == ef || static_cast<const Label*>(*it)->getText() != fc.name)
+					continue;
 			}
-		} else if (vector<Widget*>::const_iterator it = std::lower_bound(pos, end, name, [](const Widget* a, const string& b) -> bool { return StrNatCmp::less(static_cast<const Label*>(a)->getText(), b); }); it != end && static_cast<const Label*>(*it)->getText() == name) {
 			fileList->deleteWidget((*it)->getIndex());
 			if (directory)
 				--dirEnd;
 			--fileEnd;
+		} else {
+			auto [pos, end] = fc.type == FileChange::addDirectory ? pair(wgts.begin(), wgts.begin() + dirEnd) : pair(wgts.begin() + dirEnd, wgts.begin() + fileEnd);
+			uint id = std::lower_bound(pos, end, fc.name, compare) - wgts.begin();
+			Size size = fileEntrySize(fc.name);
+			if (fc.type == FileChange::addDirectory) {
+				fileList->insertWidget(id, makeDirectoryEntry(size, std::move(fc.name)));
+				++dirEnd;
+				++fileEnd;
+			} else if (Label* flbl = makeFileEntry(size, std::move(fc.name))) {
+				fileList->insertWidget(id, flbl);
+				++fileEnd;
+			}
 		}
 	}
 }
@@ -321,12 +449,11 @@ RootLayout* ProgBooks::createLayout() {
 	};
 
 	// book list
-	vector<string> books = FileSys::listDir(World::sets()->getDirLib().c_str(), false, true, World::sets()->showHidden);
+	Browser* browser = World::program()->getBrowser();
+	vector<string> books = browser->listDirDirs(World::sets()->dirLib);
 	vector<Widget*> tiles(books.size() + 1);
-	for (size_t i = 0; i < books.size(); ++i) {
-		Text txt(std::move(books[i]), TileBox::defaultItemHeight);
-		tiles[i] = makeDirectoryEntry(txt.length, std::move(txt.text));
-	}
+	for (size_t i = 0; i < books.size(); ++i)
+		tiles[i] = makeBookTile(std::move(books[i]));
 	tiles.back() = new Button(TileBox::defaultItemHeight, &Program::eventOpenPageBrowserGeneral, &Program::eventOpenBookContextGeneral, nullptr, makeTooltip("Browse other directories"), true, World::drawSys()->texture("search"));
 	dirEnd = books.size();
 	fileEnd = dirEnd;
@@ -337,6 +464,11 @@ RootLayout* ProgBooks::createLayout() {
 		fileList = new TileBox(1.f, std::move(tiles))
 	};
 	return new RootLayout(1.f, std::move(cont), Direction::down, topSpacing);
+}
+
+Label* ProgBooks::makeBookTile(string&& name) {
+	Text txt(std::move(name), TileBox::defaultItemHeight);
+	return makeDirectoryEntry(txt.length, std::move(txt.text));
 }
 
 Label* ProgBooks::makeDirectoryEntry(const Size& size, string&& name) {
@@ -370,7 +502,7 @@ void ProgPageBrowser::resetFileIcons() {
 
 RootLayout* ProgPageBrowser::createLayout() {
 	// sidebar
-	std::initializer_list<const char*> txs = {
+	static constexpr std::initializer_list<const char*> txs = {
 		"Exit",
 		"Up"
 	};
@@ -382,9 +514,10 @@ RootLayout* ProgPageBrowser::createLayout() {
 	};
 
 	// list of files and directories
-	auto [files, dirs] = World::browser()->listCurDir();
+	Browser* browser = World::program()->getBrowser();
+	auto [files, dirs] = browser->listCurDir();
 	if (World::sets()->preview)
-		World::browser()->startPreview(files, dirs, lineHeight);
+		browser->startPreview(files, dirs, lineHeight);
 	vector<Widget*> items(files.size() + dirs.size());
 	for (size_t i = 0; i < dirs.size(); ++i)
 		items[i] = makeDirectoryEntry(lineHeight, std::move(dirs[i]));
@@ -400,9 +533,10 @@ RootLayout* ProgPageBrowser::createLayout() {
 	};
 
 	// root layout
-	string location = World::browser()->currentLocation();
+	string location = browser->currentLocation();
+	string_view rpath = relativePath(location, World::sets()->dirLib);
 	vector<Widget*> cont = {
-		locationBar = new LabelEdit(lineHeight, World::browser()->getRootDir() != Browser::topDir ? string(relativePath(location, World::sets()->getDirLib())) : std::move(location), &Program::eventBrowserGoTo),
+		locationBar = new LabelEdit(lineHeight, rpath.empty() ? std::move(location) : string(rpath), &Program::eventBrowserGoTo),
 		new Layout(1.f, std::move(mid), Direction::right, topSpacing)
 	};
 	return new RootLayout(1.f, std::move(cont), Direction::down, topSpacing);
@@ -498,7 +632,7 @@ void ProgReader::eventPrevDir() {
 
 void ProgReader::eventHide() {
 	ProgState::eventHide();
-	World::browser()->startLoadPictures(string(reader->firstPage()));
+	World::program()->getBrowser()->startLoadPictures(string(reader->firstPage()));
 	World::program()->setPopupLoading();
 }
 
@@ -510,12 +644,13 @@ void ProgReader::eventRefresh() {
 }
 
 void ProgReader::eventClosing() {
-	if (string_view rpath = relativePath(World::browser()->getCurDir(), World::sets()->getDirLib()); rpath.empty())
-		World::fileSys()->saveLastPage(dotStr, World::browser()->getCurDir(), World::browser()->curDirSuffix() + reader->curPage());
+	Browser* browser = World::program()->getBrowser();
+	if (string_view rpath = relativePath(browser->getCurDir(), World::sets()->dirLib); rpath.empty())
+		World::fileSys()->saveLastPage(dotStr, browser->getCurDir(), browser->curDirSuffix() + reader->curPage());
 	else {
 		string_view::iterator mid = rng::find_if(rpath, isDsep);
 		string_view::iterator nxt = std::find_if(mid, rpath.end(), notDsep);
-		World::fileSys()->saveLastPage(string_view(rpath.begin(), mid), string_view(nxt, rpath.end()), World::browser()->curDirSuffix() + reader->curPage());
+		World::fileSys()->saveLastPage(string_view(rpath.begin(), mid), string_view(nxt, rpath.end()), browser->curDirSuffix() + reader->curPage());
 	}
 	SDL_ShowCursor(SDL_ENABLE);
 }
@@ -589,14 +724,8 @@ void ProgSettings::eventFileDrop(const char* file) {
 	if (fs::path path = toPath(file);  FileSys::isFont(path)) {
 		World::drawSys()->setFont(file);
 		eventRefresh();
-	} else {
-		try {
-			if (fs::is_directory(path))
-				World::sets()->setDirLib(file, World::fileSys()->getDirSets());
-		} catch (const fs::filesystem_error& err) {
-			logError(err.what());
-		}
-	}
+	} else
+		World::program()->setLibraryDir(file);
 }
 
 RootLayout* ProgSettings::createLayout() {
@@ -639,7 +768,7 @@ RootLayout* ProgSettings::createLayout() {
 	};
 	std::initializer_list<const char*>::iterator itxs = txs.begin();
 
-	auto [maxRes, maxCompress] = World::renderer()->getSettings(devices);
+	auto [maxRes, maxCompress] = World::drawSys()->getRenderer()->getSettings(devices);
 	vector<string> dnames(devices.size());
 	rng::transform(devices, dnames.begin(), [](pair<u32vec2, string>& it) -> string { return std::move(it.second); });
 	vector<pair<u32vec2, string>>::iterator curDev = rng::find_if(devices, [](const pair<u32vec2, string>& it) -> bool { return World::sets()->device == it.first; });
@@ -770,7 +899,7 @@ RootLayout* ProgSettings::createLayout() {
 		} },
 		{ lineHeight, {
 			new Label(descLength, *itxs++),
-			new LabelEdit(1.f, valcp(World::sets()->getDirLib()), &Program::eventSetLibraryDirLE, nullptr, nullptr, makeTooltip("Library path")),
+			libraryDir = new LabelEdit(1.f, valcp(World::sets()->dirLib), &Program::eventSetLibraryDirLE, nullptr, nullptr, makeTooltip("Library path")),
 			new Label(dots.length, std::move(dots.text), &Program::eventOpenLibDirBrowser, nullptr, nullptr, makeTooltip("Browse for library"), Alignment::center)
 		} },
 		{ lineHeight, {
@@ -830,14 +959,12 @@ Widget* ProgSettings::createLimitEdit() {
 
 void ProgSettings::startFonts() {
 	stopFonts();
-	fontThreadType = ThreadType::font;
-	fontThread = std::thread(&FileSys::listFontFamiliesThread, std::ref(fontThreadType), World::fileSys()->getDirConfs(), World::sets()->font, ' ', '~');
+	fontThread = std::jthread(&FileSys::listFontFamiliesThread, World::fileSys()->getDirConfs(), World::sets()->font, ' ', '~');
 }
 
 void ProgSettings::stopFonts() {
 	if (fontThread.joinable()) {
-		fontThreadType = ThreadType::none;
-		fontThread.join();
+		fontThread = std::jthread();
 		cleanupEvent(SDL_USEREVENT_FONTS_FINISHED, [](SDL_UserEvent& user) { delete static_cast<FontListResult*>(user.data1); });
 	}
 }
@@ -852,15 +979,12 @@ void ProgSettings::setFontField(vector<string>&& families, uptr<string[]>&& file
 
 void ProgSettings::startMove() {
 	stopMove();
-	moveThreadType = ThreadType::move;
-	moveThread = std::thread(&FileSys::moveContentThread, std::ref(moveThreadType), std::move(oldPathBuffer), toPath(World::sets()->getDirLib()));
+	moveThread = std::jthread(&FileSys::moveContentThread, toPath(oldPathBuffer), toPath(World::sets()->dirLib));
 }
 
 void ProgSettings::stopMove() {
 	if (moveThread.joinable()) {
-		moveThreadType = ThreadType::none;
-		moveThread.join();
-
+		moveThread = std::jthread();
 		SDL_FlushEvent(SDL_USEREVENT_MOVE_PROGRESS);
 		cleanupEvent(SDL_USEREVENT_MOVE_FINISHED, [](SDL_UserEvent& user) {
 			string* errors = static_cast<string*>(user.data1);
@@ -886,7 +1010,7 @@ void ProgSearchDir::eventSpecEscape() {
 
 RootLayout* ProgSearchDir::createLayout() {
 	// sidebar
-	std::initializer_list<const char*> txs = {
+	static constexpr std::initializer_list<const char*> txs = {
 		"Exit",
 		"Up",
 		"Set"
@@ -900,7 +1024,8 @@ RootLayout* ProgSearchDir::createLayout() {
 	};
 
 	// directory list
-	vector<string> strs = FileSys::listDir(World::browser()->getCurDir().c_str(), false, true, World::sets()->showHidden);
+	Browser* browser = World::program()->getBrowser();
+	vector<string> strs = browser->listDirDirs(browser->getCurDir());
 	vector<Widget*> items(strs.size());
 	for (size_t i = 0; i < strs.size(); ++i)
 		items[i] = makeDirectoryEntry(lineHeight, std::move(strs[i]));
@@ -915,7 +1040,7 @@ RootLayout* ProgSearchDir::createLayout() {
 
 	// root layout
 	vector<Widget*> cont = {
-		locationBar = new LabelEdit(lineHeight, valcp(World::browser()->getCurDir()), &Program::eventBrowserGoTo),
+		locationBar = new LabelEdit(lineHeight, valcp(browser->getCurDir()), &Program::eventBrowserGoTo),
 		new Layout(1.f, std::move(mid), Direction::right, topSpacing)
 	};
 	return new RootLayout(1.f, std::move(cont), Direction::down, topSpacing);

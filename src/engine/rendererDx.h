@@ -100,7 +100,7 @@ private:
 	ID3D11ShaderResourceView* createTextureView(ID3D11Texture2D* tex, DXGI_FORMAT format);
 
 	template <class T> void uploadBuffer(ID3D11Buffer* buffer, const T& data);
-	TextureDx* createTexture(const cbyte* pix, uvec2 res, uint pitch, DXGI_FORMAT format);
+	TextureDx* createTexture(const byte_t* pix, uvec2 res, uint pitch, DXGI_FORMAT format);
 	template <class T> static void comRelease(T*& obj);
 	static string hresultToStr(HRESULT rs);
 };

@@ -1,12 +1,99 @@
 #pragma once
 
 #include "utils/utils.h"
-#include <mutex>
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
-// archive file entry with size for pictures
+enum UserEvent : uint32 {
+	SDL_USEREVENT_READER_PROGRESS = SDL_USEREVENT,
+	SDL_USEREVENT_READER_FINISHED,
+	SDL_USEREVENT_PREVIEW_PROGRESS,
+	SDL_USEREVENT_PREVIEW_FINISHED,
+	SDL_USEREVENT_ARCHIVE_PROGRESS,
+	SDL_USEREVENT_ARCHIVE_FINISHED,
+	SDL_USEREVENT_MOVE_PROGRESS,
+	SDL_USEREVENT_MOVE_FINISHED,
+	SDL_USEREVENT_FONTS_FINISHED,
+	SDL_USEREVENT_MAX
+};
+
+template <Invocable<SDL_UserEvent&> F>
+void cleanupEvent(UserEvent type, F dealloc) {
+	array<SDL_Event, 16> events;
+	while (int num = SDL_PeepEvents(events.data(), events.size(), SDL_GETEVENT, type, type)) {
+		if (num < 0)
+			throw std::runtime_error(SDL_GetError());
+		for (int i = 0; i < num; ++i)
+			dealloc(events[i].user);
+	}
+}
+
+void pushEvent(UserEvent code, void* data1 = nullptr, void* data2 = nullptr);
+
+enum class FileOpCapabilities : uint8 {
+	none = 0x0,
+	remove = 0x1,
+	rename = 0x2,
+	watch = 0x4
+};
+
+enum class Protocol : uint8 {
+	none,
+	smb,
+	sftp
+};
+constexpr array protocolNames = {
+	"",
+	"smb",
+	"sftp"
+};
+constexpr array<uint16, protocolNames.size()> protocolPorts = {
+	0,
+	445,
+	22
+};
+
+enum class Family : uint8 {
+	any,
+	v4,
+	v6
+};
+constexpr array familyNames = {
+	"any",
+	"IPv4",
+	"IPv6"
+};
+
+// connection information about a network location
+struct RemoteLocation {
+	string server;
+	string path;
+	string user;
+	string workgroup;
+	string password;
+	uint16 port;
+	Protocol protocol = Protocol::none;
+	Family family = Family::any;
+
+	static Protocol getProtocol(string_view str);
+	static RemoteLocation fromPath(string_view str, Protocol proto);
+private:
+	static uint16 sanitizePort(string_view port, Protocol protocol);
+};
+
+// a new or deleted directory entry
+struct FileChange {
+	enum Type {
+		deleteEntry,
+		addFile,
+		addDirectory
+	};
+
+	string name;
+	Type type;
+
+	FileChange(string&& entry, Type change);
+};
+
+// archive file with image size
 struct ArchiveFile {
 	string name;
 	uintptr_t size;
@@ -81,26 +168,3 @@ struct FontListResult {
 	FontListResult(vector<string>&& fa, uptr<string[]>&& fl, size_t id, string&& msg);
 };
 
-// checks for filename changes
-class FileWatch {
-private:
-	static constexpr size_t esiz = 2048;
-
-#ifdef _WIN32
-	HANDLE dirc = INVALID_HANDLE_VALUE;
-	OVERLAPPED overlapped{};
-	fs::path filter;
-	DWORD flags;
-#else
-	int ino = -1, watch = -1;
-#endif
-	cbyte* ebuf = nullptr;
-
-public:
-	FileWatch(const char* path);
-	~FileWatch();
-
-	void set(const char* path);
-	void unset();
-	pair<vector<pair<bool, string>>, bool> changed();
-};

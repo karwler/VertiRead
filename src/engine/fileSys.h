@@ -1,9 +1,13 @@
 #pragma once
 
-#include "prog/types.h"
 #include "utils/settings.h"
-#include <atomic>
 #include <fstream>
+#include <thread>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#undef WIN32_LEAN_AND_MEAN
+#endif
 
 struct FT_FaceRec_;
 struct FT_LibraryRec_;
@@ -47,10 +51,8 @@ void IniLine::writeKeyVal(std::ofstream& ofs, P&& prp, K&& key, T&&... val) {
 class FileSys {
 private:
 #ifdef _WIN32
-	static constexpr char drivesMax = 26;
-	static constexpr wchar fontsKey[] = L"Software\\Microsoft\\Windows NT\\CurrentVersion\\Fonts";
+	static constexpr wchar_t fontsKey[] = L"Software\\Microsoft\\Windows NT\\CurrentVersion\\Fonts";
 #endif
-	static constexpr size_t archiveReadBlockSize = 10240;
 	static constexpr char fileThemes[] = "themes.ini";
 	static constexpr char fileSettings[] = "settings.ini";
 	static constexpr char fileBindings[] = "bindings.ini";
@@ -94,7 +96,7 @@ private:
 	fs::path dirSets;	// settings directory
 	fs::path dirConfs;	// internal config directory
 	std::ofstream logFile;
-#ifndef _WIN32
+#ifdef CAN_FONTCFG
 	void* fontconfig = nullptr;	// is class Fontconfig
 #endif
 public:
@@ -111,25 +113,10 @@ public:
 	void saveBindings(const array<Binding, Binding::names.size()>& bindings) const;
 	fs::path findFont(const fs::path& font) const;	// on success returns absolute path to font file, otherwise returns empty path
 	vector<fs::path> listFontFiles(FT_LibraryRec_* lib, char32_t first, char32_t last) const;
-	static void listFontFamiliesThread(std::atomic<ThreadType>& mode, fs::path cdir, string selected, char32_t first, char32_t last);
-
-	static vector<string> listDir(const char* drc, bool files = true, bool dirs = true, bool showHidden = true);
-	static pair<vector<string>, vector<string>> listDirSep(const char* drc, bool showHidden = true);	// first is list of files, second is list of directories
-
-	static vector<cbyte> readBinFile(const fs::path& file);
-	static bool isPicture(const char* file);
+	static void listFontFamiliesThread(std::stop_token stoken, fs::path cdir, string selected, char32_t first, char32_t last);
 	static bool isFont(const fs::path& file);
-	static bool isArchive(const char* file);
-	static bool isPictureArchive(const char* file);
-	static bool isArchivePicture(const char* file, string_view pname);
 
-	static archive* openArchive(const char* file);
-	static vector<string> listArchiveFiles(const char* file);
-	static void makeArchiveTreeThread(std::atomic<ThreadType>& mode, BrowserResultAsync ra, uintptr_t maxRes);
-	static SDL_Surface* loadArchivePicture(const char* file, string_view pname);
-	static SDL_Surface* loadArchivePicture(archive* arch, archive_entry* entry);
-
-	static void moveContentThread(std::atomic<ThreadType>& mode, fs::path src, fs::path dst);
+	static void moveContentThread(std::stop_token stoken, fs::path src, fs::path dst);
 	const fs::path& getDirSets() const;
 	const fs::path& getDirConfs() const;
 	fs::path dirIcons() const;
@@ -140,20 +127,17 @@ private:
 	template <Integer C, std::endian bo> static string processTextFile(std::ifstream& ifs, std::streampos offs);
 	template <Integer C, std::endian bo> static C readChar(std::ifstream& ifs, std::streampos& len);
 	static void writeChar8(string& str, char32_t ch);
-	template <Class T> static void readFileContent(std::ifstream& ifs, T& data, std::streampos len);
 
-	static bool isPicture(SDL_RWops* ifh, string_view ext);
-	static bool isPicture(archive* arch, archive_entry* entry);
-	static pair<uptr<cbyte[]>, int64> readArchiveEntry(archive* arch, archive_entry* entry);
 	static fs::path searchFontDirectory(const fs::path& font, const fs::path& drc);
 	static void listFontFilesInDirectory(FT_LibraryRec_* lib, const fs::path& drc, char32_t first, char32_t last, vector<fs::path>& fonts);
-	static void listFontFamiliesInDirectoryThread(std::atomic<ThreadType>& mode, FT_LibraryRec_* lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<string, string>>& fonts);
-	static FT_FaceRec_* openFace(FT_LibraryRec_* lib, const fs::path& file, char32_t first, char32_t last, vector<cbyte>& fdata);
+	static void listFontFamiliesInDirectoryThread(std::stop_token stoken, FT_LibraryRec_* lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<string, string>>& fonts);
+	static FT_FaceRec_* openFace(FT_LibraryRec_* lib, const fs::path& file, char32_t first, char32_t last, vector<byte_t>& fdata);
 #ifdef _WIN32
 	static fs::path searchFontRegistry(const fs::path& font);
+#ifndef __MINGW32__
 	template <HKEY root> static void listFontFilesInRegistry(FT_LibraryRec_* lib, char32_t first, char32_t last, vector<fs::path>& fonts);
-	template <HKEY root> static void listFontFamiliesInRegistryThread(std::atomic<ThreadType>& mode, FT_LibraryRec_* lib, char32_t first, char32_t last, vector<pair<string, string>>& fonts);
-	static vector<string> listDrives();
+	template <HKEY root> static void listFontFamiliesInRegistryThread(std::stop_token stoken, FT_LibraryRec_* lib, char32_t first, char32_t last, vector<pair<string, string>>& fonts);
+#endif
 #endif
 	static fs::path localFontDir();
 	static fs::path systemFontDir();
@@ -170,10 +154,6 @@ inline const fs::path& FileSys::getDirConfs() const {
 
 inline fs::path FileSys::dirIcons() const {
 	return dirConfs / "icons";
-}
-
-inline bool FileSys::isPicture(const char* file) {
-	return isPicture(SDL_RWFromFile(file, "rb"), fileExtension(file));
 }
 
 inline fs::path FileSys::localFontDir() {

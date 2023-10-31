@@ -1,14 +1,13 @@
 #ifdef WITH_VULKAN
 #include "rendererVk.h"
-#include "utils/settings.h"
-#include <vulkan/vk_enum_string_helper.h>
+#include <list>
+#include <source_location>
 #ifdef _WIN32
 #include <SDL_vulkan.h>
 #else
 #include <SDL2/SDL_vulkan.h>
 #endif
-#include <list>
-#include <source_location>
+#include <vulkan/vk_enum_string_helper.h>
 
 // GENERIC PIPELINE
 
@@ -1356,7 +1355,7 @@ Texture* RendererVk::texFromIcon(SDL_Surface* img) {
 	img = limitSize(img, pdevProperties.limits.maxImageDimension2D);
 	if (auto [pic, fmt, direct] = pickPixFormat(img); pic) {
 		TextureVk* tex = direct
-			? createTextureDirect(static_cast<cbyte*>(pic->pixels), u32vec2(pic->w, pic->h), pic->pitch, pic->format->BytesPerPixel, fmt, false)
+			? createTextureDirect(static_cast<byte_t*>(pic->pixels), u32vec2(pic->w, pic->h), pic->pitch, pic->format->BytesPerPixel, fmt, false)
 			: createTextureIndirect(pic, fmt);
 		SDL_FreeSurface(pic);
 		return tex;
@@ -1367,7 +1366,7 @@ Texture* RendererVk::texFromIcon(SDL_Surface* img) {
 Texture* RendererVk::texFromRpic(SDL_Surface* img) {
 	if (auto [pic, fmt, direct] = pickPixFormat(img); pic) {
 		TextureVk* tex = direct
-			? createTextureDirect(static_cast<cbyte*>(pic->pixels), u32vec2(pic->w, pic->h), pic->pitch, pic->format->BytesPerPixel, fmt, false)
+			? createTextureDirect(static_cast<byte_t*>(pic->pixels), u32vec2(pic->w, pic->h), pic->pitch, pic->format->BytesPerPixel, fmt, false)
 			: createTextureIndirect(pic, fmt);
 		SDL_FreeSurface(pic);
 		return tex;
@@ -1377,7 +1376,7 @@ Texture* RendererVk::texFromRpic(SDL_Surface* img) {
 
 Texture* RendererVk::texFromText(const PixmapRgba& pm) {
 	if (pm.pix)
-		return createTextureDirect(reinterpret_cast<const cbyte*>(pm.pix), glm::min(pm.res, u32vec2(pdevProperties.limits.maxImageDimension2D)), pm.res.x * 4, 4, VK_FORMAT_A8B8G8R8_UNORM_PACK32, true);
+		return createTextureDirect(reinterpret_cast<const byte_t*>(pm.pix), glm::min(pm.res, u32vec2(pdevProperties.limits.maxImageDimension2D)), pm.res.x * 4, 4, VK_FORMAT_A8B8G8R8_UNORM_PACK32, true);
 	return nullptr;
 }
 
@@ -1395,7 +1394,7 @@ void RendererVk::synchTransfer() {
 	vkWaitForFences(ldev, tfences.size(), tfences.data(), VK_TRUE, UINT64_MAX);
 }
 
-RendererVk::TextureVk* RendererVk::createTextureDirect(const cbyte* pix, u32vec2 res, uint32 pitch, uint8 bpp, VkFormat format, bool nearest) {
+RendererVk::TextureVk* RendererVk::createTextureDirect(const byte_t* pix, u32vec2 res, uint32 pitch, uint8 bpp, VkFormat format, bool nearest) {
 	VkImage image = VK_NULL_HANDLE;
 	VkDeviceMemory memory = VK_NULL_HANDLE;
 	VkImageView view = VK_NULL_HANDLE;
@@ -1436,7 +1435,7 @@ RendererVk::TextureVk* RendererVk::createTextureIndirect(const SDL_Surface* img,
 	try {
 		std::tie(image, memory) = createImage(res, VK_IMAGE_TYPE_2D, VK_FORMAT_A8B8G8R8_UNORM_PACK32, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		synchSingleTimeCommands(tcmdBuffers[currentTransfer], tfences[currentTransfer]);
-		uploadInputData<true>(static_cast<cbyte*>(img->pixels), res, img->pitch, img->format->BytesPerPixel);
+		uploadInputData<true>(static_cast<byte_t*>(img->pixels), res, img->pitch, img->format->BytesPerPixel);
 
 		array<VkDescriptorSet, 1> descriptorSets = { fmtConv.getDescriptorSet(currentTransfer) };
 		beginSingleTimeCommands(tcmdBuffers[currentTransfer]);
@@ -1471,7 +1470,7 @@ RendererVk::TextureVk* RendererVk::createTextureIndirect(const SDL_Surface* img,
 }
 
 template <bool conv>
-void RendererVk::uploadInputData(const cbyte* pix, u32vec2 res, uint32 pitch, uint8 bpp) {
+void RendererVk::uploadInputData(const byte_t* pix, u32vec2 res, uint32 pitch, uint8 bpp) {
 	VkDeviceSize texSize, pixSize;
 	if constexpr (conv) {
 		texSize = VkDeviceSize(res.x) * VkDeviceSize(res.y);

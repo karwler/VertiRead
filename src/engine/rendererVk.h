@@ -270,7 +270,7 @@ private:
 	array<VkFence, FormatConverter::maxTransfers> tfences{};
 	array<VkBuffer, FormatConverter::maxTransfers> inputBuffers{};
 	array<VkDeviceMemory, FormatConverter::maxTransfers> inputMemory{};
-	array<cbyte*, FormatConverter::maxTransfers> inputsMapped;
+	array<byte_t*, FormatConverter::maxTransfers> inputsMapped;
 	array<VkDeviceSize, FormatConverter::maxTransfers> inputSizesMax{};
 	VkDeviceSize transferAtomSize;
 
@@ -359,9 +359,9 @@ private:
 	static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR chooseSwapPresentMode(const vector<VkPresentModeKHR>& availablePresentModes) const;
 	static uint scoreDevice(const VkPhysicalDeviceProperties& prop, const VkPhysicalDeviceMemoryProperties& memp);
-	TextureVk* createTextureDirect(const cbyte* pix, u32vec2 res, uint32 pitch, uint8 bpp, VkFormat format, bool nearest);
+	TextureVk* createTextureDirect(const byte_t* pix, u32vec2 res, uint32 pitch, uint8 bpp, VkFormat format, bool nearest);
 	TextureVk* createTextureIndirect(const SDL_Surface* img, VkFormat format);
-	template <bool conv> void uploadInputData(const cbyte* pix, u32vec2 res, uint32 pitch, uint8 bpp);
+	template <bool conv> void uploadInputData(const byte_t* pix, u32vec2 res, uint32 pitch, uint8 bpp);
 	tuple<SDL_Surface*, VkFormat, bool> pickPixFormat(SDL_Surface* img) const;
 #ifndef NDEBUG
 	static pair<bool, bool> checkValidationLayerSupport();

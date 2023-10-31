@@ -10,24 +10,33 @@ private:
 	static constexpr float resModeRatio = 0.75f;
 
 	ProgState* state = nullptr;
-	uptr<Browser> browser;
+	Browser browser;
+#ifdef CAN_SECRET
+	optional<CredentialManager*> credential;	// loaded lazily
+#endif
 
 public:
 	~Program();
 
 	void start(const vector<string>& cmdVals);
 	void tick();
+	template <MemberFunction F, class... A> void exec(F func, A&&... args);
 
 	// books
 	void eventOpenBookList(Button* but = nullptr);
+	void eventOpenBookListLogin(Button* but = nullptr);
 	void eventOpenPageBrowser(Button* but);
 	void eventOpenPageBrowserGeneral(Button* but = nullptr);
 	void eventOpenBookContext(Button* but);
 	void eventOpenBookContextGeneral(Button* but);
 	void eventOpenLastPage(Button* but = nullptr);
 	void eventOpenLastPageGeneral(Button* but = nullptr);
+	void eventAskDeleteBook(Button* but = nullptr);
 	void eventDeleteBook(Button* but = nullptr);
+	void eventQueryRenameBook(Button* but = nullptr);
+	void eventRenameBook(Button* but = nullptr);
 	void openFile(const char* file);
+	void eventOpenFileLogin(Button* but = nullptr);
 
 	// browser
 	void eventArchiveProgress(const SDL_UserEvent& user);
@@ -37,6 +46,7 @@ public:
 	void eventBrowserGoIn(Button* but);
 	void eventBrowserGoFile(Button* but);
 	void eventBrowserGoTo(Button* but);
+	void eventBrowserGoToLogin(Button* but = nullptr);
 	void eventPreviewProgress(const SDL_UserEvent& user);
 	void eventPreviewFinished();
 	void eventExitBrowser(Button* but = nullptr);
@@ -59,6 +69,7 @@ public:
 	void eventSetSpacing(Button* but);
 	void eventSetLibraryDirLE(Button* but);
 	void eventSetLibraryDirBW(Button* but);
+	void setLibraryDir(string_view path, bool byText = false);
 	void eventOpenLibDirBrowser(Button* but = nullptr);
 	void eventMoveComics(Button* but = nullptr);
 	void eventMoveCancelled(Button* but = nullptr);
@@ -96,25 +107,45 @@ public:
 	// other
 	void eventClosePopup(Button* but = nullptr);
 	void eventCloseContext(Button* but = nullptr);
+	void eventConfirmComboBox(Button* but);
 	void eventResizeComboContext(Layout* lay = nullptr);
 	void eventExit(Button* but = nullptr);
 	void setPopupLoading();
 
 	ProgState* getState();
 	Browser* getBrowser();
+	bool canStoreCredentials() const;
 
 private:
+	template <class... A> void openBookListHandle(A&&... args);
+	template <class... A> void openFileHandle(A&&... args);
+	template <class... A> void browserGoToHandle(A&&... args);
+	template <Invocable<const RemoteLocation&, vector<string>&&> F> void browserLoginAuto(RemoteLocation&& rl, PCall kcal, F func);
+	template <Invocable<const RemoteLocation&> F> void browserLoginManual(F func);
 	void switchPictures(bool fwd, string_view picname);
-	void offerMoveBooks(fs::path&& oldLib);
 	static uint finishComboBox(Button* but);
 	template <Derived<ProgState> T, class... A> void setState(A&&... args);
 	void reposizeWindow(ivec2 dres, ivec2 wsiz);
 };
+
+template <MemberFunction F, class... A>
+void Program::exec(F func, A&&... args) {
+	if (func)
+		(this->*func)(std::forward<A>(args)...);
+}
 
 inline ProgState* Program::getState() {
 	return state;
 }
 
 inline Browser* Program::getBrowser() {
-	return browser.get();
+	return &browser;
+}
+
+inline bool Program::canStoreCredentials() const {
+#ifdef CAN_SECRET
+	return credential && *credential;
+#else
+	return false;
+#endif
 }

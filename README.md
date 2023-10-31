@@ -4,11 +4,27 @@ It's basically just an image viewer that shows all pictures of a directory/archi
 Currently supported file formats are whatever SDL2_image and libarchive support.  
 
 ## Build
-Used libraries are SDL2, SDL2_image, FreeType, libarchive, glm and by extension libtiff, libwebp, stb_image and zlib. The included default font is BrisaSans.  
 The CMakeLists.txt is written for at least CMake 3.12.4 with Clang, GCC, MinGW or MSVC which need to support C++ 20.  
 You can generate project files for a debug build by running CMake with the "-DCMAKE_BUILD_TYPE=Debug" option. Otherwise it'll default to a release build.  
 By default the Program uses OpenGL 3.0, which can be switched to OpenGL ES 3.0 with "-DOPENGLES=1" or entirely disabled with "-DOPENGL=0".  
 Support for DirectX 11 and Vulkan 1.0 can be enabled by setting the options "-DDIRECTX=1" and "-DVULKAN=1".  
+
+### Directly used Libraries
+|Library|Optional|Description|
+|-|-|-|
+|d3d11 & dxgi|compile time|Rendering with DirectX 11. (linked if present at compile time)|
+|fontconfig|compile time and runtime|Speeds up font file lookup. (loaded dynamically at runtime)|
+|freetype2|no|Needed for rendering text.|
+|GL/GLESv2|compile time|Rendering with OpenGL/OpenGL ES. (linked if present at compile time)|
+|glm|no|Needed mostly for Widgets.|
+|ICU|compile time|Improves sorting of file lists. (linked if present at compile time)|
+|libarchive|no|Needed for reading archive files.|
+|libsecret|compile time and runtime|For storing credentials to remote locations. (loaded dynamically at runtime)|
+|libssh2|compile time and runtime|For browsing SFTP locations. (loaded dynamically at runtime)|
+|SDL2|no|Needed for everything.|
+|SDL2_image|no|Needed to load images.|
+|smbclient|compile time and runtime|For browsing Samba shares. (loaded dynamically at runtime)|
+|vulkan|compile time|Rendering with Vulkan. (linked if present at compile time)|
 
 ### Linux
 Most dependencies need to be installed manually. Installing the development packages for SDL 2, SDL_image 2, FreeType 2 and libarchive should do the trick.  

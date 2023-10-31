@@ -399,6 +399,7 @@ class LabelEdit final : public Label {
 public:
 	enum class TextType : uint8 {
 		any,
+		password,
 		sInt,
 		sIntSpaced,
 		uInt,
@@ -435,9 +436,11 @@ public:
 	void confirm();
 	void cancel();
 
+protected:
+	ivec2 textPos() const final;
+	void updateTextTex() final;
 private:
 	void onTextReset();
-	ivec2 textPos() const final;
 	int caretPos() const;	// caret's relative x position
 	void setCPos(uint cp);
 

@@ -1,17 +1,11 @@
 #include "fileSys.h"
-#include "utils/compare.h"
-#include <archive.h>
-#include <archive_entry.h>
+#include "prog/fileOps.h"
 #include <regex>
 #include <ft2build.h>
 #include FT_FREETYPE_H
-#ifdef _WIN32
-#include <SDL_image.h>
-#else
-#include <SDL2/SDL_image.h>
-#include <dirent.h>
-#include <dlfcn.h>
-#include <fontconfig/fontconfig.h>
+#ifdef CAN_FONTCFG
+#include "optional/fontconfig.h"
+using namespace LibFontconfig;
 #endif
 
 namespace {
@@ -23,11 +17,11 @@ private:
 	DWORD i = 0;
 	DWORD type;
 	DWORD nlen, dlen;
-	wchar name[MAX_PATH];
-	BYTE data[MAX_PATH];
+	wchar_t name[MAX_PATH];
+	wchar_t data[MAX_PATH];
 
 public:
-	RegistryIterator(HKEY root, const wchar* path);
+	RegistryIterator(HKEY root, const wchar_t* path);
 	~RegistryIterator();
 
 	bool next();
@@ -36,7 +30,7 @@ public:
 	wstring_view getString() const;
 };
 
-RegistryIterator::RegistryIterator(HKEY root, const wchar* path) {
+RegistryIterator::RegistryIterator(HKEY root, const wchar_t* path) {
 	RegOpenKeyExW(root, path, 0, KEY_READ, &key);
 }
 
@@ -46,8 +40,8 @@ RegistryIterator::~RegistryIterator() {
 
 bool RegistryIterator::next() {
 	nlen = std::extent_v<decltype(name)>;
-	dlen = std::extent_v<decltype(data)>;
-	return RegEnumValueW(key, i++, name, &nlen, nullptr, &type, data, &dlen) == ERROR_SUCCESS;
+	dlen = sizeof(data);
+	return RegEnumValueW(key, i++, name, &nlen, nullptr, &type, reinterpret_cast<BYTE*>(data), &dlen) == ERROR_SUCCESS;
 }
 
 RegistryIterator::operator bool() const {
@@ -59,28 +53,14 @@ DWORD RegistryIterator::getType() const {
 }
 
 wstring_view RegistryIterator::getString() const {
-	return wstring_view(reinterpret_cast<const wchar*>(data), dlen / sizeof(wchar) - 1);
+	return wstring_view(data, dlen / sizeof(wchar_t) - 1);
 }
+#endif
 
-#else
-
+#ifdef CAN_FONTCFG
 class Fontconfig {
 private:
-	void* lib;
 	FcConfig* config;
-
-	FcPattern* (*fcPatternCreate)();
-	void (*fcPatternDestroy)(FcPattern* p);
-	FcResult (*fcPatternGetString)(FcPattern* p, const char* object, int n, FcChar8**);
-	void (*fcDefaultSubstitute)(FcPattern* pattern);
-	FcPattern* (*fcNameParse)(const FcChar8* name);
-	void (*fcFontSetDestroy)(FcFontSet* p);
-	void (*fcObjectSetDestroy)(FcObjectSet* os);
-	FcObjectSet* (*fcObjectSetBuild)(const char* first, ...);
-	void (*fcConfigDestroy)(FcConfig* config);
-	FcBool (*fcConfigSubstitute)(FcConfig* config, FcPattern* p, FcMatchKind kind);
-	FcPattern* (*fcFontMatch)(FcConfig* config, FcPattern* p, FcResult* result);
-	FcFontSet* (*fcFontList)(FcConfig* config, FcPattern* p, FcObjectSet* os);
 
 public:
 	Fontconfig();
@@ -92,38 +72,14 @@ public:
 };
 
 Fontconfig::Fontconfig() :
-	lib(dlopen("libfontconfig.so", RTLD_NOW))
+	config(fcInitLoadConfigAndFonts())
 {
-	if (!lib)
-		throw std::runtime_error(coalesce(static_cast<const char*>(dlerror()), "Failed to open fontconfig"));
-
-	FcConfig* (*fcInitLoadConfigAndFonts)() = reinterpret_cast<decltype(fcInitLoadConfigAndFonts)>(dlsym(lib, "FcInitLoadConfigAndFonts"));
-	fcPatternCreate = reinterpret_cast<decltype(fcPatternCreate)>(dlsym(lib, "FcPatternCreate"));
-	fcPatternDestroy = reinterpret_cast<decltype(fcPatternDestroy)>(dlsym(lib, "FcPatternDestroy"));
-	fcPatternGetString = reinterpret_cast<decltype(fcPatternGetString)>(dlsym(lib, "FcPatternGetString"));
-	fcDefaultSubstitute = reinterpret_cast<decltype(fcDefaultSubstitute)>(dlsym(lib, "FcDefaultSubstitute"));
-	fcNameParse = reinterpret_cast<decltype(fcNameParse)>(dlsym(lib, "FcNameParse"));
-	fcFontSetDestroy = reinterpret_cast<decltype(fcFontSetDestroy)>(dlsym(lib, "FcFontSetDestroy"));
-	fcObjectSetDestroy = reinterpret_cast<decltype(fcObjectSetDestroy)>(dlsym(lib, "FcObjectSetDestroy"));
-	fcObjectSetBuild = reinterpret_cast<decltype(fcObjectSetBuild)>(dlsym(lib, "FcObjectSetBuild"));
-	fcConfigDestroy = reinterpret_cast<decltype(fcConfigDestroy)>(dlsym(lib, "FcConfigDestroy"));
-	fcConfigSubstitute = reinterpret_cast<decltype(fcConfigSubstitute)>(dlsym(lib, "FcConfigSubstitute"));
-	fcFontMatch = reinterpret_cast<decltype(fcFontMatch)>(dlsym(lib, "FcFontMatch"));
-	fcFontList = reinterpret_cast<decltype(fcFontList)>(dlsym(lib, "FcFontList"));
-	try {
-		if (!(fcInitLoadConfigAndFonts && fcPatternCreate && fcPatternDestroy && fcPatternGetString && fcDefaultSubstitute && fcNameParse && fcFontSetDestroy && fcObjectSetDestroy && fcObjectSetBuild && fcConfigDestroy && fcConfigSubstitute && fcFontMatch && fcFontList))
-			throw std::runtime_error("Failed to find fontconfig functions");
-		if (config = fcInitLoadConfigAndFonts(); !config)
-			throw std::runtime_error("Failed to init fontconfig");
-	} catch (const std::runtime_error&) {
-		dlclose(lib);
-		throw;
-	}
+	if (!config)
+		throw std::runtime_error("Failed to init fontconfig");
 }
 
 Fontconfig::~Fontconfig() {
 	fcConfigDestroy(config);
-	dlclose(lib);
 }
 
 string Fontconfig::search(const char* font) {
@@ -261,9 +217,10 @@ FileSys::FileSys(const uset<string>& cmdFlags) {
 	if (!fs::is_regular_file(dirConfs / fileThemes, ec) || ec)
 		logError("Failed to find themes file: ", ec.message());
 
-#ifndef _WIN32
+#ifdef CAN_FONTCFG
 	try {
-		fontconfig = new Fontconfig;
+		if (symFontconfig())
+			fontconfig = new Fontconfig;
 	} catch (const std::runtime_error& err) {
 		logError(err.what());
 	}
@@ -271,7 +228,7 @@ FileSys::FileSys(const uset<string>& cmdFlags) {
 }
 
 FileSys::~FileSys() {
-#ifndef _WIN32
+#ifdef CAN_FONTCFG
 	delete static_cast<Fontconfig*>(fontconfig);
 #endif
 	SDL_LogSetOutputFunction(nullptr, nullptr);
@@ -387,7 +344,7 @@ Settings* FileSys::loadSettings() const {
 			else if (strciequal(il.prp, iniKeywordTooltips))
 				sets->tooltips = toBool(il.val);
 			else if (strciequal(il.prp, iniKeywordLibrary))
-				sets->setDirLib(il.val, dirSets);
+				sets->dirLib = il.val;
 			else if (strciequal(il.prp, iniKeywordScrollSpeed))
 				sets->scrollSpeed = toVec<vec2>(il.val);
 			else if (strciequal(il.prp, iniKeywordDeadzone))
@@ -431,7 +388,7 @@ void FileSys::saveSettings(const Settings* sets) const {
 	IniLine::writeVal(ofs, iniKeywordPreview, toStr(sets->preview));
 	IniLine::writeVal(ofs, iniKeywordShowHidden, toStr(sets->showHidden));
 	IniLine::writeVal(ofs, iniKeywordTooltips, toStr(sets->tooltips));
-	IniLine::writeVal(ofs, iniKeywordLibrary, sets->getDirLib());
+	IniLine::writeVal(ofs, iniKeywordLibrary, sets->dirLib);
 	IniLine::writeVal(ofs, iniKeywordScrollSpeed, sets->scrollSpeed.x, ' ', sets->scrollSpeed.y);
 	IniLine::writeVal(ofs, iniKeywordDeadzone, sets->getDeadzone());
 }
@@ -546,9 +503,11 @@ string FileSys::processTextFile(std::ifstream& ifs, std::streampos offs) {
 		len -= len % sizeof(C);
 		ifs.seekg(offs);
 
-		if constexpr (sizeof(C) == sizeof(char))
-			readFileContent(ifs, text, len);
-		else if constexpr (sizeof(C) == sizeof(char16_t)) {
+		if constexpr (sizeof(C) == sizeof(char)) {
+			text.resize(len);
+			if (ifs.read(text.data(), text.length()).gcount() < len)
+				text.resize(ifs.gcount());
+		} else if constexpr (sizeof(C) == sizeof(char16_t)) {
 			while (len) {
 				if (C ch = readChar<C, bo>(ifs, len); ch < 0xD800)
 					writeChar8(text, ch);
@@ -587,119 +546,6 @@ void FileSys::writeChar8(string& str, char32_t ch) {
 		str += { char(0xF0 | (ch >> 18)), char(0x80 | ((ch >> 12) & 0x3F)), char(0x80 | ((ch >> 6) & 0x3F)), char(0x80 | (ch & 0x3F)) };
 }
 
-vector<cbyte> FileSys::readBinFile(const fs::path& file) {
-	vector<cbyte> data;
-	if (std::ifstream ifs(file, std::ios::binary | std::ios::ate); ifs.good())
-		if (std::streampos len = ifs.tellg(); len > 0) {
-			ifs.seekg(0);
-			readFileContent(ifs, data, len);
-		}
-	return data;
-}
-
-template <Class T>
-void FileSys::readFileContent(std::ifstream& ifs, T& data, std::streampos len) {
-	data.resize(len / sizeof(*data.data()));
-	if (ifs.read(reinterpret_cast<char*>(data.data()), data.size() * sizeof(*data.data())).gcount() < len)
-		data.resize(ifs.gcount() / sizeof(*data.data()));
-}
-
-vector<string> FileSys::listDir(const char* drc, bool files, bool dirs, bool showHidden) {
-#ifdef _WIN32
-	if (strempty(drc))	// if in "root" directory, get drive letters and present them as directories
-		return dirs ? listDrives() : vector<string>();
-#endif
-	vector<string> entries;
-#ifdef _WIN32
-	WIN32_FIND_DATAW data;
-	if (HANDLE hFind = FindFirstFileW((sstow(drc) / L"*").c_str(), &data); hFind != INVALID_HANDLE_VALUE) {
-		do {
-			if (wcscmp(data.cFileName, L".") && wcscmp(data.cFileName, L"..") && (showHidden || !(data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) && (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? dirs : files))
-				entries.push_back(swtos(data.cFileName));
-		} while (FindNextFileW(hFind, &data));
-		FindClose(hFind);
-	}
-#else
-	if (DIR* directory = opendir(drc)) {
-		while (dirent* entry = readdir(directory))
-			if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..") && (showHidden || entry->d_name[0] != '.') && ((entry->d_type != DT_LNK ? entry->d_type == DT_DIR : fs::is_directory(toPath(drc) / entry->d_name)) ? dirs : files))
-				entries.emplace_back(entry->d_name);
-		closedir(directory);
-	}
-#endif
-	rng::sort(entries, StrNatCmp());
-	return entries;
-}
-
-pair<vector<string>, vector<string>> FileSys::listDirSep(const char* drc, bool showHidden) {
-#ifdef _WIN32
-	if (strempty(drc))	// if in "root" directory, get drive letters and present them as directories
-		return pair(vector<string>(), listDrives());
-#endif
-	vector<string> files, dirs;
-#ifdef _WIN32
-	WIN32_FIND_DATAW data;
-	if (HANDLE hFind = FindFirstFileW((sstow(drc) / L"*").c_str(), &data); hFind != INVALID_HANDLE_VALUE) {
-		do {
-			if (wcscmp(data.cFileName, L".") && wcscmp(data.cFileName, L"..") && (showHidden || !(data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)))
-				(data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? dirs : files).push_back(swtos(data.cFileName));
-		} while (FindNextFileW(hFind, &data));
-		FindClose(hFind);
-	}
-#else
-	if (DIR* directory = opendir(drc)) {
-		while (dirent* entry = readdir(directory))
-			if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..") && (showHidden || entry->d_name[0] != '.'))
-				((entry->d_type != DT_LNK ? entry->d_type == DT_DIR : fs::is_directory(toPath(drc) / entry->d_name)) ? dirs : files).emplace_back(entry->d_name);
-		closedir(directory);
-	}
-#endif
-	rng::sort(files, StrNatCmp());
-	rng::sort(dirs, StrNatCmp());
-	return pair(std::move(files), std::move(dirs));
-}
-
-bool FileSys::isPicture(SDL_RWops* ifh, string_view ext) {
-	static constexpr int (SDLCALL* const magics[])(SDL_RWops*) = {
-		IMG_isJPG,
-		IMG_isPNG,
-		IMG_isBMP,
-		IMG_isGIF,
-		IMG_isTIF,
-		IMG_isWEBP,
-		IMG_isCUR,
-		IMG_isICO,
-		IMG_isLBM,
-		IMG_isPCX,
-		IMG_isPNM,
-		IMG_isSVG,
-		IMG_isXCF,
-		IMG_isXPM,
-		IMG_isXV,
-#if SDL_IMAGE_VERSION_ATLEAST(2, 6, 0)
-		IMG_isAVIF,
-		IMG_isJXL,
-		IMG_isQOI
-#endif
-	};
-	if (ifh) {
-		for (int (SDLCALL* const test)(SDL_RWops*) : magics)
-			if (test(ifh)) {
-				SDL_RWclose(ifh);
-				return true;
-			}
-
-		if (strciequal(ext, "TGA"))
-			if (SDL_Surface* img = IMG_LoadTGA_RW(ifh)) {
-				SDL_FreeSurface(img);
-				SDL_RWclose(ifh);
-				return true;
-			}
-		SDL_RWclose(ifh);
-	}
-	return false;
-}
-
 bool FileSys::isFont(const fs::path& file) {
 	if (std::ifstream ifs(file, std::ios::binary); ifs.good()) {
 		char sig[5] = { -1, -1, -1, -1, -1 };
@@ -709,145 +555,19 @@ bool FileSys::isFont(const fs::path& file) {
 	return false;
 }
 
-bool FileSys::isArchive(const char* file) {
-	if (archive* arch = openArchive(file)) {
-		archive_read_free(arch);
-		return true;
-	}
-	return false;
-}
-
-bool FileSys::isPictureArchive(const char* file) {
-	if (archive* arch = openArchive(file)) {
-		for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
-			if (isPicture(arch, entry)) {
-				archive_read_free(arch);
-				return true;
-			}
-		archive_read_free(arch);
-	}
-	return false;
-}
-
-bool FileSys::isArchivePicture(const char* file, string_view pname) {
-	if (archive* arch = openArchive(file)) {
-		for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
-			if (archive_entry_pathname_utf8(entry) == pname)
-				if (isPicture(arch, entry)) {
-					archive_read_free(arch);
-					return true;
-				}
-		archive_read_free(arch);
-	}
-	return false;
-}
-
-bool FileSys::isPicture(archive* arch, archive_entry* entry) {
-	auto [buffer, bsiz] = readArchiveEntry(arch, entry);
-	return bsiz > 0 && isPicture(SDL_RWFromConstMem(buffer.get(), bsiz), fileExtension(archive_entry_pathname_utf8(entry)));
-}
-
-archive* FileSys::openArchive(const char* file) {
-	archive* arch = archive_read_new();
-	if (arch) {
-		archive_read_support_filter_all(arch);
-		archive_read_support_format_all(arch);
-#ifdef _WIN32
-		if (archive_read_open_filename_w(arch, sstow(file).c_str(), archiveReadBlockSize)) {
-#else
-		if (archive_read_open_filename(arch, file, archiveReadBlockSize)) {
-#endif
-			archive_read_free(arch);
-			return nullptr;
-		}
-	}
-	return arch;
-}
-
-pair<uptr<cbyte[]>, int64> FileSys::readArchiveEntry(archive* arch, archive_entry* entry) {
-	int64 bsiz = archive_entry_size(entry);
-	if (bsiz <= 0 || archive_entry_filetype(entry) != AE_IFREG)
-		return pair(nullptr, 0);
-
-	uptr<cbyte[]> buffer = std::make_unique_for_overwrite<cbyte[]>(bsiz);
-	bsiz = archive_read_data(arch, buffer.get(), bsiz);
-	return pair(std::move(buffer), bsiz);
-}
-
-vector<string> FileSys::listArchiveFiles(const char* file) {
-	vector<string> entries;
-	if (archive* arch = openArchive(file)) {
-		for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
-			if (archive_entry_filetype(entry) == AE_IFREG)
-				entries.emplace_back(archive_entry_pathname_utf8(entry));
-
-		archive_read_free(arch);
-		rng::sort(entries, StrNatCmp());
-	}
-	return entries;
-}
-
-void FileSys::makeArchiveTreeThread(std::atomic<ThreadType>& mode, BrowserResultAsync ra, uintptr_t maxRes) {
-	archive* arch = openArchive(ra.curDir.c_str());
-	if (!arch) {
-		pushEvent(SDL_USEREVENT_ARCHIVE_FINISHED);
-		return;
-	}
-
-	for (archive_entry* entry; !archive_read_next_header(arch, &entry);) {
-		if (mode != ThreadType::archive) {
-			archive_read_free(arch);
-			return;
-		}
-		pushEvent(SDL_USEREVENT_ARCHIVE_PROGRESS, std::bit_cast<void*>(archive_entry_ino(entry)));
-
-		ArchiveDir* node = &ra.arch;
-		for (const char* path = archive_entry_pathname_utf8(entry); *path;) {
-			if (const char* next = strchr(path, '/')) {
-				vector<ArchiveDir>::iterator dit = rng::find_if(node->dirs, [path, next](const ArchiveDir& it) -> bool { return std::equal(it.name.begin(), it.name.end(), path, next); });
-				node = dit != node->dirs.end() ? std::to_address(dit) : &node->dirs.emplace_back(node, string(path, next));
-				path = next + 1;
-			} else {
-				SDL_Surface* img = loadArchivePicture(arch, entry);
-				node->files.emplace_back(path, img ? std::min(uintptr_t(img->w), maxRes) * std::min(uintptr_t(img->h), maxRes) * 4 : 0);
-				SDL_FreeSurface(img);
-				break;
-			}
-		}
-	}
-	archive_read_free(arch);
-	ra.arch.sort();
-	pushEvent(SDL_USEREVENT_ARCHIVE_FINISHED, new BrowserResultAsync(std::move(ra)));
-}
-
-SDL_Surface* FileSys::loadArchivePicture(const char* file, string_view pname) {
-	SDL_Surface* img = nullptr;
-	if (archive* arch = openArchive(file)) {
-		for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
-			if (archive_entry_pathname_utf8(entry) == pname)
-				if (img = loadArchivePicture(arch, entry); img)
-					break;
-		archive_read_free(arch);
-	}
-	return img;
-}
-
-SDL_Surface* FileSys::loadArchivePicture(archive* arch, archive_entry* entry) {
-	auto [buffer, bsiz] = readArchiveEntry(arch, entry);
-	return bsiz > 0 ? IMG_Load_RW(SDL_RWFromMem(buffer.get(), bsiz), SDL_TRUE) : nullptr;
-}
-
-void FileSys::moveContentThread(std::atomic<ThreadType>& mode, fs::path src, fs::path dst) {
+void FileSys::moveContentThread(std::stop_token stoken, fs::path src, fs::path dst) {
 	uptr<string> errors = std::make_unique<string>();
 	std::error_code ec;
 	if (fs::create_directories(dst, ec); !ec) {
-		vector<string> files = listDir(fromPath(src).c_str());
-		for (uintptr_t i = 0, lim = files.size(); i < lim; ++i) {
-			if (mode != ThreadType::move)
+		vector<fs::path> entries;
+		for (const fs::directory_entry& it : fs::directory_iterator(src, fs::directory_options::skip_permission_denied, ec))
+			entries.push_back(it.path().filename());
+		for (uintptr_t i = 0, lim = entries.size(); i < lim; ++i) {
+			if (stoken.stop_requested())
 				break;
 
 			pushEvent(SDL_USEREVENT_MOVE_PROGRESS, std::bit_cast<void*>(i), std::bit_cast<void*>(lim));
-			if (fs::rename(src / toPath(files[i]), dst / toPath(files[i]), ec); ec)
+			if (fs::rename(src / entries[i], dst / entries[i], ec); ec)
 				*errors += ec.message() + '\n';
 		}
 	} else
@@ -865,7 +585,8 @@ fs::path FileSys::findFont(const fs::path& font) const {
 #ifdef _WIN32
 	if (fs::path path = searchFontRegistry(font); !path.empty())
 		return path;
-#else
+#endif
+#ifdef CAN_FONTCFG
 	if (fontconfig)
 		if (string path = static_cast<Fontconfig*>(fontconfig)->search(font.c_str()); !path.empty())
 			return path;
@@ -897,10 +618,11 @@ fs::path FileSys::searchFontRegistry(const fs::path& font) {
 vector<fs::path> FileSys::listFontFiles(FT_Library lib, char32_t first, char32_t last) const {
 	vector<fs::path> fonts;
 	listFontFilesInDirectory(lib, dirConfs, first, last, fonts);
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
 	listFontFilesInRegistry<HKEY_CURRENT_USER>(lib, first, last, fonts);
 	listFontFilesInRegistry<HKEY_LOCAL_MACHINE>(lib, first, last, fonts);
-#else
+#endif
+#ifdef CAN_FONTCFG
 	if (fontconfig)
 		static_cast<Fontconfig*>(fontconfig)->list(first, last, fonts);
 	else {
@@ -912,7 +634,7 @@ vector<fs::path> FileSys::listFontFiles(FT_Library lib, char32_t first, char32_t
 }
 
 void FileSys::listFontFilesInDirectory(FT_Library lib, const fs::path& drc, char32_t first, char32_t last, vector<fs::path>& fonts) {
-	vector<cbyte> fdata;
+	vector<byte_t> fdata;
 	std::error_code ec;
 	for (const fs::directory_entry& it : fs::recursive_directory_iterator(drc, fs::directory_options::follow_directory_symlink | fs::directory_options::skip_permission_denied, ec))
 		if (it.is_regular_file(ec))
@@ -922,10 +644,10 @@ void FileSys::listFontFilesInDirectory(FT_Library lib, const fs::path& drc, char
 			}
 }
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
 template <HKEY root>
 void FileSys::listFontFilesInRegistry(FT_Library lib, char32_t first, char32_t last, vector<fs::path>& fonts) {
-	vector<cbyte> fdata;
+	vector<byte_t> fdata;
 	fs::path gfpath;
 	if constexpr (root == HKEY_LOCAL_MACHINE)
 		gfpath = systemFontDir();
@@ -947,24 +669,25 @@ void FileSys::listFontFilesInRegistry(FT_Library lib, char32_t first, char32_t l
 }
 #endif
 
-void FileSys::listFontFamiliesThread(std::atomic<ThreadType>& mode, fs::path cdir, string selected, char32_t first, char32_t last) {
+void FileSys::listFontFamiliesThread(std::stop_token stoken, fs::path cdir, string selected, char32_t first, char32_t last) {
 	vector<pair<string, string>> fonts;
 	FT_Library lib;
 	if (FT_Error err = FT_Init_FreeType(&lib)) {
 		pushEvent(SDL_USEREVENT_FONTS_FINISHED, new FontListResult(vector<string>(), nullptr, 0, FT_Error_String(err)));
 		return;
 	}
-	listFontFamiliesInDirectoryThread(mode, lib, cdir, first, last, fonts);
-#ifdef _WIN32
-	listFontFamiliesInRegistryThread<HKEY_CURRENT_USER>(mode, lib, first, last, fonts);
-	listFontFamiliesInRegistryThread<HKEY_LOCAL_MACHINE>(mode, lib, first, last, fonts);
-#else
+	listFontFamiliesInDirectoryThread(stoken, lib, cdir, first, last, fonts);
+#if defined(_WIN32) && !defined(__MINGW32__)
+	listFontFamiliesInRegistryThread<HKEY_CURRENT_USER>(stoken, lib, first, last, fonts);
+	listFontFamiliesInRegistryThread<HKEY_LOCAL_MACHINE>(stoken, lib, first, last, fonts);
+#endif
+#ifdef CAN_FONTCFG
 	try {
-		if (mode == ThreadType::font)
+		if (!stoken.stop_requested() && symFontconfig())
 			Fontconfig().list(first, last, fonts);
 	} catch (const std::runtime_error&) {
-		listFontFamiliesInDirectoryThread(mode, lib, localFontDir(), first, last, fonts);
-		listFontFamiliesInDirectoryThread(mode, lib, systemFontDir(), first, last, fonts);
+		listFontFamiliesInDirectoryThread(stoken, lib, localFontDir(), first, last, fonts);
+		listFontFamiliesInDirectoryThread(stoken, lib, systemFontDir(), first, last, fonts);
 	}
 #endif
 	FT_Done_FreeType(lib);
@@ -987,11 +710,11 @@ void FileSys::listFontFamiliesThread(std::atomic<ThreadType>& mode, fs::path cdi
 	pushEvent(SDL_USEREVENT_FONTS_FINISHED, new FontListResult(std::move(families), std::move(files), sel, string()));
 }
 
-void FileSys::listFontFamiliesInDirectoryThread(std::atomic<ThreadType>& mode, FT_Library lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<string, string>>& fonts) {
-	vector<cbyte> fdata;
+void FileSys::listFontFamiliesInDirectoryThread(std::stop_token stoken, FT_Library lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<string, string>>& fonts) {
+	vector<byte_t> fdata;
 	std::error_code ec;
 	for (const fs::directory_entry& it : fs::recursive_directory_iterator(drc, fs::directory_options::follow_directory_symlink | fs::directory_options::skip_permission_denied, ec)) {
-		if (mode != ThreadType::font)
+		if (stoken.stop_requested())
 			break;
 		if (it.is_regular_file(ec))
 			if (FT_Face face = openFace(lib, it.path(), first, last, fdata)) {
@@ -1001,15 +724,15 @@ void FileSys::listFontFamiliesInDirectoryThread(std::atomic<ThreadType>& mode, F
 	}
 }
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
 template <HKEY root>
-void FileSys::listFontFamiliesInRegistryThread(std::atomic<ThreadType>& mode, FT_Library lib, char32_t first, char32_t last, vector<pair<string, string>>& fonts) {
-	vector<cbyte> fdata;
+void FileSys::listFontFamiliesInRegistryThread(std::stop_token stoken, FT_Library lib, char32_t first, char32_t last, vector<pair<string, string>>& fonts) {
+	vector<byte_t> fdata;
 	fs::path gfpath;
 	if constexpr (root == HKEY_LOCAL_MACHINE)
 		gfpath = systemFontDir();
 	if (RegistryIterator rit(root, fontsKey); rit) {
-		while (mode == ThreadType::font && rit.next())
+		while (!stoken.stop_requested() && rit.next())
 			if (rit.getType() == REG_SZ) {
 				fs::path fpath;
 				if constexpr (root == HKEY_CURRENT_USER)
@@ -1022,12 +745,12 @@ void FileSys::listFontFamiliesInRegistryThread(std::atomic<ThreadType>& mode, FT
 				}
 			}
 	} else
-		listFontFamiliesInDirectoryThread(mode, lib, root == HKEY_CURRENT_USER ? localFontDir() : gfpath, first, last, fonts);
+		listFontFamiliesInDirectoryThread(stoken, lib, root == HKEY_CURRENT_USER ? localFontDir() : gfpath, first, last, fonts);
 }
 #endif
 
-FT_Face FileSys::openFace(FT_Library lib, const fs::path& file, char32_t first, char32_t last, vector<cbyte>& fdata) {
-	fdata = readBinFile(file);
+FT_Face FileSys::openFace(FT_Library lib, const fs::path& file, char32_t first, char32_t last, vector<byte_t>& fdata) {
+	fdata = FileOpsLocal::readFile(file);
 	if (FT_Face face; !FT_New_Memory_Face(lib, reinterpret_cast<FT_Byte*>(fdata.data()), fdata.size(), 0, &face)) {
 		char32_t ch;
 		for (ch = first; FT_Get_Char_Index(face, ch) && ch <= last; ++ch);
@@ -1036,17 +759,6 @@ FT_Face FileSys::openFace(FT_Library lib, const fs::path& file, char32_t first, 
 	}
 	return nullptr;
 }
-
-#ifdef _WIN32
-vector<string> FileSys::listDrives() {
-	vector<string> letters;
-	DWORD drives = GetLogicalDrives();
-	for (char i = 0; i < drivesMax; ++i)
-		if (drives & (1 << i))
-			letters.push_back(string{ char('A' + i), ':', '\\' });
-	return letters;
-}
-#endif
 
 void SDLCALL FileSys::logWrite(void* userdata, int, SDL_LogPriority priority, const char* message) {
 	std::ofstream& ofs = *static_cast<std::ofstream*>(userdata);

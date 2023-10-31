@@ -1,8 +1,9 @@
 #include "layouts.h"
-#include "engine/scene.h"
 #include "engine/drawSys.h"
+#include "engine/scene.h"
 #include "engine/inputSys.h"
 #include "engine/world.h"
+#include "prog/program.h"
 #include "prog/progs.h"
 
 // SCROLL BAR
@@ -116,7 +117,7 @@ Recti Widget::frame() const {
 void Widget::setSize(const Size& size) {
 	relSize = size;
 	parent->onResize();
-	World::renderer()->synchTransfer();
+	World::drawSys()->getRenderer()->synchTransfer();
 }
 
 void Widget::onNavSelect(Direction dir) {
@@ -148,7 +149,7 @@ Picture::Picture(const Size& size, bool bg, pair<Texture*, bool> texture, int ma
 
 Picture::~Picture() {
 	if (freeTex)
-		World::renderer()->freeTexture(tex);
+		World::drawSys()->getRenderer()->freeTexture(tex);
 }
 
 void Picture::drawSelf(const Recti& view) {
@@ -170,7 +171,7 @@ Recti Picture::texRect() const {
 
 void Picture::setTex(Texture* texture, bool exclusive) {
 	if (freeTex)
-		World::renderer()->freeTexture(tex);
+		World::drawSys()->getRenderer()->freeTexture(tex);
 	tex = texture;
 	freeTex = tex && exclusive;
 }
@@ -187,24 +188,24 @@ Button::Button(const Size& size, PCall leftCall, PCall rightCall, PCall doubleCa
 
 Button::~Button() {
 	if (tooltip)
-		World::renderer()->freeTexture(tooltip);
+		World::drawSys()->getRenderer()->freeTexture(tooltip);
 }
 
 void Button::onClick(ivec2, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		if (ScrollArea* sa = dynamic_cast<ScrollArea*>(parent))
 			sa->selectWidget(relSize.id);
-		World::prun(lcall, this);
+		World::program()->exec(lcall, this);
 	} else if (mBut == SDL_BUTTON_RIGHT) {
 		if (ScrollArea* sa = dynamic_cast<ScrollArea*>(parent))
 			sa->deselectWidget(relSize.id);
-		World::prun(rcall, this);
+		World::program()->exec(rcall, this);
 	}
 }
 
 void Button::onDoubleClick(ivec2, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT)
-		World::prun(dcall, this);
+		World::program()->exec(dcall, this);
 }
 
 bool Button::navSelectable() const {
@@ -284,7 +285,7 @@ void Slider::drawSelf(const Recti& view) {
 
 void Slider::onClick(ivec2, uint8 mBut) {
 	if (mBut == SDL_BUTTON_RIGHT)
-		World::prun(rcall, this);
+		World::program()->exec(rcall, this);
 }
 
 void Slider::onHold(ivec2 mPos, uint8 mBut) {
@@ -310,7 +311,7 @@ void Slider::onUndrag(ivec2, uint8 mBut) {
 
 void Slider::setSlider(int xpos) {
 	setVal((xpos - position().x - size().y/4) * vmax / sliderLim());
-	World::prun(lcall, this);
+	World::program()->exec(lcall, this);
 }
 
 Recti Slider::barRect() const {
@@ -359,7 +360,7 @@ Label::Label(const Size& size, string&& line, PCall leftCall, PCall rightCall, P
 
 Label::~Label() {
 	if (textTex)
-		World::renderer()->freeTexture(textTex);
+		World::drawSys()->getRenderer()->freeTexture(textTex);
 }
 
 void Label::drawSelf(const Recti& view) {
@@ -422,13 +423,13 @@ ivec2 Label::textPos() const {
 
 void Label::updateTextTex() {
 	if (textTex)
-		World::renderer()->freeTexture(textTex);
+		World::drawSys()->getRenderer()->freeTexture(textTex);
 	textTex = World::drawSys()->renderText(text, size().y);
 }
 
 void Label::updateTextTexNow() {
 	updateTextTex();
-	World::renderer()->synchTransfer();
+	World::drawSys()->getRenderer()->synchTransfer();
 }
 
 // TEXT BOX
@@ -495,7 +496,7 @@ void TextBox::setText(string&& str) {
 
 void TextBox::updateTextTex() {
 	if (textTex)
-		World::renderer()->freeTexture(textTex);
+		World::drawSys()->getRenderer()->freeTexture(textTex);
 	if (textTex = World::drawSys()->renderText(text, lineSize, size().x); textTex)
 		setLimits(textTex->getRes(), size(), true);
 }
@@ -518,7 +519,7 @@ ComboBox::ComboBox(const Size& size, size_t curOption, vector<string>&& opts, PC
 
 void ComboBox::onClick(ivec2, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT || mBut == SDL_BUTTON_RIGHT)
-		World::scene()->setContext(World::state()->createComboContext(this, mBut == SDL_BUTTON_LEFT ? lcall : rcall));
+		World::scene()->setContext(World::program()->getState()->createComboContext(this, mBut == SDL_BUTTON_LEFT ? lcall : rcall));
 }
 
 void ComboBox::setOptions(size_t curOption, vector<string>&& opts, uptr<string[]> tips) {
@@ -557,7 +558,7 @@ void LabelEdit::onClick(ivec2, uint8 mBut) {
 		SDL_SetTextInputRect(reinterpret_cast<SDL_Rect*>(&rct));
 		setCPos(text.length());
 	} else if (mBut == SDL_BUTTON_RIGHT)
-		World::prun(rcall, this);
+		World::program()->exec(rcall, this);
 }
 
 void LabelEdit::onKeypress(const SDL_Keysym& key) {
@@ -680,6 +681,18 @@ void LabelEdit::onTextReset() {
 	setCPos(text.length());
 }
 
+void LabelEdit::updateTextTex() {
+	if (textType != TextType::password)
+		Label::updateTextTex();
+	else {
+		if (textTex)
+			World::drawSys()->getRenderer()->freeTexture(textTex);
+		uint cnt = 0;
+		for (uint i = 0; i < text.length(); i = jumpCharF(i), ++cnt);
+		textTex = World::drawSys()->renderText(string(cnt, '*'), size().y);
+	}
+}
+
 void LabelEdit::setCPos(uint cp) {
 	cpos = cp;
 	if (int cl = caretPos(); cl < 0)
@@ -696,7 +709,7 @@ void LabelEdit::confirm() {
 	textOfs = 0;
 	World::scene()->setCapture(nullptr);
 	SDL_StopTextInput();
-	World::prun(lcall, this);
+	World::program()->exec(lcall, this);
 }
 
 void LabelEdit::cancel() {
@@ -1007,7 +1020,7 @@ WindowArranger::~WindowArranger() {
 void WindowArranger::freeTextures() {
 	for (auto& [id, dsp] : disps)
 		if (dsp.txt)
-			World::renderer()->freeTexture(dsp.txt);
+			World::drawSys()->getRenderer()->freeTexture(dsp.txt);
 }
 
 void WindowArranger::calcDisplays() {
@@ -1062,7 +1075,7 @@ void WindowArranger::onClick(ivec2 mPos, uint8 mBut) {
 		selected = dispUnderPos(mPos);
 		if (umap<int, Dsp>::iterator it = disps.find(selected); it != disps.end()) {
 			it->second.active = !it->second.active;
-			World::prun(mBut == SDL_BUTTON_LEFT ? lcall : rcall, this);
+			World::program()->exec(mBut == SDL_BUTTON_LEFT ? lcall : rcall, this);
 		}
 	}
 }
@@ -1100,7 +1113,7 @@ void WindowArranger::onUndrag(ivec2, uint8 mBut) {
 		glm::clamp(dsp.full.pos(), ivec2(0), totalDim);
 		totalDim = glm::max(totalDim, dsp.full.end());
 		dsp.rect.pos() = vec2(dsp.full.pos()) * scale;
-		World::prun(lcall, this);
+		World::program()->exec(lcall, this);
 	}
 }
 

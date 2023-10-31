@@ -1,21 +1,22 @@
+#include "drawSys.h"
+#include "fileSys.h"
 #include "rendererDx.h"
 #include "rendererGl.h"
 #include "rendererVk.h"
-#include "drawSys.h"
-#include "fileSys.h"
 #include "scene.h"
 #include "world.h"
+#include "prog/fileOps.h"
 #include "utils/compare.h"
 #include "utils/layouts.h"
 #include <cwctype>
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include FT_GLYPH_H
 #ifdef _WIN32
 #include <SDL_image.h>
 #else
 #include <SDL2/SDL_image.h>
 #endif
-#include <ft2build.h>
-#include FT_FREETYPE_H
-#include FT_GLYPH_H
 
 // FONT SET
 
@@ -55,7 +56,7 @@ void FontSet::init(const fs::path& path, Settings::Hinting hinting) {
 }
 
 FontSet::Font FontSet::openFont(const fs::path& path, uint size) const {
-	Font face = { .data = FileSys::readBinFile(path) };
+	Font face = { .data = FileOpsLocal::readFile(path) };
 	if (FT_Error err = FT_New_Memory_Face(lib, reinterpret_cast<FT_Byte*>(face.data.data()), face.data.size(), 0, &face.face))
 		throw std::runtime_error(FT_Error_String(err));
 	if (FT_Error err = FT_Set_Pixel_Sizes(face.face, 0, size)) {
@@ -361,21 +362,21 @@ vector<FontSet::Font>::iterator FontSet::loadGlyph(char32_t ch, int32 flags) {
 
 void FontSet::copyGlyph(uvec2 res, const FT_Bitmap_& bmp, int top, int left) {
 	uint32* dst;
-	cbyte* src;
+	byte_t* src;
 	int offs = ypos - top;
 	if (offs >= 0) {
 		dst = buffer.get() + uint(offs) * res.x + xpos + left;
-		src = reinterpret_cast<cbyte*>(bmp.buffer);
+		src = reinterpret_cast<byte_t*>(bmp.buffer);
 	} else {
 		dst = buffer.get() + xpos + left;
-		src = reinterpret_cast<cbyte*>(bmp.buffer) + uint(-offs) * bmp.pitch;
+		src = reinterpret_cast<byte_t*>(bmp.buffer) + uint(-offs) * bmp.pitch;
 	}
 	uint bot = offs + bmp.rows;
 	uint rows = bot <= res.y ? bmp.rows : bmp.rows - bot + res.y;
 
 	for (uint r = 0; r < rows; ++r, dst += res.x, src += bmp.pitch)
 		for (uint c = 0; c < bmp.width; ++c)
-			dst[c] = 0x00FFFFFF | (uint32(std::max(reinterpret_cast<cbyte*>(dst + c)[3], src[c])) << 24);
+			dst[c] = 0x00FFFFFF | (uint32(std::max(reinterpret_cast<byte_t*>(dst + c)[3], src[c])) << 24);
 }
 
 void FontSet::setMode(Settings::Hinting hinting) {

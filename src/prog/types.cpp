@@ -1,10 +1,100 @@
 #include "types.h"
 #include "utils/compare.h"
-#ifndef _WIN32
-#include <sys/inotify.h>
-#include <sys/mman.h>
-#include <unistd.h>
+
+void pushEvent(UserEvent code, void* data1, void* data2) {
+	SDL_Event event = { .user = {
+		.type = code,
+		.timestamp = SDL_GetTicks(),
+		.data1 = data1,
+		.data2 = data2
+	} };
+	if (int rc = SDL_PushEvent(&event); rc <= 0)
+		throw std::runtime_error(rc ? SDL_GetError() : "Event queue full");
+}
+
+// REMOTE LOCATION
+
+Protocol RemoteLocation::getProtocol(string_view str) {
+	if (str.length() < 6)	// at least 3 for the protocol and 3 for ://
+		return Protocol::none;
+	size_t i;
+	for (i = 0; i < str.length() && str[i] != ':' && notDsep(str[i]); ++i);
+	if (i < str.length() - 3 && str[i] == ':' && isDsep(str[i + 1]) && isDsep(str[i + 2])) {
+#ifdef CAN_SMB
+		if (strciequal(string_view(str.data(), i), protocolNames[eint(Protocol::smb)]))
+			return Protocol::smb;
 #endif
+#ifdef CAN_SFTP
+		if (strciequal(string_view(str.data(), i), protocolNames[eint(Protocol::sftp)]))
+			return Protocol::sftp;
+#endif
+	}
+	return Protocol::none;
+}
+
+RemoteLocation RemoteLocation::fromPath(string_view str, Protocol proto) {
+	size_t i = str.find(':') + 3;	// skip ://
+	size_t beg = i;
+	for (; i < str.length() && str[i] != '@' && str[i] != ':' && notDsep(str[i]); ++i);
+	string_view pl(str.begin() + beg, str.begin() + i);
+	if (i >= str.length() || isDsep(str[i]))
+		return {
+			.server = string(pl),
+			.path = string(str.begin() + i, str.end()),
+			.port = protocolPorts[eint(proto)],
+			.protocol = proto
+		};
+
+	string_view pr;
+	if (str[i] == ':') {
+		size_t cl = ++i;
+		for (; i < str.length() && str[i] != '@' && notDsep(str[i]); ++i);
+		pr = string_view(str.begin() + cl, str.begin() + i);
+		if (i >= str.length() || isDsep(str[i]))
+			return {
+				.server = string(pl),
+				.path = string(str.begin() + i, str.end()),
+				.port = sanitizePort(pr, proto),
+				.protocol = proto
+			};
+	}
+
+	size_t at = ++i;
+	for (; i < str.length() && str[i] != ':' && notDsep(str[i]); ++i);
+	string_view sl(str.begin() + at, str.begin() + i);
+	if (i >= str.length() || isDsep(str[i]))
+		return {
+			.server = string(sl),
+			.path = string(str.begin() + i, str.end()),
+			.user = string(pl),
+			.password = string(pr),
+			.port = protocolPorts[eint(proto)],
+			.protocol = proto
+		};
+
+	size_t cl = ++i;
+	for (; i < str.length() && notDsep(str[i]); ++i);
+	return {
+		.server = string(sl),
+		.path = string(str.begin() + i, str.end()),
+		.user = string(pl),
+		.password = string(pr),
+		.port = sanitizePort(string_view(str.begin() + cl, str.begin() + i), proto),
+		.protocol = proto
+	};
+}
+
+uint16 RemoteLocation::sanitizePort(string_view port, Protocol protocol) {
+	uint16 pnum = toNum<uint16>(port);
+	return pnum ? pnum : protocolPorts[eint(protocol)];
+}
+
+// FILE CHANGE
+
+FileChange::FileChange(string&& entry, Type change) :
+	name(std::move(entry)),
+	type(change)
+{}
 
 // ARCHIVE NODES
 
@@ -107,132 +197,3 @@ FontListResult::FontListResult(vector<string>&& fa, uptr<string[]>&& fl, size_t 
 	error(std::move(msg))
 {}
 
-// FILE WATCH
-
-FileWatch::FileWatch(const char* path) :
-#ifdef _WIN32
-	ebuf(static_cast<cbyte*>(HeapAlloc(GetProcessHeap(), HEAP_GENERATE_EXCEPTIONS, esiz)))
-#else
-	ino(inotify_init1(IN_NONBLOCK)),
-	ebuf(static_cast<cbyte*>(mmap(nullptr, esiz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)))
-#endif
-{
-#ifdef _WIN32
-	overlapped.hEvent = CreateEventW(nullptr, false, 0, nullptr);
-#else
-	if (ebuf == MAP_FAILED)
-		throw std::runtime_error(strerror(errno));
-#endif
-	set(path);
-}
-
-FileWatch::~FileWatch() {
-#ifdef _WIN32
-	CloseHandle(dirc);
-	CloseHandle(overlapped.hEvent);
-	HeapFree(GetProcessHeap(), 0, ebuf);
-#else
-	close(ino);
-	munmap(ebuf, esiz);
-#endif
-}
-
-void FileWatch::set(const char* path) {
-	unset();
-	try {
-#ifdef _WIN32
-		if (overlapped.hEvent) {
-			if (fs::path wp = toPath(path); fs::is_directory(wp)) {
-				dirc = CreateFileW(wp.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
-				flags = FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME;
-				filter.clear();
-			} else if (wp = parentPath(path); fs::is_directory(wp)) {
-				dirc = CreateFileW(wp.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
-				flags = FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_SIZE;
-				filter = wp.filename();
-			}
-			if (dirc != INVALID_HANDLE_VALUE && !ReadDirectoryChangesW(dirc, ebuf, esiz, true, flags, nullptr, &overlapped, nullptr))
-				unset();
-		}
-#else
-		if (ino != -1)
-			watch = inotify_add_watch(ino, path, fs::is_directory(path) ? IN_CREATE | IN_DELETE | IN_DELETE_SELF | IN_MOVE_SELF | IN_MOVED_FROM | IN_MOVED_TO : IN_DELETE_SELF | IN_MODIFY | IN_MOVE_SELF);
-#endif
-	} catch (const fs::filesystem_error& err) {
-		logError(err.what());
-	}
-}
-
-void FileWatch::unset() {
-#ifdef _WIN32
-	if (dirc != INVALID_HANDLE_VALUE) {
-		CloseHandle(dirc);
-		dirc = INVALID_HANDLE_VALUE;
-	}
-#else
-	if (watch != -1) {
-		inotify_rm_watch(ino, watch);
-		watch = -1;
-	}
-#endif
-}
-
-pair<vector<pair<bool, string>>, bool> FileWatch::changed() {
-	vector<pair<bool, string>> files;
-#ifdef _WIN32
-	if (dirc == INVALID_HANDLE_VALUE)
-		return pair(std::move(files), false);
-	while (dirc != INVALID_HANDLE_VALUE && WaitForSingleObject(overlapped.hEvent, 0) == WAIT_OBJECT_0) {
-		if (DWORD bytes; !GetOverlappedResult(dirc, &overlapped, &bytes, false)) {
-			files.clear();
-			unset();
-			break;
-		}
-
-		for (FILE_NOTIFY_INFORMATION* event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(ebuf);; event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(event + event->NextEntryOffset)) {
-			switch (event->Action) {
-			case FILE_ACTION_ADDED: case FILE_ACTION_RENAMED_NEW_NAME:
-				if (filter.empty())
-					files.emplace_back(true, swtos(wstring_view(event->FileName, event->FileNameLength / sizeof(wchar))));
-				break;
-			case FILE_ACTION_REMOVED: case FILE_ACTION_RENAMED_OLD_NAME:
-				if (wstring_view file(event->FileName, event->FileNameLength / sizeof(wchar)); filter.empty())
-					files.emplace_back(false, swtos(file));
-				else if (file == filter.c_str())
-					unset();
-				break;
-			case FILE_ACTION_MODIFIED:
-				if (!filter.empty())
-					if (wstring_view file(event->FileName, event->FileNameLength / sizeof(wchar)); file == filter.c_str())
-						unset();
-			}
-			if (dirc == INVALID_HANDLE_VALUE || !event->NextEntryOffset)
-				break;
-		}
-		if (dirc != INVALID_HANDLE_VALUE && !ReadDirectoryChangesW(dirc, ebuf, esiz, true, flags, nullptr, &overlapped, nullptr))
-			unset();
-	}
-	return pair(std::move(files), dirc == INVALID_HANDLE_VALUE);
-#else
-	if (watch == -1)
-		return pair(std::move(files), false);
-	do {
-		ssize_t len = read(ino, ebuf, esiz);
-		if (len < 0)
-			break;
-
-		inotify_event* event;
-		for (ssize_t i = 0; i < len; i += sizeof(inotify_event) + event->len) {
-			event = static_cast<inotify_event*>(static_cast<void*>(ebuf + i));
-			if (int bias = bool(event->mask & IN_CREATE) + bool(event->mask & IN_MOVED_TO) - bool(event->mask & IN_DELETE) - bool(event->mask & IN_MOVED_FROM))
-				files.emplace_back(bias > 0, string(event->name, event->len));
-			if (event->mask & (IN_DELETE_SELF | IN_MODIFY | IN_MOVE_SELF)) {
-				files.clear();
-				unset();
-				break;
-			}
-		}
-	} while (watch != -1);
-	return pair(std::move(files), watch == -1);
-#endif
-}

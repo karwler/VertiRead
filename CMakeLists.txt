@@ -14,6 +14,10 @@ if(WIN32)
 	option(DIRECTX "Build with DirectX 11 support." ON)
 elseif(UNIX)
 	option(OPENGLES "Build for OpenGL ES 3.0 instead of OpenGL 3.0." OFF)
+	option(USE_FONTCONFIG "Build with fontconfig if available" ON)
+	option(USE_SECRET "Build with libsecret if available" ON)
+	option(USE_SMBCLIENT "Build with smbclient if available" ON)
+	option(USE_SSH2 "Build with libssh2 if available" ON)
 	option(APPIMAGE "Package as an AppImage." OFF)
 endif()
 option(OPENGL "Build with OpenGL 3.0 support." ON)
@@ -44,8 +48,18 @@ set(SRC_FILES
 	"src/engine/windowSys.h"
 	"src/engine/world.cpp"
 	"src/engine/world.h"
+	"src/engine/optional/fontconfig.cpp"
+	"src/engine/optional/fontconfig.h"
+	"src/engine/optional/secret.cpp"
+	"src/engine/optional/secret.h"
+	"src/engine/optional/smbclient.cpp"
+	"src/engine/optional/smbclient.h"
+	"src/engine/optional/ssh2.cpp"
+	"src/engine/optional/ssh2.h"
 	"src/prog/browser.cpp"
 	"src/prog/browser.h"
+	"src/prog/fileOps.cpp"
+	"src/prog/fileOps.h"
 	"src/prog/program.cpp"
 	"src/prog/program.h"
 	"src/prog/progs.cpp"
@@ -185,7 +199,7 @@ if(USE_ICU)
 	endif()
 	if(ICU_FOUND)
 		add_compile_definitions(WITH_ICU)
-		include_directories(${ICU_INCLUDE_DIRS})
+		include_directories(SYSTEM ${ICU_INCLUDE_DIRS})
 		if(WIN32)
 			string(REGEX REPLACE "\\.[0-9]+" "" ICU_VER_MAJ ${ICU_VERSION})
 			get_filename_component(BIN_ICU "${ICU_ICUPKG_EXECUTABLE}" DIRECTORY)
@@ -194,15 +208,52 @@ if(USE_ICU)
 	endif()
 endif()
 
+if(USE_FONTCONFIG)
+	list(APPEND PKGCONFIG_ARGS "fontconfig")
+endif()
+if(USE_SECRET AND (USE_SMBCLIENT OR USE_SSH2))
+	list(APPEND PKGCONFIG_ARGS "libsecret-1")
+endif()
+if(USE_SMBCLIENT)
+	list(APPEND PKGCONFIG_ARGS "smbclient")
+endif()
+if(USE_SSH2)
+	list(APPEND PKGCONFIG_ARGS "libssh2")
+endif()
+if(PKGCONFIG_ARGS)
+find_package(PkgConfig)
+	if(PKG_CONFIG_FOUND)
+		pkg_check_modules(PKGCONFS ${PKGCONFIG_ARGS})
+		include_directories(SYSTEM ${PKGCONFS_INCLUDE_DIRS})
+		add_definitions(${PKGCONFS_CFLAGS_OTHER})	# TODO: try without this line
+
+		if(PKGCONFS_fontconfig_FOUND OR PKGCONFS_fontconfig_VERSION)
+			add_compile_definitions(CAN_FONTCFG)
+		endif()
+		if(PKGCONFS_libsecret-1_FOUND OR PKGCONFS_libsecret-1_VERSION AND (PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION OR PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION))
+			add_compile_definitions(CAN_SECRET)
+		endif()
+		if(PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION)
+			add_compile_definitions(CAN_SMB)
+		endif()
+		if(PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION)
+			add_compile_definitions(CAN_SFTP)
+		endif()
+	endif()
+endif()
+
 if(VULKAN)
 	find_package(Vulkan REQUIRED)
 	string(REPLACE "/Include" "" VULKAN_PATH "${Vulkan_INCLUDE_DIRS}")
+	include_directories(SYSTEM ${Vulkan_INCLUDE_DIRS})
+	link_directories("${VULKAN_PATH}/Lib")
 endif()
+
 file(MAKE_DIRECTORY "${DIR_LIB}")
 downloadLib("https://github.com/g-truc/glm/releases/download/${VER_GLM}/glm-${VER_GLM}.zip" "${DIR_LIB}/glm" "")
-include_directories("${CMAKE_SOURCE_DIR}/src" "${DIR_LIB}/glm" "$<$<BOOL:${VULKAN}>:${Vulkan_INCLUDE_DIRS}>")
-link_directories("$<$<BOOL:${VULKAN}>:${VULKAN_PATH}/Lib>")
+include_directories(SYSTEM "${DIR_LIB}/glm")
 
+include_directories("${CMAKE_SOURCE_DIR}/src")
 if(WIN32)
 	set(PBOUT_DIR "${CMAKE_BINARY_DIR}/${PROJECT_NAME}")
 	set(TBIN_DIR "${PBOUT_DIR}")
@@ -245,7 +296,7 @@ if(WIN32)
 		downloadLib("https://github.com/libsdl-org/SDL_image/releases/download/release-${VER_IMG}/SDL2_image-devel-${VER_IMG}-VC.zip" "${DIR_IMG}" "${DIR_LIB}/SDL2_image-${VER_IMG}")
 		compileLib("https://download.savannah.gnu.org/releases/freetype/freetype-${VER_FT2}.tar.gz" "${DIR_FT2}" "cmake\;..\;-G\;NMake Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DFT_ENABLE_ERROR_STRINGS=1\;-DFT_DISABLE_ZLIB=1\;-DFT_DISABLE_BZIP2=1\;-DFT_DISABLE_PNG=1\;-DFT_DISABLE_HARFBUZZ=1\;-DFT_DISABLE_BROTLI=1;${MAKE_CMD}" "${BIN_FT2}" "${DIR_LIB}/freetype-${VER_FT2}")
 		link_directories("${LIB_ARC}" "${BIN_SDL}" "${BIN_IMG}" "${BIN_FT2}")
-		include_directories("${INC_ARC}" "${DIR_SDL}/include" "${DIR_IMG}/include" "${DIR_FT2}/include")
+		include_directories(SYSTEM "${INC_ARC}" "${DIR_SDL}/include" "${DIR_IMG}/include" "${DIR_FT2}/include")
 	else()
 		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 			set(VMACHINE "win64")
@@ -272,7 +323,7 @@ if(WIN32)
 		downloadLib("https://github.com/libsdl-org/SDL_image/releases/download/release-${VER_IMG}/SDL2_image-devel-${VER_IMG}-mingw.zip" "${DIR_IMG}" "${DIR_LIB}/SDL2_image-${VER_IMG}")
 		compileLib("https://download.savannah.gnu.org/releases/freetype/freetype-${VER_FT2}.tar.gz" "${DIR_FT2}" "cmake\;..\;-G\;MinGW Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DFT_ENABLE_ERROR_STRINGS=1\;-DFT_DISABLE_ZLIB=1\;-DFT_DISABLE_BZIP2=1\;-DFT_DISABLE_PNG=1\;-DFT_DISABLE_HARFBUZZ=1\;-DFT_DISABLE_BROTLI=1;${MAKE_CMD}" "${BIN_FT2}" "${DIR_LIB}/freetype-${VER_FT2}")
 		link_directories("${DIR_ARC}/build/libarchive" "${DIR_SDL}/${VMARCH}-w64-mingw32/lib" "${DIR_IMG}/${VMARCH}-w64-mingw32/lib" "${BIN_FT2}")
-		include_directories("${DIR_ARC}/libarchive" "${DIR_SDL}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_IMG}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_FT2}/include")
+		include_directories(SYSTEM "${DIR_ARC}/libarchive" "${DIR_SDL}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_IMG}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_FT2}/include")
 	endif()
 else()
 	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -293,7 +344,7 @@ else()
 	set(LICN_DIR "${DATA_DIR}/licenses")
 
 	find_package(Freetype REQUIRED)
-	include_directories("${FREETYPE_INCLUDE_DIRS}")
+	include_directories(SYSTEM ${FREETYPE_INCLUDE_DIRS})
 endif()
 
 # compiler flags
@@ -317,7 +368,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 		add_compile_options(-Wcast-align -Wnull-dereference -Wshadow-all -Wno-final-dtor-non-final-class)
 	endif()
 elseif(MSVC)
-	add_compile_options(/W4 /wd4100 /wd4201 /wd4244 /wd4267 /wd4458 /wd4706 /wd4805 $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:/GL>)
+	add_compile_options(/wd4244 /wd4267 $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:/GL>)
 endif()
 
 # set main target
@@ -325,15 +376,9 @@ add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES})
 target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image freetype archive
 						"$<$<BOOL:${UNIX}>:pthread;dl>"
 						"$<$<BOOL:${DIRECTX}>:d3d11.lib;dxgi.lib>"
-						"$<$<BOOL:${OPENGL}>:$<IF:$<BOOL:${WIN32}>,opengl32,$<IF:$<BOOL:${OPENGLES}>,GLESv2,GL>>>"
-						"$<$<BOOL:${VULKAN}>:$<IF:$<BOOL:${WIN32}>,vulkan-1,vulkan>>")
-if(ICU_FOUND)
-	if(WIN32)
-		target_link_libraries(${PROJECT_NAME} ${ICU_UC_LIBRARIES} ${ICU_IN_LIBRARIES})
-	else()
-		target_link_libraries(${PROJECT_NAME} ${ICU_UC_LIBRARIES} ${ICU_I18N_LIBRARIES})
-	endif()
-endif()
+						$<$<BOOL:${OPENGL}>:$<IF:$<BOOL:${WIN32}>,opengl32,$<IF:$<BOOL:${OPENGLES}>,GLESv2,GL>>>
+						$<$<BOOL:${VULKAN}>:$<IF:$<BOOL:${WIN32}>,vulkan-1,vulkan>>
+						"$<$<BOOL:${ICU_FOUND}>:${ICU_UC_LIBRARIES};$<IF:$<BOOL:${WIN323}>,${ICU_IN_LIBRARIES},${ICU_I18N_LIBRARIES}>>")
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
 						RUNTIME_OUTPUT_DIRECTORY "${TBIN_DIR}"

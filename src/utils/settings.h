@@ -27,7 +27,7 @@ public:
 		left,
 		right
 	};
-	static constexpr array<const char*, right + 1> names = {
+	static constexpr array names = {
 		"up",
 		"down",
 		"left",
@@ -107,7 +107,7 @@ public:
 		scrollFast,
 		scrollSlow
 	};
-	static constexpr array<const char*, size_t(Type::scrollSlow) + 1> names = {
+	static constexpr array names = {
 		"up",
 		"down",
 		"left",
@@ -165,7 +165,7 @@ public:
 		pair(SDL_HAT_LEFTDOWN, "Left-Down"),
 		pair(SDL_HAT_LEFTUP, "Left-Up")
 	};
-	static constexpr array<const char*, SDL_CONTROLLER_BUTTON_MAX> gbuttonNames = {
+	static constexpr array gbuttonNames = {
 		"A",
 		"B",
 		"X",
@@ -182,7 +182,7 @@ public:
 		"Left",
 		"Right"
 	};
-	static constexpr array<const char*, SDL_CONTROLLER_AXIS_MAX> gaxisNames = {
+	static constexpr array gaxisNames = {
 		"LX",
 		"LY",
 		"RX",
@@ -333,7 +333,7 @@ public:
 		count,
 		size
 	};
-	static constexpr array<const char*, size_t(Type::size) + 1> names = {
+	static constexpr array names = {
 		"none",
 		"count",
 		"size"
@@ -412,7 +412,7 @@ public:
 	static constexpr char flagCompositor[] = "c";
 #endif
 
-	static constexpr array<vec4, size_t(Color::texture) + 1> defaultColors = {
+	static constexpr array defaultColors = {
 		vec4(0.04f, 0.04f, 0.04f, 1.f),	// background
 		vec4(0.35f, 0.35f, 0.35f, 1.f),	// normal
 		vec4(0.24f, 0.24f, 0.24f, 1.f),	// dark
@@ -422,7 +422,7 @@ public:
 		vec4(0.82f, 0.82f, 0.82f, 1.f),	// text
 		vec4(0.82f, 0.82f, 0.82f, 1.f)	// texture
 	};
-	static constexpr array<const char*, defaultColors.size()> colorNames = {
+	static constexpr array colorNames = {
 		"background",
 		"normal",
 		"dark",
@@ -438,7 +438,7 @@ public:
 		fullscreen,
 		multiFullscreen
 	};
-	static constexpr array<const char*, size_t(Screen::multiFullscreen) + 1> screenModeNames = {
+	static constexpr array screenModeNames = {
 		"windowed",
 		"fullscreen",
 		"multi fullscreen"
@@ -452,11 +452,10 @@ public:
 		opengl,
 #endif
 #ifdef WITH_VULKAN
-		vulkan,
+		vulkan
 #endif
-		max
 	};
-	static constexpr array<const char*, size_t(Renderer::max)> rendererNames = {
+	static constexpr array rendererNames = {
 #ifdef WITH_DIRECTX
 		"DirectX 11",
 #endif
@@ -472,19 +471,11 @@ public:
 #endif
 	};
 
-	static constexpr array<const char*, 5> styleNames = {
-		"bold",
-		"italic",
-		"underline",
-		"strikethrough",
-		"normal"
-	};
-
 	enum class Hinting : uint8 {
 		normal,
 		mono
 	};
-	static constexpr array<const char*, size_t(Hinting::mono) + 1> hintingNames = {
+	static constexpr array hintingNames = {
 		"normal",
 		"mono"
 	};
@@ -494,7 +485,7 @@ public:
 		b16,
 		compress
 	};
-	static constexpr array<const char*, size_t(Compression::compress) + 1> compressionNames = {
+	static constexpr array compressionNames = {
 		"none",
 		"16 b",
 		"compress"
@@ -520,11 +511,11 @@ public:
 	static constexpr Compression defaultCompression = Compression::none;
 	static constexpr char defaultDirLib[] = "library";
 
-	string font = defaultFont;
 private:
 	string theme;
-	string dirLib;
 public:
+	string dirLib;
+	string font = defaultFont;
 	umap<int, Recti> displays;
 	PicLim picLim;
 	u32vec2 device = u32vec2(0);
@@ -552,8 +543,6 @@ public:
 
 	const string& getTheme() const;
 	const string& setTheme(string_view name, vector<string>&& themes);
-	const string& getDirLib() const;
-	const string& setDirLib(string_view drc, const fs::path& dirSets);
 
 	static umap<int, Recti> displayArrangement();
 	void unionDisplays();
@@ -564,10 +553,6 @@ public:
 
 inline const string& Settings::getTheme() const {
 	return theme;
-}
-
-inline const string& Settings::getDirLib() const {
-	return dirLib;
 }
 
 inline string Settings::scrollSpeedString() const {

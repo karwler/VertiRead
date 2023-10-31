@@ -1,9 +1,24 @@
 #include "world.h"
+#ifdef CAN_FONTCFG
+#include "optional/fontconfig.h"
+#endif
+#ifdef CAN_SECRET
+#include "optional/secret.h"
+#endif
+#ifdef CAN_SMB
+#include "optional/smbclient.h"
+#endif
+#ifdef CAN_SFTP
+#include "optional/ssh2.h"
+#endif
 #ifdef WITH_ICU
 #include "utils/compare.h"
 #endif
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
-template <Integer C, InvocableR<string, std::basic_string_view<C>> F>
+template <Integer C, class F>
 pair<vector<string>, uset<string>> getArgs(int argc, C** argv, F conv) {
 	vector<string> vals;
 	uset<string> flags;
@@ -21,9 +36,9 @@ pair<vector<string>, uset<string>> getArgs(int argc, C** argv, F conv) {
 
 #ifdef _WIN32
 #ifdef __MINGW32__
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, int) {
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 #else
-int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR pCmdLine, int) {
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
 	vector<string> vals;
@@ -40,7 +55,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR pCmdLine, int) {
 		}
 #else
 int main(int argc, char** argv) {
-	auto [vals, flags] = getArgs(argc, argv, stos);
+	auto [vals, flags] = getArgs(argc, argv, [](const char* str) -> string { return str; });
 #endif
 	setlocale(LC_CTYPE, "");
 #ifdef WITH_ICU
@@ -49,6 +64,18 @@ int main(int argc, char** argv) {
 	int rc = World::winSys()->start(std::move(vals), std::move(flags));
 #ifdef WITH_ICU
 	StrNatCmp::free();
+#endif
+#ifdef CAN_SFTP
+	LibSsh2::closeLibssh2();
+#endif
+#ifdef CAN_SMB
+	LibSmbclient::closeSmbclient();
+#endif
+#ifdef CAN_SECRET
+	LibSecret::closeLibsecret();
+#endif
+#ifdef CAN_FONTCFG
+	LibFontconfig::closeFontconfig();
 #endif
 	return rc;
 }

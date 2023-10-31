@@ -2,6 +2,7 @@
 #include "drawSys.h"
 #include "inputSys.h"
 #include "world.h"
+#include "prog/program.h"
 #include "prog/progs.h"
 #include "utils/layouts.h"
 
@@ -104,13 +105,13 @@ void Scene::onCancel() {
 	if (context)
 		setContext(nullptr);
 	else if (popup)
-		World::prun(popup->ccall, nullptr);
+		World::program()->exec(popup->ccall, nullptr);
 	else
-		World::state()->eventSpecEscape();
+		World::program()->getState()->eventSpecEscape();
 }
 
 void Scene::onResize() {
-	World::state()->onResize();
+	World::program()->getState()->onResize();
 	layout->onResize();
 	if (popup)
 		popup->onResize();
@@ -118,7 +119,7 @@ void Scene::onResize() {
 		overlay->onResize();
 	if (context)
 		context->onResize();
-	World::renderer()->synchTransfer();
+	World::drawSys()->getRenderer()->synchTransfer();
 }
 
 void Scene::onDisplayChange() {
@@ -127,7 +128,7 @@ void Scene::onDisplayChange() {
 		popup->onDisplayChange();
 	if (overlay)
 		overlay->onDisplayChange();
-	World::renderer()->synchTransfer();
+	World::drawSys()->getRenderer()->synchTransfer();
 }
 
 void Scene::resetLayouts() {
@@ -148,13 +149,14 @@ void Scene::clearLayouts() {
 }
 
 void Scene::setLayouts() {
-	layout = World::state()->createLayout();
-	overlay = World::state()->createOverlay();
+	ProgState* state = World::program()->getState();
+	layout = state->createLayout();
+	overlay = state->createOverlay();
 	layout->postInit();
 	if (overlay)
 		overlay->postInit();
 	World::inputSys()->simulateMouseMove();
-	World::renderer()->synchTransfer();
+	World::drawSys()->getRenderer()->synchTransfer();
 }
 
 void Scene::setCapture(Widget* inter) {
@@ -175,7 +177,7 @@ void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
 	if (!World::inputSys()->mouseWin)
 		select = newCapture ? newCapture : popup ? popup->firstNavSelect : nullptr;
 	updateSelect();
-	World::renderer()->synchTransfer();
+	World::drawSys()->getRenderer()->synchTransfer();
 }
 
 void Scene::setContext(Context* newContext) {
@@ -187,7 +189,7 @@ void Scene::setContext(Context* newContext) {
 	if (!World::inputSys()->mouseWin)
 		select = context ? context->firstNavSelect : nullptr;
 	updateSelect();
-	World::renderer()->synchTransfer();
+	World::drawSys()->getRenderer()->synchTransfer();
 }
 
 void Scene::updateSelect() {

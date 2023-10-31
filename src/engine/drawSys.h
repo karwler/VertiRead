@@ -1,8 +1,6 @@
 #pragma once
 
 #include "renderer.h"
-#include "utils/settings.h"
-#include <atomic>
 
 struct FT_Bitmap_;
 struct FT_BitmapGlyphRec_;
@@ -20,7 +18,7 @@ private:
 
 	struct Font {
 		FT_FaceRec_* face;
-		vector<cbyte> data;
+		vector<byte_t> data;
 	};
 
 	FT_LibraryRec_* lib = nullptr;

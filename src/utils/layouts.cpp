@@ -1,7 +1,8 @@
 #include "layouts.h"
-#include "engine/scene.h"
 #include "engine/drawSys.h"
+#include "engine/scene.h"
 #include "engine/world.h"
+#include "prog/program.h"
 
 // LAYOUT
 
@@ -154,7 +155,7 @@ void Layout::clearWidgets() {
 void Layout::setWidgets(vector<Widget*>&& wgts) {
 	initWidgets(std::move(wgts));
 	postInit();
-	World::renderer()->synchTransfer();
+	World::drawSys()->getRenderer()->synchTransfer();
 	World::scene()->updateSelect();
 }
 
@@ -190,7 +191,7 @@ void Layout::deleteWidget(uint id) {
 void Layout::postWidgetsChange() {
 	for (Widget* it : widgets)
 		it->onResize();
-	World::renderer()->synchTransfer();
+	World::drawSys()->getRenderer()->synchTransfer();
 	World::scene()->updateSelect();
 }
 
@@ -220,7 +221,7 @@ Recti RootLayout::frame() const {
 void RootLayout::setSize(const Size& size) {
 	relSize = size;
 	onResize();
-	World::renderer()->synchTransfer();
+	World::drawSys()->getRenderer()->synchTransfer();
 }
 
 // POPUP
@@ -276,7 +277,7 @@ Context::Context(const svec2& position, const svec2& size, vector<Widget*>&& chi
 }
 
 void Context::onResize() {
-	World::prun(resizeCall, this);
+	World::program()->exec(resizeCall, this);
 	Layout::onResize();
 }
 
@@ -323,7 +324,7 @@ void ScrollArea::postWidgetsChange() {
 	for (Widget* it : widgets)
 		it->onResize();
 	setListPos(listPos);
-	World::renderer()->synchTransfer();
+	World::drawSys()->getRenderer()->synchTransfer();
 	World::scene()->updateSelect();
 }
 
@@ -439,7 +440,7 @@ void ScrollArea::setWidgets(vector<Widget*>&& wgts) {
 	initWidgets(std::move(wgts));
 	postInit();
 	setListPos(listPos);
-	World::renderer()->synchTransfer();
+	World::drawSys()->getRenderer()->synchTransfer();
 	World::scene()->updateSelect();
 }
 
@@ -484,7 +485,7 @@ uint ScrollArea::firstWidgetAt(int rpos) const {
 
 void ScrollArea::selectWidget(uint id) {
 	switch (selection) {
-		using enum Select;
+	using enum Select;
 	case one:
 		selected = { widgets[id] };
 		break;

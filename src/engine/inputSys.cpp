@@ -3,6 +3,8 @@
 #include "fileSys.h"
 #include "scene.h"
 #include "world.h"
+#include "prog/program.h"
+#include "prog/progs.h"
 #include "utils/widgets.h"
 
 // CONTROLLER
@@ -47,10 +49,10 @@ void InputSys::eventMouseButtonDown(const SDL_MouseButtonEvent& button) {
 		World::scene()->onMouseDown(ivec2(button.x, button.y) + World::winSys()->winViewOffset(button.windowID), button.button, button.clicks);
 		break;
 	case SDL_BUTTON_X1:
-		World::srun(bindings[eint(Binding::Type::escape)].bcall);
+		World::program()->getState()->exec(bindings[eint(Binding::Type::escape)].bcall);
 		break;
 	case SDL_BUTTON_X2:
-		World::srun(bindings[eint(Binding::Type::enter)].bcall);
+		World::program()->getState()->exec(bindings[eint(Binding::Type::enter)].bcall);
 	}
 }
 
@@ -163,43 +165,43 @@ void InputSys::tick() const {
 	// handle key hold
 	for (size_t i = uint8(Binding::holders); i < bindings.size(); ++i)
 		if (float amt = 1.f; isPressed(bindings[i], amt))
-			World::srun(bindings[i].acall, amt);
+			World::program()->getState()->exec(bindings[i].acall, amt);
 }
 
 void InputSys::checkBindingsK(SDL_Scancode key, uint8 repeat) const {
 	for (uint8 i = 0, e = uint8(repeat ? Binding::Type::right : Binding::holders); i < e; ++i)
 		if (bindings[i].keyAssigned() && bindings[i].getKey() == key)
-			World::srun(bindings[i].bcall);
+			World::program()->getState()->exec(bindings[i].bcall);
 }
 
 void InputSys::checkBindingsB(uint8 jbutton) const {
 	for (uint8 i = 0; i < uint8(Binding::holders); ++i)
 		if (bindings[i].jbuttonAssigned() && bindings[i].getJctID() == jbutton)
-			World::srun(bindings[i].bcall);
+			World::program()->getState()->exec(bindings[i].bcall);
 }
 
 void InputSys::checkBindingsH(uint8 jhat, uint8 val) const {
 	for (uint8 i = 0; i < uint8(Binding::holders); ++i)
 		if (bindings[i].jhatAssigned() && bindings[i].getJctID() == jhat && bindings[i].getJhatVal() == val)
-			World::srun(bindings[i].bcall);
+			World::program()->getState()->exec(bindings[i].bcall);
 }
 
 void InputSys::checkBindingsA(uint8 jaxis, bool positive) const {
 	for (uint8 i = 0; i < uint8(Binding::holders); ++i)
 		if (bindings[i].jposAxisAssigned() == positive && bindings[i].getJctID() == jaxis)
-			World::srun(bindings[i].bcall);
+			World::program()->getState()->exec(bindings[i].bcall);
 }
 
 void InputSys::checkBindingsG(SDL_GameControllerButton gbutton) const {
 	for (uint8 i = 0; i < uint8(Binding::holders); ++i)
 		if (bindings[i].gbuttonAssigned() && bindings[i].getGbutton() == gbutton)
-			World::srun(bindings[i].bcall);
+			World::program()->getState()->exec(bindings[i].bcall);
 }
 
 void InputSys::checkBindingsX(SDL_GameControllerAxis gaxis, bool positive) const {
 	for (uint8 i = 0; i < uint8(Binding::holders); ++i)
 		if (bindings[i].gposAxisAssigned() == positive && bindings[i].getGaxis() == gaxis)
-			World::srun(bindings[i].bcall);
+			World::program()->getState()->exec(bindings[i].bcall);
 }
 
 bool InputSys::isPressed(const Binding& abind, float& amt) const {

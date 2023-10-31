@@ -1,143 +1,143 @@
 #include "browser.h"
+#include "fileOps.h"
 #include "engine/drawSys.h"
 #include "engine/fileSys.h"
 #include "engine/world.h"
 #include "utils/compare.h"
-#ifdef _WIN32
-#include <SDL_image.h>
-#else
-#include <SDL2/SDL_image.h>
-#endif
+#include <functional>
 #include <archive.h>
 #include <archive_entry.h>
 
-// BROWSER
+namespace std {
 
-Browser::Browser(string&& root, string&& directory, PCall exit) :
-	exCall(exit),
-	rootDir(std::move(root)),
-	curDir(std::move(directory)),
-	fwatch(curDir.c_str())
-{}
-
-uptr<Browser> Browser::openExplorer(string&& rootDir, string&& curDir, PCall exitCall) {
-	try {
-		if (rootDir != topDir && !fs::is_directory(toPath(rootDir)))
-			throw std::runtime_error(std::format("Browser root '{}' isn't a directory", rootDir));
-		if (curDir.empty())
-			curDir = rootDir;
-		if (curDir != topDir && !fs::is_directory(toPath(curDir)))
-			throw std::runtime_error(std::format("Browser directory '{}' isn't a directory", curDir));
-		if (!isSubpath(curDir, rootDir))
-			throw std::runtime_error(std::format("Browser directory '{}' isn't a subpath of root '{}'", curDir, rootDir));
-		return std::make_unique<Browser>(std::move(rootDir), std::move(curDir), exitCall);
-	} catch (const std::runtime_error& err) {
-		logError(err.what());
+template <>
+struct default_delete<SDL_Surface> {
+	void operator()(SDL_Surface* ptr) const {
+		SDL_FreeSurface(ptr);
 	}
-	return nullptr;
+};
+
+}
+
+Browser::~Browser() {
+	stopThread();
+	delete fsop;
+}
+
+uptr<RemoteLocation> Browser::prepareFileOps(string_view path) {
+	Protocol proto = RemoteLocation::getProtocol(path);
+	if (proto == Protocol::none) {
+		if (!dynamic_cast<FileOpsLocal*>(fsop)) {	// if remote to local, else local to local
+			delete fsop;
+			fsop = new FileOpsLocal;
+		}
+		return nullptr;
+	}
+	RemoteLocation rl = RemoteLocation::fromPath(path, proto);
+	return fsop->equals(rl) ? nullptr : std::make_unique<RemoteLocation>(std::move(rl));	// ? same connection : make new connection
+}
+
+template <Invocable<FileOps*, const RemoteLocation&> F>
+auto Browser::beginRemoteOps(const RemoteLocation& location, vector<string>&& passwords, F func) {
+	FileOps* backup = fsop;
+	fsop = FileOps::instantiate(location, passwords.empty() ? vector<string>{ location.password } : std::move(passwords));	// will throw if can't connect
+	try {
+		return func(backup, location);	// func should try to use the new connection and must delete backup once nothing can throw anymore
+	} catch (const std::runtime_error&) {
+		delete fsop;
+		fsop = backup;	// rollback if it's not a valid location
+		throw;
+	}
+}
+
+void Browser::start(string&& root, const RemoteLocation& location, vector<string>&& passwords) {
+	beginRemoteOps(location, std::move(passwords), [this, &root](FileOps* backup, const RemoteLocation& rl) {
+		start(std::move(root), valcp(rl.path));
+		delete backup;
+	});
+}
+
+void Browser::start(string&& root, string&& path) {
+	if (root.empty())
+		root = fsop->prefix();
+	else if (!fsop->isDirectory(root))
+		throw std::runtime_error(std::format("Browser root '{}' isn't a directory", root));
+
+	if (!path.empty()) {
+		if (!fsop->isDirectory(path))
+			throw std::runtime_error(std::format("Browser directory '{}' isn't a directory", path));
+		if (!isSubpath(path, root))
+			throw std::runtime_error(std::format("Browser directory '{}' isn't a subpath of root '{}'", path, root));
+		curDir = std::move(path);
+	} else
+		curDir = root;
+	rootDir = std::move(root);
+	fsop->setWatch(curDir);
+}
+
+bool Browser::goTo(const RemoteLocation& location, vector<string>&& passwords) {
+	return beginRemoteOps(location, std::move(passwords), [this](FileOps* backup, const RemoteLocation& rl) -> bool {
+		bool wait = goTo(fsop->prefix() / rl.path);
+		delete backup;
+		return wait;
+	});
+}
+
+bool Browser::goTo(string_view path) {
+	switch (fsop->fileType(path)) {
+	using enum fs::file_type;
+	case regular:
+		if (fsop->isPicture(path)) {
+			startLoadPictures(new BrowserResultPicture(false, isSubpath(path, rootDir) ? string() : fsop->prefix(), string(parentPath(path)), string(filename(path))));
+			return true;
+		}
+		if (fsop->isArchive(path)) {
+			startArchive(BrowserResultAsync(isSubpath(path, rootDir) ? string() : fsop->prefix(), string(path)));
+			return true;
+		}
+		if (path = parentPath(path); !fsop->isDirectory(path))
+			break;
+	case directory:
+		if (!isSubpath(path, rootDir))
+			rootDir = fsop->prefix();
+		curDir = path;
+		arch.clear();
+		curNode = nullptr;
+		fsop->setWatch(curDir);
+		return false;
+	}
+	throw std::runtime_error(std::format("Invalid path '{}'", path));
 }
 
 bool Browser::openPicture(string&& rdir, string&& dirc, string&& file) {
-	try {
-		if (rdir != topDir && (!fs::is_directory(toPath(rdir)) || !isSubpath(file, rdir)))
-			rdir = topDir;
+	if (rdir.empty() || !fsop->isDirectory(rdir) || !isSubpath(file, rdir))
+		rdir = fsop->prefix();
 
-		switch (fs::status(toPath(dirc)).type()) {
-		using enum fs::file_type;
-		case regular:
-			if (FileSys::isArchive(dirc.c_str())) {
-				startArchive(BrowserResultAsync(std::move(rdir), std::move(dirc), std::move(file)));
-				return true;
-			}
-			break;
-		case directory:
-			startLoadPictures(new BrowserResultPicture(false, std::move(rdir), std::move(dirc), std::move(file)));
+	switch (fsop->fileType(dirc)) {
+	using enum fs::file_type;
+	case regular:
+		if (fsop->isArchive(dirc)) {
+			startArchive(BrowserResultAsync(std::move(rdir), std::move(dirc), std::move(file)));
 			return true;
 		}
-		logError(dirc, " isn't a valid path");
-	} catch (const fs::filesystem_error& err) {
-		logError(err.what());
+		break;
+	case directory:
+		startLoadPictures(new BrowserResultPicture(false, std::move(rdir), std::move(dirc), std::move(file)));
+		return true;
 	}
 	return false;
 }
 
-Browser::Response Browser::openFile(string&& file) {
-	try {
-		switch (fs::status(toPath(file)).type()) {
-		using enum fs::file_type;
-		case regular:
-			if (FileSys::isPicture(file.c_str())) {
-				startLoadPictures(new BrowserResultPicture(false, isSubpath(file, rootDir) ? string() : topDir, string(parentPath(file)), string(filename(file))));
-				return RWAIT;
-			}
-			if (FileSys::isArchive(file.c_str())) {
-				startArchive(BrowserResultAsync(isSubpath(file, rootDir) ? string() : topDir, string(file)));
-				return RWAIT;
-			}
-			if (string_view dirc = parentPath(file); fs::is_directory(toPath(dirc))) {
-				rootDir = topDir;
-				curDir = dirc;
-				fwatch.set(curDir.c_str());
-				return REXPLORER;
-			}
-			break;
-		case directory:
-			rootDir = topDir;
-			curDir = std::move(file);
-			fwatch.set(curDir.c_str());
-			return REXPLORER;
-		}
-		logError(file, " isn't a valid path");
-	} catch (const fs::filesystem_error& err) {
-		logError(err.what());
-	}
-	return RERROR;
-}
-
-Browser::Response Browser::goTo(const char* path) {
-	try {
-		switch (fs::status(toPath(path)).type()) {
-		using enum fs::file_type;
-		case regular:
-			if (FileSys::isPicture(path)) {
-				startLoadPictures(new BrowserResultPicture(false, isSubpath(path, rootDir) ? string() : topDir, string(parentPath(path)), string(filename(path))));
-				return RWAIT | REXPLORER;
-			}
-			if (FileSys::isArchive(path)) {
-				bool sub = isSubpath(path, rootDir);
-				startArchive(BrowserResultAsync(sub ? string() : topDir, path));
-				return RWAIT;
-			}
-			break;
-		case directory:
-			if (!isSubpath(path, rootDir))
-				rootDir = topDir;
-			curDir = path;
-			arch.clear();
-			curNode = nullptr;
-			fwatch.set(curDir.c_str());
-			return REXPLORER;
-		}
-	} catch (const fs::filesystem_error& err) {
-		logError(err.what());
-	}
-	return RERROR;
-}
-
 bool Browser::goIn(string_view dname) {
-	try {
-		if (curNode) {
-			if (vector<ArchiveDir>::iterator dit = curNode->findDir(dname); dit != curNode->dirs.end()) {
-				curNode = std::to_address(dit);
-				return true;
-			}
-		} else if (string newPath = curDir / dname; fs::is_directory(toPath(newPath))) {
-			curDir = std::move(newPath);
-			fwatch.set(curDir.c_str());
+	if (curNode) {
+		if (vector<ArchiveDir>::iterator dit = curNode->findDir(dname); dit != curNode->dirs.end()) {
+			curNode = std::to_address(dit);
 			return true;
 		}
-	} catch (const fs::filesystem_error& err) {
-		logError(err.what());
+	} else if (string newPath = curDir / dname; fsop->isDirectory(newPath)) {
+		curDir = std::move(newPath);
+		fsop->setWatch(curDir);
+		return true;
 	}
 	return false;
 }
@@ -148,10 +148,10 @@ bool Browser::goFile(string_view fname) {
 			startLoadPictures(curNode->path() + fname);
 			return true;
 		}
-	} else if (string path = curDir / fname; FileSys::isPicture(path.c_str())) {
+	} else if (string path = curDir / fname; fsop->isPicture(path)) {
 		startLoadPictures(string(fname));
 		return true;
-	} else if (FileSys::isArchive(path.c_str())) {
+	} else if (fsop->isArchive(path)) {
 		startArchive(BrowserResultAsync(string(), std::move(path)));
 		return true;
 	}
@@ -169,33 +169,28 @@ bool Browser::goUp() {
 			curDir = parentPath(curDir);
 			arch.clear();
 			curNode = nullptr;
-			fwatch.set(curDir.c_str());
+			fsop->setWatch(curDir);
 		}
 	} else {
 		curDir = parentPath(curDir);
-		fwatch.set(curDir.c_str());
+		fsop->setWatch(curDir);
 	}
 	return true;
 }
 
 bool Browser::goNext(bool fwd, string_view picname) {
-	try {
-		if (!picname.empty())
-			if (string file = curNode ? nextArchiveFile(picname, fwd) : nextDirFile(picname, fwd); !file.empty()) {
-				startLoadPictures(std::move(file), fwd);
-				return true;
-			}
+	if (!picname.empty())
+		if (string file = curNode ? nextArchiveFile(picname, fwd) : nextDirFile(picname, fwd); !file.empty()) {
+			startLoadPictures(std::move(file), fwd);
+			return true;
+		}
 
-		if (curNode)
-			shiftArchive(fwd);
-		else
-			shiftDir(fwd);
-		startLoadPictures(string(), fwd);
-		return true;
-	} catch (const std::runtime_error& err) {
-		logError(err.what());
-	}
-	return false;
+	if (curNode)
+		shiftArchive(fwd);
+	else
+		shiftDir(fwd);
+	startLoadPictures(string(), fwd);
+	return true;
 }
 
 void Browser::shiftDir(bool fwd) {
@@ -203,7 +198,7 @@ void Browser::shiftDir(bool fwd) {
 		// find current directory and set it to the path of the next valid directory in the parent directory
 		string dir(parentPath(curDir));
 		string_view dname = filename(curDir);
-		vector<string> dirs = FileSys::listDir(dir.c_str(), false, true, World::sets()->showHidden);
+		vector<string> dirs = fsop->listDirectory(dir, false, true, World::sets()->showHidden);
 		if (vector<string>::iterator di = std::lower_bound(dirs.begin(), dirs.end(), dname, StrNatCmp()); di != dirs.end() && *di == dname)
 			foreachAround(dirs, di, fwd, &Browser::nextDir, dir);
 	}
@@ -211,10 +206,10 @@ void Browser::shiftDir(bool fwd) {
 
 bool Browser::nextDir(string_view dit, const string& pdir) {
 	string idir = pdir / dit;
-	vector<string> files = FileSys::listDir(idir.c_str(), true, false, World::sets()->showHidden);
-	if (vector<string>::iterator fi = rng::find_if(files, [&idir](const string& it) -> bool { return FileSys::isPicture((idir / it).c_str()); }); fi != files.end()) {
+	vector<string> files = fsop->listDirectory(idir, true, false, World::sets()->showHidden);
+	if (vector<string>::iterator fi = rng::find_if(files, [this, &idir](const string& it) -> bool { return fsop->isPicture(idir / it); }); fi != files.end()) {
 		curDir = std::move(idir);
-		fwatch.set(curDir.c_str());
+		fsop->setWatch(curDir);
 		return true;
 	}
 	return false;
@@ -229,7 +224,7 @@ void Browser::shiftArchive(bool fwd) {
 		// get list of archive files in the same directory, find the current file and select the next one
 		string pdir(parentPath(curDir));
 		string_view aname = filename(curDir);
-		vector<string> files = FileSys::listDir(pdir.c_str(), true, false, World::sets()->showHidden);
+		vector<string> files = fsop->listDirectory(pdir, true, false, World::sets()->showHidden);
 		if (vector<string>::iterator fi = std::lower_bound(files.begin(), files.end(), aname, StrNatCmp()); fi != files.end() && *fi == aname)
 			foreachAround(files, fi, fwd, &Browser::nextArchive, pdir);
 	}
@@ -244,9 +239,9 @@ bool Browser::nextArchiveDir(ArchiveDir& dit) {
 }
 
 bool Browser::nextArchive(string_view ait, const string& pdir) {
-	if (string path = pdir / ait; FileSys::isPictureArchive(path.c_str())) {
+	if (string path = pdir / ait; fsop->isPictureArchive(path)) {
 		curDir = std::move(path);
-		fwatch.set(curDir.c_str());
+		fsop->setWatch(curDir);
 		return true;
 	}
 	return false;
@@ -271,10 +266,10 @@ bool Browser::foreachAround(vector<T>& vec, vector<T>::iterator start, bool fwd,
 
 string Browser::nextDirFile(string_view file, bool fwd) const {
 	if (!file.empty()) {
-		vector<string> files = FileSys::listDir(curDir.c_str(), true, false, World::sets()->showHidden);
+		vector<string> files = fsop->listDirectory(curDir, true, false, World::sets()->showHidden);
 		vector<string>::iterator fit = std::lower_bound(files.begin(), files.end(), file, StrNatCmp());
 		for (size_t mov = btom<size_t>(fwd), i = fit - files.begin() + (fit != files.end() && (*fit == file || !fwd) ? mov : 0); i < files.size(); i += mov)
-			if (FileSys::isPicture((curDir / files[i]).c_str()))
+			if (fsop->isPicture(curDir / files[i]))
 				return files[i];
 	}
 	return string();
@@ -311,12 +306,28 @@ pair<vector<string>, vector<string>> Browser::listCurDir() const {
 		rng::transform(curNode->dirs, out.second.begin(), [](const ArchiveDir& it) -> string { return it.name; });
 		return out;
 	}
-	return FileSys::listDirSep(curDir.c_str(), World::sets()->showHidden);
+	return fsop->listDirectorySep(curDir, World::sets()->showHidden);
 }
 
-pair<vector<pair<bool, string>>, bool> Browser::directoryUpdate() {
-	pair<vector<pair<bool, string>>, bool> res = fwatch.changed();
-	if (curNode && res.second) {
+vector<string> Browser::listDirDirs(string_view path) const {
+	return fsop->listDirectory(path, false, true, World::sets()->showHidden);
+}
+
+bool Browser::deleteEntry(string_view ename) {
+	return !curNode && fsop->deleteEntry(curDir / ename);
+}
+
+bool Browser::renameEntry(string_view oldName, string_view newName) {
+	return !curNode && fsop->renameEntry(curDir / oldName, curDir / newName);
+}
+
+FileOpCapabilities Browser::fileOpCapabilities() const {
+	return !curNode ? fsop->capabilities() : FileOpCapabilities::none;
+}
+
+optional<vector<FileChange>> Browser::directoryUpdate() {
+	optional<vector<FileChange>> res = fsop->pollWatch();
+	if (curNode && !res) {
 		arch.clear();
 		curNode = &arch;
 	}
@@ -325,11 +336,8 @@ pair<vector<pair<bool, string>>, bool> Browser::directoryUpdate() {
 
 void Browser::stopThread() {
 	if (thread.joinable()) {
-		ThreadType handling = threadType;
-		threadType = ThreadType::none;
-		thread.join();
-
-		switch (handling) {
+		thread = std::jthread();
+		switch (curThread) {
 		using enum ThreadType;
 		case preview:
 			cleanupPreview();
@@ -340,13 +348,14 @@ void Browser::stopThread() {
 		case archive:
 			cleanupArchive();
 		}
+		curThread = ThreadType::none;
 	}
 }
 
 void Browser::startArchive(BrowserResultAsync&& ra) {
 	stopThread();
-	threadType = ThreadType::archive;
-	thread = std::thread(FileSys::makeArchiveTreeThread, std::ref(threadType), std::move(ra), World::sets()->maxPicRes);
+	curThread = ThreadType::archive;
+	thread = std::jthread(std::bind_front(&FileOps::makeArchiveTreeThread, fsop), std::move(ra), World::sets()->maxPicRes);
 }
 
 bool Browser::finishArchive(BrowserResultAsync&& ra) {
@@ -360,7 +369,7 @@ bool Browser::finishArchive(BrowserResultAsync&& ra) {
 	curDir = std::move(ra.curDir);
 	arch = std::move(ra.arch);
 	curNode = coalesce(dir, &arch);
-	fwatch.set(curDir.c_str());
+	fsop->setWatch(curDir);
 	return true;
 }
 
@@ -371,10 +380,10 @@ void Browser::cleanupArchive() {
 
 void Browser::startPreview(const vector<string>& files, const vector<string>& dirs, int maxHeight) {
 	stopThread();
-	threadType = ThreadType::preview;
+	curThread = ThreadType::preview;
 	thread = curNode
-		? std::thread(&Browser::previewArchThread, std::ref(threadType), curDir, sliceArchiveFiles(*curNode), curNode->path(), fromPath(World::fileSys()->dirIcons()), maxHeight)
-		: std::thread(&Browser::previewDirThread, std::ref(threadType), curDir, files, dirs, fromPath(World::fileSys()->dirIcons()), World::sets()->showHidden, maxHeight);
+		? std::jthread(&Browser::previewArchThread, fsop, curDir, sliceArchiveFiles(*curNode), curNode->path(), fromPath(World::fileSys()->dirIcons()), maxHeight)
+		: std::jthread(&Browser::previewDirThread, fsop, curDir, files, dirs, fromPath(World::fileSys()->dirIcons()), World::sets()->showHidden, maxHeight);
 }
 
 void Browser::cleanupPreview() {
@@ -385,28 +394,28 @@ void Browser::cleanupPreview() {
 	SDL_FlushEvent(SDL_USEREVENT_PREVIEW_FINISHED);
 }
 
-void Browser::previewDirThread(std::atomic<ThreadType>& mode, string curDir, vector<string> files, vector<string> dirs, string iconPath, bool showHidden, int maxHeight) {
-	if (uptr<SDL_Surface> dicon(!dirs.empty() ? World::renderer()->makeCompatible(World::drawSys()->loadIcon((iconPath / "folder.svg").c_str(), maxHeight), false) : nullptr); dicon)
+void Browser::previewDirThread(std::stop_token stoken, FileOps* fsop, string curDir, vector<string> files, vector<string> dirs, string iconPath, bool showHidden, int maxHeight) {
+	if (uptr<SDL_Surface> dicon(!dirs.empty() ? World::drawSys()->getRenderer()->makeCompatible(World::drawSys()->loadIcon((iconPath / "folder.svg").c_str(), maxHeight), false) : nullptr); dicon)
 		for (const string& it : dirs) {
-			if (mode != ThreadType::preview)
+			if (stoken.stop_requested())
 				return;
 
 			string dpath = curDir / it;
-			for (const string& sit : FileSys::listDir(dpath.c_str(), true, false, showHidden))
-				if (SDL_Surface* img = combineIcons(dicon.get(), IMG_Load((dpath / sit).c_str()))) {
+			for (const string& sit : fsop->listDirectory(dpath, true, false, showHidden))
+				if (SDL_Surface* img = combineIcons(dicon.get(), fsop->loadPicture(dpath / sit))) {
 					pushEvent(SDL_USEREVENT_PREVIEW_PROGRESS, allocatePreviewName(it, false), img);
 					break;
 				}
 		}
 	for (const string& it : files) {
-		if (mode != ThreadType::preview)
+		if (stoken.stop_requested())
 			return;
 
-		if (string fpath = curDir / it; SDL_Surface* img = scaleDown(IMG_Load(fpath.c_str()), maxHeight))
+		if (string fpath = curDir / it; SDL_Surface* img = scaleDown(fsop->loadPicture(fpath), maxHeight))
 			pushEvent(SDL_USEREVENT_PREVIEW_PROGRESS, allocatePreviewName(it, true), img);
-		else if (vector<string> entries = FileSys::listArchiveFiles(fpath.c_str()); !entries.empty())
+		else if (vector<string> entries = fsop->listArchiveFiles(fpath); !entries.empty())
 			for (const string& ei : entries)
-				if (img = scaleDown(FileSys::loadArchivePicture(fpath.c_str(), ei), maxHeight); img) {
+				if (img = scaleDown(fsop->loadArchivePicture(fpath, ei), maxHeight); img) {
 					pushEvent(SDL_USEREVENT_PREVIEW_PROGRESS, allocatePreviewName(it, true), img);
 					break;
 				}
@@ -414,8 +423,8 @@ void Browser::previewDirThread(std::atomic<ThreadType>& mode, string curDir, vec
 	pushEvent(SDL_USEREVENT_PREVIEW_FINISHED);
 }
 
-void Browser::previewArchThread(std::atomic<ThreadType>& mode, string curDir, ArchiveDir root, string dir, string iconPath, int maxHeight) {
-	uptr<SDL_Surface> dicon(!root.dirs.empty() ? World::renderer()->makeCompatible(World::drawSys()->loadIcon((iconPath / "folder.svg").c_str(), maxHeight), false) : nullptr);
+void Browser::previewArchThread(std::stop_token stoken, FileOps* fsop, string curDir, ArchiveDir root, string dir, string iconPath, int maxHeight) {
+	uptr<SDL_Surface> dicon(!root.dirs.empty() ? World::drawSys()->getRenderer()->makeCompatible(World::drawSys()->loadIcon((iconPath / "folder.svg").c_str(), maxHeight), false) : nullptr);
 	umap<string, bool> entries;
 	entries.reserve(dicon ? root.dirs.size() + root.files.size() : root.files.size());
 	if (dicon)
@@ -426,15 +435,15 @@ void Browser::previewArchThread(std::atomic<ThreadType>& mode, string curDir, Ar
 		if (it.size)
 			entries.emplace(dir + it.name, true);
 
-	if (archive* arch = FileSys::openArchive(curDir.c_str())) {
+	if (archive* arch = fsop->openArchive(curDir)) {
 		for (archive_entry* entry; !entries.empty() && !archive_read_next_header(arch, &entry);) {
-			if (mode != ThreadType::preview) {
+			if (stoken.stop_requested()) {
 				archive_read_free(arch);
 				return;
 			}
 
 			if (umap<string, bool>::iterator pit = entries.find(archive_entry_pathname_utf8(entry)); pit != entries.end()) {
-				if (SDL_Surface* img = pit->second ? scaleDown(FileSys::loadArchivePicture(arch, entry), maxHeight) : combineIcons(dicon.get(), FileSys::loadArchivePicture(arch, entry)))
+				if (SDL_Surface* img = pit->second ? scaleDown(FileOps::loadArchivePicture(arch, entry), maxHeight) : combineIcons(dicon.get(), FileOps::loadArchivePicture(arch, entry)))
 					pushEvent(SDL_USEREVENT_PREVIEW_PROGRESS, allocatePreviewName(pit->first, pit->second), img);
 				entries.erase(pit);
 			}
@@ -479,7 +488,7 @@ SDL_Surface* Browser::scaleDown(SDL_Surface* img, int maxHeight) {
 			SDL_FreeSurface(img);
 			img = dst;
 		}
-	return World::renderer()->makeCompatible(img, false);
+	return World::drawSys()->getRenderer()->makeCompatible(img, false);
 }
 
 char* Browser::allocatePreviewName(string_view name, bool file) {
@@ -490,19 +499,14 @@ char* Browser::allocatePreviewName(string_view name, bool file) {
 }
 
 void Browser::startLoadPictures(BrowserResultPicture* rp, bool fwd) {
-	try {
-		stopThread();
-		threadType = ThreadType::reader;
-		uint compress = World::sets()->compression != Settings::Compression::b16 ? 1 : 2;
-		if (rp->archive) {
-			umap<string, uintptr_t> files = mapArchiveFiles(curNode->path(), curNode->files, World::sets()->picLim, compress, filename(rp->file), fwd);
-			thread = std::thread(&Browser::loadPicturesArchThread, std::ref(threadType), rp, std::move(files), World::sets()->picLim);
-		} else
-			thread = std::thread(&Browser::loadPicturesDirThread, std::ref(threadType), rp, World::sets()->picLim, compress, fwd, World::sets()->showHidden);
-	} catch (const std::system_error&) {
-		delete rp;
-		throw;
-	}
+	stopThread();
+	curThread = ThreadType::reader;
+	uint compress = World::sets()->compression != Settings::Compression::b16 ? 1 : 2;
+	if (rp->archive) {
+		umap<string, uintptr_t> files = mapArchiveFiles(curNode->path(), curNode->files, World::sets()->picLim, compress, filename(rp->file), fwd);
+		thread = std::jthread(&Browser::loadPicturesArchThread, rp, fsop, std::move(files), World::sets()->picLim);
+	} else
+		thread = std::jthread(&Browser::loadPicturesDirThread, rp, fsop, World::sets()->picLim, compress, fwd, World::sets()->showHidden);
 }
 
 void Browser::finishLoadPictures(BrowserResultPicture& rp) {
@@ -511,7 +515,7 @@ void Browser::finishLoadPictures(BrowserResultPicture& rp) {
 		curDir = std::move(rp.curDir);
 		arch.clear();
 		curNode = nullptr;
-		fwatch.set(curDir.c_str());
+		fsop->setWatch(curDir);
 		if (rp.archive) {
 			arch = std::move(rp.arch);
 			auto [dir, fil] = arch.find(rp.file);
@@ -531,14 +535,14 @@ void Browser::cleanupLoadPictures() {
 		if (BrowserResultPicture* rp = static_cast<BrowserResultPicture*>(user.data1)) {
 			for (auto& [name, tex] : rp->pics)
 				if (tex)
-					World::renderer()->freeTexture(tex);
+					World::drawSys()->getRenderer()->freeTexture(tex);
 			delete rp;
 		}
 	});
 }
 
-void Browser::loadPicturesDirThread(std::atomic<ThreadType>& mode, BrowserResultPicture* rp, PicLim picLim, uint compress, bool fwd, bool showHidden) {
-	vector<string> files = FileSys::listDir(rp->curDir.c_str(), true, false, showHidden);
+void Browser::loadPicturesDirThread(std::stop_token stoken, BrowserResultPicture* rp, FileOps* fsop, PicLim picLim, uint compress, bool fwd, bool showHidden) {
+	vector<string> files = fsop->listDirectory(rp->curDir, true, false, showHidden);
 	size_t start = fwd ? 0 : files.size() - 1;
 	if (picLim.type != PicLim::Type::none)
 		if (vector<string>::iterator it = rng::lower_bound(files, rp->file, StrNatCmp()); it != files.end() && *it == rp->file)
@@ -549,10 +553,10 @@ void Browser::loadPicturesDirThread(std::atomic<ThreadType>& mode, BrowserResult
 
 	// iterate over files until one of the limits is hit (it should be the one associated with the setting)
 	for (size_t mov = btom<uintptr_t>(fwd), i = start, c = 0; i < files.size() && c < lim && m < mem; i += mov) {
-		if (mode != ThreadType::reader)
+		if (stoken.stop_requested())
 			break;
 
-		if (SDL_Surface* img = World::renderer()->makeCompatible(IMG_Load((rp->curDir / files[i]).c_str()), true)) {
+		if (SDL_Surface* img = World::drawSys()->getRenderer()->makeCompatible(fsop->loadPicture(rp->curDir / files[i]), true)) {
 			rp->mpic.lock();
 			rp->pics.emplace_back(std::move(files[i]), nullptr);
 			rp->mpic.unlock();
@@ -564,12 +568,12 @@ void Browser::loadPicturesDirThread(std::atomic<ThreadType>& mode, BrowserResult
 	pushEvent(SDL_USEREVENT_READER_FINISHED, rp, std::bit_cast<void*>(uintptr_t(fwd)));
 }
 
-void Browser::loadPicturesArchThread(std::atomic<ThreadType>& mode, BrowserResultPicture* rp, umap<string, uintptr_t> files, PicLim picLim) {
+void Browser::loadPicturesArchThread(std::stop_token stoken, BrowserResultPicture* rp, FileOps* fsop, umap<string, uintptr_t> files, PicLim picLim) {
 	auto [lim, mem, sizMag] = initLoadLimits(picLim, files.size());
 	string progLim = limitToStr(picLim, lim, mem, sizMag);
 	size_t c = 0;
 	uintptr_t m = 0;
-	archive* arch = FileSys::openArchive(rp->curDir.c_str());
+	archive* arch = fsop->openArchive(rp->curDir);
 	if (!arch) {
 		delete rp;
 		pushEvent(SDL_USEREVENT_READER_FINISHED);
@@ -577,11 +581,11 @@ void Browser::loadPicturesArchThread(std::atomic<ThreadType>& mode, BrowserResul
 	}
 
 	for (archive_entry* entry; !files.empty() && !archive_read_next_header(arch, &entry);) {
-		if (mode != ThreadType::reader)
+		if (stoken.stop_requested())
 			break;
 
 		if (umap<string, uintptr_t>::iterator fit = files.find(archive_entry_pathname_utf8(entry)); fit != files.end()) {
-			if (SDL_Surface* img = World::renderer()->makeCompatible(FileSys::loadArchivePicture(arch, entry), true)) {
+			if (SDL_Surface* img = World::drawSys()->getRenderer()->makeCompatible(FileOps::loadArchivePicture(arch, entry), true)) {
 				rp->mpic.lock();
 				rp->pics.emplace_back(filename(fit->first), nullptr);
 				rp->mpic.unlock();

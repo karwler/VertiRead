@@ -1,12 +1,5 @@
 #pragma once
 
-#define SDL_MAIN_HANDLED
-#ifdef _WIN32
-#include <SDL.h>
-#else
-#include <SDL2/SDL.h>
-#endif
-#include <glm/glm.hpp>
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -21,6 +14,13 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <glm/glm.hpp>
+#define SDL_MAIN_HANDLED
+#ifdef _WIN32
+#include <SDL.h>
+#else
+#include <SDL2/SDL.h>
+#endif
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 namespace fs = std::filesystem;
@@ -35,7 +35,6 @@ using ulong = unsigned long;
 using ullong = unsigned long long;
 using llong = long long;
 using ldouble = long double;
-using wchar = wchar_t;
 
 using std::array;
 using std::optional;
@@ -47,7 +46,7 @@ using std::vector;
 using std::wstring;
 using std::wstring_view;
 
-using cbyte = std::byte;
+using byte_t = std::byte;
 using int8 = int8_t;
 using uint8 = uint8_t;
 using int16 = int16_t;
@@ -70,14 +69,14 @@ using glm::u8vec4;
 using glm::ivec4;
 
 // forward declarations
-struct archive;
-struct archive_entry;
 class Browser;
 class Button;
 class CheckBox;
 class ComboBox;
 class Context;
+class CredentialManager;
 class DrawSys;
+class FileOps;
 class FileSys;
 class InputSys;
 class Label;
@@ -101,7 +100,7 @@ class Texture;
 class Widget;
 class WindowArranger;
 
-// events
+// callbacks
 
 using PCall = void (Program::*)(Button*);
 using LCall = void (Program::*)(Layout*);
@@ -132,28 +131,6 @@ constexpr char directorySeparator = '\\';
 #define LINEND "\n"
 constexpr char directorySeparator = '/';
 #endif
-
-enum UserEvent : uint32 {
-	SDL_USEREVENT_READER_PROGRESS = SDL_USEREVENT,
-	SDL_USEREVENT_READER_FINISHED,
-	SDL_USEREVENT_PREVIEW_PROGRESS,
-	SDL_USEREVENT_PREVIEW_FINISHED,
-	SDL_USEREVENT_ARCHIVE_PROGRESS,
-	SDL_USEREVENT_ARCHIVE_FINISHED,
-	SDL_USEREVENT_MOVE_PROGRESS,
-	SDL_USEREVENT_MOVE_FINISHED,
-	SDL_USEREVENT_FONTS_FINISHED,
-	SDL_USEREVENT_MAX
-};
-
-enum class ThreadType : uint8 {
-	none,
-	preview,
-	reader,
-	archive,
-	move,
-	font
-};
 
 template <Enumeration T>
 constexpr T operator~(T a) {
@@ -240,34 +217,11 @@ string operator+(std::basic_string_view<T> a, const std::basic_string<T>& b) {
 	return r;
 }
 
-namespace std {
-
-template <>
-struct default_delete<SDL_Surface> {
-	void operator()(SDL_Surface* ptr) const {
-		SDL_FreeSurface(ptr);
-	}
-};
-
-}
-
 template <class T>
 T valcp(const T& v) {
 	return v;	// just to avoid useless type cast warning for copying
 }
 
-template <Invocable<SDL_UserEvent&> F>
-void cleanupEvent(UserEvent type, F dealloc) {
-	array<SDL_Event, 16> events;
-	while (int num = SDL_PeepEvents(events.data(), events.size(), SDL_GETEVENT, type, type)) {
-		if (num < 0)
-			throw std::runtime_error(SDL_GetError());
-		for (int i = 0; i < num; ++i)
-			dealloc(events[i].user);
-	}
-}
-
-void pushEvent(UserEvent code, void* data1 = nullptr, void* data2 = nullptr);
 #ifndef NDEBUG
 inline void dbgPass() {}
 #endif
@@ -651,10 +605,6 @@ std::basic_string<T> operator/(const T* a, const std::basic_string<T>& b) {
 string swtos(wstring_view wstr);
 wstring sstow(string_view str);
 #endif
-
-inline string stos(string_view str) {	// dummy function for World::setArgs
-	return string(str);
-}
 
 inline fs::path toPath(string_view path) {
 #ifdef _WIN32

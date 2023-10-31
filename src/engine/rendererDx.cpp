@@ -1,8 +1,7 @@
 #ifdef WITH_DIRECTX
 #include "rendererDx.h"
-#include "utils/settings.h"
-#include <glm/gtc/type_ptr.hpp>
 #include <comdef.h>
+#include <glm/gtc/type_ptr.hpp>
 #include <SDL_syswm.h>
 
 RendererDx::TextureDx::TextureDx(ivec2 size, ID3D11ShaderResourceView* textureView) :
@@ -438,13 +437,13 @@ Texture* RendererDx::texFromRpic(SDL_Surface* img) {
 			return nullptr;
 		fmt = DXGI_FORMAT_R8G8B8A8_UNORM;
 	}
-	TextureDx* tex = createTexture(static_cast<cbyte*>(img->pixels), uvec2(img->w, img->h), img->pitch, fmt);
+	TextureDx* tex = createTexture(static_cast<byte_t*>(img->pixels), uvec2(img->w, img->h), img->pitch, fmt);
 	SDL_FreeSurface(img);
 	return tex;
 }
 
 Texture* RendererDx::texFromText(const PixmapRgba& pm) {
-	return pm.pix ? createTexture(reinterpret_cast<const cbyte*>(pm.pix), glm::min(pm.res, uvec2(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)), pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM) : nullptr;
+	return pm.pix ? createTexture(reinterpret_cast<const byte_t*>(pm.pix), glm::min(pm.res, uvec2(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)), pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM) : nullptr;
 }
 
 void RendererDx::freeTexture(Texture* tex) {
@@ -452,7 +451,7 @@ void RendererDx::freeTexture(Texture* tex) {
 	delete tex;
 }
 
-RendererDx::TextureDx* RendererDx::createTexture(const cbyte* pix, uvec2 res, uint pitch, DXGI_FORMAT format) {
+RendererDx::TextureDx* RendererDx::createTexture(const byte_t* pix, uvec2 res, uint pitch, DXGI_FORMAT format) {
 	ID3D11Texture2D* texture = nullptr;
 	ID3D11ShaderResourceView* textureView = nullptr;
 	try {

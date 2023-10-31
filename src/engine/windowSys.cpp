@@ -171,7 +171,7 @@ void WindowSys::createWindow() {
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_SKIP_TASKBAR;
 	SDL_Surface* icon = IMG_Load((fromPath(fileSys->dirIcons()) / "vertiread.svg").c_str());
 
-	array<pair<Settings::Renderer, uint32>, size_t(Settings::Renderer::max)> renderers;
+	array<pair<Settings::Renderer, uint32>, Settings::rendererNames.size()> renderers;
 	switch (sets->renderer) {
 	using enum Settings::Renderer;
 #ifdef WITH_DIRECTX

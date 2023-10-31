@@ -1,19 +1,9 @@
 #include "utils.h"
 #include <cwctype>
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
-
-void pushEvent(UserEvent code, void* data1, void* data2) {
-	SDL_Event event = { .user = {
-		.type = code,
-		.timestamp = SDL_GetTicks(),
-		.data1 = data1,
-		.data2 = data2
-	} };
-	if (int rc = SDL_PushEvent(&event); rc <= 0)
-		throw std::runtime_error(rc ? SDL_GetError() : "Event queue full");
-}
 
 template <Integer C>
 bool tstrciequal(std::basic_string_view<C> a, std::basic_string_view<C> b) {

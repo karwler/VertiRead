@@ -1,8 +1,7 @@
 #ifdef WITH_OPENGL
 #include "rendererGl.h"
-#include "utils/settings.h"
-#include <glm/gtc/type_ptr.hpp>
 #include <regex>
+#include <glm/gtc/type_ptr.hpp>
 
 RendererGl::TextureGl::TextureGl(ivec2 size, GLuint tex) :
 	Texture(size),
@@ -355,7 +354,7 @@ Widget* RendererGl::finishSelDraw(View* view) {
 
 Texture* RendererGl::texFromIcon(SDL_Surface* img) {
 	if (auto [pic, ifmt, pfmt, type] = pickPixFormat<true>(limitSize(img, maxTextureSize)); pic) {
-		TextureGl* tex = createTexture(static_cast<cbyte*>(pic->pixels), uvec2(pic->w, pic->h), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, GL_LINEAR);
+		TextureGl* tex = createTexture(static_cast<byte_t*>(pic->pixels), uvec2(pic->w, pic->h), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, GL_LINEAR);
 		SDL_FreeSurface(pic);
 		return tex;
 	}
@@ -364,7 +363,7 @@ Texture* RendererGl::texFromIcon(SDL_Surface* img) {
 
 Texture* RendererGl::texFromRpic(SDL_Surface* img) {
 	if (auto [pic, ifmt, pfmt, type] = pickPixFormat<false>(img); pic) {
-		TextureGl* tex = createTexture(static_cast<cbyte*>(pic->pixels), uvec2(pic->w, pic->h), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, GL_LINEAR);
+		TextureGl* tex = createTexture(static_cast<byte_t*>(pic->pixels), uvec2(pic->w, pic->h), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, GL_LINEAR);
 		SDL_FreeSurface(pic);
 		return tex;
 	}
@@ -372,7 +371,7 @@ Texture* RendererGl::texFromRpic(SDL_Surface* img) {
 }
 
 Texture* RendererGl::texFromText(const PixmapRgba& pm) {
-	return pm.pix ? createTexture(reinterpret_cast<const cbyte*>(pm.pix), glm::min(pm.res, uvec2(maxTextureSize)), pm.res.x, GL_RGBA8, textPixFormat, GL_UNSIGNED_BYTE, GL_NEAREST) : nullptr;
+	return pm.pix ? createTexture(reinterpret_cast<const byte_t*>(pm.pix), glm::min(pm.res, uvec2(maxTextureSize)), pm.res.x, GL_RGBA8, textPixFormat, GL_UNSIGNED_BYTE, GL_NEAREST) : nullptr;
 }
 
 void RendererGl::freeTexture(Texture* tex) {
@@ -380,7 +379,7 @@ void RendererGl::freeTexture(Texture* tex) {
 	delete tex;
 }
 
-RendererGl::TextureGl* RendererGl::createTexture(const cbyte* pix, uvec2 res, uint tpitch, GLint iform, GLenum pform, GLenum type, GLint filter) {
+RendererGl::TextureGl* RendererGl::createTexture(const byte_t* pix, uvec2 res, uint tpitch, GLint iform, GLenum pform, GLenum type, GLint filter) {
 	GLuint id;
 	glGenTextures(1, &id);
 	glBindTexture(GL_TEXTURE_2D, id);

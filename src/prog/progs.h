@@ -1,7 +1,7 @@
 #pragma once
 
+#include "types.h"
 #include "utils/settings.h"
-#include <atomic>
 #include <thread>
 
 // for handling program state specific things that occur in all states
@@ -35,6 +35,7 @@ public:
 	ProgState();
 	virtual ~ProgState() = default;
 
+	template <MemberFunction F, class... A> void exec(F func, A&&... args);
 	void eventEnter();
 	void eventEscape();
 	virtual void eventSpecEscape() {}
@@ -71,10 +72,14 @@ public:
 
 	virtual RootLayout* createLayout() = 0;
 	virtual Overlay* createOverlay();
-	Popup* createPopupMessage(string msg, PCall ccal, string ctxt = "Okay", Alignment malign = Alignment::left);
-	Popup* createPopupMultiline(string msg, PCall ccal, string ctxt = "Okay", Alignment malign = Alignment::left);
-	Popup* createPopupChoice(string msg, PCall kcal, PCall ccal, Alignment malign = Alignment::left);
-	void updatePopupMessage(string msg);
+	Popup* createPopupMessage(string&& msg, PCall ccal, string ctxt = "Okay", Alignment malign = Alignment::left);
+	void updatePopupMessage(string&& msg);
+	Popup* createPopupMultiline(string&& msg, PCall ccal, string ctxt = "Okay", Alignment malign = Alignment::left);
+	Popup* createPopupChoice(string&& msg, PCall kcal, PCall ccal, Alignment malign = Alignment::left);
+	Popup* createPopupInput(string&& msg, string&& text, PCall kcal, PCall ccal, string&& ktxt = "Okay", Alignment malign = Alignment::left);
+	static const string& inputFromPopup();
+	Popup* createPopupRemoteLogin(RemoteLocation&& rl, PCall kcall, PCall ccal);
+	static pair<RemoteLocation, bool> remoteLocationFromPopup();
 	Context* createContext(vector<pair<string, PCall>>&& items, Widget* parent);
 	Context* createComboContext(ComboBox* parent, PCall kcal);
 
@@ -94,6 +99,12 @@ inline ProgState::ProgState() {
 	onResize();
 }
 
+template <MemberFunction F, class... A>
+void ProgState::exec(F func, A&&... args) {
+	if (func)
+		(this->*func)(std::forward<A>(args)...);
+}
+
 inline int ProgState::getLineHeight() const {
 	return lineHeight;
 }
@@ -108,7 +119,7 @@ public:
 
 	void eventHide() final;
 	void eventRefresh() final;
-	void processFileChanges(const Browser* browser, vector<pair<bool, string>>& files, bool gone);
+	void processFileChanges(Browser* browser);
 
 protected:
 	virtual Label* makeDirectoryEntry(const Size& size, string&& name) = 0;
@@ -118,12 +129,15 @@ protected:
 
 class ProgBooks final : public ProgFileExplorer {
 public:
+	Label* contextBook;	// for keeping track of right clicked button
+
 	~ProgBooks() final = default;
 
 	void eventSpecEscape() final;
 	void eventFileDrop(const char* file) final;
 
 	RootLayout* createLayout() final;
+	Label* makeBookTile(string&& name);
 protected:
 	Label* makeDirectoryEntry(const Size& size, string&& name) final;
 	Size fileEntrySize(string_view name) final;
@@ -185,15 +199,15 @@ private:
 
 class ProgSettings final : public ProgState {
 public:
-	fs::path oldPathBuffer;	// for keeping old library path between decisions
+	string oldPathBuffer;	// for keeping old library path between decisions
+	LabelEdit* libraryDir;
 	Layout* limitLine;
 private:
 	ComboBox* screen;
 	CheckBox* showHidden;
 	ComboBox* fontList;
 	vector<pair<u32vec2, string>> devices;
-	std::thread moveThread, fontThread;
-	std::atomic<ThreadType> moveThreadType, fontThreadType;
+	std::jthread moveThread, fontThread;
 
 public:
 	~ProgSettings() final;
