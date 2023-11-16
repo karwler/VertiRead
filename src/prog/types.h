@@ -3,17 +3,147 @@
 #include "utils/utils.h"
 
 enum UserEvent : uint32 {
-	SDL_USEREVENT_READER_PROGRESS = SDL_USEREVENT,
-	SDL_USEREVENT_READER_FINISHED,
-	SDL_USEREVENT_PREVIEW_PROGRESS,
-	SDL_USEREVENT_PREVIEW_FINISHED,
-	SDL_USEREVENT_ARCHIVE_PROGRESS,
-	SDL_USEREVENT_ARCHIVE_FINISHED,
-	SDL_USEREVENT_MOVE_PROGRESS,
-	SDL_USEREVENT_MOVE_FINISHED,
-	SDL_USEREVENT_FONTS_FINISHED,
+	SDL_USEREVENT_GENERAL = SDL_USEREVENT,
+	SDL_USEREVENT_PROG_BOOKS,
+	SDL_USEREVENT_PROG_FILE_EXPLORER,
+	SDL_USEREVENT_PROG_PAGE_BROWSER,
+	SDL_USEREVENT_PROG_READER,
+	SDL_USEREVENT_PROG_SETTINGS,
+	SDL_USEREVENT_PROG_SEARCH_DIR,
+	SDL_USEREVENT_PROG_MAX = SDL_USEREVENT_PROG_SEARCH_DIR,
+	SDL_USEREVENT_THREAD_ARCHIVE,
+	SDL_USEREVENT_THREAD_PREVIEW,
+	SDL_USEREVENT_THREAD_READER,
+	SDL_USEREVENT_THREAD_MOVE,
+	SDL_USEREVENT_THREAD_FONTS_FINISHED,
 	SDL_USEREVENT_MAX
 };
+
+enum class GeneralEvent : int32 {
+	closePopup,
+	closeContext,
+	confirmComboBox,
+	resizeComboContext,
+	exit
+};
+
+enum class ProgBooksEvent : int32 {
+	openBookList,
+	openBookListLogin,
+	openPageBrowser,
+	openPageBrowserGeneral,
+	openLastPage,
+	openLastPageGeneral,
+	askDeleteBook,
+	deleteBook,
+	queryRenameBook,
+	renameBook,
+	openFileLogin,
+	openSettings
+};
+
+enum class ProgFileExplorerEvent : int32 {
+	goUp,
+	goIn,
+	goTo,
+	goToLogin,
+	exit
+};
+
+enum class ProgPageBrowserEvent : int32 {
+	fileLoadingCancelled,
+	goFile
+};
+
+enum class ProgReaderEvent : int32 {
+	zoomIn,
+	zoomOut,
+	zoomReset,
+	zoomFit,
+	centerView,
+	nextDir,
+	prevDir,
+	exit
+};
+
+enum class ProgSettingsEvent : int32 {
+	setDirection,
+	setZoom,
+	setSpacing,
+	setLibraryDirLe,
+	openLibDirBrowser,
+	moveBooks,
+	moveCancelled,
+	setScreenMode,
+	setRenderer,
+	setDevice,
+	setCompression,
+	setVsync,
+	setGpuSelecting,
+	setMultiFullscreen,
+	setPreview,
+	setHide,
+	setTooltips,
+	setTheme,
+	setFontCmb,
+	setFontLe,
+	setFontHinting,
+	setScrollSpeed,
+	setDeadzoneSl,
+	setDeadzoneLe,
+	setPortrait,
+	setLandscape,
+	setSquare,
+	setFill,
+	setPicLimitType,
+	setPicLimitCount,
+	setPicLimitSize,
+	setMaxPicResSl,
+	setMaxPicResLe,
+	reset
+};
+
+enum class ProgSearchDirEvent : int32 {
+	goIn,
+	setLibraryDirBw
+};
+
+enum class ThreadEvent : int32 {
+	progress,
+	finished
+};
+
+#define constructorEventId(etype, clazz) constexpr EventId(clazz e) : type(etype), code(int32(e)) {}
+
+struct EventId {
+	UserEvent type;
+	int32 code;	// should not exceed 16 bits for widget events because of the packing in Button
+
+	constexpr EventId(UserEvent t, int32 c) : type(t), code(c) {}
+	constructorEventId(SDL_USEREVENT_GENERAL, GeneralEvent)
+	constructorEventId(SDL_USEREVENT_PROG_BOOKS, ProgBooksEvent)
+	constructorEventId(SDL_USEREVENT_PROG_FILE_EXPLORER, ProgFileExplorerEvent)
+	constructorEventId(SDL_USEREVENT_PROG_PAGE_BROWSER, ProgPageBrowserEvent)
+	constructorEventId(SDL_USEREVENT_PROG_READER, ProgReaderEvent)
+	constructorEventId(SDL_USEREVENT_PROG_SETTINGS, ProgSettingsEvent)
+	constructorEventId(SDL_USEREVENT_PROG_SEARCH_DIR, ProgSearchDirEvent)
+
+	constexpr operator bool() const { return bool(type); }
+};
+
+constexpr EventId nullEvent = EventId(UserEvent(0), 0);
+
+void pushEvent(UserEvent type, int32 code, void* data1 = nullptr, void* data2 = nullptr);
+
+template <Enumeration T>
+void pushEvent(UserEvent type, T code, void* data1 = nullptr, void* data2 = nullptr) {
+	pushEvent(type, int32(code), data1, data2);
+}
+
+inline void pushEvent(EventId id, void* data1 = nullptr, void* data2 = nullptr) {
+	if (id)
+		pushEvent(id.type, id.code, data1, data2);
+}
 
 template <Invocable<SDL_UserEvent&> F>
 void cleanupEvent(UserEvent type, F dealloc) {
@@ -25,8 +155,6 @@ void cleanupEvent(UserEvent type, F dealloc) {
 			dealloc(events[i].user);
 	}
 }
-
-void pushEvent(UserEvent code, void* data1 = nullptr, void* data2 = nullptr);
 
 enum class FileOpCapabilities : uint8 {
 	none = 0x0,
@@ -90,7 +218,7 @@ struct FileChange {
 	string name;
 	Type type;
 
-	FileChange(string&& entry, Type change);
+	FileChange(string&& entry, Type change) : name(std::move(entry)), type(change) {}
 };
 
 // archive file with image size
@@ -101,7 +229,7 @@ struct ArchiveFile {
 	ArchiveFile() = default;
 	ArchiveFile(const ArchiveFile& af) = default;
 	ArchiveFile(ArchiveFile&& af) = default;
-	ArchiveFile(string&& filename, uintptr_t mem);
+	ArchiveFile(string&& filename, uintptr_t mem) : name(std::move(filename)), size(mem) {}
 
 	ArchiveFile& operator=(const ArchiveFile& af) = default;
 	ArchiveFile& operator=(ArchiveFile&& af) = default;
@@ -117,7 +245,7 @@ struct ArchiveDir {
 	ArchiveDir() = default;
 	ArchiveDir(const ArchiveDir& ad) = default;
 	ArchiveDir(ArchiveDir&& ad) = default;
-	ArchiveDir(ArchiveDir* daddy, string&& dirname);
+	ArchiveDir(ArchiveDir* daddy, string&& dirname) : parent(daddy), name(std::move(dirname)) {}
 
 	ArchiveDir& operator=(const ArchiveDir& ad) = default;
 	ArchiveDir& operator=(ArchiveDir&& ad) = default;
@@ -160,11 +288,10 @@ struct BrowserPictureProgress {
 
 // list of font families, files and which to select
 struct FontListResult {
-	vector<string> families;
-	uptr<string[]> files;
+	vector<Cstring> families;
+	uptr<Cstring[]> files;
 	size_t select;
 	string error;
 
-	FontListResult(vector<string>&& fa, uptr<string[]>&& fl, size_t id, string&& msg);
+	FontListResult(vector<Cstring>&& fa, uptr<Cstring[]>&& fl, size_t id, string&& msg);
 };
-

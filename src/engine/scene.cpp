@@ -48,13 +48,13 @@ void Scene::onMouseMove(ivec2 mPos, ivec2 mMov) {
 }
 
 void Scene::onMouseDown(ivec2 mPos, uint8 mBut, uint8 mCnt) {
-	if (LabelEdit* box = dynamic_cast<LabelEdit*>(capture); !popup && box && box->unfocusConfirm)	// confirm entered text if such a thing exists and it wants to, unless it's in a popup (that thing handles itself)
+	if (auto box = dynamic_cast<LabelEdit*>(capture); !popup && box && box->unfocusConfirm)	// confirm entered text if such a thing exists and it wants to, unless it's in a popup (that thing handles itself)
 		box->confirm();
-	if (KeyGetter* box = dynamic_cast<KeyGetter*>(capture)) {	// cancel key getting process if necessary
+	if (auto box = dynamic_cast<KeyGetter*>(capture)) {	// cancel key getting process if necessary
 		box->restoreText();
 		capture = nullptr;
 	}
-	if (context && !context->rect().contains(mPos))
+	if (context && (!context->rect().contains(mPos) || mBut != SDL_BUTTON_LEFT))
 		setContext(nullptr);
 
 	updateSelect(mPos);	// update in case selection has changed through keys while cursor remained at the old position
@@ -77,14 +77,14 @@ void Scene::onMouseUp(ivec2 mPos, uint8 mBut, uint8 mCnt) {
 }
 
 void Scene::onMouseWheel(ivec2 wMov) {
-	if (Widget* box = dynamic_cast<TextBox*>(select) ? select : getSelectedScrollArea())
+	if (auto box = dynamic_cast<TextBox*>(select) ? select : getSelectedScrollArea())
 		box->onScroll(wMov * scrollFactorWheel);
 }
 
 void Scene::onMouseLeave() {
 	for (ClickStamp& it : stamps)
 		it.widget = it.area = nullptr;
-	select = nullptr;
+	deselect();
 }
 
 void Scene::onCompose(string_view str) {
@@ -105,7 +105,7 @@ void Scene::onCancel() {
 	if (context)
 		setContext(nullptr);
 	else if (popup)
-		World::program()->exec(popup->ccall, nullptr);
+		pushEvent(popup->ccall);
 	else
 		World::program()->getState()->eventSpecEscape();
 }
@@ -137,9 +137,9 @@ void Scene::resetLayouts() {
 }
 
 void Scene::clearLayouts() {
-	onMouseLeave();	// reset stamps
-	select = nullptr;
+	onMouseLeave();	// reset stamps and select
 	capture = nullptr;
+	World::drawSys()->resetTooltip();
 	delete layout;
 	delete popup;
 	popup = nullptr;
@@ -165,9 +165,10 @@ void Scene::setCapture(Widget* inter) {
 }
 
 void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
+	deselect();	// clear select and capture in case of a dangling pointer
+	setCapture(nullptr);
 	if (context)
 		setContext(nullptr);
-	setCapture(nullptr);
 	delete popup;
 
 	if (popup = newPopup; popup)
@@ -181,20 +182,42 @@ void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
 }
 
 void Scene::setContext(Context* newContext) {
+	deselect();
 	if (context && context->owner() && !World::inputSys()->mouseWin)
-		select = context->owner();
+		updateSelect(context->owner());
+
 	delete context;
 	if (context = newContext; context)
 		context->postInit();
-	if (!World::inputSys()->mouseWin)
-		select = context ? context->firstNavSelect : nullptr;
-	updateSelect();
+
+	if (World::inputSys()->mouseWin)
+		updateSelect(World::winSys()->mousePos());
+	else if (context)
+		updateSelect(context->firstNavSelect);
 	World::drawSys()->getRenderer()->synchTransfer();
 }
 
 void Scene::updateSelect() {
 	if (World::inputSys()->mouseWin)
 		updateSelect(World::winSys()->mousePos());
+}
+
+void Scene::updateSelect(Widget* sel) {
+	if (sel != select) {
+		std::swap(select, sel);
+		if (sel)
+			sel->onUnhover();
+		if (select)
+			select->onHover();
+	}
+}
+
+void Scene::deselect() {
+	if (select) {
+		Widget* old = select;	// select must be nullptr during onUnhover in case of checks
+		select = nullptr;
+		old->onUnhover();
+	}
 }
 
 Widget* Scene::getSelected(ivec2 mPos) {
@@ -216,8 +239,9 @@ Widget* Scene::getSelected(ivec2 mPos) {
 
 	for (;;) {
 		Recti frame = box->frame();
-		if (vector<Widget*>::const_iterator it = rng::find_if(box->getWidgets(), [&frame, &mPos](const Widget* wi) -> bool { return wi->rect().intersect(frame).contains(mPos); }); it != box->getWidgets().end()) {
-			if (Layout* lay = dynamic_cast<Layout*>(*it))
+		std::span<Widget*> wgts = box->getWidgets();
+		if (std::span<Widget*>::iterator it = rng::find_if(wgts, [&frame, &mPos](const Widget* wi) -> bool { return wi->rect().intersect(frame).contains(mPos); }); it != wgts.end()) {
+			if (auto lay = dynamic_cast<Layout*>(*it))
 				box = lay;
 			else
 				return (*it)->navSelectable() ? *it : box;
@@ -227,7 +251,7 @@ Widget* Scene::getSelected(ivec2 mPos) {
 }
 
 ScrollArea* Scene::getSelectedScrollArea() const {
-	Layout* parent = dynamic_cast<Layout*>(select);
+	auto parent = dynamic_cast<Layout*>(select);
 	if (select && !parent)
 		parent = select->getParent();
 
@@ -248,7 +272,7 @@ void Scene::selectFirst() {
 	else if (popup)
 		select = popup->firstNavSelect;
 	else {
-		Layout* next = dynamic_cast<Layout*>(select);
+		auto next = dynamic_cast<Layout*>(select);
 		Layout* lay = next ? next : layout;
 		for (uint id = 0; lay;) {
 			if (id >= lay->getWidgets().size()) {

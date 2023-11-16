@@ -7,22 +7,22 @@ if(NOT GENERATOR_IS_MULTI_CONFIG AND NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE Release)
 endif()
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-	option(NATIVE "Build for the current CPU." OFF)
-endif()
 if(WIN32)
 	option(DIRECTX "Build with DirectX 11 support." ON)
 elseif(UNIX)
-	option(OPENGLES "Build for OpenGL ES 3.0 instead of OpenGL 3.0." OFF)
-	option(USE_FONTCONFIG "Build with fontconfig if available" ON)
-	option(USE_SECRET "Build with libsecret if available" ON)
-	option(USE_SMBCLIENT "Build with smbclient if available" ON)
-	option(USE_SSH2 "Build with libssh2 if available" ON)
 	option(APPIMAGE "Package as an AppImage." OFF)
+	option(OPENGLES "Build for OpenGL ES 3.0 instead of OpenGL 3.0." OFF)
+	option(USE_FONTCONFIG "Build with fontconfig if available." ON)
+	option(USE_SECRET "Build with libsecret if available." ON)
+	option(USE_SMBCLIENT "Build with smbclient if available." ON)
+	option(USE_SSH2 "Build with libssh2 if available." ON)
+endif()
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+	option(NATIVE "Build for the current CPU." OFF)
 endif()
 option(OPENGL "Build with OpenGL 3.0 support." ON)
+option(USE_ICU "Build with ICU if available." OFF)
 option(VULKAN "Build with Vulkan 1.0 support." ON)
-option(USE_ICU "Build with ICU" OFF)
 
 string(TOLOWER ${PROJECT_NAME} PROJECT_NAME_LOWER)
 
@@ -221,11 +221,10 @@ if(USE_SSH2)
 	list(APPEND PKGCONFIG_ARGS "libssh2")
 endif()
 if(PKGCONFIG_ARGS)
-find_package(PkgConfig)
+	find_package(PkgConfig)
 	if(PKG_CONFIG_FOUND)
 		pkg_check_modules(PKGCONFS ${PKGCONFIG_ARGS})
 		include_directories(SYSTEM ${PKGCONFS_INCLUDE_DIRS})
-		add_definitions(${PKGCONFS_CFLAGS_OTHER})	# TODO: try without this line
 
 		if(PKGCONFS_fontconfig_FOUND OR PKGCONFS_fontconfig_VERSION)
 			add_compile_definitions(CAN_FONTCFG)
@@ -258,8 +257,6 @@ if(WIN32)
 	set(PBOUT_DIR "${CMAKE_BINARY_DIR}/${PROJECT_NAME}")
 	set(TBIN_DIR "${PBOUT_DIR}")
 	set(DATA_DIR "${PBOUT_DIR}")
-	set(ICONS_DIR "${PBOUT_DIR}/icons")
-	set(LICN_DIR "${PBOUT_DIR}/licenses")
 
 	if(MSVC)
 		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -340,21 +337,23 @@ else()
 		set(TBIN_DIR "${PBOUT_DIR}/bin")
 		set(DATA_DIR "${PBOUT_DIR}/share/${PROJECT_NAME_LOWER}")
 	endif()
-	set(ICONS_DIR "${DATA_DIR}/icons")
-	set(LICN_DIR "${DATA_DIR}/licenses")
 
 	find_package(Freetype REQUIRED)
-	include_directories(SYSTEM ${FREETYPE_INCLUDE_DIRS})
+	find_package(LibArchive REQUIRED)
+	include_directories(SYSTEM ${FREETYPE_INCLUDE_DIRS} ${LibArchive_INCLUDE_DIRS})
 endif()
+set(ICONS_DIR "${DATA_DIR}/icons")
+set(LICN_DIR "${DATA_DIR}/licenses")
 
 # compiler flags
 add_compile_definitions($<$<BOOL:${DIRECTX}>:WITH_DIRECTX>
-						"$<$<BOOL:${OPENGL}>:WITH_OPENGL;$<$<BOOL:${OPENGLES}>:OPENGLES>>"
-						$<$<BOOL:${VULKAN}>:WITH_VULKAN>
-						"$<$<BOOL:${WIN32}>:UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;NOMINMAX;$<$<NOT:$<BOOL:${MSVC}>>:_WIN32_WINNT=0x600>>")
+	"$<$<BOOL:${OPENGL}>:WITH_OPENGL;$<$<BOOL:${OPENGLES}>:OPENGLES>>"
+	$<$<BOOL:${VULKAN}>:WITH_VULKAN>
+	"$<$<BOOL:${WIN32}>:UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;NOMINMAX;$<$<NOT:$<BOOL:${MSVC}>>:_WIN32_WINNT=0x600>>")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	add_compile_options(-Wall -Wextra -pedantic-errors -Wformat=2 -Wmissing-declarations -Wold-style-cast -Wshadow -Wunreachable-code -Wno-implicit-fallthrough -Wno-missing-field-initializers -Wno-old-style-cast -Wno-switch $<$<NOT:$<BOOL:${MINGW}>>:-Wdouble-promotion>)
+	add_compile_options(-Wall -Wextra -pedantic-errors -Wformat=2 -Wmissing-declarations -Wold-style-cast -Wshadow -Wunreachable-code
+		-Wno-implicit-fallthrough -Wno-missing-field-initializers -Wno-switch $<$<NOT:$<BOOL:${MINGW}>>:-Wdouble-promotion>)
 	if(NATIVE)
 		add_compile_options(-march=native)
 	elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -362,7 +361,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 	endif()
 	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 		add_compile_options(-Wcast-align=strict -Wduplicated-cond -Wlogical-op -Wuseless-cast
-							"$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto;-fuse-linker-plugin>")
+			"$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto;-fuse-linker-plugin>")
 		add_link_options("$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto;-fuse-linker-plugin;-s>")
 	else()
 		add_compile_options(-Wcast-align -Wnull-dereference -Wshadow-all -Wno-final-dtor-non-final-class)
@@ -373,58 +372,58 @@ endif()
 
 # set main target
 add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES})
-target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image freetype archive
-						"$<$<BOOL:${UNIX}>:pthread;dl>"
-						"$<$<BOOL:${DIRECTX}>:d3d11.lib;dxgi.lib>"
-						$<$<BOOL:${OPENGL}>:$<IF:$<BOOL:${WIN32}>,opengl32,$<IF:$<BOOL:${OPENGLES}>,GLESv2,GL>>>
-						$<$<BOOL:${VULKAN}>:$<IF:$<BOOL:${WIN32}>,vulkan-1,vulkan>>
-						"$<$<BOOL:${ICU_FOUND}>:${ICU_UC_LIBRARIES};$<IF:$<BOOL:${WIN323}>,${ICU_IN_LIBRARIES},${ICU_I18N_LIBRARIES}>>")
+target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image
+	"$<IF:$<BOOL:${WIN32}>,freetype;archive,${FREETYPE_LIBRARIES};${LibArchive_LIBRARIES}>"
+	"$<$<BOOL:${UNIX}>:pthread;dl>"
+	"$<$<BOOL:${DIRECTX}>:d3d11.lib;dxgi.lib>"
+	$<$<BOOL:${OPENGL}>:$<IF:$<BOOL:${WIN32}>,opengl32,$<IF:$<BOOL:${OPENGLES}>,GLESv2,GL>>>
+	$<$<BOOL:${VULKAN}>:$<IF:$<BOOL:${WIN32}>,vulkan-1,vulkan>>
+	"$<$<BOOL:${ICU_FOUND}>:${ICU_UC_LIBRARIES};$<IF:$<BOOL:${WIN323}>,${ICU_IN_LIBRARIES},${ICU_I18N_LIBRARIES}>>")
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
-						RUNTIME_OUTPUT_DIRECTORY "${TBIN_DIR}"
-						RUNTIME_OUTPUT_DIRECTORY_DEBUG "${TBIN_DIR}"
-						RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TBIN_DIR}"
-						RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${TBIN_DIR}"
-						RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${TBIN_DIR}")
+	RUNTIME_OUTPUT_DIRECTORY "${TBIN_DIR}"
+	RUNTIME_OUTPUT_DIRECTORY_DEBUG "${TBIN_DIR}"
+	RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TBIN_DIR}"
+	RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${TBIN_DIR}"
+	RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${TBIN_DIR}")
 if(WIN32)
 	set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DPI_AWARE "PerMonitor")
 	set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
 else()
-	set_target_properties(${PROJECT_NAME} PROPERTIES
-							OUTPUT_NAME ${PROJECT_NAME_LOWER})
+	set_property(TARGET ${PROJECT_NAME} PROPERTY OUTPUT_NAME ${PROJECT_NAME_LOWER})
 endif()
 
 # build commands
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-					COMMAND "${CMAKE_COMMAND}" -E make_directory "${ICONS_DIR}"
-					COMMAND "${CMAKE_COMMAND}" -E copy_directory "${DIR_RSC}/licenses" "${LICN_DIR}"
-					COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/BrisaSans.otf" "${DIR_RSC}/themes.ini" "${DATA_DIR}"
-					COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_LIB}/glm/copying.txt" "${LICN_DIR}/COPYING.glm.txt"
-					COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.svg" "${DIR_ICN}/center.svg" "${DIR_ICN}/cross.svg" "${DIR_ICN}/file.svg" "${DIR_ICN}/folder.svg" "${DIR_ICN}/left.svg" "${DIR_ICN}/minus.svg" "${DIR_ICN}/plus.svg" "${DIR_ICN}/reset.svg" "${DIR_ICN}/right.svg" "${DIR_ICN}/search.svg" "${ICONS_DIR}")
+	COMMAND "${CMAKE_COMMAND}" -E make_directory "${ICONS_DIR}"
+	COMMAND "${CMAKE_COMMAND}" -E copy_directory "${DIR_RSC}/licenses" "${LICN_DIR}"
+	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/BrisaSans.otf" "${DIR_RSC}/themes.ini" "${DATA_DIR}"
+	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_LIB}/glm/copying.txt" "${LICN_DIR}/COPYING.glm.txt"
+	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.svg" "${DIR_ICN}/center.svg" "${DIR_ICN}/cross.svg" "${DIR_ICN}/file.svg" "${DIR_ICN}/fit.svg" "${DIR_ICN}/folder.svg" "${DIR_ICN}/left.svg" "${DIR_ICN}/minus.svg" "${DIR_ICN}/plus.svg" "${DIR_ICN}/reset.svg" "${DIR_ICN}/right.svg" "${DIR_ICN}/search.svg" "${ICONS_DIR}")
 if(WIN32)
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ARC}/$<IF:$<BOOL:${MSVC}>,archive.dll,libarchive.dll>" "${BIN_SDL}/SDL2.dll" "${BIN_IMG}/SDL2_image.dll" "$<$<BOOL:${MSVC}>:${BIN_IMG}/optional/libtiff-5.dll;${BIN_IMG}/optional/libwebp-7.dll>" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-						COMMAND "$<$<BOOL:${MSVC}>:${CMAKE_COMMAND};-E;copy_if_different;${BIN_IMG}/optional/LICENSE.tiff.txt;${BIN_IMG}/optional/LICENSE.webp.txt;${LICN_DIR}>"
-						COMMAND "$<$<BOOL:${MINGW}>:${CMAKE_COMMAND};-E;copy_if_different;${DIR_ARC}/COPYING;${LICN_DIR}/COPYING.libarchive.txt>"
-						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_SDL}/COPYING.txt" "${LICN_DIR}/COPYING.SDL.txt"
-						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_IMG}/LICENSE.txt" "${LICN_DIR}/LICENSE.SDL_image.txt"
-						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_FT2}/LICENSE.txt" "${LICN_DIR}/LICENSE.freetype.txt"
-						COMMAND_EXPAND_LISTS)
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ARC}/$<IF:$<BOOL:${MSVC}>,archive.dll,libarchive.dll>" "${BIN_SDL}/SDL2.dll" "${BIN_IMG}/SDL2_image.dll" "$<$<BOOL:${MSVC}>:${BIN_IMG}/optional/libtiff-5.dll;${BIN_IMG}/optional/libwebp-7.dll>" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+		COMMAND "$<$<BOOL:${MSVC}>:${CMAKE_COMMAND};-E;copy_if_different;${BIN_IMG}/optional/LICENSE.tiff.txt;${BIN_IMG}/optional/LICENSE.webp.txt;${LICN_DIR}>"
+		COMMAND "$<$<BOOL:${MINGW}>:${CMAKE_COMMAND};-E;copy_if_different;${DIR_ARC}/COPYING;${LICN_DIR}/COPYING.libarchive.txt>"
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_SDL}/COPYING.txt" "${LICN_DIR}/COPYING.SDL.txt"
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_IMG}/LICENSE.txt" "${LICN_DIR}/LICENSE.SDL_image.txt"
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_FT2}/LICENSE.txt" "${LICN_DIR}/LICENSE.freetype.txt"
+		COMMAND_EXPAND_LISTS)
 	if(ICU_FOUND)
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ICU}/icudt${ICU_VER_MAJ}.dll" "${BIN_ICU}/icuin${ICU_VER_MAJ}.dll" "${BIN_ICU}/icuuc${ICU_VER_MAJ}.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-							COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${LIC_ICU}/LICENSE" "${LICN_DIR}/LICENSE.icu.txt")
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ICU}/icudt${ICU_VER_MAJ}.dll" "${BIN_ICU}/icuin${ICU_VER_MAJ}.dll" "${BIN_ICU}/icuuc${ICU_VER_MAJ}.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${LIC_ICU}/LICENSE" "${LICN_DIR}/LICENSE.icu.txt")
 	endif()
 else()
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-						COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.desktop" "${PBOUT_DIR}")
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.desktop" "${PBOUT_DIR}")
 
 	if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 		find_program(STRIPPER "strip")
 		if(STRIPPER)
 			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-								COMMAND "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:${STRIPPER};-s;$<TARGET_FILE:${PROJECT_NAME}>>"
-								COMMAND_EXPAND_LISTS)
+				COMMAND "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:${STRIPPER};-s;$<TARGET_FILE:${PROJECT_NAME}>>"
+				COMMAND_EXPAND_LISTS)
 		else()
 			message(WARNING "Can't strip the executable: Failed to find stip")
 		endif()
@@ -443,9 +442,9 @@ else()
 			endif()
 		endif()
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-							COMMAND "${CMAKE_COMMAND}" -E create_symlink "usr/bin/${PROJECT_NAME_LOWER}" "${PBOUT_DIR}/AppRun"
-							COMMAND "${CMAKE_COMMAND}" -E create_symlink "usr/share/${PROJECT_NAME_LOWER}/icons/${PROJECT_NAME_LOWER}.svg" "${PBOUT_DIR}/${PROJECT_NAME_LOWER}.svg"
-							COMMAND bash -c "VERSION='${PROJECT_VERSION}' '${LINUXDEPLOY}' --appdir '${PBOUT_DIR}' --output appimage")
+			COMMAND "${CMAKE_COMMAND}" -E create_symlink "usr/bin/${PROJECT_NAME_LOWER}" "${PBOUT_DIR}/AppRun"
+			COMMAND "${CMAKE_COMMAND}" -E create_symlink "usr/share/${PROJECT_NAME_LOWER}/icons/${PROJECT_NAME_LOWER}.svg" "${PBOUT_DIR}/${PROJECT_NAME_LOWER}.svg"
+			COMMAND bash -c "VERSION='${PROJECT_VERSION}' '${LINUXDEPLOY}' --appdir '${PBOUT_DIR}' --output appimage")
 	endif()
 endif()
 
@@ -458,7 +457,7 @@ if(WIN32)
 	install(DIRECTORY "${LICN_DIR}" DESTINATION "${DST_DIR}")
 	install(FILES "${PBOUT_DIR}/archive.dll" "${PBOUT_DIR}/libfreetype-6.dll" "${PBOUT_DIR}/libjpeg-9.dll" "${PBOUT_DIR}/libpng16-16.dll" "${PBOUT_DIR}/libtiff-5.dll" "${PBOUT_DIR}/libwebp-7.dll" "${PBOUT_DIR}/SDL2.dll" "${PBOUT_DIR}/SDL2_image.dll" DESTINATION "${DST_DIR}")
 elseif(APPIMAGE)
-	install(FILES "${CMAKE_BINARY_DIR}/${PROJECT_NAME}-x86_64.AppImage" DESTINATION "${CMAKE_INSTALL_PREFIX}")
+	install(FILES "${CMAKE_BINARY_DIR}/${PROJECT_NAME}-${VMARCH}.AppImage" DESTINATION "${CMAKE_INSTALL_PREFIX}")
 else()
 	set(DST_DIR "${CMAKE_INSTALL_PREFIX}/share/${PROJECT_NAME_LOWER}")
 	install(TARGETS ${PROJECT_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")

@@ -19,6 +19,13 @@ enum class Alignment : uint8 {
 	right
 };
 
+enum Actions : uint8 {
+	ACT_NONE = 0x0,
+	ACT_LEFT = 0x1,
+	ACT_RIGHT = 0x2,
+	ACT_DOUBLE = 0x4
+};
+
 class Direction {
 public:
 	enum Dir : uint8 {
@@ -38,39 +45,15 @@ private:
 	Dir dir;
 
 public:
-	constexpr Direction(Dir direction);
+	constexpr Direction(Dir direction) : dir(direction) {}
 
-	constexpr operator Dir() const;
+	constexpr operator Dir() const { return dir; }
 
-	constexpr bool vertical() const;
-	constexpr bool horizontal() const;
-	constexpr bool positive() const;
-	constexpr bool negative() const;
+	constexpr bool vertical() const { return dir <= down; }
+	constexpr bool horizontal() const { return dir >= left; }
+	constexpr bool positive() const { return dir & 1; }
+	constexpr bool negative() const { return !positive(); }
 };
-
-constexpr Direction::Direction(Dir direction) :
-	dir(direction)
-{}
-
-constexpr Direction::operator Dir() const {
-	return dir;
-}
-
-constexpr bool Direction::vertical() const {
-	return dir <= down;
-}
-
-constexpr bool Direction::horizontal() const {
-	return dir >= left;
-}
-
-constexpr bool Direction::positive() const {
-	return dir & 1;
-}
-
-constexpr bool Direction::negative() const {
-	return !positive();
-}
 
 class Binding {
 public:
@@ -87,6 +70,7 @@ public:
 		zoomIn,
 		zoomOut,
 		zoomReset,
+		zoomFit,
 		toStart,
 		toEnd,
 		nextDir,
@@ -120,6 +104,7 @@ public:
 		"zoom_in",
 		"zoom_out",
 		"zoom_reset",
+		"zoom_fit",
 		"to_start",
 		"to_end",
 		"next_directory",
@@ -192,8 +177,8 @@ public:
 	};
 
 	union {
-		SBCall bcall;
-		SACall acall;
+		void (ProgState::*bcall)();
+		void (ProgState::*acall)(float);
 	};
 private:
 	SDL_Scancode key;			// keyboard key
@@ -206,124 +191,52 @@ private:
 public:
 	void reset(Type newType);
 
-	SDL_Scancode getKey() const;
-	bool keyAssigned() const;
+	SDL_Scancode getKey() const { return key; }
+	bool keyAssigned() const { return asg & ASG_KEY; }
 	void clearAsgKey();
 	void setKey(SDL_Scancode kkey);
 
-	uint8 getJctID() const;
-	bool jctAssigned() const;
+	uint8 getJctID() const { return jctID; }
+	bool jctAssigned() const { return asg & (ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N); }
 	void clearAsgJct();
 
-	bool jbuttonAssigned() const;
+	bool jbuttonAssigned() const { return asg & ASG_JBUTTON; }
 	void setJbutton(uint8 but);
 
-	bool jaxisAssigned() const;
-	bool jposAxisAssigned() const;
-	bool jnegAxisAssigned() const;
+	bool jaxisAssigned() const { return asg & (ASG_JAXIS_P | ASG_JAXIS_N); }
+	bool jposAxisAssigned() const { return asg & ASG_JAXIS_P; }
+	bool jnegAxisAssigned() const { return asg & ASG_JAXIS_N; }
 	void setJaxis(uint8 axis, bool positive);
 
-	uint8 getJhatVal() const;
-	bool jhatAssigned() const;
+	uint8 getJhatVal() const { return jHatVal; }
+	bool jhatAssigned() const { return asg & ASG_JHAT; }
 	void setJhat(uint8 hat, uint8 val);
 
-	uint8 getGctID() const;
-	bool gctAssigned() const;
+	uint8 getGctID() const { return gctID; }
+	bool gctAssigned() const { return asg & (ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N); }
 	void clearAsgGct();
 
-	SDL_GameControllerButton getGbutton() const;
-	bool gbuttonAssigned() const;
+	SDL_GameControllerButton getGbutton() const { return SDL_GameControllerButton(gctID); }
+	bool gbuttonAssigned() const { return asg & ASG_GBUTTON; }
 	void setGbutton(SDL_GameControllerButton but);
 
-	SDL_GameControllerAxis getGaxis() const;
-	bool gaxisAssigned() const;
-	bool gposAxisAssigned() const;
-	bool gnegAxisAssigned() const;
+	SDL_GameControllerAxis getGaxis() const { return SDL_GameControllerAxis(gctID); }
+	bool gaxisAssigned() const { return asg & (ASG_GAXIS_P | ASG_GAXIS_N); }
+	bool gposAxisAssigned() const { return asg & ASG_GAXIS_P; }
+	bool gnegAxisAssigned() const { return asg & ASG_GAXIS_N; }
 	void setGaxis(SDL_GameControllerAxis axis, bool positive);
 };
 
-inline SDL_Scancode Binding::getKey() const {
-	return key;
-}
-
-inline bool Binding::keyAssigned() const {
-	return asg & ASG_KEY;
-}
-
 inline void Binding::clearAsgKey() {
 	asg &= ~ASG_KEY;
-}
-
-inline uint8 Binding::getJctID() const {
-	return jctID;
-}
-
-inline bool Binding::jctAssigned() const {
-	return asg & (ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N);
 }
 
 inline void Binding::clearAsgJct() {
 	asg &= ~(ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N);
 }
 
-inline bool Binding::jbuttonAssigned() const {
-	return asg & ASG_JBUTTON;
-}
-
-inline bool Binding::jaxisAssigned() const {
-	return asg & (ASG_JAXIS_P | ASG_JAXIS_N);
-}
-
-inline bool Binding::jposAxisAssigned() const {
-	return asg & ASG_JAXIS_P;
-}
-
-inline bool Binding::jnegAxisAssigned() const {
-	return asg & ASG_JAXIS_N;
-}
-
-inline uint8 Binding::getJhatVal() const {
-	return jHatVal;
-}
-
-inline bool Binding::jhatAssigned() const {
-	return asg & ASG_JHAT;
-}
-
-inline uint8 Binding::getGctID() const {
-	return gctID;
-}
-
-inline bool Binding::gctAssigned() const {
-	return asg & (ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N);
-}
-
 inline void Binding::clearAsgGct() {
 	asg &= ~(ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N);
-}
-
-inline SDL_GameControllerButton Binding::getGbutton() const {
-	return SDL_GameControllerButton(gctID);
-}
-
-inline bool Binding::gbuttonAssigned() const {
-	return asg & ASG_GBUTTON;
-}
-
-inline SDL_GameControllerAxis Binding::getGaxis() const {
-	return SDL_GameControllerAxis(gctID);
-}
-
-inline bool Binding::gaxisAssigned() const {
-	return asg & (ASG_GAXIS_P | ASG_GAXIS_N);
-}
-
-inline bool Binding::gposAxisAssigned() const {
-	return asg & ASG_GAXIS_P;
-}
-
-inline bool Binding::gnegAxisAssigned() const {
-	return asg & ASG_GAXIS_N;
 }
 
 class PicLim {
@@ -361,9 +274,9 @@ public:
 
 	PicLim(Type ltype = Type::none, uintptr_t cnt = defaultCount);
 
-	uintptr_t getCount() const;
+	uintptr_t getCount() const { return count; }
 	void setCount(string_view str);
-	uintptr_t getSize() const;
+	uintptr_t getSize() const { return size; }
 	void setSize(string_view str);
 	void set(string_view str);
 
@@ -377,20 +290,12 @@ private:
 	static uintptr_t defaultSize();
 };
 
-inline uintptr_t PicLim::getCount() const {
-	return count;
-}
-
 inline void PicLim::setCount(string_view str) {
 	count = toCount(str);
 }
 
 inline uintptr_t PicLim::toCount(string_view str) {
 	return coalesce(toNum<uintptr_t>(str), defaultCount);
-}
-
-inline uintptr_t PicLim::getSize() const {
-	return size;
 }
 
 inline void PicLim::setSize(string_view str) {
@@ -491,8 +396,7 @@ public:
 		"compress"
 	};
 
-	static constexpr float defaultZoom = 1.f;
-	static constexpr int defaultSpacing = 10;
+	static constexpr ushort defaultSpacing = 10;
 	static constexpr uint minPicRes = 1;
 	static constexpr int axisLimit = SHRT_MAX + 1;
 	static constexpr Screen defaultScreenMode = Screen::windowed;
@@ -510,6 +414,8 @@ public:
 	static constexpr Hinting defaultHinting = Hinting::normal;
 	static constexpr Compression defaultCompression = Compression::none;
 	static constexpr char defaultDirLib[] = "library";
+	static constexpr int8 zoomLimit = 113;
+	static constexpr double zoomBase = 1.2;
 
 private:
 	string theme;
@@ -522,7 +428,6 @@ public:
 	ivec2 resolution = ivec2(800, 600);
 	vec2 scrollSpeed = vec2(1600.f, 1600.f);
 	uint maxPicRes = UINT_MAX;
-	float zoom = defaultZoom;
 private:
 	int deadzone = 256;
 public:
@@ -533,6 +438,7 @@ public:
 	bool showHidden = false;
 	bool tooltips = true;
 	Direction direction = defaultDirection;
+	int8 zoom = 0;
 	Compression compression = defaultCompression;
 	bool vsync = true;
 	Renderer renderer = defaultRenderer;
@@ -541,26 +447,19 @@ public:
 
 	Settings(const fs::path& dirSets, vector<string>&& themes);
 
-	const string& getTheme() const;
+	const string& getTheme() const { return theme; }
 	const string& setTheme(string_view name, vector<string>&& themes);
 
 	static umap<int, Recti> displayArrangement();
+	static double zoomValue(int step);
 	void unionDisplays();
-	string scrollSpeedString() const;
-	int getDeadzone() const;
+	string scrollSpeedString() const { return toStr(scrollSpeed); }
+	int getDeadzone() const { return deadzone; }
 	void setDeadzone(int val);
 };
 
-inline const string& Settings::getTheme() const {
-	return theme;
-}
-
-inline string Settings::scrollSpeedString() const {
-	return toStr(scrollSpeed);
-}
-
-inline int Settings::getDeadzone() const {
-	return deadzone;
+inline double Settings::zoomValue(int step) {
+	return std::pow(zoomBase, step);
 }
 
 inline void Settings::setDeadzone(int val) {

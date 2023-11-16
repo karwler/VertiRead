@@ -71,7 +71,7 @@ vector<string> CredentialManager::loadPasswords(const RemoteLocation& rl) {
 		gErrorFree(error);
 	else if (list) {
 		for (GList* it = list; it; it = it->next) {
-			SecretItem* sitem = static_cast<SecretItem*>(it->data);
+			auto sitem = static_cast<SecretItem*>(it->data);
 			SecretValue* svalue = secretItemGetSecret(sitem);
 			if (!svalue) {
 				if (error = nullptr; !secretItemLoadSecretSync(sitem, nullptr, &error) || error) {
@@ -121,6 +121,8 @@ void CredentialManager::setAttributes(const RemoteLocation& rl, string& portTmp)
 #endif
 
 // FILE OPS
+
+FileOps::~FileOps() {}
 
 FileOps* FileOps::instantiate(const RemoteLocation& rl, vector<string>&& passwords) {
 #if defined(CAN_SMB) || defined(CAN_SFTP)
@@ -268,7 +270,7 @@ vector<string> FileOps::listArchiveFiles(string_view path) {
 void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultAsync&& ra, uintptr_t maxRes) {
 	archive* arch = openArchive(ra.curDir);
 	if (!arch) {
-		pushEvent(SDL_USEREVENT_ARCHIVE_FINISHED);
+		pushEvent(SDL_USEREVENT_THREAD_ARCHIVE, ThreadEvent::finished);
 		return;
 	}
 
@@ -277,7 +279,7 @@ void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultAsync&&
 			archive_read_free(arch);
 			return;
 		}
-		pushEvent(SDL_USEREVENT_ARCHIVE_PROGRESS, std::bit_cast<void*>(archive_entry_ino(entry)));
+		pushEvent(SDL_USEREVENT_THREAD_ARCHIVE, ThreadEvent::progress, std::bit_cast<void*>(archive_entry_ino(entry)));
 
 		ArchiveDir* node = &ra.arch;
 		for (const char* path = archive_entry_pathname_utf8(entry); *path;) {
@@ -295,7 +297,7 @@ void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultAsync&&
 	}
 	archive_read_free(arch);
 	ra.arch.sort();
-	pushEvent(SDL_USEREVENT_ARCHIVE_FINISHED, new BrowserResultAsync(std::move(ra)));
+	pushEvent(SDL_USEREVENT_THREAD_ARCHIVE, ThreadEvent::finished, new BrowserResultAsync(std::move(ra)));
 }
 
 SDL_Surface* FileOps::loadArchivePicture(string_view path, string_view pname) {
@@ -655,17 +657,16 @@ void FileOpsLocal::setWatch(string_view path) {
 #endif
 }
 
-optional<vector<FileChange>> FileOpsLocal::pollWatch() {
-	vector<FileChange> files;
+bool FileOpsLocal::pollWatch(vector<FileChange>& files) {
 #ifdef _WIN32
 	if (dirc == INVALID_HANDLE_VALUE)
-		return files;
+		return false;
 
 	while (WaitForSingleObject(overlapped.hEvent, 0) == WAIT_OBJECT_0) {
 		if (DWORD bytes; !GetOverlappedResult(dirc, &overlapped, &bytes, false))
 			return unsetWatch();
 
-		for (FILE_NOTIFY_INFORMATION* event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(ebuf);; event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(reinterpret_cast<byte_t*>(event) + event->NextEntryOffset)) {
+		for (auto event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(ebuf);; event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(reinterpret_cast<byte_t*>(event) + event->NextEntryOffset)) {
 			switch (event->Action) {
 			case FILE_ACTION_ADDED: case FILE_ACTION_RENAMED_NEW_NAME:
 				if (filter.empty()) {
@@ -691,10 +692,10 @@ optional<vector<FileChange>> FileOpsLocal::pollWatch() {
 		if (!ReadDirectoryChangesW(dirc, ebuf, esiz, true, flags, nullptr, &overlapped, nullptr))
 			return unsetWatch();
 	}
-	return files;
+	return false;
 #else
 	if (watch == -1)
-		return files;
+		return false;
 
 	struct stat ps;
 	ssize_t len;
@@ -710,11 +711,11 @@ optional<vector<FileChange>> FileOpsLocal::pollWatch() {
 					files.emplace_back(std::move(name), S_ISDIR(ps.st_mode) ? FileChange::addDirectory : FileChange::addFile);
 			}
 		}
-	return len >= 0 || errno == EAGAIN || errno == EWOULDBLOCK ? optional(std::move(files)) : unsetWatch();
+	return len < 0 && errno != EAGAIN && errno != EWOULDBLOCK && unsetWatch();
 #endif
 }
 
-std::nullopt_t FileOpsLocal::unsetWatch() {
+bool FileOpsLocal::unsetWatch() {
 #ifdef _WIN32
 	CloseHandle(dirc);
 	dirc = INVALID_HANDLE_VALUE;
@@ -722,7 +723,7 @@ std::nullopt_t FileOpsLocal::unsetWatch() {
 	inotify_rm_watch(ino, watch);
 	watch = -1;
 #endif
-	return std::nullopt;
+	return true;
 }
 
 FileOpCapabilities FileOpsLocal::capabilities() const {
@@ -807,7 +808,7 @@ FileOpsSmb::FileOpsSmb(const RemoteLocation& rl, vector<string>&& passwords) :
 	snotify = smbcGetFunctionNotify ? smbcGetFunctionNotify(ctx) : nullptr;
 
 	smbcSetFunctionAuthDataWithContext(ctx, [](SMBCCTX* c, const char*, const char*, char*, int, char*, int, char* pw, int pwlen) {
-		FileOpsSmb* self = static_cast<FileOpsSmb*>(smbcGetOptionUserData(c));
+		auto self = static_cast<FileOpsSmb*>(smbcGetOptionUserData(c));
 		std::copy_n(self->pwd.c_str(), std::min(int(self->pwd.length()) + 1, pwlen), pw);
 	});
 	smbcSetUser(ctx, rl.user.c_str());
@@ -992,10 +993,9 @@ void FileOpsSmb::setWatch(string_view path) {
 	}
 }
 
-optional<vector<FileChange>> FileOpsSmb::pollWatch() {
-	vector<FileChange> files;
+bool FileOpsSmb::pollWatch(vector<FileChange>& files) {
 	if (!wndir)
-		return files;
+		return false;
 
 	bool closeWatch = false;
 	tuple<FileOpsSmb*, vector<FileChange>*, bool*> tfc(this, &files, &closeWatch);
@@ -1026,13 +1026,13 @@ optional<vector<FileChange>> FileOpsSmb::pollWatch() {
 		}
 		return 1;
 	}, &tfc);
-	return !(rc || closeWatch) ? optional(std::move(files)) : unsetWatch();
+	return (rc || closeWatch) && unsetWatch();
 }
 
-std::nullopt_t FileOpsSmb::unsetWatch() {
+bool FileOpsSmb::unsetWatch() {
 	sclosedir(ctx, wndir);
 	wndir = nullptr;
-	return std::nullopt;
+	return true;
 }
 
 FileOpCapabilities FileOpsSmb::capabilities() const {
@@ -1293,8 +1293,8 @@ bool FileOpsSftp::isDirectory(string_view path) {
 	return !sftpStatEx(sftp, path.data(), path.length(), LIBSSH2_SFTP_STAT, &attr) && (attr.flags & S_IFDIR);
 }
 
-optional<vector<FileChange>> FileOpsSftp::pollWatch() {
-	return vector<FileChange>();
+bool FileOpsSftp::pollWatch(vector<FileChange>&) {
+	return false;
 }
 
 FileOpCapabilities FileOpsSftp::capabilities() const {

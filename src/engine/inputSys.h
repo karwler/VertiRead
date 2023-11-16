@@ -49,8 +49,8 @@ public:
 	int getAxisG(SDL_GameControllerAxis gaxis) const;			// check if any of the gamepads' axis value is greater than 0
 
 	ivec2 getMouseMove() const;
-	Binding& getBinding(Binding::Type type);
-	const array<Binding, Binding::names.size()>& getBindings() const;
+	Binding& getBinding(Binding::Type type) { return bindings[eint(type)]; }
+	const array<Binding, Binding::names.size()>& getBindings() const { return bindings; }
 	string getBoundName(Binding::Type type) const;
 	void resetBindings();
 	void reloadControllers();
@@ -83,14 +83,6 @@ inline bool InputSys::isPressedG(SDL_GameControllerButton gbutton) const {
 
 inline ivec2 InputSys::getMouseMove() const {
 	return SDL_GetTicks() - moveTime < moveTimeout ? mouseMove : ivec2(0);
-}
-
-inline Binding& InputSys::getBinding(Binding::Type type) {
-	return bindings[eint(type)];
-}
-
-inline const array<Binding, Binding::names.size()>& InputSys::getBindings() const {
-	return bindings;
 }
 
 inline float InputSys::axisToFloat(int axisValue) {

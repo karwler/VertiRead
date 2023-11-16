@@ -10,7 +10,7 @@ private:
 	private:
 		ID3D11ShaderResourceView* view;
 
-		TextureDx(ivec2 size, ID3D11ShaderResourceView* textureView);
+		TextureDx(uvec2 size, ID3D11ShaderResourceView* textureView) : Texture(size), view(textureView) {}
 
 		friend class RendererDx;
 	};
@@ -65,30 +65,33 @@ private:
 
 public:
 	RendererDx(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
-	~RendererDx() final;
+	~RendererDx() override;
 
-	void setClearColor(const vec4& color) final;
-	void setVsync(bool vsync) final;
-	void updateView(ivec2& viewRes) final;
-	void setCompression(Settings::Compression compression) final;
-	pair<uint, Settings::Compression> getSettings(vector<pair<u32vec2, string>>& devices) const final;
+	void setClearColor(const vec4& color) override;
+	void setVsync(bool vsync) override;
+	void updateView(ivec2& viewRes) override;
+	void setCompression(Settings::Compression compression) override;
+	pair<uint, Settings::Compression> getSettings(vector<pair<u32vec2, string>>& devices) const override;
 
-	void startDraw(View* view) final;
-	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) final;
-	void finishDraw(View* view) final;
+	void startDraw(View* view) override;
+	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) override;
+	void finishDraw(View* view) override;
 
-	void startSelDraw(View* view, ivec2 pos) final;
-	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) final;
-	Widget* finishSelDraw(View* view) final;
+	void startSelDraw(View* view, ivec2 pos) override;
+	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) override;
+	Widget* finishSelDraw(View* view) override;
 
-	Texture* texFromIcon(SDL_Surface* img) final;
-	Texture* texFromRpic(SDL_Surface* img) final;
-	Texture* texFromText(const PixmapRgba& pm) final;
-	void freeTexture(Texture* tex) final;
+	Texture* texFromEmpty() override;
+	Texture* texFromIcon(SDL_Surface* img) override;
+	bool texFromIcon(Texture* tex, SDL_Surface* img) override;
+	Texture* texFromRpic(SDL_Surface* img) override;
+	Texture* texFromText(const PixmapRgba& pm) override;
+	bool texFromText(Texture* tex, const PixmapRgba& pm) override;
+	void freeTexture(Texture* tex) override;
 
 protected:
-	uint maxTexSize() const final;
-	const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* getSquashableFormats() const final;
+	uint maxTexSize() const override;
+	const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* getSquashableFormats() const override;
 
 private:
 	static IDXGIFactory* createFactory();
@@ -100,7 +103,8 @@ private:
 	ID3D11ShaderResourceView* createTextureView(ID3D11Texture2D* tex, DXGI_FORMAT format);
 
 	template <class T> void uploadBuffer(ID3D11Buffer* buffer, const T& data);
-	TextureDx* createTexture(const byte_t* pix, uvec2 res, uint pitch, DXGI_FORMAT format);
+	ID3D11ShaderResourceView* createTexture(const byte_t* pix, uvec2 res, uint pitch, DXGI_FORMAT format);
+	static pair<SDL_Surface*, DXGI_FORMAT> pickPixFormat(SDL_Surface* img);
 	template <class T> static void comRelease(T*& obj);
 	static string hresultToStr(HRESULT rs);
 };

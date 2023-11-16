@@ -11,16 +11,12 @@ protected:
 	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 
 public:
-	VkPipelineLayout getPipelineLayout() const;
+	VkPipelineLayout getPipelineLayout() const { return pipelineLayout; }
 
 protected:
 	static VkSampler createSampler(const RendererVk* rend, VkFilter filter);
 	static VkShaderModule createShaderModule(const RendererVk* rend, const uint32* code, size_t clen);
 };
-
-inline VkPipelineLayout GenericPipeline::getPipelineLayout() const {
-	return pipelineLayout;
-}
 
 class FormatConverter : public GenericPipeline {
 public:
@@ -51,10 +47,10 @@ public:
 	void updateBufferSize(const RendererVk* rend, uint id, VkDeviceSize texSize, VkBuffer inputBuffer, VkDeviceSize inputSize, bool& update);
 	void free(VkDevice dev);
 
-	bool initialized() const;
-	VkPipeline getPipeline(bool rgb) const;
-	VkDescriptorSet getDescriptorSet(uint id) const;
-	VkBuffer getOutputBuffer(uint id) const;
+	bool initialized() const { return descriptorSets[maxTransfers - 1]; }	// cause it's the last thing to be initialized
+	VkPipeline getPipeline(bool rgb) const { return pipelines[rgb]; }
+	VkDescriptorSet getDescriptorSet(uint id) const { return descriptorSets[id]; }
+	VkBuffer getOutputBuffer(uint id) const { return outputBuffers[id]; }
 
 private:
 	void createDescriptorSetLayout(const RendererVk* rend);
@@ -62,39 +58,15 @@ private:
 	void createDescriptorPoolAndSet(const RendererVk* rend);
 };
 
-inline bool FormatConverter::initialized() const {
-	return descriptorSets[maxTransfers - 1];	// cause it's the last thing to be initialized
-}
-
-inline VkPipeline FormatConverter::getPipeline(bool rgb) const {
-	return pipelines[rgb];
-}
-
-inline VkDescriptorSet FormatConverter::getDescriptorSet(uint id) const {
-	return descriptorSets[id];
-}
-
-inline VkBuffer FormatConverter::getOutputBuffer(uint id) const {
-	return outputBuffers[id];
-}
-
 class GenericPass : public GenericPipeline {
 protected:
 	VkRenderPass handle = VK_NULL_HANDLE;
 	VkPipeline pipeline = VK_NULL_HANDLE;
 
 public:
-	VkRenderPass getHandle() const;
-	VkPipeline getPipeline() const;
+	VkRenderPass getHandle() const { return handle; }
+	VkPipeline getPipeline() const { return pipeline; }
 };
-
-inline VkRenderPass GenericPass::getHandle() const {
-	return handle;
-}
-
-inline VkPipeline GenericPass::getPipeline() const {
-	return pipeline;
-}
 
 class RenderPass : public GenericPass {
 public:
@@ -109,6 +81,8 @@ public:
 		alignas(16) vec4 pview;
 	};
 
+	static constexpr uint samplerLinear = 0;
+	static constexpr uint samplerNearest = 1;
 private:
 	static constexpr uint32 textureSetStep = 128;
 
@@ -127,8 +101,10 @@ private:
 public:
 	vector<VkDescriptorSet> init(const RendererVk* rend, VkFormat format, uint32 numViews);
 	pair<VkDescriptorPool, VkDescriptorSet> newDescriptorSetTex(const RendererVk* rend, VkImageView imageView);
+	pair<VkDescriptorPool, VkDescriptorSet> getDescriptorSetTex(const RendererVk* rend);
 	void freeDescriptorSetTex(VkDevice dev, VkDescriptorPool pool, VkDescriptorSet dset);
 	static void updateDescriptorSet(VkDevice dev, VkDescriptorSet descriptorSet, VkBuffer uniformBuffer);
+	static void updateDescriptorSet(VkDevice dev, VkDescriptorSet descriptorSet, VkImageView imageView);
 	void free(VkDevice dev);
 
 private:
@@ -136,8 +112,6 @@ private:
 	void createDescriptorSetLayout(const RendererVk* rend);
 	void createPipeline(const RendererVk* rend);
 	vector<VkDescriptorSet> createDescriptorPoolAndSets(const RendererVk* rend, uint32 numViews);
-	pair<VkDescriptorPool, VkDescriptorSet> getDescriptorSetTex(const RendererVk* rend);
-	static void updateDescriptorSet(VkDevice dev, VkDescriptorSet descriptorSet, VkImageView imageView);
 };
 
 class AddressPass : public GenericPass {
@@ -167,8 +141,8 @@ public:
 	void init(const RendererVk* rend);
 	void free(VkDevice dev);
 
-	VkDescriptorSet getDescriptorSet() const;
-	UniformData* getUniformBufferMapped() const;
+	VkDescriptorSet getDescriptorSet() const { return descriptorSet; }
+	UniformData* getUniformBufferMapped() const { return uniformBufferMapped; }
 
 private:
 	void createRenderPass(const RendererVk* rend);
@@ -178,14 +152,6 @@ private:
 	void createDescriptorPoolAndSet(const RendererVk* rend);
 	void updateDescriptorSet(VkDevice dev);
 };
-
-inline VkDescriptorSet AddressPass::getDescriptorSet() const {
-	return descriptorSet;
-}
-
-inline AddressPass::UniformData* AddressPass::getUniformBufferMapped() const {
-	return uniformBufferMapped;
-}
 
 class RendererVk final : public Renderer {
 private:
@@ -205,14 +171,16 @@ private:
 
 	class TextureVk : public Texture {
 	private:
-		VkImage image;
-		VkDeviceMemory memory;
-		VkImageView view;
-		VkDescriptorPool pool;
-		VkDescriptorSet set;
+		VkImage image = VK_NULL_HANDLE;
+		VkDeviceMemory memory = VK_NULL_HANDLE;
+		VkImageView view = VK_NULL_HANDLE;
+		VkDescriptorPool pool = VK_NULL_HANDLE;
+		VkDescriptorSet set = VK_NULL_HANDLE;
 		uint sid;
 
-		TextureVk(ivec2 size, VkImage img, VkDeviceMemory mem, VkImageView imageView, VkDescriptorPool descriptorPool, VkDescriptorSet descriptorSet, uint samplerId);
+		TextureVk(uvec2 size, uint samplerId) : Texture(size), sid(samplerId) {}
+		TextureVk(uvec2 size, VkDescriptorPool descriptorPool, VkDescriptorSet descriptorSet);
+		TextureVk(uvec2 size, VkDescriptorPool descriptorPool, VkDescriptorSet descriptorSet, uint samplerId);
 
 		friend class RendererVk;
 	};
@@ -288,30 +256,33 @@ private:
 
 public:
 	RendererVk(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
-	~RendererVk() final;
+	~RendererVk() override;
 
-	void setClearColor(const vec4& color) final;
-	void setVsync(bool vsync) final;
-	void updateView(ivec2& viewRes) final;
-	void setCompression(Settings::Compression compression) final;
-	pair<uint, Settings::Compression> getSettings(vector<pair<u32vec2, string>>& devices) const final;
+	void setClearColor(const vec4& color) override;
+	void setVsync(bool vsync) override;
+	void updateView(ivec2& viewRes) override;
+	void setCompression(Settings::Compression compression) override;
+	pair<uint, Settings::Compression> getSettings(vector<pair<u32vec2, string>>& devices) const override;
 
-	void startDraw(View* view) final;
-	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) final;
-	void finishDraw(View* view) final;
-	void finishRender() final;
+	void startDraw(View* view) override;
+	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) override;
+	void finishDraw(View* view) override;
+	void finishRender() override;
 
-	void startSelDraw(View* view, ivec2 pos) final;
-	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) final;
-	Widget* finishSelDraw(View* view) final;
+	void startSelDraw(View* view, ivec2 pos) override;
+	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) override;
+	Widget* finishSelDraw(View* view) override;
 
-	Texture* texFromIcon(SDL_Surface* img) final;
-	Texture* texFromRpic(SDL_Surface* img) final;
-	Texture* texFromText(const PixmapRgba& pm) final;
-	void freeTexture(Texture* tex) final;
-	void synchTransfer() final;
+	Texture* texFromEmpty() override;
+	Texture* texFromIcon(SDL_Surface* img) override;
+	bool texFromIcon(Texture* tex, SDL_Surface* img) override;
+	Texture* texFromRpic(SDL_Surface* img) override;
+	Texture* texFromText(const PixmapRgba& pm) override;
+	bool texFromText(Texture* tex, const PixmapRgba& pm) override;
+	void freeTexture(Texture* tex) override;
+	void synchTransfer() override;
 
-	VkDevice getLogicalDevice() const;
+	VkDevice getLogicalDevice() const { return ldev; }
 	pair<VkImage, VkDeviceMemory> createImage(u32vec2 size, VkImageType type, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags properties) const;
 	VkImageView createImageView(VkImage image, VkImageViewType type, VkFormat format) const;
 	VkFramebuffer createFramebuffer(VkRenderPass rpass, VkImageView view, u32vec2 size) const;
@@ -331,8 +302,8 @@ public:
 	static void copyImageToBuffer(VkCommandBuffer commandBuffer, VkImage image, VkBuffer buffer, u32vec2 size);
 
 protected:
-	uint maxTexSize() const final;
-	const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* getSquashableFormats() const final;
+	uint maxTexSize() const override;
+	const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* getSquashableFormats() const override;
 
 private:
 	void createInstance(SDL_Window* window);
@@ -359,17 +330,15 @@ private:
 	static VkSurfaceFormatKHR chooseSwapSurfaceFormat(const vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR chooseSwapPresentMode(const vector<VkPresentModeKHR>& availablePresentModes) const;
 	static uint scoreDevice(const VkPhysicalDeviceProperties& prop, const VkPhysicalDeviceMemoryProperties& memp);
-	TextureVk* createTextureDirect(const byte_t* pix, u32vec2 res, uint32 pitch, uint8 bpp, VkFormat format, bool nearest);
-	TextureVk* createTextureIndirect(const SDL_Surface* img, VkFormat format);
+	template <bool fresh = true> void createTextureDirect(const byte_t* pix, uint32 pitch, uint8 bpp, VkFormat format, TextureVk& tex);
+	template <bool fresh = true> void createTextureIndirect(const SDL_Surface* img, VkFormat format, TextureVk& tex);
 	template <bool conv> void uploadInputData(const byte_t* pix, u32vec2 res, uint32 pitch, uint8 bpp);
+	template <bool fresh> void finalizeTexture(TextureVk& tex, VkFormat format);
+	void replaceTexture(TextureVk& tex, TextureVk& ntex);
 	tuple<SDL_Surface*, VkFormat, bool> pickPixFormat(SDL_Surface* img) const;
 #ifndef NDEBUG
 	static pair<bool, bool> checkValidationLayerSupport();
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
 #endif
 };
-
-inline VkDevice RendererVk::getLogicalDevice() const {
-	return ldev;
-}
 #endif

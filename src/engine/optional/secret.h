@@ -1,6 +1,6 @@
 #pragma once
 
-#if CAN_SECRET
+#ifdef CAN_SECRET
 #include <libsecret/secret.h>
 
 namespace LibSecret {

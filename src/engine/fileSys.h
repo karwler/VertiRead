@@ -115,11 +115,12 @@ public:
 	vector<fs::path> listFontFiles(FT_LibraryRec_* lib, char32_t first, char32_t last) const;
 	static void listFontFamiliesThread(std::stop_token stoken, fs::path cdir, string selected, char32_t first, char32_t last);
 	static bool isFont(const fs::path& file);
-
 	static void moveContentThread(std::stop_token stoken, fs::path src, fs::path dst);
-	const fs::path& getDirSets() const;
-	const fs::path& getDirConfs() const;
-	fs::path dirIcons() const;
+
+	const fs::path& getDirSets() const { return dirSets; }
+	const fs::path& getDirConfs() const { return dirConfs; }
+	fs::path dirIcons() const { return dirConfs / "icons"; }
+	string sanitizeFontPath(const fs::path& path) const;
 
 private:
 	static string_view readNextLine(string_view& text);
@@ -130,13 +131,13 @@ private:
 
 	static fs::path searchFontDirectory(const fs::path& font, const fs::path& drc);
 	static void listFontFilesInDirectory(FT_LibraryRec_* lib, const fs::path& drc, char32_t first, char32_t last, vector<fs::path>& fonts);
-	static void listFontFamiliesInDirectoryThread(std::stop_token stoken, FT_LibraryRec_* lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<string, string>>& fonts);
+	static void listFontFamiliesInDirectoryThread(std::stop_token stoken, FT_LibraryRec_* lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts);
 	static FT_FaceRec_* openFace(FT_LibraryRec_* lib, const fs::path& file, char32_t first, char32_t last, vector<byte_t>& fdata);
 #ifdef _WIN32
 	static fs::path searchFontRegistry(const fs::path& font);
 #ifndef __MINGW32__
 	template <HKEY root> static void listFontFilesInRegistry(FT_LibraryRec_* lib, char32_t first, char32_t last, vector<fs::path>& fonts);
-	template <HKEY root> static void listFontFamiliesInRegistryThread(std::stop_token stoken, FT_LibraryRec_* lib, char32_t first, char32_t last, vector<pair<string, string>>& fonts);
+	template <HKEY root> static void listFontFamiliesInRegistryThread(std::stop_token stoken, FT_LibraryRec_* lib, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts);
 #endif
 #endif
 	static fs::path localFontDir();
@@ -144,16 +145,8 @@ private:
 	static void SDLCALL logWrite(void* userdata, int category, SDL_LogPriority priority, const char* message);
 };
 
-inline const fs::path& FileSys::getDirSets() const {
-	return dirSets;
-}
-
-inline const fs::path& FileSys::getDirConfs() const {
-	return dirConfs;
-}
-
-inline fs::path FileSys::dirIcons() const {
-	return dirConfs / "icons";
+inline string FileSys::sanitizeFontPath(const fs::path& path) const {
+	return fromPath(path.native().starts_with(dirConfs.native()) ? path.stem() : path);
 }
 
 inline fs::path FileSys::localFontDir() {

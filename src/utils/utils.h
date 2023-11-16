@@ -61,6 +61,7 @@ template <class... T> using uptr = std::unique_ptr<T...>;
 template <class... T> using uset = std::unordered_set<T...>;
 
 using glm::vec2;
+using glm::dvec2;
 using glm::uvec2;
 using glm::u32vec2;
 using glm::ivec2;
@@ -72,12 +73,15 @@ using glm::ivec4;
 class Browser;
 class Button;
 class CheckBox;
+struct Children;
 class ComboBox;
 class Context;
 class CredentialManager;
 class DrawSys;
 class FileOps;
 class FileSys;
+class IconButton;
+class IconPushButton;
 class InputSys;
 class Label;
 class LabelEdit;
@@ -87,8 +91,8 @@ class Picture;
 class PicLim;
 class Popup;
 class Program;
-class ProgressBar;
 class ProgState;
+class PushButton;
 class ReaderBox;
 class Renderer;
 class RootLayout;
@@ -99,13 +103,6 @@ class Slider;
 class Texture;
 class Widget;
 class WindowArranger;
-
-// callbacks
-
-using PCall = void (Program::*)(Button*);
-using LCall = void (Program::*)(Layout*);
-using SBCall = void (ProgState::*)();
-using SACall = void (ProgState::*)(float);
 
 // general wrappers
 
@@ -235,20 +232,20 @@ struct Rect {
 	T x, y, w, h;
 
 	Rect() = default;
-	constexpr Rect(T n);
-	constexpr Rect(T px, T py, T sw, T sh);
-	constexpr Rect(T px, T py, const tvec2& sv);
-	constexpr Rect(const tvec2& pv, T sw, T sh);
-	constexpr Rect(const tvec2& pv, const tvec2& sv);
-	constexpr Rect(const tvec4& rv);
+	constexpr Rect(T n) : x(n), y(n), w(n), h(n) {}
+	constexpr Rect(T px, T py, T sw, T sh) : x(px), y(py), w(sw), h(sh) {}
+	constexpr Rect(T px, T py, const tvec2& sv) : x(px), y(py), w(sv.x), h(sv.y) {}
+	constexpr Rect(const tvec2& pv, T sw, T sh) : x(pv.x), y(pv.y), w(sw), h(sh) {}
+	constexpr Rect(const tvec2& pv, const tvec2& sv) : x(pv.x), y(pv.y), w(sv.x), h(sv.y) {}
+	constexpr Rect(const tvec4& rv) : x(rv.x), y(rv.y), w(rv.z), h(rv.w) {}
 
-	tvec2& pos();
-	constexpr tvec2 pos() const;
-	tvec2& size();
-	constexpr tvec2 size() const;
-	constexpr tvec2 end() const;
-	tvec4& toVec();
-	constexpr tvec4 toVec() const;
+	tvec2& pos() { return *reinterpret_cast<tvec2*>(this); }
+	constexpr tvec2 pos() const { return tvec2(x, y); }
+	tvec2& size() { return reinterpret_cast<tvec2*>(this)[1]; }
+	constexpr tvec2 size() const { return tvec2(w, h); }
+	constexpr tvec2 end() const { return pos() + size(); }
+	tvec4& toVec() { return *reinterpret_cast<tvec4*>(this); }
+	constexpr tvec4 toVec() const { return tvec4(x, y, w, h); }
 
 	bool operator==(const Rect& rect) const;
 	constexpr bool empty() const;
@@ -260,71 +257,6 @@ struct Rect {
 
 using Recti = Rect<int>;
 using Rectu = Rect<uint>;
-
-template <Number T>
-constexpr Rect<T>::Rect(T n) :
-	x(n), y(n), w(n), h(n)
-{}
-
-template <Number T>
-constexpr Rect<T>::Rect(T px, T py, T sw, T sh) :
-	x(px), y(py), w(sw), h(sh)
-{}
-
-template <Number T>
-constexpr Rect<T>::Rect(T px, T py, const tvec2& sv) :
-	x(px), y(py), w(sv.x), h(sv.y)
-{}
-
-template <Number T>
-constexpr Rect<T>::Rect(const tvec2& pv, T sw, T sh) :
-	x(pv.x), y(pv.y), w(sw), h(sh)
-{}
-
-template <Number T>
-constexpr Rect<T>::Rect(const tvec2& pv, const tvec2& sv) :
-	x(pv.x), y(pv.y), w(sv.x), h(sv.y)
-{}
-
-template <Number T>
-constexpr Rect<T>::Rect(const tvec4& rv) :
-	x(rv.x), y(rv.y), w(rv.z), h(rv.w)
-{}
-
-template <Number T>
-typename Rect<T>::tvec2& Rect<T>::pos() {
-	return *reinterpret_cast<tvec2*>(this);
-}
-
-template <Number T>
-constexpr Rect<T>::tvec2 Rect<T>::pos() const {
-	return tvec2(x, y);
-}
-
-template <Number T>
-inline Rect<T>::tvec2& Rect<T>::size() {
-	return reinterpret_cast<tvec2*>(this)[1];
-}
-
-template <Number T>
-constexpr Rect<T>::tvec2 Rect<T>::size() const {
-	return tvec2(w, h);
-}
-
-template <Number T>
-constexpr Rect<T>::tvec2 Rect<T>::end() const {
-	return pos() + size();
-}
-
-template <Number T>
-typename Rect<T>::tvec4& Rect<T>::toVec() {
-	return *reinterpret_cast<tvec4*>(this);
-}
-
-template <Number T>
-constexpr Rect<T>::tvec4 Rect<T>::toVec() const {
-	return tvec4(x, y, w, h);
-}
 
 template <Number T>
 bool Rect<T>::operator==(const Rect& rect) const {
@@ -382,33 +314,64 @@ struct Size {
 	uint id = UINT_MAX;	// a widget's id in its parent's widget list
 	Mode mod;
 
-	template <Floating T = float> constexpr Size(T percent = T(1));
-	template <Integer T> constexpr Size(T pixels);
-	constexpr Size(int (*calcul)(const Widget*));
+	template <Floating T = float> constexpr Size(T percent = T(1)) : prc(percent), mod(rela) {}
+	template <Integer T> constexpr Size(T pixels) : pix(pixels), mod(pixv) {}
+	constexpr Size(int (*calcul)(const Widget*)) : cfn(calcul), mod(calc) {}
 
-	int operator()(const Widget* wgt) const;
+	int operator()(const Widget* wgt) const { return cfn(wgt); }
 };
+
 using svec2 = glm::vec<2, Size, glm::defaultp>;
 
-template <Floating T>
-constexpr Size::Size(T percent) :
-	prc(percent),
-	mod(rela)
-{}
+// constant dynamic C string
+class Cstring {
+private:
+	static inline char nullch = '\0';
 
-template <Integer T>
-constexpr Size::Size(T pixels) :
-	pix(pixels),
-	mod(pixv)
-{}
+	char* ptr = &nullch;
 
-constexpr Size::Size(int (*calcul)(const Widget*)) :
-	cfn(calcul),
-	mod(calc)
-{}
+public:
+	Cstring() = default;
+	Cstring(const Cstring& s) { set(s); }
+	Cstring(Cstring&& s) { set(std::move(s)); }
+	Cstring(const char* s) { set(s); }
+	Cstring(const char* s, size_t l) { set(s, l); }
+	Cstring(const char* p, const char* e) { set(p, e - p); }
+	Cstring(const string& s) { set(s); }
+	Cstring(const fs::path& s) { set(s); }
+	Cstring(string_view s) { set(s.data(), s.length()); }
+	~Cstring() { free(); }
 
-inline int Size::operator()(const Widget* wgt) const {
-	return cfn(wgt);
+	Cstring& operator=(const Cstring& s);
+	Cstring& operator=(Cstring&& s);
+	Cstring& operator=(const char* s);
+	Cstring& operator=(const string& s);
+	Cstring& operator=(const fs::path& s);
+	Cstring& operator=(string_view s);
+
+	bool operator==(const Cstring& s) const { return !strcmp(ptr, s.ptr); }
+	bool operator==(const char* s) const { return !strcmp(ptr, s); }
+	bool operator==(const string& s) const { return !strcmp(ptr, s.c_str()); }
+	bool operator==(string_view s) const;
+
+	char* data() { return ptr; }
+	const char* data() const { return ptr; }
+	size_t length() const { return std::char_traits<char>::length(ptr); }
+	bool empty() const { return ptr == &nullch; }
+	operator string_view() const { return string_view(ptr, length()); }
+
+private:
+	void set(const Cstring& s);
+	void set(Cstring&& s);
+	void set(const char* s);
+	void set(const char* s, size_t l);
+	void set(const string& s);
+	void set(const fs::path& s);
+	void free();
+};
+
+inline bool Cstring::operator==(string_view s) const {
+	return strlen(ptr) == s.length() && !std::char_traits<char>::compare(ptr, s.data(), s.length());
 }
 
 // files and strings
@@ -627,43 +590,33 @@ inline const char* toStr(bool b) {
 	return b ? "true" : "false";
 }
 
-template <uint8 base = 10, Integer T>
-string toStr(T num) {
+template <Class S = string, uint8 base = 10, Integer T>
+S toStr(T num) {
 	array<char, sizeof(T) * 8 + std::is_signed_v<T>> buf;
 	std::to_chars_result res = std::to_chars(buf.data(), buf.data() + buf.size(), num, base);
 	if constexpr (base > 10)
 		std::transform(buf.data(), res.ptr, buf.data(), toupper);
-	return string(buf.data(), res.ptr);
+	return S(buf.data(), res.ptr);
 }
 
-template <uint8 base = 10, Enumeration T>
-string toStr(T num) {
-	return toStr<base>(eint(num));
+template <Class S = string, uint8 base = 10, Enumeration T>
+S toStr(T num) {
+	return toStr<S, base>(eint(num));
 }
 
-template <Floating T>
-constexpr size_t recommendedCharBufferSize() {
-	if constexpr (std::is_same_v<T, float>)
-		return 16;
-	else if constexpr (std::is_same_v<T, double>)
-		return 24;
-	else
-		return 30;
-}
-
-template <Floating T>
-string toStr(T num) {
-	array<char, recommendedCharBufferSize<T>()> buf;
-	std::to_chars_result res = std::to_chars(buf.data(), buf.data() + buf.size(), num);
-	return string(buf.data(), res.ptr);
+template <Class S = string, Floating T>
+S toStr(T num, std::chars_format fmt = std::chars_format::fixed) {
+	array<char, 64> buf;
+	std::to_chars_result res = std::to_chars(buf.data(), buf.data() + buf.size(), num, fmt);
+	return S(buf.data(), res.ptr);
 }
 
 template <uint8 base = 10, glm::length_t L, Integer T, glm::qualifier Q>
 string toStr(const glm::vec<L, T, Q>& v, const char* sep = " ") {
 	string str;
 	for (glm::length_t i = 0; i < L - 1; ++i)
-		str += toStr<base>(v[i]) + sep;
-	return str + toStr<base>(v[L - 1]);
+		str += toStr<string, base>(v[i]) + sep;
+	return str + toStr<string, base>(v[L - 1]);
 }
 
 template <glm::length_t L, Floating T, glm::qualifier Q>

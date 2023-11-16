@@ -21,39 +21,19 @@ private:
 	wchar_t data[MAX_PATH];
 
 public:
-	RegistryIterator(HKEY root, const wchar_t* path);
-	~RegistryIterator();
+	RegistryIterator(HKEY root, const wchar_t* path) { RegOpenKeyExW(root, path, 0, KEY_READ, &key); }
+	~RegistryIterator() { RegCloseKey(key); }
 
 	bool next();
-	operator bool() const;
-	DWORD getType() const;
-	wstring_view getString() const;
+	operator bool() const { return key; }
+	DWORD getType() const { return type; }
+	wstring_view getString() const { return wstring_view(data, dlen / sizeof(wchar_t) - 1); }
 };
-
-RegistryIterator::RegistryIterator(HKEY root, const wchar_t* path) {
-	RegOpenKeyExW(root, path, 0, KEY_READ, &key);
-}
-
-RegistryIterator::~RegistryIterator() {
-	RegCloseKey(key);
-}
 
 bool RegistryIterator::next() {
 	nlen = std::extent_v<decltype(name)>;
 	dlen = sizeof(data);
 	return RegEnumValueW(key, i++, name, &nlen, nullptr, &type, reinterpret_cast<BYTE*>(data), &dlen) == ERROR_SUCCESS;
-}
-
-RegistryIterator::operator bool() const {
-	return key;
-}
-
-DWORD RegistryIterator::getType() const {
-	return type;
-}
-
-wstring_view RegistryIterator::getString() const {
-	return wstring_view(data, dlen / sizeof(wchar_t) - 1);
 }
 #endif
 
@@ -64,11 +44,11 @@ private:
 
 public:
 	Fontconfig();
-	~Fontconfig();
+	~Fontconfig() { fcConfigDestroy(config); }
 
 	string search(const char* font);
 	void list(char32_t first, char32_t last, vector<fs::path>& fonts);
-	void list(char32_t first, char32_t last, vector<pair<string, string>>& fonts);
+	void list(char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts);
 };
 
 Fontconfig::Fontconfig() :
@@ -76,10 +56,6 @@ Fontconfig::Fontconfig() :
 {
 	if (!config)
 		throw std::runtime_error("Failed to init fontconfig");
-}
-
-Fontconfig::~Fontconfig() {
-	fcConfigDestroy(config);
 }
 
 string Fontconfig::search(const char* font) {
@@ -113,7 +89,7 @@ void Fontconfig::list(char32_t first, char32_t last, vector<fs::path>& fonts) {
 	}
 }
 
-void Fontconfig::list(char32_t first, char32_t last, vector<pair<string, string>>& fonts) {
+void Fontconfig::list(char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts) {
 	if (FcPattern* pattern = fcNameParse(reinterpret_cast<const FcChar8*>(std::format(":charset={:X} {:X}", uint32(first), uint32(last)).c_str()))) {
 		if (FcObjectSet* objects = fcObjectSetBuild(FC_FAMILY, FC_STYLE, FC_FILE, FC_CHARSET, nullptr)) {
 			if (FcFontSet* flist = fcFontList(config, pattern, objects)) {
@@ -298,7 +274,7 @@ void FileSys::saveLastPage(string_view book, string_view drc, string_view fname)
 }
 
 Settings* FileSys::loadSettings() const {
-	Settings* sets = new Settings(dirSets, getAvailableThemes());
+	auto sets = new Settings(dirSets, getAvailableThemes());
 	IniLine il;
 	string text = readTextFile(dirSets / fileSettings);
 	for (string_view tx = text; tx.length();) {
@@ -324,7 +300,7 @@ Settings* FileSys::loadSettings() const {
 			else if (strciequal(il.prp, iniKeywordDirection))
 				sets->direction = strToEnum(Direction::names, il.val, Settings::defaultDirection);
 			else if (strciequal(il.prp, iniKeywordZoom))
-				sets->zoom = toNum<float>(il.val);
+				sets->zoom = std::clamp(toNum<int8>(il.val), int8(-Settings::zoomLimit), Settings::zoomLimit);
 			else if (strciequal(il.prp, iniKeywordSpacing))
 				sets->spacing = toNum<ushort>(il.val);
 			else if (strciequal(il.prp, iniKeywordPictureLimit))
@@ -332,7 +308,7 @@ Settings* FileSys::loadSettings() const {
 			else if (strciequal(il.prp, iniKeywordMaxPictureRes))
 				sets->maxPicRes = std::max(toNum<uint>(il.val), Settings::minPicRes);
 			else if (strciequal(il.prp, iniKeywordFont))
-				sets->font = FileSys::isFont(findFont(toPath(il.val))) ? il.val : Settings::defaultFont;
+				sets->font = FileSys::isFont(findFont(toPath(il.val))) ? il.val : Settings::defaultFont;	// will get sanitized in DrawSys if necessary
 			else if (strciequal(il.prp, iniKeywordHinting))
 				sets->hinting = strToEnum<Settings::Hinting>(Settings::hintingNames, il.val, Settings::defaultHinting);
 			else if (strciequal(il.prp, iniKeywordTheme))
@@ -377,7 +353,7 @@ void FileSys::saveSettings(const Settings* sets) const {
 	IniLine::writeVal(ofs, iniKeywordCompression, Settings::compressionNames[eint(sets->compression)]);
 	IniLine::writeVal(ofs, iniKeywordVSync, toStr(sets->vsync));
 	IniLine::writeVal(ofs, iniKeywordGpuSelecting, toStr(sets->gpuSelecting));
-	IniLine::writeVal(ofs, iniKeywordZoom, sets->zoom);
+	IniLine::writeVal(ofs, iniKeywordZoom, int(sets->zoom));
 	IniLine::writeVal(ofs, iniKeywordPictureLimit, PicLim::names[eint(sets->picLim.type)], ' ', sets->picLim.getCount(), ' ', PicLim::memoryString(sets->picLim.getSize()));
 	IniLine::writeVal(ofs, iniKeywordMaxPictureRes, sets->maxPicRes);
 	IniLine::writeVal(ofs, iniKeywordSpacing, sets->spacing);
@@ -566,7 +542,7 @@ void FileSys::moveContentThread(std::stop_token stoken, fs::path src, fs::path d
 			if (stoken.stop_requested())
 				break;
 
-			pushEvent(SDL_USEREVENT_MOVE_PROGRESS, std::bit_cast<void*>(i), std::bit_cast<void*>(lim));
+			pushEvent(SDL_USEREVENT_THREAD_MOVE, ThreadEvent::progress, std::bit_cast<void*>(i), std::bit_cast<void*>(lim));
 			if (fs::rename(src / entries[i], dst / entries[i], ec); ec)
 				*errors += ec.message() + '\n';
 		}
@@ -574,7 +550,7 @@ void FileSys::moveContentThread(std::stop_token stoken, fs::path src, fs::path d
 		*errors += ec.message() + '\n';
 	if (!errors->empty())
 		errors->pop_back();
-	pushEvent(SDL_USEREVENT_MOVE_FINISHED, errors.release());
+	pushEvent(SDL_USEREVENT_THREAD_MOVE, ThreadEvent::finished, errors.release());
 }
 
 fs::path FileSys::findFont(const fs::path& font) const {
@@ -582,14 +558,14 @@ fs::path FileSys::findFont(const fs::path& font) const {
 		return font;
 	if (fs::path path = searchFontDirectory(font, dirConfs); !path.empty())
 		return path;
-#ifdef _WIN32
-	if (fs::path path = searchFontRegistry(font); !path.empty())
-		return path;
-#endif
 #ifdef CAN_FONTCFG
 	if (fontconfig)
 		if (string path = static_cast<Fontconfig*>(fontconfig)->search(font.c_str()); !path.empty())
 			return path;
+#endif
+#ifdef _WIN32
+	if (fs::path path = searchFontRegistry(font); !path.empty())
+		return path;
 #endif
 	if (fs::path path = searchFontDirectory(font, localFontDir()); !path.empty())
 		return path;
@@ -599,8 +575,9 @@ fs::path FileSys::findFont(const fs::path& font) const {
 fs::path FileSys::searchFontDirectory(const fs::path& font, const fs::path& drc) {
 	std::error_code ec;
 	for (const fs::directory_entry& it : fs::recursive_directory_iterator(drc, fs::directory_options::follow_directory_symlink | fs::directory_options::skip_permission_denied, ec))
-		if (it.is_regular_file(ec) && strciequal(it.path().stem().native(), font.native()) && isFont(it.path()))
-			return it.path();
+		if (it.is_regular_file(ec))
+			if (fs::path fname = it.path().filename(); (strciequal(fname.native(), font.native()) || strciequal(fname.stem().native(), font.native())) && isFont(it.path()))
+				return it.path();
 	return fs::path();
 }
 
@@ -608,9 +585,11 @@ fs::path FileSys::searchFontDirectory(const fs::path& font, const fs::path& drc)
 fs::path FileSys::searchFontRegistry(const fs::path& font) {
 	for (HKEY root : { HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE })
 		for (RegistryIterator rit(root, fontsKey); rit.next();)
-			if (rit.getType() == REG_SZ)
-				if (wstring_view fname = rit.getString(); strciequal(filename(delExtension(fname)), font.native()))
+			if (rit.getType() == REG_SZ) {
+				string_view fname = rit.getString();
+				if (wstring_view freduce = filename(fname); strciequal(freduce, font.native()) || strciequal(delExtension(freduce), font.native()))
 					return root == HKEY_CURRENT_USER ? fname : systemFontDir() / fname;
+			}
 	return fs::path();
 }
 #endif
@@ -618,10 +597,6 @@ fs::path FileSys::searchFontRegistry(const fs::path& font) {
 vector<fs::path> FileSys::listFontFiles(FT_Library lib, char32_t first, char32_t last) const {
 	vector<fs::path> fonts;
 	listFontFilesInDirectory(lib, dirConfs, first, last, fonts);
-#if defined(_WIN32) && !defined(__MINGW32__)
-	listFontFilesInRegistry<HKEY_CURRENT_USER>(lib, first, last, fonts);
-	listFontFilesInRegistry<HKEY_LOCAL_MACHINE>(lib, first, last, fonts);
-#endif
 #ifdef CAN_FONTCFG
 	if (fontconfig)
 		static_cast<Fontconfig*>(fontconfig)->list(first, last, fonts);
@@ -629,6 +604,12 @@ vector<fs::path> FileSys::listFontFiles(FT_Library lib, char32_t first, char32_t
 		listFontFilesInDirectory(lib, localFontDir(), first, last, fonts);
 		listFontFilesInDirectory(lib, systemFontDir(), first, last, fonts);
 	}
+#elif defined(_WIN32) && !defined(__MINGW32__)
+	listFontFilesInRegistry<HKEY_CURRENT_USER>(lib, first, last, fonts);
+	listFontFilesInRegistry<HKEY_LOCAL_MACHINE>(lib, first, last, fonts);
+#else
+	listFontFilesInDirectory(lib, localFontDir(), first, last, fonts);
+	listFontFilesInDirectory(lib, systemFontDir(), first, last, fonts);
 #endif
 	return fonts;
 }
@@ -669,18 +650,25 @@ void FileSys::listFontFilesInRegistry(FT_Library lib, char32_t first, char32_t l
 }
 #endif
 
-void FileSys::listFontFamiliesThread(std::stop_token stoken, fs::path cdir, string selected, char32_t first, char32_t last) {
-	vector<pair<string, string>> fonts;
+void FileSys::listFontFamiliesThread(std::stop_token stoken, fs::path cdir, string desired, char32_t first, char32_t last) {
+	vector<pair<Cstring, Cstring>> fonts;
 	FT_Library lib;
 	if (FT_Error err = FT_Init_FreeType(&lib)) {
-		pushEvent(SDL_USEREVENT_FONTS_FINISHED, new FontListResult(vector<string>(), nullptr, 0, FT_Error_String(err)));
+		pushEvent(SDL_USEREVENT_THREAD_FONTS_FINISHED, 0, new FontListResult(vector<Cstring>(), nullptr, 0, FT_Error_String(err)));
 		return;
 	}
 	listFontFamiliesInDirectoryThread(stoken, lib, cdir, first, last, fonts);
-#if defined(_WIN32) && !defined(__MINGW32__)
-	listFontFamiliesInRegistryThread<HKEY_CURRENT_USER>(stoken, lib, first, last, fonts);
-	listFontFamiliesInRegistryThread<HKEY_LOCAL_MACHINE>(stoken, lib, first, last, fonts);
-#endif
+
+	string desiredPath;
+	if (!isFont(toPath(desired))) {
+		vector<pair<Cstring, Cstring>>::iterator it = rng::find_if(fonts, [&desired](const pair<Cstring, Cstring>& fp) -> bool {
+			string_view fname = filename(fp.second.data());
+			return strciequal(fname, desired) || strciequal(delExtension(fname), desired);
+		});
+		if (it != fonts.end())
+			desiredPath = it->second;
+	}
+
 #ifdef CAN_FONTCFG
 	try {
 		if (!stoken.stop_requested() && symFontconfig())
@@ -689,28 +677,39 @@ void FileSys::listFontFamiliesThread(std::stop_token stoken, fs::path cdir, stri
 		listFontFamiliesInDirectoryThread(stoken, lib, localFontDir(), first, last, fonts);
 		listFontFamiliesInDirectoryThread(stoken, lib, systemFontDir(), first, last, fonts);
 	}
+#elif defined(_WIN32) && !defined(__MINGW32__)
+	listFontFamiliesInRegistryThread<HKEY_CURRENT_USER>(stoken, lib, first, last, fonts);
+	listFontFamiliesInRegistryThread<HKEY_LOCAL_MACHINE>(stoken, lib, first, last, fonts);
+#else
+	listFontFamiliesInDirectoryThread(stoken, lib, localFontDir(), first, last, fonts);
+	listFontFamiliesInDirectoryThread(stoken, lib, systemFontDir(), first, last, fonts);
 #endif
 	FT_Done_FreeType(lib);
-	rng::sort(fonts, [](const pair<string, string>& a, const pair<string, string>& b) -> bool {
-		int cmp = a.first.compare(b.first);
-		return cmp < 0 || (!cmp && a.second < b.second);
+	rng::sort(fonts, [](const pair<Cstring, Cstring>& a, const pair<Cstring, Cstring>& b) -> bool {
+		int cmp = strcmp(a.first.data(), b.first.data());
+		return cmp < 0 || (!cmp && strcmp(a.second.data(), b.second.data()) < 0);
 	});
 
-	size_t sel = rng::find_if(fonts, [&selected](const pair<string, string>& fp) -> bool { return strciequal(filename(delExtension(fp.second)), selected); }) - fonts.begin();
-	if (sel >= fonts.size()) {
-		fonts.emplace(fonts.begin(), std::move(selected), string());
+	size_t sel;
+	if (!desiredPath.empty())
+		sel = rng::find_if(fonts, [&desiredPath](const pair<Cstring, Cstring>& fp) -> bool { return !strcmp(fp.second.data(), desiredPath.c_str()); }) - fonts.begin();
+	else if (vector<pair<Cstring, Cstring>>::iterator it = rng::find_if(fonts, [&desired](const pair<Cstring, Cstring>& fp) -> bool { return !strcmp(fp.second.data(), desired.c_str()); }); it != fonts.end())
+		sel = it - fonts.begin();
+	else {
+		fonts.emplace(fonts.begin(), desired, Cstring());
 		sel = 0;
 	}
-	vector<string> families(fonts.size());
-	uptr<string[]> files = std::make_unique_for_overwrite<string[]>(fonts.size());
+
+	vector<Cstring> families(fonts.size());
+	uptr<Cstring[]> files = std::make_unique_for_overwrite<Cstring[]>(fonts.size());
 	for (size_t i = 0; i < fonts.size(); ++i) {
 		families[i] = std::move(fonts[i].first);
 		files[i] = std::move(fonts[i].second);
 	}
-	pushEvent(SDL_USEREVENT_FONTS_FINISHED, new FontListResult(std::move(families), std::move(files), sel, string()));
+	pushEvent(SDL_USEREVENT_THREAD_FONTS_FINISHED, 0, new FontListResult(std::move(families), std::move(files), sel, string()));
 }
 
-void FileSys::listFontFamiliesInDirectoryThread(std::stop_token stoken, FT_Library lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<string, string>>& fonts) {
+void FileSys::listFontFamiliesInDirectoryThread(std::stop_token stoken, FT_Library lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts) {
 	vector<byte_t> fdata;
 	std::error_code ec;
 	for (const fs::directory_entry& it : fs::recursive_directory_iterator(drc, fs::directory_options::follow_directory_symlink | fs::directory_options::skip_permission_denied, ec)) {
@@ -718,7 +717,7 @@ void FileSys::listFontFamiliesInDirectoryThread(std::stop_token stoken, FT_Libra
 			break;
 		if (it.is_regular_file(ec))
 			if (FT_Face face = openFace(lib, it.path(), first, last, fdata)) {
-				fonts.emplace_back(std::format("{} {}", face->family_name, face->style_name), fromPath(it.path()));
+				fonts.emplace_back(std::format("{} {}", face->family_name, face->style_name), it.path());
 				FT_Done_Face(face);
 			}
 	}
@@ -726,7 +725,7 @@ void FileSys::listFontFamiliesInDirectoryThread(std::stop_token stoken, FT_Libra
 
 #if defined(_WIN32) && !defined(__MINGW32__)
 template <HKEY root>
-void FileSys::listFontFamiliesInRegistryThread(std::stop_token stoken, FT_Library lib, char32_t first, char32_t last, vector<pair<string, string>>& fonts) {
+void FileSys::listFontFamiliesInRegistryThread(std::stop_token stoken, FT_Library lib, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts) {
 	vector<byte_t> fdata;
 	fs::path gfpath;
 	if constexpr (root == HKEY_LOCAL_MACHINE)
@@ -740,7 +739,7 @@ void FileSys::listFontFamiliesInRegistryThread(std::stop_token stoken, FT_Librar
 				else
 					fpath = gfpath / rit.getString();
 				if (FT_Face face = openFace(lib, fpath, first, last, fdata)) {
-					fonts.emplace_back(std::format("{} {}", face->family_name, face->style_name), fromPath(fpath));
+					fonts.emplace_back(std::format("{} {}", face->family_name, face->style_name), fpath);
 					FT_Done_Face(face);
 				}
 			}

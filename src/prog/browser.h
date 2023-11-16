@@ -14,7 +14,7 @@ private:
 	};
 
 public:
-	PCall exCall;		// gets called when goUp() fails, aka stepping out of rootDir into the previous menu
+	void (Program::*exCall)();		// gets called when goUp() fails, aka stepping out of rootDir into the previous menu
 private:
 	string rootDir;		// the top directory one can visit
 	string curDir;		// directory in which one currently is
@@ -39,15 +39,15 @@ public:
 	bool goUp();
 	bool goNext(bool fwd, string_view picname);
 
-	const string& getRootDir() const;
-	const string& getCurDir() const;
+	const string& getRootDir() const { return rootDir; }
+	const string& getCurDir() const { return curDir; }
 	string currentLocation() const;
 	string curDirSuffix() const;
 	pair<vector<string>, vector<string>> listCurDir() const;
 	vector<string> listDirDirs(string_view path) const;
 	bool deleteEntry(string_view ename);
 	bool renameEntry(string_view oldName, string_view newName);
-	optional<vector<FileChange>> directoryUpdate();
+	bool directoryUpdate(vector<FileChange>& files);
 	FileOpCapabilities fileOpCapabilities() const;
 
 	bool finishArchive(BrowserResultAsync&& ra);
@@ -91,14 +91,6 @@ private:
 	static string limitToStr(const PicLim& picLim, uintptr_t c, uintptr_t m, uint8 mag);
 	static char* progressText(string_view val, string_view lim);
 };
-
-inline const string& Browser::getRootDir() const {
-	return rootDir;
-}
-
-inline const string& Browser::getCurDir() const {
-	return curDir;
-}
 
 inline void Browser::startLoadPictures(string&& first, bool fwd) {
 	startLoadPictures(new BrowserResultPicture(curNode, string(), valcp(curDir), std::move(first)), fwd);

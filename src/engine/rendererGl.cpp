@@ -3,16 +3,6 @@
 #include <regex>
 #include <glm/gtc/type_ptr.hpp>
 
-RendererGl::TextureGl::TextureGl(ivec2 size, GLuint tex) :
-	Texture(size),
-	id(tex)
-{}
-
-RendererGl::ViewGl::ViewGl(SDL_Window* window, const Recti& area, SDL_GLContext context) :
-	View(window, area),
-	ctx(context)
-{}
-
 RendererGl::RendererGl(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor) :
 	Renderer({
 #ifdef OPENGLES
@@ -24,7 +14,7 @@ RendererGl::RendererGl(const umap<int, SDL_Window*>& windows, Settings* sets, iv
 #endif
 	})
 {
-	if (windows.size() == 1 && windows.begin()->first == singleDspId) {
+	if (isSingleWindow(windows)) {
 		SDL_GL_GetDrawableSize(windows.begin()->second, &viewRes.x, &viewRes.y);
 		if (!static_cast<ViewGl*>(views.emplace(singleDspId, new ViewGl(windows.begin()->second, Recti(ivec2(0), viewRes), SDL_GL_CreateContext(windows.begin()->second))).first->second)->ctx)
 			throw std::runtime_error(std::format("Failed to create context:" LINEND "{}", SDL_GetError()));
@@ -352,18 +342,36 @@ Widget* RendererGl::finishSelDraw(View* view) {
 	return std::bit_cast<Widget*>(uintptr_t(val.x) | (uintptr_t(val.y) << 32));
 }
 
+Texture* RendererGl::texFromEmpty() {
+	return new TextureGl(uvec2(0), initTexture(GL_NEAREST));
+}
+
 Texture* RendererGl::texFromIcon(SDL_Surface* img) {
 	if (auto [pic, ifmt, pfmt, type] = pickPixFormat<true>(limitSize(img, maxTextureSize)); pic) {
-		TextureGl* tex = createTexture(static_cast<byte_t*>(pic->pixels), uvec2(pic->w, pic->h), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, GL_LINEAR);
+		auto tex = new TextureGl(uvec2(pic->w, pic->h), initTexture(GL_LINEAR));
+		fillTexture(static_cast<byte_t*>(pic->pixels), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, *tex);
 		SDL_FreeSurface(pic);
 		return tex;
 	}
 	return nullptr;
 }
 
+bool RendererGl::texFromIcon(Texture* tex, SDL_Surface* img) {
+	if (auto [pic, ifmt, pfmt, type] = pickPixFormat<true>(limitSize(img, maxTextureSize)); pic) {
+		auto gtx = static_cast<TextureGl*>(tex);
+		gtx->res = uvec2(pic->w, pic->h);
+		glBindTexture(GL_TEXTURE_2D, gtx->id);
+		fillTexture(static_cast<byte_t*>(pic->pixels), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, *gtx);
+		SDL_FreeSurface(pic);
+		return true;
+	}
+	return false;
+}
+
 Texture* RendererGl::texFromRpic(SDL_Surface* img) {
 	if (auto [pic, ifmt, pfmt, type] = pickPixFormat<false>(img); pic) {
-		TextureGl* tex = createTexture(static_cast<byte_t*>(pic->pixels), uvec2(pic->w, pic->h), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, GL_LINEAR);
+		auto tex = new TextureGl(uvec2(pic->w, pic->h), initTexture(GL_LINEAR));
+		fillTexture(static_cast<byte_t*>(pic->pixels), pic->pitch / pic->format->BytesPerPixel, ifmt, pfmt, type, *tex);
 		SDL_FreeSurface(pic);
 		return tex;
 	}
@@ -371,7 +379,20 @@ Texture* RendererGl::texFromRpic(SDL_Surface* img) {
 }
 
 Texture* RendererGl::texFromText(const PixmapRgba& pm) {
-	return pm.pix ? createTexture(reinterpret_cast<const byte_t*>(pm.pix), glm::min(pm.res, uvec2(maxTextureSize)), pm.res.x, GL_RGBA8, textPixFormat, GL_UNSIGNED_BYTE, GL_NEAREST) : nullptr;
+	if (pm.pix) {
+		auto tex = new TextureGl(glm::min(pm.res, uvec2(maxTextureSize)), initTexture(GL_NEAREST));
+		fillTexture(reinterpret_cast<const byte_t*>(pm.pix), pm.res.x, GL_RGBA8, textPixFormat, GL_UNSIGNED_BYTE, *tex);
+		return tex;
+	}
+	return nullptr;
+}
+
+bool RendererGl::texFromText(Texture* tex, const PixmapRgba& pm) {
+	auto gtx = static_cast<TextureGl*>(tex);
+	gtx->res = glm::min(pm.res, uvec2(maxTextureSize));
+	glBindTexture(GL_TEXTURE_2D, gtx->id);
+	fillTexture(reinterpret_cast<const byte_t*>(pm.pix), pm.res.x, GL_RGBA8, textPixFormat, GL_UNSIGNED_BYTE, *gtx);
+	return true;
 }
 
 void RendererGl::freeTexture(Texture* tex) {
@@ -379,7 +400,7 @@ void RendererGl::freeTexture(Texture* tex) {
 	delete tex;
 }
 
-RendererGl::TextureGl* RendererGl::createTexture(const byte_t* pix, uvec2 res, uint tpitch, GLint iform, GLenum pform, GLenum type, GLint filter) {
+GLuint RendererGl::initTexture(GLint filter) {
 	GLuint id;
 	glGenTextures(1, &id);
 	glBindTexture(GL_TEXTURE_2D, id);
@@ -388,9 +409,12 @@ RendererGl::TextureGl* RendererGl::createTexture(const byte_t* pix, uvec2 res, u
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+	return id;
+}
+
+void RendererGl::fillTexture(const byte_t* pix, uint tpitch, GLint iform, GLenum pform, GLenum type, TextureGl& tex) {
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, tpitch);
-	glTexImage2D(GL_TEXTURE_2D, 0, iform, res.x, res.y, 0, pform, type, pix);
-	return new TextureGl(res, id);
+	glTexImage2D(GL_TEXTURE_2D, 0, iform, tex.res.x, tex.res.y, 0, pform, type, pix);
 }
 
 template <bool keep>

@@ -1,4 +1,11 @@
 import os
+import sys
+
+
+def write_text(file, text: str):
+	file.write('R"r(')
+	file.write(text)
+	file.write(')r"\n')
 
 
 def reduce_source(name: str, src_dir: str, dst_dir: str):
@@ -48,9 +55,14 @@ def reduce_source(name: str, src_dir: str, dst_dir: str):
 		i += 1
 
 	with open(f'{os.path.join(dst_dir, name)}.rel.h', 'w') as fh:
-		fh.write('R"r(')
-		fh.write(str(text, 'ascii'))
-		fh.write(')r"\n')
+		write_text(fh, str(text, 'ascii'))
+
+
+def copy_source(name: str, src_dir: str, dst_dir: str):
+	with open(os.path.join(src_dir, name), "r") as fh:
+		text = fh.read().strip()
+	with open(f'{os.path.join(dst_dir, name)}.dbg.h', 'w') as fh:
+		write_text(fh, text)
 
 
 if __name__ == '__main__':
@@ -58,6 +70,9 @@ if __name__ == '__main__':
 	dstd = os.path.join(os.path.dirname(__file__), os.pardir, 'src', 'engine', 'shaders')
 	for it in ['glGui.vert', 'glGui.frag', 'glSel.vert', 'glSel.frag']:
 		try:
-			reduce_source(it, srcd, dstd)
+			if len(sys.argv) <= 1:
+				reduce_source(it, srcd, dstd)
+			else:
+				copy_source(it, srcd, dstd)
 		except Exception as e:
 			print(e)

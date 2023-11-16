@@ -2,6 +2,7 @@
 
 #include "types.h"
 #include "utils/settings.h"
+#include <span>
 #include <thread>
 
 // for handling program state specific things that occur in all states
@@ -10,29 +11,19 @@ public:
 	static constexpr char dotStr[] = ".";
 
 protected:
-	struct Text {
-		string text;
-		uint length;
-
-		Text(string&& str, uint height);
-
-		static uint measure(string_view str, uint height);
-	};
-
 	int popupLineHeight;
 	int tooltipHeight;
 	int lineHeight;
 	int topHeight;
 	int topSpacing;
 	int picSize;
-	int picMargin;
 private:
 	int contextMargin;
 	uint maxTooltipLength;
 	float cursorMoveFactor;
 
 public:
-	ProgState();
+	ProgState() { onResize(); }
 	virtual ~ProgState() = default;
 
 	template <MemberFunction F, class... A> void exec(F func, A&&... args);
@@ -57,6 +48,7 @@ public:
 	virtual void eventZoomIn() {}
 	virtual void eventZoomOut() {}
 	virtual void eventZoomReset() {}
+	virtual void eventZoomFit() {}
 	virtual void eventToStart() {}
 	virtual void eventToEnd() {}
 	virtual void eventNextDir() {}
@@ -72,32 +64,28 @@ public:
 
 	virtual RootLayout* createLayout() = 0;
 	virtual Overlay* createOverlay();
-	Popup* createPopupMessage(string&& msg, PCall ccal, string ctxt = "Okay", Alignment malign = Alignment::left);
-	void updatePopupMessage(string&& msg);
-	Popup* createPopupMultiline(string&& msg, PCall ccal, string ctxt = "Okay", Alignment malign = Alignment::left);
-	Popup* createPopupChoice(string&& msg, PCall kcal, PCall ccal, Alignment malign = Alignment::left);
-	Popup* createPopupInput(string&& msg, string&& text, PCall kcal, PCall ccal, string&& ktxt = "Okay", Alignment malign = Alignment::left);
+	Popup* createPopupMessage(Cstring&& msg, EventId ccal = GeneralEvent::closePopup, Cstring&& ctxt = "Okay", Alignment malign = Alignment::left);
+	void updatePopupMessage(Cstring&& msg);
+	Popup* createPopupMultiline(Cstring&& msg, EventId ccal = GeneralEvent::closePopup, Cstring&& ctxt = "Okay");
+	Popup* createPopupChoice(Cstring&& msg, EventId kcal, EventId ccal = GeneralEvent::closePopup, Alignment malign = Alignment::left);
+	Popup* createPopupInput(Cstring&& msg, string&& text, EventId kcal, EventId ccal = GeneralEvent::closePopup, Cstring&& ktxt = "Okay", Alignment malign = Alignment::left);
 	static const string& inputFromPopup();
-	Popup* createPopupRemoteLogin(RemoteLocation&& rl, PCall kcall, PCall ccal);
+	Popup* createPopupRemoteLogin(RemoteLocation&& rl, EventId kcall, EventId ccal = GeneralEvent::closePopup);
 	static pair<RemoteLocation, bool> remoteLocationFromPopup();
-	Context* createContext(vector<pair<string, PCall>>&& items, Widget* parent);
-	Context* createComboContext(ComboBox* parent, PCall kcal);
+	Context* createContext(vector<pair<Cstring, EventId> >&& items, Widget* parent);
+	Context* createComboContext(ComboBox* parent, EventId kcal);
 
-	int getLineHeight() const;
-	static Recti calcTextContextRect(const vector<Widget*>& items, ivec2 pos, ivec2 size, int margin);
+	int getLineHeight() const { return lineHeight; }
+	pair<int, uint> getTooltipParams() const { return pair(tooltipHeight, maxTooltipLength); }
+	static Recti calcTextContextRect(const Children& items, ivec2 pos, ivec2 size, int margin);
 protected:
-	template <Iterator T> static int findMaxLength(T pos, T end, int height);
-	Texture* makeTooltip(string_view str);
-	Texture* makeTooltipL(string_view str);
+	static uint measureText(string_view str, uint height);
+	template <Iterator T> static uint findMaxLength(T pos, T end, uint height);
 
 private:
 	void eventSelect(Direction dir);
 	static void calcContextPos(int& pos, int& siz, int limit);
 };
-
-inline ProgState::ProgState() {
-	onResize();
-}
 
 template <MemberFunction F, class... A>
 void ProgState::exec(F func, A&&... args) {
@@ -105,11 +93,9 @@ void ProgState::exec(F func, A&&... args) {
 		(this->*func)(std::forward<A>(args)...);
 }
 
-inline int ProgState::getLineHeight() const {
-	return lineHeight;
-}
-
 class ProgFileExplorer : public ProgState {
+private:
+	vector<FileChange> fileChanges;
 public:
 	LabelEdit* locationBar = nullptr;
 	ScrollArea* fileList;
@@ -117,44 +103,44 @@ public:
 
 	~ProgFileExplorer() override = default;
 
-	void eventHide() final;
-	void eventRefresh() final;
+	void eventHide() override;
+	void eventRefresh() override;
 	void processFileChanges(Browser* browser);
 
 protected:
-	virtual Label* makeDirectoryEntry(const Size& size, string&& name) = 0;
-	virtual Label* makeFileEntry(const Size& size, string&& name);
+	virtual PushButton* makeDirectoryEntry(const Size& size, Cstring&& name) = 0;
+	virtual PushButton* makeFileEntry(const Size& size, Cstring&& name);
 	virtual Size fileEntrySize(string_view name);
 };
 
 class ProgBooks final : public ProgFileExplorer {
 public:
-	Label* contextBook;	// for keeping track of right clicked button
+	PushButton* contextBook;	// for keeping track of right clicked button
 
-	~ProgBooks() final = default;
+	~ProgBooks() override = default;
 
-	void eventSpecEscape() final;
-	void eventFileDrop(const char* file) final;
+	void eventSpecEscape() override;
+	void eventFileDrop(const char* file) override;
 
-	RootLayout* createLayout() final;
-	Label* makeBookTile(string&& name);
+	RootLayout* createLayout() override;
+	PushButton* makeBookTile(Cstring&& name);
 protected:
-	Label* makeDirectoryEntry(const Size& size, string&& name) final;
-	Size fileEntrySize(string_view name) final;
+	PushButton* makeDirectoryEntry(const Size& size, Cstring&& name) override;
+	Size fileEntrySize(string_view name) override;
 };
 
 class ProgPageBrowser final : public ProgFileExplorer {
 public:
-	~ProgPageBrowser() final = default;
+	~ProgPageBrowser() override;
 
-	void eventSpecEscape() final;
-	void eventFileDrop(const char* file) final;
+	void eventSpecEscape() override;
+	void eventFileDrop(const char* file) override;
 	void resetFileIcons();
 
-	RootLayout* createLayout() final;
+	RootLayout* createLayout() override;
 protected:
-	Label* makeDirectoryEntry(const Size& size, string&& name) final;
-	Label* makeFileEntry(const Size& size, string&& name) final;
+	PushButton* makeDirectoryEntry(const Size& size, Cstring&& name) override;
+	PushButton* makeFileEntry(const Size& size, Cstring&& name) override;
 };
 
 class ProgReader final : public ProgState {
@@ -164,36 +150,37 @@ private:
 	static constexpr float scrollFactor = 2.f;
 
 public:
-	~ProgReader() final = default;
+	~ProgReader() override = default;
 
-	void eventSpecEscape() final;
-	void eventUp() final;
-	void eventDown() final;
-	void eventLeft() final;
-	void eventRight() final;
-	void eventScrollUp(float amt) final;
-	void eventScrollDown(float amt) final;
-	void eventScrollLeft(float amt) final;
-	void eventScrollRight(float amt) final;
-	void eventCenterView() final;
-	void eventNextPage() final;
-	void eventPrevPage() final;
-	void eventZoomIn() final;
-	void eventZoomOut() final;
-	void eventZoomReset() final;
-	void eventToStart() final;
-	void eventToEnd() final;
-	void eventNextDir() final;
-	void eventPrevDir() final;
-	void eventHide() final;
-	void eventRefresh() final;
-	void eventClosing() final;
+	void eventSpecEscape() override;
+	void eventUp() override;
+	void eventDown() override;
+	void eventLeft() override;
+	void eventRight() override;
+	void eventScrollUp(float amt) override;
+	void eventScrollDown(float amt) override;
+	void eventScrollLeft(float amt) override;
+	void eventScrollRight(float amt) override;
+	void eventCenterView() override;
+	void eventNextPage() override;
+	void eventPrevPage() override;
+	void eventZoomIn() override;
+	void eventZoomOut() override;
+	void eventZoomReset() override;
+	void eventZoomFit() override;
+	void eventToStart() override;
+	void eventToEnd() override;
+	void eventNextDir() override;
+	void eventPrevDir() override;
+	void eventHide() override;
+	void eventRefresh() override;
+	void eventClosing() override;
 
-	RootLayout* createLayout() final;
-	Overlay* createOverlay() final;
+	RootLayout* createLayout() override;
+	Overlay* createOverlay() override;
 
 private:
-	Texture* makeTooltipWithKey(const char* text, Binding::Type type);
+	Cstring makeTooltipWithKey(const char* text, Binding::Type type);
 	static int modifySpeed(float value);	// change scroll speed depending on pressed bindings
 };
 
@@ -210,21 +197,22 @@ private:
 	std::jthread moveThread, fontThread;
 
 public:
-	~ProgSettings() final;
+	~ProgSettings() override;
 
-	void eventSpecEscape() final;
-	void eventFullscreen() final;
-	void eventMultiFullscreen() final;
-	void eventHide() final;
-	void eventRefresh() final;
-	void eventFileDrop(const char* file) final;
+	void eventSpecEscape() override;
+	void eventFullscreen() override;
+	void eventMultiFullscreen() override;
+	void eventHide() override;
+	void eventRefresh() override;
+	void eventFileDrop(const char* file) override;
 
-	RootLayout* createLayout() final;
+	RootLayout* createLayout() override;
 	Widget* createLimitEdit();
-	u32vec2 getDevice(size_t id) const;
+	u32vec2 getDevice(size_t id) const { return devices[id].first; }
+	static Cstring makeZoomText();
 
 	void stopFonts();
-	void setFontField(vector<string>&& families, uptr<string[]>&& files, size_t select);
+	void setFontField(vector<Cstring>&& families, uptr<Cstring[]>&& files, size_t select);
 	void startMove();
 	void stopMove();
 	static void logMoveErrors(const string* errors);
@@ -232,17 +220,15 @@ private:
 	void startFonts();
 };
 
-inline u32vec2 ProgSettings::getDevice(size_t id) const {
-	return devices[id].first;
-}
-
 class ProgSearchDir final : public ProgFileExplorer {
 public:
-	~ProgSearchDir() final = default;
+	PushButton* selected = nullptr;
 
-	void eventSpecEscape() final;
+	~ProgSearchDir() override = default;
 
-	RootLayout* createLayout() final;
+	void eventSpecEscape() override;
+
+	RootLayout* createLayout() override;
 protected:
-	Label* makeDirectoryEntry(const Size& size, string&& name) final;
+	PushButton* makeDirectoryEntry(const Size& size, Cstring&& name) override;
 };

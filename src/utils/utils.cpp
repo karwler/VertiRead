@@ -5,6 +5,82 @@
 #include <windows.h>
 #endif
 
+// CSTRING
+
+#define cstringOperatorAssign(type) \
+	Cstring& Cstring::operator=(type s) { \
+		free(); \
+		set(s); \
+		return *this; \
+	}
+
+Cstring& Cstring::operator=(Cstring&& s) {
+	free();
+	set(std::move(s));
+	return *this;
+}
+
+cstringOperatorAssign(const Cstring&)
+cstringOperatorAssign(const char*)
+cstringOperatorAssign(const string&)
+cstringOperatorAssign(const fs::path&)
+
+Cstring& Cstring::operator=(string_view s) {
+	free();
+	set(s.data(), s.length());
+	return *this;
+}
+
+void Cstring::set(const Cstring& s) {
+	size_t len = s.length() + 1;
+	ptr = new char[len];
+	std::copy_n(s.ptr, len, ptr);
+}
+
+void Cstring::set(Cstring&& s) {
+	ptr = s.ptr;
+	s.ptr = &nullch;
+}
+
+void Cstring::set(const char* s) {
+	size_t len = std::char_traits<char>::length(s) + 1;
+	ptr = new char[len];
+	std::copy_n(s, len, ptr);
+}
+
+void Cstring::set(const char* s, size_t l) {
+	ptr = new char[l + 1];
+	std::copy_n(s, l, ptr);
+	ptr[l] = '\0';
+}
+
+void Cstring::set(const string& s) {
+	size_t len = s.length() + 1;
+	ptr = new char[len];
+	std::copy_n(s.c_str(), len, ptr);
+}
+
+void Cstring::set(const fs::path& s) {
+	size_t slen = s.native().length() + 1;
+#ifdef _WIN32
+	if (int len = WideCharToMultiByte(CP_UTF8, 0, s.c_str(), slen, nullptr, 0, nullptr, nullptr); len > 1) {
+		ptr = new char[len];
+		WideCharToMultiByte(CP_UTF8, 0, s.c_str(), slen, ptr, len, nullptr, nullptr);
+	} else
+		ptr = &nullch;
+#else
+	ptr = new char[slen];
+	std::copy_n(s.c_str(), slen, ptr);
+#endif
+}
+
+void Cstring::free() {
+	if (ptr != &nullch)
+		delete[] ptr;
+}
+
+// FUNCTIONS
+
 template <Integer C>
 bool tstrciequal(std::basic_string_view<C> a, std::basic_string_view<C> b) {
 	if (a.length() != b.length())

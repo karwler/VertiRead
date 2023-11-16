@@ -6,6 +6,8 @@
 #include "scene.h"
 #include "world.h"
 #include "prog/fileOps.h"
+#include "prog/program.h"
+#include "prog/progs.h"
 #include "utils/compare.h"
 #include "utils/layouts.h"
 #include <cwctype>
@@ -80,10 +82,7 @@ PixmapRgba FontSet::renderText(string_view text, uint size) {
 	uint width = measureText(text, size);
 	if (!width)
 		return PixmapRgba();
-	ptr = text.begin();
-	len = text.length();
-	cpos = 0;
-	xpos = 0;
+	prepareAdvance(text.begin(), text.length());
 	ypos = uint(float(size) * baseScale);
 
 	array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
@@ -111,10 +110,7 @@ PixmapRgba FontSet::renderText(string_view text, uint size) {
 uint FontSet::measureText(string_view text, uint size) {
 	if (!setSize(text, size))
 		return 0;
-	ptr = text.begin();
-	len = text.length();
-	cpos = 0;
-	xpos = 0;
+	prepareAdvance(text.begin(), text.length());
 	mfin = 0;
 
 	array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
@@ -146,11 +142,7 @@ PixmapRgba FontSet::renderText(string_view text, uint size, uint limit) {
 	array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
 	uvec2 res = prepareBuffer(width, (ln.size() - 1) * size);
 	for (size_t i = 0; i < ln.size() - 1; ++i) {
-		ptr = ln[i];
-		len = ln[i + 1] - ln[i];
-		cpos = 0;
-		xpos = 0;
-
+		prepareAdvance(ln[i], ln[i + 1] - ln[i]);
 		for (char32_t ch, prev = '\0'; len; prev = ch) {
 			ch = mbstowc(ptr, len);
 			if (std::iswcntrl(ch)) {
@@ -180,11 +172,8 @@ PixmapRgba FontSet::renderText(string_view text, uint size, uint limit) {
 pair<uint, vector<string_view::iterator>> FontSet::measureText(string_view text, uint size, uint limit) {
 	if (!setSize(text, size))
 		return pair(0, vector<string_view::iterator>());
-	ptr = text.begin();
-	len = text.length();
+	prepareAdvance(text.begin(), text.length());
 	wordStart = ptr;
-	cpos = 0;
-	xpos = 0;
 	mfin = 0;
 	gXpos = 0;
 
@@ -235,6 +224,13 @@ uvec2 FontSet::prepareBuffer(uint resx, uint resy) {
 	}
 	std::fill_n(buffer.get(), size, 0);
 	return uvec2(resx, resy);
+}
+
+void FontSet::prepareAdvance(string_view::iterator begin, size_t length) {
+	ptr = begin;
+	len = length;
+	cpos = 0;
+	xpos = 0;
 }
 
 template <bool ml>
@@ -386,7 +382,7 @@ void FontSet::setMode(Settings::Hinting hinting) {
 
 // DRAW SYS
 
-DrawSys::DrawSys(const umap<int, SDL_Window*>& windows, int iconSize) :
+DrawSys::DrawSys(const umap<int, SDL_Window*>& windows) :
 	colors(World::fileSys()->loadColors(World::sets()->setTheme(World::sets()->getTheme(), World::fileSys()->getAvailableThemes())))
 {
 	ivec2 origin(INT_MAX);
@@ -411,6 +407,13 @@ DrawSys::DrawSys(const umap<int, SDL_Window*>& windows, int iconSize) :
 #endif
 	}
 
+	for (auto [id, win] : windows)
+		if (float vdpi; !SDL_GetDisplayDPI(SDL_GetWindowDisplayIndex(win), nullptr, nullptr, &vdpi) && vdpi > winDpi)
+			winDpi = vdpi;
+	if (winDpi <= 0.f)
+		winDpi = fallbackDpi;
+	cursorHeight = int(assumedCursorHeight / fallbackDpi * winDpi);
+
 	SDL_Surface* white = SDL_CreateRGBSurfaceWithFormat(0, 2, 2, 32, SDL_PIXELFORMAT_RGBA32);
 	if (!white)
 		throw std::runtime_error(std::format("Failed to create blank texture: {}", SDL_GetError()));
@@ -419,15 +422,20 @@ DrawSys::DrawSys(const umap<int, SDL_Window*>& windows, int iconSize) :
 		throw std::runtime_error("Failed to create blank texture");
 	texes.emplace(string(), blank);
 
+	int iconSize = int(assumedIconSize / fallbackDpi * winDpi);
 	for (const fs::directory_entry& it : fs::directory_iterator(World::fileSys()->dirIcons(), fs::directory_options::skip_permission_denied))
 		if (Texture* tex = renderer->texFromIcon(loadIcon(fromPath(it.path()), iconSize)))
 			texes.emplace(fromPath(it.path().stem()), tex);
+
 	setFont(toPath(World::sets()->font));
+	tooltip = renderer->texFromEmpty();
 	renderer->synchTransfer();
 }
 
 DrawSys::~DrawSys() {
 	if (renderer) {
+		if (tooltip)
+			renderer->freeTexture(tooltip);
 		for (auto& [name, tex] : texes)
 			renderer->freeTexture(tex);
 		delete renderer;
@@ -463,6 +471,21 @@ int DrawSys::findPointInView(ivec2 pos) const {
 	return vit != renderer->getViews().end() ? vit->first : Renderer::singleDspId;
 }
 
+bool DrawSys::updateDpi(int dsp) {
+	if (float vdpi; !SDL_GetDisplayDPI(dsp, nullptr, nullptr, &vdpi) && vdpi != winDpi) {
+		winDpi = vdpi;
+		cursorHeight = int(assumedCursorHeight / fallbackDpi * winDpi);
+
+		int iconSize = int(assumedIconSize / fallbackDpi * winDpi);
+		for (const fs::directory_entry& it : fs::directory_iterator(World::fileSys()->dirIcons(), fs::directory_options::skip_permission_denied))
+			if (umap<string, Texture*>::iterator tx = texes.find(fromPath(it.path().stem())); tx != texes.end())
+				renderer->texFromIcon(tx->second, loadIcon(fromPath(it.path()), iconSize));
+		renderer->synchTransfer();
+		return true;
+	}
+	return false;
+}
+
 void DrawSys::setTheme(string_view name) {
 	colors = World::fileSys()->loadColors(World::sets()->setTheme(name, World::fileSys()->getAvailableThemes()));
 	renderer->setClearColor(colors[eint(Color::background)]);
@@ -470,25 +493,29 @@ void DrawSys::setTheme(string_view name) {
 
 void DrawSys::setFont(const fs::path& font) {
 	fs::path path = World::fileSys()->findFont(font);
-	if (FileSys::isFont(path))
-		World::sets()->font = fromPath(font);
-	else {
-		World::sets()->font = Settings::defaultFont;
-		path = World::fileSys()->findFont(Settings::defaultFont);
-	}
+	if (!path.empty())
+		World::sets()->font = World::fileSys()->sanitizeFontPath(path);
+	else if (path = World::fileSys()->findFont(Settings::defaultFont); !path.empty())
+		World::sets()->font = World::fileSys()->sanitizeFontPath(path);
+	else if (vector<fs::path> fontPaths = World::fileSys()->listFontFiles(fonts.getLib(), ' ', '~'); !fontPaths.empty()) {
+		World::sets()->font = World::fileSys()->sanitizeFontPath(fontPaths[0]);
+		path = std::move(fontPaths[0]);
+	} else
+		throw std::runtime_error(std::format("Failed to find a font file for '{}'", fromPath(font)));
 	fonts.init(path, World::sets()->hinting);
 }
 
-pair<Texture*, bool> DrawSys::texture(const string& name) const {
+const Texture* DrawSys::texture(const string& name) const {
 	try {
-		return pair(texes.at(name), false);
+		return texes.at(name);
 	} catch (const std::out_of_range&) {
 		logError("Texture ", name, " doesn't exist");
 	}
-	return pair(blank, false);
+	return blank;
 }
 
 void DrawSys::drawWidgets(bool mouseLast) {
+	optional<bool> syncTooltip = mouseLast && World::sets()->tooltips ? prepareTooltip() : std::nullopt;
 	for (auto [id, view] : renderer->getViews()) {
 		try {
 			renderer->startDraw(view);
@@ -511,8 +538,8 @@ void DrawSys::drawWidgets(bool mouseLast) {
 			// draw extra stuff on top
 			if (World::scene()->getCapture())
 				World::scene()->getCapture()->drawTop(view->rect);
-			else if (Button* but = dynamic_cast<Button*>(World::scene()->select); mouseLast && but)
-				drawTooltip(but, view->rect);
+			if (syncTooltip)
+				drawTooltip(syncTooltip, view->rect);
 
 			renderer->finishDraw(view);
 		} catch (const Renderer::ErrorSkip&) {}
@@ -520,42 +547,74 @@ void DrawSys::drawWidgets(bool mouseLast) {
 	renderer->finishRender();
 }
 
-bool DrawSys::drawPicture(const Picture* wgt, const Recti& view) {
-	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
-		Recti frame = wgt->frame();
-		if (wgt->showBG)
-			renderer->drawRect(blank, rect, frame, colors[eint(wgt->color())]);
-		if (wgt->getTex())
-			renderer->drawRect(wgt->getTex(), wgt->texRect(), frame, colors[eint(Color::texture)]);
-		return true;
-	}
-	return false;
+void DrawSys::drawPicture(const Picture* wgt, const Recti& view) {
+	if (Recti rect = wgt->rect(); rect.overlaps(view))
+		renderer->drawRect(wgt->getTex(), rect, wgt->frame(), colors[eint(Color::texture)]);
 }
 
 void DrawSys::drawCheckBox(const CheckBox* wgt, const Recti& view) {
-	if (drawPicture(wgt, view))																	// draw background
-		renderer->drawRect(blank, wgt->boxRect(), wgt->frame(), colors[eint(wgt->boxColor())]);	// draw checkbox
-}
-
-void DrawSys::drawSlider(const Slider* wgt, const Recti& view) {
-	if (drawPicture(wgt, view)) {															// draw background
+	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
 		Recti frame = wgt->frame();
-		renderer->drawRect(blank, wgt->barRect(), frame, colors[eint(Color::dark)]);		// draw bar
-		renderer->drawRect(blank, wgt->sliderRect(), frame, colors[eint(Color::light)]);	// draw slider
+		renderer->drawRect(blank, rect, frame, colors[eint(wgt->getBgColor())]);
+		renderer->drawRect(blank, wgt->boxRect(), frame, colors[eint(wgt->boxColor())]);
 	}
 }
 
-void DrawSys::drawProgressBar(const ProgressBar* wgt, const Recti& view) {
+void DrawSys::drawSlider(const Slider* wgt, const Recti& view) {
 	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
 		Recti frame = wgt->frame();
-		renderer->drawRect(blank, rect, frame, colors[eint(Color::normal)]);			// draw background
-		renderer->drawRect(blank, wgt->barRect(), frame, colors[eint(Color::light)]);	// draw bar
+		renderer->drawRect(blank, rect, frame, colors[eint(wgt->getBgColor())]);
+		renderer->drawRect(blank, wgt->barRect(), frame, colors[eint(Color::dark)]);
+		renderer->drawRect(blank, wgt->sliderRect(), frame, colors[eint(Color::light)]);
 	}
 }
 
 void DrawSys::drawLabel(const Label* wgt, const Recti& view) {
-	if (drawPicture(wgt, view) && wgt->getTextTex())
-		renderer->drawRect(wgt->getTextTex(), wgt->textRect(), wgt->textFrame(), colors[eint(Color::text)]);
+	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
+		Recti frame = wgt->frame();
+		if (wgt->showBg)
+			renderer->drawRect(blank, rect, frame, colors[eint(Color::normal)]);
+		if (wgt->getTextTex())
+			renderer->drawRect(wgt->getTextTex(), wgt->textRect(), wgt->textFrame(), colors[eint(Color::text)]);
+	}
+}
+
+void DrawSys::drawPushButton(const PushButton* wgt, const Recti& view) {
+	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
+		Recti frame = wgt->frame();
+		renderer->drawRect(blank, rect, frame, colors[eint(wgt->getBgColor())]);
+		if (wgt->getTextTex())
+			renderer->drawRect(wgt->getTextTex(), wgt->textRect(), wgt->textFrame(), colors[eint(Color::text)]);
+	}
+}
+
+void DrawSys::drawIconButton(const IconButton* wgt, const Recti& view) {
+	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
+		Recti frame = wgt->frame();
+		renderer->drawRect(blank, rect, frame, colors[eint(wgt->getBgColor())]);
+		if (wgt->getTex())
+			renderer->drawRect(wgt->getTex(), wgt->texRect(), frame, colors[eint(Color::texture)]);
+	}
+}
+
+void DrawSys::drawIconPushButton(const IconPushButton* wgt, const Recti& view) {
+	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
+		Recti frame = wgt->frame();
+		renderer->drawRect(blank, rect, frame, colors[eint(wgt->getBgColor())]);
+		if (wgt->getIconTex())
+			renderer->drawRect(wgt->getIconTex(), wgt->iconRect(), frame, colors[eint(Color::texture)]);
+		if (wgt->getTextTex())
+			renderer->drawRect(wgt->getTextTex(), wgt->textRect(), wgt->textFrame(), colors[eint(Color::text)]);
+	}
+}
+
+void DrawSys::drawLabelEdit(const LabelEdit* wgt, const Recti& view) {
+	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
+		Recti frame = wgt->frame();
+		renderer->drawRect(blank, rect, frame, colors[eint(wgt->getBgColor())]);
+		if (wgt->getTextTex())
+			renderer->drawRect(wgt->getTextTex(), wgt->textRect(), wgt->textFrame(), colors[eint(Color::text)]);
+	}
 }
 
 void DrawSys::drawCaret(const Recti& rect, const Recti& frame, const Recti& view) {
@@ -566,7 +625,7 @@ void DrawSys::drawCaret(const Recti& rect, const Recti& frame, const Recti& view
 void DrawSys::drawWindowArranger(const WindowArranger* wgt, const Recti& view) {
 	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
 		Recti frame = wgt->frame();
-		renderer->drawRect(blank, rect, frame, colors[eint(wgt->color())]);
+		renderer->drawRect(blank, rect, frame, colors[eint(Color::dark)]);
 		for (const auto& [id, dsp] : wgt->getDisps())
 			if (!wgt->draggingDisp(id)) {
 				auto [rct, color, text, tex] = wgt->dispRect(id, dsp);
@@ -590,8 +649,8 @@ void DrawSys::drawScrollArea(const ScrollArea* box, const Recti& view) {
 
 	if (Recti bar = box->barRect(); bar.overlaps(view)) {
 		Recti frame = box->frame();
-		renderer->drawRect(blank, bar, frame, colors[eint(Color::dark)]);					// draw scroll bar
-		renderer->drawRect(blank, box->sliderRect(), frame, colors[eint(Color::light)]);	// draw scroll slider
+		renderer->drawRect(blank, bar, frame, colors[eint(Color::dark)]);
+		renderer->drawRect(blank, box->sliderRect(), frame, colors[eint(Color::light)]);
 	}
 }
 
@@ -609,18 +668,53 @@ void DrawSys::drawReaderBox(const ReaderBox* box, const Recti& view) {
 
 void DrawSys::drawPopup(const Popup* box, const Recti& view) {
 	if (Recti rect = box->rect(); rect.overlaps(view)) {
-		renderer->drawRect(blank, rect, box->frame(), colors[eint(box->bgColor)]);	// draw background
-		for (Widget* it : box->getWidgets())										// draw children
+		renderer->drawRect(blank, rect, box->frame(), colors[eint(box->bgColor)]);
+		for (Widget* it : box->getWidgets())
 			it->drawSelf(view);
 	}
 }
 
-void DrawSys::drawTooltip(Button* but, const Recti& view) {
-	const Texture* tip = but->getTooltip();
-	if (Recti rct = but->tooltipRect(); tip && rct.overlaps(view)) {
-		renderer->drawRect(blank, rct, view, colors[eint(Color::tooltip)]);
-		renderer->drawRect(tip, Recti(rct.pos() + Button::tooltipMargin, tip->getRes()), rct, colors[eint(Color::text)]);
+void DrawSys::drawTooltip(optional<bool>& syncTooltip, const Recti& view) {
+	if (*syncTooltip) {
+		renderer->synchTransfer();
+		*syncTooltip = false;
 	}
+
+	Recti rct(World::winSys()->mousePos() + ivec2(0, cursorHeight), tooltip ? ivec2(tooltip->getRes()) + tooltipMargin * 2 : ivec2(0));
+	if (rct.x + rct.w > viewRes.x)
+		rct.x = viewRes.x - rct.w;
+	if (rct.y + rct.h > viewRes.y)
+		rct.y = rct.y - cursorHeight - rct.h;
+
+	if (rct.overlaps(view)) {
+		renderer->drawRect(blank, rct, view, colors[eint(Color::tooltip)]);
+		renderer->drawRect(tooltip, Recti(rct.pos() + tooltipMargin, tooltip->getRes()), rct, colors[eint(Color::text)]);
+	}
+}
+
+optional<bool> DrawSys::prepareTooltip() {
+	auto but = dynamic_cast<Button*>(World::scene()->getSelect());
+	if (!but)
+		return std::nullopt;
+	const char* tip = but->getTooltip();
+	if (!tip)
+		return std::nullopt;
+	if (tip == curTooltip)
+		return false;
+	curTooltip = tip;
+
+	auto [tooltipHeight, maxTooltipWidth] = World::program()->getState()->getTooltipParams();
+	uint width = 0;
+	for (const char* pos = curTooltip;;) {
+		const char* brk = strchr(pos, '\n');
+		if (uint siz = fonts.measureText(string_view(pos, brk ? brk : pos + strlen(pos)), tooltipHeight) + tooltipMargin.x * 2; siz > width)
+			if (width = std::min(siz, maxTooltipWidth); width == maxTooltipWidth)
+				break;
+		if (!brk)
+			break;
+		pos = brk + 1;
+	}
+	return renderer->texFromText(tooltip, fonts.renderText(curTooltip, tooltipHeight, width)) ? optional(true) : std::nullopt;
 }
 
 Widget* DrawSys::getSelectedWidget(Layout* box, ivec2 mPos) {
@@ -633,7 +727,7 @@ Widget* DrawSys::getSelectedWidget(Layout* box, ivec2 mPos) {
 	return renderer->finishSelDraw(vit->second);
 }
 
-void DrawSys::drawPictureAddr(const Picture* wgt, const Recti& view) {
+void DrawSys::drawButtonAddr(const Button* wgt, const Recti& view) {
 	if (Recti rect = wgt->rect(); rect.overlaps(view))
 		renderer->drawSelRect(wgt, rect, wgt->frame());
 }

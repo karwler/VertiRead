@@ -6,6 +6,33 @@
 #include "prog/program.h"
 #include "prog/progs.h"
 
+template <Class T>
+TextDsp<T>::~TextDsp() {
+	if (textTex)
+		World::drawSys()->getRenderer()->freeTexture(textTex);
+}
+
+template <Class T>
+void TextDsp<T>::recreateTextTex(uint height) {
+	if (textTex)
+		World::drawSys()->getRenderer()->freeTexture(textTex);
+	textTex = World::drawSys()->renderText(text, height);
+}
+
+template <Class T>
+ivec2 TextDsp<T>::alignedTextPos(ivec2 pos, int sizx, Alignment align) const {
+	switch (align) {
+		using enum Alignment;
+	case left:
+		return ivec2(pos.x + textMargin, pos.y);
+	case center:
+		return ivec2(pos.x + (sizx - textTex->getRes().x) / 2, pos.y);
+	case right:
+		return ivec2(pos.x + sizx - textTex->getRes().x - textMargin, pos.y);
+	}
+	return pos;
+}
+
 // SCROLL BAR
 
 bool Scrollable::tick(float dSec) {
@@ -78,13 +105,13 @@ void Scrollable::setSlider(int spos, ivec2 pos, bool vert) {
 
 Recti Scrollable::barRect(ivec2 pos, ivec2 size, bool vert) const {
 	int bs = barSize(size, vert);
-	return vert ? Rect(pos.x + size.x - bs, pos.y, bs, size.y) : Rect(pos.x, pos.y + size.y - bs, size.x, bs);
+	return vert ? Recti(pos.x + size.x - bs, pos.y, bs, size.y) : Recti(pos.x, pos.y + size.y - bs, size.x, bs);
 }
 
 Recti Scrollable::sliderRect(ivec2 pos, ivec2 size, bool vert) const {
 	int bs = barSize(size, vert);
 	int sp = sliderPos(pos, size, vert);
-	return vert ? Rect(pos.x + size.x - bs, sp, bs, sliderSize) : Rect(sp, pos.y + size.y - bs, sliderSize, bs);
+	return vert ? Recti(pos.x + size.x - bs, sp, bs, sliderSize) : Recti(sp, pos.y + size.y - bs, sliderSize, bs);
 }
 
 // WIDGET
@@ -139,118 +166,188 @@ int Widget::sizeToPixAbs(const Size& siz, int res) const {
 
 // PICTURE
 
-Picture::Picture(const Size& size, bool bg, pair<Texture*, bool> texture, int margin) :
+Picture::Picture(const Size& size, Texture* texture) :
 	Widget(size),
-	tex(texture.first),
-	freeTex(texture.second),
-	showBG(bg),
-	texMargin(margin)
+	tex(texture)
 {}
 
 Picture::~Picture() {
-	if (freeTex)
-		World::drawSys()->getRenderer()->freeTexture(tex);
+	World::drawSys()->getRenderer()->freeTexture(tex);
 }
 
 void Picture::drawSelf(const Recti& view) {
 	World::drawSys()->drawPicture(this, view);
 }
 
-void Picture::drawAddr(const Recti& view) {
-	World::drawSys()->drawPictureAddr(this, view);
+// LABEL
+
+Label::Label(const Size& size, Cstring&& line, Alignment alignment, bool bg) :
+	Widget(size),
+	TextDsp(std::move(line)),
+	showBg(bg),
+	align(alignment)
+{}
+
+void Label::drawSelf(const Recti& view) {
+	World::drawSys()->drawLabel(this, view);
 }
 
-Color Picture::color() const {
-	return Color::normal;
+void Label::onResize() {
+	updateTextTex();
 }
 
-Recti Picture::texRect() const {
-	Recti rct = rect();
-	return Recti(rct.pos() + texMargin, rct.size() - texMargin * 2);
+void Label::postInit() {
+	updateTextTex();
 }
 
-void Picture::setTex(Texture* texture, bool exclusive) {
-	if (freeTex)
-		World::drawSys()->getRenderer()->freeTexture(tex);
-	tex = texture;
-	freeTex = tex && exclusive;
+void Label::setText(const Cstring& str) {
+	text = str;
+	updateTextTexNow();
+}
+
+void Label::setText(Cstring&& str) {
+	text = std::move(str);
+	updateTextTexNow();
+}
+
+Recti Label::textRect() const {
+	return Recti(textPos(), textTex->getRes());
+}
+
+ivec2 Label::textPos() const {
+	return alignedTextPos(position(), size().x, align);
+}
+
+void Label::updateTextTex() {
+	recreateTextTex(size().y);
+}
+
+void Label::updateTextTexNow() {
+	updateTextTex();
+	World::drawSys()->getRenderer()->synchTransfer();
+}
+
+// TEXT BOX
+
+TextBox::TextBox(const Size& size, uint lineH, Cstring&& lines, bool bg) :
+	Label(size, std::move(lines), Alignment::left, bg),
+	lineSize(lineH)
+{}
+
+void TextBox::tick(float dSec) {
+	Scrollable::tick(dSec);
+}
+
+void TextBox::onResize() {
+	updateTextTex();
+	setListPos(listPos);
+}
+
+void TextBox::onHold(ivec2 mPos, uint8 mBut) {
+	hold(mPos, mBut, this, position(), size(), true);
+}
+
+void TextBox::onDrag(ivec2 mPos, ivec2 mMov) {
+	drag(mPos, mMov, position(), true);
+}
+
+void TextBox::onUndrag(ivec2 mPos, uint8 mBut) {
+	undrag(mPos, mBut, true);
+}
+
+void TextBox::onScroll(ivec2 wMov) {
+	scroll(wMov, true);
+}
+
+bool TextBox::navSelectable() const {
+	return true;
+}
+
+ivec2 TextBox::textPos() const {
+	return Label::textPos() - listPos;
+}
+
+void TextBox::setText(const Cstring& str) {
+	Label::setText(str);
+	listPos = ivec2(0);
+}
+
+void TextBox::setText(Cstring&& str) {
+	Label::setText(std::move(str));
+	listPos = ivec2(0);
+}
+
+void TextBox::updateTextTex() {
+	if (textTex)
+		World::drawSys()->getRenderer()->freeTexture(textTex);
+	if (textTex = World::drawSys()->renderText(text, lineSize, size().x); textTex)
+		setLimits(textTex->getRes(), size(), true);
 }
 
 // BUTTON
 
-Button::Button(const Size& size, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, bool bg, pair<Texture*, bool> texture, int margin) :
-	Picture(size, bg, texture, margin),
-	lcall(leftCall),
-	rcall(rightCall),
-	dcall(doubleCall),
-	tooltip(tip)
+Button::Button(const Size& size, EventId eid, Actions amask, Cstring&& tip) :
+	Widget(size),
+	tooltip(std::move(tip)),
+	etype(eid.type),
+	ecode(eid.code),
+	actions(amask)
 {}
 
-Button::~Button() {
-	if (tooltip)
-		World::drawSys()->getRenderer()->freeTexture(tooltip);
+void Button::drawAddr(const Recti& view) {
+	World::drawSys()->drawButtonAddr(this, view);
 }
 
 void Button::onClick(ivec2, uint8 mBut) {
-	if (mBut == SDL_BUTTON_LEFT) {
-		if (ScrollArea* sa = dynamic_cast<ScrollArea*>(parent))
-			sa->selectWidget(relSize.id);
-		World::program()->exec(lcall, this);
-	} else if (mBut == SDL_BUTTON_RIGHT) {
-		if (ScrollArea* sa = dynamic_cast<ScrollArea*>(parent))
-			sa->deselectWidget(relSize.id);
-		World::program()->exec(rcall, this);
-	}
+	if (mBut == SDL_BUTTON_LEFT && (actions & ACT_LEFT))
+		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
+	else if (mBut == SDL_BUTTON_RIGHT && (actions & ACT_RIGHT))
+		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_RIGHT)));
 }
 
 void Button::onDoubleClick(ivec2, uint8 mBut) {
-	if (mBut == SDL_BUTTON_LEFT)
-		World::program()->exec(dcall, this);
+	if (mBut == SDL_BUTTON_LEFT && (actions & ACT_DOUBLE))
+		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_DOUBLE)));
+}
+
+void Button::onHover() {
+	if (bgColor == Color::normal)
+		bgColor = Color::select;
+}
+
+void Button::onUnhover() {
+	if (bgColor == Color::select)
+		bgColor = Color::normal;
+}
+
+bool Button::toggleHighlighted() {
+	bool off = bgColor != Color::light;
+	bgColor = off ? Color::light : navSelectable() && World::scene()->getSelect() == this ? Color::select : Color::normal;
+	return !off;
 }
 
 bool Button::navSelectable() const {
-	return lcall || rcall || dcall || tooltip;
+	return (etype && actions) || !tooltip.empty();
 }
 
 bool Button::hasDoubleclick() const {
-	return dcall;
+	return actions & ACT_DOUBLE;
 }
 
-Color Button::color() const {
-	if (ScrollArea* sa = dynamic_cast<ScrollArea*>(parent); sa && sa->getSelected().contains(const_cast<Button*>(this)))
-		return Color::light;
-	if (navSelectable() && World::scene()->select == this)
-		return Color::select;
-	return Color::normal;
+const char* Button::getTooltip() const {
+	return !tooltip.empty() ? tooltip.data() : nullptr;
 }
 
-const Texture* Button::getTooltip() {
-	return tooltip;
-}
-
-Recti Button::tooltipRect() const {
-	ivec2 view = World::drawSys()->getViewRes();
-	Recti rct(World::winSys()->mousePos() + ivec2(0, DrawSys::cursorHeight), tooltip ? tooltip->getRes() + tooltipMargin * 2 : ivec2(0));
-	if (rct.x + rct.w > view.x)
-		rct.x = view.x - rct.w;
-	if (rct.y + rct.h > view.y)
-		rct.y = rct.y - DrawSys::cursorHeight - rct.h;
-	return rct;
-}
-
-void Button::setCalls(optional<PCall> lc, optional<PCall> rc, optional<PCall> dc) {
-	if (lc)
-		lcall = *lc;
-	if (rc)
-		rcall = *rc;
-	if (dc)
-		dcall = *dc;
+void Button::setEvent(EventId eid, Actions amask) {
+	etype = eid.type;
+	ecode = eid.code;
+	actions = amask;
 }
 
 // CHECK BOX
 
-CheckBox::CheckBox(const Size& size, bool checked, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, bool bg, pair<Texture*, bool> texture, int margin) :
-	Button(size, leftCall, rightCall, doubleCall, tip, bg, texture, margin),
+CheckBox::CheckBox(const Size& size, bool checked, EventId eid, Cstring&& tip) :
+	Button(size, eid, ACT_LEFT, std::move(tip)),
 	on(checked)
 {}
 
@@ -259,7 +356,7 @@ void CheckBox::drawSelf(const Recti& view) {
 }
 
 void CheckBox::onClick(ivec2 mPos, uint8 mBut) {
-	if (mBut == SDL_BUTTON_LEFT || mBut == SDL_BUTTON_RIGHT)
+	if (mBut == SDL_BUTTON_LEFT)
 		toggle();
 	Button::onClick(mPos, mBut);
 }
@@ -272,8 +369,8 @@ Recti CheckBox::boxRect() const {
 
 // SLIDER
 
-Slider::Slider(const Size& size, int value, int minimum, int maximum, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, bool bg, pair<Texture*, bool> texture, int margin) :
-	Button(size, leftCall, rightCall, doubleCall, tip, bg, texture, margin),
+Slider::Slider(const Size& size, int value, int minimum, int maximum, EventId eid, Actions amask, Cstring&& tip) :
+	Button(size, eid, amask, std::move(tip)),
 	val(value),
 	vmin(minimum),
 	vmax(maximum)
@@ -284,8 +381,8 @@ void Slider::drawSelf(const Recti& view) {
 }
 
 void Slider::onClick(ivec2, uint8 mBut) {
-	if (mBut == SDL_BUTTON_RIGHT)
-		World::program()->exec(rcall, this);
+	if (mBut == SDL_BUTTON_RIGHT && (actions & ACT_RIGHT))
+		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_RIGHT)));
 }
 
 void Slider::onHold(ivec2 mPos, uint8 mBut) {
@@ -310,8 +407,9 @@ void Slider::onUndrag(ivec2, uint8 mBut) {
 }
 
 void Slider::setSlider(int xpos) {
-	setVal((xpos - position().x - size().y/4) * vmax / sliderLim());
-	World::program()->exec(lcall, this);
+	setVal((xpos - position().x - size().y / 4) * (vmax - vmin) / sliderLim() + vmin);
+	if (actions & ACT_LEFT)
+		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
 }
 
 Recti Slider::barRect() const {
@@ -327,227 +425,192 @@ Recti Slider::sliderRect() const {
 
 int Slider::sliderLim() const {
 	ivec2 siz = size();
-	return siz.x - siz.y/2 - Scrollable::barSizeVal;
+	return siz.x - siz.y / 2 - Scrollable::barSizeVal;
 }
 
-// PROGRESS BAR
+// PUSH BUTTON
 
-ProgressBar::ProgressBar(const Size& size, int value, int minimum, int maximum, bool bg, pair<Texture*, bool> texture, int margin) :
-	Picture(size, bg, texture, margin),
-	val(value),
-	vmin(minimum),
-	vmax(maximum)
-{}
-
-void ProgressBar::drawSelf(const Recti& view) {
-	World::drawSys()->drawProgressBar(this, view);
-}
-
-Recti ProgressBar::barRect() const {
-	ivec2 siz = size();
-	int margin = siz.y / barMarginFactor;
-	return Recti(position() + margin, ivec2(val * (siz.x - margin * 2) / (vmax - vmin), siz.y - margin * 2));
-}
-
-// LABEL
-
-Label::Label(const Size& size, string&& line, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
-	Button(size, leftCall, rightCall, doubleCall, tip, bg, texture, iconMargin),
-	text(std::move(line)),
-	textMargin(lineMargin),
+PushButton::PushButton(const Size& size, Cstring&& line, EventId eid, Actions amask, Cstring&& tip, Alignment alignment) :
+	Button(size, eid, amask, std::move(tip)),
+	TextDsp(std::move(line)),
 	align(alignment)
 {}
 
-Label::~Label() {
-	if (textTex)
-		World::drawSys()->getRenderer()->freeTexture(textTex);
+void PushButton::drawSelf(const Recti& view) {
+	World::drawSys()->drawPushButton(this, view);
 }
 
-void Label::drawSelf(const Recti& view) {
-	World::drawSys()->drawLabel(this, view);
-}
-
-void Label::onResize() {
+void PushButton::onResize() {
 	updateTextTex();
 }
 
-void Label::postInit() {
+void PushButton::postInit() {
 	updateTextTex();
 }
 
-void Label::setText(const string& str) {
+void PushButton::setText(const Cstring& str) {
 	text = str;
 	updateTextTexNow();
 }
 
-void Label::setText(string&& str) {
+void PushButton::setText(Cstring&& str) {
 	text = std::move(str);
 	updateTextTexNow();
 }
 
-Recti Label::textRect() const {
+Recti PushButton::textRect() const {
 	return Recti(textPos(), textTex->getRes());
 }
 
-Recti Label::textFrame() const {
-	Recti rct = rect();
-	int ofs = textIconOffset();
-	return Recti(rct.x + ofs + textMargin, rct.y, rct.w - ofs - textMargin * 2, rct.h).intersect(frame());
+ivec2 PushButton::textPos() const {
+	return alignedTextPos(position(), size().x, align);
 }
 
-Recti Label::texRect() const {
-	Recti rct = rect();
-	vec2 res = getTex()->getRes();
-	ivec2 siz = res * float(rct.h - texMargin * 2) / std::max(res.x, res.y);
-	return Recti(rct.pos() + (rct.h - siz) / 2, siz);
+void PushButton::updateTextTex() {
+	recreateTextTex(size().y);
 }
 
-int Label::textIconOffset() const {
-	return getTex() ? size().y : 0;
-}
-
-ivec2 Label::textPos() const {
-	ivec2 pos = position();
-	switch (align) {
-	using enum Alignment;
-	case left:
-		return ivec2(pos.x + textIconOffset() + textMargin, pos.y);
-	case center: {
-		int iofs = textIconOffset();
-		return ivec2(pos.x + iofs + (size().x - iofs - textTex->getRes().x) / 2, pos.y); }
-	case right:
-		return ivec2(pos.x + size().x - textTex->getRes().x - textMargin, pos.y);
-	}
-	return pos;
-}
-
-void Label::updateTextTex() {
-	if (textTex)
-		World::drawSys()->getRenderer()->freeTexture(textTex);
-	textTex = World::drawSys()->renderText(text, size().y);
-}
-
-void Label::updateTextTexNow() {
+void PushButton::updateTextTexNow() {
 	updateTextTex();
 	World::drawSys()->getRenderer()->synchTransfer();
 }
 
-// TEXT BOX
+// ICON BUTTON
 
-TextBox::TextBox(const Size& size, int lineH, string&& lines, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
-	Label(size, std::move(lines), leftCall, rightCall, doubleCall, tip, alignment, texture, bg, lineMargin, iconMargin),
-	lineSize(lineH)
+IconButton::IconButton(const Size& size, const Texture* texture, EventId eid, Actions amask, Cstring&& tip) :
+	Button(size, eid, amask, std::move(tip)),
+	tex(texture)
 {}
 
-void TextBox::tick(float dSec) {
-	Scrollable::tick(dSec);
+void IconButton::drawSelf(const Recti& view) {
+	World::drawSys()->drawIconButton(this, view);
 }
 
-void TextBox::onResize() {
-	updateTextTex();
-	setListPos(listPos);
+Recti IconButton::texRect() const {
+	Recti rct = rect();
+	return Recti(rct.pos() + margin, rct.size() - margin * 2);
 }
 
-void TextBox::postInit() {
-	updateTextTex();
+// ICON PUSH BUTTON
+
+IconPushButton::IconPushButton(const Size& size, Cstring&& line, const Texture* texture, EventId eid, Actions amask, Cstring&& tip) :
+	PushButton(size, std::move(line), eid, amask, std::move(tip), Alignment::left),
+	freeIcon(false),
+	iconTex(const_cast<Texture*>(texture))
+{}
+
+IconPushButton::IconPushButton(const Size& size, Cstring&& line, Texture* texture, EventId eid, Actions amask, Cstring&& tip) :
+	PushButton(size, std::move(line), eid, amask, std::move(tip), Alignment::left),
+	freeIcon(true),
+	iconTex(texture)
+{}
+
+IconPushButton::~IconPushButton() {
+	if (freeIcon)
+		World::drawSys()->getRenderer()->freeTexture(iconTex);
 }
 
-void TextBox::onHold(ivec2 mPos, uint8 mBut) {
-	hold(mPos, mBut, this, position(), size(), true);
+void IconPushButton::drawSelf(const Recti& view) {
+	World::drawSys()->drawIconPushButton(this, view);
 }
 
-void TextBox::onDrag(ivec2 mPos, ivec2 mMov) {
-	drag(mPos, mMov, position(), true);
+Recti IconPushButton::textRect() const {
+	return Recti(textPos(), textTex->getRes());
 }
 
-void TextBox::onUndrag(ivec2 mPos, uint8 mBut) {
-	undrag(mPos, mBut, true);
+Recti IconPushButton::textFrame() const {
+	Recti rct = rect();
+	int ofs = iconTex ? rct.h : 0;
+	return Recti(rct.x + ofs + textMargin, rct.y, rct.w - ofs - textMargin * 2, rct.h).intersect(frame());
 }
 
-void TextBox::onScroll(ivec2 wMov) {
-	scroll(wMov, true);
+ivec2 IconPushButton::textPos() const {
+	ivec2 pos = position();
+	int ofs = iconTex ? size().y : 0;
+	return ivec2(pos.x + ofs + textMargin, pos.y);
 }
 
-bool TextBox::navSelectable() const {
-	return true;
+Recti IconPushButton::iconRect() const {
+	Recti rct = rect();
+	vec2 res = iconTex->getRes();
+	ivec2 siz = res * float(rct.h - IconButton::margin * 2) / std::max(res.x, res.y);
+	return Recti(rct.pos() + (rct.h - siz) / 2, siz);
 }
 
-Recti TextBox::texRect() const {
-	return Picture::texRect();
+void IconPushButton::setIcon(const Texture* tex) {
+	if (freeIcon)
+		World::drawSys()->getRenderer()->freeTexture(iconTex);
+	iconTex = const_cast<Texture*>(tex);
+	freeIcon = false;
 }
 
-int TextBox::textIconOffset() const {
-	return 0;
-}
-
-ivec2 TextBox::textPos() const {
-	return Label::textPos() - listPos;
-}
-
-void TextBox::setText(const string& str) {
-	text = str;
-	listPos = ivec2(0);
-}
-
-void TextBox::setText(string&& str) {
-	text = std::move(str);
-	listPos = ivec2(0);
-}
-
-void TextBox::updateTextTex() {
-	if (textTex)
-		World::drawSys()->getRenderer()->freeTexture(textTex);
-	if (textTex = World::drawSys()->renderText(text, lineSize, size().x); textTex)
-		setLimits(textTex->getRes(), size(), true);
+void IconPushButton::setIcon(Texture* tex) {
+	if (freeIcon)
+		World::drawSys()->getRenderer()->freeTexture(iconTex);
+	iconTex = tex;
+	freeIcon = true;
 }
 
 // COMBO BOX
 
-ComboBox::ComboBox(const Size& size, string&& curOption, vector<string>&& opts, PCall call, Texture* tip, uptr<string[]> otips, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
-	Label(size, std::move(curOption), call, call, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
+ComboBox::ComboBox(const Size& size, Cstring&& curOption, vector<Cstring>&& opts, EventId call, Cstring&& tip, uptr<Cstring[]> otips, Alignment alignment) :
+	PushButton(size, std::move(curOption), call, ACT_LEFT | ACT_RIGHT, std::move(tip), alignment),
+	curOpt(std::min(size_t(rng::find(opts, text) - opts.begin()), opts.size())),
 	options(std::move(opts)),
-	tooltips(std::move(otips)),
-	curOpt(std::min(size_t(rng::find(options, text) - options.begin()), options.size()))
+	tooltips(std::move(otips))
 {}
 
-ComboBox::ComboBox(const Size& size, size_t curOption, vector<string>&& opts, PCall call, Texture* tip, uptr<string[]> otips, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
-	Label(size, valcp(opts[curOption]), call, call, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
+ComboBox::ComboBox(const Size& size, uint curOption, vector<Cstring>&& opts, EventId call, Cstring&& tip, uptr<Cstring[]> otips, Alignment alignment) :
+	PushButton(size, valcp(opts[curOption]), call, ACT_LEFT | ACT_RIGHT, std::move(tip), alignment),
+	curOpt(curOption),
 	options(std::move(opts)),
-	tooltips(std::move(otips)),
-	curOpt(curOption)
+	tooltips(std::move(otips))
 {}
 
 void ComboBox::onClick(ivec2, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT || mBut == SDL_BUTTON_RIGHT)
-		World::scene()->setContext(World::program()->getState()->createComboContext(this, mBut == SDL_BUTTON_LEFT ? lcall : rcall));
+		World::scene()->setContext(World::program()->getState()->createComboContext(this, EventId(etype, ecode)));
 }
 
-void ComboBox::setOptions(size_t curOption, vector<string>&& opts, uptr<string[]> tips) {
+void ComboBox::setOptions(uint curOption, vector<Cstring>&& opts, uptr<Cstring[]> tips) {
 	setText(opts[curOption]);
 	curOpt = curOption;
 	options = std::move(opts);
 	tooltips = std::move(tips);
 }
 
-void ComboBox::setCurOpt(size_t id) {
-	curOpt = std::min(id, options.size());
+void ComboBox::setCurOpt(uint id) {
+	curOpt = std::min(id, uint(options.size()));
 	setText(options[curOpt]);
 }
 
 // LABEL EDIT
 
-LabelEdit::LabelEdit(const Size& size, string&& line, PCall leftCall, PCall rightCall, PCall doubleCall, Texture* tip, TextType type, bool focusLossConfirm, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
-	Label(size, std::move(line), leftCall, rightCall, doubleCall, tip, Alignment::left, texture, bg, lineMargin, iconMargin),
-	unfocusConfirm(focusLossConfirm),
+LabelEdit::LabelEdit(const Size& size, string&& line, EventId eid, Actions amask, Cstring&& tip, TextType type, bool focusLossConfirm) :
+	Button(size, eid, amask, std::move(tip)),
+	TextDsp(std::move(line)),
+	oldText(text),
 	textType(type),
-	oldText(text)
+	unfocusConfirm(focusLossConfirm)
 {
 	cleanText();
 }
 
+void LabelEdit::drawSelf(const Recti& view) {
+	World::drawSys()->drawLabelEdit(this, view);
+}
+
 void LabelEdit::drawTop(const Recti& view) const {
 	ivec2 ps = position();
-	World::drawSys()->drawCaret(Recti(caretPos() + ps.x + textIconOffset() + textMargin, ps.y, caretWidth, size().y), frame(), view);
+	World::drawSys()->drawCaret(Recti(caretPos() + ps.x + textMargin, ps.y, caretWidth, size().y), frame(), view);
+}
+
+void LabelEdit::onResize() {
+	updateTextTex();
+}
+
+void LabelEdit::postInit() {
+	updateTextTex();
 }
 
 void LabelEdit::onClick(ivec2, uint8 mBut) {
@@ -557,8 +620,8 @@ void LabelEdit::onClick(ivec2, uint8 mBut) {
 		SDL_StartTextInput();
 		SDL_SetTextInputRect(reinterpret_cast<SDL_Rect*>(&rct));
 		setCPos(text.length());
-	} else if (mBut == SDL_BUTTON_RIGHT)
-		World::program()->exec(rcall, this);
+	} else if (mBut == SDL_BUTTON_RIGHT && (actions & ACT_RIGHT))
+		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_RIGHT)));
 }
 
 void LabelEdit::onKeypress(const SDL_Keysym& key) {
@@ -658,11 +721,6 @@ void LabelEdit::onText(string_view str, uint olen) {
 	setCPos(cpos + str.length());
 }
 
-ivec2 LabelEdit::textPos() const {
-	ivec2 pos = position();
-	return ivec2(pos.x + textOfs + textIconOffset() + textMargin, pos.y);
-}
-
 void LabelEdit::setText(const string& str) {
 	oldText = std::move(text);
 	text = str;
@@ -683,7 +741,7 @@ void LabelEdit::onTextReset() {
 
 void LabelEdit::updateTextTex() {
 	if (textType != TextType::password)
-		Label::updateTextTex();
+		recreateTextTex(size().y);
 	else {
 		if (textTex)
 			World::drawSys()->getRenderer()->freeTexture(textTex);
@@ -693,11 +751,21 @@ void LabelEdit::updateTextTex() {
 	}
 }
 
+void LabelEdit::updateTextTexNow() {
+	updateTextTex();
+	World::drawSys()->getRenderer()->synchTransfer();
+}
+
+Recti LabelEdit::textRect() const {
+	ivec2 pos = position();
+	return Recti(pos.x + textOfs + textMargin, pos.y, textTex->getRes());
+}
+
 void LabelEdit::setCPos(uint cp) {
 	cpos = cp;
 	if (int cl = caretPos(); cl < 0)
 		textOfs -= cl;
-	else if (int ce = cl + caretWidth, sx = size().x - texMargin*2; ce > sx)
+	else if (int ce = cl + caretWidth, sx = size().x; ce > sx)
 		textOfs -= ce - sx;
 }
 
@@ -709,7 +777,8 @@ void LabelEdit::confirm() {
 	textOfs = 0;
 	World::scene()->setCapture(nullptr);
 	SDL_StopTextInput();
-	World::program()->exec(lcall, this);
+	if (actions & ACT_LEFT)
+		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
 }
 
 void LabelEdit::cancel() {
@@ -885,8 +954,8 @@ void LabelEdit::cleanUFloatSpacedText() {
 
 // KEY GETTER
 
-KeyGetter::KeyGetter(const Size& size, AcceptType type, Binding::Type binding, Texture* tip, Alignment alignment, pair<Texture*, bool> texture, bool bg, int lineMargin, int iconMargin) :
-	Label(size, bindingText(binding, type), nullptr, nullptr, nullptr, tip, alignment, texture, bg, lineMargin, iconMargin),
+KeyGetter::KeyGetter(const Size& size, AcceptType type, Binding::Type binding, Cstring&& tip) :
+	PushButton(size, bindingText(binding, type), nullEvent, ACT_NONE, std::move(tip), Alignment::center),
 	acceptType(type),
 	bindingType(binding)
 {}
@@ -1005,8 +1074,8 @@ WindowArranger::Dsp::Dsp(const Recti& vdsp, bool on) :
 	active(on)
 {}
 
-WindowArranger::WindowArranger(const Size& size, float baseScale, bool vertExp, PCall leftCall, PCall rightCall, Texture* tip, bool bg, pair<Texture*, bool> texture, int margin) :
-	Button(size, leftCall, rightCall, nullptr, tip, bg, texture, margin),
+WindowArranger::WindowArranger(const Size& size, float baseScale, bool vertExp, EventId eid, Actions amask, Cstring&& tip) :
+	Button(size, eid, amask, std::move(tip)),
 	bscale(baseScale),
 	vertical(vertExp)
 {
@@ -1058,7 +1127,7 @@ void WindowArranger::drawSelf(const Recti& view) {
 
 void WindowArranger::drawTop(const Recti& view) const {
 	const Dsp& dsp = disps.at(dragging);
-	World::drawSys()->drawWaDisp(dragr, Color::light, dsp.txt ? Recti(dragr.pos() + (dragr.size() - dsp.txt->getRes()) / 2, dsp.txt->getRes()) : Recti(0), dsp.txt, frame(), view);
+	World::drawSys()->drawWaDisp(dragr, Color::light, dsp.txt ? Recti(dragr.pos() + (dragr.size() - ivec2(dsp.txt->getRes())) / 2, dsp.txt->getRes()) : Recti(0), dsp.txt, frame(), view);
 }
 
 void WindowArranger::onResize() {
@@ -1071,11 +1140,11 @@ void WindowArranger::postInit() {
 }
 
 void WindowArranger::onClick(ivec2 mPos, uint8 mBut) {
-	if (((mBut == SDL_BUTTON_LEFT && lcall) || (mBut == SDL_BUTTON_RIGHT && rcall)) && disps.size() > 1) {
+	if (((mBut == SDL_BUTTON_LEFT && (actions & ACT_LEFT)) || (mBut == SDL_BUTTON_RIGHT && (actions & ACT_RIGHT))) && disps.size() > 1) {
 		selected = dispUnderPos(mPos);
 		if (umap<int, Dsp>::iterator it = disps.find(selected); it != disps.end()) {
 			it->second.active = !it->second.active;
-			World::program()->exec(mBut == SDL_BUTTON_LEFT ? lcall : rcall, this);
+			pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(mBut == SDL_BUTTON_LEFT ? ACT_LEFT : ACT_RIGHT)));
 		}
 	}
 }
@@ -1113,7 +1182,8 @@ void WindowArranger::onUndrag(ivec2, uint8 mBut) {
 		glm::clamp(dsp.full.pos(), ivec2(0), totalDim);
 		totalDim = glm::max(totalDim, dsp.full.end());
 		dsp.rect.pos() = vec2(dsp.full.pos()) * scale;
-		World::program()->exec(lcall, this);
+		if (actions & ACT_LEFT)
+			pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
 	}
 }
 
@@ -1191,12 +1261,8 @@ bool WindowArranger::navSelectable() const {
 	return true;
 }
 
-Color WindowArranger::color() const {
-	return Color::dark;
-}
-
-const Texture* WindowArranger::getTooltip() {
-	return disps.contains(selected) ? tooltip : nullptr;
+const char* WindowArranger::getTooltip() const {
+	return !tooltip.empty() && disps.contains(selected) ? tooltip.data() : nullptr;
 }
 
 bool WindowArranger::draggingDisp(int id) const {
@@ -1219,8 +1285,8 @@ float WindowArranger::entryScale(int fsiz) const {
 tuple<Recti, Color, Recti, const Texture*> WindowArranger::dispRect(int id, const Dsp& dsp) const {
 	ivec2 offs = position() + winMargin;
 	Recti rct = dsp.rect.translate(offs);
-	Color clr = id != selected || World::scene()->select != this || World::scene()->getCapture() != this ? dsp.active ? Color::light : Color::normal : Color::select;
-	return tuple(rct, clr, dsp.txt ? Recti(rct.pos() + (rct.size() - dsp.txt->getRes()) / 2, dsp.txt->getRes()) : Recti(0), dsp.txt);
+	Color clr = id != selected || World::scene()->getSelect() != this || World::scene()->getCapture() != this ? dsp.active ? Color::light : Color::normal : Color::select;
+	return tuple(rct, clr, dsp.txt ? Recti(rct.pos() + (rct.size() - ivec2(dsp.txt->getRes())) / 2, dsp.txt->getRes()) : Recti(0), dsp.txt);
 }
 
 umap<int, Recti> WindowArranger::getActiveDisps() const {

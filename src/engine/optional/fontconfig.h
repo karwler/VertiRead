@@ -1,6 +1,6 @@
 #pragma once
 
-#if CAN_FONTCFG
+#ifdef CAN_FONTCFG
 #include <fontconfig/fontconfig.h>
 
 namespace LibFontconfig {

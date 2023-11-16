@@ -16,7 +16,7 @@ private:
 public:
 #ifdef WITH_ICU
 	static void init();
-	static void free();
+	static void free() { delete collator; }
 #endif
 
 	bool operator()(string_view a, string_view b) const;
@@ -36,12 +36,6 @@ private:
 	static char32_t skipSpaces(string_view::iterator& p, size_t& l);
 #endif
 };
-
-#ifdef WITH_ICU
-inline void StrNatCmp::free() {
-	delete collator;
-}
-#endif
 
 inline bool StrNatCmp::operator()(string_view a, string_view b) const {
 	return less(a, b);

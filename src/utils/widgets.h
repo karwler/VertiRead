@@ -1,6 +1,33 @@
 #pragma once
 
 #include "settings.h"
+#include "prog/types.h"
+
+template <Class T>
+class TextDsp {
+public:
+	static constexpr int textMargin = 5;
+
+protected:
+	T text;
+	Texture* textTex = nullptr;
+
+public:
+	TextDsp(T&& str) : text(std::move(str)) {}
+	~TextDsp();
+
+	const T& getText() const { return text; }
+	const Texture* getTextTex() const { return textTex; }
+protected:
+	void recreateTextTex(uint height);
+	Recti dspTextFrame(const Recti& rect, const Recti& frame) const;
+	ivec2 alignedTextPos(ivec2 pos, int sizx, Alignment align) const;
+};
+
+template <Class T>
+Recti TextDsp<T>::dspTextFrame(const Recti& rect, const Recti& frame) const {
+	return Recti(rect.x + textMargin, rect.y, rect.w - textMargin * 2, rect.h).intersect(frame);
+}
 
 // scroll information
 class Scrollable {
@@ -26,10 +53,10 @@ public:
 	void undrag(ivec2 mPos, uint8 mBut, bool vert);
 	void scroll(ivec2 wMov, bool vert);
 
-	bool getDraggingSlider() const;
+	bool getDraggingSlider() const { return draggingSlider; }
 	void setLimits(ivec2 lsize, ivec2 wsize, bool vert);
-	ivec2 getListSize() const;
-	ivec2 getListMax() const;
+	ivec2 getListSize() const { return listSize; }
+	ivec2 getListMax() const { return listMax; }
 	void setListPos(ivec2 pos);
 	void moveListPos(ivec2 mov);
 	int barSize(ivec2 wsize, bool vert) const;	// returns 0 if slider isn't needed
@@ -40,18 +67,6 @@ private:
 	int sliderPos(ivec2 pos, ivec2 wsize, bool vert) const;
 	static void throttleMotion(float& mov, float dSec);
 };
-
-inline bool Scrollable::getDraggingSlider() const {
-	return draggingSlider;
-}
-
-inline ivec2 Scrollable::getListSize() const {
-	return listSize;
-}
-
-inline ivec2 Scrollable::getListMax() const {
-	return listMax;
-}
 
 inline void Scrollable::setListPos(ivec2 pos) {
 	listPos = glm::clamp(pos, ivec2(0), listMax);
@@ -76,7 +91,7 @@ protected:
 	Size relSize;				// size relative to parent's parameters
 
 public:
-	Widget(const Size& size = Size());
+	Widget(const Size& size = Size()) : relSize(size) {}
 	virtual ~Widget() = default;
 
 	virtual void drawSelf(const Recti&) {}	// calls appropriate drawing function(s) in DrawSys
@@ -88,6 +103,8 @@ public:
 	virtual void onClick(ivec2, uint8) {}
 	virtual void onDoubleClick(ivec2, uint8) {}
 	virtual void onMouseMove(ivec2, ivec2) {}
+	virtual void onHover() {}
+	virtual void onUnhover() {}
 	virtual void onHold(ivec2, uint8) {}
 	virtual void onDrag(ivec2, ivec2) {}	// mouse move while left button down
 	virtual void onUndrag(ivec2, uint8) {}	// gets called on mouse button up if instance is Scene's capture
@@ -105,34 +122,18 @@ public:
 	virtual bool navSelectable() const;
 	virtual bool hasDoubleclick() const;
 
-	Layout* getParent() const;
+	Layout* getParent() const { return parent; }
 	void setParent(Layout* pnt, uint id);
-	uint getIndex() const;
-	const Size& getRelSize() const;
+	uint getIndex() const { return relSize.id; }
+	const Size& getRelSize() const { return relSize; }
 	virtual ivec2 position() const;
 	virtual ivec2 size() const;
 	ivec2 center() const;
-	Recti rect() const;			// the rectangle that is the widget
+	Recti rect() const;				// the rectangle that is the widget
 	virtual Recti frame() const;	// the rectangle to restrain a widget's visibility (in Widget it returns the parent's frame and if in Layout, it returns a frame for it's children)
 	virtual void setSize(const Size& size);
 	int sizeToPixAbs(const Size& siz, int res) const;
 };
-
-inline Widget::Widget(const Size& size) :
-	relSize(size)
-{}
-
-inline Layout* Widget::getParent() const {
-	return parent;
-}
-
-inline uint Widget::getIndex() const {
-	return relSize.id;
-}
-
-inline const Size& Widget::getRelSize() const {
-	return relSize;
-}
 
 inline ivec2 Widget::center() const {
 	return position() + size() / 2;
@@ -142,71 +143,113 @@ inline Recti Widget::rect() const {
 	return Recti(position(), size());
 }
 
-// visible widget with texture and background color
-class Picture : public Widget {
-public:
-	static constexpr int defaultIconMargin = 2;
-	static constexpr pair<Texture*, bool> nullTex = pair(nullptr, false);
-
+// visible widget owning a texture
+class Picture final : public Widget {
 private:
 	Texture* tex;
-	bool freeTex = false;
-public:
-	bool showBG;
-protected:
-	int texMargin;
 
 public:
-	Picture(const Size& size = Size(), bool bg = true, pair<Texture*, bool> texture = nullTex, int margin = defaultIconMargin);
+	Picture(const Size& size, Texture* texture);
 	~Picture() override;
 
 	void drawSelf(const Recti& view) override;
-	void drawAddr(const Recti& view) override;
 
-	virtual Color color() const;
-	virtual Recti texRect() const;
-	Texture* getTex() const;
-	void setTex(Texture* texture, bool exclusive);
+	const Texture* getTex() const { return tex; }
 };
 
-inline Texture* Picture::getTex() const {
-	return tex;
+// it's a little ass backwards but labels (aka a line of text) are buttons
+class Label : public Widget, public TextDsp<Cstring> {
+public:
+	const bool showBg;
+	const Alignment align;
+
+public:
+	Label(const Size& size, Cstring&& line, Alignment alignment = Alignment::left, bool bg = true);
+	~Label() override = default;
+
+	void drawSelf(const Recti& view) override;
+	void onResize() override;
+	void postInit() override;
+
+	virtual void setText(const Cstring& str);
+	virtual void setText(Cstring&& str);
+	Recti textRect() const;
+	Recti textFrame() const;
+protected:
+	virtual ivec2 textPos() const;
+	virtual void updateTextTex();
+	void updateTextTexNow();
+};
+
+inline Recti Label::textFrame() const {
+	return dspTextFrame(rect(), frame());
 }
 
-// clickable widget with function calls for left and right click (it's rect is drawn so you can use it like a spacer with color)
-class Button : public Picture {
-public:
-	static constexpr ivec2 tooltipMargin = ivec2(4, 1);
+// multi-line scrollable label
+class TextBox final : public Label, private Scrollable {
+private:
+	const uint lineSize;
 
+public:
+	TextBox(const Size& size, uint lineH, Cstring&& lines, bool bg = true);
+	~TextBox() override = default;
+
+	void tick(float dSec) override;
+	void onResize() override;
+	void onHold(ivec2 mPos, uint8 mBut) override;
+	void onDrag(ivec2 mPos, ivec2 mMov) override;
+	void onUndrag(ivec2 mPos, uint8 but) override;
+	void onScroll(ivec2 wMov) override;
+	bool navSelectable() const override;
+
+	void setText(const Cstring& str) override;
+	void setText(Cstring&& str) override;
 protected:
-	PCall lcall, rcall, dcall;
-	Texture* tooltip;
+	ivec2 textPos() const override;
+	void updateTextTex() override;
+};
+
+// clickable widget with an event
+class Button : public Widget {
+protected:
+	const Cstring tooltip;
+	UserEvent etype;
+	int16 ecode;
+	Actions actions;
+	Color bgColor = Color::normal;
 
 public:
-	Button(const Size& size = Size(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, bool bg = true, pair<Texture*, bool> texture = nullTex, int margin = defaultIconMargin);
-	~Button() override;
+	Button(const Size& size, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring());
+	~Button() override = default;
 
+	void drawAddr(const Recti& view) override;
 	void onClick(ivec2 mPos, uint8 mBut) override;
 	void onDoubleClick(ivec2 mPos, uint8 mBut) override;
+	void onHover() override;
+	void onUnhover() override;
 	bool navSelectable() const override;
 	bool hasDoubleclick() const override;
 
-	Color color() const override;
-	virtual const Texture* getTooltip();
-	Recti tooltipRect() const;
-	void setCalls(optional<PCall> lc, optional<PCall> rc, optional<PCall> dc);
+	virtual const char* getTooltip() const;
+	void setEvent(EventId eid, Actions amask);
+	Color getBgColor() const;
+	bool toggleHighlighted();
 };
+
+inline Color Button::getBgColor() const {
+	return bgColor;
+}
 
 // if you don't know what a checkbox is then I don't know what to tell ya
 class CheckBox final : public Button {
 public:
 	bool on;
 
-	CheckBox(const Size& size = Size(), bool checked = false, PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, bool bg = true, pair<Texture*, bool> texture = nullTex, int margin = defaultIconMargin);
-	~CheckBox() final = default;
+	CheckBox(const Size& size, bool checked, EventId eid, Cstring&& tip = Cstring());
+	~CheckBox() override = default;
 
-	void drawSelf(const Recti& view) final;
-	void onClick(ivec2 mPos, uint8 mBut) final;
+	void drawSelf(const Recti& view) override;
+	void onClick(ivec2 mPos, uint8 mBut) override;
 
 	Recti boxRect() const;
 	Color boxColor() const;
@@ -228,16 +271,16 @@ private:
 	int diffSliderMouse = 0;
 
 public:
-	Slider(const Size& size = Size(), int value = 0, int minimum = 0, int maximum = 255, PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, bool bg = true, pair<Texture*, bool> texture = nullTex, int margin = defaultIconMargin);
-	~Slider() final = default;
+	Slider(const Size& size, int value, int minimum, int maximum, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring());
+	~Slider() override = default;
 
-	void drawSelf(const Recti& view) final;
-	void onClick(ivec2 mPos, uint8 mBut) final;
-	void onHold(ivec2 mPos, uint8 mBut) final;
-	void onDrag(ivec2 mPos, ivec2 mMov) final;
-	void onUndrag(ivec2 mPos, uint8 mBut) final;
+	void drawSelf(const Recti& view) override;
+	void onClick(ivec2 mPos, uint8 mBut) override;
+	void onHold(ivec2 mPos, uint8 mBut) override;
+	void onDrag(ivec2 mPos, ivec2 mMov) override;
+	void onUndrag(ivec2 mPos, uint8 mBut) override;
 
-	int getVal() const;
+	int getVal() const { return val; }
 	void setVal(int value);
 
 	Recti barRect() const;
@@ -249,153 +292,106 @@ private:
 	int sliderLim() const;
 };
 
-inline int Slider::getVal() const {
-	return val;
-}
-
 inline void Slider::setVal(int value) {
 	val = std::clamp(value, vmin, vmax);
 }
 
 inline int Slider::sliderPos() const {
-	return position().x + size().y/4 + val * sliderLim() / vmax;
+	return position().x + size().y / 4 + (val - vmin) * sliderLim() / (vmax - vmin);
 }
 
-// horizontal progress bar
-class ProgressBar final : public Picture {
+// button with text
+class PushButton : public Button, public TextDsp<Cstring> {
 private:
-	static constexpr int barMarginFactor = 8;
-
-	int val, vmin, vmax;
+	const Alignment align;
 
 public:
-	ProgressBar(const Size& size = Size(), int value = 0, int minimum = 0, int maximum = 255, bool bg = true, pair<Texture*, bool> texture = nullTex, int margin = defaultIconMargin);
-	~ProgressBar() final = default;
-
-	void drawSelf(const Recti& view) final;
-
-	int getVal() const;
-	void setVal(int value);
-
-	Recti barRect() const;
-};
-
-inline int ProgressBar::getVal() const {
-	return val;
-}
-
-inline void ProgressBar::setVal(int value) {
-	val = std::clamp(value, vmin, vmax);
-}
-
-// it's a little ass backwards but labels (aka a line of text) are buttons
-class Label : public Button {
-public:
-	static constexpr int defaultTextMargin = 5;
-
-protected:
-	string text;
-	Texture* textTex = nullptr;
-	int textMargin;
-	Alignment align;	// text alignment
-
-public:
-	Label(const Size& size = Size(), string&& line = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, Alignment alignment = Alignment::left, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
-	~Label() override;
+	PushButton(const Size& size, Cstring&& line, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring(), Alignment alignment = Alignment::left);
+	~PushButton() override = default;
 
 	void drawSelf(const Recti& view) override;
 	void onResize() override;
 	void postInit() override;
 
-	const string& getText() const;
-	const Texture* getTextTex() const;
-	virtual void setText(const string& str);
-	virtual void setText(string&& str);
+	virtual void setText(const Cstring& str);
+	virtual void setText(Cstring&& str);
 	Recti textRect() const;
 	Recti textFrame() const;
-	int getTextMargin() const;
-	Recti texRect() const override;
 protected:
-	virtual int textIconOffset() const;
 	virtual ivec2 textPos() const;
 	virtual void updateTextTex();
 	void updateTextTexNow();
 };
 
-inline const string& Label::getText() const {
-	return text;
+inline Recti PushButton::textFrame() const {
+	return dspTextFrame(rect(), frame());
 }
 
-inline const Texture* Label::getTextTex() const {
-	return textTex;
-}
+// button with a texture
+class IconButton final : public Button {
+public:
+	static constexpr int margin = 4;
 
-inline int Label::getTextMargin() const {
-	return textMargin;
-}
-
-// multi-line scrollable label
-class TextBox final : public Label, private Scrollable {
 private:
-	int lineSize;
+	const Texture* tex;
 
 public:
-	TextBox(const Size& size = 1.f, int lineH = 30, string&& lines = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, Alignment alignment = Alignment::left, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
-	~TextBox() final = default;
+	IconButton(const Size& size, const Texture* texture, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring());
+	~IconButton() override = default;
 
-	void tick(float dSec) final;
-	void onResize() final;
-	void postInit() final;
-	void onHold(ivec2 mPos, uint8 mBut) final;
-	void onDrag(ivec2 mPos, ivec2 mMov) final;
-	void onUndrag(ivec2 mPos, uint8 but) final;
-	void onScroll(ivec2 wMov) final;
-	bool navSelectable() const final;
+	void drawSelf(const Recti& view) override;
 
-	void setText(const string& str) final;
-	void setText(string&& str) final;
-	Recti texRect() const final;
-protected:
-	int textIconOffset() const final;
-	ivec2 textPos() const final;
-	void updateTextTex() final;
+	const Texture* getTex() const { return tex; }
+	Recti texRect() const;
+};
+
+// button with text and an icon on the left
+class IconPushButton final : public PushButton {
+private:
+	bool freeIcon;
+	Texture* iconTex;
+
+public:
+	IconPushButton(const Size& size, Cstring&& line, const Texture* texture, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring());
+	IconPushButton(const Size& size, Cstring&& line, Texture* texture, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring());	// gains ownership of texture
+	~IconPushButton() override;
+
+	void drawSelf(const Recti& view) override;
+
+	const Texture* getTextTex() const { return textTex; }
+	const Texture* getIconTex() const { return iconTex; }
+	void setIcon(const Texture* tex);
+	void setIcon(Texture* tex);	// gains ownership of texture
+	Recti textRect() const;
+	Recti textFrame() const;
+	Recti iconRect() const;
+private:
+	ivec2 textPos() const override;
 };
 
 // for switching between multiple options (kinda like a drop-down menu except I was too lazy to make an actual one)
-class ComboBox final : public Label {
+class ComboBox final : public PushButton {
 private:
-	vector<string> options;
-	uptr<string[]> tooltips;
-	size_t curOpt;
+	uint curOpt;
+	vector<Cstring> options;
+	uptr<Cstring[]> tooltips;
 
 public:
-	ComboBox(const Size& size = Size(), string&& curOption = string(), vector<string>&& opts = vector<string>(), PCall call = nullptr, Texture* tip = nullptr, uptr<string[]> otips = nullptr, Alignment alignment = Alignment::left, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
-	ComboBox(const Size& size = Size(), size_t curOption = 0, vector<string>&& opts = vector<string>(), PCall call = nullptr, Texture* tip = nullptr, uptr<string[]> otips = nullptr, Alignment alignment = Alignment::left, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
-	~ComboBox() final = default;
+	ComboBox(const Size& size, Cstring&& curOption, vector<Cstring>&& opts, EventId call, Cstring&& tip = Cstring(), uptr<Cstring[]> otips = nullptr, Alignment alignment = Alignment::left);
+	ComboBox(const Size& size, uint curOption, vector<Cstring>&& opts, EventId call, Cstring&& tip = Cstring(), uptr<Cstring[]> otips = nullptr, Alignment alignment = Alignment::left);
+	~ComboBox() override = default;
 
-	void onClick(ivec2 mPos, uint8 mBut) final;
+	void onClick(ivec2 mPos, uint8 mBut) override;
 
-	const vector<string>& getOptions() const;
-	void setOptions(size_t curOption, vector<string>&& opt, uptr<string[]> tips);
-	const string* getTooltips() const;
-	size_t getCurOpt() const;
-	void setCurOpt(size_t id);
+	const vector<Cstring>& getOptions() const { return options; }
+	void setOptions(uint curOption, vector<Cstring>&& opt, uptr<Cstring[]> tips);
+	const Cstring* getTooltips() const { return tooltips.get(); }
+	uint getCurOpt() const { return curOpt; }
+	void setCurOpt(uint id);
 };
 
-inline const vector<string>& ComboBox::getOptions() const {
-	return options;
-}
-
-inline const string* ComboBox::getTooltips() const {
-	return tooltips.get();
-}
-
-inline size_t ComboBox::getCurOpt() const {
-	return curOpt;
-}
-
 // for editing a line of text (ignores Label's align), (calls Button's lcall on text confirm rather than on click)
-class LabelEdit final : public Label {
+class LabelEdit final : public Button, public TextDsp<string> {
 public:
 	enum class TextType : uint8 {
 		any,
@@ -412,34 +408,37 @@ public:
 
 	static constexpr int caretWidth = 4;
 
-	bool unfocusConfirm;
 private:
-	TextType textType;
-	int textOfs = 0;	// text's horizontal offset
-	uint cpos = 0;		// caret position
 	string oldText;
-
+	uint cpos = 0;		// caret position
+	int textOfs = 0;	// text's horizontal offset
+	const TextType textType;
 public:
-	LabelEdit(const Size& size = Size(), string&& line = string(), PCall leftCall = nullptr, PCall rightCall = nullptr, PCall doubleCall = nullptr, Texture* tip = nullptr, TextType type = TextType::any, bool focusLossConfirm = true, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
-	~LabelEdit() final = default;
+	const bool unfocusConfirm;
 
-	void drawTop(const Recti& view) const final;
-	void onClick(ivec2 mPos, uint8 mBut) final;
-	void onKeypress(const SDL_Keysym& key) final;
-	void onCompose(string_view str, uint olen) final;
-	void onText(string_view str, uint olen) final;
+	LabelEdit(const Size& size, string&& line, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring(), TextType type = TextType::any, bool focusLossConfirm = true);
+	~LabelEdit() override = default;
 
-	const string& getOldText() const;
-	void setText(const string& str) final;
-	void setText(string&& str) final;
-
+	void drawSelf(const Recti& view) override;
+	void drawTop(const Recti& view) const override;
+	void onResize() override;
+	void postInit() override;
+	void onClick(ivec2 mPos, uint8 mBut) override;
+	void onKeypress(const SDL_Keysym& key) override;
+	void onCompose(string_view str, uint olen) override;
+	void onText(string_view str, uint olen) override;
 	void confirm();
 	void cancel();
 
-protected:
-	ivec2 textPos() const final;
-	void updateTextTex() final;
+	const string& getOldText() const { return oldText; }
+	void setText(const string& str);
+	void setText(string&& str);
+	Recti textRect() const;
+	Recti textFrame() const;
+
 private:
+	void updateTextTex();
+	void updateTextTexNow();
 	void onTextReset();
 	int caretPos() const;	// caret's relative x position
 	void setCPos(uint cp);
@@ -459,8 +458,8 @@ private:
 	void cleanUFloatSpacedText();
 };
 
-inline const string& LabelEdit::getOldText() const {
-	return oldText;
+inline Recti LabelEdit::textFrame() const {
+	return dspTextFrame(rect(), frame());
 }
 
 inline bool LabelEdit::kmodCtrl(uint16 mod) {
@@ -472,7 +471,7 @@ inline bool LabelEdit::kmodAlt(uint16 mod) {
 }
 
 // for getting a key/button/axis
-class KeyGetter final : public Label {
+class KeyGetter final : public PushButton {
 public:
 	enum class AcceptType : uint8 {
 		keyboard,
@@ -488,21 +487,21 @@ private:
 	static constexpr char prefAxisPos = '+';
 	static constexpr char prefAxisNeg = '-';
 
-	AcceptType acceptType;		// what kind of binding is being accepted
-	Binding::Type bindingType;	// index of what is currently being edited
+	const AcceptType acceptType;		// what kind of binding is being accepted
+	const Binding::Type bindingType;	// index of what is currently being edited
 
 public:
-	KeyGetter(const Size& size = Size(), AcceptType type = AcceptType::keyboard, Binding::Type binding = Binding::Type(-1), Texture* tip = nullptr, Alignment alignment = Alignment::center, pair<Texture*, bool> texture = nullTex, bool bg = true, int lineMargin = defaultTextMargin, int iconMargin = defaultIconMargin);
-	~KeyGetter() final = default;
+	KeyGetter(const Size& size, AcceptType type, Binding::Type binding, Cstring&& tip = Cstring());
+	~KeyGetter() override = default;
 
-	void onClick(ivec2 mPos, uint8 mBut) final;
-	void onKeypress(const SDL_Keysym& key) final;
-	void onJButton(uint8 jbutton) final;
-	void onJHat(uint8 jhat, uint8 value) final;
-	void onJAxis(uint8 jaxis, bool positive) final;
-	void onGButton(SDL_GameControllerButton gbutton) final;
-	void onGAxis(SDL_GameControllerAxis gaxis, bool positive) final;
-	bool navSelectable() const final;
+	void onClick(ivec2 mPos, uint8 mBut) override;
+	void onKeypress(const SDL_Keysym& key) override;
+	void onJButton(uint8 jbutton) override;
+	void onJHat(uint8 jhat, uint8 value) override;
+	void onJAxis(uint8 jaxis, bool positive) override;
+	void onGButton(SDL_GameControllerButton gbutton) override;
+	void onGAxis(SDL_GameControllerAxis gaxis, bool positive) override;
+	bool navSelectable() const override;
 
 	void restoreText();
 	void clearBinding();
@@ -538,30 +537,28 @@ private:
 	Recti dragr;
 	int dragging;
 	int selected;
-	float bscale;
-	bool vertical;
+	const float bscale;
+	const bool vertical;
 
 public:
-	WindowArranger(const Size& size = Size(), float baseScale = 1.f, bool vertExp = true, PCall leftCall = nullptr, PCall rightCall = nullptr, Texture* tip = nullptr, bool bg = true, pair<Texture*, bool> texture = nullTex, int margin = defaultIconMargin);
-	~WindowArranger() final;
+	WindowArranger(const Size& size, float baseScale, bool vertExp, EventId eid, Actions amask, Cstring&& tip = Cstring());
+	~WindowArranger() override;
 
-	void drawSelf(const Recti& view) final;
-	void drawTop(const Recti& view) const final;
-	void onResize() final;
-	void postInit() final;
-	void onClick(ivec2 mPos, uint8 mBut) final;
-	void onMouseMove(ivec2 mPos, ivec2 mMov) final;
-	void onHold(ivec2 mPos, uint8 mBut) final;
-	void onDrag(ivec2 mPos, ivec2 mMov) final;
-	void onUndrag(ivec2 mPos, uint8 mBut) final;
-	void onDisplayChange() final;
-	bool navSelectable() const final;
+	void drawSelf(const Recti& view) override;
+	void drawTop(const Recti& view) const override;
+	void onResize() override;
+	void postInit() override;
+	void onClick(ivec2 mPos, uint8 mBut) override;
+	void onMouseMove(ivec2 mPos, ivec2 mMov) override;
+	void onHold(ivec2 mPos, uint8 mBut) override;
+	void onDrag(ivec2 mPos, ivec2 mMov) override;
+	void onUndrag(ivec2 mPos, uint8 mBut) override;
+	void onDisplayChange() override;
+	bool navSelectable() const override;
 
-	Color color() const final;
-	const Texture* getTooltip() final;
+	const char* getTooltip() const override;
 	bool draggingDisp(int id) const;
-
-	const umap<int, Dsp>& getDisps() const;
+	const umap<int, Dsp>& getDisps() const { return disps; }
 	umap<int, Recti> getActiveDisps() const;
 	Recti offsetDisp(const Recti& rect, ivec2 pos) const;
 	int precalcSizeExpand(int fsiz) const;
@@ -576,10 +573,6 @@ private:
 	static array<ivec2, 8> getSnapPoints(const Recti& rect);
 	template <size_t S> static void scanClosestSnapPoint(const array<pair<uint, uint>, S>& relations, const Recti& rect, const array<ivec2, 8>& snaps, uint& snapId, ivec2& snapPnt, float& minDist);
 };
-
-inline const umap<int, WindowArranger::Dsp>& WindowArranger::getDisps() const {
-	return disps;
-}
 
 inline Recti WindowArranger::offsetDisp(const Recti& rect, ivec2 pos) const {
 	return rect.translate(pos + winMargin);

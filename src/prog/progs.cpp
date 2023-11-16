@@ -8,22 +8,11 @@
 #include "utils/compare.h"
 #include "utils/layouts.h"
 
-// PROGRAM TEXT
-
-ProgState::Text::Text(string&& str, uint height) :
-	text(std::move(str)),
-	length(measure(text, height))
-{}
-
-uint ProgState::Text::measure(string_view str, uint height) {
-	return World::drawSys()->textLength(str, height) + Label::defaultTextMargin * 2;
-}
-
 // PROGRAM STATE
 
 void ProgState::eventEnter() {
-	if (World::scene()->select)
-		World::scene()->select->onClick(World::scene()->select->position(), SDL_BUTTON_LEFT);
+	if (World::scene()->getSelect())
+		World::scene()->getSelect()->onClick(World::scene()->getSelect()->position(), SDL_BUTTON_LEFT);
 }
 
 void ProgState::eventEscape() {
@@ -32,8 +21,8 @@ void ProgState::eventEscape() {
 
 void ProgState::eventSelect(Direction dir) {
 	World::inputSys()->mouseWin = std::nullopt;
-	if (World::scene()->select && !dynamic_cast<Layout*>(World::scene()->select))
-		World::scene()->select->onNavSelect(dir);
+	if (World::scene()->getSelect() && !dynamic_cast<Layout*>(World::scene()->getSelect()))
+		World::scene()->getSelect()->onNavSelect(dir);
 	else
 		World::scene()->selectFirst();
 }
@@ -91,100 +80,98 @@ void ProgState::eventRefresh() {
 }
 
 void ProgState::onResize() {
-	popupLineHeight = int(40.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
-	tooltipHeight = int(16.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
-	lineHeight = int(30.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
-	topHeight = int(40.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
-	topSpacing = int(10.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
-	picSize = int(40.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
-	picMargin = int(4.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
-	contextMargin = int(3.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi());
+	popupLineHeight = int(40.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi());
+	tooltipHeight = int(16.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi());
+	lineHeight = int(30.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi());
+	topHeight = int(40.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi());
+	topSpacing = int(10.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi());
+	picSize = int(40.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi());
+	contextMargin = int(3.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi());
 	maxTooltipLength = World::drawSys()->getViewRes().x * 2 / 3;
-	cursorMoveFactor = 10.f / WindowSys::fallbackDpi * World::winSys()->getWinDpi();
+	cursorMoveFactor = 10.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi();
 }
 
 Overlay* ProgState::createOverlay() {
 	return nullptr;
 }
 
-Popup* ProgState::createPopupMessage(string&& msg, PCall ccal, string ctxt, Alignment malign) {
-	Text ok(std::move(ctxt), popupLineHeight);
-	Text mg(std::move(msg), popupLineHeight);
+Popup* ProgState::createPopupMessage(Cstring&& msg, EventId ccal, Cstring&& ctxt, Alignment malign) {
+	uint oklen = measureText(ctxt, popupLineHeight);
+	uint mglen = measureText(msg, popupLineHeight);
 	Widget* first;
-	vector<Widget*> bot = {
+	Children bot = {
 		new Widget(),
-		first = new Label(ok.length, std::move(ok.text), ccal, nullptr, nullptr, nullptr, Alignment::center),
+		first = new PushButton(oklen, std::move(ctxt), ccal, ACT_LEFT, Cstring(), Alignment::center),
 		new Widget()
 	};
-	vector<Widget*> con = {
-		new Label(1.f, std::move(mg.text), nullptr, nullptr, nullptr, nullptr, malign),
+	Children con = {
+		new Label(1.f, std::move(msg), malign),
 		new Layout(1.f, std::move(bot), Direction::right, 0)
 	};
-	return new Popup(svec2(std::max(mg.length, ok.length) + Layout::defaultItemSpacing * 2, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), ccal, first);
+	return new Popup(svec2(std::max(mglen, oklen) + Layout::defaultItemSpacing * 2, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), ccal, first);
 }
 
-void ProgState::updatePopupMessage(string&& msg) {
+void ProgState::updatePopupMessage(Cstring&& msg) {
 	if (Popup* popup = World::scene()->getPopup()) {
-		Text mg(std::move(msg), popupLineHeight);
-		popup->getWidget<Label>(0)->setText(std::move(mg.text));
-		popup->setSize(std::max(mg.length, Text::measure(popup->getWidget<Layout>(1)->getWidget<Label>(1)->getText(), popupLineHeight)) + Layout::defaultItemSpacing * 2);
+		uint mglen = measureText(msg, popupLineHeight);
+		popup->getWidget<Label>(0)->setText(std::move(msg));
+		popup->setSize(std::max(mglen, measureText(popup->getWidget<Layout>(1)->getWidget<PushButton>(1)->getText(), popupLineHeight)) + Layout::defaultItemSpacing * 2);
 	}
 }
 
-Popup* ProgState::createPopupMultiline(string&& msg, PCall ccal, string ctxt, Alignment malign) {
-	Text ok(std::move(ctxt), popupLineHeight);
-	ivec2 viewRes = World::drawSys()->getViewRes();
-	int width = ok.length, lines = 0;
-	for (size_t i = 0; i < msg.length();) {
+Popup* ProgState::createPopupMultiline(Cstring&& msg, EventId ccal, Cstring&& ctxt) {
+	uint oklen = measureText(ctxt, popupLineHeight);
+	uvec2 viewRes = World::drawSys()->getViewRes();
+	uint width = oklen, lines = 0;
+	for (char* pos = msg.data();;) {
 		++lines;
-		size_t end = std::min(msg.find('\n', i), msg.length());
-		if (int siz = World::drawSys()->textLength(string_view(msg.data() + i, end - i), lineHeight) + (Label::defaultTextMargin + Layout::defaultItemSpacing) * 2; siz > width)
+		char* end = strchr(pos, '\n');
+		if (uint siz = World::drawSys()->textLength(string_view(pos, end ? end : pos + strlen(pos)), lineHeight) + (TextDsp<Cstring>::textMargin + Layout::defaultItemSpacing) * 2; siz > width)
 			if (width = std::min(siz, viewRes.x); width == viewRes.x)
 				break;
-		i = msg.find_first_not_of('\n', end);
+		if (!end)
+			break;
+		pos = end + 1;
 	}
 
 	Widget* first;
-	vector<Widget*> bot = {
+	Children bot = {
 		new Widget(),
-		first = new Label(ok.length, std::move(ok.text), ccal, nullptr, nullptr, nullptr, Alignment::center),
+		first = new PushButton(oklen, std::move(ctxt), ccal, ACT_LEFT, Cstring(), Alignment::center),
 		new Widget()
 	};
-	vector<Widget*> con = {
-		new TextBox(1.f, lineHeight, std::move(msg), nullptr, nullptr, nullptr, nullptr, malign),
+	Children con = {
+		new TextBox(1.f, lineHeight, std::move(msg)),
 		new Layout(popupLineHeight, std::move(bot), Direction::right, 0)
 	};
 	return new Popup(svec2(width, std::min(lineHeight * lines + popupLineHeight + Layout::defaultItemSpacing * 3, viewRes.y)), std::move(con), ccal, first);
 }
 
-Popup* ProgState::createPopupChoice(string&& msg, PCall kcal, PCall ccal, Alignment malign) {
-	Text mg(std::move(msg), popupLineHeight);
-	Text yes("Yes", popupLineHeight);
-	Text no("No", popupLineHeight);
+Popup* ProgState::createPopupChoice(Cstring&& msg, EventId kcal, EventId ccal, Alignment malign) {
+	uint mglen = measureText(msg, popupLineHeight);
+	uint yeslen = measureText("Yes", popupLineHeight);
+	uint nolen = measureText("No", popupLineHeight);
 	Widget* first;
-	vector<Widget*> bot = {
-		first = new Label(1.f, std::move(yes.text), kcal, nullptr, nullptr, nullptr, Alignment::center),
-		new Label(1.f, std::move(no.text), ccal, nullptr, nullptr, nullptr, Alignment::center)
+	Children bot = {
+		first = new PushButton(1.f, "Yes", kcal, ACT_LEFT, Cstring(), Alignment::center),
+		new PushButton(1.f, "No", ccal, ACT_LEFT, Cstring(), Alignment::center)
 	};
-	vector<Widget*> con = {
-		new Label(1.f, std::move(mg.text), nullptr, nullptr, nullptr, nullptr, malign),
+	Children con = {
+		new Label(1.f, std::move(msg), malign),
 		new Layout(1.f, std::move(bot), Direction::right, 0)
 	};
-	return new Popup(svec2(std::max(mg.length, yes.length + no.length) + Layout::defaultItemSpacing * 3, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), ccal, first);
+	return new Popup(svec2(std::max(mglen, yeslen + nolen) + Layout::defaultItemSpacing * 3, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), ccal, first);
 }
 
-Popup* ProgState::createPopupInput(string&& msg, string&& text, PCall kcal, PCall ccal, string&& ktxt, Alignment malign) {
-	Text mg(std::move(msg), popupLineHeight);
-	Text yes(std::move(ktxt), popupLineHeight);
-	Text no("Cancel", popupLineHeight);
+Popup* ProgState::createPopupInput(Cstring&& msg, string&& text, EventId kcal, EventId ccal, Cstring&& ktxt, Alignment malign) {
 	Widget* first;
-	vector<Widget*> bot = {
-		new Label(1.f, std::move(yes.text), kcal, nullptr, nullptr, nullptr, Alignment::center),
-		new Label(1.f, std::move(no.text), ccal, nullptr, nullptr, nullptr, Alignment::center)
+	Children bot = {
+		new PushButton(1.f, std::move(ktxt), kcal, ACT_LEFT, Cstring(), Alignment::center),
+		new PushButton(1.f, "Cancel", ccal, ACT_LEFT, Cstring(), Alignment::center)
 	};
-	vector<Widget*> con = {
-		new Label(1.f, std::move(mg.text), nullptr, nullptr, nullptr, nullptr, malign),
-		first = new LabelEdit(1.f, std::move(text), kcal, ccal),
+	Children con = {
+		new Label(1.f, std::move(msg), malign),
+		first = new LabelEdit(1.f, std::move(text), kcal, ACT_LEFT),
 		new Layout(1.f, std::move(bot), Direction::right, 0)
 	};
 	return new Popup(svec2(0.75f, popupLineHeight * 3 + Layout::defaultItemSpacing * 4), std::move(con), ccal, first);
@@ -194,7 +181,7 @@ const string& ProgState::inputFromPopup() {
 	return World::scene()->getPopup()->getWidget<LabelEdit>(1)->getText();
 }
 
-Popup* ProgState::createPopupRemoteLogin(RemoteLocation&& rl, PCall kcal, PCall ccal) {
+Popup* ProgState::createPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, EventId ccal) {
 	static constexpr std::initializer_list<const char*> txs = {
 		"User",
 		"Password",
@@ -206,49 +193,50 @@ Popup* ProgState::createPopupRemoteLogin(RemoteLocation&& rl, PCall kcal, PCall 
 		"Save"
 	};
 	std::initializer_list<const char*>::iterator itxs = txs.begin();
-	int descLength = findMaxLength(txs.begin(), txs.end(), popupLineHeight);
-	int protocolLength = findMaxLength(protocolNames.begin(), protocolNames.end(), popupLineHeight);
-	int portLength = Text::measure("00000", popupLineHeight) + LabelEdit::caretWidth;
-	int familyLblLength = Text::measure(txs.end()[-1], popupLineHeight);
-	int familyValLength = findMaxLength(familyNames.begin(), familyNames.end(), popupLineHeight);
-	int valLength = std::max(protocolLength + Layout::defaultItemSpacing + descLength * 2, portLength + familyLblLength + familyValLength + Layout::defaultItemSpacing * 2);
+	uint descLength = findMaxLength(txs.begin(), txs.end(), popupLineHeight);
+	uint protocolLength = findMaxLength(protocolNames.begin(), protocolNames.end(), popupLineHeight);
+	uint portLength = measureText("00000", popupLineHeight) + LabelEdit::caretWidth;
+	uint familyLblLength = measureText(txs.end()[-1], popupLineHeight);
+	uint familyValLength = findMaxLength(familyNames.begin(), familyNames.end(), popupLineHeight);
+	uint valLength = std::max(protocolLength + Layout::defaultItemSpacing + descLength * 2, portLength + familyLblLength + familyValLength + Layout::defaultItemSpacing * 2);
 
-	Text mg(std::format("{} Login", rl.protocol == Protocol::smb ? "SMB" : "SFTP"), popupLineHeight);
-	Text yes("Log In", popupLineHeight);
-	Text no("Cancel", popupLineHeight);
-	vector<Widget*> user = {
+	string msg = std::format("{} Login", rl.protocol == Protocol::smb ? "SMB" : "SFTP");
+	uint mglen = measureText(msg, popupLineHeight);
+	uint yeslen = measureText("Log In", popupLineHeight);
+	uint nolen = measureText("Cancel", popupLineHeight);
+	Children user = {
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, std::move(rl.user), nullptr, nullptr, nullptr, makeTooltip("Username"))
+		new LabelEdit(1.f, std::move(rl.user), nullEvent, ACT_NONE, "Username")
 	};
-	vector<Widget*> password = {
+	Children password = {
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, std::move(rl.password), nullptr, nullptr, nullptr, makeTooltip("Password"), LabelEdit::TextType::password)
+		new LabelEdit(1.f, std::move(rl.password), nullEvent, ACT_NONE, "Password", LabelEdit::TextType::password)
 	};
-	vector<Widget*> server = {
+	Children server = {
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, std::move(rl.server), nullptr, nullptr, nullptr, makeTooltip("Server address"))
+		new LabelEdit(1.f, std::move(rl.server), nullEvent, ACT_NONE, "Server address")
 	};
-	vector<Widget*> path = {
+	Children path = {
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, std::move(rl.path), nullptr, nullptr, nullptr, makeTooltip("Directory to open0"s + (rl.protocol == Protocol::smb ? " (must start with the share name)" : "")))
+		new LabelEdit(1.f, std::move(rl.path), nullEvent, ACT_NONE, "Directory to open"s + (rl.protocol == Protocol::smb ? " (must start with the share name)" : ""))
 	};
 	vector<Widget*> port = {
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, toStr(rl.port), nullptr, nullptr, nullptr, makeTooltip("Port"), rl.protocol == Protocol::smb ? LabelEdit::TextType::uInt : LabelEdit::TextType::any)
+		new LabelEdit(1.f, toStr(rl.port), nullEvent, ACT_NONE, "Port", rl.protocol == Protocol::smb ? LabelEdit::TextType::uInt : LabelEdit::TextType::any)
 	};
 	if (rl.protocol == Protocol::sftp)
 		port.insert(port.end(), {
 			new Label(familyLblLength, *++itxs),
-			new ComboBox(familyValLength, eint(Family::any), vector<string>(familyNames.begin(), familyNames.end()), &Program::eventConfirmComboBox, makeTooltip("Family for resolving the server address"))
+			new ComboBox(familyValLength, eint(Family::any), vector<Cstring>(familyNames.begin(), familyNames.end()), GeneralEvent::confirmComboBox, "Family for resolving the server address")
 		});
-	vector<Widget*> bot = {
-		new Label(1.f, std::move(yes.text), kcal, nullptr, nullptr, nullptr, Alignment::center),
-		new Label(1.f, std::move(no.text), ccal, nullptr, nullptr, nullptr, Alignment::center)
+	Children bot = {
+		new PushButton(1.f, "Log In", kcal, ACT_LEFT, Cstring(), Alignment::center),
+		new PushButton(1.f, "Cancel", ccal, ACT_LEFT, Cstring(), Alignment::center)
 	};
 	Widget* first = rl.user.empty() ? user[1] : password[1];
 
 	vector<Widget*> con {
-		new Label(popupLineHeight, std::move(mg.text), nullptr, nullptr, nullptr, nullptr, Alignment::center),
+		new Label(popupLineHeight, std::move(msg), Alignment::center),
 		new Layout(popupLineHeight, std::move(user), Direction::right),
 		new Layout(popupLineHeight, std::move(password), Direction::right),
 		new Layout(popupLineHeight, std::move(server), Direction::right),
@@ -257,28 +245,28 @@ Popup* ProgState::createPopupRemoteLogin(RemoteLocation&& rl, PCall kcal, PCall 
 		new Layout(popupLineHeight, std::move(bot), Direction::right),
 	};
 	if (rl.protocol == Protocol::smb) {
-		vector<Widget*> workgroup = {
+		Children workgroup = {
 			new Label(descLength, *itxs),
-			new LabelEdit(1.f, std::move(rl.workgroup), nullptr, nullptr, nullptr, makeTooltip("Workgroup"))
+			new LabelEdit(1.f, std::move(rl.workgroup), nullEvent, ACT_NONE, "Workgroup")
 		};
 		con.insert(con.begin() + 2, new Layout(popupLineHeight, std::move(workgroup), Direction::right));
 	}
 	++itxs;
 	if (World::program()->canStoreCredentials()) {
-		vector<Widget*> saveCredentials {
+		Children saveCredentials {
 			new Label(descLength, *itxs),
-			new CheckBox(popupLineHeight, false, nullptr, nullptr, nullptr, makeTooltip("Remember credentials"))
+			new CheckBox(popupLineHeight, false, nullEvent, "Remember credentials")
 		};
 		con.insert(con.end() - 1, new Layout(popupLineHeight, std::move(saveCredentials), Direction::right));
 	}
 	uint numLines = con.size();
-	return new Popup(svec2(std::max(std::max(mg.length, yes.length + no.length), uint(descLength + valLength)) + Layout::defaultItemSpacing * 3, popupLineHeight * numLines + Layout::defaultItemSpacing * (numLines + 1)), std::move(con), ccal, first);
+	return new Popup(svec2(std::max(std::max(mglen, yeslen + nolen), descLength + valLength) + Layout::defaultItemSpacing * 3, popupLineHeight * numLines + Layout::defaultItemSpacing * (numLines + 1)), std::move(con), ccal, first);
 }
 
 pair<RemoteLocation, bool> ProgState::remoteLocationFromPopup() {
-	const vector<Widget*>& con = World::scene()->getPopup()->getWidgets();
+	std::span<Widget*> con = World::scene()->getPopup()->getWidgets();
 	uint offs = con.size() == uint(8 + World::program()->canStoreCredentials());
-	const vector<Widget*>& portfam = static_cast<Layout*>(con[5 + offs])->getWidgets();
+	std::span<Widget*> portfam = static_cast<Layout*>(con[5 + offs])->getWidgets();
 	return pair(RemoteLocation{
 		.server = static_cast<Layout*>(con[2 + offs])->getWidget<LabelEdit>(2)->getText(),
 		.path = static_cast<Layout*>(con[4 + offs])->getWidget<LabelEdit>(1)->getText(),
@@ -291,37 +279,37 @@ pair<RemoteLocation, bool> ProgState::remoteLocationFromPopup() {
 	}, World::program()->canStoreCredentials() ? static_cast<Layout*>(con[con.size() - 2])->getWidget<CheckBox>(1)->on : false);
 }
 
-Context* ProgState::createContext(vector<pair<string, PCall>>&& items, Widget* parent) {
-	vector<Widget*> wgts(items.size());
-	for (size_t i = 0; i < items.size(); ++i)
-		wgts[i] = new Label(lineHeight, std::move(items[i].first), items[i].second, &Program::eventCloseContext);
+Context* ProgState::createContext(vector<pair<Cstring, EventId>>&& items, Widget* parent) {
+	Children wgts(items.size());
+	for (uint i = 0; i < wgts.num; ++i)
+		wgts[i] = new PushButton(lineHeight, std::move(items[i].first), items[i].second, ACT_LEFT);
 
 	Widget* first = wgts[0];
 	Recti rect = calcTextContextRect(wgts, World::winSys()->mousePos(), ivec2(0, lineHeight), contextMargin);
-	return new Context(rect.pos(), rect.size(), vector<Widget*>{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, ScrollArea::Select::none, 0) }, first, parent, Color::dark, nullptr, Layout::defaultDirection, contextMargin);
+	return new Context(rect.pos(), rect.size(), Children{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, 0) }, first, parent, Color::dark, nullEvent, Layout::defaultDirection, contextMargin);
 }
 
-Context* ProgState::createComboContext(ComboBox* parent, PCall kcal) {
+Context* ProgState::createComboContext(ComboBox* parent, EventId kcal) {
 	ivec2 size = parent->size();
-	vector<Widget*> wgts(parent->getOptions().size());
+	Children wgts(parent->getOptions().size());
 	if (parent->getTooltips()) {
-		for (size_t i = 0; i < wgts.size(); ++i)
-			wgts[i] = new Label(size.y, valcp(parent->getOptions()[i]), kcal, &Program::eventCloseContext, nullptr, makeTooltip(parent->getTooltips()[i]));
+		for (uint i = 0; i < wgts.num; ++i)
+			wgts[i] = new PushButton(size.y, valcp(parent->getOptions()[i]), kcal, ACT_LEFT, valcp(parent->getTooltips()[i]));
 	} else
-		for (size_t i = 0; i < wgts.size(); ++i)
-			wgts[i] = new Label(size.y, valcp(parent->getOptions()[i]), kcal, &Program::eventCloseContext);
+		for (uint i = 0; i < wgts.num; ++i)
+			wgts[i] = new PushButton(size.y, valcp(parent->getOptions()[i]), kcal, ACT_LEFT);
 
 	Widget* first = wgts[0];
 	Recti rect = calcTextContextRect(wgts, parent->position(), size, contextMargin);
-	return new Context(rect.pos(), rect.size(), vector<Widget*>{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, ScrollArea::Select::none, 0) }, first, parent, Color::dark, &Program::eventResizeComboContext, Layout::defaultDirection, contextMargin);
+	return new Context(rect.pos(), rect.size(), Children{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, 0) }, first, parent, Color::dark, GeneralEvent::resizeComboContext, Layout::defaultDirection, contextMargin);
 }
 
-Recti ProgState::calcTextContextRect(const vector<Widget*>& items, ivec2 pos, ivec2 size, int margin) {
-	for (Widget* it : items)
-		if (Label* lbl = dynamic_cast<Label*>(it))
-			if (int w = World::drawSys()->textLength(lbl->getText(), size.y) + lbl->getTextMargin() * 2 + Scrollable::barSizeVal + margin * 2; w > size.x)
+Recti ProgState::calcTextContextRect(const Children& items, ivec2 pos, ivec2 size, int margin) {
+	for (uint i = 0; i < items.num; ++i)
+		if (auto lbl = dynamic_cast<PushButton*>(items[i]))
+			if (int w = World::drawSys()->textLength(lbl->getText(), size.y) + TextDsp<Cstring>::textMargin * 2 + Scrollable::barSizeVal + margin * 2; w > size.x)
 				size.x = w;
-	size.y = size.y * uint(items.size()) + margin * 2;
+	size.y = size.y * uint(items.num) + margin * 2;
 
 	ivec2 res = World::drawSys()->getViewRes();
 	calcContextPos(pos.x, size.x, res.x);
@@ -339,31 +327,16 @@ void ProgState::calcContextPos(int& pos, int& siz, int limit) {
 }
 
 template <Iterator T>
-int ProgState::findMaxLength(T pos, T end, int height) {
-	int width = 0;
+uint ProgState::findMaxLength(T pos, T end, uint height) {
+	uint width = 0;
 	for (; pos != end; ++pos)
-		if (int len = World::drawSys()->textLength(*pos, height) + Label::defaultTextMargin * 2; len > width)
+		if (uint len = measureText(*pos, height); len > width)
 			width = len;
 	return width;
 }
 
-Texture* ProgState::makeTooltip(string_view str) {
-	return World::sets()->tooltips ? World::drawSys()->renderText(str, tooltipHeight, maxTooltipLength) : nullptr;
-}
-
-Texture* ProgState::makeTooltipL(string_view str) {
-	if (!World::sets()->tooltips)
-		return nullptr;
-
-	uint width = 0;
-	for (string_view::iterator pos = str.begin(); pos != str.end();) {
-		string_view::iterator brk = std::find(pos, str.end(), '\n');
-		if (uint siz = World::drawSys()->textLength(string_view(pos, brk), tooltipHeight) + Label::tooltipMargin.x * 2; siz > width)
-			if (width = std::min(siz, maxTooltipLength); width == maxTooltipLength)
-				break;
-		pos = brk + (brk != str.end());
-	}
-	return World::drawSys()->renderText(str, tooltipHeight, width);
+uint ProgState::measureText(string_view str, uint height) {
+	return World::drawSys()->textLength(str, height) + TextDsp<Cstring>::textMargin * 2;
 }
 
 // PROG FILE EXPLORER
@@ -381,24 +354,23 @@ void ProgFileExplorer::eventRefresh() {
 }
 
 void ProgFileExplorer::processFileChanges(Browser* browser) {
-	optional<vector<FileChange>> files = browser->directoryUpdate();
-	if (!files) {
-		fileList->setWidgets(vector<Widget*>());
+	if (browser->directoryUpdate(fileChanges)) {
+		fileList->setWidgets(Children());
 		if (locationBar)
 			locationBar->setText(browser->currentLocation());
-		return;
+		return fileChanges.clear();
 	}
 
-	auto compare = [](const Widget* a, const string& b) -> bool { return StrNatCmp::less(static_cast<const Label*>(a)->getText(), b); };
-	const vector<Widget*>& wgts = fileList->getWidgets();
-	for (FileChange& fc : *files) {
+	auto compare = [](const Widget* a, const string& b) -> bool { return StrNatCmp::less(static_cast<const PushButton*>(a)->getText(), b); };
+	std::span<Widget*> wgts = fileList->getWidgets();
+	for (FileChange& fc : fileChanges) {
 		if (fc.type == FileChange::deleteEntry) {
-			vector<Widget*>::const_iterator sp = wgts.begin() + dirEnd;
-			vector<Widget*>::const_iterator it = std::lower_bound(wgts.begin(), sp, fc.name, compare);
-			bool directory = it != sp && static_cast<const Label*>(*it)->getText() == fc.name;
+			std::span<Widget*>::iterator sp = wgts.begin() + dirEnd;
+			std::span<Widget*>::iterator it = std::lower_bound(wgts.begin(), sp, fc.name, compare);
+			bool directory = it != sp && static_cast<const PushButton*>(*it)->getText() == fc.name;
 			if (!directory) {
-				vector<Widget*>::const_iterator ef = wgts.begin() + fileEnd;
-				if (it = std::lower_bound(sp, ef, fc.name, compare); it == ef || static_cast<const Label*>(*it)->getText() != fc.name)
+				std::span<Widget*>::iterator ef = wgts.begin() + fileEnd;
+				if (it = std::lower_bound(sp, ef, fc.name, compare); it == ef || static_cast<const PushButton*>(*it)->getText() != fc.name)
 					continue;
 			}
 			fileList->deleteWidget((*it)->getIndex());
@@ -413,15 +385,16 @@ void ProgFileExplorer::processFileChanges(Browser* browser) {
 				fileList->insertWidget(id, makeDirectoryEntry(size, std::move(fc.name)));
 				++dirEnd;
 				++fileEnd;
-			} else if (Label* flbl = makeFileEntry(size, std::move(fc.name))) {
-				fileList->insertWidget(id, flbl);
+			} else if (PushButton* pb = makeFileEntry(size, std::move(fc.name))) {
+				fileList->insertWidget(id, pb);
 				++fileEnd;
 			}
 		}
 	}
+	fileChanges.clear();
 }
 
-Label* ProgFileExplorer::makeFileEntry(const Size&, string&&) {
+PushButton* ProgFileExplorer::makeFileEntry(const Size&, Cstring&&) {
 	return nullptr;
 }
 
@@ -441,45 +414,46 @@ void ProgBooks::eventFileDrop(const char* file) {
 
 RootLayout* ProgBooks::createLayout() {
 	// top bar
-	Text settings("Settings", topHeight);
-	Text exit("Exit", topHeight);
-	vector<Widget*> top = {
-		new Label(settings.length, std::move(settings.text), &Program::eventOpenSettings),
-		new Label(exit.length, std::move(exit.text), &Program::eventExit)
+	Children top = {
+		new PushButton(measureText("Settings", topHeight), "Settings", ProgBooksEvent::openSettings),
+		new PushButton(measureText("Exit", topHeight), "Exit", GeneralEvent::exit)
 	};
 
 	// book list
-	Browser* browser = World::program()->getBrowser();
-	vector<string> books = browser->listDirDirs(World::sets()->dirLib);
-	vector<Widget*> tiles(books.size() + 1);
+	vector<string> books = World::program()->getBrowser()->listDirDirs(World::sets()->dirLib);
+	Children tiles(books.size() + 1);
 	for (size_t i = 0; i < books.size(); ++i)
 		tiles[i] = makeBookTile(std::move(books[i]));
-	tiles.back() = new Button(TileBox::defaultItemHeight, &Program::eventOpenPageBrowserGeneral, &Program::eventOpenBookContextGeneral, nullptr, makeTooltip("Browse other directories"), true, World::drawSys()->texture("search"));
+	tiles[books.size()] = new IconButton(TileBox::defaultItemHeight, World::drawSys()->texture("search"), ProgBooksEvent::openPageBrowserGeneral, ACT_LEFT | ACT_RIGHT, "Browse other directories");
 	dirEnd = books.size();
 	fileEnd = dirEnd;
 
 	// root layout
-	vector<Widget*> cont = {
+	Children cont = {
 		new Layout(topHeight, std::move(top), Direction::right, topSpacing),
 		fileList = new TileBox(1.f, std::move(tiles))
 	};
 	return new RootLayout(1.f, std::move(cont), Direction::down, topSpacing);
 }
 
-Label* ProgBooks::makeBookTile(string&& name) {
-	Text txt(std::move(name), TileBox::defaultItemHeight);
-	return makeDirectoryEntry(txt.length, std::move(txt.text));
+PushButton* ProgBooks::makeBookTile(Cstring&& name) {
+	uint len = measureText(name, TileBox::defaultItemHeight);
+	return makeDirectoryEntry(len, std::move(name));
 }
 
-Label* ProgBooks::makeDirectoryEntry(const Size& size, string&& name) {
-	return new Label(size, std::move(name), &Program::eventOpenPageBrowser, &Program::eventOpenBookContext);
+PushButton* ProgBooks::makeDirectoryEntry(const Size& size, Cstring&& name) {
+	return new PushButton(size, std::move(name), ProgBooksEvent::openPageBrowser, ACT_LEFT | ACT_RIGHT);
 }
 
 Size ProgBooks::fileEntrySize(string_view name) {
-	return Text::measure(name, TileBox::defaultItemHeight);
+	return measureText(name, TileBox::defaultItemHeight);
 }
 
 // PROG PAGE BROWSER
+
+ProgPageBrowser::~ProgPageBrowser() {
+	World::program()->getBrowser()->stopThread();
+}
 
 void ProgPageBrowser::eventSpecEscape() {
 	World::program()->eventBrowserGoUp();
@@ -490,14 +464,14 @@ void ProgPageBrowser::eventFileDrop(const char* file) {
 }
 
 void ProgPageBrowser::resetFileIcons() {
-	Texture* dtex = World::drawSys()->texture("folder").first;
-	Texture* ftex = World::drawSys()->texture("file").first;
-	const vector<Widget*>& wgts = fileList->getWidgets();
+	const Texture* dtex = World::drawSys()->texture("folder");
+	const Texture* ftex = World::drawSys()->texture("file");
+	std::span<Widget*> wgts = fileList->getWidgets();
 	size_t i = 0;
 	for (; i < dirEnd; ++i)
-		static_cast<Label*>(wgts[i])->setTex(dtex, false);
+		static_cast<IconPushButton*>(wgts[i])->setIcon(dtex);
 	for (; i < fileEnd; ++i)
-		static_cast<Label*>(wgts[i])->setTex(ftex, false);
+		static_cast<IconPushButton*>(wgts[i])->setIcon(ftex);
 }
 
 RootLayout* ProgPageBrowser::createLayout() {
@@ -507,10 +481,10 @@ RootLayout* ProgPageBrowser::createLayout() {
 		"Up"
 	};
 	std::initializer_list<const char*>::iterator itxs = txs.begin();
-	int txsWidth = findMaxLength(txs.begin(), txs.end(), lineHeight);
-	vector<Widget*> bar = {
-		new Label(lineHeight, *itxs++, &Program::eventExitBrowser),
-		new Label(lineHeight, *itxs++, &Program::eventBrowserGoUp)
+	uint txsWidth = findMaxLength(txs.begin(), txs.end(), lineHeight);
+	Children bar = {
+		new PushButton(lineHeight, *itxs++, ProgFileExplorerEvent::exit),
+		new PushButton(lineHeight, *itxs++, ProgFileExplorerEvent::goUp)
 	};
 
 	// list of files and directories
@@ -518,7 +492,7 @@ RootLayout* ProgPageBrowser::createLayout() {
 	auto [files, dirs] = browser->listCurDir();
 	if (World::sets()->preview)
 		browser->startPreview(files, dirs, lineHeight);
-	vector<Widget*> items(files.size() + dirs.size());
+	Children items(files.size() + dirs.size());
 	for (size_t i = 0; i < dirs.size(); ++i)
 		items[i] = makeDirectoryEntry(lineHeight, std::move(dirs[i]));
 	for (size_t i = 0; i < files.size(); ++i)
@@ -527,7 +501,7 @@ RootLayout* ProgPageBrowser::createLayout() {
 	fileEnd = dirEnd + files.size();
 
 	// main content
-	vector<Widget*> mid = {
+	Children mid = {
 		new Layout(txsWidth, std::move(bar)),
 		fileList = new ScrollArea(1.f, std::move(items))
 	};
@@ -535,19 +509,19 @@ RootLayout* ProgPageBrowser::createLayout() {
 	// root layout
 	string location = browser->currentLocation();
 	string_view rpath = relativePath(location, World::sets()->dirLib);
-	vector<Widget*> cont = {
-		locationBar = new LabelEdit(lineHeight, rpath.empty() ? std::move(location) : string(rpath), &Program::eventBrowserGoTo),
+	Children cont = {
+		locationBar = new LabelEdit(lineHeight, rpath.empty() ? std::move(location) : string(rpath), ProgFileExplorerEvent::goTo),
 		new Layout(1.f, std::move(mid), Direction::right, topSpacing)
 	};
 	return new RootLayout(1.f, std::move(cont), Direction::down, topSpacing);
 }
 
-Label* ProgPageBrowser::makeDirectoryEntry(const Size& size, string&& name) {
-	return new Label(size, std::move(name), &Program::eventBrowserGoIn, nullptr, nullptr, nullptr, Alignment::left, World::drawSys()->texture("folder"));
+PushButton* ProgPageBrowser::makeDirectoryEntry(const Size& size, Cstring&& name) {
+	return new IconPushButton(size, std::move(name), World::drawSys()->texture("folder"), ProgFileExplorerEvent::goIn);
 }
 
-Label* ProgPageBrowser::makeFileEntry(const Size&, string&& name) {
-	return new Label(lineHeight, std::move(name), &Program::eventBrowserGoFile, nullptr, nullptr, nullptr, Alignment::left, World::drawSys()->texture("file"));
+PushButton* ProgPageBrowser::makeFileEntry(const Size&, Cstring&& name) {
+	return new IconPushButton(lineHeight, std::move(name), World::drawSys()->texture("file"), ProgPageBrowserEvent::goFile);
 }
 
 // PROG READER
@@ -610,6 +584,10 @@ void ProgReader::eventZoomReset() {
 	World::program()->eventZoomReset();
 }
 
+void ProgReader::eventZoomFit() {
+	World::program()->eventZoomFit();
+}
+
 void ProgReader::eventToStart() {
 	reader->scrollToLimit(true);
 }
@@ -656,27 +634,28 @@ void ProgReader::eventClosing() {
 }
 
 RootLayout* ProgReader::createLayout() {
-	vector<Widget*> cont = { reader = new ReaderBox(1.f, World::sets()->direction, World::sets()->zoom, World::sets()->spacing) };
+	Children cont = { reader = new ReaderBox(1.f, World::sets()->direction, World::sets()->zoom, World::sets()->spacing) };
 	return new RootLayout(1.f, std::move(cont), Direction::right, 0);
 }
 
 Overlay* ProgReader::createOverlay() {
-	vector<Widget*> menu = {
-		new Button(picSize, &Program::eventExitReader, nullptr, nullptr, makeTooltipWithKey("Exit", Binding::Type::escape), false, World::drawSys()->texture("cross"), picMargin),
-		new Button(picSize, &Program::eventNextDir, nullptr, nullptr, makeTooltipWithKey("Next", Binding::Type::nextDir), false, World::drawSys()->texture("right"), picMargin),
-		new Button(picSize, &Program::eventPrevDir, nullptr, nullptr, makeTooltipWithKey("Previous", Binding::Type::prevDir), false, World::drawSys()->texture("left"), picMargin),
-		new Button(picSize, &Program::eventZoomIn, nullptr, nullptr, makeTooltipWithKey("Zoom in", Binding::Type::zoomIn), false, World::drawSys()->texture("plus"), picMargin),
-		new Button(picSize, &Program::eventZoomOut, nullptr, nullptr, makeTooltipWithKey("Zoom out", Binding::Type::zoomOut), false, World::drawSys()->texture("minus"), picMargin),
-		new Button(picSize, &Program::eventZoomReset, nullptr, nullptr, makeTooltipWithKey("Zoom reset", Binding::Type::zoomReset), false, World::drawSys()->texture("reset"), picMargin),
-		new Button(picSize, &Program::eventCenterView, nullptr, nullptr, makeTooltipWithKey("Center", Binding::Type::centerView), false, World::drawSys()->texture("center"), picMargin)
+	Children menu = {
+		new IconButton(picSize, World::drawSys()->texture("cross"), ProgReaderEvent::exit, ACT_LEFT, makeTooltipWithKey("Exit", Binding::Type::escape)),
+		new IconButton(picSize, World::drawSys()->texture("right"), ProgReaderEvent::nextDir, ACT_LEFT, makeTooltipWithKey("Next", Binding::Type::nextDir)),
+		new IconButton(picSize, World::drawSys()->texture("left"), ProgReaderEvent::prevDir, ACT_LEFT, makeTooltipWithKey("Previous", Binding::Type::prevDir)),
+		new IconButton(picSize, World::drawSys()->texture("plus"), ProgReaderEvent::zoomIn, ACT_LEFT, makeTooltipWithKey("Zoom in", Binding::Type::zoomIn)),
+		new IconButton(picSize, World::drawSys()->texture("minus"), ProgReaderEvent::zoomOut, ACT_LEFT, makeTooltipWithKey("Zoom out", Binding::Type::zoomOut)),
+		new IconButton(picSize, World::drawSys()->texture("reset"), ProgReaderEvent::zoomReset, ACT_LEFT, makeTooltipWithKey("Zoom reset", Binding::Type::zoomReset)),
+		new IconButton(picSize, World::drawSys()->texture("fit"), ProgReaderEvent::zoomFit, ACT_LEFT, makeTooltipWithKey("Zoom fit", Binding::Type::zoomFit)),
+		new IconButton(picSize, World::drawSys()->texture("center"), ProgReaderEvent::centerView, ACT_LEFT, makeTooltipWithKey("Center", Binding::Type::centerView))
 	};
-	int ysiz = picSize * menu.size();
+	int ysiz = picSize * menu.num;
 	return new Overlay(svec2(0), svec2(picSize, ysiz), svec2(0), svec2(picSize/2, ysiz), std::move(menu), Color::normal, Direction::down, 0);
 }
 
-Texture* ProgReader::makeTooltipWithKey(const char* text, Binding::Type type) {
+Cstring ProgReader::makeTooltipWithKey(const char* text, Binding::Type type) {
 	string btext = World::inputSys()->getBoundName(type);
-	return makeTooltip(!btext.empty() ? std::format("{} ({})", text, btext) : text);
+	return !btext.empty() ? std::format("{} ({})", text, btext) : text;
 }
 
 int ProgReader::modifySpeed(float value) {
@@ -700,12 +679,12 @@ void ProgSettings::eventSpecEscape() {
 
 void ProgSettings::eventFullscreen() {
 	ProgState::eventFullscreen();
-	screen->setCurOpt(size_t(World::sets()->screen));
+	screen->setCurOpt(uint(World::sets()->screen));
 }
 
 void ProgSettings::eventMultiFullscreen() {
 	ProgState::eventMultiFullscreen();
-	screen->setCurOpt(size_t(World::sets()->screen));
+	screen->setCurOpt(uint(World::sets()->screen));
 }
 
 void ProgSettings::eventHide() {
@@ -721,29 +700,20 @@ void ProgSettings::eventRefresh() {
 }
 
 void ProgSettings::eventFileDrop(const char* file) {
-	if (fs::path path = toPath(file);  FileSys::isFont(path)) {
-		World::drawSys()->setFont(file);
-		eventRefresh();
-	} else
+	if (fs::path path = toPath(file);  FileSys::isFont(path))
+		World::program()->setFont(path);
+	else if (fs::is_directory(toPath(file)))
 		World::program()->setLibraryDir(file);
 }
 
 RootLayout* ProgSettings::createLayout() {
 	// top bar
-	Text books("Library", topHeight);
-	Text exit("Exit", topHeight);
-	vector<Widget*> top = {
-		new Label(books.length, std::move(books.text), &Program::eventOpenBookList),
-		new Label(exit.length, std::move(exit.text), &Program::eventExit)
+	Children top = {
+		new PushButton(measureText("Library", topHeight), "Library", ProgBooksEvent::openBookList),
+		new PushButton(measureText("Exit", topHeight), "Exit", GeneralEvent::exit)
 	};
 
 	// setting buttons and labels
-	Text tcnt("Count:", lineHeight);
-	Text tsiz("Size:", lineHeight);
-	Text tsizp("Portrait", lineHeight);
-	Text tsizl("Landscape", lineHeight);
-	Text tsizs("Square", lineHeight);
-	Text tsizf("Fill", lineHeight);
 	static constexpr std::initializer_list<const char*> txs = {
 		"Direction",
 		"Zoom",
@@ -769,8 +739,8 @@ RootLayout* ProgSettings::createLayout() {
 	std::initializer_list<const char*>::iterator itxs = txs.begin();
 
 	auto [maxRes, maxCompress] = World::drawSys()->getRenderer()->getSettings(devices);
-	vector<string> dnames(devices.size());
-	rng::transform(devices, dnames.begin(), [](pair<u32vec2, string>& it) -> string { return std::move(it.second); });
+	vector<Cstring> dnames(devices.size());
+	rng::transform(devices, dnames.begin(), [](pair<u32vec2, string>& it) -> Cstring { return it.second; });
 	vector<pair<u32vec2, string>>::iterator curDev = rng::find_if(devices, [](const pair<u32vec2, string>& it) -> bool { return World::sets()->device == it.first; });
 
 	array<string, Binding::names.size()> bnames;
@@ -779,8 +749,8 @@ RootLayout* ProgSettings::createLayout() {
 		bnames[i][0] = toupper(bnames[i][0]);
 		std::replace(bnames[i].begin() + 1, bnames[i].end(), '_', ' ');
 	}
-	int plimLength = findMaxLength(PicLim::names.begin(), PicLim::names.end(), lineHeight);
-	int descLength = std::max(findMaxLength(txs.begin(), txs.end(), lineHeight), findMaxLength(Binding::names.begin(), Binding::names.end(), lineHeight));
+	uint plimLength = findMaxLength(PicLim::names.begin(), PicLim::names.end(), lineHeight);
+	uint descLength = std::max(findMaxLength(txs.begin(), txs.end(), lineHeight), findMaxLength(Binding::names.begin(), Binding::names.end(), lineHeight));
 	static constexpr char tipPicLim[] = "Picture limit per batch:\n"
 		"- none: all pictures in directory/archive\n"
 		"- count: number of pictures\n"
@@ -793,153 +763,156 @@ RootLayout* ProgSettings::createLayout() {
 		"- compress: use compressed textures";
 
 	Size monitorSize = Size([](const Widget* wgt) -> int {
-		const Layout* box = static_cast<const Layout*>(wgt);
+		auto box = static_cast<const Layout*>(wgt);
 		return box->getWidget<WindowArranger>(1)->precalcSizeExpand(box->getParent()->size().x - box->getWidget(0)->getRelSize().pix - box->getSpacing() - Scrollable::barSizeVal);
 	});
 
 	// action fields for labels
 	vector<string> themes = World::fileSys()->getAvailableThemes();
-	Text dots(KeyGetter::ellipsisStr, lineHeight);
-	int unumLen = Text::measure("0000000000", lineHeight) + LabelEdit::caretWidth;
+	uint unumLen = measureText("0000000000", lineHeight) + LabelEdit::caretWidth;
 	startFonts();
 
-	vector<pair<Size, vector<Widget*>>> lx;
+	vector<pair<Size, Children>> lx;
 	lx.reserve(txs.size());
-	lx.insert(lx.end(), {
-		{ lineHeight, {
+
+	array<pair<Size, Children>, 7> sec0 = {
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new ComboBox(1.f, size_t(World::sets()->direction), vector<string>(Direction::names.begin(), Direction::names.end()), &Program::eventSwitchDirection, makeTooltip("Reading direction"))
-		} },
-		{ lineHeight, {
+			new ComboBox(1.f, uint(World::sets()->direction), vector<Cstring>(Direction::names.begin(), Direction::names.end()), ProgSettingsEvent::setDirection, "Reading direction")
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new LabelEdit(1.f, toStr(World::sets()->zoom), &Program::eventSetZoom, nullptr, nullptr, makeTooltip("Default reader zoom"), LabelEdit::TextType::uFloat)
-		} },
-		{ lineHeight, {
+			new Slider(1.f, World::sets()->zoom, -Settings::zoomLimit, Settings::zoomLimit, ProgSettingsEvent::setZoom, ACT_LEFT, "Default reader zoom"),
+			new Label(unumLen, makeZoomText())
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new LabelEdit(1.f, toStr(World::sets()->spacing), &Program::eventSetSpacing, nullptr, nullptr, makeTooltip("Picture spacing in reader"), LabelEdit::TextType::uInt)
-		} },
-		{ lineHeight, {
+			new LabelEdit(1.f, toStr(World::sets()->spacing), ProgSettingsEvent::setSpacing, ACT_LEFT, "Picture spacing in reader", LabelEdit::TextType::uInt)
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new ComboBox(plimLength, eint(World::sets()->picLim.type), vector<string>(PicLim::names.begin(), PicLim::names.end()), &Program::eventSetPicLimitType, makeTooltipL(tipPicLim)),
+			new ComboBox(plimLength, eint(World::sets()->picLim.type), vector<Cstring>(PicLim::names.begin(), PicLim::names.end()), ProgSettingsEvent::setPicLimitType, tipPicLim),
 			createLimitEdit()
-		} },
-		{ lineHeight, {
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new Slider(1.f, World::sets()->maxPicRes, Settings::minPicRes, maxRes, &Program::eventSetMaxPicResSL, nullptr, nullptr, makeTooltip(tipMaxPicRes)),
-			new LabelEdit(unumLen, toStr(World::sets()->maxPicRes), &Program::eventSetMaxPicResLE, nullptr, nullptr, makeTooltip(tipMaxPicRes))
-		} },
-		{ lineHeight, {
+			new Slider(1.f, World::sets()->maxPicRes, Settings::minPicRes, maxRes, ProgSettingsEvent::setMaxPicResSl, ACT_LEFT, tipMaxPicRes),
+			new LabelEdit(unumLen, toStr(World::sets()->maxPicRes), ProgSettingsEvent::setMaxPicResLe, ACT_LEFT, tipMaxPicRes)
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			screen = new ComboBox(1.f, eint(World::sets()->screen), vector<string>(Settings::screenModeNames.begin(), Settings::screenModeNames.end()), &Program::eventSetScreenMode, makeTooltip("Window screen mode"))
-		} },
-		{ monitorSize, {
+			screen = new ComboBox(1.f, eint(World::sets()->screen), vector<Cstring>(Settings::screenModeNames.begin(), Settings::screenModeNames.end()), ProgSettingsEvent::setScreenMode, "Window screen mode")
+		}),
+		pair(monitorSize, Children{
 			new Widget(descLength),
-			new WindowArranger(1.f, float(lineHeight * 2) / 1080.f, true, &Program::eventSetMultiFullscreen, &Program::eventSetMultiFullscreen, makeTooltip("Monitor arrangement for multi fullscreen"))
-		} }
-	});
+			new WindowArranger(1.f, float(lineHeight * 2) / 1080.f, true, ProgSettingsEvent::setMultiFullscreen, ACT_LEFT, "Monitor arrangement for multi fullscreen")
+		})
+	};
+	lx.insert(lx.end(), std::make_move_iterator(sec0.begin()), std::make_move_iterator(sec0.end()));
 
 	if constexpr (Settings::rendererNames.size() > 1) {
-		lx.push_back({ lineHeight, {
+		lx.emplace_back(lineHeight, Children{
 			new Label(descLength, *itxs),
-			new ComboBox(1.f, eint(World::sets()->renderer), vector<string>(Settings::rendererNames.begin(), Settings::rendererNames.end()), &Program::eventSetRenderer, makeTooltip("Rendering backend"))
-		} });
+			new ComboBox(1.f, eint(World::sets()->renderer), vector<Cstring>(Settings::rendererNames.begin(), Settings::rendererNames.end()), ProgSettingsEvent::setRenderer, "Rendering backend")
+		});
 	}
 	++itxs;
 	if (!devices.empty()) {
-		lx.push_back({ lineHeight, {
+		lx.emplace_back(lineHeight, Children{
 			new Label(descLength, *itxs),
-			new ComboBox(1.f, curDev != devices.end() ? curDev - devices.begin() : 0, std::move(dnames), &Program::eventSetDevice, makeTooltip("Rendering devices"))
-		} });
+			new ComboBox(1.f, curDev != devices.end() ? curDev - devices.begin() : 0, std::move(dnames), ProgSettingsEvent::setDevice, "Rendering devices")
+		});
 	}
 	++itxs;
 	if (maxCompress > Settings::Compression::none) {
-		lx.push_back({ lineHeight, {
+		lx.emplace_back(lineHeight, Children{
 			new Label(descLength, *itxs),
-			new ComboBox(1.f, eint(World::sets()->compression), vector<string>(Settings::compressionNames.begin(), Settings::compressionNames.begin() + eint(maxCompress) + 1), &Program::eventSetCompression, makeTooltipL(tipCompression))
-		} });
+			new ComboBox(1.f, eint(World::sets()->compression), vector<Cstring>(Settings::compressionNames.begin(), Settings::compressionNames.begin() + eint(maxCompress) + 1), ProgSettingsEvent::setCompression, tipCompression)
+		});
 	}
 	++itxs;
 
-	lx.insert(lx.end(), {
-		{ lineHeight, {
+	array<pair<Size, Children>, 11> sec1 = {
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new CheckBox(lineHeight, World::sets()->vsync, &Program::eventSetVsync, nullptr, nullptr, makeTooltip("Vertical synchronization"))
-		} },
-		{ lineHeight, {
+			new CheckBox(lineHeight, World::sets()->vsync, ProgSettingsEvent::setVsync, "Vertical synchronization")
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new CheckBox(lineHeight, World::sets()->gpuSelecting, &Program::eventSetGpuSelecting, nullptr, nullptr, makeTooltip("Use the graphics process to determine which widget is being selected"))
-		} },
-		{ lineHeight, {
+			new CheckBox(lineHeight, World::sets()->gpuSelecting, ProgSettingsEvent::setGpuSelecting, "Use the graphics process to determine which widget is being selected")
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new Label(tsizp.length, std::move(tsizp.text), &Program::eventSetPortrait, nullptr, nullptr, makeTooltip("Portrait window size")),
-			new Label(tsizl.length, std::move(tsizl.text), &Program::eventSetLandscape, nullptr, nullptr, makeTooltip("Landscape window size")),
-			new Label(tsizs.length, std::move(tsizs.text), &Program::eventSetSquare, nullptr, nullptr, makeTooltip("Square window size")),
-			new Label(tsizf.length, std::move(tsizf.text), &Program::eventSetFill, nullptr, nullptr, makeTooltip("Fill screen with window"))
-		} },
-		{ lineHeight, {
+			new PushButton(measureText("Portrait", lineHeight), "Portrait", ProgSettingsEvent::setPortrait, ACT_LEFT, "Portrait window size"),
+			new PushButton(measureText("Landscape", lineHeight), "Landscape", ProgSettingsEvent::setLandscape, ACT_LEFT, "Landscape window size"),
+			new PushButton(measureText("Square", lineHeight), "Square", ProgSettingsEvent::setSquare, ACT_LEFT, "Square window size"),
+			new PushButton(measureText("Fill", lineHeight), "Fill", ProgSettingsEvent::setFill, ACT_LEFT, "Fill screen with window")
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new ComboBox(1.f, valcp(World::sets()->getTheme()), std::move(themes), &Program::eventSetTheme, makeTooltip("Color scheme"))
-		} },
-		{ lineHeight, {
+			new ComboBox(1.f, valcp(World::sets()->getTheme()), vector<Cstring>(themes.begin(), themes.end()), ProgSettingsEvent::setTheme, "Color scheme")
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new CheckBox(lineHeight, World::sets()->preview, &Program::eventSetPreview, nullptr, nullptr, makeTooltip("Show preview icons of pictures in browser"))
-		} },
-		{ lineHeight, {
+			new CheckBox(lineHeight, World::sets()->preview, ProgSettingsEvent::setPreview, "Show preview icons of pictures in browser")
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			showHidden = new CheckBox(lineHeight, World::sets()->showHidden, &Program::eventSetHide, nullptr, nullptr, makeTooltip("Show hidden files"))
-		} },
-		{ lineHeight, {
+			showHidden = new CheckBox(lineHeight, World::sets()->showHidden, ProgSettingsEvent::setHide, "Show hidden files")
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new CheckBox(lineHeight, World::sets()->tooltips, &Program::eventSetTooltips, nullptr, nullptr, makeTooltip("Display tooltips on hover"))
-		} },
-		{ lineHeight, {
+			new CheckBox(lineHeight, World::sets()->tooltips, ProgSettingsEvent::setTooltips, "Display tooltips on hover")
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			fontList = new ComboBox(1.f, 0, { "loading..." }, nullptr, makeTooltip("Font family")),
-			new ComboBox(findMaxLength(Settings::hintingNames.begin(), Settings::hintingNames.end(), lineHeight), eint(World::sets()->hinting), vector<string>(Settings::hintingNames.begin(), Settings::hintingNames.end()), &Program::eventSetFontHinting, makeTooltip("Font hinting"))
-		} },
-		{ lineHeight, {
+			fontList = new ComboBox(1.f, 0, { "loading..." }, nullEvent, "Font family"),
+			new ComboBox(findMaxLength(Settings::hintingNames.begin(), Settings::hintingNames.end(), lineHeight), eint(World::sets()->hinting), vector<Cstring>(Settings::hintingNames.begin(), Settings::hintingNames.end()), ProgSettingsEvent::setFontHinting, "Font hinting")
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			libraryDir = new LabelEdit(1.f, valcp(World::sets()->dirLib), &Program::eventSetLibraryDirLE, nullptr, nullptr, makeTooltip("Library path")),
-			new Label(dots.length, std::move(dots.text), &Program::eventOpenLibDirBrowser, nullptr, nullptr, makeTooltip("Browse for library"), Alignment::center)
-		} },
-		{ lineHeight, {
+			libraryDir = new LabelEdit(1.f, valcp(World::sets()->dirLib), ProgSettingsEvent::setLibraryDirLe, ACT_LEFT, "Library path"),
+			new PushButton(measureText(KeyGetter::ellipsisStr, lineHeight), KeyGetter::ellipsisStr, ProgSettingsEvent::openLibDirBrowser, ACT_LEFT, "Browse for library", Alignment::center)
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new LabelEdit(1.f, World::sets()->scrollSpeedString(), &Program::eventSetScrollSpeed, nullptr, nullptr, makeTooltip("Scroll speed for button presses or axes"), LabelEdit::TextType::sFloatSpaced)
-		} },
-		{ lineHeight, {
+			new LabelEdit(1.f, World::sets()->scrollSpeedString(), ProgSettingsEvent::setScrollSpeed, ACT_LEFT, "Scroll speed for button presses or axes", LabelEdit::TextType::sFloatSpaced)
+		}),
+		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new Slider(1.f, World::sets()->getDeadzone(), 0, Settings::axisLimit, &Program::eventSetDeadzoneSL, nullptr, nullptr, makeTooltip(tipDeadzone)),
-			new LabelEdit(unumLen, toStr(World::sets()->getDeadzone()), &Program::eventSetDeadzoneLE, nullptr, nullptr, makeTooltip(tipDeadzone), LabelEdit::TextType::uInt)
-		} }
-	});
-	size_t lcnt = lx.size();
-	vector<Widget*> lns(lcnt + 2 + bnames.size() + 2);
-	for (size_t i = 0; i < lcnt; ++i)
+			new Slider(1.f, World::sets()->getDeadzone(), 0, Settings::axisLimit, ProgSettingsEvent::setDeadzoneSl, ACT_LEFT, tipDeadzone),
+			new LabelEdit(unumLen, toStr(World::sets()->getDeadzone()), ProgSettingsEvent::setDeadzoneLe, ACT_LEFT, tipDeadzone, LabelEdit::TextType::uInt)
+		})
+	};
+	lx.insert(lx.end(), std::make_move_iterator(sec1.begin()), std::make_move_iterator(sec1.end()));
+
+	uint lcnt = lx.size();
+	Children lns(lcnt + 2 + bnames.size() + 2);
+	for (uint i = 0; i < lcnt; ++i)
 		lns[i] = new Layout(lx[i].first, std::move(lx[i].second), Direction::right);
 	lns[lcnt] = new Widget(0);
-	lns[lcnt + 1] = new Layout(lineHeight, { new Widget(descLength), new Label(1.f, "Keyboard", nullptr, nullptr, nullptr, nullptr, Alignment::center, Picture::nullTex, false), new Label(1.f, "DirectInput", nullptr, nullptr, nullptr, nullptr, Alignment::center, Picture::nullTex, false), new Label(1.f, "XInput", nullptr, nullptr, nullptr, nullptr, Alignment::center, Picture::nullTex, false) }, Direction::right);
+	lns[lcnt + 1] = new Layout(lineHeight, { new Widget(descLength), new Label(1.f, "Keyboard", Alignment::center, false), new Label(1.f, "DirectInput", Alignment::center, false), new Label(1.f, "XInput", Alignment::center, false) }, Direction::right);
 	limitLine = static_cast<Layout*>(lns[3]);
 
 	// shortcut entries
 	for (size_t i = 0; i < bnames.size(); ++i) {
-		Label* lbl = new Label(descLength, std::move(bnames[i]));
-		vector<Widget*> lin {
+		auto lbl = new Label(descLength, std::move(bnames[i]));
+		Children lin {
 			lbl,
-			new KeyGetter(1.f, KeyGetter::AcceptType::keyboard, Binding::Type(i), makeTooltip(std::format("{} keyboard binding", lbl->getText()))),
-			new KeyGetter(1.f, KeyGetter::AcceptType::joystick, Binding::Type(i), makeTooltip(std::format("{} joystick binding", lbl->getText()))),
-			new KeyGetter(1.f, KeyGetter::AcceptType::gamepad, Binding::Type(i), makeTooltip(std::format("{} gamepad binding", lbl->getText())))
+			new KeyGetter(1.f, KeyGetter::AcceptType::keyboard, Binding::Type(i), std::format("{} keyboard binding", lbl->getText().data())),
+			new KeyGetter(1.f, KeyGetter::AcceptType::joystick, Binding::Type(i), std::format("{} joystick binding", lbl->getText().data())),
+			new KeyGetter(1.f, KeyGetter::AcceptType::gamepad, Binding::Type(i), std::format("{} gamepad binding", lbl->getText().data()))
 		};
 		lns[lcnt + 2 + i] = new Layout(lineHeight, std::move(lin), Direction::right);
 	}
 	lcnt += 2 + Binding::names.size();
 
 	// reset button
-	Text resbut("Reset", lineHeight);
 	lns[lcnt] = new Widget(0);
-	lns[lcnt + 1] = new Layout(lineHeight, { new Label(resbut.length, std::move(resbut.text), &Program::eventResetSettings, nullptr, nullptr, makeTooltip("Reset all settings")) }, Direction::right);
+	lns[lcnt + 1] = new Layout(lineHeight, { new PushButton(measureText("Reset", lineHeight), "Reset", ProgSettingsEvent::reset, ACT_LEFT, "Reset all settings") }, Direction::right);
 
 	// root layout
-	vector<Widget*> cont = {
+	Children cont = {
 		new Layout(topHeight, std::move(top), Direction::right, topSpacing),
 		new ScrollArea(1.f, std::move(lns))
 	};
@@ -950,11 +923,24 @@ Widget* ProgSettings::createLimitEdit() {
 	switch (World::sets()->picLim.type) {
 	using enum PicLim::Type;
 	case count:
-		return new LabelEdit(1.f, toStr(World::sets()->picLim.getCount()), &Program::eventSetPicLimCount, nullptr, nullptr, makeTooltip("Number of pictures per batch"), LabelEdit::TextType::uInt);
+		return new LabelEdit(1.f, toStr(World::sets()->picLim.getCount()), ProgSettingsEvent::setPicLimitCount, ACT_LEFT, "Number of pictures per batch", LabelEdit::TextType::uInt);
 	case size:
-		return new LabelEdit(1.f, PicLim::memoryString(World::sets()->picLim.getSize()), &Program::eventSetPicLimSize, nullptr, nullptr, makeTooltip("Total size of pictures per batch"));
+		return new LabelEdit(1.f, PicLim::memoryString(World::sets()->picLim.getSize()), ProgSettingsEvent::setPicLimitSize, ACT_LEFT, "Total size of pictures per batch");
 	}
 	return new Widget();
+}
+
+Cstring ProgSettings::makeZoomText() {
+	double zoom = Settings::zoomValue(World::sets()->zoom);
+	Cstring str = toStr<Cstring>(zoom);
+	size_t len = str.length();
+	if (zoom >= 1.0) {
+		if (size_t i = std::find(str.data(), str.data() + len, '.') - str.data(); i + 4 < len)
+			return Cstring(str.data(), i + 4);
+	} else if (size_t i = std::find(str.data(), str.data() + len, '.') - str.data(); i < len)
+		if (i = std::find_if(str.data() + i + 1, str.data() + len, [](char ch) -> bool { return ch != '0'; }) - str.data(); i < len)
+			return Cstring(str.data(), std::min(i + 3, len));
+	return str;
 }
 
 void ProgSettings::startFonts() {
@@ -965,16 +951,16 @@ void ProgSettings::startFonts() {
 void ProgSettings::stopFonts() {
 	if (fontThread.joinable()) {
 		fontThread = std::jthread();
-		cleanupEvent(SDL_USEREVENT_FONTS_FINISHED, [](SDL_UserEvent& user) { delete static_cast<FontListResult*>(user.data1); });
+		cleanupEvent(SDL_USEREVENT_THREAD_FONTS_FINISHED, [](SDL_UserEvent& user) { delete static_cast<FontListResult*>(user.data1); });
 	}
 }
 
-void ProgSettings::setFontField(vector<string>&& families, uptr<string[]>&& files, size_t select) {
+void ProgSettings::setFontField(vector<Cstring>&& families, uptr<Cstring[]>&& files, size_t select) {
 	if (!families.empty()) {
 		fontList->setOptions(select, std::move(families), std::move(files));
-		fontList->setCalls(&Program::eventSetFontCMB, &Program::eventSetFontCMB, std::nullopt);
+		fontList->setEvent(ProgSettingsEvent::setFontCmb, ACT_LEFT | ACT_RIGHT);
 	} else
-		fontList->getParent()->replaceWidget(fontList->getIndex(), new LabelEdit(1.f, valcp(World::sets()->font), &Program::eventSetFontLE, nullptr, nullptr, makeTooltip("Font name or path")));
+		fontList->getParent()->replaceWidget(fontList->getIndex(), new LabelEdit(1.f, valcp(World::sets()->font), ProgSettingsEvent::setFontLe, ACT_LEFT, "Font name or path"));
 }
 
 void ProgSettings::startMove() {
@@ -985,11 +971,12 @@ void ProgSettings::startMove() {
 void ProgSettings::stopMove() {
 	if (moveThread.joinable()) {
 		moveThread = std::jthread();
-		SDL_FlushEvent(SDL_USEREVENT_MOVE_PROGRESS);
-		cleanupEvent(SDL_USEREVENT_MOVE_FINISHED, [](SDL_UserEvent& user) {
-			string* errors = static_cast<string*>(user.data1);
-			logMoveErrors(errors);
-			delete errors;
+		cleanupEvent(SDL_USEREVENT_THREAD_MOVE, [](SDL_UserEvent& event) {
+			if (ThreadEvent(event.code) == ThreadEvent::finished) {
+				auto errors = static_cast<string*>(event.data1);
+				logMoveErrors(errors);
+				delete errors;
+			}
 		});
 	}
 }
@@ -1016,36 +1003,36 @@ RootLayout* ProgSearchDir::createLayout() {
 		"Set"
 	};
 	std::initializer_list<const char*>::iterator itxs = txs.begin();
-	int txsWidth = findMaxLength(txs.begin(), txs.end(), lineHeight);
-	vector<Widget*> bar = {
-		new Label(lineHeight, *itxs++, &Program::eventExitBrowser),
-		new Label(lineHeight, *itxs++, &Program::eventBrowserGoUp),
-		new Label(lineHeight, *itxs++, &Program::eventSetLibraryDirBW)
+	uint txsWidth = findMaxLength(txs.begin(), txs.end(), lineHeight);
+	Children bar = {
+		new PushButton(lineHeight, *itxs++, ProgFileExplorerEvent::exit),
+		new PushButton(lineHeight, *itxs++, ProgFileExplorerEvent::goUp),
+		new PushButton(lineHeight, *itxs++, ProgSearchDirEvent::setLibraryDirBw)
 	};
 
 	// directory list
 	Browser* browser = World::program()->getBrowser();
 	vector<string> strs = browser->listDirDirs(browser->getCurDir());
-	vector<Widget*> items(strs.size());
+	Children items(strs.size());
 	for (size_t i = 0; i < strs.size(); ++i)
 		items[i] = makeDirectoryEntry(lineHeight, std::move(strs[i]));
 	dirEnd = strs.size();
 	fileEnd = dirEnd;
 
 	// main content
-	vector<Widget*> mid = {
+	Children mid = {
 		new Layout(txsWidth, std::move(bar)),
-		fileList = new ScrollArea(1.f, std::move(items), Direction::down, ScrollArea::Select::one)
+		fileList = new ScrollArea(1.f, std::move(items))
 	};
 
 	// root layout
-	vector<Widget*> cont = {
-		locationBar = new LabelEdit(lineHeight, valcp(browser->getCurDir()), &Program::eventBrowserGoTo),
+	Children cont = {
+		locationBar = new LabelEdit(lineHeight, valcp(browser->getCurDir()), ProgFileExplorerEvent::goTo),
 		new Layout(1.f, std::move(mid), Direction::right, topSpacing)
 	};
 	return new RootLayout(1.f, std::move(cont), Direction::down, topSpacing);
 }
 
-Label* ProgSearchDir::makeDirectoryEntry(const Size& size, string&& name) {
-	return new Label(size, std::move(name), nullptr, nullptr, &Program::eventBrowserGoIn, nullptr, Alignment::left, World::drawSys()->texture("folder"));
+PushButton* ProgSearchDir::makeDirectoryEntry(const Size& size, Cstring&& name) {
+	return new IconPushButton(size, std::move(name), World::drawSys()->texture("folder"), ProgSearchDirEvent::goIn, ACT_LEFT | ACT_DOUBLE);
 }

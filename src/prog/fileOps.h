@@ -49,7 +49,7 @@ private:
 // file operations interface
 class FileOps {
 public:
-	virtual ~FileOps() = default;
+	virtual ~FileOps();
 
 	static FileOps* instantiate(const RemoteLocation& rl, vector<string>&& passwords);
 
@@ -64,7 +64,7 @@ public:
 	virtual SDL_Surface* loadPicture(string_view path) = 0;
 	virtual archive* openArchive(string_view path) = 0;
 	virtual void setWatch(string_view path) = 0;
-	virtual optional<vector<FileChange>> pollWatch() = 0;	// nullopt if the watched file/directory has been renamed or deleted
+	virtual bool pollWatch(vector<FileChange>& files) = 0;	// returns true if the watched file/directory has been renamed or deleted
 	virtual FileOpCapabilities capabilities() const = 0;
 	virtual string prefix() const = 0;
 	virtual bool equals(const RemoteLocation& rl) const = 0;
@@ -115,23 +115,23 @@ private:
 
 public:
 	FileOpsLocal();
-	~FileOpsLocal() final;
+	~FileOpsLocal() override;
 
-	vector<string> listDirectory(string_view path, bool files = true, bool dirs = true, bool hidden = true) final;
-	pair<vector<string>, vector<string>> listDirectorySep(string_view path, bool hidden) final;
-	bool deleteEntry(string_view base) final;
-	bool renameEntry(string_view oldPath, string_view newPath) final;
-	vector<byte_t> readFile(string_view path) final;
-	fs::file_type fileType(string_view path) final;
-	bool isDirectory(string_view path) final;
-	bool isPicture(string_view path) final;
-	SDL_Surface* loadPicture(string_view path) final;
-	archive* openArchive(string_view path) final;
-	void setWatch(string_view path) final;
-	optional<vector<FileChange>> pollWatch() final;
-	FileOpCapabilities capabilities() const final;
-	string prefix() const final;
-	bool equals(const RemoteLocation& rl) const final;
+	vector<string> listDirectory(string_view path, bool files = true, bool dirs = true, bool hidden = true) override;
+	pair<vector<string>, vector<string>> listDirectorySep(string_view path, bool hidden) override;
+	bool deleteEntry(string_view base) override;
+	bool renameEntry(string_view oldPath, string_view newPath) override;
+	vector<byte_t> readFile(string_view path) override;
+	fs::file_type fileType(string_view path) override;
+	bool isDirectory(string_view path) override;
+	bool isPicture(string_view path) override;
+	SDL_Surface* loadPicture(string_view path) override;
+	archive* openArchive(string_view path) override;
+	void setWatch(string_view path) override;
+	bool pollWatch(vector<FileChange>& files) override;
+	FileOpCapabilities capabilities() const override;
+	string prefix() const override;
+	bool equals(const RemoteLocation& rl) const override;
 
 	static vector<byte_t> readFile(const fs::path& path);
 	static bool isDirectory(const fs::path& path);
@@ -139,7 +139,7 @@ private:
 #ifdef _WIN32
 	static vector<string> listDrives();
 #endif
-	std::nullopt_t unsetWatch();
+	bool unsetWatch();
 };
 
 #if defined(CAN_SMB) || defined(CAN_SFTP)
@@ -153,11 +153,11 @@ public:
 	FileOpsRemote(string&& srv);
 	~FileOpsRemote() override = default;
 
-	string prefix() const final;
+	string prefix() const override;
 
-	bool isPicture(string_view path) final;
-	SDL_Surface* loadPicture(string_view path) final;
-	archive* openArchive(string_view path) final;
+	bool isPicture(string_view path) override;
+	SDL_Surface* loadPicture(string_view path) override;
+	archive* openArchive(string_view path) override;
 };
 
 inline FileOpsRemote::FileOpsRemote(string&& srv) :
@@ -192,22 +192,22 @@ private:
 
 public:
 	FileOpsSmb(const RemoteLocation& rl, vector<string>&& passwords);
-	~FileOpsSmb() final;
+	~FileOpsSmb() override;
 
-	vector<string> listDirectory(string_view path, bool files = true, bool dirs = true, bool hidden = true) final;
-	pair<vector<string>, vector<string>> listDirectorySep(string_view path, bool hidden) final;
-	bool deleteEntry(string_view base) final;
-	bool renameEntry(string_view oldPath, string_view newPath) final;
-	vector<byte_t> readFile(string_view path) final;
-	fs::file_type fileType(string_view path) final;
-	bool isDirectory(string_view path) final;
-	void setWatch(string_view path) final;
-	optional<vector<FileChange>> pollWatch() final;
-	FileOpCapabilities capabilities() const final;
-	bool equals(const RemoteLocation& rl) const final;
+	vector<string> listDirectory(string_view path, bool files = true, bool dirs = true, bool hidden = true) override;
+	pair<vector<string>, vector<string>> listDirectorySep(string_view path, bool hidden) override;
+	bool deleteEntry(string_view base) override;
+	bool renameEntry(string_view oldPath, string_view newPath) override;
+	vector<byte_t> readFile(string_view path) override;
+	fs::file_type fileType(string_view path) override;
+	bool isDirectory(string_view path) override;
+	void setWatch(string_view path) override;
+	bool pollWatch(vector<FileChange>& files) override;
+	FileOpCapabilities capabilities() const override;
+	bool equals(const RemoteLocation& rl) const override;
 
 private:
-	std::nullopt_t unsetWatch();
+	bool unsetWatch();
 	static void logMsg(void* data, int level, const char* msg);
 };
 #endif
@@ -224,19 +224,19 @@ private:
 
 public:
 	FileOpsSftp(const RemoteLocation& rl, const vector<string>& passwords);
-	~FileOpsSftp() final;
+	~FileOpsSftp() override;
 
-	vector<string> listDirectory(string_view path, bool files = true, bool dirs = true, bool hidden = true) final;
-	pair<vector<string>, vector<string>> listDirectorySep(string_view path, bool hidden) final;
-	bool deleteEntry(string_view base) final;
-	bool renameEntry(string_view oldPath, string_view newPath) final;
-	vector<byte_t> readFile(string_view path) final;
-	fs::file_type fileType(string_view path) final;
-	bool isDirectory(string_view path) final;
-	void setWatch(string_view) final {}
-	optional<vector<FileChange>> pollWatch() final;
-	FileOpCapabilities capabilities() const final;
-	bool equals(const RemoteLocation& rl) const final;
+	vector<string> listDirectory(string_view path, bool files = true, bool dirs = true, bool hidden = true) override;
+	pair<vector<string>, vector<string>> listDirectorySep(string_view path, bool hidden) override;
+	bool deleteEntry(string_view base) override;
+	bool renameEntry(string_view oldPath, string_view newPath) override;
+	vector<byte_t> readFile(string_view path) override;
+	fs::file_type fileType(string_view path) override;
+	bool isDirectory(string_view path) override;
+	void setWatch(string_view) override {}
+	bool pollWatch(vector<FileChange>& files) override;
+	FileOpCapabilities capabilities() const override;
+	bool equals(const RemoteLocation& rl) const override;
 
 private:
 	void authenticate(const vector<string>& passwords);

@@ -1,10 +1,11 @@
 #include "types.h"
 #include "utils/compare.h"
 
-void pushEvent(UserEvent code, void* data1, void* data2) {
+void pushEvent(UserEvent type, int32 code, void* data1, void* data2) {
 	SDL_Event event = { .user = {
-		.type = code,
+		.type = type,
 		.timestamp = SDL_GetTicks(),
+		.code = code,
 		.data1 = data1,
 		.data2 = data2
 	} };
@@ -89,24 +90,7 @@ uint16 RemoteLocation::sanitizePort(string_view port, Protocol protocol) {
 	return pnum ? pnum : protocolPorts[eint(protocol)];
 }
 
-// FILE CHANGE
-
-FileChange::FileChange(string&& entry, Type change) :
-	name(std::move(entry)),
-	type(change)
-{}
-
 // ARCHIVE NODES
-
-ArchiveFile::ArchiveFile(string&& filename, uintptr_t mem) :
-	name(std::move(filename)),
-	size(mem)
-{}
-
-ArchiveDir::ArchiveDir(ArchiveDir* daddy, string&& dirname) :
-	parent(daddy),
-	name(std::move(dirname))
-{}
 
 void ArchiveDir::sort() {
 	rng::sort(dirs, [](const ArchiveDir& a, const ArchiveDir& b) -> bool { return StrNatCmp::less(a.name, b.name); });
@@ -190,10 +174,9 @@ BrowserPictureProgress::BrowserPictureProgress(BrowserResultPicture* rp, SDL_Sur
 	id(index)
 {}
 
-FontListResult::FontListResult(vector<string>&& fa, uptr<string[]>&& fl, size_t id, string&& msg) :
+FontListResult::FontListResult(vector<Cstring>&& fa, uptr<Cstring[]>&& fl, size_t id, string&& msg) :
 	families(std::move(fa)),
 	files(std::move(fl)),
 	select(id),
 	error(std::move(msg))
 {}
-

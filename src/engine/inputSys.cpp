@@ -144,7 +144,7 @@ void InputSys::eventFingerDown(const SDL_TouchFingerEvent& fin) {
 
 void InputSys::eventFingerUp(const SDL_TouchFingerEvent& fin) {
 	eventMouseButtonUp(toMouseEvent(fin, SDL_RELEASED, World::drawSys()->getViewRes()));
-	World::scene()->updateSelect(ivec2(-1));
+	World::scene()->deselect();
 }
 
 SDL_MouseButtonEvent InputSys::toMouseEvent(const SDL_TouchFingerEvent& fin, uint8 state, vec2 winSize) {

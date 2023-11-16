@@ -10,27 +10,18 @@ struct PixmapRgba {
 	PixmapRgba() = default;
 	PixmapRgba(const PixmapRgba&) = default;
 	PixmapRgba(PixmapRgba&&) = default;
-	PixmapRgba(const uint32* data, uvec2 size);
+	PixmapRgba(const uint32* data, uvec2 size) : pix(data), res(size) {}
 };
 
 class Texture {
-private:
-	ivec2 res;
-
 protected:
-	Texture(ivec2 size);
+	uvec2 res;
+
+	Texture(uvec2 size) : res(size) {}
 
 public:
-	ivec2 getRes() const;
+	uvec2 getRes() const { return res; }
 };
-
-inline Texture::Texture(ivec2 size) :
-	res(size)
-{}
-
-inline ivec2 Texture::getRes() const {
-	return res;
-}
 
 class Renderer {
 public:
@@ -40,7 +31,7 @@ public:
 		SDL_Window* win;
 		Recti rect;
 
-		View(SDL_Window* window, const Recti& area = Recti());
+		View(SDL_Window* window, const Recti& area = Recti()) : win(window), rect(area) {}
 	};
 
 	struct ErrorSkip {};
@@ -57,7 +48,7 @@ protected:
 	std::set<SDL_PixelFormatEnum> supportedFormats;
 	uint maxPicRes;	// should only get accessed from one thread at a time
 
-	Renderer(std::set<SDL_PixelFormatEnum>&& formats);
+	Renderer(std::set<SDL_PixelFormatEnum>&& formats) : supportedFormats(std::move(formats)) {}
 public:
 	virtual ~Renderer() = default;
 
@@ -73,15 +64,19 @@ public:
 	virtual void startSelDraw(View* view, ivec2 pos) = 0;
 	virtual void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) = 0;
 	virtual Widget* finishSelDraw(View* view) = 0;
-	virtual Texture* texFromIcon(SDL_Surface* img) = 0;	// scales down image to largest possible size
-	virtual Texture* texFromRpic(SDL_Surface* img) = 0;	// image must have been scaled down in advance
+	virtual Texture* texFromEmpty() = 0;					// creates empty texture handle (currently only used for text)
+	virtual Texture* texFromIcon(SDL_Surface* img) = 0;		// scales down image to largest possible size
+	virtual bool texFromIcon(Texture* tex, SDL_Surface* img) = 0;	// ^ but refills tex and returns true if successful
+	virtual Texture* texFromRpic(SDL_Surface* img) = 0;		// image must have been scaled down in advance
 	virtual Texture* texFromText(const PixmapRgba& pm) = 0;	// cuts off image if it's too large and uses nearest filter if possible
+	virtual bool texFromText(Texture* tex, const PixmapRgba& pm) = 0;	// ^ but refills tex and returns true if successful
 	virtual void freeTexture(Texture* tex) = 0;
 	virtual void synchTransfer();
 
-	const umap<int, View*>& getViews() const;
+	const umap<int, View*>& getViews() const { return views; }
 	void setMaxPicRes(uint& size);
 	SDL_Surface* makeCompatible(SDL_Surface* img, bool rpic) const;	// must be thread safe
+	static bool isSingleWindow(const umap<int, SDL_Window*>& windows);
 protected:
 	virtual uint maxTexSize() const = 0;
 	virtual const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* getSquashableFormats() const = 0;
@@ -89,10 +84,6 @@ protected:
 	static SDL_Surface* limitSize(SDL_Surface* img, uint32 limit);
 };
 
-inline Renderer::Renderer(std::set<SDL_PixelFormatEnum>&& formats) :
-	supportedFormats(std::move(formats))
-{}
-
-inline const umap<int, Renderer::View*>& Renderer::getViews() const {
-	return views;
+inline bool Renderer::isSingleWindow(const umap<int, SDL_Window*>& windows) {
+	return windows.size() == 1 && windows.begin()->first == singleDspId;
 }

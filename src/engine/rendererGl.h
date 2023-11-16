@@ -25,7 +25,7 @@ private:
 	private:
 		GLuint id = 0;
 
-		TextureGl(ivec2 size, GLuint tex);
+		TextureGl(uvec2 size, GLuint tex) : Texture(size), id(tex) {}
 
 		friend class RendererGl;
 	};
@@ -33,7 +33,7 @@ private:
 	struct ViewGl : View {
 		SDL_GLContext ctx;
 
-		ViewGl(SDL_Window* window, const Recti& area, SDL_GLContext context);
+		ViewGl(SDL_Window* window, const Recti& area, SDL_GLContext context) : View(window, area), ctx(context) {}
 	};
 
 	GLint uniPviewGui, uniRectGui, uniFrameGui, uniColorGui;
@@ -82,30 +82,33 @@ private:
 #endif
 public:
 	RendererGl(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
-	~RendererGl() final;
+	~RendererGl() override;
 
-	void setClearColor(const vec4& color) final;
-	void setVsync(bool vsync) final;
-	void updateView(ivec2& viewRes) final;
-	void setCompression(Settings::Compression compression) final;
-	pair<uint, Settings::Compression> getSettings(vector<pair<u32vec2, string>>& devices) const final;
+	void setClearColor(const vec4& color) override;
+	void setVsync(bool vsync) override;
+	void updateView(ivec2& viewRes) override;
+	void setCompression(Settings::Compression compression) override;
+	pair<uint, Settings::Compression> getSettings(vector<pair<u32vec2, string>>& devices) const override;
 
-	void startDraw(View* view) final;
-	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) final;
-	void finishDraw(View* view) final;
+	void startDraw(View* view) override;
+	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) override;
+	void finishDraw(View* view) override;
 
-	void startSelDraw(View* view, ivec2 pos) final;
-	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) final;
-	Widget* finishSelDraw(View* view) final;
+	void startSelDraw(View* view, ivec2 pos) override;
+	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) override;
+	Widget* finishSelDraw(View* view) override;
 
-	Texture* texFromIcon(SDL_Surface* img) final;
-	Texture* texFromRpic(SDL_Surface* img) final;
-	Texture* texFromText(const PixmapRgba& pm) final;
-	void freeTexture(Texture* tex) final;
+	Texture* texFromEmpty() override;
+	Texture* texFromIcon(SDL_Surface* img) override;
+	bool texFromIcon(Texture* tex, SDL_Surface* img) override;
+	Texture* texFromRpic(SDL_Surface* img) override;
+	Texture* texFromText(const PixmapRgba& pm) override;
+	bool texFromText(Texture* tex, const PixmapRgba& pm) override;
+	void freeTexture(Texture* tex) override;
 
 protected:
-	uint maxTexSize() const final;
-	const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* getSquashableFormats() const final;
+	uint maxTexSize() const override;
+	const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* getSquashableFormats() const override;
 
 private:
 	void initGl(ivec2 res, bool vsync, const vec4& bgcolor);
@@ -118,7 +121,8 @@ private:
 	void checkFramebufferStatus(const char* name);
 
 	template <Invocable<GLuint, GLenum, GLint*> C, Invocable<GLuint, GLsizei, GLsizei*, GLchar*> I> static void checkStatus(GLuint id, GLenum stat, C check, I info, const string& name);
-	static TextureGl* createTexture(const byte_t* pix, uvec2 res, uint tpitch, GLint iform, GLenum pform, GLenum type, GLint filter);
+	static GLuint initTexture(GLint filter);
+	static void fillTexture(const byte_t* pix, uint tpitch, GLint iform, GLenum pform, GLenum type, TextureGl& tex);
 	template <bool keep> tuple<SDL_Surface*, GLint, GLenum, GLenum> pickPixFormat(SDL_Surface* img) const;
 #ifndef OPENGLES
 #ifndef NDEBUG

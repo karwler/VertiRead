@@ -73,6 +73,10 @@ void Binding::reset(Type newType) {
 		setJbutton(11);
 		setGbutton(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
 		break;
+	case zoomFit:
+		bcall = &ProgState::eventZoomFit;
+		setKey(SDL_SCANCODE_T);
+		break;
 	case toStart:
 		bcall = &ProgState::eventToStart;
 		setKey(SDL_SCANCODE_HOME);

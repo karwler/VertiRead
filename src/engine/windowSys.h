@@ -4,8 +4,6 @@
 
 // handles window events and contains video settings
 class WindowSys {
-public:
-	static constexpr float fallbackDpi = 96.f;
 private:
 	static constexpr char title[] = "VertiRead";
 	static constexpr ivec2 windowMinSize = { 500, 300 };
@@ -19,7 +17,6 @@ private:
 	Scene* scene;
 	Settings* sets;
 	umap<int, SDL_Window*> windows;
-	float winDpi;
 	float dSec = 0.f;		// delta seconds, aka the time between each iteration of the above mentioned loop
 	bool run = true;		// whether the loop in which the program runs should continue
 
@@ -27,25 +24,23 @@ public:
 	int start(vector<string>&& cmdVals, uset<string>&& cmdFlags);
 	void close();
 
-	float getDSec() const;
-	float getWinDpi() const;
+	float getDSec() const { return dSec; }
 	ivec2 mousePos();
 	ivec2 winViewOffset(uint32 wid);
 	ivec2 displayResolution() const;
 	void moveCursor(ivec2 mov);
 	void toggleOpacity();
 	void setScreenMode(Settings::Screen sm);
-	void setWindowPos(ivec2 pos);
-	void setResolution(ivec2 res);
+	void reposizeWindow(ivec2 dres, ivec2 wsiz);
 	void resetSettings();
 	void recreateWindows();
 
-	FileSys* getFileSys();
-	DrawSys* getDrawSys();
-	InputSys* getInputSys();
-	Program* getProgram();
-	Scene* getScene();
-	Settings* getSets();
+	FileSys* getFileSys() { return fileSys; }
+	DrawSys* getDrawSys() { return drawSys; }
+	InputSys* getInputSys() { return inputSys; }
+	Program* getProgram() { return program; }
+	Scene* getScene() { return scene; }
+	Settings* getSets() { return sets; }
 
 private:
 	void init(vector<string>&& cmdVals, uset<string>&& cmdFlags);
@@ -62,36 +57,4 @@ private:
 
 inline void WindowSys::close() {
 	run = false;
-}
-
-inline float WindowSys::getDSec() const {
-	return dSec;
-}
-
-inline FileSys* WindowSys::getFileSys() {
-	return fileSys;
-}
-
-inline DrawSys* WindowSys::getDrawSys() {
-	return drawSys;
-}
-
-inline InputSys* WindowSys::getInputSys() {
-	return inputSys;
-}
-
-inline Program* WindowSys::getProgram() {
-	return program;
-}
-
-inline Scene* WindowSys::getScene() {
-	return scene;
-}
-
-inline Settings* WindowSys::getSets() {
-	return sets;
-}
-
-inline float WindowSys::getWinDpi() const {
-	return winDpi;
 }

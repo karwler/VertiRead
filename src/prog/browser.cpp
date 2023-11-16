@@ -325,13 +325,13 @@ FileOpCapabilities Browser::fileOpCapabilities() const {
 	return !curNode ? fsop->capabilities() : FileOpCapabilities::none;
 }
 
-optional<vector<FileChange>> Browser::directoryUpdate() {
-	optional<vector<FileChange>> res = fsop->pollWatch();
-	if (curNode && !res) {
+bool Browser::directoryUpdate(vector<FileChange>& files) {
+	bool gone = fsop->pollWatch(files);
+	if (curNode && gone) {
 		arch.clear();
 		curNode = &arch;
 	}
-	return res;
+	return gone;
 }
 
 void Browser::stopThread() {
@@ -374,8 +374,10 @@ bool Browser::finishArchive(BrowserResultAsync&& ra) {
 }
 
 void Browser::cleanupArchive() {
-	SDL_FlushEvent(SDL_USEREVENT_ARCHIVE_PROGRESS);
-	cleanupEvent(SDL_USEREVENT_ARCHIVE_FINISHED, [](SDL_UserEvent& user) { delete static_cast<BrowserResultAsync*>(user.data1); });
+	cleanupEvent(SDL_USEREVENT_THREAD_ARCHIVE, [](SDL_UserEvent& event) {
+		if (ThreadEvent(event.code) == ThreadEvent::finished)
+			delete static_cast<BrowserResultAsync*>(event.data1);
+	});
 }
 
 void Browser::startPreview(const vector<string>& files, const vector<string>& dirs, int maxHeight) {
@@ -387,11 +389,12 @@ void Browser::startPreview(const vector<string>& files, const vector<string>& di
 }
 
 void Browser::cleanupPreview() {
-	cleanupEvent(SDL_USEREVENT_PREVIEW_PROGRESS, [](SDL_UserEvent& user) {
-		delete[] static_cast<char*>(user.data1);
-		SDL_FreeSurface(static_cast<SDL_Surface*>(user.data2));
+	cleanupEvent(SDL_USEREVENT_THREAD_PREVIEW, [](SDL_UserEvent& event) {
+		if (ThreadEvent(event.code) == ThreadEvent::progress) {
+			delete[] static_cast<char*>(event.data1);
+			SDL_FreeSurface(static_cast<SDL_Surface*>(event.data2));
+		}
 	});
-	SDL_FlushEvent(SDL_USEREVENT_PREVIEW_FINISHED);
 }
 
 void Browser::previewDirThread(std::stop_token stoken, FileOps* fsop, string curDir, vector<string> files, vector<string> dirs, string iconPath, bool showHidden, int maxHeight) {
@@ -403,7 +406,7 @@ void Browser::previewDirThread(std::stop_token stoken, FileOps* fsop, string cur
 			string dpath = curDir / it;
 			for (const string& sit : fsop->listDirectory(dpath, true, false, showHidden))
 				if (SDL_Surface* img = combineIcons(dicon.get(), fsop->loadPicture(dpath / sit))) {
-					pushEvent(SDL_USEREVENT_PREVIEW_PROGRESS, allocatePreviewName(it, false), img);
+					pushEvent(SDL_USEREVENT_THREAD_PREVIEW, ThreadEvent::progress, allocatePreviewName(it, false), img);
 					break;
 				}
 		}
@@ -412,15 +415,15 @@ void Browser::previewDirThread(std::stop_token stoken, FileOps* fsop, string cur
 			return;
 
 		if (string fpath = curDir / it; SDL_Surface* img = scaleDown(fsop->loadPicture(fpath), maxHeight))
-			pushEvent(SDL_USEREVENT_PREVIEW_PROGRESS, allocatePreviewName(it, true), img);
+			pushEvent(SDL_USEREVENT_THREAD_PREVIEW, ThreadEvent::progress, allocatePreviewName(it, true), img);
 		else if (vector<string> entries = fsop->listArchiveFiles(fpath); !entries.empty())
 			for (const string& ei : entries)
 				if (img = scaleDown(fsop->loadArchivePicture(fpath, ei), maxHeight); img) {
-					pushEvent(SDL_USEREVENT_PREVIEW_PROGRESS, allocatePreviewName(it, true), img);
+					pushEvent(SDL_USEREVENT_THREAD_PREVIEW, ThreadEvent::progress, allocatePreviewName(it, true), img);
 					break;
 				}
 	}
-	pushEvent(SDL_USEREVENT_PREVIEW_FINISHED);
+	pushEvent(SDL_USEREVENT_THREAD_PREVIEW, ThreadEvent::finished);
 }
 
 void Browser::previewArchThread(std::stop_token stoken, FileOps* fsop, string curDir, ArchiveDir root, string dir, string iconPath, int maxHeight) {
@@ -444,13 +447,13 @@ void Browser::previewArchThread(std::stop_token stoken, FileOps* fsop, string cu
 
 			if (umap<string, bool>::iterator pit = entries.find(archive_entry_pathname_utf8(entry)); pit != entries.end()) {
 				if (SDL_Surface* img = pit->second ? scaleDown(FileOps::loadArchivePicture(arch, entry), maxHeight) : combineIcons(dicon.get(), FileOps::loadArchivePicture(arch, entry)))
-					pushEvent(SDL_USEREVENT_PREVIEW_PROGRESS, allocatePreviewName(pit->first, pit->second), img);
+					pushEvent(SDL_USEREVENT_THREAD_PREVIEW, ThreadEvent::progress, allocatePreviewName(pit->first, pit->second), img);
 				entries.erase(pit);
 			}
 		}
 		archive_read_free(arch);
 	}
-	pushEvent(SDL_USEREVENT_PREVIEW_FINISHED);
+	pushEvent(SDL_USEREVENT_THREAD_PREVIEW, ThreadEvent::finished);
 }
 
 ArchiveDir Browser::sliceArchiveFiles(const ArchiveDir& node) {
@@ -492,7 +495,7 @@ SDL_Surface* Browser::scaleDown(SDL_Surface* img, int maxHeight) {
 }
 
 char* Browser::allocatePreviewName(string_view name, bool file) {
-	char* str = new char[name.length() + 2];
+	auto str = new char[name.length() + 2];
 	str[0] = file;
 	std::copy_n(name.data(), name.length() + 1, str + 1);
 	return str;
@@ -525,18 +528,22 @@ void Browser::finishLoadPictures(BrowserResultPicture& rp) {
 }
 
 void Browser::cleanupLoadPictures() {
-	cleanupEvent(SDL_USEREVENT_READER_PROGRESS, [](SDL_UserEvent& user) {
-		BrowserPictureProgress* pp = static_cast<BrowserPictureProgress*>(user.data1);
-		SDL_FreeSurface(pp->img);
-		delete pp;
-		delete[] static_cast<char*>(user.data2);
-	});
-	cleanupEvent(SDL_USEREVENT_READER_FINISHED, [](SDL_UserEvent& user) {
-		if (BrowserResultPicture* rp = static_cast<BrowserResultPicture*>(user.data1)) {
-			for (auto& [name, tex] : rp->pics)
-				if (tex)
-					World::drawSys()->getRenderer()->freeTexture(tex);
-			delete rp;
+	cleanupEvent(SDL_USEREVENT_THREAD_READER, [](SDL_UserEvent& event) {
+		switch (ThreadEvent(event.code)) {
+		using enum ThreadEvent;
+		case progress: {
+			auto pp = static_cast<BrowserPictureProgress*>(event.data1);
+			SDL_FreeSurface(pp->img);
+			delete pp;
+			delete[] static_cast<char*>(event.data2);
+			break; }
+		case finished:
+			if (auto rp = static_cast<BrowserResultPicture*>(event.data1)) {
+				for (auto& [name, tex] : rp->pics)
+					if (tex)
+						World::drawSys()->getRenderer()->freeTexture(tex);
+				delete rp;
+			}
 		}
 	});
 }
@@ -562,10 +569,10 @@ void Browser::loadPicturesDirThread(std::stop_token stoken, BrowserResultPicture
 			rp->mpic.unlock();
 			m += uintptr_t(img->w) * uintptr_t(img->h) * 4 / compress;
 			++c;
-			pushEvent(SDL_USEREVENT_READER_PROGRESS, new BrowserPictureProgress(rp, img, c - 1), progressText(limitToStr(picLim, c, m, sizMag), progLim));
+			pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::progress, new BrowserPictureProgress(rp, img, c - 1), progressText(limitToStr(picLim, c, m, sizMag), progLim));
 		}
 	}
-	pushEvent(SDL_USEREVENT_READER_FINISHED, rp, std::bit_cast<void*>(uintptr_t(fwd)));
+	pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::finished, rp, std::bit_cast<void*>(uintptr_t(fwd)));
 }
 
 void Browser::loadPicturesArchThread(std::stop_token stoken, BrowserResultPicture* rp, FileOps* fsop, umap<string, uintptr_t> files, PicLim picLim) {
@@ -576,7 +583,7 @@ void Browser::loadPicturesArchThread(std::stop_token stoken, BrowserResultPictur
 	archive* arch = fsop->openArchive(rp->curDir);
 	if (!arch) {
 		delete rp;
-		pushEvent(SDL_USEREVENT_READER_FINISHED);
+		pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::finished);
 		return;
 	}
 
@@ -591,13 +598,13 @@ void Browser::loadPicturesArchThread(std::stop_token stoken, BrowserResultPictur
 				rp->mpic.unlock();
 				m += fit->second;
 				++c;
-				pushEvent(SDL_USEREVENT_READER_PROGRESS, new BrowserPictureProgress(rp, img, c - 1), progressText(limitToStr(picLim, c, m, sizMag), progLim));
+				pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::progress, new BrowserPictureProgress(rp, img, c - 1), progressText(limitToStr(picLim, c, m, sizMag), progLim));
 			}
 			files.erase(fit);
 		}
 	}
 	archive_read_free(arch);
-	pushEvent(SDL_USEREVENT_READER_FINISHED, rp);
+	pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::finished, rp);
 }
 
 umap<string, uintptr_t> Browser::mapArchiveFiles(string_view dir, const vector<ArchiveFile>& files, const PicLim& picLim, uint compress, string_view firstPic, bool fwd) {
@@ -658,7 +665,7 @@ string Browser::limitToStr(const PicLim& picLim, uintptr_t c, uintptr_t m, uint8
 }
 
 char* Browser::progressText(string_view val, string_view lim) {
-	char* text = new char[val.length() + lim.length() + 2];
+	auto text = new char[val.length() + lim.length() + 2];
 	rng::copy(val, text);
 	text[val.length()] = '/';
 	rng::copy(lim, text + val.length() + 1);

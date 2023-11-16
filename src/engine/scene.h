@@ -13,9 +13,8 @@ struct ClickStamp {
 
 // handles more back-end UI interactions, works with widgets (UI elements), and contains Program and Library
 class Scene {
-public:
-	Widget* select = nullptr;	// currently selected widget
 private:
+	Widget* select = nullptr;	// currently selected widget
 	Widget* capture = nullptr;	// either pointer to widget currently hogging all keyboard input or ScrollArea which's slider is currently being dragged. nullptr if nothing is being captured or dragged
 	RootLayout* layout = nullptr;
 	Popup* popup = nullptr;
@@ -42,21 +41,24 @@ public:
 	void onResize();
 	void onDisplayChange();
 
-	Widget* getCapture() const;
+	Widget* getSelect() const { return select; }
+	Widget* getCapture() const { return capture; }
 	void setCapture(Widget* inter);
 	void resetLayouts();
 	void clearLayouts();
 	void setLayouts();
-	RootLayout* getLayout();
-	Overlay* getOverlay();
-	Popup* getPopup();
+	RootLayout* getLayout() { return layout; }
+	Overlay* getOverlay() { return overlay; }
+	Popup* getPopup() { return popup; }
 	void setPopup(Popup* newPopup, Widget* newCapture = nullptr);
 	void setPopup(pair<Popup*, Widget*> popcap);
-	Context* getContext();
+	Context* getContext() { return context; }
 	void setContext(Context* newContext);
 
 	void updateSelect();
+	void updateSelect(Widget* sel);
 	void updateSelect(ivec2 mPos);
+	void deselect();
 	void selectFirst();
 	bool cursorInClickRange(ivec2 mPos, uint8 mBut);
 
@@ -66,32 +68,12 @@ private:
 	bool overlayFocused(ivec2 mPos) const;
 };
 
-inline Widget* Scene::getCapture() const {
-	return capture;
-}
-
-inline RootLayout* Scene::getLayout() {
-	return layout;
-}
-
-inline Overlay* Scene::getOverlay() {
-	return overlay;
-}
-
-inline Popup* Scene::getPopup() {
-	return popup;
-}
-
 inline void Scene::setPopup(pair<Popup*, Widget*> popcap) {
 	setPopup(popcap.first, popcap.second);
 }
 
-inline Context* Scene::getContext() {
-	return context;
-}
-
 inline void Scene::updateSelect(ivec2 mPos) {
-	select = getSelected(mPos);
+	updateSelect(getSelected(mPos));
 }
 
 inline bool Scene::cursorInClickRange(ivec2 mPos, uint8 mBut) {

@@ -8,39 +8,11 @@ private:
 	static inline WindowSys windowSys;	// the thing on which everything runs;
 
 public:
-	static DrawSys* drawSys();
-	static FileSys* fileSys();
-	static InputSys* inputSys();
-	static Program* program();
-	static Scene* scene();
-	static Settings* sets();
-	static WindowSys* winSys();
+	static DrawSys* drawSys() { return windowSys.getDrawSys(); }
+	static FileSys* fileSys() { return windowSys.getFileSys(); }
+	static InputSys* inputSys() { return windowSys.getInputSys(); }
+	static Program* program() { return windowSys.getProgram(); }
+	static Scene* scene() { return windowSys.getScene(); }
+	static Settings* sets() { return windowSys.getSets(); }
+	static WindowSys* winSys() { return &windowSys; }
 };
-
-inline DrawSys* World::drawSys() {
-	return windowSys.getDrawSys();
-}
-
-inline FileSys* World::fileSys() {
-	return windowSys.getFileSys();
-}
-
-inline InputSys* World::inputSys() {
-	return windowSys.getInputSys();
-}
-
-inline Program* World::program() {
-	return windowSys.getProgram();
-}
-
-inline Scene* World::scene() {
-	return windowSys.getScene();
-}
-
-inline Settings* World::sets() {
-	return windowSys.getSets();
-}
-
-inline WindowSys* World::winSys() {
-	return &windowSys;
-}
