@@ -881,8 +881,9 @@ RendererVk::~RendererVk() {
 			pfnDestroyDebugUtilsMessengerExt(instance, dbgMessenger, nullptr);
 #endif
 	for (auto [id, view] : views) {
-		vkDestroySurfaceKHR(instance, static_cast<ViewVk*>(view)->surface, nullptr);
-		delete view;
+		auto vw = static_cast<ViewVk*>(view);
+		vkDestroySurfaceKHR(instance, vw->surface, nullptr);
+		delete vw;
 	}
 	vkDestroyInstance(instance, nullptr);
 }

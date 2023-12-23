@@ -129,6 +129,10 @@ constexpr char directorySeparator = '\\';
 constexpr char directorySeparator = '/';
 #endif
 
+constexpr byte_t operator""_b(char ch) {
+	return byte_t(ch);
+}
+
 template <Enumeration T>
 constexpr T operator~(T a) {
 	return T(~std::underlying_type_t<T>(a));
@@ -323,11 +327,32 @@ struct Size {
 
 using svec2 = glm::vec<2, Size, glm::defaultp>;
 
+// byte sequence that shouldn't change its location
+class Data {
+private:
+	uptr<byte_t[]> ptr;
+	size_t len = 0;
+
+public:
+	Data() = default;
+	Data(Data&& d) = default;
+	Data(size_t siz) : ptr(std::make_unique_for_overwrite<byte_t[]>(siz)), len(siz) {}
+
+	Data& operator=(Data&& d) = default;
+
+	byte_t* data() { return ptr.get(); }
+	const byte_t* data() const { return ptr.get(); }
+	size_t size() const { return len; }
+	void resize(size_t siz);
+	void clear();
+};
+
 // constant dynamic C string
 class Cstring {
-private:
+public:
 	static inline char nullch = '\0';
 
+private:
 	char* ptr = &nullch;
 
 public:
@@ -338,8 +363,12 @@ public:
 	Cstring(const char* s, size_t l) { set(s, l); }
 	Cstring(const char* p, const char* e) { set(p, e - p); }
 	Cstring(const string& s) { set(s); }
+#ifdef _WIN32
+	Cstring(const wchar_t* s) { set(s); }
+#endif
 	Cstring(const fs::path& s) { set(s); }
 	Cstring(string_view s) { set(s.data(), s.length()); }
+	Cstring(std::initializer_list<char> s) { set(s); }
 	~Cstring() { free(); }
 
 	Cstring& operator=(const Cstring& s);
@@ -348,30 +377,37 @@ public:
 	Cstring& operator=(const string& s);
 	Cstring& operator=(const fs::path& s);
 	Cstring& operator=(string_view s);
+	Cstring& operator=(std::initializer_list<char> s);
 
 	bool operator==(const Cstring& s) const { return !strcmp(ptr, s.ptr); }
 	bool operator==(const char* s) const { return !strcmp(ptr, s); }
 	bool operator==(const string& s) const { return !strcmp(ptr, s.c_str()); }
 	bool operator==(string_view s) const;
 
+	char& operator[](size_t i) { return ptr[i]; }
+	char operator[](size_t i) const { return ptr[i]; }
 	char* data() { return ptr; }
 	const char* data() const { return ptr; }
-	size_t length() const { return std::char_traits<char>::length(ptr); }
+	size_t length() const { return strlen(ptr); }
 	bool empty() const { return ptr == &nullch; }
-	operator string_view() const { return string_view(ptr, length()); }
 
+	void clear();
 private:
 	void set(const Cstring& s);
 	void set(Cstring&& s);
 	void set(const char* s);
 	void set(const char* s, size_t l);
 	void set(const string& s);
+#ifdef _WIN32
+	void set(const wchar_t* s);
+#endif
 	void set(const fs::path& s);
+	void set(std::initializer_list<char> s);
 	void free();
 };
 
 inline bool Cstring::operator==(string_view s) const {
-	return strlen(ptr) == s.length() && !std::char_traits<char>::compare(ptr, s.data(), s.length());
+	return !strncmp(ptr, s.data(), s.length()) && !ptr[s.length()];
 }
 
 // files and strings
@@ -383,9 +419,12 @@ string_view parentPath(string_view path);
 string_view relativePath(string_view path, string_view base);
 bool isSubpath(string_view path, string_view base);
 string strEnclose(string_view str);
-vector<string> strUnenclose(string_view str);
+string strUnenclose(string_view& str);
 vector<string_view> getWords(string_view str);
 tm currentDateTime();
+#ifdef _WIN32
+bool isAbsolute(string_view path);
+#endif
 
 template <Integer T>
 bool strempty(const T* str) {
@@ -420,6 +459,10 @@ inline bool notDsep(int c) {
 inline bool isDriveLetter(string_view path) {
 	return path.length() >= 2 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':' && std::all_of(path.begin() + 2, path.end(), isDsep);
 }
+#else
+inline bool isAbsolute(string_view path) {
+	return !path.empty() && path[0] == '/';
+}
 #endif
 
 template <Integer T>
@@ -436,6 +479,16 @@ std::basic_string_view<T> filename(const std::basic_string<T>& path) {
 template <Integer T>
 std::basic_string_view<T> filename(const T* path) {
 	return filename(std::basic_string_view<T>(path));
+}
+
+template <Integer T>
+const T* filenamePtr(std::basic_string_view<T> path) {
+	return std::to_address(std::find_if(path.rbegin(), path.rend(), isDsep).base());
+}
+
+template <Integer T>
+const T* filenamePtr(const std::basic_string<T>& path) {
+	return filenamePtr(std::basic_string_view<T>(path));
 }
 
 template <Integer T>

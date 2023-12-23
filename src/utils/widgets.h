@@ -19,7 +19,8 @@ public:
 	const T& getText() const { return text; }
 	const Texture* getTextTex() const { return textTex; }
 protected:
-	void recreateTextTex(uint height);
+	void recreateTextTex(string_view str, uint height);
+	void recreateTextTex(string_view str, uint height, uint limit);
 	Recti dspTextFrame(const Recti& rect, const Recti& frame) const;
 	ivec2 alignedTextPos(ivec2 pos, int sizx, Alignment align) const;
 };
@@ -279,6 +280,7 @@ public:
 	void onHold(ivec2 mPos, uint8 mBut) override;
 	void onDrag(ivec2 mPos, ivec2 mMov) override;
 	void onUndrag(ivec2 mPos, uint8 mBut) override;
+	void onKeypress(const SDL_Keysym& key) override;
 
 	int getVal() const { return val; }
 	void setVal(int value);
@@ -412,11 +414,13 @@ private:
 	string oldText;
 	uint cpos = 0;		// caret position
 	int textOfs = 0;	// text's horizontal offset
+	UserEvent cancEtype;
+	int16 cancEcode;
 	const TextType textType;
 public:
 	const bool unfocusConfirm;
 
-	LabelEdit(const Size& size, string&& line, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring(), TextType type = TextType::any, bool focusLossConfirm = true);
+	LabelEdit(const Size& size, string&& line, EventId eid, EventId cid = nullEvent, Actions amask = ACT_LEFT, Cstring&& tip = Cstring(), TextType type = TextType::any, bool focusLossConfirm = true);
 	~LabelEdit() override = default;
 
 	void drawSelf(const Recti& view) override;

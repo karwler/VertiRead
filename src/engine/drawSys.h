@@ -18,7 +18,7 @@ private:
 
 	struct Font {
 		FT_FaceRec_* face;
-		vector<byte_t> data;
+		Data data;
 	};
 
 	FT_LibraryRec_* lib = nullptr;
@@ -130,6 +130,8 @@ public:
 	uint textLength(string_view text, uint height);
 	Texture* renderText(string_view text, uint height);
 	Texture* renderText(string_view text, uint height, uint length);
+	bool renderText(Texture* tex, string_view text, uint height);
+	bool renderText(Texture* tex, string_view text, uint height, uint length);
 	FT_LibraryRec_* ftLib() const { return fonts.getLib(); }
 
 private:
@@ -147,6 +149,14 @@ inline Texture* DrawSys::renderText(string_view text, uint height) {
 
 inline Texture* DrawSys::renderText(string_view text, uint height, uint length) {
 	return renderer->texFromText(fonts.renderText(text, height, length));
+}
+
+inline bool DrawSys::renderText(Texture* tex, string_view text, uint height) {
+	return renderer->texFromText(tex, fonts.renderText(text, height));
+}
+
+inline bool DrawSys::renderText(Texture* tex, string_view text, uint height, uint length) {
+	return renderer->texFromText(tex, fonts.renderText(text, height, length));
 }
 
 inline void DrawSys::setFontHinting(Settings::Hinting hinting) {

@@ -7,9 +7,6 @@
 
 // for handling program state specific things that occur in all states
 class ProgState {
-public:
-	static constexpr char dotStr[] = ".";
-
 protected:
 	int popupLineHeight;
 	int tooltipHeight;
@@ -64,16 +61,16 @@ public:
 
 	virtual RootLayout* createLayout() = 0;
 	virtual Overlay* createOverlay();
-	Popup* createPopupMessage(Cstring&& msg, EventId ccal = GeneralEvent::closePopup, Cstring&& ctxt = "Okay", Alignment malign = Alignment::left);
+	void showPopupMessage(Cstring&& msg, EventId ccal = GeneralEvent::closePopup, Cstring&& ctxt = "Okay", Alignment malign = Alignment::left);
 	void updatePopupMessage(Cstring&& msg);
-	Popup* createPopupMultiline(Cstring&& msg, EventId ccal = GeneralEvent::closePopup, Cstring&& ctxt = "Okay");
-	Popup* createPopupChoice(Cstring&& msg, EventId kcal, EventId ccal = GeneralEvent::closePopup, Alignment malign = Alignment::left);
-	Popup* createPopupInput(Cstring&& msg, string&& text, EventId kcal, EventId ccal = GeneralEvent::closePopup, Cstring&& ktxt = "Okay", Alignment malign = Alignment::left);
+	void showPopupMultiline(Cstring&& msg, EventId ccal = GeneralEvent::closePopup, Cstring&& ctxt = "Okay");
+	void showPopupChoice(Cstring&& msg, EventId kcal, EventId ccal = GeneralEvent::closePopup, Alignment malign = Alignment::left);
+	void showPopupInput(Cstring&& msg, string&& text, EventId kcal, EventId ccal = GeneralEvent::closePopup, Cstring&& ktxt = "Okay", Alignment malign = Alignment::left);
 	static const string& inputFromPopup();
-	Popup* createPopupRemoteLogin(RemoteLocation&& rl, EventId kcall, EventId ccal = GeneralEvent::closePopup);
+	void showPopupRemoteLogin(RemoteLocation&& rl, EventId kcall, EventId ccal = GeneralEvent::closePopup);
 	static pair<RemoteLocation, bool> remoteLocationFromPopup();
-	Context* createContext(vector<pair<Cstring, EventId> >&& items, Widget* parent);
-	Context* createComboContext(ComboBox* parent, EventId kcal);
+	void showContext(vector<pair<Cstring, EventId> >&& items, Widget* parent);
+	void showComboContext(ComboBox* parent, EventId kcal);
 
 	int getLineHeight() const { return lineHeight; }
 	pair<int, uint> getTooltipParams() const { return pair(tooltipHeight, maxTooltipLength); }

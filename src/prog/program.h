@@ -27,7 +27,7 @@ public:
 	void handleProgBooksEvent(const SDL_UserEvent& event);
 	void handleProgFileExplorerEvent(const SDL_UserEvent& event);
 	void handleProgPageBrowserEvent(const SDL_UserEvent& event);
-	void handleThreadArchiveEvent(const SDL_UserEvent& event);
+	void eventArchiveFinished(const SDL_UserEvent& event);
 	void handleThreadPreviewEvent(const SDL_UserEvent& event);
 	void handleProgReaderEvent(const SDL_UserEvent& event);
 	void handleThreadReaderEvent(const SDL_UserEvent& event);
@@ -69,7 +69,6 @@ private:
 	void eventOpenSettings();
 
 	// browser
-	void eventArchiveFinished(BrowserResultAsync* ra);
 	void eventFileLoadingCancelled();
 	void eventBrowserGoIn(PushButton* lbl);
 	void eventBrowserGoFile(PushButton* lbl);

@@ -92,11 +92,23 @@ uint16 RemoteLocation::sanitizePort(string_view port, Protocol protocol) {
 
 // ARCHIVE NODES
 
-void ArchiveDir::sort() {
-	rng::sort(dirs, [](const ArchiveDir& a, const ArchiveDir& b) -> bool { return StrNatCmp::less(a.name, b.name); });
-	rng::sort(files, [](const ArchiveFile& a, const ArchiveFile& b) -> bool { return StrNatCmp::less(a.name, b.name); });
-	for (ArchiveDir& it : dirs)
-		it.sort();
+vector<ArchiveDir*> ArchiveDir::listDirs() {
+	vector<ArchiveDir*> entries;
+	rng::transform(dirs, std::back_inserter(entries), [](ArchiveDir& it) -> ArchiveDir* { return &it; });
+	rng::sort(entries, [](const ArchiveDir* a, const ArchiveDir* b) -> bool { return Strcomp::less(a->name.data(), b->name.data()); });
+	return entries;
+}
+
+vector<ArchiveFile*> ArchiveDir::listFiles() {
+	vector<ArchiveFile*> entries;
+	rng::transform(files, std::back_inserter(entries), [](ArchiveFile& it) -> ArchiveFile* { return &it; });
+	rng::sort(entries, [](const ArchiveFile* a, const ArchiveFile* b) -> bool { return Strcomp::less(a->name.data(), b->name.data()); });
+	return entries;
+}
+
+void ArchiveDir::finalize() {
+	dirs.sort([](const ArchiveDir& a, const ArchiveDir& b) -> bool { return strcmp(a.name.data(), b.name.data()) < 0; });
+	files.sort([](const ArchiveFile& a, const ArchiveFile& b) -> bool { return strcmp(a.name.data(), b.name.data()) < 0; });
 }
 
 void ArchiveDir::clear() {
@@ -105,67 +117,58 @@ void ArchiveDir::clear() {
 	files.clear();
 }
 
-string ArchiveDir::path() const {
-	size_t len = 0;
-	for (const ArchiveDir* it = this; it->parent; it = it->parent)
-		len += it->name.length() + 1;
-	string str;
-	str.resize(len);
-
-	for (const ArchiveDir* it = this; it->parent; it = it->parent) {
-		str[--len] = '/';
-		len -= it->name.length();
-		rng::copy(it->name, str.begin() + len);
-	}
-	return str;
-}
-
 pair<ArchiveDir*, ArchiveFile*> ArchiveDir::find(string_view path) {
-	if (path.empty())
-		return pair(nullptr, nullptr);
-
 	ArchiveDir* node = this;
 	size_t p = path.find_first_not_of('/');
-	for (size_t e; (e = path.find('/', p)) != string::npos; p = path.find_first_not_of('/', p)) {
-		vector<ArchiveDir>::iterator dit = node->findDir(path.substr(p, e - p));
-		if (dit == dirs.end())
+	for (size_t e; (e = path.find('/', p)) != string::npos; p = path.find_first_not_of('/', e))
+		if (node = node->findDir(path.substr(p, e - p)); !node)
 			return pair(nullptr, nullptr);
-		node = std::to_address(dit);
-	}
-	if (p < path.length()) {
-		string_view sname = path.substr(p);
-		if (vector<ArchiveDir>::iterator dit = node->findDir(sname); dit != dirs.end())
-			node = std::to_address(dit);
-		else if (vector<ArchiveFile>::iterator fit = node->findFile(sname); fit != files.end())
-			return pair(node, std::to_address(fit));
-		else
-			return pair(nullptr, nullptr);
-	}
-	return pair(node, nullptr);
+	if (p == string::npos)
+		return pair(node, nullptr);
+
+	string_view sname = path.substr(p);
+	if (ArchiveDir* dit = node->findDir(sname); dit)
+		return pair(dit, nullptr);
+	ArchiveFile* fit = node->findFile(sname);
+	return fit ? pair(node, fit) : pair(nullptr, nullptr);
 }
 
-vector<ArchiveDir>::iterator ArchiveDir::findDir(string_view dname) {
-	vector<ArchiveDir>::iterator dit = std::lower_bound(dirs.begin(), dirs.end(), dname, [](const ArchiveDir& a, string_view b) -> bool { return StrNatCmp::less(a.name, b); });
-	return dit != dirs.end() && dit->name == dname ? dit : dirs.end();
+ArchiveDir* ArchiveDir::findDir(string_view dname) {
+	std::forward_list<ArchiveDir>::iterator dit = std::lower_bound(dirs.begin(), dirs.end(), dname, [](const ArchiveDir& a, string_view b) -> bool { return strncmp(a.name.data(), b.data(), b.length()) < 0; });
+	return dit != dirs.end() && dit->name == dname ? std::to_address(dit) : nullptr;
 }
 
-vector<ArchiveFile>::iterator ArchiveDir::findFile(string_view fname) {
-	vector<ArchiveFile>::iterator fit = std::lower_bound(files.begin(), files.end(), fname, [](const ArchiveFile& a, string_view b) -> bool { return StrNatCmp::less(a.name, b); });
-	return fit != files.end() && fit->name == fname ? fit : files.end();
+ArchiveFile* ArchiveDir::findFile(string_view fname) {
+	std::forward_list<ArchiveFile>::iterator fit = std::lower_bound(files.begin(), files.end(), fname, [](const ArchiveFile& a, string_view b) -> bool { return strncmp(a.name.data(), b.data(), b.length()) < 0; });
+	return fit != files.end() && fit->name == fname ? std::to_address(fit) : nullptr;
+}
+
+void ArchiveDir::copySlicedDentsFrom(const ArchiveDir& src) {
+	dirs.clear();
+	for (const ArchiveDir& it : src.dirs)
+		dirs.emplace_front(valcp(it.name)).files = it.files;
+	files = src.files;
 }
 
 // RESULT ASYNC
 
-BrowserResultAsync::BrowserResultAsync(string&& root, string&& directory, string&& pname, ArchiveDir&& aroot) :
-	rootDir(std::move(root)),
-	curDir(std::move(directory)),
-	file(std::move(pname)),
-	arch(std::move(aroot))
+BrowserResultArchive::BrowserResultArchive(optional<string>&& root, ArchiveDir&& aroot, string&& fpath, string&& ppage) :
+	rootDir(root ? std::move(*root) : string()),
+	opath(std::move(fpath)),
+	page(std::move(ppage)),
+	arch(std::move(aroot)),
+	hasRootDir(root)
 {}
 
-BrowserResultPicture::BrowserResultPicture(bool inArch, string&& root, string&& directory, string&& pname, ArchiveDir&& aroot) :
-	BrowserResultAsync(std::move(root), std::move(directory), std::move(pname), std::move(aroot)),
-	archive(inArch)
+BrowserResultPicture::BrowserResultPicture(BrowserResultState brs, optional<string>&& root, string&& container, string&& pname, ArchiveDir&& aroot) :
+	rootDir(root ? std::move(*root) : string()),
+	curDir(std::move(container)),
+	picname(std::move(pname)),
+	arch(std::move(aroot)),
+	hasRootDir(root),
+	newCurDir(brs & BRS_LOC),
+	newArchive(brs & BRS_ARCH),
+	pdf(brs & BRS_PDF)
 {}
 
 BrowserPictureProgress::BrowserPictureProgress(BrowserResultPicture* rp, SDL_Surface* pic, size_t index) :
@@ -180,3 +183,13 @@ FontListResult::FontListResult(vector<Cstring>&& fa, uptr<Cstring[]>&& fl, size_
 	select(id),
 	error(std::move(msg))
 {}
+
+// COUNTED STOP REQ
+
+bool CountedStopReq::stopReq(std::stop_token stoken) {
+	if (++cnt >= lim) {
+		cnt = 0;
+		return stoken.stop_requested();
+	}
+	return false;
+}

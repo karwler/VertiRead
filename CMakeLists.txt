@@ -16,6 +16,7 @@ elseif(UNIX)
 	option(USE_SECRET "Build with libsecret if available." ON)
 	option(USE_SMBCLIENT "Build with smbclient if available." ON)
 	option(USE_SSH2 "Build with libssh2 if available." ON)
+	option(USE_PDF "Build with Poppler support." ON)
 endif()
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 	option(NATIVE "Build for the current CPU." OFF)
@@ -50,6 +51,10 @@ set(SRC_FILES
 	"src/engine/world.h"
 	"src/engine/optional/fontconfig.cpp"
 	"src/engine/optional/fontconfig.h"
+	"src/engine/optional/glib.cpp"
+	"src/engine/optional/glib.h"
+	"src/engine/optional/poppler.cpp"
+	"src/engine/optional/poppler.h"
 	"src/engine/optional/secret.cpp"
 	"src/engine/optional/secret.h"
 	"src/engine/optional/smbclient.cpp"
@@ -123,8 +128,8 @@ endif()
 
 # dependencies
 set(VER_ARC "3.6.2")
-set(VER_SDL "2.28.2")
-set(VER_IMG "2.6.3")
+set(VER_SDL "2.28.5")
+set(VER_IMG "2.8.2")
 set(VER_FT2 "2.13.0")
 set(VER_GLM "0.9.9.8")
 set(VER_CURL "7.83.1")
@@ -220,23 +225,29 @@ endif()
 if(USE_SSH2)
 	list(APPEND PKGCONFIG_ARGS "libssh2")
 endif()
+if(USE_PDF)
+	list(APPEND PKGCONFIG_ARGS "poppler-glib")
+endif()
 if(PKGCONFIG_ARGS)
 	find_package(PkgConfig)
 	if(PKG_CONFIG_FOUND)
 		pkg_check_modules(PKGCONFS ${PKGCONFIG_ARGS})
 		include_directories(SYSTEM ${PKGCONFS_INCLUDE_DIRS})
 
-		if(PKGCONFS_fontconfig_FOUND OR PKGCONFS_fontconfig_VERSION)
+		if(USE_FONTCONFIG AND (PKGCONFS_fontconfig_FOUND OR PKGCONFS_fontconfig_VERSION))
 			add_compile_definitions(CAN_FONTCFG)
 		endif()
-		if(PKGCONFS_libsecret-1_FOUND OR PKGCONFS_libsecret-1_VERSION AND (PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION OR PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION))
+		if(USE_SECRET AND (USE_SMBCLIENT OR USE_SSH2) AND (PKGCONFS_libsecret-1_FOUND OR PKGCONFS_libsecret-1_VERSION) AND (PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION OR PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION))
 			add_compile_definitions(CAN_SECRET)
 		endif()
-		if(PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION)
+		if(USE_SMBCLIENT AND (PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION))
 			add_compile_definitions(CAN_SMB)
 		endif()
-		if(PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION)
+		if(USE_SSH2 AND (PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION))
 			add_compile_definitions(CAN_SFTP)
+		endif()
+		if(USE_PDF AND (PKGCONFS_poppler-glib_FOUND OR PKGCONFS_poppler-glib_VERSION))
+			add_compile_definitions(CAN_PDF)
 		endif()
 	endif()
 endif()

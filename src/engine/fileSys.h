@@ -67,6 +67,7 @@ private:
 	static constexpr char iniKeywordCompression[] = "compression";
 	static constexpr char iniKeywordVSync[] = "vsync";
 	static constexpr char iniKeywordGpuSelecting[] = "gpu_selecting";
+	static constexpr char iniKeywordPdfImages[] = "pdf_images";
 	static constexpr char iniKeywordDirection[] = "direction";
 	static constexpr char iniKeywordZoom[] = "zoom";
 	static constexpr char iniKeywordSpacing[] = "spacing";
@@ -105,8 +106,8 @@ public:
 
 	vector<string> getAvailableThemes() const;
 	array<vec4, Settings::defaultColors.size()> loadColors(string_view theme) const;	// updates settings' colors according to settings' theme
-	tuple<bool, string, string> getLastPage(string_view book) const;
-	void saveLastPage(string_view book, string_view drc, string_view fname) const;
+	vector<string> getLastPage(string_view book) const;
+	void saveLastPage(string_view book, const vector<string>& paths) const;
 	Settings* loadSettings() const;
 	void saveSettings(const Settings* sets) const;
 	array<Binding, Binding::names.size()> loadBindings() const;
@@ -132,7 +133,7 @@ private:
 	static fs::path searchFontDirectory(const fs::path& font, const fs::path& drc);
 	static void listFontFilesInDirectory(FT_LibraryRec_* lib, const fs::path& drc, char32_t first, char32_t last, vector<fs::path>& fonts);
 	static void listFontFamiliesInDirectoryThread(std::stop_token stoken, FT_LibraryRec_* lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts);
-	static FT_FaceRec_* openFace(FT_LibraryRec_* lib, const fs::path& file, char32_t first, char32_t last, vector<byte_t>& fdata);
+	static FT_FaceRec_* openFace(FT_LibraryRec_* lib, const fs::path& file, char32_t first, char32_t last, Data& fdata);
 #ifdef _WIN32
 	static fs::path searchFontRegistry(const fs::path& font);
 #ifndef __MINGW32__

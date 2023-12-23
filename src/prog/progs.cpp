@@ -11,8 +11,7 @@
 // PROGRAM STATE
 
 void ProgState::eventEnter() {
-	if (World::scene()->getSelect())
-		World::scene()->getSelect()->onClick(World::scene()->getSelect()->position(), SDL_BUTTON_LEFT);
+	World::scene()->onConfirm();
 }
 
 void ProgState::eventEscape() {
@@ -95,9 +94,9 @@ Overlay* ProgState::createOverlay() {
 	return nullptr;
 }
 
-Popup* ProgState::createPopupMessage(Cstring&& msg, EventId ccal, Cstring&& ctxt, Alignment malign) {
-	uint oklen = measureText(ctxt, popupLineHeight);
-	uint mglen = measureText(msg, popupLineHeight);
+void ProgState::showPopupMessage(Cstring&& msg, EventId ccal, Cstring&& ctxt, Alignment malign) {
+	uint oklen = measureText(ctxt.data(), popupLineHeight);
+	uint mglen = measureText(msg.data(), popupLineHeight);
 	Widget* first;
 	Children bot = {
 		new Widget(),
@@ -108,19 +107,19 @@ Popup* ProgState::createPopupMessage(Cstring&& msg, EventId ccal, Cstring&& ctxt
 		new Label(1.f, std::move(msg), malign),
 		new Layout(1.f, std::move(bot), Direction::right, 0)
 	};
-	return new Popup(svec2(std::max(mglen, oklen) + Layout::defaultItemSpacing * 2, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), ccal, first);
+	World::scene()->setPopup(new Popup(svec2(std::max(mglen, oklen) + Layout::defaultItemSpacing * 2, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), ccal, ccal, first));
 }
 
 void ProgState::updatePopupMessage(Cstring&& msg) {
 	if (Popup* popup = World::scene()->getPopup()) {
-		uint mglen = measureText(msg, popupLineHeight);
+		uint mglen = measureText(msg.data(), popupLineHeight);
 		popup->getWidget<Label>(0)->setText(std::move(msg));
-		popup->setSize(std::max(mglen, measureText(popup->getWidget<Layout>(1)->getWidget<PushButton>(1)->getText(), popupLineHeight)) + Layout::defaultItemSpacing * 2);
+		popup->setSize(std::max(mglen, measureText(popup->getWidget<Layout>(1)->getWidget<PushButton>(1)->getText().data(), popupLineHeight)) + Layout::defaultItemSpacing * 2);
 	}
 }
 
-Popup* ProgState::createPopupMultiline(Cstring&& msg, EventId ccal, Cstring&& ctxt) {
-	uint oklen = measureText(ctxt, popupLineHeight);
+void ProgState::showPopupMultiline(Cstring&& msg, EventId ccal, Cstring&& ctxt) {
+	uint oklen = measureText(ctxt.data(), popupLineHeight);
 	uvec2 viewRes = World::drawSys()->getViewRes();
 	uint width = oklen, lines = 0;
 	for (char* pos = msg.data();;) {
@@ -144,11 +143,11 @@ Popup* ProgState::createPopupMultiline(Cstring&& msg, EventId ccal, Cstring&& ct
 		new TextBox(1.f, lineHeight, std::move(msg)),
 		new Layout(popupLineHeight, std::move(bot), Direction::right, 0)
 	};
-	return new Popup(svec2(width, std::min(lineHeight * lines + popupLineHeight + Layout::defaultItemSpacing * 3, viewRes.y)), std::move(con), ccal, first);
+	World::scene()->setPopup(new Popup(svec2(width, std::min(lineHeight * lines + popupLineHeight + Layout::defaultItemSpacing * 3, viewRes.y)), std::move(con), ccal, ccal, first));
 }
 
-Popup* ProgState::createPopupChoice(Cstring&& msg, EventId kcal, EventId ccal, Alignment malign) {
-	uint mglen = measureText(msg, popupLineHeight);
+void ProgState::showPopupChoice(Cstring&& msg, EventId kcal, EventId ccal, Alignment malign) {
+	uint mglen = measureText(msg.data(), popupLineHeight);
 	uint yeslen = measureText("Yes", popupLineHeight);
 	uint nolen = measureText("No", popupLineHeight);
 	Widget* first;
@@ -160,10 +159,10 @@ Popup* ProgState::createPopupChoice(Cstring&& msg, EventId kcal, EventId ccal, A
 		new Label(1.f, std::move(msg), malign),
 		new Layout(1.f, std::move(bot), Direction::right, 0)
 	};
-	return new Popup(svec2(std::max(mglen, yeslen + nolen) + Layout::defaultItemSpacing * 3, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), ccal, first);
+	World::scene()->setPopup(new Popup(svec2(std::max(mglen, yeslen + nolen) + Layout::defaultItemSpacing * 3, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), ccal, kcal, first));
 }
 
-Popup* ProgState::createPopupInput(Cstring&& msg, string&& text, EventId kcal, EventId ccal, Cstring&& ktxt, Alignment malign) {
+void ProgState::showPopupInput(Cstring&& msg, string&& text, EventId kcal, EventId ccal, Cstring&& ktxt, Alignment malign) {
 	Widget* first;
 	Children bot = {
 		new PushButton(1.f, std::move(ktxt), kcal, ACT_LEFT, Cstring(), Alignment::center),
@@ -171,17 +170,17 @@ Popup* ProgState::createPopupInput(Cstring&& msg, string&& text, EventId kcal, E
 	};
 	Children con = {
 		new Label(1.f, std::move(msg), malign),
-		first = new LabelEdit(1.f, std::move(text), kcal, ACT_LEFT),
+		first = new LabelEdit(1.f, std::move(text), kcal, ccal, ACT_LEFT, Cstring(), LabelEdit::TextType::any, false),
 		new Layout(1.f, std::move(bot), Direction::right, 0)
 	};
-	return new Popup(svec2(0.75f, popupLineHeight * 3 + Layout::defaultItemSpacing * 4), std::move(con), ccal, first);
+	World::scene()->setPopup(new Popup(svec2(0.75f, popupLineHeight * 3 + Layout::defaultItemSpacing * 4), std::move(con), ccal, kcal, first), first);
 }
 
 const string& ProgState::inputFromPopup() {
 	return World::scene()->getPopup()->getWidget<LabelEdit>(1)->getText();
 }
 
-Popup* ProgState::createPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, EventId ccal) {
+void ProgState::showPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, EventId ccal) {
 	static constexpr std::initializer_list<const char*> txs = {
 		"User",
 		"Password",
@@ -206,23 +205,23 @@ Popup* ProgState::createPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, Even
 	uint nolen = measureText("Cancel", popupLineHeight);
 	Children user = {
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, std::move(rl.user), nullEvent, ACT_NONE, "Username")
+		new LabelEdit(1.f, std::move(rl.user), nullEvent, nullEvent, ACT_NONE, "Username")
 	};
 	Children password = {
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, std::move(rl.password), nullEvent, ACT_NONE, "Password", LabelEdit::TextType::password)
+		new LabelEdit(1.f, std::move(rl.password), nullEvent, nullEvent, ACT_NONE, "Password", LabelEdit::TextType::password)
 	};
 	Children server = {
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, std::move(rl.server), nullEvent, ACT_NONE, "Server address")
+		new LabelEdit(1.f, std::move(rl.server), nullEvent, nullEvent, ACT_NONE, "Server address")
 	};
 	Children path = {
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, std::move(rl.path), nullEvent, ACT_NONE, "Directory to open"s + (rl.protocol == Protocol::smb ? " (must start with the share name)" : ""))
+		new LabelEdit(1.f, std::move(rl.path), nullEvent, nullEvent, ACT_NONE, "Directory to open"s + (rl.protocol == Protocol::smb ? " (must start with the share name)" : ""))
 	};
 	vector<Widget*> port = {
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, toStr(rl.port), nullEvent, ACT_NONE, "Port", rl.protocol == Protocol::smb ? LabelEdit::TextType::uInt : LabelEdit::TextType::any)
+		new LabelEdit(1.f, toStr(rl.port), nullEvent, nullEvent, ACT_NONE, "Port", rl.protocol == Protocol::smb ? LabelEdit::TextType::uInt : LabelEdit::TextType::any)
 	};
 	if (rl.protocol == Protocol::sftp)
 		port.insert(port.end(), {
@@ -247,7 +246,7 @@ Popup* ProgState::createPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, Even
 	if (rl.protocol == Protocol::smb) {
 		Children workgroup = {
 			new Label(descLength, *itxs),
-			new LabelEdit(1.f, std::move(rl.workgroup), nullEvent, ACT_NONE, "Workgroup")
+			new LabelEdit(1.f, std::move(rl.workgroup), nullEvent, nullEvent, ACT_NONE, "Workgroup")
 		};
 		con.insert(con.begin() + 2, new Layout(popupLineHeight, std::move(workgroup), Direction::right));
 	}
@@ -260,7 +259,7 @@ Popup* ProgState::createPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, Even
 		con.insert(con.end() - 1, new Layout(popupLineHeight, std::move(saveCredentials), Direction::right));
 	}
 	uint numLines = con.size();
-	return new Popup(svec2(std::max(std::max(mglen, yeslen + nolen), descLength + valLength) + Layout::defaultItemSpacing * 3, popupLineHeight * numLines + Layout::defaultItemSpacing * (numLines + 1)), std::move(con), ccal, first);
+	World::scene()->setPopup(new Popup(svec2(std::max(std::max(mglen, yeslen + nolen), descLength + valLength) + Layout::defaultItemSpacing * 3, popupLineHeight * numLines + Layout::defaultItemSpacing * (numLines + 1)), std::move(con), ccal, kcal, first));
 }
 
 pair<RemoteLocation, bool> ProgState::remoteLocationFromPopup() {
@@ -279,17 +278,17 @@ pair<RemoteLocation, bool> ProgState::remoteLocationFromPopup() {
 	}, World::program()->canStoreCredentials() ? static_cast<Layout*>(con[con.size() - 2])->getWidget<CheckBox>(1)->on : false);
 }
 
-Context* ProgState::createContext(vector<pair<Cstring, EventId>>&& items, Widget* parent) {
+void ProgState::showContext(vector<pair<Cstring, EventId>>&& items, Widget* parent) {
 	Children wgts(items.size());
 	for (uint i = 0; i < wgts.num; ++i)
 		wgts[i] = new PushButton(lineHeight, std::move(items[i].first), items[i].second, ACT_LEFT);
 
 	Widget* first = wgts[0];
 	Recti rect = calcTextContextRect(wgts, World::winSys()->mousePos(), ivec2(0, lineHeight), contextMargin);
-	return new Context(rect.pos(), rect.size(), Children{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, 0) }, first, parent, Color::dark, nullEvent, Layout::defaultDirection, contextMargin);
+	World::scene()->setContext(new Context(rect.pos(), rect.size(), Children{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, 0) }, first, parent, Color::dark, nullEvent, Layout::defaultDirection, contextMargin));
 }
 
-Context* ProgState::createComboContext(ComboBox* parent, EventId kcal) {
+void ProgState::showComboContext(ComboBox* parent, EventId kcal) {
 	ivec2 size = parent->size();
 	Children wgts(parent->getOptions().size());
 	if (parent->getTooltips()) {
@@ -301,13 +300,13 @@ Context* ProgState::createComboContext(ComboBox* parent, EventId kcal) {
 
 	Widget* first = wgts[0];
 	Recti rect = calcTextContextRect(wgts, parent->position(), size, contextMargin);
-	return new Context(rect.pos(), rect.size(), Children{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, 0) }, first, parent, Color::dark, GeneralEvent::resizeComboContext, Layout::defaultDirection, contextMargin);
+	World::scene()->setContext(new Context(rect.pos(), rect.size(), Children{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, 0) }, first, parent, Color::dark, GeneralEvent::resizeComboContext, Layout::defaultDirection, contextMargin));
 }
 
 Recti ProgState::calcTextContextRect(const Children& items, ivec2 pos, ivec2 size, int margin) {
 	for (uint i = 0; i < items.num; ++i)
 		if (auto lbl = dynamic_cast<PushButton*>(items[i]))
-			if (int w = World::drawSys()->textLength(lbl->getText(), size.y) + TextDsp<Cstring>::textMargin * 2 + Scrollable::barSizeVal + margin * 2; w > size.x)
+			if (int w = World::drawSys()->textLength(lbl->getText().data(), size.y) + TextDsp<Cstring>::textMargin * 2 + Scrollable::barSizeVal + margin * 2; w > size.x)
 				size.x = w;
 	size.y = size.y * uint(items.num) + margin * 2;
 
@@ -357,11 +356,11 @@ void ProgFileExplorer::processFileChanges(Browser* browser) {
 	if (browser->directoryUpdate(fileChanges)) {
 		fileList->setWidgets(Children());
 		if (locationBar)
-			locationBar->setText(browser->currentLocation());
+			locationBar->setText(browser->locationForDisplay());
 		return fileChanges.clear();
 	}
 
-	auto compare = [](const Widget* a, const string& b) -> bool { return StrNatCmp::less(static_cast<const PushButton*>(a)->getText(), b); };
+	auto compare = [](const Widget* a, const string& b) -> bool { return Strcomp::less(static_cast<const PushButton*>(a)->getText().data(), b.c_str()); };
 	std::span<Widget*> wgts = fileList->getWidgets();
 	for (FileChange& fc : fileChanges) {
 		if (fc.type == FileChange::deleteEntry) {
@@ -420,7 +419,7 @@ RootLayout* ProgBooks::createLayout() {
 	};
 
 	// book list
-	vector<string> books = World::program()->getBrowser()->listDirDirs(World::sets()->dirLib);
+	vector<Cstring> books = World::program()->getBrowser()->listDirDirs(World::sets()->dirLib);
 	Children tiles(books.size() + 1);
 	for (size_t i = 0; i < books.size(); ++i)
 		tiles[i] = makeBookTile(std::move(books[i]));
@@ -437,7 +436,7 @@ RootLayout* ProgBooks::createLayout() {
 }
 
 PushButton* ProgBooks::makeBookTile(Cstring&& name) {
-	uint len = measureText(name, TileBox::defaultItemHeight);
+	uint len = measureText(name.data(), TileBox::defaultItemHeight);
 	return makeDirectoryEntry(len, std::move(name));
 }
 
@@ -507,10 +506,8 @@ RootLayout* ProgPageBrowser::createLayout() {
 	};
 
 	// root layout
-	string location = browser->currentLocation();
-	string_view rpath = relativePath(location, World::sets()->dirLib);
 	Children cont = {
-		locationBar = new LabelEdit(lineHeight, rpath.empty() ? std::move(location) : string(rpath), ProgFileExplorerEvent::goTo),
+		locationBar = new LabelEdit(lineHeight, browser->locationForDisplay(), ProgFileExplorerEvent::goTo),
 		new Layout(1.f, std::move(mid), Direction::right, topSpacing)
 	};
 	return new RootLayout(1.f, std::move(cont), Direction::down, topSpacing);
@@ -610,7 +607,7 @@ void ProgReader::eventPrevDir() {
 
 void ProgReader::eventHide() {
 	ProgState::eventHide();
-	World::program()->getBrowser()->startLoadPictures(string(reader->firstPage()));
+	World::program()->getBrowser()->startReloadPictures(string(reader->firstPage()));
 	World::program()->setPopupLoading();
 }
 
@@ -622,14 +619,8 @@ void ProgReader::eventRefresh() {
 }
 
 void ProgReader::eventClosing() {
-	Browser* browser = World::program()->getBrowser();
-	if (string_view rpath = relativePath(browser->getCurDir(), World::sets()->dirLib); rpath.empty())
-		World::fileSys()->saveLastPage(dotStr, browser->getCurDir(), browser->curDirSuffix() + reader->curPage());
-	else {
-		string_view::iterator mid = rng::find_if(rpath, isDsep);
-		string_view::iterator nxt = std::find_if(mid, rpath.end(), notDsep);
-		World::fileSys()->saveLastPage(string_view(rpath.begin(), mid), string_view(nxt, rpath.end()), browser->curDirSuffix() + reader->curPage());
-	}
+	auto [book, paths] = World::program()->getBrowser()->locationForStore(reader->curPage());
+	World::fileSys()->saveLastPage(book, paths);
 	SDL_ShowCursor(SDL_ENABLE);
 }
 
@@ -726,6 +717,9 @@ RootLayout* ProgSettings::createLayout() {
 		"Image compression",
 		"VSync",
 		"GPU selecting",
+#ifdef CAN_PDF
+		"PDF images only",
+#endif
 		"Size",
 		"Theme",
 		"Preview",
@@ -787,7 +781,7 @@ RootLayout* ProgSettings::createLayout() {
 		}),
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new LabelEdit(1.f, toStr(World::sets()->spacing), ProgSettingsEvent::setSpacing, ACT_LEFT, "Picture spacing in reader", LabelEdit::TextType::uInt)
+			new LabelEdit(1.f, toStr(World::sets()->spacing), ProgSettingsEvent::setSpacing, nullEvent, ACT_LEFT, "Picture spacing in reader", LabelEdit::TextType::uInt)
 		}),
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
@@ -797,7 +791,7 @@ RootLayout* ProgSettings::createLayout() {
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
 			new Slider(1.f, World::sets()->maxPicRes, Settings::minPicRes, maxRes, ProgSettingsEvent::setMaxPicResSl, ACT_LEFT, tipMaxPicRes),
-			new LabelEdit(unumLen, toStr(World::sets()->maxPicRes), ProgSettingsEvent::setMaxPicResLe, ACT_LEFT, tipMaxPicRes)
+			new LabelEdit(unumLen, toStr(World::sets()->maxPicRes), ProgSettingsEvent::setMaxPicResLe, nullEvent, ACT_LEFT, tipMaxPicRes)
 		}),
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
@@ -832,7 +826,7 @@ RootLayout* ProgSettings::createLayout() {
 	}
 	++itxs;
 
-	array<pair<Size, Children>, 11> sec1 = {
+	array<pair<Size, Children>, 12> sec1 = {
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
 			new CheckBox(lineHeight, World::sets()->vsync, ProgSettingsEvent::setVsync, "Vertical synchronization")
@@ -841,6 +835,12 @@ RootLayout* ProgSettings::createLayout() {
 			new Label(descLength, *itxs++),
 			new CheckBox(lineHeight, World::sets()->gpuSelecting, ProgSettingsEvent::setGpuSelecting, "Use the graphics process to determine which widget is being selected")
 		}),
+#ifdef CAN_PDF
+		pair(lineHeight, Children{
+			new Label(descLength, *itxs++),
+			new CheckBox(lineHeight, World::sets()->pdfImages, ProgSettingsEvent::setPdfImages, "Only load a PDF file's images instead of rendering the pages fully")
+		}),
+#endif
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
 			new PushButton(measureText("Portrait", lineHeight), "Portrait", ProgSettingsEvent::setPortrait, ACT_LEFT, "Portrait window size"),
@@ -871,17 +871,17 @@ RootLayout* ProgSettings::createLayout() {
 		}),
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			libraryDir = new LabelEdit(1.f, valcp(World::sets()->dirLib), ProgSettingsEvent::setLibraryDirLe, ACT_LEFT, "Library path"),
+			libraryDir = new LabelEdit(1.f, valcp(World::sets()->dirLib), ProgSettingsEvent::setLibraryDirLe, nullEvent, ACT_LEFT, "Library path"),
 			new PushButton(measureText(KeyGetter::ellipsisStr, lineHeight), KeyGetter::ellipsisStr, ProgSettingsEvent::openLibDirBrowser, ACT_LEFT, "Browse for library", Alignment::center)
 		}),
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new LabelEdit(1.f, World::sets()->scrollSpeedString(), ProgSettingsEvent::setScrollSpeed, ACT_LEFT, "Scroll speed for button presses or axes", LabelEdit::TextType::sFloatSpaced)
+			new LabelEdit(1.f, World::sets()->scrollSpeedString(), ProgSettingsEvent::setScrollSpeed, nullEvent, ACT_LEFT, "Scroll speed for button presses or axes", LabelEdit::TextType::sFloatSpaced)
 		}),
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
 			new Slider(1.f, World::sets()->getDeadzone(), 0, Settings::axisLimit, ProgSettingsEvent::setDeadzoneSl, ACT_LEFT, tipDeadzone),
-			new LabelEdit(unumLen, toStr(World::sets()->getDeadzone()), ProgSettingsEvent::setDeadzoneLe, ACT_LEFT, tipDeadzone, LabelEdit::TextType::uInt)
+			new LabelEdit(unumLen, toStr(World::sets()->getDeadzone()), ProgSettingsEvent::setDeadzoneLe, nullEvent, ACT_LEFT, tipDeadzone, LabelEdit::TextType::uInt)
 		})
 	};
 	lx.insert(lx.end(), std::make_move_iterator(sec1.begin()), std::make_move_iterator(sec1.end()));
@@ -923,9 +923,9 @@ Widget* ProgSettings::createLimitEdit() {
 	switch (World::sets()->picLim.type) {
 	using enum PicLim::Type;
 	case count:
-		return new LabelEdit(1.f, toStr(World::sets()->picLim.getCount()), ProgSettingsEvent::setPicLimitCount, ACT_LEFT, "Number of pictures per batch", LabelEdit::TextType::uInt);
+		return new LabelEdit(1.f, toStr(World::sets()->picLim.getCount()), ProgSettingsEvent::setPicLimitCount, nullEvent, ACT_LEFT, "Number of pictures per batch", LabelEdit::TextType::uInt);
 	case size:
-		return new LabelEdit(1.f, PicLim::memoryString(World::sets()->picLim.getSize()), ProgSettingsEvent::setPicLimitSize, ACT_LEFT, "Total size of pictures per batch");
+		return new LabelEdit(1.f, PicLim::memoryString(World::sets()->picLim.getSize()), ProgSettingsEvent::setPicLimitSize, nullEvent, ACT_LEFT, "Total size of pictures per batch");
 	}
 	return new Widget();
 }
@@ -960,7 +960,7 @@ void ProgSettings::setFontField(vector<Cstring>&& families, uptr<Cstring[]>&& fi
 		fontList->setOptions(select, std::move(families), std::move(files));
 		fontList->setEvent(ProgSettingsEvent::setFontCmb, ACT_LEFT | ACT_RIGHT);
 	} else
-		fontList->getParent()->replaceWidget(fontList->getIndex(), new LabelEdit(1.f, valcp(World::sets()->font), ProgSettingsEvent::setFontLe, ACT_LEFT, "Font name or path"));
+		fontList->getParent()->replaceWidget(fontList->getIndex(), new LabelEdit(1.f, valcp(World::sets()->font), ProgSettingsEvent::setFontLe, nullEvent, ACT_LEFT, "Font name or path"));
 }
 
 void ProgSettings::startMove() {
@@ -1012,7 +1012,7 @@ RootLayout* ProgSearchDir::createLayout() {
 
 	// directory list
 	Browser* browser = World::program()->getBrowser();
-	vector<string> strs = browser->listDirDirs(browser->getCurDir());
+	vector<Cstring> strs = browser->listDirDirs(browser->getCurDir());
 	Children items(strs.size());
 	for (size_t i = 0; i < strs.size(); ++i)
 		items[i] = makeDirectoryEntry(lineHeight, std::move(strs[i]));

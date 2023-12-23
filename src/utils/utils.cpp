@@ -5,6 +5,24 @@
 #include <windows.h>
 #endif
 
+// DATA
+
+void Data::resize(size_t siz) {
+	if (siz) {
+		uptr<byte_t[]> dat = std::make_unique_for_overwrite<byte_t[]>(siz);
+		if (ptr)
+			std::copy_n(ptr.get(), std::min(len, siz), dat.get());
+		ptr = std::move(dat);
+		len = siz;
+	} else
+		clear();
+}
+
+void Data::clear() {
+	ptr.reset();
+	len = 0;
+}
+
 // CSTRING
 
 #define cstringOperatorAssign(type) \
@@ -24,6 +42,7 @@ cstringOperatorAssign(const Cstring&)
 cstringOperatorAssign(const char*)
 cstringOperatorAssign(const string&)
 cstringOperatorAssign(const fs::path&)
+cstringOperatorAssign(std::initializer_list<char>)
 
 Cstring& Cstring::operator=(string_view s) {
 	free();
@@ -43,7 +62,7 @@ void Cstring::set(Cstring&& s) {
 }
 
 void Cstring::set(const char* s) {
-	size_t len = std::char_traits<char>::length(s) + 1;
+	size_t len = strlen(s) + 1;
 	ptr = new char[len];
 	std::copy_n(s, len, ptr);
 }
@@ -60,6 +79,16 @@ void Cstring::set(const string& s) {
 	std::copy_n(s.c_str(), len, ptr);
 }
 
+#ifdef _WIN32
+void Cstring::set(const wchar_t* s) {
+	if (int len = WideCharToMultiByte(CP_UTF8, 0, s, -1, nullptr, 0, nullptr, nullptr); len > 1) {
+		ptr = new char[len];
+		WideCharToMultiByte(CP_UTF8, 0, s, -1, ptr, len, nullptr, nullptr);
+	} else
+		ptr = &nullch;
+}
+#endif
+
 void Cstring::set(const fs::path& s) {
 	size_t slen = s.native().length() + 1;
 #ifdef _WIN32
@@ -74,9 +103,22 @@ void Cstring::set(const fs::path& s) {
 #endif
 }
 
+void Cstring::set(std::initializer_list<char> s) {
+	ptr = new char[s.size() + 1];
+	std::copy(s.begin(), s.end(), ptr);
+	ptr[s.size()] = '\0';
+}
+
 void Cstring::free() {
 	if (ptr != &nullch)
 		delete[] ptr;
+}
+
+void Cstring::clear() {
+	if (ptr != &nullch) {
+		delete[] ptr;
+		ptr = &nullch;
+	}
 }
 
 // FUNCTIONS
@@ -149,35 +191,30 @@ bool isSubpath(string_view path, string_view base) {
 
 string strEnclose(string_view str) {
 	string txt(str);
-	for (size_t i = txt.find_first_of("\"\\"); i < txt.length(); i = txt.find_first_of("\"\\", i + 2))
+	for (size_t i = 0; (i = txt.find_first_of("\"\\", i)) != string::npos; i += 2)
 		txt.insert(txt.begin() + i, '\\');
 	return '"' + txt + '"';
 }
 
-vector<string> strUnenclose(string_view str) {
-	vector<string> words;
-	for (size_t pos = 0;;) {
-		// find next start
-		if (pos = str.find_first_of('"', pos); pos == string::npos)
-			break;
-
-		// find start's end
-		size_t end = ++pos;
-		for (;; ++end)
-			if (end = str.find_first_of('"', end); end == string::npos || str[end - 1] != '\\')
-				break;
-		if (end >= str.length())
-			break;
-
-		// remove escapes and add to quote list
-		string quote(str.data() + pos, end - pos);
-		for (size_t i = quote.find_first_of('\\'); i < quote.length(); i = quote.find_first_of('\\', i + 1))
-			if (quote[i + 1] == '"')
-				quote.erase(i, 1);
-		words.push_back(std::move(quote));
-		pos = end + 1;
+string strUnenclose(string_view& str) {	// TODO: test
+	size_t p = str.find('"');
+	if (p == string::npos) {
+		string word(str);
+		str = string_view();
+		return word;
 	}
-	return words;
+
+	string word;
+	size_t e;
+	for (e = ++p; e < str.length() && str[e] != '"'; ++e)
+		if (str[e] == '\\') {
+			word.append(str.data() + p, e - p);
+			p = ++e;
+		}
+
+	word += str.substr(p, e);
+	str = e < str.length() ? str.substr(e) : string_view();
+	return word;
 }
 
 vector<string_view> getWords(string_view str) {
@@ -205,6 +242,18 @@ tm currentDateTime() {
 }
 
 #ifdef _WIN32
+static bool hasDriveLetter(const char* path) {
+	return ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':';
+}
+
+static bool isUnc(const char* path) {
+	return isDsep(path[0]) && isDsep(path[1]) && notDsep(path[2]);
+}
+
+bool isAbsolute(string_view path) {
+	return path.length() >= 3 && ((hasDriveLetter(path.data()) && isDsep(path[2])) || isUnc(path.data()));
+}
+
 string swtos(wstring_view src) {
 	string dst;
 	if (int len = WideCharToMultiByte(CP_UTF8, 0, src.data(), src.length(), nullptr, 0, nullptr, nullptr); len > 0) {

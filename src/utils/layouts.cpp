@@ -277,11 +277,12 @@ void RootLayout::setSize(const Size& size) {
 
 // POPUP
 
-Popup::Popup(const svec2& size, Children&& children, EventId cancelCall, Widget* first, Color background, Direction dir, ushort space, bool pad) :
+Popup::Popup(const svec2& size, Children&& children, EventId cancelCall, EventId confirmCall, Widget* first, Color background, Direction dir, ushort space, bool pad) :
 	RootLayout(size.x, std::move(children), dir, space, pad),
 	bgColor(background),
 	firstNavSelect(first),
 	ccall(cancelCall),
+	kcall(confirmCall),
 	sizeY(size.y)
 {}
 
@@ -301,7 +302,7 @@ ivec2 Popup::size() const {
 // OVERLAY
 
 Overlay::Overlay(const svec2& position, const svec2& size, const svec2& activationPos, const svec2& activationSize, Children&& children, Color background, Direction dir, ushort space, bool pad) :
-	Popup(size, std::move(children), nullEvent, nullptr, background, dir, space, pad),
+	Popup(size, std::move(children), nullEvent, nullEvent, nullptr, background, dir, space, pad),
 	pos(position),
 	actPos(activationPos),
 	actSize(activationSize)
@@ -320,7 +321,7 @@ Recti Overlay::actRect() const {
 // CONTEXT
 
 Context::Context(const svec2& position, const svec2& size, Children&& children, Widget* first, Widget* owner, Color background, EventId resize, Direction dir, ushort space, bool pad) :
-	Popup(size, std::move(children), nullEvent, first, background, dir, space, pad),
+	Popup(size, std::move(children), nullEvent, nullEvent, first, background, dir, space, pad),
 	pos(position),
 	resizeCall(resize)
 {
@@ -671,16 +672,17 @@ void ReaderBox::onMouseMove(ivec2 mPos, ivec2 mMov) {
 	}
 }
 
-void ReaderBox::setPictures(vector<pair<string, Texture*>>& imgs, string_view startPic) {
+void ReaderBox::setPictures(vector<pair<Cstring, Texture*>>& imgs, string_view startPic, bool fwd) {
 	deselectWidgets();
 	clearWidgets();
 	numWgts = imgs.size();
 	widgets = std::make_unique_for_overwrite<Widget*[]>(numWgts);
 	positions = std::make_unique_for_overwrite<ivec2[]>(numWgts + 1);
-	picNames = std::make_unique_for_overwrite<string[]>(numWgts);
-
-	if (direction.negative())
+	picNames = std::make_unique<Cstring[]>(numWgts);
+	bool dp = direction.positive();
+	if (!dp)
 		rng::reverse(imgs);
+
 	for (uint i = 0; i < numWgts; ++i) {
 		widgets[i] = new Picture(0, imgs[i].second);
 		widgets[i]->setParent(this, i);
@@ -691,12 +693,12 @@ void ReaderBox::setPictures(vector<pair<string, Texture*>>& imgs, string_view st
 
 	// scroll down to opened picture if it exists, otherwise start at beginning
 	if (startPicId < numWgts) {
-		if (direction.positive())
+		if (dp)
 			scrollToWidgetPos(startPicId);
 		else
 			scrollToWidgetEnd(startPicId);
 	} else
-		listPos = ivec2(0);
+		listPos = fwd == dp ? ivec2(0) : getListMax();
 	centerList();
 }
 

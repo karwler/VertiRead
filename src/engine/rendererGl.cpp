@@ -47,15 +47,9 @@ RendererGl::~RendererGl() {
 	glDeleteProgram(progGui);
 
 	for (auto [id, view] : views) {
-		SDL_GL_DeleteContext(static_cast<ViewGl*>(view)->ctx);
-		delete view;
-	}
-}
-
-void RendererGl::setClearColor(const vec4& color) {
-	for (auto [id, view] : views) {
-		SDL_GL_MakeCurrent(view->win, static_cast<ViewGl*>(view)->ctx);
-		glClearColor(color.r, color.g, color.b, color.a);
+		auto vw = static_cast<ViewGl*>(view);
+		SDL_GL_DeleteContext(vw->ctx);
+		delete vw;
 	}
 }
 
@@ -70,6 +64,13 @@ void RendererGl::initGl(ivec2 res, bool vsync, const vec4& bgcolor) {
 	glCullFace(GL_FRONT);
 	glFrontFace(GL_CCW);
 	glScissor(0, 0, 1, 1);	// for address pass
+}
+
+void RendererGl::setClearColor(const vec4& color) {
+	for (auto [id, view] : views) {
+		SDL_GL_MakeCurrent(view->win, static_cast<ViewGl*>(view)->ctx);
+		glClearColor(color.r, color.g, color.b, color.a);
+	}
 }
 
 void RendererGl::setVsync(bool vsync) {
@@ -127,13 +128,20 @@ void RendererGl::initFunctions() {
 	glUniform4fv = reinterpret_cast<decltype(glUniform4fv)>(SDL_GL_GetProcAddress("glUniform4fv"));
 	glUniform4iv = reinterpret_cast<decltype(glUniform4iv)>(SDL_GL_GetProcAddress("glUniform4iv"));
 	glUseProgram = reinterpret_cast<decltype(glUseProgram)>(SDL_GL_GetProcAddress("glUseProgram"));
+	if (!(glActiveTexture && glAttachShader && glBindFramebuffer && glBindVertexArray && glCheckFramebufferStatus && glClearBufferuiv && glCompileShader && glCreateProgram && glCreateShader && glDeleteFramebuffers && glDeleteShader && glDeleteProgram && glDeleteVertexArrays && glDetachShader && glFramebufferTexture1D && glGenFramebuffers && glGenVertexArrays && glGetProgramInfoLog && glGetProgramiv && glGetShaderInfoLog && glGetShaderiv && glGetUniformLocation && glLinkProgram && glShaderSource && glUniform1i && glUniform2f && glUniform2fv && glUniform2ui && glUniform2uiv && glUniform4f && glUniform4fv && glUniform4iv && glUseProgram))
+		throw std::runtime_error("Failed to find OpenGL functions");
+
 #ifndef NDEBUG
 	int gval;
 	if (glGetIntegerv(GL_CONTEXT_FLAGS, &gval); gval & GL_CONTEXT_FLAG_DEBUG_BIT && SDL_GL_ExtensionSupported("GL_KHR_debug")) {
-		glEnable(GL_DEBUG_OUTPUT);
-		glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-		reinterpret_cast<void (APIENTRY*)(void (APIENTRY*)(GLenum, GLenum, GLuint, GLenum, GLsizei, const GLchar*, const void*), const void*)>(SDL_GL_GetProcAddress("glDebugMessageCallback"))(debugMessage, nullptr);
-		reinterpret_cast<void (APIENTRY*)(GLenum, GLenum, GLenum, GLsizei, const GLuint*, GLboolean)>(SDL_GL_GetProcAddress("glDebugMessageControl"))(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+		auto glDebugMessageCallback = reinterpret_cast<void (APIENTRY*)(void (APIENTRY*)(GLenum, GLenum, GLuint, GLenum, GLsizei, const GLchar*, const void*), const void*)>(SDL_GL_GetProcAddress("glDebugMessageCallback"));
+		auto glDebugMessageControl = reinterpret_cast<void (APIENTRY*)(GLenum, GLenum, GLenum, GLsizei, const GLuint*, GLboolean)>(SDL_GL_GetProcAddress("glDebugMessageControl"));
+		if (glDebugMessageCallback && glDebugMessageControl) {
+			glEnable(GL_DEBUG_OUTPUT);
+			glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+			glDebugMessageCallback(debugMessage, nullptr);
+			glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+		}
 	}
 #endif
 }
@@ -396,8 +404,9 @@ bool RendererGl::texFromText(Texture* tex, const PixmapRgba& pm) {
 }
 
 void RendererGl::freeTexture(Texture* tex) {
-	glDeleteTextures(1, &static_cast<TextureGl*>(tex)->id);
-	delete tex;
+	auto gtx = static_cast<TextureGl*>(tex);
+	glDeleteTextures(1, &gtx->id);
+	delete gtx;
 }
 
 GLuint RendererGl::initTexture(GLint filter) {

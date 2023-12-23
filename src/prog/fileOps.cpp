@@ -1,5 +1,13 @@
 #include "fileOps.h"
 #include "utils/compare.h"
+#if defined(CAN_SECRET) || defined(CAN_PDF)
+#include "engine/optional/glib.h"
+using namespace LibGlib;
+#endif
+#ifdef CAN_PDF
+#include "engine/optional/poppler.h"
+using namespace LibPoppler;
+#endif
 #ifdef CAN_SECRET
 #include "engine/optional/secret.h"
 using namespace LibSecret;
@@ -14,6 +22,8 @@ using namespace LibSmbclient;
 #include "engine/optional/ssh2.h"
 using namespace LibSsh2;
 #endif
+#include <fstream>
+#include <queue>
 #include <stack>
 #include <archive.h>
 #include <archive_entry.h>
@@ -206,9 +216,13 @@ bool FileOps::isPicture(SDL_RWops* ifh, string_view ext) {
 	return false;
 }
 
-bool FileOps::isPicture(archive* arch, archive_entry* entry) {
-	auto [buffer, bsiz] = readArchiveEntry(arch, entry);
-	return bsiz > 0 && isPicture(SDL_RWFromConstMem(buffer.get(), bsiz), fileExtension(archive_entry_pathname_utf8(entry)));
+bool FileOps::isPdf(string_view path) {
+#ifdef CAN_PDF
+	array<byte_t, signaturePdf.size()> sig;
+	return readFileStart(path, sig.data(), sig.size()) == sig.size() && rng::equal(sig, signaturePdf) && symPoppler();
+#else
+	return false;
+#endif
 }
 
 bool FileOps::isArchive(string_view path) {
@@ -219,103 +233,117 @@ bool FileOps::isArchive(string_view path) {
 	return false;
 }
 
-bool FileOps::isPictureArchive(string_view path) {
-	if (archive* arch = openArchive(path)) {
-		for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
-			if (isPicture(arch, entry)) {
-				archive_read_free(arch);
-				return true;
-			}
-		archive_read_free(arch);
-	}
-	return false;
-}
-
-bool FileOps::isArchivePicture(string_view path, string_view pname) {
-	if (archive* arch = openArchive(path)) {
-		for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
-			if (archive_entry_pathname_utf8(entry) == pname)
-				if (isPicture(arch, entry)) {
-					archive_read_free(arch);
-					return true;
-				}
-		archive_read_free(arch);
-	}
-	return false;
-}
-
-pair<uptr<byte_t[]>, int64> FileOps::readArchiveEntry(archive* arch, archive_entry* entry) {
+Data FileOps::readArchiveEntry(archive* arch, archive_entry* entry) {
 	int64 bsiz = archive_entry_size(entry);
-	if (bsiz <= 0 || archive_entry_filetype(entry) != AE_IFREG)
-		return pair(nullptr, 0);
+	if (bsiz <= 0)
+		return Data();
 
-	uptr<byte_t[]> buffer = std::make_unique_for_overwrite<byte_t[]>(bsiz);
-	bsiz = archive_read_data(arch, buffer.get(), bsiz);
-	return pair(std::move(buffer), bsiz);
-}
-
-vector<string> FileOps::listArchiveFiles(string_view path) {
-	vector<string> entries;
-	if (archive* arch = openArchive(path)) {
-		for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
-			if (archive_entry_filetype(entry) == AE_IFREG)
-				entries.emplace_back(archive_entry_pathname_utf8(entry));
-
-		archive_read_free(arch);
-		rng::sort(entries, StrNatCmp());
+	Data data(bsiz);
+	if (la_ssize_t len = archive_read_data(arch, data.data(), bsiz); len < bsiz) {
+		if (len <= 0)
+			return Data();
+		data.resize(len);
 	}
-	return entries;
+	return data;
 }
 
-void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultAsync&& ra, uintptr_t maxRes) {
-	archive* arch = openArchive(ra.curDir);
+void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultArchive* ra, uint maxRes) {
+	archive* arch = openArchive(ra->arch.name.data(), &ra->error);
 	if (!arch) {
-		pushEvent(SDL_USEREVENT_THREAD_ARCHIVE, ThreadEvent::finished);
+		pushEvent(SDL_USEREVENT_THREAD_ARCHIVE_FINISHED, 0, ra);
 		return;
 	}
 
-	for (archive_entry* entry; !archive_read_next_header(arch, &entry);) {
+	int rc;
+	for (archive_entry* entry; (rc = archive_read_next_header(arch, &entry)) == ARCHIVE_OK;) {
 		if (stoken.stop_requested()) {
+			delete ra;
 			archive_read_free(arch);
 			return;
 		}
-		pushEvent(SDL_USEREVENT_THREAD_ARCHIVE, ThreadEvent::progress, std::bit_cast<void*>(archive_entry_ino(entry)));
 
-		ArchiveDir* node = &ra.arch;
+		ArchiveDir* node = &ra->arch;
 		for (const char* path = archive_entry_pathname_utf8(entry); *path;) {
 			if (const char* next = strchr(path, '/')) {
-				vector<ArchiveDir>::iterator dit = rng::find_if(node->dirs, [path, next](const ArchiveDir& it) -> bool { return std::equal(it.name.begin(), it.name.end(), path, next); });
-				node = dit != node->dirs.end() ? std::to_address(dit) : &node->dirs.emplace_back(node, string(path, next));
+				string_view sname(path, next);
+				std::forward_list<ArchiveDir>::iterator dit = rng::find_if(node->dirs, [sname](const ArchiveDir& it) -> bool { return it.name == sname; });
+				node = dit != node->dirs.end() ? std::to_address(dit) : &node->dirs.emplace_front(sname);
 				path = next + 1;
 			} else {
-				SDL_Surface* img = loadArchivePicture(arch, entry);
-				node->files.emplace_back(path, img ? std::min(uintptr_t(img->w), maxRes) * std::min(uintptr_t(img->h), maxRes) * 4 : 0);
-				SDL_FreeSurface(img);
+				if (Data data = readArchiveEntry(arch, entry); SDL_Surface* img = IMG_Load_RW(SDL_RWFromConstMem(data.data(), data.size()), SDL_TRUE)) {
+					node->files.emplace_front(path, std::min(uint(img->w), maxRes) * std::min(uint(img->h), maxRes) * 4);
+					SDL_FreeSurface(img);
+				} else if (data.size() >= signaturePdf.size() && std::equal(signaturePdf.begin(), signaturePdf.end(), data.data()))
+					node->files.emplace_front(path);
+				else
+					node->files.emplace_front(path, 0);
 				break;
 			}
 		}
 	}
-	archive_read_free(arch);
-	ra.arch.sort();
-	pushEvent(SDL_USEREVENT_THREAD_ARCHIVE, ThreadEvent::finished, new BrowserResultAsync(std::move(ra)));
-}
 
-SDL_Surface* FileOps::loadArchivePicture(string_view path, string_view pname) {
-	SDL_Surface* img = nullptr;
-	if (archive* arch = openArchive(path)) {
-		for (archive_entry* entry; !archive_read_next_header(arch, &entry);)
-			if (archive_entry_pathname_utf8(entry) == pname)
-				if (img = loadArchivePicture(arch, entry); img)
-					break;
+	if (rc == ARCHIVE_EOF) {
+		archive_read_free(arch);
+
+		std::queue<ArchiveDir*> dirs;
+		dirs.push(&ra->arch);
+		do {
+			ArchiveDir* dit = dirs.front();
+			dit->finalize();
+			for (ArchiveDir& it : dit->dirs)
+				dirs.push(&it);
+			dirs.pop();
+		} while (!dirs.empty());
+	} else {
+		ra->error = archive_error_string(arch);
 		archive_read_free(arch);
 	}
-	return img;
+	pushEvent(SDL_USEREVENT_THREAD_ARCHIVE_FINISHED, 0, ra);
 }
 
 SDL_Surface* FileOps::loadArchivePicture(archive* arch, archive_entry* entry) {
-	auto [buffer, bsiz] = readArchiveEntry(arch, entry);
-	return bsiz > 0 ? IMG_Load_RW(SDL_RWFromMem(buffer.get(), bsiz), SDL_TRUE) : nullptr;
+	Data data = readArchiveEntry(arch, entry);
+	return IMG_Load_RW(SDL_RWFromConstMem(data.data(), data.size()), SDL_TRUE);
 }
+
+#ifdef CAN_PDF
+pair<PopplerDocument*, Data> FileOps::loadArchivePdf(archive* arch, archive_entry* entry, string* error) {
+	int64 esiz = archive_entry_size(entry);
+	return esiz > int64(signaturePdf.size()) ? loadPdfChecked(arch, esiz, archive_read_data, error) : pair(nullptr, Data());
+}
+
+template <class H, class F>
+pair<PopplerDocument*, Data> FileOps::loadPdfChecked(H fd, size_t esiz, F eread, string* error) {
+	array<byte_t, signaturePdf.size()> sig;
+	int64 len = eread(fd, sig.data(), sig.size());
+	if (size_t(len) == sig.size() && std::equal(signaturePdf.begin(), signaturePdf.end(), sig.data()) && symPoppler()) {
+		Data fdata(esiz);
+		rng::copy(sig, fdata.data());
+		int64 toRead = esiz - signaturePdf.size();
+		if (len = eread(fd, fdata.data() + signaturePdf.size(), toRead); len < toRead) {
+			if (len <= 0) {
+				if (error)
+					*error = "Failed to read PDF data";
+				return pair(nullptr, Data());
+			}
+			fdata.resize(signaturePdf.size() + len);
+		}
+		GError* gerr = nullptr;
+		GBytes* bytes = gBytesNewStatic(fdata.data(), fdata.size());
+		PopplerDocument* doc = popplerDocumentNewFromBytes(bytes, nullptr, &gerr);
+		if (!doc) {
+			if (error)
+				*error = gerr->message;
+			gErrorFree(gerr);
+		}
+		gBytesUnref(bytes);
+		return pair(doc, std::move(fdata));
+	}
+	if (error)
+		*error = "Missing PDF signature";
+	return pair(nullptr, Data());
+}
+#endif
 
 // FILE OPS LOCAL
 
@@ -344,12 +372,12 @@ FileOpsLocal::~FileOpsLocal() {
 #endif
 }
 
-vector<string> FileOpsLocal::listDirectory(string_view path, bool files, bool dirs, bool hidden) {
+vector<Cstring> FileOpsLocal::listDirectory(string_view path, bool files, bool dirs, bool hidden) {
 #ifdef _WIN32
 	if (path.empty())	// if in "root" directory, get drive letters and present them as directories
-		return dirs ? FileOpsLocal::listDrives() : vector<string>();
+		return dirs ? FileOpsLocal::listDrives() : vector<Cstring>();
 #endif
-	vector<string> entries;
+	vector<Cstring> entries;
 #ifdef _WIN32
 	WIN32_FIND_DATAW data;
 	if (HANDLE hFind = FindFirstFileW((sstow(path) / L"*").c_str(), &data); hFind != INVALID_HANDLE_VALUE) {
@@ -357,9 +385,9 @@ vector<string> FileOpsLocal::listDirectory(string_view path, bool files, bool di
 			if (hidden || !(data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
 				if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 					if (dirs && wcscmp(data.cFileName, L".") && wcscmp(data.cFileName, L".."))
-						entries.push_back(swtos(data.cFileName));
+						entries.emplace_back(data.cFileName);
 				} else if (files)
-					entries.push_back(swtos(data.cFileName));
+					entries.emplace_back(data.cFileName);
 			}
 		} while (FindNextFileW(hFind, &data));
 		FindClose(hFind);
@@ -391,17 +419,17 @@ vector<string> FileOpsLocal::listDirectory(string_view path, bool files, bool di
 				}
 		closedir(directory);
 #endif
-		rng::sort(entries, StrNatCmp());
+		rng::sort(entries, Strcomp());
 	}
 	return entries;
 }
 
-pair<vector<string>, vector<string>> FileOpsLocal::listDirectorySep(string_view path, bool hidden) {
+pair<vector<Cstring>, vector<Cstring>> FileOpsLocal::listDirectorySep(string_view path, bool hidden) {
 #ifdef _WIN32
 	if (path.empty())	// if in "root" directory, get drive letters and present them as directories
-		return pair(vector<string>(), listDrives());
+		return pair(vector<Cstring>(), listDrives());
 #endif
-	vector<string> files, dirs;
+	vector<Cstring> files, dirs;
 #ifdef _WIN32
 	WIN32_FIND_DATAW data;
 	if (HANDLE hFind = FindFirstFileW((sstow(path) / L"*").c_str(), &data); hFind != INVALID_HANDLE_VALUE) {
@@ -409,9 +437,9 @@ pair<vector<string>, vector<string>> FileOpsLocal::listDirectorySep(string_view 
 			if (hidden || !(data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
 				if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 					if (notDotName(data.cFileName))
-						dirs.push_back(swtos(data.cFileName));
+						dirs.emplace_back(data.cFileName);
 				} else
-					files.push_back(swtos(data.cFileName));
+					files.emplace_back(data.cFileName);
 			}
 		} while (FindNextFileW(hFind, &data));
 		FindClose(hFind);
@@ -440,19 +468,19 @@ pair<vector<string>, vector<string>> FileOpsLocal::listDirectorySep(string_view 
 				}
 		closedir(directory);
 #endif
-		rng::sort(files, StrNatCmp());
-		rng::sort(dirs, StrNatCmp());
+		rng::sort(files, Strcomp());
+		rng::sort(dirs, Strcomp());
 	}
 	return pair(std::move(files), std::move(dirs));
 }
 
 #ifdef _WIN32
-vector<string> FileOpsLocal::listDrives() {
-	vector<string> letters;
+vector<Cstring> FileOpsLocal::listDrives() {
+	vector<Cstring> letters;
 	DWORD drives = GetLogicalDrives();
 	for (char i = 0; i < drivesMax; ++i)
 		if (drives & (1 << i))
-			letters.push_back(string{ char('A' + i), ':', '\\' });
+			letters.push_back(Cstring{ char('A' + i), ':', '\\' });
 	return letters;
 }
 #endif
@@ -535,12 +563,12 @@ bool FileOpsLocal::renameEntry(string_view oldPath, string_view newPath) {
 #endif
 }
 
-vector<byte_t> FileOpsLocal::readFile(string_view path) {
+Data FileOpsLocal::readFile(string_view path) {
 	return readFile(toPath(path));
 }
 
-vector<byte_t> FileOpsLocal::readFile(const fs::path& path) {
-	vector<byte_t> data;
+Data FileOpsLocal::readFile(const fs::path& path) {
+	Data data;
 #ifdef _WIN32
 	if (HANDLE fh = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr); fh != INVALID_HANDLE_VALUE) {
 		if (LARGE_INTEGER siz; GetFileSizeEx(fh, &siz)) {
@@ -552,7 +580,7 @@ vector<byte_t> FileOpsLocal::readFile(const fs::path& path) {
 				data.clear();
 		}
 		CloseHandle(fh);
-	};
+	}
 #else
 	if (int fd = open(path.c_str(), O_RDONLY); fd != -1) {
 		if (struct stat ps; !fstat(fd, &ps)) {
@@ -564,6 +592,24 @@ vector<byte_t> FileOpsLocal::readFile(const fs::path& path) {
 	}
 #endif
 	return data;
+}
+
+size_t FileOpsLocal::readFileStart(string_view path, byte_t* buf, size_t n) {
+	size_t len = 0;
+#ifdef _WIN32
+	if (HANDLE fh = CreateFileW(sstow(path).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr); fh != INVALID_HANDLE_VALUE) {
+		if (DWORD l; ReadFile(fh, buf, n, &l, nullptr))
+			len = l;
+		CloseHandle(fh);
+	};
+#else
+	if (int fd = open(string(path).c_str(), O_RDONLY); fd != -1) {
+		if (ssize_t l = read(fd, buf, n); l > 0)
+			len = l;
+		close(fd);
+	}
+#endif
+	return len;
 }
 
 fs::file_type FileOpsLocal::fileType(string_view path) {
@@ -578,19 +624,36 @@ fs::file_type FileOpsLocal::fileType(string_view path) {
 #endif
 }
 
-bool FileOpsLocal::isDirectory(string_view path) {
-	return isDirectory(toPath(path));
-}
-
-bool FileOpsLocal::isDirectory(const fs::path& path) {
+bool FileOpsLocal::isRegular(string_view path) {
 #ifdef _WIN32
-	DWORD attr = GetFileAttributesW(path.c_str());
-	return attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY);
+	DWORD attr = GetFileAttributesW(sstow(path).c_str());
+	return attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY);
 #else
-	struct stat ps;
-	return !stat(path.c_str(), &ps) && S_ISDIR(ps.st_mode);
+	return hasModeFlags(string(path).c_str(), S_IFREG);
 #endif
 }
+
+bool FileOpsLocal::isDirectory(string_view path) {
+#ifdef _WIN32
+	return isDirectory(sstow(path).c_str());
+#else
+	return hasModeFlags(string(path).c_str(), S_IFDIR);
+#endif
+}
+
+#ifdef _WIN32
+bool FileOpsLocal::isDirectory(const wchar_t* path) {
+	DWORD attr = GetFileAttributesW(path);
+	return attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+#else
+
+bool FileOpsLocal::hasModeFlags(const char* path, mode_t flags) {
+	struct stat ps;
+	return !stat(path, &ps) && (ps.st_mode & flags);
+}
+#endif
 
 bool FileOpsLocal::isPicture(string_view path) {
 	return FileOps::isPicture(SDL_RWFromFile(string(path).c_str(), "rb"), fileExtension(path));
@@ -600,20 +663,47 @@ SDL_Surface* FileOpsLocal::loadPicture(string_view path) {
 	return IMG_Load(string(path).c_str());
 }
 
-archive* FileOpsLocal::openArchive(string_view path) {
+#ifdef CAN_PDF
+pair<PopplerDocument*, Data> FileOpsLocal::loadPdf(string_view path, string* error) {
+	pair<PopplerDocument*, Data> ret(nullptr, Data());
+#ifdef _WIN32
+	if (HANDLE fh = CreateFileW(sstow(path).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr); fh != INVALID_HANDLE_VALUE) {
+		if (LARGE_INTEGER siz; GetFileSizeEx(fh, &siz)) {
+			ret = loadPdfChecked(fh, siz.QuadPart, [](HANDLE h, byte_t* b, DWORD s) -> DWORD {
+				DWORD len;
+				return ReadFile(h, b, s, &len, nullptr) ? len : 0;
+			}, error);
+		}
+		CloseHandle(fh);
+	}
+#else
+	if (int fd = open(string(path).c_str(), O_RDONLY); fd != -1) {
+		if (struct stat ps; !fstat(fd, &ps) && ps.st_size > off_t(signaturePdf.size()))
+			ret = loadPdfChecked(fd, ps.st_size, read, error);
+		close(fd);
+	}
+#endif
+	return ret;
+}
+#endif
+
+archive* FileOpsLocal::openArchive(string_view path, string* error) {
 	archive* arch = archive_read_new();
 	if (arch) {
 		archive_read_support_filter_all(arch);
 		archive_read_support_format_all(arch);
 #ifdef _WIN32
-		if (archive_read_open_filename_w(arch, sstow(path).c_str(), archiveReadBlockSize)) {
+		if (archive_read_open_filename_w(arch, sstow(path).c_str(), archiveReadBlockSize) != ARCHIVE_OK) {
 #else
-		if (archive_read_open_filename(arch, string(path).c_str(), archiveReadBlockSize)) {
+		if (archive_read_open_filename(arch, string(path).c_str(), archiveReadBlockSize) != ARCHIVE_OK) {
 #endif
+			if (error)
+				*error = archive_error_string(arch);
 			archive_read_free(arch);
 			return nullptr;
 		}
-	}
+	} else if (error)
+		*error = "Failed to allocate archive object";
 	return arch;
 }
 
@@ -623,15 +713,15 @@ void FileOpsLocal::setWatch(string_view path) {
 		if (dirc != INVALID_HANDLE_VALUE)
 			unsetWatch();
 
-		if (fs::path wp = toPath(path); isDirectory(wp)) {
+		if (wstring wp = sstow(path); isDirectory(wp.c_str())) {
 			dirc = CreateFileW(wp.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
 			flags = FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME;
 			filter.clear();
 			wpdir = std::move(wp);
-		} else if (wp = toPath(parentPath(path)); isDirectory(wp)) {
+		} else if (wp = sstow(parentPath(path)); isDirectory(wp.c_str())) {
 			dirc = CreateFileW(wp.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
 			flags = FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_SIZE;
-			filter = wp.filename();
+			filter = filename(wp);
 			wpdir.clear();
 		}
 		if (dirc != INVALID_HANDLE_VALUE && !ReadDirectoryChangesW(dirc, ebuf, esiz, true, flags, nullptr, &overlapped, nullptr))
@@ -746,25 +836,28 @@ bool FileOpsLocal::equals(const RemoteLocation& rl) const {
 
 #if defined(CAN_SMB) || defined(CAN_SFTP)
 bool FileOpsRemote::isPicture(string_view path) {
-	vector<byte_t> data = readFile(path);
-	return !data.empty() && FileOps::isPicture(SDL_RWFromConstMem(data.data(), data.size()), fileExtension(path));
+	Data data = readFile(path);
+	return FileOps::isPicture(SDL_RWFromConstMem(data.data(), data.size()), fileExtension(path));
 }
 
 SDL_Surface* FileOpsRemote::loadPicture(string_view path) {
-	vector<byte_t> data = readFile(path);
-	return !data.empty() ? IMG_Load_RW(SDL_RWFromMem(data.data(), data.size()), SDL_TRUE) : nullptr;
+	Data data = readFile(path);
+	return IMG_Load_RW(SDL_RWFromConstMem(data.data(), data.size()), SDL_TRUE);
 }
 
-archive* FileOpsRemote::openArchive(string_view path) {
+archive* FileOpsRemote::openArchive(string_view path, string* error) {
 	archive* arch = archive_read_new();
 	if (arch) {
 		archive_read_support_filter_all(arch);
 		archive_read_support_format_all(arch);
-		if (vector<byte_t> data = readFile(path); archive_read_open_memory(arch, data.data(), data.size())) {
+		if (Data data = readFile(path); archive_read_open_memory(arch, data.data(), data.size()) != ARCHIVE_OK) {
+			if (error)
+				*error = archive_error_string(arch);
 			archive_read_free(arch);
 			return nullptr;
 		}
-	}
+	} else if (error)
+		*error = "Failed to allocate archive object";
 	return arch;
 }
 
@@ -831,9 +924,9 @@ FileOpsSmb::~FileOpsSmb() {
 	smbcFreeContext(ctx, 0);
 }
 
-vector<string> FileOpsSmb::listDirectory(string_view path, bool files, bool dirs, bool hidden) {
+vector<Cstring> FileOpsSmb::listDirectory(string_view path, bool files, bool dirs, bool hidden) {
 	std::lock_guard lockg(mlock);
-	vector<string> entries;
+	vector<Cstring> entries;
 	if (string drc(path); SMBCFILE* dir = sopendir(ctx, drc.c_str())) {
 		struct stat ps;
 		while (smbc_dirent* it = sreaddir(ctx, dir)) {
@@ -863,14 +956,14 @@ vector<string> FileOpsSmb::listDirectory(string_view path, bool files, bool dirs
 			}
 		}
 		sclosedir(ctx, dir);
-		rng::sort(entries, StrNatCmp());
+		rng::sort(entries, Strcomp());
 	}
 	return entries;
 }
 
-pair<vector<string>, vector<string>> FileOpsSmb::listDirectorySep(string_view path, bool hidden) {
+pair<vector<Cstring>, vector<Cstring>> FileOpsSmb::listDirectorySep(string_view path, bool hidden) {
 	std::lock_guard lockg(mlock);
-	vector<string> files, dirs;
+	vector<Cstring> files, dirs;
 	if (string drc(path); SMBCFILE* dir = sopendir(ctx, drc.c_str())) {
 		struct stat ps;
 		while (smbc_dirent* it = sreaddir(ctx, dir)) {
@@ -897,8 +990,8 @@ pair<vector<string>, vector<string>> FileOpsSmb::listDirectorySep(string_view pa
 			}
 		}
 		sclosedir(ctx, dir);
-		rng::sort(files, StrNatCmp());
-		rng::sort(dirs, StrNatCmp());
+		rng::sort(files, Strcomp());
+		rng::sort(dirs, Strcomp());
 	}
 	return pair(std::move(files), std::move(dirs));
 }
@@ -946,9 +1039,9 @@ bool FileOpsSmb::renameEntry(string_view oldPath, string_view newPath) {
 	return srename && !srename(ctx, string(oldPath).c_str(), ctx, string(newPath).c_str());
 }
 
-vector<byte_t> FileOpsSmb::readFile(string_view path) {
+Data FileOpsSmb::readFile(string_view path) {
 	std::lock_guard lockg(mlock);
-	vector<byte_t> data;
+	Data data;
 	if (SMBCFILE* fh = sopen(ctx, string(path).c_str(), O_RDONLY, 0)) {	// TODO: check if this works if there's no open handle to the directory/share
 		if (struct stat ps; !sfstat(ctx, fh, &ps)) {
 			data.resize(ps.st_size);
@@ -960,17 +1053,49 @@ vector<byte_t> FileOpsSmb::readFile(string_view path) {
 	return data;
 }
 
+size_t FileOpsSmb::readFileStart(string_view path, byte_t* buf, size_t n) {
+	std::lock_guard lockg(mlock);
+	size_t len = 0;
+	if (SMBCFILE* fh = sopen(ctx, string(path).c_str(), O_RDONLY, 0)) {	// TODO: check if this works if there's no open handle to the directory/share
+		if (ssize_t l = sread(ctx, fh, buf, n); l > 0)
+			len = l;
+		sclose(ctx, fh);
+	}
+	return len;
+}
+
 fs::file_type FileOpsSmb::fileType(string_view path) {
 	std::lock_guard lockg(mlock);
 	struct stat ps;
 	return !sstat(ctx, string(path).c_str(), &ps) ? modeToType(ps.st_mode) : fs::file_type::not_found;
-};
+}
+
+bool FileOpsSmb::isRegular(string_view path) {
+	return hasModeFlags(path, S_IFREG);
+}
 
 bool FileOpsSmb::isDirectory(string_view path) {
+	return hasModeFlags(path, S_IFDIR);
+}
+
+bool FileOpsSmb::hasModeFlags(string_view path, mode_t mdes) {
 	std::lock_guard lockg(mlock);
 	struct stat ps;
-	return !sstat(ctx, string(path).c_str(), &ps) && S_ISDIR(ps.st_mode);	// TODO: is this right?
+	return !sstat(ctx, string(path).c_str(), &ps) && (ps.st_mode & mdes);	// TODO: is this right with S_IFDIR and S_IFREG?
 }
+
+#ifdef CAN_PDF
+pair<PopplerDocument*, Data> FileOpsSmb::loadPdf(string_view path, string* error) {
+	std::lock_guard lockg(mlock);
+	pair<PopplerDocument*, Data> ret(nullptr, Data());
+	if (SMBCFILE* fh = sopen(ctx, string(path).c_str(), O_RDONLY, 0)) {	// TODO: check if this works if there's no open handle to the directory/share
+		if (struct stat ps; !sfstat(ctx, fh, &ps) && ps.st_size > off_t(signaturePdf.size()))
+			ret = loadPdfChecked(fh, ps.st_size, [this](SMBCFILE* h, byte_t* b, size_t s) -> ssize_t { return sread(ctx, h, b, s); }, error);
+		sclose(ctx, fh);
+	}
+	return ret;
+}
+#endif
 
 void FileOpsSmb::setWatch(string_view path) {
 	if (snotify) {
@@ -1151,9 +1276,9 @@ void FileOpsSftp::authenticate(const vector<string>& passwords) {
 	}
 }
 
-vector<string> FileOpsSftp::listDirectory(string_view path, bool files, bool dirs, bool hidden) {
+vector<Cstring> FileOpsSftp::listDirectory(string_view path, bool files, bool dirs, bool hidden) {
 	std::lock_guard lockg(mlock);
-	vector<string> entries;
+	vector<Cstring> entries;
 	if (LIBSSH2_SFTP_HANDLE* dir = sftpOpenEx(sftp, path.data(), path.length(), 0, 0, LIBSSH2_SFTP_OPENDIR)) {
 		char name[2048], longentry[2048];	// TODO: no need for longentry
 		LIBSSH2_SFTP_ATTRIBUTES attr;
@@ -1182,14 +1307,14 @@ vector<string> FileOpsSftp::listDirectory(string_view path, bool files, bool dir
 				}
 		}
 		sftpClose(dir);
-		rng::sort(entries, StrNatCmp());
+		rng::sort(entries, Strcomp());
 	}
 	return entries;
 }
 
-pair<vector<string>, vector<string>> FileOpsSftp::listDirectorySep(string_view path, bool hidden) {
+pair<vector<Cstring>, vector<Cstring>> FileOpsSftp::listDirectorySep(string_view path, bool hidden) {
 	std::lock_guard lockg(mlock);
-	vector<string> files, dirs;
+	vector<Cstring> files, dirs;
 	if (LIBSSH2_SFTP_HANDLE* dir = sftpOpenEx(sftp, path.data(), path.length(), 0, 0, LIBSSH2_SFTP_OPENDIR)) {
 		char name[2048], longentry[2048];	// TODO: no need for longentry
 		LIBSSH2_SFTP_ATTRIBUTES attr;
@@ -1215,8 +1340,8 @@ pair<vector<string>, vector<string>> FileOpsSftp::listDirectorySep(string_view p
 				}
 		}
 		sftpClose(dir);
-		rng::sort(files, StrNatCmp());
-		rng::sort(dirs, StrNatCmp());
+		rng::sort(files, Strcomp());
+		rng::sort(dirs, Strcomp());
 	}
 	return pair(std::move(files), std::move(dirs));
 }
@@ -1267,9 +1392,9 @@ bool FileOpsSftp::renameEntry(string_view oldPath, string_view newPath) {
 	return sftpRenameEx && !sftpRenameEx(sftp, oldPath.data(), oldPath.length(), newPath.data(), newPath.length(), LIBSSH2_SFTP_RENAME_ATOMIC | LIBSSH2_SFTP_RENAME_NATIVE);
 }
 
-vector<byte_t> FileOpsSftp::readFile(string_view path) {
+Data FileOpsSftp::readFile(string_view path) {
 	std::lock_guard lockg(mlock);
-	vector<byte_t> data;
+	Data data;
 	if (LIBSSH2_SFTP_HANDLE* fh = sftpOpenEx(sftp, path.data(), path.length(), LIBSSH2_FXF_READ, 0, LIBSSH2_SFTP_OPENFILE)) {
 		if (LIBSSH2_SFTP_ATTRIBUTES attr; !sftpFstatEx(fh, &attr, 0)) {
 			data.resize(attr.filesize);
@@ -1281,17 +1406,49 @@ vector<byte_t> FileOpsSftp::readFile(string_view path) {
 	return data;
 }
 
+size_t FileOpsSftp::readFileStart(string_view path, byte_t* buf, size_t n) {
+	std::lock_guard lockg(mlock);
+	size_t len = 0;
+	if (LIBSSH2_SFTP_HANDLE* fh = sftpOpenEx(sftp, path.data(), path.length(), LIBSSH2_FXF_READ, 0, LIBSSH2_SFTP_OPENFILE)) {
+		if (ssize_t l = sftpRead(fh, reinterpret_cast<char*>(buf), n); l > 0)
+			len = l;
+		sftpClose(fh);
+	}
+	return len;
+}
+
 fs::file_type FileOpsSftp::fileType(string_view path) {
 	std::lock_guard lockg(mlock);
 	LIBSSH2_SFTP_ATTRIBUTES attr;
 	return !sftpStatEx(sftp, path.data(), path.length(), LIBSSH2_SFTP_STAT, &attr) ? modeToType(attr.flags) : fs::file_type::not_found;
-};
+}
+
+bool FileOpsSftp::isRegular(string_view path) {
+	return hasAttributeFlags(path, S_IFREG);
+}
 
 bool FileOpsSftp::isDirectory(string_view path) {
+	return hasAttributeFlags(path, S_IFDIR);
+}
+
+bool FileOpsSftp::hasAttributeFlags(string_view path, ulong flags) {
 	std::lock_guard lockg(mlock);
 	LIBSSH2_SFTP_ATTRIBUTES attr;
-	return !sftpStatEx(sftp, path.data(), path.length(), LIBSSH2_SFTP_STAT, &attr) && (attr.flags & S_IFDIR);
+	return !sftpStatEx(sftp, path.data(), path.length(), LIBSSH2_SFTP_STAT, &attr) && (attr.flags & flags);
 }
+
+#ifdef CAN_PDF
+pair<PopplerDocument*, Data> FileOpsSftp::loadPdf(string_view path, string* error) {
+	std::lock_guard lockg(mlock);
+	pair<PopplerDocument*, Data> ret(nullptr, Data());
+	if (LIBSSH2_SFTP_HANDLE* fh = sftpOpenEx(sftp, path.data(), path.length(), LIBSSH2_FXF_READ, 0, LIBSSH2_SFTP_OPENFILE)) {
+		if (LIBSSH2_SFTP_ATTRIBUTES attr; !sftpFstatEx(fh, &attr, 0) && attr.filesize > signaturePdf.size())
+			ret = loadPdfChecked(fh, attr.filesize, [](LIBSSH2_SFTP_HANDLE* h, byte_t* b, size_t s) -> ssize_t { return sftpRead(h, reinterpret_cast<char*>(b), s); }, error);
+		sftpClose(fh);
+	}
+	return ret;
+}
+#endif
 
 bool FileOpsSftp::pollWatch(vector<FileChange>&) {
 	return false;

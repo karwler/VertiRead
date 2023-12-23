@@ -245,31 +245,46 @@ array<vec4, Settings::defaultColors.size()> FileSys::loadColors(string_view them
 	return colors;
 }
 
-tuple<bool, string, string> FileSys::getLastPage(string_view book) const {
+vector<string> FileSys::getLastPage(string_view book) const {
 	string text = readTextFile(dirSets / fileBooks);
 	for (string_view tx = text; !tx.empty();)
-		if (vector<string> words = strUnenclose(readNextLine(tx)); words.size() >= 2 && words[0] == book)
-			return tuple(true, std::move(words[1]), words.size() >= 3 ? std::move(words[2]) : string());
-	return tuple(false, string(), string());
+		if (string_view ln = readNextLine(tx); strUnenclose(ln) == book) {
+			vector<string> paths;
+			while (paths.size() < 3 && !ln.empty())
+				if (string word = strUnenclose(ln); !word.empty())
+					paths.push_back(std::move(word));
+			if (!paths.empty())
+				return paths;
+		}
+	return vector<string>();
 }
 
-void FileSys::saveLastPage(string_view book, string_view drc, string_view fname) const {
+void FileSys::saveLastPage(string_view book, const vector<string>& paths) const {
 	fs::path file = dirSets / fileBooks;
 	string text = readTextFile(file);
 	string_view line;
 	for (string_view tx = text; !tx.empty();) {
 		line = readNextLine(tx);
-		if (vector<string> words = strUnenclose(line); words.size() >= 2 && words[0] == book)
+		string_view ln = line;
+		if (string bname = strUnenclose(ln); bname == book)
 			break;
 	}
-	if (string ilin = std::format("{} {} {}", strEnclose(book), strEnclose(drc), strEnclose(fname)); line.empty())
-		text += ilin + LINEND;
-	else
-		text.replace(line.data() - text.c_str(), line.length(), ilin);
 
-	if (std::ofstream ofs(file, std::ios::binary); ofs.good())
-		ofs.write(text.c_str(), text.length());
-	else
+	if (std::ofstream ofs(file, line.empty() ? std::ios::binary | std::ios::ate : std::ios::binary); ofs.good()) {
+		string ilin(book);
+		for (const string& it : paths) {
+			ilin += ' ';
+			ilin += it;
+		}
+
+		if (line.empty()) {
+			ofs.write(ilin.c_str(), ilin.length());
+			ofs.write(LINEND, strlen(LINEND));
+		} else {
+			text.replace(line.data() - text.c_str(), line.length(), ilin);
+			ofs.write(text.c_str(), text.length());
+		}
+	} else
 		logError("Failed to write books file: ", file);
 }
 
@@ -297,6 +312,8 @@ Settings* FileSys::loadSettings() const {
 				sets->vsync = toBool(il.val);
 			else if (strciequal(il.prp, iniKeywordGpuSelecting))
 				sets->gpuSelecting = toBool(il.val);
+			else if (strciequal(il.prp, iniKeywordPdfImages))
+				sets->pdfImages = toBool(il.val);
 			else if (strciequal(il.prp, iniKeywordDirection))
 				sets->direction = strToEnum(Direction::names, il.val, Settings::defaultDirection);
 			else if (strciequal(il.prp, iniKeywordZoom))
@@ -308,7 +325,7 @@ Settings* FileSys::loadSettings() const {
 			else if (strciequal(il.prp, iniKeywordMaxPictureRes))
 				sets->maxPicRes = std::max(toNum<uint>(il.val), Settings::minPicRes);
 			else if (strciequal(il.prp, iniKeywordFont))
-				sets->font = FileSys::isFont(findFont(toPath(il.val))) ? il.val : Settings::defaultFont;	// will get sanitized in DrawSys if necessary
+				sets->font = isFont(findFont(toPath(il.val))) ? il.val : Settings::defaultFont;	// will get sanitized in DrawSys if necessary
 			else if (strciequal(il.prp, iniKeywordHinting))
 				sets->hinting = strToEnum<Settings::Hinting>(Settings::hintingNames, il.val, Settings::defaultHinting);
 			else if (strciequal(il.prp, iniKeywordTheme))
@@ -353,6 +370,7 @@ void FileSys::saveSettings(const Settings* sets) const {
 	IniLine::writeVal(ofs, iniKeywordCompression, Settings::compressionNames[eint(sets->compression)]);
 	IniLine::writeVal(ofs, iniKeywordVSync, toStr(sets->vsync));
 	IniLine::writeVal(ofs, iniKeywordGpuSelecting, toStr(sets->gpuSelecting));
+	IniLine::writeVal(ofs, iniKeywordPdfImages, toStr(sets->pdfImages));
 	IniLine::writeVal(ofs, iniKeywordZoom, int(sets->zoom));
 	IniLine::writeVal(ofs, iniKeywordPictureLimit, PicLim::names[eint(sets->picLim.type)], ' ', sets->picLim.getCount(), ' ', PicLim::memoryString(sets->picLim.getSize()));
 	IniLine::writeVal(ofs, iniKeywordMaxPictureRes, sets->maxPicRes);
@@ -524,9 +542,8 @@ void FileSys::writeChar8(string& str, char32_t ch) {
 
 bool FileSys::isFont(const fs::path& file) {
 	if (std::ifstream ifs(file, std::ios::binary); ifs.good()) {
-		char sig[5] = { -1, -1, -1, -1, -1 };
-		ifs.read(sig, sizeof(sig));
-		return !memcmp(sig, "\0\1\0\0\0", 5) || !memcmp(sig, "OTTO", 4) || !memcmp(sig, "\1fcp", 4);
+		char sig[5];
+		return ifs.read(sig, sizeof(sig)).gcount() == sizeof(sig) && (!memcmp(sig, "\0\1\0\0\0", 5) || !memcmp(sig, "OTTO", 4) || !memcmp(sig, "\1fcp", 4));
 	}
 	return false;
 }
@@ -586,7 +603,7 @@ fs::path FileSys::searchFontRegistry(const fs::path& font) {
 	for (HKEY root : { HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE })
 		for (RegistryIterator rit(root, fontsKey); rit.next();)
 			if (rit.getType() == REG_SZ) {
-				string_view fname = rit.getString();
+				wstring_view fname = rit.getString();
 				if (wstring_view freduce = filename(fname); strciequal(freduce, font.native()) || strciequal(delExtension(freduce), font.native()))
 					return root == HKEY_CURRENT_USER ? fname : systemFontDir() / fname;
 			}
@@ -615,7 +632,7 @@ vector<fs::path> FileSys::listFontFiles(FT_Library lib, char32_t first, char32_t
 }
 
 void FileSys::listFontFilesInDirectory(FT_Library lib, const fs::path& drc, char32_t first, char32_t last, vector<fs::path>& fonts) {
-	vector<byte_t> fdata;
+	Data fdata;
 	std::error_code ec;
 	for (const fs::directory_entry& it : fs::recursive_directory_iterator(drc, fs::directory_options::follow_directory_symlink | fs::directory_options::skip_permission_denied, ec))
 		if (it.is_regular_file(ec))
@@ -628,7 +645,7 @@ void FileSys::listFontFilesInDirectory(FT_Library lib, const fs::path& drc, char
 #if defined(_WIN32) && !defined(__MINGW32__)
 template <HKEY root>
 void FileSys::listFontFilesInRegistry(FT_Library lib, char32_t first, char32_t last, vector<fs::path>& fonts) {
-	vector<byte_t> fdata;
+	Data fdata;
 	fs::path gfpath;
 	if constexpr (root == HKEY_LOCAL_MACHINE)
 		gfpath = systemFontDir();
@@ -666,7 +683,7 @@ void FileSys::listFontFamiliesThread(std::stop_token stoken, fs::path cdir, stri
 			return strciequal(fname, desired) || strciequal(delExtension(fname), desired);
 		});
 		if (it != fonts.end())
-			desiredPath = it->second;
+			desiredPath = it->second.data();
 	}
 
 #ifdef CAN_FONTCFG
@@ -701,7 +718,7 @@ void FileSys::listFontFamiliesThread(std::stop_token stoken, fs::path cdir, stri
 	}
 
 	vector<Cstring> families(fonts.size());
-	uptr<Cstring[]> files = std::make_unique_for_overwrite<Cstring[]>(fonts.size());
+	uptr<Cstring[]> files = std::make_unique<Cstring[]>(fonts.size());
 	for (size_t i = 0; i < fonts.size(); ++i) {
 		families[i] = std::move(fonts[i].first);
 		files[i] = std::move(fonts[i].second);
@@ -710,7 +727,7 @@ void FileSys::listFontFamiliesThread(std::stop_token stoken, fs::path cdir, stri
 }
 
 void FileSys::listFontFamiliesInDirectoryThread(std::stop_token stoken, FT_Library lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts) {
-	vector<byte_t> fdata;
+	Data fdata;
 	std::error_code ec;
 	for (const fs::directory_entry& it : fs::recursive_directory_iterator(drc, fs::directory_options::follow_directory_symlink | fs::directory_options::skip_permission_denied, ec)) {
 		if (stoken.stop_requested())
@@ -726,7 +743,7 @@ void FileSys::listFontFamiliesInDirectoryThread(std::stop_token stoken, FT_Libra
 #if defined(_WIN32) && !defined(__MINGW32__)
 template <HKEY root>
 void FileSys::listFontFamiliesInRegistryThread(std::stop_token stoken, FT_Library lib, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts) {
-	vector<byte_t> fdata;
+	Data fdata;
 	fs::path gfpath;
 	if constexpr (root == HKEY_LOCAL_MACHINE)
 		gfpath = systemFontDir();
@@ -748,7 +765,7 @@ void FileSys::listFontFamiliesInRegistryThread(std::stop_token stoken, FT_Librar
 }
 #endif
 
-FT_Face FileSys::openFace(FT_Library lib, const fs::path& file, char32_t first, char32_t last, vector<byte_t>& fdata) {
+FT_Face FileSys::openFace(FT_Library lib, const fs::path& file, char32_t first, char32_t last, Data& fdata) {
 	fdata = FileOpsLocal::readFile(file);
 	if (FT_Face face; !FT_New_Memory_Face(lib, reinterpret_cast<FT_Byte*>(fdata.data()), fdata.size(), 0, &face)) {
 		char32_t ch;

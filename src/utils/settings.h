@@ -444,6 +444,7 @@ public:
 	Renderer renderer = defaultRenderer;
 	bool gpuSelecting = false;
 	Hinting hinting = defaultHinting;
+	bool pdfImages = true;
 
 	Settings(const fs::path& dirSets, vector<string>&& themes);
 

@@ -1,16 +1,10 @@
 #include "world.h"
-#ifdef CAN_FONTCFG
 #include "optional/fontconfig.h"
-#endif
-#ifdef CAN_SECRET
+#include "optional/glib.h"
+#include "optional/poppler.h"
 #include "optional/secret.h"
-#endif
-#ifdef CAN_SMB
 #include "optional/smbclient.h"
-#endif
-#ifdef CAN_SFTP
 #include "optional/ssh2.h"
-#endif
 #ifdef WITH_ICU
 #include "utils/compare.h"
 #endif
@@ -59,11 +53,11 @@ int main(int argc, char** argv) {
 #endif
 	setlocale(LC_CTYPE, "");
 #ifdef WITH_ICU
-	StrNatCmp::init();
+	Strcomp::init();
 #endif
 	int rc = World::winSys()->start(std::move(vals), std::move(flags));
 #ifdef WITH_ICU
-	StrNatCmp::free();
+	Strcomp::free();
 #endif
 #ifdef CAN_SFTP
 	LibSsh2::closeLibssh2();
@@ -73,6 +67,12 @@ int main(int argc, char** argv) {
 #endif
 #ifdef CAN_SECRET
 	LibSecret::closeLibsecret();
+#endif
+#ifdef CAN_PDF
+	LibPoppler::closePoppler();
+#endif
+#if defined(CAN_SECRET) || defined(CAN_PDF)
+	LibGlib::closeGlib();
 #endif
 #ifdef CAN_FONTCFG
 	LibFontconfig::closeFontconfig();

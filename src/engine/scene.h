@@ -37,6 +37,7 @@ public:
 	void onMouseLeave();
 	void onCompose(string_view str);
 	void onText(string_view str);
+	void onConfirm();
 	void onCancel();
 	void onResize();
 	void onDisplayChange();
@@ -51,7 +52,6 @@ public:
 	Overlay* getOverlay() { return overlay; }
 	Popup* getPopup() { return popup; }
 	void setPopup(Popup* newPopup, Widget* newCapture = nullptr);
-	void setPopup(pair<Popup*, Widget*> popcap);
 	Context* getContext() { return context; }
 	void setContext(Context* newContext);
 
@@ -67,10 +67,6 @@ private:
 	Widget* getSelected(ivec2 mPos);
 	bool overlayFocused(ivec2 mPos) const;
 };
-
-inline void Scene::setPopup(pair<Popup*, Widget*> popcap) {
-	setPopup(popcap.first, popcap.second);
-}
 
 inline void Scene::updateSelect(ivec2 mPos) {
 	updateSelect(getSelected(mPos));

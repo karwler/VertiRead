@@ -44,8 +44,45 @@ char32_t mbstowc(string_view::iterator& mb, size_t& len) {
 	return !(w >= 0x110000 || (w >= 0x00D800 && w <= 0x00DFFF)) ? w : '\0';
 }
 
+char32_t mbstowc(const char*& mb) {
+	uchar c = *mb;
+	if (!c)
+		return '\0';
+
+	++mb;
+	if (c < 0x80)
+		return c;
+	if ((c >= 0x80 && c <= 0xBF) || c >= 0xF5) {
+		for (; *mb && ((uchar(*mb) >= 0x80 && uchar(*mb) <= 0xBF) || uchar(*mb) >= 0xF5); ++mb);
+		return '\0';
+	}
+
+	char32_t w;
+	uint cnt;
+	if (c >= 0xF0) {
+		w = c & 0x07;
+		cnt = 3;
+	} else if (c >= 0xE0) {
+		w = c & 0x0F;
+		cnt = 2;
+	} else {
+		w = c & 0x1F;
+		cnt = 1;
+	}
+
+	for (; cnt; --cnt, ++mb) {
+		c = *mb;
+		if (c < 0x80 || c > 0xBF) {
+			for (; *mb && ((uchar(*mb) >= 0x80 && uchar(*mb) <= 0xBF) || uchar(*mb) >= 0xF5); ++mb);
+			return '\0';
+		}
+		w = (w << 6) | (c & 0x3F);
+	}
+	return !(w >= 0x110000 || (w >= 0x00D800 && w <= 0x00DFFF)) ? w : '\0';
+}
+
 #ifdef WITH_ICU
-void StrNatCmp::init() {
+void Strcomp::init() {
 	UErrorCode status = U_ZERO_ERROR;
 	collator = icu::Collator::createInstance(icu::Locale::getDefault(), status);
 	if (U_FAILURE(status))
@@ -57,29 +94,21 @@ void StrNatCmp::init() {
 
 #else
 
-std::strong_ordering StrNatCmp::cmp(string_view sa, string_view sb) {
+std::strong_ordering Strcomp::cmp(string_view sa, string_view sb) {
 	string_view::iterator a = sa.begin(), b = sb.begin();
 	size_t alen = sa.length(), blen = sb.length();
 	while (alen && blen) {
 		char32_t ca = skipSpaces(a, alen), cb = skipSpaces(b, blen);
 		if (std::iswdigit(ca) && std::iswdigit(cb))
-			if (std::strong_ordering dif = ca == '0' || cb == '0' ? cmpLeft(ca, a, alen, cb, b, blen) : cmpRight(ca, a, alen, cb, b, blen); dif != 0)
+			if (std::strong_ordering dif = ca == '0' || cb == '0' ? cmpLeft(ca, a, alen, cb, b, blen) : cmpRight(ca, a, alen, cb, b, blen); dif != std::strong_ordering::equal)
 				return dif;
-		if (std::strong_ordering dif = cmpLetter(ca, cb); dif != 0)
+		if (std::strong_ordering dif = cmpLetter(ca, cb); dif != std::strong_ordering::equal)
 			return dif;
 	}
 	return alen == 0 && blen == 0 ? std::strong_ordering::equal : alen == 0 ? std::strong_ordering::less : std::strong_ordering::greater;
 }
 
-char32_t StrNatCmp::skipSpaces(string_view::iterator& p, size_t& l) {
-	char32_t c;
-	do {
-		c = mbstowc(p, l);
-	} while (l && std::iswspace(c));
-	return c;
-}
-
-std::strong_ordering StrNatCmp::cmpLeft(char32_t ca, string_view::iterator a, size_t alen, char32_t cb, string_view::iterator b, size_t blen) {
+std::strong_ordering Strcomp::cmpLeft(char32_t ca, string_view::iterator a, size_t alen, char32_t cb, string_view::iterator b, size_t blen) {
 	for (;; ca = mbstowc(a, alen), cb = mbstowc(b, blen)) {
 		bool nad = !std::iswdigit(ca), nbd = !std::iswdigit(cb);
 		if (nad && nbd)
@@ -88,14 +117,14 @@ std::strong_ordering StrNatCmp::cmpLeft(char32_t ca, string_view::iterator a, si
 			return std::strong_ordering::less;
 		if (nbd)
 			return std::strong_ordering::greater;
-		if (std::strong_ordering dif = cmpLetter(ca, cb); dif != 0)
+		if (std::strong_ordering dif = cmpLetter(ca, cb); dif != std::strong_ordering::equal)
 			return dif;
 		if (!(alen && blen))
 			return alen == 0 && blen == 0 ? std::strong_ordering::equal : alen == 0 ? std::strong_ordering::less : std::strong_ordering::greater;
 	}
 }
 
-std::strong_ordering StrNatCmp::cmpRight(char32_t ca, string_view::iterator a, size_t alen, char32_t cb, string_view::iterator b, size_t blen) {
+std::strong_ordering Strcomp::cmpRight(char32_t ca, string_view::iterator a, size_t alen, char32_t cb, string_view::iterator b, size_t blen) {
 	for (std::strong_ordering bias = std::strong_ordering::equal;; ca = mbstowc(a, alen), cb = mbstowc(b, blen)) {
 		bool nad = !std::iswdigit(ca), nbd = !std::iswdigit(cb);
 		if (nad && nbd)
@@ -104,18 +133,77 @@ std::strong_ordering StrNatCmp::cmpRight(char32_t ca, string_view::iterator a, s
 			return std::strong_ordering::less;
 		if (nbd)
 			return std::strong_ordering::greater;
-		if (std::strong_ordering dif = cmpLetter(ca, cb); dif != 0 && bias == 0)
+		if (std::strong_ordering dif = cmpLetter(ca, cb); dif != std::strong_ordering::equal && bias == std::strong_ordering::equal)
 			bias = dif;
 		if (!(alen && blen))
 			return alen == 0 && blen == 0 ? bias : alen == 0 ? std::strong_ordering::less : std::strong_ordering::greater;
 	}
 }
 
-std::strong_ordering StrNatCmp::cmpLetter(char32_t a, char32_t b) {
+char32_t Strcomp::skipSpaces(string_view::iterator& p, size_t& l) {
+	char32_t c;
+	do {
+		c = mbstowc(p, l);
+	} while (l && std::iswspace(c));
+	return c;
+}
+
+std::strong_ordering Strcomp::cmpLetter(char32_t a, char32_t b) {
 	if (a != b) {
 		wint_t au = std::towlower(a), bu = std::towlower(b);
 		return au != bu ? au <=> bu : a <=> b;
 	}
 	return std::strong_ordering::equal;
+}
+
+std::strong_ordering Strcomp::cmp(const char* a, const char* b) {
+	for (;;) {
+		char32_t ca = skipSpaces(a), cb = skipSpaces(b);
+		if (std::iswdigit(ca) && std::iswdigit(cb))
+			if (std::strong_ordering dif = ca == '0' || cb == '0' ? cmpLeft(ca, a, cb, b) : cmpRight(ca, a, cb, b); dif != std::strong_ordering::equal)
+				return dif;
+		if (!(ca || cb))
+			return std::strong_ordering::equal;
+		if (std::strong_ordering dif = cmpLetter(ca, cb); dif != std::strong_ordering::equal)
+			return dif;
+	}
+}
+
+std::strong_ordering Strcomp::cmpLeft(char32_t ca, const char* a, char32_t cb, const char* b) {
+	for (;; ca = mbstowc(a), cb = mbstowc(b)) {
+		bool nad = !std::iswdigit(ca), nbd = !std::iswdigit(cb);
+		if (nad && nbd)
+			return std::strong_ordering::equal;
+		if (nad)
+			return std::strong_ordering::less;
+		if (nbd)
+			return std::strong_ordering::greater;
+		if (std::strong_ordering dif = cmpLetter(ca, cb); dif != std::strong_ordering::equal)
+			return dif;
+	}
+}
+
+std::strong_ordering Strcomp::cmpRight(char32_t ca, const char* a, char32_t cb, const char* b) {
+	for (std::strong_ordering bias = std::strong_ordering::equal;; ca = mbstowc(a), cb = mbstowc(b)) {
+		bool nad = !std::iswdigit(ca), nbd = !std::iswdigit(cb);
+		if (nad && nbd)
+			return bias;
+		if (nad)
+			return std::strong_ordering::less;
+		if (nbd)
+			return std::strong_ordering::greater;
+		if (!(ca || cb))
+			return bias;
+		if (std::strong_ordering dif = cmpLetter(ca, cb); dif != std::strong_ordering::equal && bias == std::strong_ordering::equal)
+			bias = dif;
+	}
+}
+
+char32_t Strcomp::skipSpaces(const char*& p) {
+	char32_t c;
+	do {
+		c = mbstowc(p);
+	} while (std::iswspace(c));
+	return c;
 }
 #endif

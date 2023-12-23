@@ -13,17 +13,7 @@ extern decltype(secret_item_load_secret_sync)* secretItemLoadSecretSync;
 extern decltype(secret_value_new)* secretValueNew;
 extern decltype(secret_value_get_text)* secretValueGetText;
 
-extern decltype(g_object_unref)* gObjectUnref;
-
-extern decltype(g_hash_table_new)* gHashTableNew;
-extern decltype(g_hash_table_insert)* gHashTableInsert;
-extern decltype(g_hash_table_remove)* gHashTableRemove;
-extern decltype(g_hash_table_unref)* gHashTableUnref;
-extern decltype(g_str_hash)* gStrHash;
-extern decltype(g_list_free)* gListFree;
-extern decltype(g_error_free)* gErrorFree;
-
-bool symLibsecret();
+bool symLibsecret();	// loads glib because of dependency
 void closeLibsecret();
 
 }

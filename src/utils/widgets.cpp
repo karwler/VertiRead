@@ -13,10 +13,25 @@ TextDsp<T>::~TextDsp() {
 }
 
 template <Class T>
-void TextDsp<T>::recreateTextTex(uint height) {
-	if (textTex)
-		World::drawSys()->getRenderer()->freeTexture(textTex);
-	textTex = World::drawSys()->renderText(text, height);
+void TextDsp<T>::recreateTextTex(string_view str, uint height) {
+	if (textTex) {
+		if (!World::drawSys()->renderText(textTex, str, height)) {
+			World::drawSys()->getRenderer()->freeTexture(textTex);
+			textTex = nullptr;
+		}
+	} else
+		textTex = World::drawSys()->renderText(str, height);
+}
+
+template <Class T>
+void TextDsp<T>::recreateTextTex(string_view str, uint height, uint limit) {
+	if (textTex) {
+		if (!World::drawSys()->renderText(textTex, str, height, limit)) {
+			World::drawSys()->getRenderer()->freeTexture(textTex);
+			textTex = nullptr;
+		}
+	} else
+		textTex = World::drawSys()->renderText(str, height, limit);
 }
 
 template <Class T>
@@ -219,7 +234,7 @@ ivec2 Label::textPos() const {
 }
 
 void Label::updateTextTex() {
-	recreateTextTex(size().y);
+	recreateTextTex(text.data(), size().y);
 }
 
 void Label::updateTextTexNow() {
@@ -278,10 +293,8 @@ void TextBox::setText(Cstring&& str) {
 }
 
 void TextBox::updateTextTex() {
-	if (textTex)
-		World::drawSys()->getRenderer()->freeTexture(textTex);
-	if (textTex = World::drawSys()->renderText(text, lineSize, size().x); textTex)
-		setLimits(textTex->getRes(), size(), true);
+	recreateTextTex(text.data(), lineSize, size().x);
+	setLimits(textTex ? textTex->getRes() : uvec2(0), size(), true);
 }
 
 // BUTTON
@@ -406,6 +419,41 @@ void Slider::onUndrag(ivec2, uint8 mBut) {
 	}
 }
 
+void Slider::onKeypress(const SDL_Keysym& key) {
+	switch (key.scancode) {
+	case SDL_SCANCODE_RIGHT:
+		if (val < vmax) {
+			setVal(val + 1);
+			if (actions & ACT_LEFT)
+				pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
+		}
+		break;
+	case SDL_SCANCODE_LEFT:
+		if (val > vmin) {
+			setVal(val - 1);
+			if (actions & ACT_LEFT)
+				pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
+		}
+		break;
+	case SDL_SCANCODE_DOWN: case SDL_SCANCODE_END:
+		if (val != vmax) {
+			val = vmax;
+			if (actions & ACT_LEFT)
+				pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
+		}
+		break;
+	case SDL_SCANCODE_UP: case SDL_SCANCODE_HOME:
+		if (val != vmin) {
+			val = vmin;
+			if (actions & ACT_LEFT)
+				pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
+		}
+		break;
+	case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER: case SDL_SCANCODE_ESCAPE:
+		onUndrag(ivec2(), SDL_BUTTON_LEFT);
+	}
+}
+
 void Slider::setSlider(int xpos) {
 	setVal((xpos - position().x - size().y / 4) * (vmax - vmin) / sliderLim() + vmin);
 	if (actions & ACT_LEFT)
@@ -467,7 +515,7 @@ ivec2 PushButton::textPos() const {
 }
 
 void PushButton::updateTextTex() {
-	recreateTextTex(size().y);
+	recreateTextTex(text.data(), size().y);
 }
 
 void PushButton::updateTextTexNow() {
@@ -569,7 +617,7 @@ ComboBox::ComboBox(const Size& size, uint curOption, vector<Cstring>&& opts, Eve
 
 void ComboBox::onClick(ivec2, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT || mBut == SDL_BUTTON_RIGHT)
-		World::scene()->setContext(World::program()->getState()->createComboContext(this, EventId(etype, ecode)));
+		World::program()->getState()->showComboContext(this, EventId(etype, ecode));
 }
 
 void ComboBox::setOptions(uint curOption, vector<Cstring>&& opts, uptr<Cstring[]> tips) {
@@ -586,10 +634,12 @@ void ComboBox::setCurOpt(uint id) {
 
 // LABEL EDIT
 
-LabelEdit::LabelEdit(const Size& size, string&& line, EventId eid, Actions amask, Cstring&& tip, TextType type, bool focusLossConfirm) :
+LabelEdit::LabelEdit(const Size& size, string&& line, EventId eid, EventId cid, Actions amask, Cstring&& tip, TextType type, bool focusLossConfirm) :
 	Button(size, eid, amask, std::move(tip)),
 	TextDsp(std::move(line)),
 	oldText(text),
+	cancEtype(cid.type),
+	cancEcode(cid.code),
 	textType(type),
 	unfocusConfirm(focusLossConfirm)
 {
@@ -741,13 +791,11 @@ void LabelEdit::onTextReset() {
 
 void LabelEdit::updateTextTex() {
 	if (textType != TextType::password)
-		recreateTextTex(size().y);
+		recreateTextTex(text, size().y);
 	else {
-		if (textTex)
-			World::drawSys()->getRenderer()->freeTexture(textTex);
 		uint cnt = 0;
 		for (uint i = 0; i < text.length(); i = jumpCharF(i), ++cnt);
-		textTex = World::drawSys()->renderText(string(cnt, '*'), size().y);
+		recreateTextTex(string(cnt, '*'), size().y);
 	}
 }
 
@@ -788,6 +836,8 @@ void LabelEdit::cancel() {
 
 	World::scene()->setCapture(nullptr);
 	SDL_StopTextInput();
+	if (actions & ACT_LEFT)
+		pushEvent(EventId(cancEtype, cancEcode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
 }
 
 uint LabelEdit::jumpCharB(uint i) {

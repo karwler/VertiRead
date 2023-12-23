@@ -6,8 +6,9 @@
 #endif
 
 char32_t mbstowc(string_view::iterator& mb, size_t& len);
+char32_t mbstowc(const char*& mb);
 
-class StrNatCmp {
+class Strcomp {
 #ifdef WITH_ICU
 private:
 	static inline icu::Collator* collator = nullptr;
@@ -19,13 +20,10 @@ public:
 	static void free() { delete collator; }
 #endif
 
-	bool operator()(string_view a, string_view b) const;
-	bool operator()(const string& a, const string& b) const;
-	bool operator()(const string& a, string_view b) const;
+	bool operator()(const Cstring& a, const Cstring& b) const;
 
+	static bool less(const char* a, const char* b);
 	static bool less(string_view a, string_view b);
-	static bool less(const string& a, const string& b);
-	static bool less(const string& a, string_view b);
 
 #ifndef WITH_ICU
 private:
@@ -34,34 +32,32 @@ private:
 	static std::strong_ordering cmpRight(char32_t ca, string_view::iterator a, size_t alen, char32_t cb, string_view::iterator b, size_t blen);
 	static std::strong_ordering cmpLetter(char32_t a, char32_t b);
 	static char32_t skipSpaces(string_view::iterator& p, size_t& l);
+
+	static std::strong_ordering cmp(const char* a, const char* b);
+	static std::strong_ordering cmpLeft(char32_t ca, const char* a, char32_t cb, const char* b);
+	static std::strong_ordering cmpRight(char32_t ca, const char* a, char32_t cb, const char* b);
+	static char32_t skipSpaces(const char*& p);
 #endif
 };
 
-inline bool StrNatCmp::operator()(string_view a, string_view b) const {
-	return less(a, b);
+inline bool Strcomp::operator()(const Cstring& a, const Cstring& b) const {
+	return less(a.data(), b.data());
 }
 
-inline bool StrNatCmp::operator()(const string& a, const string& b) const {
-	return less(string_view(a), string_view(b));
-}
-
-inline bool StrNatCmp::operator()(const string& a, string_view b) const {
-	return less(string_view(a), b);
-}
-
-inline bool StrNatCmp::less(string_view a, string_view b) {
+inline bool Strcomp::less(const char* a, const char* b) {
 #ifdef WITH_ICU
 	UErrorCode status = U_ZERO_ERROR;
 	return collator->compareUTF8(a, b, status) == UCOL_LESS;
 #else
-	return cmp(a, b) < 0;
+	return cmp(a, b) == std::strong_ordering::less;
 #endif
 }
 
-inline bool StrNatCmp::less(const string& a, const string& b) {
-	return less(string_view(a), string_view(b));
-}
-
-inline bool StrNatCmp::less(const string& a, string_view b) {
-	return less(string_view(a), b);
+inline bool Strcomp::less(string_view a, string_view b) {
+#ifdef WITH_ICU
+	UErrorCode status = U_ZERO_ERROR;
+	return collator->compareUTF8(a, b, status) == UCOL_LESS;
+#else
+	return cmp(a, b) == std::strong_ordering::less;
+#endif
 }

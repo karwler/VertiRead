@@ -414,7 +414,7 @@ Texture* RendererDx::texFromIcon(SDL_Surface* img) {
 }
 
 bool RendererDx::texFromIcon(Texture* tex, SDL_Surface* img) {
-	if (auto [pic, fmt] = pickPickFormat(img); pic) {
+	if (auto [pic, fmt] = pickPixFormat(img); pic) {
 		try {
 			uvec2 res(pic->w, pic->h);
 			ID3D11ShaderResourceView* view = createTexture(static_cast<byte_t*>(pic->pixels), res, pic->pitch, fmt);
@@ -423,7 +423,7 @@ bool RendererDx::texFromIcon(Texture* tex, SDL_Surface* img) {
 			auto dtx = static_cast<TextureDx*>(tex);
 			comRelease(dtx->view);
 			dtx->res = res;
-			dtx->view = view;TextureGl*
+			dtx->view = view;
 			return true;
 		} catch (const std::runtime_error&) {
 			SDL_FreeSurface(pic);
@@ -433,7 +433,7 @@ bool RendererDx::texFromIcon(Texture* tex, SDL_Surface* img) {
 }
 
 Texture* RendererDx::texFromRpic(SDL_Surface* img) {
-	if (auto [pic, fmt] = pickPickFormat(img); pic) {
+	if (auto [pic, fmt] = pickPixFormat(img); pic) {
 		try {
 			uvec2 res(pic->w, pic->h);
 			ID3D11ShaderResourceView* view = createTexture(static_cast<byte_t*>(pic->pixels), res, pic->pitch, fmt);
@@ -468,13 +468,14 @@ bool RendererDx::texFromText(Texture* tex, const PixmapRgba& pm) {
 			dtx->view = view;
 			return true;
 		} catch (const std::runtime_error&) {}
-	|
+	}
 	return false;
 }
 
 void RendererDx::freeTexture(Texture* tex) {
-	comRelease(static_cast<TextureDx*>(tex)->view);
-	delete tex;
+	auto dtx = static_cast<TextureDx*>(tex);
+	comRelease(dtx->view);
+	delete dtx;
 }
 
 ID3D11ShaderResourceView* RendererDx::createTexture(const byte_t* pix, uvec2 res, uint pitch, DXGI_FORMAT format) {

@@ -48,10 +48,10 @@ void Scene::onMouseMove(ivec2 mPos, ivec2 mMov) {
 }
 
 void Scene::onMouseDown(ivec2 mPos, uint8 mBut, uint8 mCnt) {
-	if (auto box = dynamic_cast<LabelEdit*>(capture); !popup && box && box->unfocusConfirm)	// confirm entered text if such a thing exists and it wants to, unless it's in a popup (that thing handles itself)
-		box->confirm();
-	if (auto box = dynamic_cast<KeyGetter*>(capture)) {	// cancel key getting process if necessary
-		box->restoreText();
+	if (auto le = dynamic_cast<LabelEdit*>(capture); le && le->unfocusConfirm)	// confirm entered text if such a thing exists and wants to
+		le->confirm();
+	else if (auto kg = dynamic_cast<KeyGetter*>(capture)) {	// cancel key getting process if necessary
+		kg->restoreText();
 		capture = nullptr;
 	}
 	if (context && (!context->rect().contains(mPos) || mBut != SDL_BUTTON_LEFT))
@@ -99,6 +99,15 @@ void Scene::onText(string_view str) {
 		capture->onText(str, captureLen);
 		captureLen = 0;
 	}
+}
+
+void Scene::onConfirm() {
+	if (popup && !(popup->isParentOf(select) && dynamic_cast<Button*>(select)))
+		pushEvent(popup->kcall);
+	else if (Slider* sl = dynamic_cast<Slider*>(select))
+		sl->onHold(sl->sliderRect().pos(), SDL_BUTTON_LEFT);
+	else if (select)
+		select->onClick(select->position(), SDL_BUTTON_LEFT);
 }
 
 void Scene::onCancel() {

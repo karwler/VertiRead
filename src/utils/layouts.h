@@ -67,6 +67,7 @@ public:
 	virtual ivec2 wgtSize(uint id) const;
 	int getSpacing() const { return spacing; }
 	bool isVertical() const { return direction.vertical(); }
+	bool isParentOf(const Widget* wgt) const;
 
 protected:
 	void initWidgets(Children&& children);
@@ -80,7 +81,6 @@ private:
 	void deselectWidget(const Widget* wgt) const;
 	void scanSequential(uint id, int mid, Direction dir);
 	void scanPerpendicular(int mid, Direction dir);
-	bool isParentOf(const Widget* wgt) const;
 };
 
 // top level layout
@@ -101,11 +101,12 @@ public:
 	const Color bgColor;
 	Widget* const firstNavSelect;
 	const EventId ccall;	// gets called on escape press
+	const EventId kcall;	// gets called on confirm
 protected:
 	Size sizeY;		// use Widget's relSize as width
 
 public:
-	Popup(const svec2& size, Children&& children, EventId cancelCall = nullEvent, Widget* first = nullptr, Color background = Color::normal, Direction dir = defaultDirection, ushort space = defaultItemSpacing, bool pad = true);
+	Popup(const svec2& size, Children&& children, EventId cancelCall = nullEvent, EventId confirmCall = nullEvent, Widget* first = nullptr, Color background = Color::normal, Direction dir = defaultDirection, ushort space = defaultItemSpacing, bool pad = true);
 	~Popup() override = default;
 
 	void drawSelf(const Recti& view) override;
@@ -233,7 +234,7 @@ class ReaderBox final : public ScrollArea {
 private:
 	static constexpr float menuHideTimeout = 3.f;
 
-	uptr<string[]> picNames;
+	uptr<Cstring[]> picNames;
 	uint startPicId;
 	float cursorTimer = menuHideTimeout;	// time left until cursor/overlay disappears
 	int8 zoomStep;
@@ -247,14 +248,14 @@ public:
 	void tick(float dSec) override;
 	void onMouseMove(ivec2 mPos, ivec2 mMov) override;
 
-	void setPictures(vector<pair<string, Texture*>>& imgs, string_view startPic);
+	void setPictures(vector<pair<Cstring, Texture*>>& imgs, string_view startPic, bool fwd);
 	bool showBar() const;
 	void setZoom(int8 step);
 	void addZoom(int8 step);
 	void centerList();		// set listPos.x so that the view will be in the center
-	string_view firstPage() const;
-	string_view lastPage() const;
-	string_view curPage() const;
+	const char* firstPage() const;
+	const char* lastPage() const;
+	const char* curPage() const;
 	ivec2 wgtSize(uint id) const override;
 
 private:
@@ -262,14 +263,14 @@ private:
 	template <Invocable<int8> F> void setZoom(F zset, int8 step);
 };
 
-inline string_view ReaderBox::firstPage() const {
-	return numWgts ? picNames[0] : string_view();
+inline const char* ReaderBox::firstPage() const {
+	return numWgts ? picNames[0].data() : &Cstring::nullch;
 }
 
-inline string_view ReaderBox::lastPage() const {
-	return numWgts ? picNames[numWgts - 1] : string_view();
+inline const char* ReaderBox::lastPage() const {
+	return numWgts ? picNames[numWgts - 1].data() : &Cstring::nullch;
 }
 
-inline string_view ReaderBox::curPage() const {
-	return numWgts ? picNames[direction.positive() ? firstWidgetAt(listPos[direction.vertical()]) : visibleWidgets().y - 1] : string_view();
+inline const char* ReaderBox::curPage() const {
+	return numWgts ? picNames[direction.positive() ? firstWidgetAt(listPos[direction.vertical()]) : visibleWidgets().y - 1].data() : &Cstring::nullch;
 }

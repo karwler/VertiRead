@@ -1,6 +1,9 @@
 #pragma once
 
 #include "utils/utils.h"
+#include <forward_list>
+#include <mutex>
+#include <stop_token>
 
 enum UserEvent : uint32 {
 	SDL_USEREVENT_GENERAL = SDL_USEREVENT,
@@ -11,7 +14,7 @@ enum UserEvent : uint32 {
 	SDL_USEREVENT_PROG_SETTINGS,
 	SDL_USEREVENT_PROG_SEARCH_DIR,
 	SDL_USEREVENT_PROG_MAX = SDL_USEREVENT_PROG_SEARCH_DIR,
-	SDL_USEREVENT_THREAD_ARCHIVE,
+	SDL_USEREVENT_THREAD_ARCHIVE_FINISHED,
 	SDL_USEREVENT_THREAD_PREVIEW,
 	SDL_USEREVENT_THREAD_READER,
 	SDL_USEREVENT_THREAD_MOVE,
@@ -80,6 +83,7 @@ enum class ProgSettingsEvent : int32 {
 	setCompression,
 	setVsync,
 	setGpuSelecting,
+	setPdfImages,
 	setMultiFullscreen,
 	setPreview,
 	setHide,
@@ -223,13 +227,15 @@ struct FileChange {
 
 // archive file with image size
 struct ArchiveFile {
-	string name;
-	uintptr_t size;
+	Cstring name;
+	bool isPdf : 1 = false;
+	uint64 size : 63 = 0;
 
 	ArchiveFile() = default;
 	ArchiveFile(const ArchiveFile& af) = default;
 	ArchiveFile(ArchiveFile&& af) = default;
-	ArchiveFile(string&& filename, uintptr_t mem) : name(std::move(filename)), size(mem) {}
+	ArchiveFile(Cstring&& filename, uint64 mem) : name(std::move(filename)), size(mem) {}
+	ArchiveFile(Cstring&& pdfName) : name(std::move(pdfName)), isPdf(true) {}
 
 	ArchiveFile& operator=(const ArchiveFile& af) = default;
 	ArchiveFile& operator=(ArchiveFile&& af) = default;
@@ -237,45 +243,64 @@ struct ArchiveFile {
 
 // archive directory node
 struct ArchiveDir {
-	ArchiveDir* parent = nullptr;
-	string name;
-	vector<ArchiveDir> dirs;
-	vector<ArchiveFile> files;
+	Cstring name;	// if this is a root node then the name is the path to the associated archive file
+	std::forward_list<ArchiveDir> dirs;
+	std::forward_list<ArchiveFile> files;
 
 	ArchiveDir() = default;
-	ArchiveDir(const ArchiveDir& ad) = default;
-	ArchiveDir(ArchiveDir&& ad) = default;
-	ArchiveDir(ArchiveDir* daddy, string&& dirname) : parent(daddy), name(std::move(dirname)) {}
+	ArchiveDir(Cstring&& dirname) : name(std::move(dirname)) {}
 
-	ArchiveDir& operator=(const ArchiveDir& ad) = default;
-	ArchiveDir& operator=(ArchiveDir&& ad) = default;
-
-	void sort();
+	vector<ArchiveDir*> listDirs();
+	vector<ArchiveFile*> listFiles();
+	void finalize();
 	void clear();
-	string path() const;
 	pair<ArchiveDir*, ArchiveFile*> find(string_view path);
-	vector<ArchiveDir>::iterator findDir(string_view dname);
-	vector<ArchiveFile>::iterator findFile(string_view fname);
+	ArchiveDir* findDir(string_view dname);
+	ArchiveFile* findFile(string_view fname);
+	void copySlicedDentsFrom(const ArchiveDir& src);
 };
 
-// archive/picture info
-struct BrowserResultAsync {
-	string rootDir;
-	string curDir;
-	string file;
-	ArchiveDir arch;
+enum BrowserResultState : uint8 {
+	BRS_NONE = 0x0,
+	BRS_LOC = 0x1,
+	BRS_PDF = 0x2,
+	BRS_ARCH = 0x4
+};
 
-	BrowserResultAsync(string&& root, string&& directory, string&& pname = string(), ArchiveDir&& aroot = ArchiveDir());
+// archive load info
+struct BrowserResultArchive {
+	string rootDir;
+	string opath;	// path to the file or directory to open
+	string page;	// for PDF only
+	ArchiveDir arch;
+	string error;
+	const bool hasRootDir;
+
+	BrowserResultArchive(optional<string>&& root, ArchiveDir&& aroot, string&& fpath = string(), string&& ppage = string());
 };
 
 // picture load info
-struct BrowserResultPicture : public BrowserResultAsync {
-	vector<pair<string, Texture*>> pics;
+struct BrowserResultPicture {
+	string rootDir;
+	string curDir;
+	string picname;
+	ArchiveDir arch;
+	vector<pair<Cstring, Texture*>> pics;
 	std::mutex mpic;
-	const bool archive;
+	string error;
+	const bool hasRootDir;
+	const bool newCurDir;
+	const bool newArchive;
+	const bool pdf;
 
-	BrowserResultPicture(bool inArch, string&& root, string&& directory, string&& pname = string(), ArchiveDir&& aroot = ArchiveDir());
+	BrowserResultPicture(BrowserResultState brs, optional<string>&& root, string&& container, string&& pname = string(), ArchiveDir&& aroot = ArchiveDir());
+
+	bool hasArchive() const;
 };
+
+inline bool BrowserResultPicture::hasArchive() const {
+	return !arch.name.empty();
+}
 
 // intermediate picture load buffer
 struct BrowserPictureProgress {
@@ -294,4 +319,16 @@ struct FontListResult {
 	string error;
 
 	FontListResult(vector<Cstring>&& fa, uptr<Cstring[]>&& fl, size_t id, string&& msg);
+};
+
+// check a stop token every n iterations
+class CountedStopReq {
+private:
+	uint cnt = 0;
+	uint lim;
+
+public:
+	CountedStopReq(uint steps) : lim(steps) {}
+
+	bool stopReq(std::stop_token stoken);
 };

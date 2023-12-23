@@ -14,6 +14,7 @@
 
 struct archive;
 struct archive_entry;
+struct _PopplerDocument;
 struct _SecretService;
 struct _GHashTable;
 struct _LIBSSH2_SESSION;
@@ -35,7 +36,7 @@ private:
 	_GHashTable* attributes = nullptr;
 
 public:
-	CredentialManager();
+	CredentialManager();	// throws if libsecrent couldn't be loaded
 	~CredentialManager();
 
 	vector<string> loadPasswords(const RemoteLocation& rl);
@@ -48,44 +49,53 @@ private:
 
 // file operations interface
 class FileOps {
+protected:	// TODO: maybe change back to private
+	static constexpr array<byte_t, 5> signaturePdf = { '%'_b, 'P'_b, 'D'_b, 'F'_b, '-'_b };
+
 public:
 	virtual ~FileOps();
 
-	static FileOps* instantiate(const RemoteLocation& rl, vector<string>&& passwords);
+	static FileOps* instantiate(const RemoteLocation& rl, vector<string>&& passwords);	// loads smbclient or libssh2 if the protocol matches SMB or SFTP
 
-	virtual vector<string> listDirectory(string_view path, bool files = true, bool dirs = true, bool hidden = true) = 0;
-	virtual pair<vector<string>, vector<string>> listDirectorySep(string_view path, bool hidden) = 0;	// first is files, second is directories
+	virtual vector<Cstring> listDirectory(string_view path, bool files = true, bool dirs = true, bool hidden = true) = 0;
+	virtual pair<vector<Cstring>, vector<Cstring>> listDirectorySep(string_view path, bool hidden) = 0;	// first is files, second is directories
 	virtual bool deleteEntry(string_view base) = 0;	// TODO: test!
 	virtual bool renameEntry(string_view oldPath, string_view newPath) = 0;
-	virtual vector<byte_t> readFile(string_view path) = 0;
+	virtual Data readFile(string_view path) = 0;
 	virtual fs::file_type fileType(string_view path) = 0;
+	virtual bool isRegular(string_view path) = 0;
 	virtual bool isDirectory(string_view path) = 0;
 	virtual bool isPicture(string_view path) = 0;
 	virtual SDL_Surface* loadPicture(string_view path) = 0;
-	virtual archive* openArchive(string_view path) = 0;
+#ifdef CAN_PDF
+	virtual pair<_PopplerDocument*, Data> loadPdf(string_view path, string* error = nullptr) = 0;	// loads Poppler if necessary
+#endif
+	virtual archive* openArchive(string_view path, string* error = nullptr) = 0;
 	virtual void setWatch(string_view path) = 0;
 	virtual bool pollWatch(vector<FileChange>& files) = 0;	// returns true if the watched file/directory has been renamed or deleted
 	virtual FileOpCapabilities capabilities() const = 0;
 	virtual string prefix() const = 0;
 	virtual bool equals(const RemoteLocation& rl) const = 0;
 
+	bool isPdf(string_view path);	// loads Poppler if the file is has a PDF signature
 	bool isArchive(string_view path);
-	bool isPictureArchive(string_view path);
-	bool isArchivePicture(string_view path, string_view pname);
-	vector<string> listArchiveFiles(string_view path);
-	void makeArchiveTreeThread(std::stop_token stoken, BrowserResultAsync&& ra, uintptr_t maxRes);
-	SDL_Surface* loadArchivePicture(string_view path, string_view pname);
+	void makeArchiveTreeThread(std::stop_token stoken, BrowserResultArchive* ra, uint maxRes);
+	static bool isPicture(SDL_RWops* ifh, string_view ext);
 	static SDL_Surface* loadArchivePicture(archive* arch, archive_entry* entry);
+#ifdef CAN_PDF
+	static pair<_PopplerDocument*, Data> loadArchivePdf(archive* arch, archive_entry* entry, string* error = nullptr);
+#endif
+	static Data readArchiveEntry(archive* arch, archive_entry* entry);
 
 protected:
+	virtual size_t readFileStart(string_view path, byte_t* buf, size_t n) = 0;
+#ifdef CAN_PDF
+	template <class H, class F> static pair<_PopplerDocument*, Data> loadPdfChecked(H fd, size_t esiz, F eread, string* error);
+#endif
 #if !defined(_WIN32) || defined(CAN_SMB) || defined(CAN_SFTP)
 	static fs::file_type modeToType(mode_t mode);
 #endif
 	template <Integer C> static bool notDotName(const C* name);
-	static bool isPicture(SDL_RWops* ifh, string_view ext);
-private:
-	static bool isPicture(archive* arch, archive_entry* entry);
-	static pair<uptr<byte_t[]>, int64> readArchiveEntry(archive* arch, archive_entry* entry);
 };
 
 template <Integer C>
@@ -102,42 +112,53 @@ private:
 	static constexpr size_t archiveReadBlockSize = 10240;
 	static constexpr size_t esiz = 2048;
 
+	byte_t* ebuf;
 #ifdef _WIN32
+	wstring wpdir;
+	wstring filter;
 	HANDLE dirc = INVALID_HANDLE_VALUE;
 	OVERLAPPED overlapped;
-	fs::path filter;
 	DWORD flags;
 #else
+	string wpdir;
 	int ino, watch = -1;
 #endif
-	byte_t* ebuf;
-	fs::path wpdir;
 
 public:
 	FileOpsLocal();
 	~FileOpsLocal() override;
 
-	vector<string> listDirectory(string_view path, bool files = true, bool dirs = true, bool hidden = true) override;
-	pair<vector<string>, vector<string>> listDirectorySep(string_view path, bool hidden) override;
+	vector<Cstring> listDirectory(string_view path, bool files = true, bool dirs = true, bool hidden = true) override;
+	pair<vector<Cstring>, vector<Cstring>> listDirectorySep(string_view path, bool hidden) override;
 	bool deleteEntry(string_view base) override;
 	bool renameEntry(string_view oldPath, string_view newPath) override;
-	vector<byte_t> readFile(string_view path) override;
+	Data readFile(string_view path) override;
 	fs::file_type fileType(string_view path) override;
+	bool isRegular(string_view path) override;
 	bool isDirectory(string_view path) override;
 	bool isPicture(string_view path) override;
 	SDL_Surface* loadPicture(string_view path) override;
-	archive* openArchive(string_view path) override;
+#ifdef CAN_PDF
+	pair<_PopplerDocument*, Data> loadPdf(string_view path, string* error = nullptr) override;
+#endif
+	archive* openArchive(string_view path, string* error = nullptr) override;
 	void setWatch(string_view path) override;
 	bool pollWatch(vector<FileChange>& files) override;
 	FileOpCapabilities capabilities() const override;
 	string prefix() const override;
 	bool equals(const RemoteLocation& rl) const override;
 
-	static vector<byte_t> readFile(const fs::path& path);
-	static bool isDirectory(const fs::path& path);
+	static Data readFile(const fs::path& path);
+
+protected:
+	size_t readFileStart(string_view path, byte_t* buf, size_t n) override;
+
 private:
 #ifdef _WIN32
-	static vector<string> listDrives();
+	static bool isDirectory(const wchar_t* path);
+	static vector<Cstring> listDrives();
+#else
+	static bool hasModeFlags(const char* path, mode_t flags);
 #endif
 	bool unsetWatch();
 };
@@ -157,7 +178,7 @@ public:
 
 	bool isPicture(string_view path) override;
 	SDL_Surface* loadPicture(string_view path) override;
-	archive* openArchive(string_view path) override;
+	archive* openArchive(string_view path, string* error = nullptr) override;
 };
 
 inline FileOpsRemote::FileOpsRemote(string&& srv) :
@@ -194,19 +215,27 @@ public:
 	FileOpsSmb(const RemoteLocation& rl, vector<string>&& passwords);
 	~FileOpsSmb() override;
 
-	vector<string> listDirectory(string_view path, bool files = true, bool dirs = true, bool hidden = true) override;
-	pair<vector<string>, vector<string>> listDirectorySep(string_view path, bool hidden) override;
+	vector<Cstring> listDirectory(string_view path, bool files = true, bool dirs = true, bool hidden = true) override;
+	pair<vector<Cstring>, vector<Cstring>> listDirectorySep(string_view path, bool hidden) override;
 	bool deleteEntry(string_view base) override;
 	bool renameEntry(string_view oldPath, string_view newPath) override;
-	vector<byte_t> readFile(string_view path) override;
+	Data readFile(string_view path) override;
 	fs::file_type fileType(string_view path) override;
+	bool isRegular(string_view path) override;
 	bool isDirectory(string_view path) override;
+#ifdef CAN_PDF
+	pair<_PopplerDocument*, Data> loadPdf(string_view path, string* error = nullptr) override;
+#endif
 	void setWatch(string_view path) override;
 	bool pollWatch(vector<FileChange>& files) override;
 	FileOpCapabilities capabilities() const override;
 	bool equals(const RemoteLocation& rl) const override;
 
+protected:
+	size_t readFileStart(string_view path, byte_t* buf, size_t n) override;
+
 private:
+	bool hasModeFlags(string_view path, mode_t mdes);
 	bool unsetWatch();
 	static void logMsg(void* data, int level, const char* msg);
 };
@@ -226,19 +255,27 @@ public:
 	FileOpsSftp(const RemoteLocation& rl, const vector<string>& passwords);
 	~FileOpsSftp() override;
 
-	vector<string> listDirectory(string_view path, bool files = true, bool dirs = true, bool hidden = true) override;
-	pair<vector<string>, vector<string>> listDirectorySep(string_view path, bool hidden) override;
+	vector<Cstring> listDirectory(string_view path, bool files = true, bool dirs = true, bool hidden = true) override;
+	pair<vector<Cstring>, vector<Cstring>> listDirectorySep(string_view path, bool hidden) override;
 	bool deleteEntry(string_view base) override;
 	bool renameEntry(string_view oldPath, string_view newPath) override;
-	vector<byte_t> readFile(string_view path) override;
+	Data readFile(string_view path) override;
 	fs::file_type fileType(string_view path) override;
+	bool isRegular(string_view path) override;
 	bool isDirectory(string_view path) override;
+#ifdef CAN_PDF
+	pair<_PopplerDocument*, Data> loadPdf(string_view path, string* error = nullptr) override;
+#endif
 	void setWatch(string_view) override {}
 	bool pollWatch(vector<FileChange>& files) override;
 	FileOpCapabilities capabilities() const override;
 	bool equals(const RemoteLocation& rl) const override;
 
+protected:
+	size_t readFileStart(string_view path, byte_t* buf, size_t n) override;
+
 private:
 	void authenticate(const vector<string>& passwords);
+	bool hasAttributeFlags(string_view path, ulong flags);
 };
 #endif

@@ -375,8 +375,8 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 	case SDL_USEREVENT_PROG_SEARCH_DIR:
 		program->handleProgSearchDirEvent(event.user);
 		break;
-	case SDL_USEREVENT_THREAD_ARCHIVE:
-		program->handleThreadArchiveEvent(event.user);
+	case SDL_USEREVENT_THREAD_ARCHIVE_FINISHED:
+		program->eventArchiveFinished(event.user);
 		break;
 	case SDL_USEREVENT_THREAD_PREVIEW:
 		program->handleThreadPreviewEvent(event.user);
