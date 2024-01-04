@@ -3,6 +3,14 @@
 #include "settings.h"
 #include "prog/types.h"
 
+template <Number T>
+glm::vec<2, T, glm::defaultp> vswap(T x, T y, bool swap) {
+	glm::vec<2, T, glm::defaultp> v;
+	v[swap] = x;
+	v[!swap] = y;
+	return v;
+}
+
 template <Class T>
 class TextDsp {
 public:

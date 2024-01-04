@@ -5,6 +5,9 @@
 #include "engine/world.h"
 #include "prog/program.h"
 #include "prog/progs.h"
+#include <cfloat>
+#include <format>
+#include <SDL2/SDL_clipboard.h>
 
 template <Class T>
 TextDsp<T>::~TextDsp() {

@@ -184,6 +184,9 @@ void Program::handleProgSettingsEvent(const SDL_UserEvent& event) {
 	case setDirection:
 		World::sets()->direction = Direction::Dir(finishComboBox(static_cast<PushButton*>(event.data1)));
 		break;
+	case setZoomType:
+		eventSetZoomType(static_cast<PushButton*>(event.data1));
+		break;
 	case setZoom:
 		eventSetZoom(static_cast<Slider*>(event.data1));
 		break;
@@ -256,20 +259,8 @@ void Program::handleProgSettingsEvent(const SDL_UserEvent& event) {
 	case setDeadzoneLe:
 		eventSetDeadzone(static_cast<LabelEdit*>(event.data1));
 		break;
-	case setPortrait:
-		eventSetPortrait();
-		break;
-	case setLandscape:
-		eventSetLandscape();
-		break;
-	case setSquare:
-		eventSetSquare();
-		break;
-	case setFill:
-		eventSetFill();
-		break;
 	case setPicLimitType:
-		eventSetPicLimitType(static_cast<PushButton*>(event.data1));
+		eventSetPicLimType(static_cast<PushButton*>(event.data1));
 		break;
 	case setPicLimitCount:
 		eventSetPicLimCount(static_cast<LabelEdit*>(event.data1));
@@ -374,8 +365,9 @@ void Program::eventOpenBookContextGeneral(Widget* wgt) {
 void Program::eventOpenLastPage() {
 	string_view bname = static_cast<PushButton*>(World::scene()->getContext()->owner())->getText().data();
 	if (vector<string> paths = World::fileSys()->getLastPage(bname); !paths.empty()) {
-		paths[0] = World::sets()->dirLib / bname / paths[0];
-		if (browser.openPicture(World::sets()->dirLib / bname, std::move(paths)))
+		string root = World::sets()->dirLib / bname;
+		paths[0] = !paths[0].empty() ? root / paths[0] : root;
+		if (browser.openPicture(std::move(root), std::move(paths)))
 			setPopupLoading();
 		else
 			state->showPopupMessage("Invalid last page entry");
@@ -623,16 +615,12 @@ void Program::eventZoomReset() {
 void Program::eventZoomFit() {
 	auto rb = static_cast<ProgReader*>(state)->reader;
 	int di = rb->direction.horizontal();
-	int maxRes = 0;
+	uint maxRes = 0;
 	for (const Widget* it : rb->getWidgets())
-		if (int res = static_cast<const Picture*>(it)->getTex()->getRes()[di]; res > maxRes)
+		if (uint res = static_cast<const Picture*>(it)->getTex()->getRes()[di]; res > maxRes)
 			maxRes = res;
-
-	if (maxRes > 0) {
-		double target = double(World::drawSys()->getViewRes()[di]) / double(maxRes);
-		double zoom = int(std::log(target) / std::log(Settings::zoomBase));
-		rb->setZoom(std::clamp(int(std::floor(zoom)), -Settings::zoomLimit, int(Settings::zoomLimit)));
-	}
+	if (maxRes)
+		rb->setZoom(rb->zoomStepToFit(maxRes));
 }
 
 void Program::eventCenterView() {
@@ -737,6 +725,14 @@ void Program::eventFontsFinished(const SDL_UserEvent& event) {
 	delete flr;
 }
 
+void Program::eventSetZoomType(PushButton* but) {
+	if (Settings::Zoom type = Settings::Zoom(finishComboBox(but)); type != World::sets()->zoomType) {
+		auto ps = static_cast<ProgSettings*>(state);
+		World::sets()->zoomType = type;
+		ps->zoomLine->replaceWidget(ps->zoomLine->getWidgets().size() - 1, ps->createZoomEdit());
+	}
+}
+
 void Program::eventSetZoom(Slider* sl) {
 	if (World::sets()->zoom != sl->getVal()) {
 		World::sets()->zoom = sl->getVal();
@@ -764,7 +760,12 @@ void Program::eventSetDevice(PushButton* but) {
 }
 
 void Program::eventSetCompression(PushButton* but) {
-	if (Settings::Compression compression = Settings::Compression(finishComboBox(but)); World::sets()->compression != compression) {
+	ComboBox* cmb = World::scene()->getContext()->owner<ComboBox>();
+	Settings::Compression compression = strToEnum(Settings::compressionNames, cmb->getOptions()[but->getIndex()].data(), World::sets()->compression);
+	cmb->setCurOpt(but->getIndex());
+	World::scene()->setContext(nullptr);
+
+	if (World::sets()->compression != compression) {
 		World::sets()->compression = compression;
 		World::drawSys()->getRenderer()->setCompression(compression);
 	}
@@ -822,58 +823,22 @@ void Program::eventSetDeadzone(LabelEdit* le) {
 	le->getParent()->getWidget<Slider>(le->getIndex() - 1)->setVal(World::sets()->getDeadzone());
 }
 
-void Program::eventSetPortrait() {
-	ivec2 res = World::winSys()->displayResolution();
-	float width, height;
-	if (res.x > res.y) {
-		height = float(res.y) * resModeBorder;
-		width = height * resModeRatio;
-	} else {
-		width = float(res.x) * resModeBorder;
-		height = width / resModeRatio;
-	}
-	World::winSys()->reposizeWindow(res, ivec2(width, height));
-}
-
-void Program::eventSetLandscape() {
-	ivec2 res = World::winSys()->displayResolution();
-	float width, height;
-	if (res.x < res.y) {
-		width = float(res.x) * resModeBorder;
-		height = width * resModeRatio;
-	} else {
-		height = float(res.y) * resModeBorder;
-		width = height / resModeRatio;
-	}
-	World::winSys()->reposizeWindow(res, ivec2(width, height));
-}
-
-void Program::eventSetSquare() {
-	ivec2 res = World::winSys()->displayResolution();
-	World::winSys()->reposizeWindow(res, vec2(res.x < res.y ? res.x : res.y) * resModeBorder);
-}
-
-void Program::eventSetFill() {
-	ivec2 res = World::winSys()->displayResolution();
-	World::winSys()->reposizeWindow(res, vec2(res) * resModeBorder);
-}
-
-void Program::eventSetPicLimitType(PushButton* but) {
+void Program::eventSetPicLimType(PushButton* but) {
 	if (PicLim::Type plim = PicLim::Type(finishComboBox(but)); plim != World::sets()->picLim.type) {
 		auto ps = static_cast<ProgSettings*>(state);
 		World::sets()->picLim.type = plim;
-		ps->limitLine->replaceWidget(ps->limitLine->getWidgets().size() - 1, static_cast<ProgSettings*>(state)->createLimitEdit());
+		ps->limitLine->replaceWidget(ps->limitLine->getWidgets().size() - 1, ps->createLimitEdit());
 	}
 }
 
 void Program::eventSetPicLimCount(LabelEdit* le) {
-	World::sets()->picLim.setCount(le->getText());
-	le->setText(toStr(World::sets()->picLim.getCount()));
+	World::sets()->picLim.count = PicLim::toCount(le->getText());
+	le->setText(toStr(World::sets()->picLim.count));
 }
 
 void Program::eventSetPicLimSize(LabelEdit* le) {
-	World::sets()->picLim.setSize(le->getText());
-	le->setText(PicLim::memoryString(World::sets()->picLim.getSize()));
+	World::sets()->picLim.size = PicLim::toSize(le->getText());
+	le->setText(PicLim::memoryString(World::sets()->picLim.size));
 }
 
 void Program::eventSetMaxPicRes(Slider* sl) {

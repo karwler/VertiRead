@@ -2,25 +2,88 @@
 
 #ifdef WITH_OPENGL
 #include "renderer.h"
-#ifdef _WIN32
-#include <SDL_opengl.h>
-#else
-#ifdef OPENGLES
-#include <GLES3/gl3.h>
-#endif
+#include <glm/mat4x4.hpp>
 #include <SDL2/SDL_opengl.h>
-#endif
 
-class RendererGl final : public Renderer {
-private:
-#ifdef OPENGLES
-	static constexpr GLenum textPixFormat = GL_RGBA;
-	static constexpr GLenum addrTargetType = GL_TEXTURE_2D;
-#else
-	static constexpr GLenum textPixFormat = GL_BGRA;
-	static constexpr GLenum addrTargetType = GL_TEXTURE_1D;
-#endif
+struct FunctionsGl {
+	decltype(glBindTexture)* bindTexture;
+	decltype(glBlendFunc)* blendFunc;
+	decltype(glClear)* clear;
+	decltype(glClearColor)* clearColor;
+	decltype(glCullFace)* cullFace;
+	decltype(glDeleteTextures)* deleteTextures;
+	decltype(glDisable)* disable;
+	decltype(glDrawArrays)* drawArrays;
+	decltype(glEnable)* enable;
+	decltype(glFrontFace)* frontFace;
+	decltype(glGenTextures)* genTextures;
+	decltype(glGetIntegerv)* getIntegerv;
+	decltype(glPixelStorei)* pixelStorei;
+	decltype(glReadPixels)* readPixels;
+	decltype(glScissor)* scissor;
+	decltype(glTexImage2D)* texImage2D;
+	decltype(glTexParameteri)* texParameteri;
+	decltype(glViewport)* viewport;
 
+	void initFunctions();
+};
+
+struct FunctionsGl1 {
+	decltype(glColor4fv)* color4fv;
+	decltype(glEnableClientState)* enableClientState;
+	decltype(glLoadMatrixf)* loadMatrixf;
+	decltype(glMatrixMode)* matrixMode;
+	decltype(glTexCoordPointer)* texCoordPointer;
+	decltype(glVertexPointer)* vertexPointer;
+
+	void initFunctions();
+};
+
+struct FunctionsGl3 {
+	PFNGLATTACHSHADERPROC attachShader;
+	PFNGLBINDBUFFERPROC bindBuffer;
+	PFNGLBINDFRAMEBUFFERPROC bindFramebuffer;
+	PFNGLBINDVERTEXARRAYPROC bindVertexArray;
+	PFNGLBUFFERDATAPROC bufferData;
+	PFNGLCHECKFRAMEBUFFERSTATUSPROC checkFramebufferStatus;
+	PFNGLCLEARBUFFERUIVPROC clearBufferuiv;
+	PFNGLCOMPILESHADERPROC compileShader;
+	PFNGLCREATEPROGRAMPROC createProgram;
+	PFNGLCREATESHADERPROC createShader;
+	PFNGLDELETEBUFFERSPROC deleteBuffers;
+	PFNGLDELETEFRAMEBUFFERSPROC deleteFramebuffers;
+	PFNGLDELETESHADERPROC deleteShader;
+	PFNGLDELETEPROGRAMPROC deleteProgram;
+	PFNGLDELETEVERTEXARRAYSPROC deleteVertexArrays;
+	PFNGLDETACHSHADERPROC detachShader;
+	PFNGLENABLEVERTEXATTRIBARRAYPROC enableVertexAttribArray;
+	PFNGLFRAMEBUFFERTEXTURE2DPROC framebufferTexture2D;
+	PFNGLGENBUFFERSPROC genBuffers;
+	PFNGLGENFRAMEBUFFERSPROC genFramebuffers;
+	PFNGLGENVERTEXARRAYSPROC genVertexArrays;
+	PFNGLGETATTRIBLOCATIONPROC getAttribLocation;
+	PFNGLGETPROGRAMINFOLOGPROC getProgramInfoLog;
+	PFNGLGETPROGRAMIVPROC getProgramiv;
+	PFNGLGETSHADERINFOLOGPROC getShaderInfoLog;
+	PFNGLGETSHADERIVPROC getShaderiv;
+	PFNGLGETUNIFORMLOCATIONPROC getUniformLocation;
+	PFNGLLINKPROGRAMPROC linkProgram;
+	PFNGLSHADERSOURCEPROC shaderSource;
+	PFNGLUNIFORM1IPROC uniform1i;
+	PFNGLUNIFORM2FPROC uniform2f;
+	PFNGLUNIFORM2UIPROC uniform2ui;
+	PFNGLUNIFORM4FPROC uniform4f;
+	PFNGLUNIFORM4FVPROC uniform4fv;
+	PFNGLUNIFORM4IVPROC uniform4iv;
+	PFNGLUSEPROGRAMPROC useProgram;
+	PFNGLVERTEXATTRIBPOINTERPROC vertexAttribPointer = nullptr;
+
+	void initFunctions();
+	bool functionsInitialized() const { return vertexAttribPointer; }
+};
+
+class RendererGl : public Renderer {
+protected:
 	class TextureGl : public Texture {
 	private:
 		GLuint id = 0;
@@ -28,75 +91,54 @@ private:
 		TextureGl(uvec2 size, GLuint tex) : Texture(size), id(tex) {}
 
 		friend class RendererGl;
+		friend class RendererGl1;
+		friend class RendererGl3;
 	};
 
 	struct ViewGl : View {
-		SDL_GLContext ctx;
+		SDL_GLContext ctx = nullptr;
+#ifdef _WIN32
+		FunctionsGl gl;
+#endif
 
-		ViewGl(SDL_Window* window, const Recti& area, SDL_GLContext context) : View(window, area), ctx(context) {}
+		using View::View;
 	};
 
-	GLint uniPviewGui, uniRectGui, uniFrameGui, uniColorGui;
-	GLint uniPviewSel, uniRectSel, uniFrameSel, uniAddrSel;
-	GLuint progGui = 0, progSel = 0;
-	GLuint fboSel = 0, texSel = 0;
-	GLuint vao = 0;
-	GLint iformRgb;
-	GLint iformRgba;
-	int maxTextureSize;
+private:
+	struct SurfaceInfo {
+		SDL_Surface* img = nullptr;
+		uint16 ifmt;
+		uint16 pfmt;
+		uint16 type;
+		uint8 align;
 
-#ifndef OPENGLES
-	void (APIENTRY* glActiveTexture)(GLenum texture);
-	void (APIENTRY* glAttachShader)(GLuint program, GLuint shader);
-	void (APIENTRY* glBindFramebuffer)(GLenum target, GLuint framebuffer);
-	void (APIENTRY* glBindVertexArray)(GLuint array);
-	GLenum (APIENTRY* glCheckFramebufferStatus)(GLenum target);
-	void (APIENTRY* glClearBufferuiv)(GLenum buffer, GLint drawbuffer, const GLuint* value);
-	void (APIENTRY* glCompileShader)(GLuint shader);
-	GLuint (APIENTRY* glCreateProgram)();
-	GLuint (APIENTRY* glCreateShader)(GLenum shaderType);
-	void (APIENTRY* glDeleteFramebuffers)(GLsizei n, GLuint* framebuffers);
-	void (APIENTRY* glDeleteShader)(GLuint shader);
-	void (APIENTRY* glDeleteProgram)(GLuint program);
-	void (APIENTRY* glDeleteVertexArrays)(GLsizei n, const GLuint* arrays);
-	void (APIENTRY* glDetachShader)(GLuint program, GLuint shader);
-	void (APIENTRY* glFramebufferTexture1D)(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
-	void (APIENTRY* glGenFramebuffers)(GLsizei n, GLuint* ids);
-	void (APIENTRY* glGenVertexArrays)(GLsizei n, GLuint* arrays);
-	void (APIENTRY* glGetProgramInfoLog)(GLuint program, GLsizei maxLength, GLsizei* length, GLchar* infoLog);
-	void (APIENTRY* glGetProgramiv)(GLuint program, GLenum pname, GLint* params);
-	void (APIENTRY* glGetShaderInfoLog)(GLuint shader, GLsizei maxLength, GLsizei* length, GLchar* infoLog);
-	void (APIENTRY* glGetShaderiv)(GLuint shader, GLenum pname, GLint* params);
-	GLint (APIENTRY* glGetUniformLocation)(GLuint program, const GLchar* name);
-	void (APIENTRY* glLinkProgram)(GLuint program);
-	void (APIENTRY* glShaderSource)(GLuint shader, GLsizei count, const GLchar** string, const GLint* length);
-	void (APIENTRY* glUniform1i)(GLint location, GLint v0);
-	void (APIENTRY* glUniform2f)(GLint location, GLfloat v0, GLfloat v1);
-	void (APIENTRY* glUniform2fv)(GLint location, GLsizei count, const GLfloat* value);
-	void (APIENTRY* glUniform2ui)(GLint location, GLuint v0, GLuint v1);
-	void (APIENTRY* glUniform2uiv)(GLint location, GLsizei count, const GLuint* value);
-	void (APIENTRY* glUniform4f)(GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3);
-	void (APIENTRY* glUniform4fv)(GLint location, GLsizei count, const GLfloat* value);
-	void (APIENTRY* glUniform4iv)(GLint location, GLsizei count, const GLint* value);
-	void (APIENTRY* glUseProgram)(GLuint program);
+		SurfaceInfo() = default;
+		SurfaceInfo(SDL_Surface* surface, uint16 internal, uint16 format, uint16 texel);
+	};
+
+	uint16 iformRgb;
+	uint16 iformRgba;
+	uint16 iformRgba10;
+protected:
+	uint16 texType = GL_TEXTURE_2D;
+	bool core;
+	bool hasBgra = true;
+	bool hasPackedPixels = true;
+	bool hasTextureCompression;
+#ifdef _WIN32
+	ViewGl* cvw = nullptr;	// current context's view
+#else
+	FunctionsGl gl;
 #endif
-public:
-	RendererGl(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
-	~RendererGl() override;
 
+	RendererGl();
+
+public:
 	void setClearColor(const vec4& color) override;
 	void setVsync(bool vsync) override;
-	void updateView(ivec2& viewRes) override;
 	void setCompression(Settings::Compression compression) override;
-	pair<uint, Settings::Compression> getSettings(vector<pair<u32vec2, string>>& devices) const override;
 
-	void startDraw(View* view) override;
-	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) override;
 	void finishDraw(View* view) override;
-
-	void startSelDraw(View* view, ivec2 pos) override;
-	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) override;
-	Widget* finishSelDraw(View* view) override;
 
 	Texture* texFromEmpty() override;
 	Texture* texFromIcon(SDL_Surface* img) override;
@@ -107,27 +149,96 @@ public:
 	void freeTexture(Texture* tex) override;
 
 protected:
-	uint maxTexSize() const override;
-	const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* getSquashableFormats() const override;
-
-private:
-	void initGl(ivec2 res, bool vsync, const vec4& bgcolor);
-	void setSwapInterval(bool vsync);
-#ifndef OPENGLES
-	void initFunctions();
+#ifdef _WIN32
+	template <Class T = ViewGl> T* setContext(View* view);
+#else
+	template <Class T = ViewGl> static T* setContext(View* view);
 #endif
-	void initShader();
-	GLuint createShader(const char* vertSrc, const char* fragSrc, const char* name) const;
-	void checkFramebufferStatus(const char* name);
-
-	template <Invocable<GLuint, GLenum, GLint*> C, Invocable<GLuint, GLsizei, GLsizei*, GLchar*> I> static void checkStatus(GLuint id, GLenum stat, C check, I info, const string& name);
-	static GLuint initTexture(GLint filter);
-	static void fillTexture(const byte_t* pix, uint tpitch, GLint iform, GLenum pform, GLenum type, TextureGl& tex);
-	template <bool keep> tuple<SDL_Surface*, GLint, GLenum, GLenum> pickPixFormat(SDL_Surface* img) const;
-#ifndef OPENGLES
+	template <Class T, class F> void initContexts(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, F initGl);
+	void initGlCommon(ViewGl* view, bool vsync, const vec4& bgcolor);
+	void finalizeConstruction(Settings* sets, uintptr_t availableMemory);
+	static void setSwapInterval(bool vsync);
+private:
+	GLuint initTexture(GLint filter);
+	void uploadTexture(TextureGl* tex, SurfaceInfo& si);
+	void uploadTexture(TextureGl* tex, const PixmapRgba& pm);
+	template <bool keep> SurfaceInfo pickPixFormat(SDL_Surface* img) const;
 #ifndef NDEBUG
 	static void APIENTRY debugMessage(GLenum source, GLenum type, uint id, GLenum severity, GLsizei length, const char* message, const void* userParam);
 #endif
+};
+
+class RendererGl1 final : public RendererGl {
+private:
+	struct ViewGl1 : ViewGl {
+#ifdef _WIN32
+		FunctionsGl1 gl1;
 #endif
+		mat4 proj;
+
+		ViewGl1(SDL_Window* window, const Recti& area);
+	};
+
+#ifndef _WIN32
+	FunctionsGl1 gl1;
+#endif
+	mat4 model = mat4(1.f);
+	mat4 mtex = mat4(1.f);
+
+public:
+	RendererGl1(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
+	~RendererGl1() override;
+
+	void updateView(ivec2& viewRes) override;
+	Info getInfo() const override;
+
+	void startDraw(View* view) override;
+	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) override;
+
+private:
+	void initGl(ViewGl1* view, bool vsync, const vec4& bgcolor, bool& canTexRect, uintptr_t& availableMemory);
+	template <Number T> static void setPosScale(mat4& matrix, const Rect<T>& rect);
+};
+
+class RendererGl3 final : public RendererGl {
+private:
+	struct ViewGl3 : ViewGl {
+#ifdef _WIN32
+		FunctionsGl3 gl3;
+#endif
+		GLuint vao = 0;
+
+		using ViewGl::ViewGl;
+	};
+
+#ifndef _WIN32
+	FunctionsGl3 gl3;
+#endif
+	GLint uniPviewGui, uniRectGui, uniFrameGui, uniColorGui;
+	GLint uniPviewSel, uniRectSel, uniFrameSel, uniAddrSel;
+	GLuint progGui = 0, progSel = 0;
+	GLuint fboSel = 0, texSel = 0;	// framebuffer is bound to the first context
+	GLuint vbo = 0;
+
+public:
+	RendererGl3(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
+	~RendererGl3() override;
+
+	void updateView(ivec2& viewRes) override;
+	Info getInfo() const override;
+
+	void startDraw(View* view) override;
+	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) override;
+
+	void startSelDraw(View* view, ivec2 pos) override;
+	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) override;
+	Widget* finishSelDraw(View* view) override;
+
+private:
+	void initGl(ViewGl3* view, bool vsync, const vec4& bgcolor, uintptr_t& availableMemory);
+	void initShader();
+	GLuint createShader(const char* vertSrc, const char* fragSrc, const char* name) const;
+	void checkFramebufferStatus(const char* name);
+	static void checkStatus(GLuint id, GLenum stat, PFNGLGETSHADERIVPROC check, PFNGLGETSHADERINFOLOGPROC info, const string& name);
 };
 #endif

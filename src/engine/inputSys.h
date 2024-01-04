@@ -1,6 +1,8 @@
 #pragma once
 
 #include "utils/settings.h"
+#include <SDL2/SDL_events.h>
+#include <SDL2/SDL_timer.h>
 
 // handles input events and contains controls settings
 class InputSys {

@@ -1,4 +1,6 @@
 #include "prog/progs.h"
+#include <format>
+#include <regex>
 
 // BINDING
 
@@ -225,52 +227,58 @@ void Binding::setGaxis(SDL_GameControllerAxis axis, bool positive) {
 
 // PICTURE LIMIT
 
-PicLim::PicLim(Type ltype, uintptr_t cnt) :
-	count(cnt),
-	size(defaultSize()),
-	type(ltype)
-{}
-
 void PicLim::set(string_view str) {
-	vector<string_view> elems = getWords(str);
-	type = !elems.empty() ? strToEnum(names, elems[0], Type::none) : Type::none;
-	count = elems.size() > 1 ? toCount(elems[1]) : defaultCount;
-	size = elems.size() > 2 ? toSize(elems[2]) : defaultSize();
+	size_t p, e;
+	for (p = 0; p < str.length() && isSpace(str[p]); ++p);
+	for (e = p; e < str.length() && notSpace(str[e]); ++e);
+	type = strToEnum(names, str.substr(p, e - p), Type::none);
+	for (p = e; p < str.length() && isSpace(str[p]); ++p);
+	for (e = p; e < str.length() && notSpace(str[e]); ++e);
+	count = toCount(str.substr(p, e - p));
+	size = toSize(str.substr(e));
 }
 
 uintptr_t PicLim::toSize(string_view str) {
-	size_t i = 0;
-	for (; i < str.length() && isSpace(str[i]); ++i);
 	uintptr_t num = 0;
-	std::from_chars_result res = std::from_chars(str.data() + i, str.data() + str.length(), num);
+	const char* end = str.data() + str.length();
+	std::from_chars_result res = std::from_chars(std::find_if(str.data(), end, [](char ch) -> bool { return notSpace(ch); }), end, num);
 	if (!num)
-		return defaultSize();
+		return 0;
 
-	string_view::iterator mit = std::find_if(str.begin() + (res.ptr - str.data()), str.end(), [](char c) -> bool { return rng::find(sizeLetters, toupper(c)) != sizeLetters.end(); });
-	if (mit != str.end())
-		switch (toupper(*mit)) {
-		case sizeLetters[1]:
-			num *= sizeFactors[1];
-			break;
-		case sizeLetters[2]:
-			num *= sizeFactors[2];
-			break;
-		case sizeLetters[3]:
-			num *= sizeFactors[3];
-		}
-	mit = std::find_if(mit, str.end(), [](char c) -> bool { return toupper(c) == sizeLetters[0]; });
-	return mit == str.end() || *mit != 'b' ? num : num / 8;
+	const char* beg = std::find_if(res.ptr, end, [](char ch) -> bool { return notSpace(ch); });
+	const char* fin = std::find_if(beg, end, [](char ch) -> bool { return !isalpha(ch); });
+	if (string_view unit(beg, fin); (unit.length() == 2 || unit.length() == 3) && toupper(unit.back()) == 'B') {
+		constexpr array letters = { 'K', 'M', 'G' };
+		for (uint i = 0; i < letters.size(); ++i)
+			if (toupper(unit[0]) == letters[i])
+				return num * uintptr_t(std::pow(unit.length() == 3 && toupper(unit[1]) == 'I' ? 1024u : 1000u, i + 1));
+	}
+	return num;
 }
 
-uint8 PicLim::memSizeMag(uintptr_t num) {
+pair<uint8, uint8> PicLim::memSizeMag(uintptr_t num) {
+	if (!num)
+		return pair(0, 0);
+
 	uint8 m;
-	for (m = 0; m + 1u < sizeLetters.size() && (!(num % 1000) && (num /= 1000)); ++m);
-	return m;
+	for (m = 0; m < 3 && num % 1000 == 0; num /= 1000, ++m);
+	if (m)
+		return pair(m, 0);
+	for (m = 0; m < 3 && num % 1024 == 0; num /= 1024, ++m);
+	return pair(0, m);
 }
 
-string PicLim::memoryString(uintptr_t num, uint8 mag) {
-	string str = toStr(num / sizeFactors[mag]);
-	return (mag ? str + sizeLetters[mag] : str) + sizeLetters[0];
+string PicLim::memoryString(uintptr_t num, uint8 dmag, uint8 smag) {
+	if (!(dmag || smag))
+		return std::format("{} B", num);
+	return dmag
+		? std::format("{} {}", num / uintptr_t(std::pow(1000u, dmag)), array{ "KB", "MB", "GB" }[dmag - 1])
+		: std::format("{} {}", num / uintptr_t(std::pow(1024u, smag)), array{ "KiB", "MiB", "GiB" }[smag - 1]);
+}
+
+string PicLim::memoryString(uintptr_t num) {
+	auto [dmag, smag] = memSizeMag(num);
+	return memoryString(num, dmag, smag);
 }
 
 // SETTINGS
@@ -279,6 +287,14 @@ Settings::Settings(const fs::path& dirSets, vector<string>&& themes) :
 	dirLib(fromPath(dirSets / defaultDirLib))
 {
 	setTheme(string_view(), std::move(themes));
+}
+
+void Settings::setZoom(string_view str) {
+	size_t p, e;
+	for (p = 0; p < str.length() && isSpace(str[p]); ++p);
+	for (e = p; e < str.length() && notSpace(str[e]); ++e);
+	zoomType = strToEnum(zoomNames, string_view(str.data() + p, e - p), defaultZoomType);
+	zoom = std::clamp(toNum<int8>(str.substr(e)), int8(-Settings::zoomLimit), Settings::zoomLimit);
 }
 
 const string& Settings::setTheme(string_view name, vector<string>&& themes) {
@@ -290,7 +306,7 @@ const string& Settings::setTheme(string_view name, vector<string>&& themes) {
 umap<int, Recti> Settings::displayArrangement() {
 	ivec2 origin(INT_MAX);
 	umap<int, Recti> dsps;
-	for (int i = 0; i < SDL_GetNumVideoDisplays(); ++i)
+	for (int i = 0, e = SDL_GetNumVideoDisplays(); i < e; ++i)
 		if (Recti rect; !SDL_GetDisplayBounds(i, reinterpret_cast<SDL_Rect*>(&rect))) {
 			dsps.emplace(i, rect);
 			origin = glm::min(origin, rect.pos());
@@ -310,4 +326,48 @@ void Settings::unionDisplays() {
 			displays.erase(it);
 	if (displays.empty())
 		displays = std::move(dsps);
+}
+
+Settings::Renderer Settings::getRenderer(string_view name) {
+#ifdef WITH_DIRECT3D
+	if (std::regex_match(name.begin(), name.end(), std::regex(R"r(\s*d(irect)?(3d|x).*)r", std::regex::icase)))
+		return Renderer::direct3d11;
+#endif
+#ifdef WITH_OPENGL
+	std::match_results<string_view::iterator> mr;
+	if (std::regex_match(name.begin(), name.end(), mr, std::regex(R"r(\s*(open)?gl[^a-z]*?(es[^a-z]*?)?(\d).*)r", std::regex::icase))) {
+		if (mr.length(2))
+			return Renderer::opengles3;
+		return name[mr.position(3)] >= '3' ? Renderer::opengl3 : Renderer::opengl1;
+	}
+#endif
+#ifdef WITH_VULKAN
+	if (std::regex_match(name.begin(), name.end(), std::regex(R"r(\s*v(ulkan|k).*)r", std::regex::icase)))
+		return Renderer::vulkan;
+#endif
+	return Renderer::software;
+}
+
+void Settings::setRenderer(const uset<string>& cmdFlags) {
+#ifdef WITH_DIRECT3D
+	if (cmdFlags.contains(flagDirect3d11))
+		renderer = Renderer::direct3d11;
+	else
+#endif
+#ifdef WITH_OPENGL
+	if (cmdFlags.contains(flagOpenGl1))
+		renderer = Renderer::opengl1;
+	else if (cmdFlags.contains(flagOpenGl3))
+		renderer = Renderer::opengl3;
+	else if (cmdFlags.contains(flagOpenEs3))
+		renderer = Renderer::opengles3;
+	else
+#endif
+#ifdef WITH_VULKAN
+	if (cmdFlags.contains(flagVulkan))
+		renderer = Renderer::vulkan;
+	else
+#endif
+	if (cmdFlags.contains(flagSoftware))
+		renderer = Renderer::software;
 }

@@ -11,14 +11,11 @@
 #include "utils/compare.h"
 #include "utils/layouts.h"
 #include <cwctype>
+#include <format>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
-#ifdef _WIN32
-#include <SDL_image.h>
-#else
 #include <SDL2/SDL_image.h>
-#endif
 
 // FONT SET
 
@@ -58,7 +55,7 @@ void FontSet::init(const fs::path& path, Settings::Hinting hinting) {
 }
 
 FontSet::Font FontSet::openFont(const fs::path& path, uint size) const {
-	Font face = { .data = FileOpsLocal::readFile(path) };
+	Font face = FileOpsLocal::readFile(path);
 	if (FT_Error err = FT_New_Memory_Face(lib, reinterpret_cast<FT_Byte*>(face.data.data()), face.data.size(), 0, &face.face))
 		throw std::runtime_error(FT_Error_String(err));
 	if (FT_Error err = FT_Set_Pixel_Sizes(face.face, 0, size)) {
@@ -79,19 +76,19 @@ void FontSet::clearCache() {
 }
 
 PixmapRgba FontSet::renderText(string_view text, uint size) {
-	uint width = measureText(text, size);
-	if (!width)
+	uvec2 res(measureText(text, size), size);
+	if (!res.x)
 		return PixmapRgba();
+	prepareBuffer(res);
 	prepareAdvance(text.begin(), text.length());
 	ypos = uint(float(size) * baseScale);
 
 	array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
-	uvec2 res = prepareBuffer(width, size);
 	for (char32_t ch, prev = '\0'; len; prev = ch) {
 		ch = mbstowc(ptr, len);
-		if (std::iswcntrl(ch)) {
+		if (iswcntrl(ch)) {
 			if (ch == '\t')
-				advanceTab<false>(glyphs);
+				advanceTab(glyphs);
 			continue;
 		}
 
@@ -116,49 +113,49 @@ uint FontSet::measureText(string_view text, uint size) {
 	array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
 	for (char32_t ch, prev = '\0'; len; prev = ch) {
 		ch = mbstowc(ptr, len);
-		if (std::iswcntrl(ch)) {
+		if (iswcntrl(ch)) {
 			if (ch == '\t')
-				advanceTab<false>(glyphs);
+				advanceTab(glyphs);
 			continue;
 		}
 
 		if (uint id = ch - ' '; id < glyphs.size()) {
 			cacheGlyph(glyphs, ch, id);
-			advanceChar<true, false>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x, glyphs[id]->left, glyphs[id]->bitmap.width);
+			advanceChar<true>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x, glyphs[id]->left, glyphs[id]->bitmap.width);
 		} else {
 			vector<Font>::iterator ft = loadGlyph(ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_BITMAP_METRICS_ONLY);
-			advanceChar<false, false>(ft->face, ch, prev, ft->face->glyph->advance.x, ft->face->glyph->bitmap_left, ft->face->glyph->bitmap.width);
+			advanceChar<false>(ft->face, ch, prev, ft->face->glyph->advance.x, ft->face->glyph->bitmap_left, ft->face->glyph->bitmap.width);
 		}
 	}
 	return mfin;
 }
 
 PixmapRgba FontSet::renderText(string_view text, uint size, uint limit) {
-	auto [width, ln] = measureText(text, size, limit);
-	if (!width)
+	uvec2 res = measureText(text, size, limit);
+	if (!res.x)
 		return PixmapRgba();
 	ypos = uint(float(size) * baseScale);
 
 	array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
-	uvec2 res = prepareBuffer(width, (ln.size() - 1) * size);
-	for (size_t i = 0; i < ln.size() - 1; ++i) {
-		prepareAdvance(ln[i], ln[i + 1] - ln[i]);
+	prepareBuffer(res);
+	for (size_t i = 0; i < lineBreaks.size() - 1; ++i) {
+		prepareAdvance(lineBreaks[i], lineBreaks[i + 1] - lineBreaks[i]);
 		for (char32_t ch, prev = '\0'; len; prev = ch) {
 			ch = mbstowc(ptr, len);
-			if (std::iswcntrl(ch)) {
+			if (iswcntrl(ch)) {
 				if (ch == '\t')
-					advanceTab<true>(glyphs);
+					advanceTab(glyphs);
 				continue;
 			}
 
 			if (uint id = ch - ' '; id < glyphs.size()) {
-				if (xpos + glyphs[id]->left + glyphs[id]->bitmap.width <= width) {
+				if (glyphs[id]->left + glyphs[id]->bitmap.width <= limit) {	// for worst case scenario from checkSpace
 					copyGlyph(res, glyphs[id]->bitmap, glyphs[id]->top, glyphs[id]->left);
 					advanceChar<true>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x);
 				}
 			} else {
 				vector<Font>::iterator ft = loadGlyph(ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_RENDER | FT_LOAD_TARGET_(mode));
-				if (xpos + ft->face->glyph->bitmap_left + ft->face->glyph->bitmap.width <= width) {
+				if (ft->face->glyph->bitmap_left + ft->face->glyph->bitmap.width <= limit) {	// for worst case scenario from checkSpace
 					copyGlyph(res, ft->face->glyph->bitmap, ft->face->glyph->bitmap_top, ft->face->glyph->bitmap_left);
 					advanceChar<false>(ft->face, ch, prev, ft->face->glyph->advance.x);
 				}
@@ -169,61 +166,57 @@ PixmapRgba FontSet::renderText(string_view text, uint size, uint limit) {
 	return PixmapRgba(buffer.get(), res);
 }
 
-pair<uint, vector<string_view::iterator>> FontSet::measureText(string_view text, uint size, uint limit) {
+uvec2 FontSet::measureText(string_view text, uint size, uint limit) {
 	if (!setSize(text, size))
-		return pair(0, vector<string_view::iterator>());
+		return uvec2(0);
 	prepareAdvance(text.begin(), text.length());
-	wordStart = ptr;
+	lineBreaks = { text.begin() };
+	wordStart = text.begin();
 	mfin = 0;
-	gXpos = 0;
+	wordXpos = 0;
+	maxWidth = 0;
 
 	array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
-	vector<string_view::iterator> ln = { text.begin() };
 	for (char32_t ch, prev = '\0'; len; prev = ch) {
 		ch = mbstowc(ptr, len);
-		if (std::iswcntrl(ch)) {
+		if (iswcntrl(ch)) {
 			switch (ch) {
 			case '\t':
-				if (advanceTab<true>(glyphs); xpos + mfin >= limit) {
-					advanceLine(ln, ptr, size);
-					resetLine();
-				}
+				if (advanceTab(glyphs); mfin >= limit)
+					advanceLine(ptr);
 				break;
 			case '\n':
-				advanceLine(ln, ptr, size);
-				resetLine();
+				advanceLine(ptr);
 			}
 			continue;
 		}
 
 		if (uint id = ch - ' '; id < glyphs.size()) {
 			cacheGlyph(glyphs, ch, id);
-			if (breakLine(ln, size, limit, glyphs[id]->left, glyphs[id]->bitmap.width))
-				advanceChar<true, true>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x, glyphs[id]->left, glyphs[id]->bitmap.width);
+			if (checkSpace(limit, glyphs[id]->left, glyphs[id]->bitmap.width))
+				advanceChar<true>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x, glyphs[id]->left, glyphs[id]->bitmap.width);
 		} else {
 			vector<Font>::iterator ft = loadGlyph(ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_BITMAP_METRICS_ONLY);
-			if (breakLine(ln, size, limit, ft->face->glyph->bitmap_left, ft->face->glyph->bitmap.width))
-				advanceChar<false, true>(ft->face, ch, prev, ft->face->glyph->advance.x, ft->face->glyph->bitmap_left, ft->face->glyph->bitmap.width);
+			if (checkSpace(limit, ft->face->glyph->bitmap_left, ft->face->glyph->bitmap.width))
+				advanceChar<false>(ft->face, ch, prev, ft->face->glyph->advance.x, ft->face->glyph->bitmap_left, ft->face->glyph->bitmap.width);
 		}
 
-		if (std::iswblank(ch) || std::iswpunct(ch)) {
+		if (iswblank(ch) || iswpunct(ch)) {
 			wordStart = ptr;
-			gXpos += xpos;
-			xpos = 0;
+			wordXpos = xpos;
 		}
 	}
-	ln.push_back(text.end());
-	return pair(mfin, std::move(ln));
+	lineBreaks.push_back(text.end());
+	return uvec2(std::max(maxWidth, mfin), (lineBreaks.size() - 1) * size);
 }
 
-uvec2 FontSet::prepareBuffer(uint resx, uint resy) {
-	size_t size = size_t(resx) * size_t(resy);
+void FontSet::prepareBuffer(uvec2 res) {
+	size_t size = size_t(res.x) * size_t(res.y);
 	if (size > bufSize) {
 		buffer = std::make_unique_for_overwrite<uint32[]>(size);
 		bufSize = size;
 	}
 	std::fill_n(buffer.get(), size, 0);
-	return uvec2(resx, resy);
 }
 
 void FontSet::prepareAdvance(string_view::iterator begin, size_t length) {
@@ -233,16 +226,11 @@ void FontSet::prepareAdvance(string_view::iterator begin, size_t length) {
 	xpos = 0;
 }
 
-template <bool ml>
 void FontSet::advanceTab(array<FT_BitmapGlyph, cacheSize>& glyphs) {
 	cacheGlyph(glyphs, ' ', 0);
 	uint n = coalesce(uint(cpos % tabsize), tabsize);
 	FT_Pos adv = glyphs[0]->root.advance.x >> 16;
-	if constexpr (ml)
-		mfin = gXpos + xpos;
-	else
-		mfin = xpos;
-	mfin += adv * (n - 1) + glyphs[0]->left + glyphs[0]->bitmap.width;
+	mfin = xpos + adv * (n - 1) + glyphs[0]->left + glyphs[0]->bitmap.width;
 	xpos += adv * n;
 	cpos += n;
 }
@@ -259,42 +247,34 @@ void FontSet::advanceChar(FT_Face face, char32_t ch, char32_t prev, long advance
 	++cpos;
 }
 
-template <bool cached, bool ml>
+template <bool cached>
 void FontSet::advanceChar(FT_Face face, char32_t ch, char32_t prev, long advance, int left, uint width) {
-	if constexpr (ml)
-		mfin = gXpos + xpos;
-	else
-		mfin = xpos;
-	mfin += left + width;
+	mfin = xpos + left + width;
 	advanceChar<cached>(face, ch, prev, advance);
 }
 
-bool FontSet::breakLine(vector<string_view::iterator>& ln, uint size, uint limit, int left, uint width) {
-	if (gXpos + xpos + left + width <= limit)
+bool FontSet::checkSpace(uint limit, int left, uint width) {
+	uint end = xpos + left + width;
+	if (end <= limit)	// next character fits within limit
 		return true;
-	if (mfin <= limit) {
-		advanceLine(ln, wordStart, size);
-		resetLine();
-		return false;
-	}
-	if (left + width <= limit) {
-		advanceLine(ln, ptr, size);
+	if (end - wordXpos <= limit) {	// try to fit the word onto a new line
+		advanceLine(wordStart);
 		return true;
 	}
-	return false;
+	bool fits = left + width <= limit;
+	if (fits)	// split word if the character can fit onto a line
+		advanceLine(ptr - 1);
+	return fits;
 }
 
-void FontSet::advanceLine(vector<string_view::iterator>& ln, string_view::iterator pos, uint size) {
-	ln.push_back(pos);
+void FontSet::advanceLine(string_view::iterator pos) {
+	lineBreaks.push_back(pos);
 	wordStart = pos;
-	ypos += size;
-}
-
-void FontSet::resetLine() {
-	mfin = 0;
+	wordXpos = 0;
+	maxWidth = std::max(maxWidth, mfin);
 	cpos = 0;
 	xpos = 0;
-	gXpos = 0;
+	mfin = 0;
 }
 
 bool FontSet::setSize(string_view text, uint size) {
@@ -356,7 +336,7 @@ vector<FontSet::Font>::iterator FontSet::loadGlyph(char32_t ch, int32 flags) {
 	return fonts.begin();
 }
 
-void FontSet::copyGlyph(uvec2 res, const FT_Bitmap_& bmp, int top, int left) {
+void FontSet::copyGlyph(uvec2 res, const FT_Bitmap& bmp, int top, int left) {
 	uint32* dst;
 	byte_t* src;
 	int offs = ypos - top;
@@ -377,7 +357,7 @@ void FontSet::copyGlyph(uvec2 res, const FT_Bitmap_& bmp, int top, int left) {
 
 void FontSet::setMode(Settings::Hinting hinting) {
 	height = 0;
-	mode = array<int, size_t(Settings::Hinting::mono) + 1>{ FT_RENDER_MODE_NORMAL, FT_RENDER_MODE_MONO }[eint(hinting)];
+	mode = hinting != Settings::Hinting::mono ? FT_RENDER_MODE_NORMAL : FT_RENDER_MODE_MONO;
 }
 
 // DRAW SYS
@@ -391,20 +371,26 @@ DrawSys::DrawSys(const umap<int, SDL_Window*>& windows) :
 
 	switch (World::sets()->renderer) {
 	using enum Settings::Renderer;
-#ifdef WITH_DIRECTX
-	case directx:
-		renderer = new RendererDx(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
+#ifdef WITH_DIRECT3D
+	case direct3d11:
+		renderer = new RendererDx11(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
 		break;
 #endif
 #ifdef WITH_OPENGL
-	case opengl:
-		renderer = new RendererGl(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
+	case opengl1:
+		renderer = new RendererGl1(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
+		break;
+	case opengl3: case opengles3:
+		renderer = new RendererGl3(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
 		break;
 #endif
 #ifdef WITH_VULKAN
 	case vulkan:
 		renderer = new RendererVk(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
+		break;
 #endif
+	case software:
+		renderer = new RendererSf(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
 	}
 
 	for (auto [id, win] : windows)
@@ -418,25 +404,23 @@ DrawSys::DrawSys(const umap<int, SDL_Window*>& windows) :
 	if (!white)
 		throw std::runtime_error(std::format("Failed to create blank texture: {}", SDL_GetError()));
 	SDL_FillRect(white, nullptr, 0xFFFFFFFF);
-	if (blank = renderer->texFromIcon(white); !blank)
+	if (texes[eint(Tex::blank)] = renderer->texFromIcon(white); !texes[eint(Tex::blank)])
 		throw std::runtime_error("Failed to create blank texture");
-	texes.emplace(string(), blank);
 
 	int iconSize = int(assumedIconSize / fallbackDpi * winDpi);
-	for (const fs::directory_entry& it : fs::directory_iterator(World::fileSys()->dirIcons(), fs::directory_options::skip_permission_denied))
-		if (Texture* tex = renderer->texFromIcon(loadIcon(fromPath(it.path()), iconSize)))
-			texes.emplace(fromPath(it.path().stem()), tex);
+	string dirIcons = fromPath(World::fileSys()->dirIcons());
+	for (size_t i = 0; i < iconStems.size() - 1; ++i)
+		if (texes[i + fileTexBegin] = renderer->texFromIcon(loadIcon(dirIcons / iconStems[i] + iconExt, iconSize)); !texes[i + fileTexBegin])
+			logError("Failed to load texture '", iconStems[i], iconExt, '\'');
 
 	setFont(toPath(World::sets()->font));
-	tooltip = renderer->texFromEmpty();
+	texes[eint(Tex::tooltip)] = renderer->texFromEmpty();
 	renderer->synchTransfer();
 }
 
 DrawSys::~DrawSys() {
 	if (renderer) {
-		if (tooltip)
-			renderer->freeTexture(tooltip);
-		for (auto& [name, tex] : texes)
+		for (Texture* tex : texes)
 			renderer->freeTexture(tex);
 		delete renderer;
 	}
@@ -477,9 +461,10 @@ bool DrawSys::updateDpi(int dsp) {
 		cursorHeight = int(assumedCursorHeight / fallbackDpi * winDpi);
 
 		int iconSize = int(assumedIconSize / fallbackDpi * winDpi);
-		for (const fs::directory_entry& it : fs::directory_iterator(World::fileSys()->dirIcons(), fs::directory_options::skip_permission_denied))
-			if (umap<string, Texture*>::iterator tx = texes.find(fromPath(it.path().stem())); tx != texes.end())
-				renderer->texFromIcon(tx->second, loadIcon(fromPath(it.path()), iconSize));
+		string dirIcons = fromPath(World::fileSys()->dirIcons());
+		for (size_t i = 0; i < iconStems.size() - 1; ++i)
+			if (!renderer->texFromIcon(texes[i + fileTexBegin], loadIcon(dirIcons / iconStems[i] + iconExt, iconSize)))
+				logError("Failed to reload texture '", iconStems[i], iconExt, '\'');
 		renderer->synchTransfer();
 		return true;
 	}
@@ -505,15 +490,6 @@ void DrawSys::setFont(const fs::path& font) {
 	fonts.init(path, World::sets()->hinting);
 }
 
-const Texture* DrawSys::texture(const string& name) const {
-	try {
-		return texes.at(name);
-	} catch (const std::out_of_range&) {
-		logError("Texture ", name, " doesn't exist");
-	}
-	return blank;
-}
-
 void DrawSys::drawWidgets(bool mouseLast) {
 	optional<bool> syncTooltip = mouseLast && World::sets()->tooltips ? prepareTooltip() : std::nullopt;
 	for (auto [id, view] : renderer->getViews()) {
@@ -527,7 +503,7 @@ void DrawSys::drawWidgets(bool mouseLast) {
 
 			// draw popup if exists and dim main widgets
 			if (World::scene()->getPopup()) {
-				renderer->drawRect(blank, view->rect, view->rect, colorPopupDim);
+				renderer->drawRect(texes[eint(Tex::blank)], view->rect, view->rect, colorPopupDim);
 				World::scene()->getPopup()->drawSelf(view->rect);
 			}
 
@@ -555,17 +531,17 @@ void DrawSys::drawPicture(const Picture* wgt, const Recti& view) {
 void DrawSys::drawCheckBox(const CheckBox* wgt, const Recti& view) {
 	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
 		Recti frame = wgt->frame();
-		renderer->drawRect(blank, rect, frame, colors[eint(wgt->getBgColor())]);
-		renderer->drawRect(blank, wgt->boxRect(), frame, colors[eint(wgt->boxColor())]);
+		renderer->drawRect(texes[eint(Tex::blank)], rect, frame, colors[eint(wgt->getBgColor())]);
+		renderer->drawRect(texes[eint(Tex::blank)], wgt->boxRect(), frame, colors[eint(wgt->boxColor())]);
 	}
 }
 
 void DrawSys::drawSlider(const Slider* wgt, const Recti& view) {
 	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
 		Recti frame = wgt->frame();
-		renderer->drawRect(blank, rect, frame, colors[eint(wgt->getBgColor())]);
-		renderer->drawRect(blank, wgt->barRect(), frame, colors[eint(Color::dark)]);
-		renderer->drawRect(blank, wgt->sliderRect(), frame, colors[eint(Color::light)]);
+		renderer->drawRect(texes[eint(Tex::blank)], rect, frame, colors[eint(wgt->getBgColor())]);
+		renderer->drawRect(texes[eint(Tex::blank)], wgt->barRect(), frame, colors[eint(Color::dark)]);
+		renderer->drawRect(texes[eint(Tex::blank)], wgt->sliderRect(), frame, colors[eint(Color::light)]);
 	}
 }
 
@@ -573,7 +549,7 @@ void DrawSys::drawLabel(const Label* wgt, const Recti& view) {
 	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
 		Recti frame = wgt->frame();
 		if (wgt->showBg)
-			renderer->drawRect(blank, rect, frame, colors[eint(Color::normal)]);
+			renderer->drawRect(texes[eint(Tex::blank)], rect, frame, colors[eint(Color::normal)]);
 		if (wgt->getTextTex())
 			renderer->drawRect(wgt->getTextTex(), wgt->textRect(), wgt->textFrame(), colors[eint(Color::text)]);
 	}
@@ -582,7 +558,7 @@ void DrawSys::drawLabel(const Label* wgt, const Recti& view) {
 void DrawSys::drawPushButton(const PushButton* wgt, const Recti& view) {
 	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
 		Recti frame = wgt->frame();
-		renderer->drawRect(blank, rect, frame, colors[eint(wgt->getBgColor())]);
+		renderer->drawRect(texes[eint(Tex::blank)], rect, frame, colors[eint(wgt->getBgColor())]);
 		if (wgt->getTextTex())
 			renderer->drawRect(wgt->getTextTex(), wgt->textRect(), wgt->textFrame(), colors[eint(Color::text)]);
 	}
@@ -591,7 +567,7 @@ void DrawSys::drawPushButton(const PushButton* wgt, const Recti& view) {
 void DrawSys::drawIconButton(const IconButton* wgt, const Recti& view) {
 	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
 		Recti frame = wgt->frame();
-		renderer->drawRect(blank, rect, frame, colors[eint(wgt->getBgColor())]);
+		renderer->drawRect(texes[eint(Tex::blank)], rect, frame, colors[eint(wgt->getBgColor())]);
 		if (wgt->getTex())
 			renderer->drawRect(wgt->getTex(), wgt->texRect(), frame, colors[eint(Color::texture)]);
 	}
@@ -600,7 +576,7 @@ void DrawSys::drawIconButton(const IconButton* wgt, const Recti& view) {
 void DrawSys::drawIconPushButton(const IconPushButton* wgt, const Recti& view) {
 	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
 		Recti frame = wgt->frame();
-		renderer->drawRect(blank, rect, frame, colors[eint(wgt->getBgColor())]);
+		renderer->drawRect(texes[eint(Tex::blank)], rect, frame, colors[eint(wgt->getBgColor())]);
 		if (wgt->getIconTex())
 			renderer->drawRect(wgt->getIconTex(), wgt->iconRect(), frame, colors[eint(Color::texture)]);
 		if (wgt->getTextTex())
@@ -611,7 +587,7 @@ void DrawSys::drawIconPushButton(const IconPushButton* wgt, const Recti& view) {
 void DrawSys::drawLabelEdit(const LabelEdit* wgt, const Recti& view) {
 	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
 		Recti frame = wgt->frame();
-		renderer->drawRect(blank, rect, frame, colors[eint(wgt->getBgColor())]);
+		renderer->drawRect(texes[eint(Tex::blank)], rect, frame, colors[eint(wgt->getBgColor())]);
 		if (wgt->getTextTex())
 			renderer->drawRect(wgt->getTextTex(), wgt->textRect(), wgt->textFrame(), colors[eint(Color::text)]);
 	}
@@ -619,13 +595,13 @@ void DrawSys::drawLabelEdit(const LabelEdit* wgt, const Recti& view) {
 
 void DrawSys::drawCaret(const Recti& rect, const Recti& frame, const Recti& view) {
 	if (rect.overlaps(view))
-		renderer->drawRect(blank, rect, frame, colors[eint(Color::light)]);
+		renderer->drawRect(texes[eint(Tex::blank)], rect, frame, colors[eint(Color::light)]);
 }
 
 void DrawSys::drawWindowArranger(const WindowArranger* wgt, const Recti& view) {
 	if (Recti rect = wgt->rect(); rect.overlaps(view)) {
 		Recti frame = wgt->frame();
-		renderer->drawRect(blank, rect, frame, colors[eint(Color::dark)]);
+		renderer->drawRect(texes[eint(Tex::blank)], rect, frame, colors[eint(Color::dark)]);
 		for (const auto& [id, dsp] : wgt->getDisps())
 			if (!wgt->draggingDisp(id)) {
 				auto [rct, color, text, tex] = wgt->dispRect(id, dsp);
@@ -636,7 +612,7 @@ void DrawSys::drawWindowArranger(const WindowArranger* wgt, const Recti& view) {
 
 void DrawSys::drawWaDisp(const Recti& rect, Color color, const Recti& text, const Texture* tex, const Recti& frame, const Recti& view) {
 	if (rect.overlaps(view)) {
-		renderer->drawRect(blank, rect, frame, colors[eint(color)]);
+		renderer->drawRect(texes[eint(Tex::blank)], rect, frame, colors[eint(color)]);
 		if (tex)
 			renderer->drawRect(tex, text, frame, colors[eint(Color::text)]);
 	}
@@ -649,8 +625,8 @@ void DrawSys::drawScrollArea(const ScrollArea* box, const Recti& view) {
 
 	if (Recti bar = box->barRect(); bar.overlaps(view)) {
 		Recti frame = box->frame();
-		renderer->drawRect(blank, bar, frame, colors[eint(Color::dark)]);
-		renderer->drawRect(blank, box->sliderRect(), frame, colors[eint(Color::light)]);
+		renderer->drawRect(texes[eint(Tex::blank)], bar, frame, colors[eint(Color::dark)]);
+		renderer->drawRect(texes[eint(Tex::blank)], box->sliderRect(), frame, colors[eint(Color::light)]);
 	}
 }
 
@@ -661,14 +637,14 @@ void DrawSys::drawReaderBox(const ReaderBox* box, const Recti& view) {
 
 	if (Recti bar = box->barRect(); box->showBar() && bar.overlaps(view)) {
 		Recti frame = box->frame();
-		renderer->drawRect(blank, bar, frame, colors[eint(Color::dark)]);
-		renderer->drawRect(blank, box->sliderRect(), frame, colors[eint(Color::light)]);
+		renderer->drawRect(texes[eint(Tex::blank)], bar, frame, colors[eint(Color::dark)]);
+		renderer->drawRect(texes[eint(Tex::blank)], box->sliderRect(), frame, colors[eint(Color::light)]);
 	}
 }
 
 void DrawSys::drawPopup(const Popup* box, const Recti& view) {
 	if (Recti rect = box->rect(); rect.overlaps(view)) {
-		renderer->drawRect(blank, rect, box->frame(), colors[eint(box->bgColor)]);
+		renderer->drawRect(texes[eint(Tex::blank)], rect, box->frame(), colors[eint(box->bgColor)]);
 		for (Widget* it : box->getWidgets())
 			it->drawSelf(view);
 	}
@@ -680,15 +656,15 @@ void DrawSys::drawTooltip(optional<bool>& syncTooltip, const Recti& view) {
 		*syncTooltip = false;
 	}
 
-	Recti rct(World::winSys()->mousePos() + ivec2(0, cursorHeight), tooltip ? ivec2(tooltip->getRes()) + tooltipMargin * 2 : ivec2(0));
+	Recti rct(World::winSys()->mousePos() + ivec2(0, cursorHeight), texes[eint(Tex::tooltip)] ? ivec2(texes[eint(Tex::tooltip)]->getRes()) + tooltipMargin * 2 : ivec2(0));
 	if (rct.x + rct.w > viewRes.x)
 		rct.x = viewRes.x - rct.w;
 	if (rct.y + rct.h > viewRes.y)
 		rct.y = rct.y - cursorHeight - rct.h;
 
 	if (rct.overlaps(view)) {
-		renderer->drawRect(blank, rct, view, colors[eint(Color::tooltip)]);
-		renderer->drawRect(tooltip, Recti(rct.pos() + tooltipMargin, tooltip->getRes()), rct, colors[eint(Color::text)]);
+		renderer->drawRect(texes[eint(Tex::blank)], rct, view, colors[eint(Color::tooltip)]);
+		renderer->drawRect(texes[eint(Tex::tooltip)], Recti(rct.pos() + tooltipMargin, texes[eint(Tex::tooltip)]->getRes()), rct, colors[eint(Color::text)]);
 	}
 }
 
@@ -697,7 +673,7 @@ optional<bool> DrawSys::prepareTooltip() {
 	if (!but)
 		return std::nullopt;
 	const char* tip = but->getTooltip();
-	if (!tip)
+	if (!strfilled(tip))
 		return std::nullopt;
 	if (tip == curTooltip)
 		return false;
@@ -714,7 +690,7 @@ optional<bool> DrawSys::prepareTooltip() {
 			break;
 		pos = brk + 1;
 	}
-	return renderer->texFromText(tooltip, fonts.renderText(curTooltip, tooltipHeight, width)) ? optional(true) : std::nullopt;
+	return renderer->texFromText(texes[eint(Tex::tooltip)], fonts.renderText(curTooltip, tooltipHeight, width)) ? optional(true) : std::nullopt;
 }
 
 Widget* DrawSys::getSelectedWidget(Layout* box, ivec2 mPos) {

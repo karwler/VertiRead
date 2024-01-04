@@ -87,6 +87,7 @@ private:
 	void eventMoveBooks();
 	void eventMoveCancelled();
 	void eventMoveFinished(string* errors);
+	void eventSetZoomType(PushButton* but);
 	void eventSetZoom(Slider* sl);
 	void eventSetScreenMode(PushButton* but);
 	void eventSetRenderer(PushButton* but);
@@ -99,11 +100,7 @@ private:
 	void eventSetFontHinting(PushButton* but);
 	void eventSetDeadzone(Slider* sl);
 	void eventSetDeadzone(LabelEdit* le);
-	void eventSetPortrait();
-	void eventSetLandscape();
-	void eventSetSquare();
-	void eventSetFill();
-	void eventSetPicLimitType(PushButton* but);
+	void eventSetPicLimType(PushButton* but);
 	void eventSetPicLimCount(LabelEdit* le);
 	void eventSetPicLimSize(LabelEdit* le);
 	void eventSetMaxPicRes(Slider* sl);

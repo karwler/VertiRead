@@ -1,15 +1,10 @@
 #version 130
 
-const vec2 vposs[4] = vec2[](
-	vec2(0.0, 0.0),
-	vec2(1.0, 0.0),
-	vec2(0.0, 1.0),
-	vec2(1.0, 1.0)
-);
-
 uniform vec4 pview;
 uniform ivec4 rect;
 uniform ivec4 frame;
+
+in vec2 vpos;
 
 noperspective out vec2 fragUV;
 
@@ -22,8 +17,8 @@ void main() {
 
 	if (dst[2] > 0.0 && dst[3] > 0.0) {
 		vec4 uvrc = vec4(dst.xy - vec2(rect.xy), dst.zw) / vec4(rect.zwzw);
-		fragUV = vposs[gl_VertexID] * uvrc.zw + uvrc.xy;
-		vec2 loc = vposs[gl_VertexID] * dst.zw + dst.xy;
+		fragUV = vpos * uvrc.zw + uvrc.xy;
+		vec2 loc = vpos * dst.zw + dst.xy;
 		gl_Position = vec4((loc.x - pview.x) / pview[2] - 1.0, -(loc.y - pview.y) / pview[3] + 1.0, 0.0, 1.0);
    } else {
 		fragUV = vec2(0.0);

@@ -4,7 +4,8 @@ import wand.api
 import wand.color
 import wand.image
 
-def convert_image(dst: str, filepath: str, save_ico: bool = False) -> None:
+
+def convert_image(dst: str, filepath: str, save_ico: bool = False):
 	try:
 		with wand.image.Image() as img:
 			with wand.color.Color('transparent') as bgcolor:
@@ -19,6 +20,7 @@ def convert_image(dst: str, filepath: str, save_ico: bool = False) -> None:
 					out.write(img.make_blob('ico'))
 	except Exception as ex:
 		print(f'"{filepath}": {ex}')
+
 
 if __name__ == '__main__':
 	if len(sys.argv) == 2:

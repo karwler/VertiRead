@@ -3,24 +3,18 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
-#include <climits>
 #include <cstring>
 #include <filesystem>
-#include <format>
 #include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
-#include <glm/glm.hpp>
+#include <glm/common.hpp>
+#include <glm/fwd.hpp>
 #define SDL_MAIN_HANDLED
-#ifdef _WIN32
-#include <SDL.h>
-#else
-#include <SDL2/SDL.h>
-#endif
+#include <SDL2/SDL_log.h>
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 namespace fs = std::filesystem;
@@ -58,13 +52,14 @@ using uint64 = uint64_t;
 
 template <class... T> using umap = std::unordered_map<T...>;
 template <class... T> using uptr = std::unique_ptr<T...>;
-template <class... T> using uset = std::unordered_set<T...>;
 
+using glm::mat4;
 using glm::vec2;
 using glm::dvec2;
 using glm::uvec2;
 using glm::u32vec2;
 using glm::ivec2;
+using glm::vec3;
 using glm::vec4;
 using glm::u8vec4;
 using glm::ivec4;
@@ -88,7 +83,7 @@ class LabelEdit;
 class Layout;
 class Overlay;
 class Picture;
-class PicLim;
+struct PicLim;
 class Popup;
 class Program;
 class ProgState;
@@ -111,15 +106,16 @@ template <class T, class B> concept Derived = std::is_base_of_v<B, T>;
 template <class T> concept Enumeration = std::is_enum_v<T>;
 template <class T> concept Integer = std::is_integral_v<T> && !std::is_same_v<T, bool>;
 template <class T> concept IntEnum = std::is_integral_v<T> || std::is_enum_v<T>;
-template <class T> concept IntEnumFloat = IntEnum<T> || std::is_floating_point_v<T>;
-template <class T, class... A> concept Invocable = std::is_invocable_v<T, A...>;
-template <class T, class R, class... A> concept InvocableR = std::is_invocable_r_v<R, T, A...>;
 template <class T> concept Floating = std::is_floating_point_v<T>;
-template <class T> concept Iterator = requires(T t) { ++t; *t; };
-template <class T> concept MemberFunction = std::is_member_function_pointer_v<T>;
+template <class T> concept IntEnumFloat = IntEnum<T> || Floating<T>;
 template <class T> concept Number = Integer<T> || Floating<T>;
 template <class T> concept Pointer = std::is_pointer_v<T>;
+template <class T> concept IntegerPointer = Integer<T> || Pointer<T>;
 template <class T> concept VecNumber = Number<typename T::value_type>;
+template <class T> concept Iterator = requires(T t) { ++t; *t; };
+template <class T> concept MemberFunction = std::is_member_function_pointer_v<T>;
+template <class T, class... A> concept Invocable = std::is_invocable_v<T, A...>;
+template <class T, class R, class... A> concept InvocableR = std::is_invocable_r_v<R, T, A...>;
 
 #ifdef _WIN32
 #define LINEND "\r\n"
@@ -178,7 +174,7 @@ constexpr bool outRange(T val, T min, T max) {
 	return val < min || val > max;
 }
 
-template <class T>
+template <IntegerPointer T>
 T coalesce(T val, T alt) {
 	return val ? val : alt;
 }
@@ -218,16 +214,16 @@ string operator+(std::basic_string_view<T> a, const std::basic_string<T>& b) {
 	return r;
 }
 
-template <class T>
+template <Class T>
 T valcp(const T& v) {
-	return v;	// just to avoid useless type cast warning for copying
+	return v;	// to avoid useless type cast warning for copying
 }
 
 #ifndef NDEBUG
 inline void dbgPass() {}
 #endif
 
-// SDL_Rect wrapper
+// SDL_Rect equivalent (must be reinterpretable)
 template <Number T>
 struct Rect {
 	using tvec2 = glm::vec<2, T, glm::defaultp>;
@@ -236,6 +232,7 @@ struct Rect {
 	T x, y, w, h;
 
 	Rect() = default;
+	template <Number U> constexpr Rect(const Rect<U>& r) : x(T(r.x)), y(T(r.y)), w(T(r.w)), h(T(r.h)) {}
 	constexpr Rect(T n) : x(n), y(n), w(n), h(n) {}
 	constexpr Rect(T px, T py, T sw, T sh) : x(px), y(py), w(sw), h(sh) {}
 	constexpr Rect(T px, T py, const tvec2& sv) : x(px), y(py), w(sv.x), h(sv.y) {}
@@ -261,6 +258,7 @@ struct Rect {
 
 using Recti = Rect<int>;
 using Rectu = Rect<uint>;
+using Rectf = Rect<float>;
 
 template <Number T>
 bool Rect<T>::operator==(const Rect& rect) const {
@@ -416,19 +414,18 @@ bool strciequal(string_view a, string_view b);
 bool strciequal(wstring_view a, wstring_view b);
 bool strnciequal(string_view a, string_view b, size_t n);
 string_view parentPath(string_view path);
+bool pathEqual(string_view a, string_view b);
+bool pathEqual(const char* a, const char* b);
 string_view relativePath(string_view path, string_view base);
 bool isSubpath(string_view path, string_view base);
-string strEnclose(string_view str);
-string strUnenclose(string_view& str);
-vector<string_view> getWords(string_view str);
 tm currentDateTime();
 #ifdef _WIN32
 bool isAbsolute(string_view path);
 #endif
 
 template <Integer T>
-bool strempty(const T* str) {
-	return !(str && str[0]);
+bool strfilled(const T* str) {
+	return str && str[0];
 }
 
 inline bool isSpace(int c) {
@@ -530,13 +527,13 @@ std::basic_string_view<T> trim(std::basic_string_view<T> str) {
 }
 
 template <Integer T>
-std::basic_string_view<T> trim(const std::basic_string<T>& path) {
-	return delExtension(std::basic_string_view<T>(path));
+std::basic_string_view<T> trim(const std::basic_string<T>& str) {
+	return trim(std::basic_string_view<T>(str));
 }
 
 template <Integer T>
-std::basic_string_view<T> trim(const T* path) {
-	return delExtension(std::basic_string_view<T>(path));
+std::basic_string_view<T> trim(const T* str) {
+	return trim(std::basic_string_view<T>(str));
 }
 
 template <Integer T>
@@ -680,30 +677,6 @@ string toStr(const glm::vec<L, T, Q>& v, const char* sep = " ") {
 	return str + toStr(v[L - 1]);
 }
 
-inline string tmToDateStr(const tm& tim) {
-	return std::format("{}-{:02}-{:02}", tim.tm_year + 1900, tim.tm_mon + 1, tim.tm_mday);
-}
-
-inline string tmToTimeStr(const tm& tim) {
-	return std::format("{:02}:{:02}:{:02}", tim.tm_hour, tim.tm_min, tim.tm_sec);
-}
-
-template <IntEnum T, size_t N>
-T strToEnum(const array<const char*, N>& names, string_view str, T defaultValue = T(N)) {
-	typename array<const char*, N>::const_iterator p = rng::find_if(names, [str](const char* it) -> bool { return strciequal(it, str); });
-	return p != names.end() ? T(p - names.begin()) : defaultValue;
-}
-
-template <IntEnumFloat T>
-T strToVal(const umap<T, const char*>& names, string_view str, T defaultValue = T(0)) {
-	typename umap<T, const char*>::const_iterator it = rng::find_if(names, [str](const pair<const T, const char*>& nit) -> bool { return strciequal(nit.second, str); });
-	return it != names.end() ? it->first : defaultValue;
-}
-
-inline bool toBool(string_view str) {
-	return strciequal(str, "true") || strciequal(str, "on") || strciequal(str, "y") || rng::any_of(str, [](char c) -> bool { return c >= '1' && c <= '9'; });
-}
-
 template <Number T, class... A>
 T toNum(string_view str, A... args) {
 	T val = T(0);
@@ -735,30 +708,30 @@ T btom(bool b) {
 	return T(b) * T(2) - T(1);	// b needs to be 0 or 1
 }
 
-template <Number T, glm::qualifier Q = glm::defaultp>
-glm::vec<2, T, Q> vswap(T x, T y, bool swap) {
-	glm::vec<2, T, Q> v;
-	v[swap] = x;
-	v[!swap] = y;
-	return v;
-}
-
 template <Integer T>
-T roundToMulOf(T val, T mul) {
+T roundToMultiple(T val, T mul) {
 	T rem = val % mul;
 	return rem ? val + mul - rem : val;
 }
 
 template <class... A>
 void logInfo(A&&... args) {
-	std::ostringstream ss;
-	(ss << ... << std::forward<A>(args));
-	SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", ss.str().c_str());
+	try {
+		std::ostringstream ss;
+		(ss << ... << std::forward<A>(args));
+		SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", ss.str().c_str());
+	} catch (...) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to log");
+	}
 }
 
 template <class... A>
 void logError(A&&... args) {
-	std::ostringstream ss;
-	(ss << ... << std::forward<A>(args));
-	SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", ss.str().c_str());
+	try {
+		std::ostringstream ss;
+		(ss << ... << std::forward<A>(args));
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", ss.str().c_str());
+	} catch (...) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to log");
+	}
 }

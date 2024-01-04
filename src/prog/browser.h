@@ -48,10 +48,9 @@ public:
 	bool goNext(bool fwd, string_view picname);
 	void exitFile();
 
-	const string& getRootDir() const { return rootDir; }
 	const string& getCurDir() const { return curDir; }
 	string locationForDisplay() const;
-	pair<string, vector<string>> locationForStore(string_view pname) const;	// book name, paths
+	vector<string> locationForStore(string_view pname) const;
 	pair<vector<Cstring>, vector<Cstring>> listCurDir();
 	vector<Cstring> listDirDirs(string_view path) const;
 	bool deleteEntry(string_view ename);
@@ -103,8 +102,8 @@ private:
 	static vector<pair<dvec2, int>> getPdfPageImagesInfo(_PopplerPage* page);
 	static SDL_Surface* cairoImageToSdl(_cairo_surface* img);
 #endif
-	static tuple<size_t, uintptr_t, uint8> initLoadLimits(const PicLim& picLim, size_t max);
-	static string limitToStr(const PicLim& picLim, uintptr_t c, uintptr_t m, uint8 mag);
+	static tuple<size_t, uintptr_t, pair<uint8, uint8>> initLoadLimits(const PicLim& picLim, size_t max);
+	static string limitToStr(const PicLim& picLim, uintptr_t c, uintptr_t m, pair<uint8, uint8> mag);
 	static char* progressText(string_view val, string_view lim);
 };
 

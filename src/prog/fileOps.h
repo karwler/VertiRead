@@ -90,7 +90,7 @@ public:
 protected:
 	virtual size_t readFileStart(string_view path, byte_t* buf, size_t n) = 0;
 #ifdef CAN_PDF
-	template <class H, class F> static pair<_PopplerDocument*, Data> loadPdfChecked(H fd, size_t esiz, F eread, string* error);
+	template <IntegerPointer H, class F> static pair<_PopplerDocument*, Data> loadPdfChecked(H fd, size_t esiz, F eread, string* error);
 #endif
 #if !defined(_WIN32) || defined(CAN_SMB) || defined(CAN_SFTP)
 	static fs::file_type modeToType(mode_t mode);

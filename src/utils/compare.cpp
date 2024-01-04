@@ -1,41 +1,40 @@
 #include "compare.h"
 #include <cwctype>
 
-char32_t mbstowc(string_view::iterator& mb, size_t& len) {
+char32_t mbstowc(string_view::iterator& pos, size_t& len) {
 	if (!len)
 		return '\0';
 
-	uchar c = *mb++;
+	uchar c = *pos++;
 	--len;
 	if (c < 0x80)
 		return c;
 	if ((c >= 0x80 && c <= 0xBF) || c >= 0xF5) {
-		for (; len && ((uchar(*mb) >= 0x80 && uchar(*mb) <= 0xBF) || uchar(*mb) >= 0xF5); ++mb, --len);
+		for (; len && (c = *pos, (c >= 0x80 && c <= 0xBF) || c >= 0xF5); ++pos, --len);
 		return '\0';
 	}
 
 	char32_t w;
-	size_t cnt;
+	size_t l;
 	if (c >= 0xF0) {
 		w = c & 0x07;
-		cnt = 3;
+		l = 3;
 	} else if (c >= 0xE0) {
 		w = c & 0x0F;
-		cnt = 2;
+		l = 2;
 	} else {
 		w = c & 0x1F;
-		cnt = 1;
+		l = 1;
 	}
 
-	if (len < cnt) {
-		for (; len && ((uchar(*mb) >= 0x80 && uchar(*mb) <= 0xBF) || uchar(*mb) >= 0xF5); ++mb, --len);
+	if (len < l) {
+		for (; len && (c = *pos, (c >= 0x80 && c <= 0xBF) || c >= 0xF5); ++pos, --len);
 		return '\0';
 	}
-	len -= cnt;
+	len -= l;
 
-	for (size_t l = cnt; l; --l, ++mb) {
-		c = *mb;
-		if (c < 0x80 || c > 0xBF) {
+	for (; l; --l, ++pos) {
+		if (c = *pos; c < 0x80 || c > 0xBF) {
 			len += l;
 			return '\0';
 		}
@@ -44,36 +43,35 @@ char32_t mbstowc(string_view::iterator& mb, size_t& len) {
 	return !(w >= 0x110000 || (w >= 0x00D800 && w <= 0x00DFFF)) ? w : '\0';
 }
 
-char32_t mbstowc(const char*& mb) {
-	uchar c = *mb;
+char32_t mbstowc(const char*& pos) {
+	uchar c = *pos;
 	if (!c)
 		return '\0';
 
-	++mb;
+	++pos;
 	if (c < 0x80)
 		return c;
 	if ((c >= 0x80 && c <= 0xBF) || c >= 0xF5) {
-		for (; *mb && ((uchar(*mb) >= 0x80 && uchar(*mb) <= 0xBF) || uchar(*mb) >= 0xF5); ++mb);
+		for (; (c = *pos) && ((c >= 0x80 && c <= 0xBF) || c >= 0xF5); ++pos);
 		return '\0';
 	}
 
 	char32_t w;
-	uint cnt;
+	size_t l;
 	if (c >= 0xF0) {
 		w = c & 0x07;
-		cnt = 3;
+		l = 3;
 	} else if (c >= 0xE0) {
 		w = c & 0x0F;
-		cnt = 2;
+		l = 2;
 	} else {
 		w = c & 0x1F;
-		cnt = 1;
+		l = 1;
 	}
 
-	for (; cnt; --cnt, ++mb) {
-		c = *mb;
-		if (c < 0x80 || c > 0xBF) {
-			for (; *mb && ((uchar(*mb) >= 0x80 && uchar(*mb) <= 0xBF) || uchar(*mb) >= 0xF5); ++mb);
+	for (; l; --l, ++pos) {
+		if (c = *pos; c < 0x80 || c > 0xBF) {
+			for (; (c = *pos) && c >= 0xF5; ++pos);
 			return '\0';
 		}
 		w = (w << 6) | (c & 0x3F);
@@ -99,7 +97,7 @@ std::strong_ordering Strcomp::cmp(string_view sa, string_view sb) {
 	size_t alen = sa.length(), blen = sb.length();
 	while (alen && blen) {
 		char32_t ca = skipSpaces(a, alen), cb = skipSpaces(b, blen);
-		if (std::iswdigit(ca) && std::iswdigit(cb))
+		if (iswdigit(ca) && iswdigit(cb))
 			if (std::strong_ordering dif = ca == '0' || cb == '0' ? cmpLeft(ca, a, alen, cb, b, blen) : cmpRight(ca, a, alen, cb, b, blen); dif != std::strong_ordering::equal)
 				return dif;
 		if (std::strong_ordering dif = cmpLetter(ca, cb); dif != std::strong_ordering::equal)
@@ -110,7 +108,7 @@ std::strong_ordering Strcomp::cmp(string_view sa, string_view sb) {
 
 std::strong_ordering Strcomp::cmpLeft(char32_t ca, string_view::iterator a, size_t alen, char32_t cb, string_view::iterator b, size_t blen) {
 	for (;; ca = mbstowc(a, alen), cb = mbstowc(b, blen)) {
-		bool nad = !std::iswdigit(ca), nbd = !std::iswdigit(cb);
+		bool nad = !iswdigit(ca), nbd = !iswdigit(cb);
 		if (nad && nbd)
 			return std::strong_ordering::equal;
 		if (nad)
@@ -126,7 +124,7 @@ std::strong_ordering Strcomp::cmpLeft(char32_t ca, string_view::iterator a, size
 
 std::strong_ordering Strcomp::cmpRight(char32_t ca, string_view::iterator a, size_t alen, char32_t cb, string_view::iterator b, size_t blen) {
 	for (std::strong_ordering bias = std::strong_ordering::equal;; ca = mbstowc(a, alen), cb = mbstowc(b, blen)) {
-		bool nad = !std::iswdigit(ca), nbd = !std::iswdigit(cb);
+		bool nad = !iswdigit(ca), nbd = !iswdigit(cb);
 		if (nad && nbd)
 			return bias;
 		if (nad)
@@ -144,13 +142,13 @@ char32_t Strcomp::skipSpaces(string_view::iterator& p, size_t& l) {
 	char32_t c;
 	do {
 		c = mbstowc(p, l);
-	} while (l && std::iswspace(c));
+	} while (l && iswspace(c));
 	return c;
 }
 
 std::strong_ordering Strcomp::cmpLetter(char32_t a, char32_t b) {
 	if (a != b) {
-		wint_t au = std::towlower(a), bu = std::towlower(b);
+		wint_t au = towupper(a), bu = towupper(b);
 		return au != bu ? au <=> bu : a <=> b;
 	}
 	return std::strong_ordering::equal;
@@ -159,7 +157,7 @@ std::strong_ordering Strcomp::cmpLetter(char32_t a, char32_t b) {
 std::strong_ordering Strcomp::cmp(const char* a, const char* b) {
 	for (;;) {
 		char32_t ca = skipSpaces(a), cb = skipSpaces(b);
-		if (std::iswdigit(ca) && std::iswdigit(cb))
+		if (iswdigit(ca) && iswdigit(cb))
 			if (std::strong_ordering dif = ca == '0' || cb == '0' ? cmpLeft(ca, a, cb, b) : cmpRight(ca, a, cb, b); dif != std::strong_ordering::equal)
 				return dif;
 		if (!(ca || cb))
@@ -171,7 +169,7 @@ std::strong_ordering Strcomp::cmp(const char* a, const char* b) {
 
 std::strong_ordering Strcomp::cmpLeft(char32_t ca, const char* a, char32_t cb, const char* b) {
 	for (;; ca = mbstowc(a), cb = mbstowc(b)) {
-		bool nad = !std::iswdigit(ca), nbd = !std::iswdigit(cb);
+		bool nad = !iswdigit(ca), nbd = !iswdigit(cb);
 		if (nad && nbd)
 			return std::strong_ordering::equal;
 		if (nad)
@@ -185,7 +183,7 @@ std::strong_ordering Strcomp::cmpLeft(char32_t ca, const char* a, char32_t cb, c
 
 std::strong_ordering Strcomp::cmpRight(char32_t ca, const char* a, char32_t cb, const char* b) {
 	for (std::strong_ordering bias = std::strong_ordering::equal;; ca = mbstowc(a), cb = mbstowc(b)) {
-		bool nad = !std::iswdigit(ca), nbd = !std::iswdigit(cb);
+		bool nad = !iswdigit(ca), nbd = !iswdigit(cb);
 		if (nad && nbd)
 			return bias;
 		if (nad)
@@ -203,7 +201,7 @@ char32_t Strcomp::skipSpaces(const char*& p) {
 	char32_t c;
 	do {
 		c = mbstowc(p);
-	} while (std::iswspace(c));
+	} while (iswspace(c));
 	return c;
 }
 #endif

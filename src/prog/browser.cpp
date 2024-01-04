@@ -204,7 +204,7 @@ bool Browser::goUp() {
 			fsop->setWatch(curDir);
 		}
 	} else {
-		if (curDir == rootDir)
+		if (pathEqual(curDir, rootDir))
 			return false;
 
 		curDir = parentPath(curDir);
@@ -243,7 +243,7 @@ bool Browser::goNext(bool fwd, string_view picname) {
 			if (vector<ArchiveDir*>::iterator di = std::lower_bound(dirs.begin(), dirs.end(), cname, [](const ArchiveDir* a, const char* b) -> bool { return Strcomp::less(a->name.data(), b); }); di != dirs.end() && (*di)->name == cname)
 				return foreachAround(dirs, di, fwd, &Browser::nextArchiveDir, pdir);
 		}
-	} else if (curDir != rootDir) {
+	} else if (!pathEqual(curDir, rootDir)) {
 		vector<Cstring> dirs = fsop->listDirectory(pdir, false, true, World::sets()->showHidden);
 		if (vector<Cstring>::iterator di = std::lower_bound(dirs.begin(), dirs.end(), cname, [](const Cstring& a, const char* b) -> bool { return Strcomp::less(a.data(), b); }); di != dirs.end() && *di == cname)
 			return foreachAround(dirs, di, fwd, &Browser::nextDir, pdir);
@@ -324,7 +324,7 @@ string Browser::nextPdfPage(string_view file, bool fwd) {
 		if (archive* ar = fsop->openArchive(arch.name.data(), &error)) {
 			int rc;
 			for (archive_entry* entry; (rc = archive_read_next_header(ar, &entry)) == ARCHIVE_OK;)
-				if (archive_entry_pathname_utf8(entry) == curDir) {
+				if (pathEqual(archive_entry_pathname_utf8(entry), curDir.c_str())) {
 					std::tie(doc, fdat) = FileOps::loadArchivePdf(ar, entry);
 					break;
 				}
@@ -370,22 +370,21 @@ string Browser::locationForDisplay() const {
 	return path;
 }
 
-pair<string, vector<string> > Browser::locationForStore(string_view pname) const {
-	vector<string> paths;
+vector<string> Browser::locationForStore(string_view pname) const {
+	vector<string> paths = { dotStr };
 	if (inArchive())
 		paths.emplace_back(arch.name.data());
 	paths.push_back(curDir);
 	if (!pname.empty())
 		paths.emplace_back(pname);
 
-	string book = dotStr;
 	if (rootDir != fsop->prefix())
 		if (string_view rpath = relativePath(paths[1], parentPath(rootDir)); !rpath.empty()) {
 			string_view::iterator sep = rng::find_if(rpath, isDsep);
-			book.assign(rpath.begin(), sep);
-			paths[0].assign(std::find_if(sep, rpath.end(), notDsep), rpath.end());
+			paths[0].assign(rpath.begin(), sep);
+			paths[1].assign(std::find_if(sep, rpath.end(), notDsep), rpath.end());
 		}
-	return pair(std::move(book), std::move(paths));
+	return paths;
 }
 
 pair<vector<Cstring>, vector<Cstring>> Browser::listCurDir() {
@@ -491,7 +490,7 @@ void Browser::cleanupPreview() {
 }
 
 void Browser::previewDirThread(std::stop_token stoken, FileOps* fsop, string curDir, vector<Cstring> files, vector<Cstring> dirs, string iconPath, bool showHidden, int maxHeight) {
-	if (uptr<SDL_Surface> dicon(!dirs.empty() ? World::drawSys()->getRenderer()->makeCompatible(World::drawSys()->loadIcon((iconPath / "folder.svg").c_str(), maxHeight), false) : nullptr); dicon)
+	if (uptr<SDL_Surface> dicon(!dirs.empty() ? World::drawSys()->getRenderer()->makeCompatible(World::drawSys()->loadIcon((iconPath / DrawSys::iconName(DrawSys::Tex::folder)).c_str(), maxHeight), false) : nullptr); dicon)
 		for (const Cstring& it : dirs) {
 			if (stoken.stop_requested())
 				return;
@@ -555,7 +554,7 @@ void Browser::previewArchThread(std::stop_token stoken, FileOps* fsop, ArchiveDi
 	CountedStopReq csr(previewSpeedyStopCheckInterval);
 	vector<ArchiveDir*> dirs = slice.listDirs();
 	vector<ArchiveFile*> files = slice.listFiles();
-	uptr<SDL_Surface> dicon(!dirs.empty() ? World::drawSys()->getRenderer()->makeCompatible(World::drawSys()->loadIcon((iconPath / "folder.svg").c_str(), maxHeight), false) : nullptr);
+	uptr<SDL_Surface> dicon(!dirs.empty() ? World::drawSys()->getRenderer()->makeCompatible(World::drawSys()->loadIcon((iconPath / DrawSys::iconName(DrawSys::Tex::folder)).c_str(), maxHeight), false) : nullptr);
 	umap<string, pair<bool, bool>> entries;	// path, pair(isFile, isPdf)
 	entries.reserve(dicon ? dirs.size() + files.size() : files.size());
 	if (dicon)
@@ -788,7 +787,7 @@ void Browser::loadPicturesPdfThread(std::stop_token stoken, BrowserResultPicture
 		if (archive* arch = fsop->openArchive(rp->arch.name.data(), &rp->error)) {
 			int rc;
 			for (archive_entry* entry; (rc = archive_read_next_header(arch, &entry)) == ARCHIVE_OK;)
-				if (archive_entry_pathname_utf8(entry) == rp->curDir) {
+				if (pathEqual(archive_entry_pathname_utf8(entry), rp->curDir.c_str())) {
 					std::tie(doc, fdata) = FileOps::loadArchivePdf(arch, entry, &rp->error);
 					break;
 				}
@@ -863,7 +862,7 @@ vector<pair<dvec2, int>> Browser::getPdfPageImagesInfo(PopplerPage* page) {
 		positions.emplace_back(dvec2(im->area.x1, im->area.y1), im->image_id);
 	}
 	popplerPageFreeImageMapping(imaps);
-	rng::sort(positions, [](const pair<const dvec2, int>& a, const pair<const dvec2, int>& b) -> bool { return a.first.y < b.first.y || (a.first.y == b.first.y && a.first.x < b.first.x); });	// TODO: maybe make a function for sorting based on vectors
+	rng::sort(positions, [](const pair<const dvec2, int>& a, const pair<const dvec2, int>& b) -> bool { return a.first.y < b.first.y || (a.first.y == b.first.y && a.first.x < b.first.x); });
 	return positions;
 }
 
@@ -910,15 +909,15 @@ umap<string, uintptr_t> Browser::prepareArchiveDirPicLoad(BrowserResultPicture* 
 				stage.emplace_back(rp->curDir / files[i]->name.data(), uintptr_t(files[i]->size));
 		break;
 	case count:
-		stage.reserve(picLim.getCount());
-		for (size_t i = start, mov = btom<size_t>(fwd); i < files.size() && stage.size() < picLim.getCount(); i += mov)
+		stage.reserve(picLim.count);
+		for (size_t i = start, mov = btom<size_t>(fwd); i < files.size() && stage.size() < picLim.count; i += mov)
 			if (files[i]->size)
 				stage.emplace_back(rp->curDir / files[i]->name.data(), uintptr_t(files[i]->size));
 		break;
 	case size: {
 		stage.reserve(files.size());
 		uintptr_t m = 0;
-		for (size_t i = start, mov = btom<size_t>(fwd); i < files.size() && m < picLim.getSize(); i += mov)
+		for (size_t i = start, mov = btom<size_t>(fwd); i < files.size() && m < picLim.size; i += mov)
 			if (files[i]->size) {
 				stage.emplace_back(rp->curDir / files[i]->name.data(), uintptr_t(files[i]->size));
 				m += files[i]->size / compress;
@@ -927,21 +926,21 @@ umap<string, uintptr_t> Browser::prepareArchiveDirPicLoad(BrowserResultPicture* 
 	return umap<string, uintptr_t>(std::make_move_iterator(stage.begin()), std::make_move_iterator(stage.end()));
 }
 
-tuple<size_t, uintptr_t, uint8> Browser::initLoadLimits(const PicLim& picLim, size_t max) {
+tuple<size_t, uintptr_t, pair<uint8, uint8>> Browser::initLoadLimits(const PicLim& picLim, size_t max) {
 	switch (picLim.type) {
 	using enum PicLim::Type;
 	case none:
-		return tuple(max, UINTPTR_MAX, 0);
+		return tuple(max, UINTPTR_MAX, pair(0, 0));
 	case count:
-		return tuple(std::min(picLim.getCount(), max), UINTPTR_MAX, 0);
+		return tuple(std::min(picLim.count, max), UINTPTR_MAX, pair(0, 0));
 	case size:
-		return tuple(max, picLim.getSize(), PicLim::memSizeMag(picLim.getSize()));
+		return tuple(max, picLim.size, PicLim::memSizeMag(picLim.size));
 	}
-	return tuple(0, 0, 0);
+	return tuple(0, 0, pair(0, 0));
 }
 
-string Browser::limitToStr(const PicLim& picLim, uintptr_t c, uintptr_t m, uint8 mag) {
-	return picLim.type != PicLim::Type::size ? toStr(c) : PicLim::memoryString(m, mag);;
+string Browser::limitToStr(const PicLim& picLim, uintptr_t c, uintptr_t m, pair<uint8, uint8> mag) {
+	return picLim.type != PicLim::Type::size ? toStr(c) : PicLim::memoryString(m, mag.first, mag.second);
 }
 
 char* Browser::progressText(string_view val, string_view lim) {

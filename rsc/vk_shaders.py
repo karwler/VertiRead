@@ -3,6 +3,29 @@ import shutil
 import subprocess
 
 
+def make_word(data: bytes, offset: int, size: int) -> int:
+	word = 0
+	for i in range(0, size):
+		word |= data[offset + i] << (8 * i)
+	return word
+
+
+def bytes_to_text(src_file: str, dst_file: str, wsize: int):
+	with open(src_file, "rb") as fh:
+		data = fh.read()
+
+	over = len(data) % wsize
+	end = len(data) - over
+	words = list(make_word(data, i, wsize) for i in range(0, end, wsize))
+	if over != 0:
+		print(f'Size is not a multiple of {wsize}. Padding with zeros.')
+		words.append(make_word(data, end, over))
+
+	with open(dst_file, 'w') as fh:
+		fh.write(',\n'.join(f'0x{w:X}' for w in words))
+		fh.write('\n')
+
+
 def compile_source(glslc: str, name: str, src_dir: str, dst_dir: str):
 	src_file = os.path.join(src_dir, name)
 	for dbg in [True, False]:
@@ -20,13 +43,7 @@ def compile_source(glslc: str, name: str, src_dir: str, dst_dir: str):
 			if ret.returncode != 0:
 				print(f'returned: {ret.returncode}')
 
-			with open(spv_file, "rb") as fh:
-				data = fh.read()
-			if len(data) % 4 != 0:
-				print('size not divisible by 4')
-			with open(cpp_file, 'w') as fh:
-				fh.write(',\n'.join(f'0x{(data[i] | (data[i + 1] << 8) | (data[i + 2] << 16) | (data[i + 3] << 24)):X}' for i in range(0, len(data), 4)))
-				fh.write('\n')
+			bytes_to_text(spv_file, cpp_file, 4)
 			os.remove(spv_file)
 		except Exception as e:
 			print(e)

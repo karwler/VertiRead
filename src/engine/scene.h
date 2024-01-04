@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/utils.h"
+#include <glm/geometric.hpp>
 
 // saves what widget is being clicked on with what button at what position
 struct ClickStamp {
@@ -20,7 +21,7 @@ private:
 	Popup* popup = nullptr;
 	Overlay* overlay = nullptr;
 	Context* context = nullptr;
-	array<ClickStamp, SDL_BUTTON_RIGHT> stamps;	// data about last mouse click (indexes are mouse button numbers
+	array<ClickStamp, 3> stamps;	// data about last mouse click (indices are mouse button numbers
 	uint captureLen = 0;	// composing substring length
 
 	static constexpr float clickMoveThreshold = 8.f;

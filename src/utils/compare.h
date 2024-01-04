@@ -5,8 +5,8 @@
 #include <unicode/coll.h>
 #endif
 
-char32_t mbstowc(string_view::iterator& mb, size_t& len);
-char32_t mbstowc(const char*& mb);
+char32_t mbstowc(string_view::iterator& pos, size_t& len);
+char32_t mbstowc(const char*& pos);
 
 class Strcomp {
 #ifdef WITH_ICU

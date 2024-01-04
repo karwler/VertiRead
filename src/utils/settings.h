@@ -1,6 +1,11 @@
 #pragma once
 
 #include "utils.h"
+#include <unordered_set>
+#include <SDL2/SDL_gamecontroller.h>
+#include <SDL2/SDL_scancode.h>
+
+template <class... T> using uset = std::unordered_set<T...>;
 
 enum class Color : uint8 {
 	background,
@@ -25,6 +30,18 @@ enum Actions : uint8 {
 	ACT_RIGHT = 0x2,
 	ACT_DOUBLE = 0x4
 };
+
+template <IntEnum T, size_t N>
+T strToEnum(const array<const char*, N>& names, string_view str, T defaultValue = T(N)) {
+	typename array<const char*, N>::const_iterator p = rng::find_if(names, [str](const char* it) -> bool { return strciequal(it, str); });
+	return p != names.end() ? T(p - names.begin()) : defaultValue;
+}
+
+template <IntEnumFloat T>
+T strToVal(const umap<T, const char*>& names, string_view str, T defaultValue = T(0)) {
+	typename umap<T, const char*>::const_iterator it = rng::find_if(names, [str](const pair<const T, const char*>& nit) -> bool { return strciequal(nit.second, str); });
+	return it != names.end() ? it->first : defaultValue;
+}
 
 class Direction {
 public:
@@ -239,8 +256,7 @@ inline void Binding::clearAsgGct() {
 	asg &= ~(ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N);
 }
 
-class PicLim {
-public:
+struct PicLim {
 	enum class Type : uint8 {
 		none,
 		count,
@@ -252,62 +268,23 @@ public:
 		"size"
 	};
 
-	static constexpr array<uintptr_t, 4> sizeFactors = {
-		1,
-		1'000,
-		1'000'000,
-		1'000'000'000
-	};
-	static constexpr array<char, 4> sizeLetters = {
-		'B',
-		'K',
-		'M',
-		'G'
-	};
-
 	static constexpr uintptr_t defaultCount = 128;
 
-private:
-	uintptr_t count, size;	// size in bytes
-public:
-	Type type;
+	uintptr_t count = defaultCount;
+	uintptr_t size = 0; // if it statys 0 then it should be set to a recommended value by a renderer
+	Type type = Type::none;
 
-	PicLim(Type ltype = Type::none, uintptr_t cnt = defaultCount);
-
-	uintptr_t getCount() const { return count; }
-	void setCount(string_view str);
-	uintptr_t getSize() const { return size; }
-	void setSize(string_view str);
 	void set(string_view str);
 
-	static uint8 memSizeMag(uintptr_t num);
-	static string memoryString(uintptr_t num, uint8 mag);
+	static pair<uint8, uint8> memSizeMag(uintptr_t num);
+	static string memoryString(uintptr_t num, uint8 dmag, uint8 smag);
 	static string memoryString(uintptr_t num);
-
-private:
 	static uintptr_t toCount(string_view str);
 	static uintptr_t toSize(string_view str);
-	static uintptr_t defaultSize();
 };
-
-inline void PicLim::setCount(string_view str) {
-	count = toCount(str);
-}
 
 inline uintptr_t PicLim::toCount(string_view str) {
 	return coalesce(toNum<uintptr_t>(str), defaultCount);
-}
-
-inline void PicLim::setSize(string_view str) {
-	size = toSize(str);
-}
-
-inline uintptr_t PicLim::defaultSize() {
-	return uintptr_t(SDL_GetSystemRAM() / 2) * 1'000'000;
-}
-
-inline string PicLim::memoryString(uintptr_t num) {
-	return memoryString(num, memSizeMag(num));
 }
 
 class Settings {
@@ -316,6 +293,18 @@ public:
 #ifndef _WIN32
 	static constexpr char flagCompositor[] = "c";
 #endif
+#ifdef WITH_DIRECT3D
+	static constexpr char flagDirect3d11[] = "d11";
+#endif
+#ifdef WITH_OPENGL
+	static constexpr char flagOpenGl1[] = "g1";
+	static constexpr char flagOpenGl3[] = "g3";
+	static constexpr char flagOpenEs3[] = "e3";
+#endif
+#ifdef WITH_VULKAN
+	static constexpr char flagVulkan[] = "vk";
+#endif
+	static constexpr char flagSoftware[] = "sf";
 
 	static constexpr array defaultColors = {
 		vec4(0.04f, 0.04f, 0.04f, 1.f),	// background
@@ -349,31 +338,44 @@ public:
 		"multi fullscreen"
 	};
 
+	enum class Zoom : uint8 {
+		value,
+		first,
+		largest
+	};
+	static constexpr array zoomNames = {
+		"value",
+		"first",
+		"largest"
+	};
+
 	enum class Renderer : uint8 {
-#ifdef WITH_DIRECTX
-		directx,
+#ifdef WITH_DIRECT3D
+		direct3d11,
 #endif
 #ifdef WITH_OPENGL
-		opengl,
+		opengl1,
+		opengl3,
+		opengles3,
 #endif
 #ifdef WITH_VULKAN
-		vulkan
+		vulkan,
 #endif
+		software
 	};
 	static constexpr array rendererNames = {
-#ifdef WITH_DIRECTX
-		"DirectX 11",
+#ifdef WITH_DIRECT3D
+		"Direct3D 11",
 #endif
 #ifdef WITH_OPENGL
-#ifdef OPENGLES
-		"OpenGL ES 3.0",
-#else
+		"OpenGL 1.1",
 		"OpenGL 3.0",
-#endif
+		"OpenGL ES 3.0",
 #endif
 #ifdef WITH_VULKAN
-		"Vulkan 1.0"
+		"Vulkan 1.0",
 #endif
+		"Software"
 	};
 
 	enum class Hinting : uint8 {
@@ -387,11 +389,13 @@ public:
 
 	enum class Compression : uint8 {
 		none,
+		b8,
 		b16,
 		compress
 	};
 	static constexpr array compressionNames = {
 		"none",
+		"8 b",
 		"16 b",
 		"compress"
 	};
@@ -401,14 +405,19 @@ public:
 	static constexpr int axisLimit = SHRT_MAX + 1;
 	static constexpr Screen defaultScreenMode = Screen::windowed;
 	static constexpr Direction::Dir defaultDirection = Direction::down;
+	static constexpr Zoom defaultZoomType = Zoom::value;
 #ifdef WITH_OPENGL
-	static constexpr Renderer defaultRenderer = Renderer::opengl;
-#elif defined(WITH_DIRECTX)
-	static constexpr Renderer defaultRenderer = Renderer::directx;
+#if !defined(_WIN32) && (defined(__arm__) || defined(__aarch64__))
+	static constexpr Renderer defaultRenderer = Renderer::opengles3;
+#else
+	static constexpr Renderer defaultRenderer = Renderer::opengl1;
+#endif
+#elif defined(WITH_DIRECT3D)
+	static constexpr Renderer defaultRenderer = Renderer::direct3d11;
 #elif defined(WITH_VULKAN)
 	static constexpr Renderer defaultRenderer = Renderer::vulkan;
 #else
-#error "No renderer supported"
+	static constexpr Renderer defaultRenderer = Renderer::software;
 #endif
 	static constexpr char defaultFont[] = "BrisaSans";
 	static constexpr Hinting defaultHinting = Hinting::normal;
@@ -438,6 +447,7 @@ public:
 	bool showHidden = false;
 	bool tooltips = true;
 	Direction direction = defaultDirection;
+	Zoom zoomType = defaultZoomType;
 	int8 zoom = 0;
 	Compression compression = defaultCompression;
 	bool vsync = true;
@@ -448,12 +458,15 @@ public:
 
 	Settings(const fs::path& dirSets, vector<string>&& themes);
 
+	void setZoom(string_view str);
 	const string& getTheme() const { return theme; }
 	const string& setTheme(string_view name, vector<string>&& themes);
 
 	static umap<int, Recti> displayArrangement();
 	static double zoomValue(int step);
 	void unionDisplays();
+	static Renderer getRenderer(string_view name);
+	void setRenderer(const uset<string>& cmdFlags);
 	string scrollSpeedString() const { return toStr(scrollSpeed); }
 	int getDeadzone() const { return deadzone; }
 	void setDeadzone(int val);

@@ -252,6 +252,7 @@ public:
 	bool showBar() const;
 	void setZoom(int8 step);
 	void addZoom(int8 step);
+	int8 zoomStepToFit(uint res) const;
 	void centerList();		// set listPos.x so that the view will be in the center
 	const char* firstPage() const;
 	const char* lastPage() const;

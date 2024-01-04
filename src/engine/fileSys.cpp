@@ -3,6 +3,7 @@
 #include <regex>
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include <SDL2/SDL_filesystem.h>
 #ifdef CAN_FONTCFG
 #include "optional/fontconfig.h"
 using namespace LibFontconfig;
@@ -31,7 +32,7 @@ public:
 };
 
 bool RegistryIterator::next() {
-	nlen = std::extent_v<decltype(name)>;
+	nlen = std::size(name);
 	dlen = sizeof(data);
 	return RegEnumValueW(key, i++, name, &nlen, nullptr, &type, reinterpret_cast<BYTE*>(data), &dlen) == ERROR_SUCCESS;
 }
@@ -143,6 +144,81 @@ IniLine::Type IniLine::setLine(string_view str) {
 	return type = Type::empty;
 }
 
+// CSV TEXT
+
+template <bool fill>
+CsvText::Code CsvText::readField() {
+	char ch = *text;
+	if (!ch)
+		return Code::end;
+	if (nextLine)
+		lineStart = text;
+
+	if (ch != '"') {
+		size_t elen = strcspn(text, ",\r\n");
+		if constexpr (fill)
+			field.assign(text, elen);
+		text += elen;
+	} else {
+		const char* end;
+		if constexpr (fill) {
+			field.clear();
+			for (end = strchr(++text, '"'); end && end[1] == '"'; end = strchr(end + 2, '"')) {
+				field.append(text, end);
+				text = end + 1;
+			}
+			if (end) {
+				field.append(text, end++);
+				text = end + strcspn(end, ",\r\n");
+			} else {
+				size_t elen = strlen(text);
+				field.append(text, elen);
+				text += elen;
+			}
+		} else {
+			for (end = strchr(++text, '"'); end && end[1] == '"'; end = strchr(end + 2, '"'));
+			text = end ? end + strcspn(end + 1, ",\r\n") : text + strlen(text);
+		}
+	}
+
+	if (nextLine = *text != ','; !nextLine) {
+		++text;
+		return Code::field;
+	}
+	lineEnd = text;
+	text += strspn(text, "\r\n");
+	return Code::last;
+}
+
+string CsvText::makeLine(const vector<string>& fields) {
+	string line;
+	if (!fields.empty()) {
+		for (string_view fld : fields) {
+			if (size_t e = fld.find_first_of(",\"\r\n"); e == string_view::npos)
+				line += fld;
+			else {
+				size_t p = 0;
+				line += '"';
+				if (fld[e] == '"') {
+					line.append(fld.data(), e);
+					line += '"';
+					p = e++;
+				}
+				while ((e = fld.find('"', e)) != string_view::npos) {
+					line.append(fld.data() + p, e - p);
+					line += '"';
+					p = e++;
+				}
+				line.append(fld.data() + p, fld.length() - p);
+				line += '"';
+			}
+			line += ',';
+		}
+		line.pop_back();
+	}
+	return line;
+}
+
 // FILE SYS
 
 FileSys::FileSys(const uset<string>& cmdFlags) {
@@ -213,9 +289,9 @@ FileSys::~FileSys() {
 vector<string> FileSys::getAvailableThemes() const {
 	vector<string> themes;
 	IniLine il;
-	array<fs::path, 2> locations = { dirSets, dirConfs };
-	for (size_t i = 0; i < locations.size() && themes.empty(); ++i) {
-		string text = readTextFile(locations[i] / fileThemes);
+	const fs::path* locations[2] = { &dirSets, &dirConfs };
+	for (size_t i = 0; i < std::size(locations) && themes.empty(); ++i) {
+		string text = readTextFile(*locations[i] / fileThemes);
 		for (string_view tx = text; tx.length();)
 			if (il.setLine(readNextLine(tx)) == IniLine::Type::title)
 				themes.emplace_back(il.prp);
@@ -247,48 +323,53 @@ array<vec4, Settings::defaultColors.size()> FileSys::loadColors(string_view them
 
 vector<string> FileSys::getLastPage(string_view book) const {
 	string text = readTextFile(dirSets / fileBooks);
-	for (string_view tx = text; !tx.empty();)
-		if (string_view ln = readNextLine(tx); strUnenclose(ln) == book) {
-			vector<string> paths;
-			while (paths.size() < 3 && !ln.empty())
-				if (string word = strUnenclose(ln); !word.empty())
-					paths.push_back(std::move(word));
-			if (!paths.empty())
-				return paths;
+	CsvText csv = text.c_str();
+	for (CsvText::Code cc; (cc = csv.readField()) != CsvText::Code::end;)
+		if (cc == CsvText::Code::field) {
+			if (csv.field == book) {
+				vector<string> paths;
+				while (paths.size() < 3 && (cc = csv.readField()) != CsvText::Code::end) {
+					paths.push_back(std::move(csv.field));
+					if (cc == CsvText::Code::last)
+						break;
+				}
+				if (!paths.empty())
+					return paths;
+			} else
+				while ((cc = csv.readField<false>()) == CsvText::Code::field);
 		}
 	return vector<string>();
 }
 
-void FileSys::saveLastPage(string_view book, const vector<string>& paths) const {
+void FileSys::saveLastPage(const vector<string>& paths) const {
 	fs::path file = dirSets / fileBooks;
 	string text = readTextFile(file);
-	string_view line;
-	for (string_view tx = text; !tx.empty();) {
-		line = readNextLine(tx);
-		string_view ln = line;
-		if (string bname = strUnenclose(ln); bname == book)
+	CsvText csv = text.c_str();
+	CsvText::Code cc;
+	while ((cc = csv.readField()) != CsvText::Code::end) {
+		if (csv.field == paths[0]) {
+			for (; cc == CsvText::Code::field; cc = csv.readField<false>());
 			break;
+		}
+		for (; cc == CsvText::Code::field; cc = csv.readField<false>());
 	}
 
-	if (std::ofstream ofs(file, line.empty() ? std::ios::binary | std::ios::ate : std::ios::binary); ofs.good()) {
-		string ilin(book);
-		for (const string& it : paths) {
-			ilin += ' ';
-			ilin += it;
-		}
-
-		if (line.empty()) {
-			ofs.write(ilin.c_str(), ilin.length());
+	if (std::ofstream ofs(file, cc == CsvText::Code::end ? std::ios::binary | std::ios::app : std::ios::binary); ofs.good()) {
+		string line = CsvText::makeLine(paths);
+		if (cc == CsvText::Code::end) {
+			if (!text.empty() && text.back() != '\n' && text.back() != '\r')
+				ofs.write(LINEND, strlen(LINEND));
+			ofs.write(line.c_str(), line.length());
 			ofs.write(LINEND, strlen(LINEND));
 		} else {
-			text.replace(line.data() - text.c_str(), line.length(), ilin);
+			text.replace(csv.lineStart - text.c_str(), csv.lineEnd - csv.lineStart, line);
 			ofs.write(text.c_str(), text.length());
 		}
 	} else
 		logError("Failed to write books file: ", file);
 }
 
-Settings* FileSys::loadSettings() const {
+Settings* FileSys::loadSettings(const uset<string>* cmdFlags) const {
 	auto sets = new Settings(dirSets, getAvailableThemes());
 	IniLine il;
 	string text = readTextFile(dirSets / fileSettings);
@@ -297,27 +378,27 @@ Settings* FileSys::loadSettings() const {
 		using enum IniLine::Type;
 		case prpVal:
 			if (strciequal(il.prp, iniKeywordMaximized))
-				sets->maximized = toBool(il.val);
+				sets->maximized = toBool(trim(il.val));
 			else if (strciequal(il.prp, iniKeywordScreen))
-				sets->screen = strToEnum(Settings::screenModeNames, il.val, Settings::defaultScreenMode);
+				sets->screen = strToEnum(Settings::screenModeNames, trim(il.val), Settings::defaultScreenMode);
 			else if (strciequal(il.prp, iniKeywordResolution))
 				sets->resolution = toVec<ivec2>(il.val);
 			else if (strciequal(il.prp, iniKeywordRenderer))
-				sets->renderer = strToEnum(Settings::rendererNames, il.val, Settings::defaultRenderer);
+				sets->renderer = Settings::getRenderer(il.val);
 			else if (strciequal(il.prp, iniKeywordDevice))
 				sets->device = toVec<u32vec2>(il.val, 0, 0x10);
 			else if (strciequal(il.prp, iniKeywordCompression))
-				sets->compression = strToEnum(Settings::compressionNames, il.val, Settings::defaultCompression);
+				sets->compression = strToEnum(Settings::compressionNames, trim(il.val), Settings::defaultCompression);
 			else if (strciequal(il.prp, iniKeywordVSync))
-				sets->vsync = toBool(il.val);
+				sets->vsync = toBool(trim(il.val));
 			else if (strciequal(il.prp, iniKeywordGpuSelecting))
-				sets->gpuSelecting = toBool(il.val);
+				sets->gpuSelecting = toBool(trim(il.val));
 			else if (strciequal(il.prp, iniKeywordPdfImages))
-				sets->pdfImages = toBool(il.val);
+				sets->pdfImages = toBool(trim(il.val));
 			else if (strciequal(il.prp, iniKeywordDirection))
-				sets->direction = strToEnum(Direction::names, il.val, Settings::defaultDirection);
+				sets->direction = strToEnum(Direction::names, trim(il.val), Settings::defaultDirection);
 			else if (strciequal(il.prp, iniKeywordZoom))
-				sets->zoom = std::clamp(toNum<int8>(il.val), int8(-Settings::zoomLimit), Settings::zoomLimit);
+				sets->setZoom(il.val);
 			else if (strciequal(il.prp, iniKeywordSpacing))
 				sets->spacing = toNum<ushort>(il.val);
 			else if (strciequal(il.prp, iniKeywordPictureLimit))
@@ -327,15 +408,15 @@ Settings* FileSys::loadSettings() const {
 			else if (strciequal(il.prp, iniKeywordFont))
 				sets->font = isFont(findFont(toPath(il.val))) ? il.val : Settings::defaultFont;	// will get sanitized in DrawSys if necessary
 			else if (strciequal(il.prp, iniKeywordHinting))
-				sets->hinting = strToEnum<Settings::Hinting>(Settings::hintingNames, il.val, Settings::defaultHinting);
+				sets->hinting = strToEnum<Settings::Hinting>(Settings::hintingNames, trim(il.val), Settings::defaultHinting);
 			else if (strciequal(il.prp, iniKeywordTheme))
 				sets->setTheme(il.val, getAvailableThemes());
 			else if (strciequal(il.prp, iniKeywordPreview))
-				sets->preview = toBool(il.val);
+				sets->preview = toBool(trim(il.val));
 			else if (strciequal(il.prp, iniKeywordShowHidden))
-				sets->showHidden = toBool(il.val);
+				sets->showHidden = toBool(trim(il.val));
 			else if (strciequal(il.prp, iniKeywordTooltips))
-				sets->tooltips = toBool(il.val);
+				sets->tooltips = toBool(trim(il.val));
 			else if (strciequal(il.prp, iniKeywordLibrary))
 				sets->dirLib = il.val;
 			else if (strciequal(il.prp, iniKeywordScrollSpeed))
@@ -349,6 +430,8 @@ Settings* FileSys::loadSettings() const {
 		}
 	}
 	sets->unionDisplays();
+	if (cmdFlags)
+		sets->setRenderer(*cmdFlags);
 	return sets;
 }
 
@@ -371,8 +454,8 @@ void FileSys::saveSettings(const Settings* sets) const {
 	IniLine::writeVal(ofs, iniKeywordVSync, toStr(sets->vsync));
 	IniLine::writeVal(ofs, iniKeywordGpuSelecting, toStr(sets->gpuSelecting));
 	IniLine::writeVal(ofs, iniKeywordPdfImages, toStr(sets->pdfImages));
-	IniLine::writeVal(ofs, iniKeywordZoom, int(sets->zoom));
-	IniLine::writeVal(ofs, iniKeywordPictureLimit, PicLim::names[eint(sets->picLim.type)], ' ', sets->picLim.getCount(), ' ', PicLim::memoryString(sets->picLim.getSize()));
+	IniLine::writeVal(ofs, iniKeywordZoom, Settings::zoomNames[eint(sets->zoomType)], ' ', int(sets->zoom));
+	IniLine::writeVal(ofs, iniKeywordPictureLimit, PicLim::names[eint(sets->picLim.type)], ' ', sets->picLim.count, ' ', PicLim::memoryString(sets->picLim.size));
 	IniLine::writeVal(ofs, iniKeywordMaxPictureRes, sets->maxPicRes);
 	IniLine::writeVal(ofs, iniKeywordSpacing, sets->spacing);
 	IniLine::writeVal(ofs, iniKeywordDirection, Direction::names[uint8(sets->direction)]);
@@ -395,36 +478,39 @@ array<Binding, Binding::names.size()> FileSys::loadBindings() const {
 	IniLine il;
 	string text = readTextFile(dirSets / fileBindings);
 	for (string_view tx = text; tx.length();) {
-		if (il.setLine(readNextLine(tx)) != IniLine::Type::prpVal || il.val.length() < 3)
+		if (il.setLine(readNextLine(tx)) != IniLine::Type::prpVal)
 			continue;
 		size_t bid = strToEnum<size_t>(Binding::names, il.prp);
 		if (bid >= bindings.size())
 			continue;
+		string_view bdsc = trim(il.val);
+		if (bdsc.length() < 3)
+			continue;
 
-		switch (toupper(il.val[0])) {
+		switch (toupper(bdsc[0])) {
 		case keyKey[0]:			// keyboard key
-			bindings[bid].setKey(SDL_GetScancodeFromName(string(il.val).c_str() + 2));
+			bindings[bid].setKey(SDL_GetScancodeFromName(string(bdsc).c_str() + 2));
 			break;
 		case keyButton[0]:		// joystick button
-			bindings[bid].setJbutton(toNum<uint8>(il.val.substr(2)));
+			bindings[bid].setJbutton(toNum<uint8>(bdsc.substr(2)));
 			break;
 		case keyHat[0]:			// joystick hat
-			if (size_t id = std::find_if(il.val.begin() + 2, il.val.end(), [](char c) -> bool { return !isdigit(c); }) - il.val.begin(); id < il.val.size())
-				bindings[bid].setJhat(toNum<uint8>(il.val.substr(2, id - 2)), strToVal(Binding::hatNames, il.val.substr(id + 1)));
+			if (size_t id = std::find_if(bdsc.begin() + 2, bdsc.end(), [](char c) -> bool { return !isdigit(c); }) - bdsc.begin(); id < bdsc.length())
+				bindings[bid].setJhat(toNum<uint8>(bdsc.substr(2, id - 2)), strToVal(Binding::hatNames, bdsc.substr(id + 1)));
 			break;
 		case keyAxisPos[0]:		// joystick axis
-			bindings[bid].setJaxis(toNum<uint8>(il.val.substr(3)), il.val[2] != keyAxisNeg[2]);
+			bindings[bid].setJaxis(toNum<uint8>(bdsc.substr(3)), bdsc[2] != keyAxisNeg[2]);
 			break;
 		case keyGButton[0]:		// gamepad button
-			if (SDL_GameControllerButton cid = strToEnum<SDL_GameControllerButton>(Binding::gbuttonNames, il.val.substr(2)); cid < SDL_CONTROLLER_BUTTON_MAX)
+			if (SDL_GameControllerButton cid = strToEnum<SDL_GameControllerButton>(Binding::gbuttonNames, bdsc.substr(2)); cid < SDL_CONTROLLER_BUTTON_MAX)
 				bindings[bid].setGbutton(cid);
 			break;
 		case keyGAxisPos[0]:	// gamepad axis
-			if (SDL_GameControllerAxis cid = strToEnum<SDL_GameControllerAxis>(Binding::gaxisNames, il.val.substr(3)); cid < SDL_CONTROLLER_AXIS_MAX)
-				bindings[bid].setGaxis(cid, (il.val[2] != keyGAxisNeg[2]));
+			if (SDL_GameControllerAxis cid = strToEnum<SDL_GameControllerAxis>(Binding::gaxisNames, bdsc.substr(3)); cid < SDL_CONTROLLER_AXIS_MAX)
+				bindings[bid].setGaxis(cid, (bdsc[2] != keyGAxisNeg[2]));
 			break;
 		default:
-			throw std::runtime_error(std::format("Invalid binding identifier: {}", il.val[0]));
+			throw std::runtime_error(std::format("Invalid binding identifier: {}", bdsc[0]));
 		}
 	}
 	return bindings;
@@ -468,7 +554,7 @@ string FileSys::readTextFile(const fs::path& file) {
 	if (!ifs.good())
 		return string();
 	char bom[4];
-	std::streampos len = ifs.read(bom, std::extent_v<decltype(bom)>).gcount();
+	std::streampos len = ifs.read(bom, std::size(bom)).gcount();
 	if (len <= 0)
 		return string();
 

@@ -4,6 +4,7 @@
 #include <forward_list>
 #include <mutex>
 #include <stop_token>
+#include <SDL2/SDL_events.h>
 
 enum UserEvent : uint32 {
 	SDL_USEREVENT_GENERAL = SDL_USEREVENT,
@@ -71,6 +72,7 @@ enum class ProgReaderEvent : int32 {
 
 enum class ProgSettingsEvent : int32 {
 	setDirection,
+	setZoomType,
 	setZoom,
 	setSpacing,
 	setLibraryDirLe,
@@ -95,10 +97,6 @@ enum class ProgSettingsEvent : int32 {
 	setScrollSpeed,
 	setDeadzoneSl,
 	setDeadzoneLe,
-	setPortrait,
-	setLandscape,
-	setSquare,
-	setFill,
 	setPicLimitType,
 	setPicLimitCount,
 	setPicLimitSize,

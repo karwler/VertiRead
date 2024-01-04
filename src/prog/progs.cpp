@@ -99,9 +99,9 @@ void ProgState::showPopupMessage(Cstring&& msg, EventId ccal, Cstring&& ctxt, Al
 	uint mglen = measureText(msg.data(), popupLineHeight);
 	Widget* first;
 	Children bot = {
-		new Widget(),
+		new Widget,
 		first = new PushButton(oklen, std::move(ctxt), ccal, ACT_LEFT, Cstring(), Alignment::center),
-		new Widget()
+		new Widget
 	};
 	Children con = {
 		new Label(1.f, std::move(msg), malign),
@@ -135,9 +135,9 @@ void ProgState::showPopupMultiline(Cstring&& msg, EventId ccal, Cstring&& ctxt) 
 
 	Widget* first;
 	Children bot = {
-		new Widget(),
+		new Widget,
 		first = new PushButton(oklen, std::move(ctxt), ccal, ACT_LEFT, Cstring(), Alignment::center),
-		new Widget()
+		new Widget
 	};
 	Children con = {
 		new TextBox(1.f, lineHeight, std::move(msg)),
@@ -423,7 +423,7 @@ RootLayout* ProgBooks::createLayout() {
 	Children tiles(books.size() + 1);
 	for (size_t i = 0; i < books.size(); ++i)
 		tiles[i] = makeBookTile(std::move(books[i]));
-	tiles[books.size()] = new IconButton(TileBox::defaultItemHeight, World::drawSys()->texture("search"), ProgBooksEvent::openPageBrowserGeneral, ACT_LEFT | ACT_RIGHT, "Browse other directories");
+	tiles[books.size()] = new IconButton(TileBox::defaultItemHeight, World::drawSys()->texture(DrawSys::Tex::search), ProgBooksEvent::openPageBrowserGeneral, ACT_LEFT | ACT_RIGHT, "Browse other directories");
 	dirEnd = books.size();
 	fileEnd = dirEnd;
 
@@ -463,8 +463,8 @@ void ProgPageBrowser::eventFileDrop(const char* file) {
 }
 
 void ProgPageBrowser::resetFileIcons() {
-	const Texture* dtex = World::drawSys()->texture("folder");
-	const Texture* ftex = World::drawSys()->texture("file");
+	const Texture* dtex = World::drawSys()->texture(DrawSys::Tex::folder);
+	const Texture* ftex = World::drawSys()->texture(DrawSys::Tex::file);
 	std::span<Widget*> wgts = fileList->getWidgets();
 	size_t i = 0;
 	for (; i < dirEnd; ++i)
@@ -514,11 +514,11 @@ RootLayout* ProgPageBrowser::createLayout() {
 }
 
 PushButton* ProgPageBrowser::makeDirectoryEntry(const Size& size, Cstring&& name) {
-	return new IconPushButton(size, std::move(name), World::drawSys()->texture("folder"), ProgFileExplorerEvent::goIn);
+	return new IconPushButton(size, std::move(name), World::drawSys()->texture(DrawSys::Tex::folder), ProgFileExplorerEvent::goIn);
 }
 
 PushButton* ProgPageBrowser::makeFileEntry(const Size&, Cstring&& name) {
-	return new IconPushButton(lineHeight, std::move(name), World::drawSys()->texture("file"), ProgPageBrowserEvent::goFile);
+	return new IconPushButton(lineHeight, std::move(name), World::drawSys()->texture(DrawSys::Tex::file), ProgPageBrowserEvent::goFile);
 }
 
 // PROG READER
@@ -619,8 +619,7 @@ void ProgReader::eventRefresh() {
 }
 
 void ProgReader::eventClosing() {
-	auto [book, paths] = World::program()->getBrowser()->locationForStore(reader->curPage());
-	World::fileSys()->saveLastPage(book, paths);
+	World::fileSys()->saveLastPage(World::program()->getBrowser()->locationForStore(reader->curPage()));
 	SDL_ShowCursor(SDL_ENABLE);
 }
 
@@ -631,14 +630,14 @@ RootLayout* ProgReader::createLayout() {
 
 Overlay* ProgReader::createOverlay() {
 	Children menu = {
-		new IconButton(picSize, World::drawSys()->texture("cross"), ProgReaderEvent::exit, ACT_LEFT, makeTooltipWithKey("Exit", Binding::Type::escape)),
-		new IconButton(picSize, World::drawSys()->texture("right"), ProgReaderEvent::nextDir, ACT_LEFT, makeTooltipWithKey("Next", Binding::Type::nextDir)),
-		new IconButton(picSize, World::drawSys()->texture("left"), ProgReaderEvent::prevDir, ACT_LEFT, makeTooltipWithKey("Previous", Binding::Type::prevDir)),
-		new IconButton(picSize, World::drawSys()->texture("plus"), ProgReaderEvent::zoomIn, ACT_LEFT, makeTooltipWithKey("Zoom in", Binding::Type::zoomIn)),
-		new IconButton(picSize, World::drawSys()->texture("minus"), ProgReaderEvent::zoomOut, ACT_LEFT, makeTooltipWithKey("Zoom out", Binding::Type::zoomOut)),
-		new IconButton(picSize, World::drawSys()->texture("reset"), ProgReaderEvent::zoomReset, ACT_LEFT, makeTooltipWithKey("Zoom reset", Binding::Type::zoomReset)),
-		new IconButton(picSize, World::drawSys()->texture("fit"), ProgReaderEvent::zoomFit, ACT_LEFT, makeTooltipWithKey("Zoom fit", Binding::Type::zoomFit)),
-		new IconButton(picSize, World::drawSys()->texture("center"), ProgReaderEvent::centerView, ACT_LEFT, makeTooltipWithKey("Center", Binding::Type::centerView))
+		new IconButton(picSize, World::drawSys()->texture(DrawSys::Tex::cross), ProgReaderEvent::exit, ACT_LEFT, makeTooltipWithKey("Exit", Binding::Type::escape)),
+		new IconButton(picSize, World::drawSys()->texture(DrawSys::Tex::right), ProgReaderEvent::nextDir, ACT_LEFT, makeTooltipWithKey("Next", Binding::Type::nextDir)),
+		new IconButton(picSize, World::drawSys()->texture(DrawSys::Tex::left), ProgReaderEvent::prevDir, ACT_LEFT, makeTooltipWithKey("Previous", Binding::Type::prevDir)),
+		new IconButton(picSize, World::drawSys()->texture(DrawSys::Tex::plus), ProgReaderEvent::zoomIn, ACT_LEFT, makeTooltipWithKey("Zoom in", Binding::Type::zoomIn)),
+		new IconButton(picSize, World::drawSys()->texture(DrawSys::Tex::minus), ProgReaderEvent::zoomOut, ACT_LEFT, makeTooltipWithKey("Zoom out", Binding::Type::zoomOut)),
+		new IconButton(picSize, World::drawSys()->texture(DrawSys::Tex::reset), ProgReaderEvent::zoomReset, ACT_LEFT, makeTooltipWithKey("Zoom reset", Binding::Type::zoomReset)),
+		new IconButton(picSize, World::drawSys()->texture(DrawSys::Tex::fit), ProgReaderEvent::zoomFit, ACT_LEFT, makeTooltipWithKey("Zoom fit", Binding::Type::zoomFit)),
+		new IconButton(picSize, World::drawSys()->texture(DrawSys::Tex::center), ProgReaderEvent::centerView, ACT_LEFT, makeTooltipWithKey("Center", Binding::Type::centerView))
 	};
 	int ysiz = picSize * menu.num;
 	return new Overlay(svec2(0), svec2(picSize, ysiz), svec2(0), svec2(picSize/2, ysiz), std::move(menu), Color::normal, Direction::down, 0);
@@ -720,11 +719,10 @@ RootLayout* ProgSettings::createLayout() {
 #ifdef CAN_PDF
 		"PDF images only",
 #endif
-		"Size",
-		"Theme",
 		"Preview",
 		"Show hidden",
 		"Show tooltips",
+		"Theme",
 		"Font",
 		"Library",
 		"Scroll speed",
@@ -732,29 +730,68 @@ RootLayout* ProgSettings::createLayout() {
 	};
 	std::initializer_list<const char*>::iterator itxs = txs.begin();
 
-	auto [maxRes, maxCompress] = World::drawSys()->getRenderer()->getSettings(devices);
-	vector<Cstring> dnames(devices.size());
-	rng::transform(devices, dnames.begin(), [](pair<u32vec2, string>& it) -> Cstring { return it.second; });
-	vector<pair<u32vec2, string>>::iterator curDev = rng::find_if(devices, [](const pair<u32vec2, string>& it) -> bool { return World::sets()->device == it.first; });
+	Renderer::Info rinf = World::drawSys()->getRenderer()->getInfo();
+	devices.resize(rinf.devices.size());
+	vector<Cstring> dnames(rinf.devices.size());
+	uptr<Cstring[]> dtips = std::make_unique<Cstring[]>(rinf.devices.size());
+	uint curDev = 0;
+	for (size_t i = 0; i < rinf.devices.size(); ++i) {
+		string tipstr;
+		if (rinf.devices[i].id != u32vec2(0))
+			tipstr = std::format("ID: {:04X}:{:04X}", rinf.devices[i].id.x, rinf.devices[i].id.y);
+		if (rinf.devices[i].dmem)
+			tipstr += (tipstr.empty() ? "" : " ") + "Memory: "s + PicLim::memoryString(rinf.devices[i].dmem);
+		dtips[i] = tipstr;
+		dnames[i] = std::move(rinf.devices[i].name);
+		devices[i] = rinf.devices[i].id;
+		if (rinf.devices[i].id == World::sets()->device)
+			curDev = i;
+	}
+	static constexpr array compressionTipLines = {
+		"load textures uncompressed",
+		"squash texels to 8 bits",
+		"squash texels to 16 bits",
+		"use compressed textures"
+	};
+	vector<Cstring> compressionNames(rinf.compressions.size());
+	uptr<Cstring[]> compressionTips = std::make_unique<Cstring[]>(rinf.compressions.size());
+	uint curCompression = 0;
+	for (size_t i = 0; Settings::Compression it : rinf.compressions) {
+		compressionNames[i] = Settings::compressionNames[eint(it)];
+		compressionTips[i] = compressionTipLines[eint(it)];
+		if (it == World::sets()->compression)
+			curCompression = i;
+		++i;
+	}
 
-	array<string, Binding::names.size()> bnames;
+	Cstring bnames[Binding::names.size()];
 	for (uint8 i = 0; i < Binding::names.size(); ++i) {
 		bnames[i] = Binding::names[i];
 		bnames[i][0] = toupper(bnames[i][0]);
-		std::replace(bnames[i].begin() + 1, bnames[i].end(), '_', ' ');
+		for (size_t j = 1; bnames[i][j]; ++j)
+			if (bnames[i][j] == '_')
+				bnames[i][j] = ' ';
 	}
+	uint ztypLength = findMaxLength(Settings::zoomNames.begin(), Settings::zoomNames.end(), lineHeight);
 	uint plimLength = findMaxLength(PicLim::names.begin(), PicLim::names.end(), lineHeight);
 	uint descLength = std::max(findMaxLength(txs.begin(), txs.end(), lineHeight), findMaxLength(Binding::names.begin(), Binding::names.end(), lineHeight));
-	static constexpr char tipPicLim[] = "Picture limit per batch:\n"
-		"- none: all pictures in directory/archive\n"
-		"- count: number of pictures\n"
-		"- size: total size of pictures";
+	static constexpr std::initializer_list<const char*> tipsZoomType = {
+		"use a default zoom value",
+		"fit the first picture into the window",
+		"fit the largest picture into the window"
+	};
+	static constexpr std::initializer_list<const char*> tipsPicLim = {
+		"all pictures in directory/archive",
+		"number of pictures",
+		"total size of pictures"
+	};
+	static constexpr std::initializer_list<const char*> compressLines = {
+		"load textures uncompressed",
+		"squash texels to 16 bits",
+		"use compressed textures"
+	};
 	static constexpr char tipDeadzone[] = "Controller axis deadzone";
 	static constexpr char tipMaxPicRes[] = "Maximum picture resolution";
-	static constexpr char tipCompression[] = "Texture compression of pictures:\n"
-		"- none: load textures uncompressed\n"
-		"- 16 b: squash texels to 16 bits\n"
-		"- compress: use compressed textures";
 
 	Size monitorSize = Size([](const Widget* wgt) -> int {
 		auto box = static_cast<const Layout*>(wgt);
@@ -763,12 +800,11 @@ RootLayout* ProgSettings::createLayout() {
 
 	// action fields for labels
 	vector<string> themes = World::fileSys()->getAvailableThemes();
-	uint unumLen = measureText("0000000000", lineHeight) + LabelEdit::caretWidth;
+	uint unumLen = getSettingsNumberDisplayLength();
 	startFonts();
 
 	vector<pair<Size, Children>> lx;
 	lx.reserve(txs.size());
-
 	array<pair<Size, Children>, 7> sec0 = {
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
@@ -776,8 +812,8 @@ RootLayout* ProgSettings::createLayout() {
 		}),
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new Slider(1.f, World::sets()->zoom, -Settings::zoomLimit, Settings::zoomLimit, ProgSettingsEvent::setZoom, ACT_LEFT, "Default reader zoom"),
-			new Label(unumLen, makeZoomText())
+			new ComboBox(ztypLength, eint(World::sets()->zoomType), vector<Cstring>(Settings::zoomNames.begin(), Settings::zoomNames.end()), ProgSettingsEvent::setZoomType, "Initial reader zoom", makeCmbTips(tipsZoomType.begin(), tipsZoomType.end())),
+			createZoomEdit()
 		}),
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
@@ -785,12 +821,12 @@ RootLayout* ProgSettings::createLayout() {
 		}),
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new ComboBox(plimLength, eint(World::sets()->picLim.type), vector<Cstring>(PicLim::names.begin(), PicLim::names.end()), ProgSettingsEvent::setPicLimitType, tipPicLim),
+			new ComboBox(plimLength, eint(World::sets()->picLim.type), vector<Cstring>(PicLim::names.begin(), PicLim::names.end()), ProgSettingsEvent::setPicLimitType, "Picture limit per batch", makeCmbTips(tipsPicLim.begin(), tipsPicLim.end())),
 			createLimitEdit()
 		}),
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new Slider(1.f, World::sets()->maxPicRes, Settings::minPicRes, maxRes, ProgSettingsEvent::setMaxPicResSl, ACT_LEFT, tipMaxPicRes),
+			new Slider(1.f, World::sets()->maxPicRes, Settings::minPicRes, rinf.texSize, ProgSettingsEvent::setMaxPicResSl, ACT_LEFT, tipMaxPicRes),
 			new LabelEdit(unumLen, toStr(World::sets()->maxPicRes), ProgSettingsEvent::setMaxPicResLe, nullEvent, ACT_LEFT, tipMaxPicRes)
 		}),
 		pair(lineHeight, Children{
@@ -811,47 +847,41 @@ RootLayout* ProgSettings::createLayout() {
 		});
 	}
 	++itxs;
-	if (!devices.empty()) {
+	if (devices.size() > 1) {
 		lx.emplace_back(lineHeight, Children{
 			new Label(descLength, *itxs),
-			new ComboBox(1.f, curDev != devices.end() ? curDev - devices.begin() : 0, std::move(dnames), ProgSettingsEvent::setDevice, "Rendering devices")
+			new ComboBox(1.f, curDev, std::move(dnames), ProgSettingsEvent::setDevice, "Rendering devices", std::move(dtips))
 		});
 	}
 	++itxs;
-	if (maxCompress > Settings::Compression::none) {
+	if (compressionNames.size() > 1) {
 		lx.emplace_back(lineHeight, Children{
 			new Label(descLength, *itxs),
-			new ComboBox(1.f, eint(World::sets()->compression), vector<Cstring>(Settings::compressionNames.begin(), Settings::compressionNames.begin() + eint(maxCompress) + 1), ProgSettingsEvent::setCompression, tipCompression)
+			new ComboBox(1.f, curCompression, std::move(compressionNames), ProgSettingsEvent::setCompression, "Texture compression of pictures", std::move(compressionTips))
 		});
 	}
 	++itxs;
 
-	array<pair<Size, Children>, 12> sec1 = {
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			new CheckBox(lineHeight, World::sets()->vsync, ProgSettingsEvent::setVsync, "Vertical synchronization")
-		}),
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		new CheckBox(lineHeight, World::sets()->vsync, ProgSettingsEvent::setVsync, "Vertical synchronization")
+	});
+	if (rinf.selecting) {
+		lx.emplace_back(lineHeight, Children{
+			new Label(descLength, *itxs),
 			new CheckBox(lineHeight, World::sets()->gpuSelecting, ProgSettingsEvent::setGpuSelecting, "Use the graphics process to determine which widget is being selected")
-		}),
+		});
+	}
+	++itxs;
+
 #ifdef CAN_PDF
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			new CheckBox(lineHeight, World::sets()->pdfImages, ProgSettingsEvent::setPdfImages, "Only load a PDF file's images instead of rendering the pages fully")
-		}),
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		new CheckBox(lineHeight, World::sets()->pdfImages, ProgSettingsEvent::setPdfImages, "Only load a PDF file's images instead of rendering the pages fully")
+	});
 #endif
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			new PushButton(measureText("Portrait", lineHeight), "Portrait", ProgSettingsEvent::setPortrait, ACT_LEFT, "Portrait window size"),
-			new PushButton(measureText("Landscape", lineHeight), "Landscape", ProgSettingsEvent::setLandscape, ACT_LEFT, "Landscape window size"),
-			new PushButton(measureText("Square", lineHeight), "Square", ProgSettingsEvent::setSquare, ACT_LEFT, "Square window size"),
-			new PushButton(measureText("Fill", lineHeight), "Fill", ProgSettingsEvent::setFill, ACT_LEFT, "Fill screen with window")
-		}),
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			new ComboBox(1.f, valcp(World::sets()->getTheme()), vector<Cstring>(themes.begin(), themes.end()), ProgSettingsEvent::setTheme, "Color scheme")
-		}),
+
+	array<pair<Size, Children>, 8> sec1 = {
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
 			new CheckBox(lineHeight, World::sets()->preview, ProgSettingsEvent::setPreview, "Show preview icons of pictures in browser")
@@ -863,6 +893,10 @@ RootLayout* ProgSettings::createLayout() {
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
 			new CheckBox(lineHeight, World::sets()->tooltips, ProgSettingsEvent::setTooltips, "Display tooltips on hover")
+		}),
+		pair(lineHeight, Children{
+			new Label(descLength, *itxs++),
+			new ComboBox(1.f, valcp(World::sets()->getTheme()), vector<Cstring>(themes.begin(), themes.end()), ProgSettingsEvent::setTheme, "Color scheme")
 		}),
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
@@ -887,15 +921,16 @@ RootLayout* ProgSettings::createLayout() {
 	lx.insert(lx.end(), std::make_move_iterator(sec1.begin()), std::make_move_iterator(sec1.end()));
 
 	uint lcnt = lx.size();
-	Children lns(lcnt + 2 + bnames.size() + 2);
+	Children lns(lcnt + 2 + std::size(bnames) + 2);
 	for (uint i = 0; i < lcnt; ++i)
 		lns[i] = new Layout(lx[i].first, std::move(lx[i].second), Direction::right);
 	lns[lcnt] = new Widget(0);
 	lns[lcnt + 1] = new Layout(lineHeight, { new Widget(descLength), new Label(1.f, "Keyboard", Alignment::center, false), new Label(1.f, "DirectInput", Alignment::center, false), new Label(1.f, "XInput", Alignment::center, false) }, Direction::right);
+	zoomLine = static_cast<Layout*>(lns[1]);
 	limitLine = static_cast<Layout*>(lns[3]);
 
 	// shortcut entries
-	for (size_t i = 0; i < bnames.size(); ++i) {
+	for (size_t i = 0; i < std::size(bnames); ++i) {
 		auto lbl = new Label(descLength, std::move(bnames[i]));
 		Children lin {
 			lbl,
@@ -919,15 +954,15 @@ RootLayout* ProgSettings::createLayout() {
 	return new RootLayout(1.f, std::move(cont), Direction::down, topSpacing);
 }
 
-Widget* ProgSettings::createLimitEdit() {
-	switch (World::sets()->picLim.type) {
-	using enum PicLim::Type;
-	case count:
-		return new LabelEdit(1.f, toStr(World::sets()->picLim.getCount()), ProgSettingsEvent::setPicLimitCount, nullEvent, ACT_LEFT, "Number of pictures per batch", LabelEdit::TextType::uInt);
-	case size:
-		return new LabelEdit(1.f, PicLim::memoryString(World::sets()->picLim.getSize()), ProgSettingsEvent::setPicLimitSize, nullEvent, ACT_LEFT, "Total size of pictures per batch");
-	}
-	return new Widget();
+Widget* ProgSettings::createZoomEdit() {
+	if (World::sets()->zoomType != Settings::Zoom::value)
+		return new Widget;
+
+	Children line = {
+		new Slider(1.f, World::sets()->zoom, -Settings::zoomLimit, Settings::zoomLimit, ProgSettingsEvent::setZoom, ACT_LEFT, "Default reader zoom"),
+		new Label(getSettingsNumberDisplayLength(), makeZoomText())
+	};
+	return new Layout(1.f, std::move(line), Direction::right);
 }
 
 Cstring ProgSettings::makeZoomText() {
@@ -943,6 +978,21 @@ Cstring ProgSettings::makeZoomText() {
 	return str;
 }
 
+Widget* ProgSettings::createLimitEdit() {
+	switch (World::sets()->picLim.type) {
+	using enum PicLim::Type;
+	case count:
+		return new LabelEdit(1.f, toStr(World::sets()->picLim.count), ProgSettingsEvent::setPicLimitCount, nullEvent, ACT_LEFT, "Number of pictures per batch", LabelEdit::TextType::uInt);
+	case size:
+		return new LabelEdit(1.f, PicLim::memoryString(World::sets()->picLim.size), ProgSettingsEvent::setPicLimitSize, nullEvent, ACT_LEFT, "Total size of pictures per batch");
+	}
+	return new Widget;
+}
+
+uint ProgSettings::getSettingsNumberDisplayLength() const {
+	return measureText("0000000000", lineHeight) + LabelEdit::caretWidth;
+}
+
 void ProgSettings::startFonts() {
 	stopFonts();
 	fontThread = std::jthread(&FileSys::listFontFamiliesThread, World::fileSys()->getDirConfs(), World::sets()->font, ' ', '~');
@@ -955,7 +1005,7 @@ void ProgSettings::stopFonts() {
 	}
 }
 
-void ProgSettings::setFontField(vector<Cstring>&& families, uptr<Cstring[]>&& files, size_t select) {
+void ProgSettings::setFontField(vector<Cstring>&& families, uptr<Cstring[]>&& files, uint select) {
 	if (!families.empty()) {
 		fontList->setOptions(select, std::move(families), std::move(files));
 		fontList->setEvent(ProgSettingsEvent::setFontCmb, ACT_LEFT | ACT_RIGHT);
@@ -987,6 +1037,14 @@ void ProgSettings::logMoveErrors(const string* errors) {
 		logError(string_view(pos, next));
 		pos = std::find_if(next, errors->end(), [](char c) -> bool { return c != '\n'; });
 	}
+}
+
+template <Iterator T>
+uptr<Cstring[]> ProgSettings::makeCmbTips(T pos, T end) {
+	uptr<Cstring[]> tips = std::make_unique<Cstring[]>(end - pos);
+	for (size_t i = 0; pos != end; ++pos, ++i)
+		tips[i] = *pos;
+	return tips;
 }
 
 // PROG SEARCH DIR
@@ -1034,5 +1092,5 @@ RootLayout* ProgSearchDir::createLayout() {
 }
 
 PushButton* ProgSearchDir::makeDirectoryEntry(const Size& size, Cstring&& name) {
-	return new IconPushButton(size, std::move(name), World::drawSys()->texture("folder"), ProgSearchDirEvent::goIn, ACT_LEFT | ACT_DOUBLE);
+	return new IconPushButton(size, std::move(name), World::drawSys()->texture(DrawSys::Tex::folder), ProgSearchDirEvent::goIn, ACT_LEFT | ACT_DOUBLE);
 }

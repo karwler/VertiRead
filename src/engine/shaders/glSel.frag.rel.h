@@ -1,2 +1,2 @@
 R"r(#version 130
-uniform uvec2 addr;out uvec2 outAddr;void main(){if(addr.x!=0u||addr.y!=0u)outAddr=addr;else discard;})r"
+uniform uvec2 e;out uvec2 f;void main(){if(e.x!=0u||e.y!=0u)f=e;else discard;})r"

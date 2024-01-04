@@ -17,8 +17,10 @@ private:
 	static constexpr uint cacheSize = 127 - ' ';
 
 	struct Font {
-		FT_FaceRec_* face;
+		FT_FaceRec_* face = nullptr;
 		Data data;
+
+		Font(Data&& font) : data(std::move(font)) {}
 	};
 
 	FT_LibraryRec_* lib = nullptr;
@@ -31,13 +33,15 @@ private:
 
 	uptr<uint32[]> buffer;
 	size_t bufSize = 0;
-	string_view::iterator ptr;
+	vector<string_view::iterator> lineBreaks;
 	string_view::iterator wordStart;
+	string_view::iterator ptr;
 	size_t len;
 	size_t cpos;
 	uint xpos, ypos;
 	uint mfin;
-	uint gXpos;
+	uint wordXpos;
+	uint maxWidth;
 
 public:
 	FontSet();
@@ -47,21 +51,20 @@ public:
 	void clearCache();
 	void setMode(Settings::Hinting hinting);
 	uint measureText(string_view text, uint size);
-	pair<uint, vector<string_view::iterator>> measureText(string_view text, uint size, uint limit);
+	uvec2 measureText(string_view text, uint size, uint limit);
 	PixmapRgba renderText(string_view text, uint size);
 	PixmapRgba renderText(string_view text, uint size, uint limit);
 	FT_LibraryRec_* getLib() const { return lib; }
 
 private:
 	Font openFont(const fs::path& path, uint size) const;
-	uvec2 prepareBuffer(uint resx, uint resy);
+	void prepareBuffer(uvec2 res);
 	void prepareAdvance(string_view::iterator begin, size_t length);
-	template <bool ml> void advanceTab(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs);
+	void advanceTab(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs);
 	template <bool cached> void advanceChar(FT_FaceRec_* face, char32_t ch, char32_t prev, long advance);
-	template <bool cached, bool ml> void advanceChar(FT_FaceRec_* face, char32_t ch, char32_t prev, long advance, int left, uint width);
-	bool breakLine(vector<string_view::iterator>& ln, uint size, uint limit, int left, uint width);
-	void advanceLine(vector<string_view::iterator>& ln, string_view::iterator pos, uint size);
-	void resetLine();
+	template <bool cached> void advanceChar(FT_FaceRec_* face, char32_t ch, char32_t prev, long advance, int left, uint width);
+	bool checkSpace(uint limit, int left, uint width);
+	void advanceLine(string_view::iterator pos);
 	bool setSize(string_view text, uint size);
 	void cacheGlyph(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs, char32_t ch, uint id);
 	vector<Font>::iterator loadGlyph(char32_t ch, int32 flags);
@@ -71,20 +74,52 @@ private:
 // handles the drawing
 class DrawSys {
 public:
+	enum class Tex : uint8 {
+		blank,
+		tooltip,
+		center,	// textures loaded from files start here
+		cross,
+		file,
+		fit,
+		folder,
+		left,
+		minus,
+		plus,
+		reset,
+		right,
+		search,	// stored textures end here
+		vertiread
+	};
+
 	static constexpr float fallbackDpi = 96.f;
 private:
-	static constexpr float assumedCursorHeight = 17.f;	// 16 p probably + some spacing
+	static constexpr float assumedCursorHeight = 20.f;	// 16 p probably + some spacing
 	static constexpr float assumedIconSize = 128.f;
 	static constexpr ivec2 tooltipMargin = ivec2(4, 1);
 	static constexpr vec4 colorPopupDim = vec4(0.f, 0.f, 0.f, 0.5f);
+	static constexpr uint fileTexBegin = uint(Tex::center);
+	static constexpr char iconExt[] = ".svg";
+
+	static constexpr array<const char*, size_t(Tex::vertiread) + 1 - fileTexBegin> iconStems = {
+		"center",
+		"cross",
+		"file",
+		"fit",
+		"folder",
+		"left",
+		"minus",
+		"plus",
+		"reset",
+		"right",
+		"search",
+		"vertiread"
+	};
 
 	Renderer* renderer = nullptr;
 	ivec2 viewRes = ivec2(0);
 	array<vec4, Settings::defaultColors.size()> colors;
 	FontSet fonts;
-	umap<string, Texture*> texes;
-	Texture* blank;		// reference to texes[""]
-	Texture* tooltip = nullptr;
+	array<Texture*, size_t(Tex::vertiread)> texes{};
 	const char* curTooltip = nullptr;	// reference to text of the currently rendered tooltip texture
 	float winDpi = 0.f;
 	int cursorHeight;
@@ -103,7 +138,8 @@ public:
 	void setFont(const fs::path& font);
 	void setFontHinting(Settings::Hinting hinting);
 	SDL_Surface* loadIcon(const string& path, int size);
-	const Texture* texture(const string& name) const;
+	static string iconName(Tex name);
+	const Texture* texture(Tex name) const;
 	void resetTooltip();
 
 	void drawWidgets(bool mouseLast);
@@ -138,6 +174,14 @@ private:
 	umap<int, Renderer::View*>::const_iterator findViewForPoint(ivec2 pos) const;
 	optional<bool> prepareTooltip();	// returns if a new texture has been created or nullopt to not display a tooltip
 };
+
+inline string DrawSys::iconName(Tex name) {
+	return string(iconStems[eint(name) - fileTexBegin]) + iconExt;
+}
+
+inline const Texture* DrawSys::texture(Tex name) const {
+	return coalesce(texes[eint(name)], texes[eint(Tex::blank)]);
+}
 
 inline uint DrawSys::textLength(string_view text, uint height) {
 	return fonts.measureText(text, height);

@@ -1,5 +1,6 @@
 #include "types.h"
 #include "utils/compare.h"
+#include <SDL2/SDL_timer.h>
 
 void pushEvent(UserEvent type, int32 code, void* data1, void* data2) {
 	SDL_Event event = { .user = {

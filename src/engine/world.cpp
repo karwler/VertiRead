@@ -38,10 +38,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	vector<string> vals;
 	uset<string> flags;
 #ifdef __MINGW32__
-	if (!strempty(lpCmdLine))
+	if (strfilled(lpCmdLine))
 		if (int argc; LPWSTR* argv = CommandLineToArgvW(sstow(lpCmdLine).c_str(), &argc)) {
 #else
-	if (!strempty(pCmdLine))
+	if (strfilled(pCmdLine))
 		if (int argc; LPWSTR* argv = CommandLineToArgvW(pCmdLine, &argc)) {
 #endif
 			std::tie(vals, flags) = getArgs(argc, argv, swtos);

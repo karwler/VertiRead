@@ -43,20 +43,19 @@ bool symGlib() {
 	}
 
 	try {
-		gHashTableNew = reinterpret_cast<decltype(gHashTableNew)>(dlsym(libg, "g_hash_table_new"));
-		gHashTableInsert = reinterpret_cast<decltype(gHashTableInsert)>(dlsym(libg, "g_hash_table_insert"));
-		gHashTableRemove = reinterpret_cast<decltype(gHashTableRemove)>(dlsym(libg, "g_hash_table_remove"));
-		gHashTableUnref = reinterpret_cast<decltype(gHashTableUnref)>(dlsym(libg, "g_hash_table_unref"));
-		gStrHash = reinterpret_cast<decltype(gStrHash)>(dlsym(libg, "g_str_hash"));
-		gListFree = reinterpret_cast<decltype(gListFree)>(dlsym(libg, "g_list_free"));
-		gBytesNewStatic = reinterpret_cast<decltype(gBytesNewStatic)>(dlsym(libg, "g_bytes_new_static"));
-		gBytesUnref = reinterpret_cast<decltype(gBytesUnref)>(dlsym(libg, "g_bytes_unref"));
-		gErrorFree = reinterpret_cast<decltype(gErrorFree)>(dlsym(libg, "g_error_free"));
-		if (!(gHashTableNew && gHashTableInsert && gHashTableRemove && gHashTableUnref && gStrHash && gListFree && gBytesNewStatic && gBytesUnref && gErrorFree))
+		if (!((gHashTableNew = reinterpret_cast<decltype(gHashTableNew)>(dlsym(libg, "g_hash_table_new")))
+			&& (gHashTableInsert = reinterpret_cast<decltype(gHashTableInsert)>(dlsym(libg, "g_hash_table_insert")))
+			&& (gHashTableRemove = reinterpret_cast<decltype(gHashTableRemove)>(dlsym(libg, "g_hash_table_remove")))
+			&& (gHashTableUnref = reinterpret_cast<decltype(gHashTableUnref)>(dlsym(libg, "g_hash_table_unref")))
+			&& (gStrHash = reinterpret_cast<decltype(gStrHash)>(dlsym(libg, "g_str_hash")))
+			&& (gListFree = reinterpret_cast<decltype(gListFree)>(dlsym(libg, "g_list_free")))
+			&& (gBytesNewStatic = reinterpret_cast<decltype(gBytesNewStatic)>(dlsym(libg, "g_bytes_new_static")))
+			&& (gBytesUnref = reinterpret_cast<decltype(gBytesUnref)>(dlsym(libg, "g_bytes_unref")))
+			&& (gErrorFree = reinterpret_cast<decltype(gErrorFree)>(dlsym(libg, "g_error_free")))
+		))
 			throw "Failed to find " GLIB_NAME " functions";
 
-		gObjectUnref = reinterpret_cast<decltype(gObjectUnref)>(dlsym(libo, "g_object_unref"));
-		if (!gObjectUnref)
+		if (gObjectUnref = reinterpret_cast<decltype(gObjectUnref)>(dlsym(libo, "g_object_unref")); !gObjectUnref)
 			throw "Failed to find " OLIB_NAME " functions";
 	} catch (const char* msg) {
 		std::cerr << msg << std::endl;

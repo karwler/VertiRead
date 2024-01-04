@@ -3,13 +3,11 @@
 #include "fileSys.h"
 #include "inputSys.h"
 #include "scene.h"
+#include "optional/d3d.h"
 #include "prog/program.h"
 #include "prog/progs.h"
-#ifdef _WIN32
-#include <SDL_image.h>
-#else
 #include <SDL2/SDL_image.h>
-#endif
+#include <SDL2/SDL_vulkan.h>
 
 int WindowSys::start(vector<string>&& cmdVals,  uset<string>&& cmdFlags) {
 	fileSys = nullptr;
@@ -68,35 +66,14 @@ void WindowSys::init(vector<string>&& cmdVals, uset<string>&& cmdFlags) {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER))
 		throw std::runtime_error(SDL_GetError());
 #if SDL_IMAGE_VERSION_ATLEAST(2, 6, 0)
-	int flags = IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP | IMG_INIT_JXL | IMG_INIT_AVIF);
+	int imgFlags = IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP | IMG_INIT_JXL | IMG_INIT_AVIF;
 #else
-	int flags = IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP);
+	int imgFlags = IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP;
 #endif
-	if (!(flags & IMG_INIT_JPG))
-		logError(IMG_GetError());
-	if (!(flags & IMG_INIT_PNG))
-		logError(IMG_GetError());
-	if (!(flags & IMG_INIT_TIF))
-		logError(IMG_GetError());
-	if (!(flags & IMG_INIT_WEBP))
-		logError(IMG_GetError());
-#if SDL_IMAGE_VERSION_ATLEAST(2, 6, 0)
-	if (!(flags & IMG_INIT_JXL))
-		logError(IMG_GetError());
-	if (!(flags & IMG_INIT_AVIF))
-		logError(IMG_GetError());
-#endif
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-#ifdef OPENGLES
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-#else
-#ifdef NDEBUG
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
-#else
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG | SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
-#endif
-#endif
+	if (IMG_Init(imgFlags) != imgFlags) {
+		const char* err = IMG_GetError();
+		logError(strfilled(err) ? err : "Failed to initialize all image formats");
+	}
 	SDL_EventState(SDL_LOCALECHANGED, SDL_DISABLE);
 	SDL_EventState(SDL_SYSWMEVENT, SDL_DISABLE);
 	SDL_EventState(SDL_KEYUP, SDL_DISABLE);
@@ -127,7 +104,7 @@ void WindowSys::init(vector<string>&& cmdVals, uset<string>&& cmdFlags) {
 	SDL_StopTextInput();
 
 	fileSys = new FileSys(cmdFlags);
-	sets = fileSys->loadSettings();
+	sets = fileSys->loadSettings(&cmdFlags);
 	createWindow();
 	inputSys = new InputSys;
 	scene = new Scene;
@@ -176,57 +153,110 @@ void WindowSys::createWindow() {
 	case multiFullscreen:
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_SKIP_TASKBAR;
 	}
-	SDL_Surface* icon = IMG_Load((fromPath(fileSys->dirIcons()) / "vertiread.svg").c_str());
+	SDL_Surface* icon = IMG_Load((fromPath(fileSys->dirIcons()) / DrawSys::iconName(DrawSys::Tex::vertiread)).c_str());
 
-	array<pair<Settings::Renderer, uint32>, Settings::rendererNames.size()> renderers;
+	vector<Settings::Renderer> renderers;
 	switch (sets->renderer) {
 	using enum Settings::Renderer;
-#ifdef WITH_DIRECTX
-	case directx:
+#ifdef WITH_DIRECT3D
+	case direct3d11:
 		renderers = {
-			pair(directx, 0),
+			direct3d11,
 #ifdef WITH_OPENGL
-			pair(opengl, SDL_WINDOW_OPENGL),
+			opengl3, opengl1,
 #endif
 #ifdef WITH_VULKAN
-			pair(vulkan, SDL_WINDOW_VULKAN)
+			vulkan,
 #endif
+			software
 		};
 		break;
 #endif
 #ifdef WITH_OPENGL
-	case opengl:
+	case opengl1:
 		renderers = {
-			pair(opengl, SDL_WINDOW_OPENGL),
-#ifdef WITH_DIRECTX
-			pair(directx, 0),
+			opengl1, opengl3,
+#ifndef _WIN32
+			opengles3,
+#endif
+#ifdef WITH_DIRECT3D
+			direct3d11,
 #endif
 #ifdef WITH_VULKAN
-			pair(vulkan, SDL_WINDOW_VULKAN)
+			vulkan,
 #endif
+			software
+		};
+		break;
+	case opengl3:
+		renderers = {
+			opengl3, opengl1,
+#ifndef _WIN32
+			opengles3,
+#endif
+#ifdef WITH_DIRECT3D
+			direct3d11,
+#endif
+#ifdef WITH_VULKAN
+			vulkan,
+#endif
+			software
+		};
+		break;
+	case opengles3:
+		renderers = {
+#ifndef _WIN32
+			opengles3,
+#endif
+			opengl3, opengl1,
+#ifdef WITH_DIRECT3D
+			direct3d11,
+#endif
+#ifdef WITH_VULKAN
+			vulkan,
+#endif
+			software
 		};
 		break;
 #endif
 #ifdef WITH_VULKAN
 	case vulkan:
 		renderers = {
-			pair(vulkan, SDL_WINDOW_VULKAN),
+			vulkan,
 #ifdef WITH_OPENGL
-			pair(opengl, SDL_WINDOW_OPENGL),
+			opengl3, opengl1,
+#ifndef _WIN32
+			opengles3,
 #endif
-#ifdef WITH_DIRECTX
-			pair(directx, 0)
+#endif
+#ifdef WITH_DIRECT3D
+			direct3d11,
+#endif
+			software
+		};
+		break;
+#endif
+	case software:
+		renderers = {
+			software,
+#ifdef WITH_OPENGL
+			opengl1, opengl3,
+#endif
+#ifdef WITH_DIRECT3D
+			direct3d11,
+#endif
+#ifdef WITH_VULKAN
+			vulkan
 #endif
 		};
-#endif
 	}
-	for (auto [rnd, rfl] : renderers) {
+	for (Settings::Renderer rnd : renderers) {
 		try {
 			sets->renderer = rnd;
 			if (sets->screen != Settings::Screen::multiFullscreen)
-				createSingleWindow(flags | rfl, icon);
+				createSingleWindow(flags | initWindow(false), icon);
 			else
-				createMultiWindow(flags | rfl, icon);
+				createMultiWindow(flags | initWindow(true), icon);
 			break;
 		} catch (const std::runtime_error& err) {
 			logError(err.what());
@@ -239,9 +269,50 @@ void WindowSys::createWindow() {
 		throw std::runtime_error("Failed to initialize a working renderer");
 }
 
+uint32 WindowSys::initWindow(bool shared) {
+	switch (sets->renderer) {
+	using enum Settings::Renderer;
+#ifdef WITH_DIRECT3D
+	case direct3d11:
+		LibD3d11::load();
+		break;
+#endif
+#ifdef WITH_OPENGL
+	case opengl1: case opengl3: case opengles3: {
+		bool core = sets->renderer <= opengl3;
+		int flags = 0;
+#ifndef NDEBUG
+		flags |= SDL_GL_CONTEXT_DEBUG_FLAG;
+#endif
+		SDL_GL_ResetAttributes();
+		if (sets->renderer == opengl1) {
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+		} else {
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+			if (core)
+				flags |= SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG;
+		}
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, core ? SDL_GL_CONTEXT_PROFILE_CORE : SDL_GL_CONTEXT_PROFILE_ES);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, flags);
+		SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, shared);
+		if (SDL_GL_LoadLibrary(nullptr))
+			throw std::runtime_error(SDL_GetError());
+		return SDL_WINDOW_OPENGL; }
+#endif
+#ifdef WITH_VULKAN
+	case vulkan:
+		if (SDL_Vulkan_LoadLibrary(nullptr))
+			throw std::runtime_error(SDL_GetError());
+		return SDL_WINDOW_VULKAN;
+#endif
+	}
+	return 0;
+}
+
 void WindowSys::createSingleWindow(uint32 flags, SDL_Surface* icon) {
 	sets->resolution = glm::clamp(sets->resolution, windowMinSize, displayResolution());
-	SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, SDL_DISABLE);
 	SDL_Window* win = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets->resolution.x, sets->resolution.y, flags);
 	if (!win)
 		throw std::runtime_error(std::format("Failed to create window:" LINEND "{}", SDL_GetError()));
@@ -255,7 +326,6 @@ void WindowSys::createSingleWindow(uint32 flags, SDL_Surface* icon) {
 
 void WindowSys::createMultiWindow(uint32 flags, SDL_Surface* icon) {
 	windows.reserve(sets->displays.size());
-	SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, SDL_ENABLE);
 	int minId = rng::min_element(sets->displays, [](const pair<const int, Recti>& a, const pair<const int, Recti>& b) -> bool { return a.first < b.first; })->first;
 	for (const auto& [id, rect] : sets->displays) {
 		SDL_Window* win = windows.emplace(id, SDL_CreateWindow(std::format("{} {}", title, id).c_str(), SDL_WINDOWPOS_CENTERED_DISPLAY(id), SDL_WINDOWPOS_CENTERED_DISPLAY(id), rect.w, rect.h, id != minId ? flags : flags & ~SDL_WINDOW_SKIP_TASKBAR)).first->second;
@@ -272,6 +342,24 @@ void WindowSys::destroyWindows() {
 	for (auto [id, win] : windows)
 		SDL_DestroyWindow(win);
 	windows.clear();
+
+	switch (sets->renderer) {
+	using enum Settings::Renderer;
+#ifdef WITH_DIRECT3D
+	case direct3d11:
+		LibD3d11::free();
+		break;
+#endif
+#ifdef WITH_OPENGL
+	case opengl1: case opengl3: case opengles3:
+		SDL_GL_UnloadLibrary();
+		break;
+#endif
+#ifdef WITH_VULKAN
+	case vulkan:
+		SDL_Vulkan_UnloadLibrary();
+#endif
+	}
 }
 
 void WindowSys::recreateWindows() {
@@ -494,21 +582,13 @@ void WindowSys::setScreenMode(Settings::Screen sm) {
 		recreateWindows();
 }
 
-void WindowSys::reposizeWindow(ivec2 dres, ivec2 wsiz) {
-	if (sets->screen == Settings::Screen::windowed) {
-		sets->resolution = glm::clamp(wsiz, windowMinSize, displayResolution());
-		SDL_SetWindowPosition(windows.begin()->second, (dres.x - sets->resolution.x) / 2, (dres.y - sets->resolution.y) / 2);
-		SDL_SetWindowSize(windows.begin()->second, sets->resolution.x, sets->resolution.y);
-	}
-}
-
 ivec2 WindowSys::displayResolution() const {
 	SDL_DisplayMode mode{};
 	if (!windows.empty() && !SDL_GetDesktopDisplayMode(SDL_GetWindowDisplayIndex(windows.begin()->second), &mode))
 		return ivec2(mode.w, mode.h);
 
 	ivec2 res(0);
-	for (int i = 0; i < SDL_GetNumVideoDisplays(); ++i)
+	for (int i = 0, e = SDL_GetNumVideoDisplays(); i < e; ++i)
 		if (!SDL_GetDesktopDisplayMode(i, &mode))
 			res = glm::max(res, ivec2(mode.w, mode.h));
 	return res;

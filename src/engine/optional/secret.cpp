@@ -32,14 +32,14 @@ bool symLibsecret() {
 		return false;
 	}
 
-	secretServiceGetSync = reinterpret_cast<decltype(secretServiceGetSync)>(dlsym(lib, "secret_service_get_sync"));
-	secretServiceSearchSync = reinterpret_cast<decltype(secretServiceSearchSync)>(dlsym(lib, "secret_service_search_sync"));
-	secretServiceStoreSync = reinterpret_cast<decltype(secretServiceStoreSync)>(dlsym(lib, "secret_service_store_sync"));
-	secretItemGetSecret = reinterpret_cast<decltype(secretItemGetSecret)>(dlsym(lib, "secret_item_get_secret"));
-	secretItemLoadSecretSync = reinterpret_cast<decltype(secretItemLoadSecretSync)>(dlsym(lib, "secret_item_load_secret_sync"));
-	secretValueNew = reinterpret_cast<decltype(secretValueNew)>(dlsym(lib, "secret_value_new"));
-	secretValueGetText = reinterpret_cast<decltype(secretValueGetText)>(dlsym(lib, "secret_value_get_text"));
-	if (!(secretServiceGetSync && secretServiceSearchSync && secretServiceStoreSync && secretItemGetSecret && secretItemLoadSecretSync && secretValueNew && secretValueGetText)) {
+	if (!((secretServiceGetSync = reinterpret_cast<decltype(secretServiceGetSync)>(dlsym(lib, "secret_service_get_sync")))
+		&& (secretServiceSearchSync = reinterpret_cast<decltype(secretServiceSearchSync)>(dlsym(lib, "secret_service_search_sync")))
+		&& (secretServiceStoreSync = reinterpret_cast<decltype(secretServiceStoreSync)>(dlsym(lib, "secret_service_store_sync")))
+		&& (secretItemGetSecret = reinterpret_cast<decltype(secretItemGetSecret)>(dlsym(lib, "secret_item_get_secret")))
+		&& (secretItemLoadSecretSync = reinterpret_cast<decltype(secretItemLoadSecretSync)>(dlsym(lib, "secret_item_load_secret_sync")))
+		&& (secretValueNew = reinterpret_cast<decltype(secretValueNew)>(dlsym(lib, "secret_value_new")))
+		&& (secretValueGetText = reinterpret_cast<decltype(secretValueGetText)>(dlsym(lib, "secret_value_get_text")))
+	)) {
 		std::cerr << "Failed to find " LIB_NAME " functions" << std::endl;
 		dlclose(lib);
 		lib = nullptr;

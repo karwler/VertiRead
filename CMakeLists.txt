@@ -1,17 +1,14 @@
-cmake_minimum_required(VERSION 3.12.4)
-project(VertiRead VERSION 1.0.0 DESCRIPTION "Comic/Manga reader" HOMEPAGE_URL "https://github.com/karwler/vertiread" LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.16.9)
+include(CheckIncludeFileCXX)
+project(VertiRead VERSION 1.0.0 DESCRIPTION "Comic/Manga reader" HOMEPAGE_URL "https://github.com/karwler/VertiRead" LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-if(NOT GENERATOR_IS_MULTI_CONFIG AND NOT CMAKE_BUILD_TYPE)
-	set(CMAKE_BUILD_TYPE Release)
-endif()
 
 if(WIN32)
-	option(DIRECTX "Build with DirectX 11 support." ON)
-elseif(UNIX)
+	option(DIRECT3D "Build with Direct3D 11 support." ON)
+else()
 	option(APPIMAGE "Package as an AppImage." OFF)
-	option(OPENGLES "Build for OpenGL ES 3.0 instead of OpenGL 3.0." OFF)
 	option(USE_FONTCONFIG "Build with fontconfig if available." ON)
 	option(USE_SECRET "Build with libsecret if available." ON)
 	option(USE_SMBCLIENT "Build with smbclient if available." ON)
@@ -21,7 +18,7 @@ endif()
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 	option(NATIVE "Build for the current CPU." OFF)
 endif()
-option(OPENGL "Build with OpenGL 3.0 support." ON)
+option(OPENGL "Build with OpenGL 1.1, 3.0 and ES 3.0 support." ON)
 option(USE_ICU "Build with ICU if available." OFF)
 option(VULKAN "Build with Vulkan 1.0 support." ON)
 
@@ -37,30 +34,12 @@ set(SRC_FILES
 	"src/engine/inputSys.h"
 	"src/engine/renderer.cpp"
 	"src/engine/renderer.h"
-	"src/engine/rendererDx.cpp"
-	"src/engine/rendererDx.h"
-	"src/engine/rendererGl.cpp"
-	"src/engine/rendererGl.h"
-	"src/engine/rendererVk.cpp"
-	"src/engine/rendererVk.h"
 	"src/engine/scene.cpp"
 	"src/engine/scene.h"
 	"src/engine/windowSys.cpp"
 	"src/engine/windowSys.h"
 	"src/engine/world.cpp"
 	"src/engine/world.h"
-	"src/engine/optional/fontconfig.cpp"
-	"src/engine/optional/fontconfig.h"
-	"src/engine/optional/glib.cpp"
-	"src/engine/optional/glib.h"
-	"src/engine/optional/poppler.cpp"
-	"src/engine/optional/poppler.h"
-	"src/engine/optional/secret.cpp"
-	"src/engine/optional/secret.h"
-	"src/engine/optional/smbclient.cpp"
-	"src/engine/optional/smbclient.h"
-	"src/engine/optional/ssh2.cpp"
-	"src/engine/optional/ssh2.h"
 	"src/prog/browser.cpp"
 	"src/prog/browser.h"
 	"src/prog/fileOps.cpp"
@@ -81,19 +60,31 @@ set(SRC_FILES
 	"src/utils/utils.h"
 	"src/utils/widgets.cpp"
 	"src/utils/widgets.h")
-if(DIRECTX)
-	list(APPEND SRC_FILES
-		"src/engine/shaders/dxGuiPs.dbg.h"
-		"src/engine/shaders/dxGuiPs.rel.h"
-		"src/engine/shaders/dxGuiVs.dbg.h"
-		"src/engine/shaders/dxGuiVs.rel.h"
-		"src/engine/shaders/dxSelPs.dbg.h"
-		"src/engine/shaders/dxSelPs.rel.h"
-		"src/engine/shaders/dxSelVs.dbg.h"
-		"src/engine/shaders/dxSelVs.rel.h")
+
+if(DIRECT3D)
+	CHECK_INCLUDE_FILE_CXX("d3d11.h" FOUND_D3D11)
+	if(FOUND_D3D11)
+		list(APPEND SRC_FILES
+			"src/engine/rendererDx.cpp"
+			"src/engine/rendererDx.h"
+			"src/engine/optional/d3d.cpp"
+			"src/engine/optional/d3d.h"
+			"src/engine/shaders/dxGuiPs.dbg.h"
+			"src/engine/shaders/dxGuiPs.rel.h"
+			"src/engine/shaders/dxGuiVs.dbg.h"
+			"src/engine/shaders/dxGuiVs.rel.h"
+			"src/engine/shaders/dxSelPs.dbg.h"
+			"src/engine/shaders/dxSelPs.rel.h"
+			"src/engine/shaders/dxSelVs.dbg.h"
+			"src/engine/shaders/dxSelVs.rel.h")
+		add_compile_definitions(WITH_DIRECT3D)
+	endif()
 endif()
 if(OPENGL)
 	list(APPEND SRC_FILES
+		"src/engine/rendererGl.cpp"
+		"src/engine/rendererGl.h"
+		"src/engine/shaders/glDefs.h"
 		"src/engine/shaders/glGui.frag.dbg.h"
 		"src/engine/shaders/glGui.frag.rel.h"
 		"src/engine/shaders/glGui.vert.dbg.h"
@@ -102,6 +93,7 @@ if(OPENGL)
 		"src/engine/shaders/glSel.frag.rel.h"
 		"src/engine/shaders/glSel.vert.dbg.h"
 		"src/engine/shaders/glSel.vert.rel.h")
+	add_compile_definitions(WITH_OPENGL)
 
 	foreach(GLFILE "rsc/shaders/glGui.frag" "rsc/shaders/glGui.vert" "rsc/shaders/glSel.frag" "rsc/shaders/glSel.vert")
 		file(READ "${CMAKE_SOURCE_DIR}/${GLFILE}" GL_CODE)
@@ -110,30 +102,36 @@ if(OPENGL)
 	endforeach()
 endif()
 if(VULKAN)
-	list(APPEND SRC_FILES
-		"src/engine/shaders/vkConv.comp.dbg.h"
-		"src/engine/shaders/vkConv.comp.rel.h"
-		"src/engine/shaders/vkGui.frag.dbg.h"
-		"src/engine/shaders/vkGui.frag.rel.h"
-		"src/engine/shaders/vkGui.vert.dbg.h"
-		"src/engine/shaders/vkGui.vert.rel.h"
-		"src/engine/shaders/vkSel.frag.dbg.h"
-		"src/engine/shaders/vkSel.frag.rel.h"
-		"src/engine/shaders/vkSel.vert.dbg.h"
-		"src/engine/shaders/vkSel.vert.rel.h")
+	find_package(Vulkan)
+	if(Vulkan_FOUND)
+		list(APPEND SRC_FILES
+			"src/engine/rendererVk.cpp"
+			"src/engine/rendererVk.h"
+			"src/engine/shaders/vkConv.comp.dbg.h"
+			"src/engine/shaders/vkConv.comp.rel.h"
+			"src/engine/shaders/vkGui.frag.dbg.h"
+			"src/engine/shaders/vkGui.frag.rel.h"
+			"src/engine/shaders/vkGui.vert.dbg.h"
+			"src/engine/shaders/vkGui.vert.rel.h"
+			"src/engine/shaders/vkSel.frag.dbg.h"
+			"src/engine/shaders/vkSel.frag.rel.h"
+			"src/engine/shaders/vkSel.vert.dbg.h"
+			"src/engine/shaders/vkSel.vert.rel.h")
+		add_compile_definitions(WITH_VULKAN)
+	endif()
 endif()
 if(WIN32)
 	list(APPEND SRC_FILES "rsc/resource.rc")
+	add_compile_definitions(UNICODE _UNICODE _CRT_SECURE_NO_WARNINGS NOMINMAX $<$<NOT:$<BOOL:${MSVC}>>:_WIN32_WINNT=0x600>)
 endif()
+include_directories("${CMAKE_SOURCE_DIR}/src")
 
 # dependencies
-set(VER_ARC "3.6.2")
-set(VER_SDL "2.28.5")
+set(VER_ARC "3.7.2")
+set(VER_SDL "2.30.0")
 set(VER_IMG "2.8.2")
-set(VER_FT2 "2.13.0")
-set(VER_GLM "0.9.9.8")
-set(VER_CURL "7.83.1")
-set(VER_LXML "2.9.14")
+set(VER_FT2 "2.13.2")
+set(VER_GLM "1.0.0")
 set(DIR_LIB "${CMAKE_SOURCE_DIR}/lib")
 set(DIR_RSC "${CMAKE_SOURCE_DIR}/rsc")
 set(DIR_ICN "${DIR_RSC}/icons")
@@ -175,7 +173,8 @@ function(downloadLib URL LIBDIR ORIG_LIBDIR)
 			file(RENAME "${ORIG_LIBDIR}" "${LIBDIR}")
 		endif()
 	elseif(FILE MATCHES "\.dmg$")
-		execute_process(COMMAND hdiutil attach "${DST}/${FILE}")
+		find_program(HDIUTIL "hdiutil")
+		execute_process(COMMAND "${HDIUTIL}" attach "${DST}/${FILE}")
 		string(FIND "${FILE}" "-" FID)
 		string(SUBSTRING "${FILE}" 0 ${FID} FNAME)
 		file(COPY "/Volumes/${FNAME}/${FNAME}.framework" DESTINATION "${DST}")
@@ -196,22 +195,11 @@ function(compileLib URL LIBDIR CMDV WDIR ORIG_LIBDIR)
 	endif()
 endfunction()
 
-if(USE_ICU)
-	if(WIN32)
-		find_package(ICU COMPONENTS uc in)
-	else()
-		find_package(ICU COMPONENTS uc i18n)
+function(try_rename OPATH NPATH)
+	if(EXISTS "${OPATH}")
+		file(RENAME "${OPATH}" "${NPATH}")
 	endif()
-	if(ICU_FOUND)
-		add_compile_definitions(WITH_ICU)
-		include_directories(SYSTEM ${ICU_INCLUDE_DIRS})
-		if(WIN32)
-			string(REGEX REPLACE "\\.[0-9]+" "" ICU_VER_MAJ ${ICU_VERSION})
-			get_filename_component(BIN_ICU "${ICU_ICUPKG_EXECUTABLE}" DIRECTORY)
-			get_filename_component(LIC_ICU "${BIN_ICU}" DIRECTORY)
-		endif()
-	endif()
-endif()
+endfunction()
 
 if(USE_FONTCONFIG)
 	list(APPEND PKGCONFIG_ARGS "fontconfig")
@@ -235,76 +223,98 @@ if(PKGCONFIG_ARGS)
 		include_directories(SYSTEM ${PKGCONFS_INCLUDE_DIRS})
 
 		if(USE_FONTCONFIG AND (PKGCONFS_fontconfig_FOUND OR PKGCONFS_fontconfig_VERSION))
+			list(APPEND SRC_FILES
+				"src/engine/optional/fontconfig.cpp"
+				"src/engine/optional/fontconfig.h")
 			add_compile_definitions(CAN_FONTCFG)
 		endif()
 		if(USE_SECRET AND (USE_SMBCLIENT OR USE_SSH2) AND (PKGCONFS_libsecret-1_FOUND OR PKGCONFS_libsecret-1_VERSION) AND (PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION OR PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION))
+			list(APPEND SRC_FILES
+				"src/engine/optional/secret.cpp"
+				"src/engine/optional/secret.h")
 			add_compile_definitions(CAN_SECRET)
+			set(NEED_GLIB TRUE)
 		endif()
 		if(USE_SMBCLIENT AND (PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION))
+			list(APPEND SRC_FILES
+				"src/engine/optional/smbclient.cpp"
+				"src/engine/optional/smbclient.h")
 			add_compile_definitions(CAN_SMB)
 		endif()
 		if(USE_SSH2 AND (PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION))
+			list(APPEND SRC_FILES
+				"src/engine/optional/ssh2.cpp"
+				"src/engine/optional/ssh2.h")
 			add_compile_definitions(CAN_SFTP)
 		endif()
 		if(USE_PDF AND (PKGCONFS_poppler-glib_FOUND OR PKGCONFS_poppler-glib_VERSION))
+			list(APPEND SRC_FILES
+				"src/engine/optional/poppler.cpp"
+				"src/engine/optional/poppler.h")
 			add_compile_definitions(CAN_PDF)
+			set(NEED_GLIB TRUE)
+		endif()
+		if (NEED_GLIB)
+			list(APPEND SRC_FILES
+				"src/engine/optional/glib.cpp"
+				"src/engine/optional/glib.h")
 		endif()
 	endif()
 endif()
 
-if(VULKAN)
-	find_package(Vulkan REQUIRED)
-	string(REPLACE "/Include" "" VULKAN_PATH "${Vulkan_INCLUDE_DIRS}")
-	include_directories(SYSTEM ${Vulkan_INCLUDE_DIRS})
-	link_directories("${VULKAN_PATH}/Lib")
+if(USE_ICU)
+	if(WIN32)
+		find_package(ICU COMPONENTS uc in)
+	else()
+		find_package(ICU COMPONENTS uc i18n)
+	endif()
+	if(ICU_FOUND)
+		add_compile_definitions(WITH_ICU)
+		include_directories(SYSTEM ${ICU_INCLUDE_DIRS})
+		if(WIN32)
+			string(REGEX REPLACE "\\.[0-9]+" "" ICU_VER_MAJ ${ICU_VERSION})
+			get_filename_component(BIN_ICU "${ICU_ICUPKG_EXECUTABLE}" DIRECTORY)
+			get_filename_component(LIC_ICU "${BIN_ICU}" DIRECTORY)
+		endif()
+	endif()
 endif()
 
-file(MAKE_DIRECTORY "${DIR_LIB}")
-downloadLib("https://github.com/g-truc/glm/releases/download/${VER_GLM}/glm-${VER_GLM}.zip" "${DIR_LIB}/glm" "")
-include_directories(SYSTEM "${DIR_LIB}/glm")
+CHECK_INCLUDE_FILE_CXX("glm/glm.hpp" FOUND_GLM)
+if(NOT FOUND_GLM)
+	file(MAKE_DIRECTORY "${DIR_LIB}")
+	downloadLib("https://github.com/g-truc/glm/releases/download/${VER_GLM}/glm-${VER_GLM}-light.zip" "${DIR_LIB}/glm" "")
+	include_directories(SYSTEM "${DIR_LIB}")
+endif()
 
-include_directories("${CMAKE_SOURCE_DIR}/src")
 if(WIN32)
 	set(PBOUT_DIR "${CMAKE_BINARY_DIR}/${PROJECT_NAME}")
 	set(TBIN_DIR "${PBOUT_DIR}")
 	set(DATA_DIR "${PBOUT_DIR}")
 
+	file(MAKE_DIRECTORY "${DIR_LIB}")
 	if(MSVC)
 		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 			set(VMACHINE "x64")
-			set(DIR_ARC "${DIR_LIB}/libarchive")
-			set(BIN_ARC "${DIR_ARC}/bin")
-			set(LIB_ARC "${DIR_ARC}/lib")
-			set(INC_ARC "${DIR_ARC}/include")
 		else()
 			set(VMACHINE "x86")
-			set(DIR_ARC "${DIR_LIB}/libarchive-${VER_ARC}")
-			set(BIN_ARC "${DIR_ARC}/build/bin")
-			set(LIB_ARC "${DIR_ARC}/build/libarchive")
-			set(INC_ARC "${DIR_ARC}/libarchive")
 		endif()
+		set(DIR_ARC "${DIR_LIB}/libarchive-${VER_ARC}-${VMACHINE}-msvc")
 		set(DIR_SDL "${DIR_LIB}/SDL2-${VER_SDL}-msvc")
 		set(DIR_IMG "${DIR_LIB}/SDL2_image-${VER_IMG}-msvc")
 		set(DIR_FT2 "${DIR_LIB}/freetype-${VER_FT2}-${VMACHINE}-msvc")
-		set(DIR_CURL "${DIR_LIB}/curl-${VER_CURL}-${VMACHINE}-msvc")
-		set(DIR_LXML "${DIR_LIB}/libxml2-${VER_LXML}-${VMACHINE}-msvc")
-		set(OUT_CURL "${DIR_CURL}/builds/libcurl-vc-${VMACHINE}-release-dll-ipv6-sspi-schannel")
+		set(BIN_ARC "${DIR_ARC}/build/bin")
 		set(BIN_SDL "${DIR_SDL}/lib/${VMACHINE}")
 		set(BIN_IMG "${DIR_IMG}/lib/${VMACHINE}")
 		set(BIN_FT2 "${DIR_FT2}/build")
-		set(BIN_CURL "${OUT_CURL}/bin")
-		set(BIN_LXML "${DIR_LXML}/win32/bin.msvc")
 
-		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-			downloadLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-v${VER_ARC}-amd64.zip" "${DIR_ARC}" "")
-		else()
-			compileLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-${VER_ARC}.zip" "${DIR_ARC}" "cmake\;..\;-G\;NMake Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DENABLE_WERROR=0;${MAKE_CMD}" "${DIR_ARC}/build" "")
-		endif()
+		compileLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-${VER_ARC}.zip" "${DIR_ARC}" "${CMAKE_COMMAND}\;..\;-G\;NMake Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DENABLE_WERROR=0\;-DENABLE_MBEDTLS=0\;-DENABLE_NETTLE=0\;-DENABLE_OPENSSL=0\;-DENABLE_LIBB2=0\;-DENABLE_LZ4=0\;-DENABLE_LZO=0\;-DENABLE_LZMA=0\;-DENABLE_ZSTD=0\;-DENABLE_ZLIB=0\;-DENABLE_BZip2=0\;-DENABLE_LIBXML2=0\;-DENABLE_EXPAT=0\;-DENABLE_PCREPOSIX=0\;-DENABLE_CNG=0\;-DENABLE_XATTR=0\;-DENABLE_ACL=0\;-DENABLE_ICONV=0\;-DENABLE_TEST=0\;-DENABLE_COVERAGE=0\;-DENABLE_INSTALL=0\;-DENABLE_TAR=0\;-DENABLE_CPIO=0\;-DENABLE_CAT=0;${MAKE_CMD}" "${DIR_ARC}/build" "${DIR_LIB}/libarchive-${VER_ARC}")
 		downloadLib("https://github.com/libsdl-org/SDL/releases/download/release-${VER_SDL}/SDL2-devel-${VER_SDL}-VC.zip" "${DIR_SDL}" "${DIR_LIB}/SDL2-${VER_SDL}")
 		downloadLib("https://github.com/libsdl-org/SDL_image/releases/download/release-${VER_IMG}/SDL2_image-devel-${VER_IMG}-VC.zip" "${DIR_IMG}" "${DIR_LIB}/SDL2_image-${VER_IMG}")
-		compileLib("https://download.savannah.gnu.org/releases/freetype/freetype-${VER_FT2}.tar.gz" "${DIR_FT2}" "cmake\;..\;-G\;NMake Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DFT_ENABLE_ERROR_STRINGS=1\;-DFT_DISABLE_ZLIB=1\;-DFT_DISABLE_BZIP2=1\;-DFT_DISABLE_PNG=1\;-DFT_DISABLE_HARFBUZZ=1\;-DFT_DISABLE_BROTLI=1;${MAKE_CMD}" "${BIN_FT2}" "${DIR_LIB}/freetype-${VER_FT2}")
-		link_directories("${LIB_ARC}" "${BIN_SDL}" "${BIN_IMG}" "${BIN_FT2}")
-		include_directories(SYSTEM "${INC_ARC}" "${DIR_SDL}/include" "${DIR_IMG}/include" "${DIR_FT2}/include")
+		compileLib("https://download.savannah.gnu.org/releases/freetype/freetype-${VER_FT2}.tar.gz" "${DIR_FT2}" "${CMAKE_COMMAND}\;..\;-G\;NMake Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DFT_ENABLE_ERROR_STRINGS=1\;-DFT_DISABLE_ZLIB=1\;-DFT_DISABLE_BZIP2=1\;-DFT_DISABLE_PNG=1\;-DFT_DISABLE_HARFBUZZ=1\;-DFT_DISABLE_BROTLI=1;${MAKE_CMD}" "${BIN_FT2}" "${DIR_LIB}/freetype-${VER_FT2}")
+		try_rename("${DIR_SDL}/include" "${DIR_SDL}/SDL2")
+		try_rename("${DIR_IMG}/include" "${DIR_IMG}/SDL2")
+		link_directories("${DIR_ARC}/build/libarchive" "${BIN_SDL}" "${BIN_IMG}" "${BIN_FT2}")
+		include_directories(SYSTEM "${DIR_ARC}/libarchive" "${DIR_SDL}/SDL2" "${DIR_SDL}" "${DIR_IMG}" "${DIR_FT2}/include")
 	else()
 		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 			set(VMACHINE "win64")
@@ -313,25 +323,21 @@ if(WIN32)
 			set(VMACHINE "win32")
 			set(VMARCH "i686")
 		endif()
+		set(DIR_ARC "${DIR_LIB}/libarchive-${VER_ARC}-${VMACHINE}-mingw")
 		set(DIR_SDL "${DIR_LIB}/SDL2-${VER_SDL}-mingw")
 		set(DIR_IMG "${DIR_LIB}/SDL2_image-${VER_IMG}-mingw")
 		set(DIR_FT2 "${DIR_LIB}/freetype-${VER_FT2}-${VMACHINE}-mingw")
-		set(DIR_ARC "${DIR_LIB}/libarchive-${VER_ARC}-${VMACHINE}-mingw")
-		set(DIR_CURL "${DIR_LIB}/curl-${VER_CURL}-${VMACHINE}-mingw")
-		set(DIR_LXML "${DIR_LIB}/libxml2-${VER_LXML}-${VMACHINE}-mingw")
 		set(BIN_ARC "${DIR_ARC}/build/bin")
 		set(BIN_SDL "${DIR_SDL}/${VMARCH}-w64-mingw32/bin")
 		set(BIN_IMG "${DIR_IMG}/${VMARCH}-w64-mingw32/bin")
 		set(BIN_FT2 "${DIR_FT2}/build")
-		set(BIN_CURL "${DIR_CURL}/bin")
-		set(BIN_LXML "${DIR_LXML}/win32/bin.mingw")
 
-		compileLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-${VER_ARC}.zip" "${DIR_ARC}" "cmake\;..\;-G\;MinGW Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DENABLE_WERROR=0;${MAKE_CMD}\;archive" "${DIR_ARC}/build" "${DIR_LIB}/libarchive-${VER_ARC}")
+		compileLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-${VER_ARC}.zip" "${DIR_ARC}" "${CMAKE_COMMAND}\;..\;-G\;MinGW Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DENABLE_WERROR=0\;-DENABLE_MBEDTLS=0\;-DENABLE_NETTLE=0\;-DENABLE_OPENSSL=0\;-DENABLE_LIBB2=0\;-DENABLE_LZ4=0\;-DENABLE_LZO=0\;-DENABLE_LZMA=0\;-DENABLE_ZSTD=0\;-DENABLE_ZLIB=0\;-DENABLE_BZip2=0\;-DENABLE_LIBXML2=0\;-DENABLE_EXPAT=0\;-DENABLE_PCREPOSIX=0\;-DENABLE_CNG=0\;-DENABLE_XATTR=0\;-DENABLE_ACL=0\;-DENABLE_ICONV=0\;-DENABLE_TEST=0\;-DENABLE_COVERAGE=0\;-DENABLE_INSTALL=0\;-DENABLE_TAR=0\;-DENABLE_CPIO=0\;-DENABLE_CAT=0;${MAKE_CMD}\;archive" "${DIR_ARC}/build" "${DIR_LIB}/libarchive-${VER_ARC}")
 		downloadLib("https://github.com/libsdl-org/SDL/releases/download/release-${VER_SDL}/SDL2-devel-${VER_SDL}-mingw.zip" "${DIR_SDL}" "${DIR_LIB}/SDL2-${VER_SDL}")
 		downloadLib("https://github.com/libsdl-org/SDL_image/releases/download/release-${VER_IMG}/SDL2_image-devel-${VER_IMG}-mingw.zip" "${DIR_IMG}" "${DIR_LIB}/SDL2_image-${VER_IMG}")
-		compileLib("https://download.savannah.gnu.org/releases/freetype/freetype-${VER_FT2}.tar.gz" "${DIR_FT2}" "cmake\;..\;-G\;MinGW Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DFT_ENABLE_ERROR_STRINGS=1\;-DFT_DISABLE_ZLIB=1\;-DFT_DISABLE_BZIP2=1\;-DFT_DISABLE_PNG=1\;-DFT_DISABLE_HARFBUZZ=1\;-DFT_DISABLE_BROTLI=1;${MAKE_CMD}" "${BIN_FT2}" "${DIR_LIB}/freetype-${VER_FT2}")
+		compileLib("https://download.savannah.gnu.org/releases/freetype/freetype-${VER_FT2}.tar.gz" "${DIR_FT2}" "${CMAKE_COMMAND}\;..\;-G\;MinGW Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DFT_ENABLE_ERROR_STRINGS=1\;-DFT_DISABLE_ZLIB=1\;-DFT_DISABLE_BZIP2=1\;-DFT_DISABLE_PNG=1\;-DFT_DISABLE_HARFBUZZ=1\;-DFT_DISABLE_BROTLI=1;${MAKE_CMD}" "${BIN_FT2}" "${DIR_LIB}/freetype-${VER_FT2}")
 		link_directories("${DIR_ARC}/build/libarchive" "${DIR_SDL}/${VMARCH}-w64-mingw32/lib" "${DIR_IMG}/${VMARCH}-w64-mingw32/lib" "${BIN_FT2}")
-		include_directories(SYSTEM "${DIR_ARC}/libarchive" "${DIR_SDL}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_IMG}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_FT2}/include")
+		include_directories(SYSTEM "${DIR_ARC}/libarchive" "${DIR_SDL}/${VMARCH}-w64-mingw32/include/SDL2" "${DIR_SDL}/${VMARCH}-w64-mingw32/include" "${DIR_IMG}/${VMARCH}-w64-mingw32/include" "${DIR_FT2}/include")
 	endif()
 else()
 	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -353,15 +359,13 @@ else()
 	find_package(LibArchive REQUIRED)
 	include_directories(SYSTEM ${FREETYPE_INCLUDE_DIRS} ${LibArchive_INCLUDE_DIRS})
 endif()
+if(Vulkan_FOUND)
+	include_directories(SYSTEM ${Vulkan_INCLUDE_DIRS})	# needs to come after the other includes so the SDL and GLM headers from the SDK don't get used
+endif()
 set(ICONS_DIR "${DATA_DIR}/icons")
 set(LICN_DIR "${DATA_DIR}/licenses")
 
 # compiler flags
-add_compile_definitions($<$<BOOL:${DIRECTX}>:WITH_DIRECTX>
-	"$<$<BOOL:${OPENGL}>:WITH_OPENGL;$<$<BOOL:${OPENGLES}>:OPENGLES>>"
-	$<$<BOOL:${VULKAN}>:WITH_VULKAN>
-	"$<$<BOOL:${WIN32}>:UNICODE;_UNICODE;_CRT_SECURE_NO_WARNINGS;NOMINMAX;$<$<NOT:$<BOOL:${MSVC}>>:_WIN32_WINNT=0x600>>")
-
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 	add_compile_options(-Wall -Wextra -pedantic-errors -Wformat=2 -Wmissing-declarations -Wold-style-cast -Wshadow -Wunreachable-code
 		-Wno-implicit-fallthrough -Wno-missing-field-initializers -Wno-switch $<$<NOT:$<BOOL:${MINGW}>>:-Wdouble-promotion>)
@@ -375,7 +379,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 			"$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto;-fuse-linker-plugin>")
 		add_link_options("$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto;-fuse-linker-plugin;-s>")
 	else()
-		add_compile_options(-Wcast-align -Wnull-dereference -Wshadow-all -Wno-final-dtor-non-final-class)
+		add_compile_options(-Wcast-align -Wimplicit-int-float-conversion -Wnull-dereference -Wshadow-all -Wno-final-dtor-non-final-class)
 	endif()
 elseif(MSVC)
 	add_compile_options(/wd4244 /wd4267 $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:/GL>)
@@ -386,10 +390,10 @@ add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES})
 target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image
 	"$<IF:$<BOOL:${WIN32}>,freetype;archive,${FREETYPE_LIBRARIES};${LibArchive_LIBRARIES}>"
 	"$<$<BOOL:${UNIX}>:pthread;dl>"
-	"$<$<BOOL:${DIRECTX}>:d3d11.lib;dxgi.lib>"
-	$<$<BOOL:${OPENGL}>:$<IF:$<BOOL:${WIN32}>,opengl32,$<IF:$<BOOL:${OPENGLES}>,GLESv2,GL>>>
-	$<$<BOOL:${VULKAN}>:$<IF:$<BOOL:${WIN32}>,vulkan-1,vulkan>>
 	"$<$<BOOL:${ICU_FOUND}>:${ICU_UC_LIBRARIES};$<IF:$<BOOL:${WIN323}>,${ICU_IN_LIBRARIES},${ICU_I18N_LIBRARIES}>>")
+if(NOT CMAKE_EXPORT_COMPILE_COMMANDS)	# because it fucks with ALE
+	target_precompile_headers(${PROJECT_NAME} PUBLIC "src/utils/widgets.h")
+endif()
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
 	RUNTIME_OUTPUT_DIRECTORY "${TBIN_DIR}"
@@ -409,12 +413,13 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 	COMMAND "${CMAKE_COMMAND}" -E make_directory "${ICONS_DIR}"
 	COMMAND "${CMAKE_COMMAND}" -E copy_directory "${DIR_RSC}/licenses" "${LICN_DIR}"
 	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/BrisaSans.otf" "${DIR_RSC}/themes.ini" "${DATA_DIR}"
-	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_LIB}/glm/copying.txt" "${LICN_DIR}/COPYING.glm.txt"
-	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.svg" "${DIR_ICN}/center.svg" "${DIR_ICN}/cross.svg" "${DIR_ICN}/file.svg" "${DIR_ICN}/fit.svg" "${DIR_ICN}/folder.svg" "${DIR_ICN}/left.svg" "${DIR_ICN}/minus.svg" "${DIR_ICN}/plus.svg" "${DIR_ICN}/reset.svg" "${DIR_ICN}/right.svg" "${DIR_ICN}/search.svg" "${ICONS_DIR}")
+	COMMAND "$<$<NOT:$<BOOL:${FOUND_GLM}>>:${CMAKE_COMMAND};-E;copy_if_different;${DIR_LIB}/glm/copying.txt;${LICN_DIR}/COPYING.glm.txt>"
+	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.svg" "${DIR_ICN}/center.svg" "${DIR_ICN}/cross.svg" "${DIR_ICN}/file.svg" "${DIR_ICN}/fit.svg" "${DIR_ICN}/folder.svg" "${DIR_ICN}/left.svg" "${DIR_ICN}/minus.svg" "${DIR_ICN}/plus.svg" "${DIR_ICN}/reset.svg" "${DIR_ICN}/right.svg" "${DIR_ICN}/search.svg" "${ICONS_DIR}"
+	COMMAND_EXPAND_LISTS)
 if(WIN32)
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ARC}/$<IF:$<BOOL:${MSVC}>,archive.dll,libarchive.dll>" "${BIN_SDL}/SDL2.dll" "${BIN_IMG}/SDL2_image.dll" "$<$<BOOL:${MSVC}>:${BIN_IMG}/optional/libtiff-5.dll;${BIN_IMG}/optional/libwebp-7.dll>" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-		COMMAND "$<$<BOOL:${MSVC}>:${CMAKE_COMMAND};-E;copy_if_different;${BIN_IMG}/optional/LICENSE.tiff.txt;${BIN_IMG}/optional/LICENSE.webp.txt;${LICN_DIR}>"
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ARC}/$<IF:$<BOOL:${MSVC}>,archive.dll,libarchive.dll>" "${BIN_SDL}/SDL2.dll" "${BIN_IMG}/SDL2_image.dll" "$<$<BOOL:${MSVC}>:${BIN_IMG}/optional/libavif-16.dll;${BIN_IMG}/optional/libtiff-5.dll;${BIN_IMG}/optional/libwebp-7.dll;${BIN_IMG}/optional/libwebpdemux-2.dll>" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+		COMMAND "$<$<BOOL:${MSVC}>:${CMAKE_COMMAND};-E;copy_if_different;${BIN_IMG}/optional/LICENSE.avif.txt;${BIN_IMG}/optional/LICENSE.dav1d.txt;${BIN_IMG}/optional/LICENSE.tiff.txt;${BIN_IMG}/optional/LICENSE.webp.txt;${LICN_DIR}>"
 		COMMAND "$<$<BOOL:${MINGW}>:${CMAKE_COMMAND};-E;copy_if_different;${DIR_ARC}/COPYING;${LICN_DIR}/COPYING.libarchive.txt>"
 		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_SDL}/COPYING.txt" "${LICN_DIR}/COPYING.SDL.txt"
 		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_IMG}/LICENSE.txt" "${LICN_DIR}/LICENSE.SDL_image.txt"
@@ -440,6 +445,7 @@ else()
 		endif()
 	endif()
 	if(APPIMAGE)
+		find_program(CMD_BASH "bash")
 		find_program(LINUXDEPLOY "linuxdeploy")
 		if(NOT LINUXDEPLOY)
 			set(LDPEXE_NAME "linuxdeploy-${VMARCH}.AppImage")
@@ -455,7 +461,7 @@ else()
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 			COMMAND "${CMAKE_COMMAND}" -E create_symlink "usr/bin/${PROJECT_NAME_LOWER}" "${PBOUT_DIR}/AppRun"
 			COMMAND "${CMAKE_COMMAND}" -E create_symlink "usr/share/${PROJECT_NAME_LOWER}/icons/${PROJECT_NAME_LOWER}.svg" "${PBOUT_DIR}/${PROJECT_NAME_LOWER}.svg"
-			COMMAND bash -c "VERSION='${PROJECT_VERSION}' '${LINUXDEPLOY}' --appdir '${PBOUT_DIR}' --output appimage")
+			COMMAND "${CMD_BASH}" -c "VERSION='${PROJECT_VERSION}' '${LINUXDEPLOY}' --appdir '${PBOUT_DIR}' --output appimage")
 	endif()
 endif()
 
@@ -478,10 +484,20 @@ else()
 endif()
 
 # group files
-foreach(FSRC IN LISTS SRC_FILES)
-	get_filename_component(FGRP "${FSRC}" DIRECTORY)
-	string(REPLACE "/" ";" FGRP "${FGRP}")
-	list(REMOVE_AT FGRP 0)
-	string(REPLACE ";" "/" FGRP "${FGRP}")
-	source_group("${FGRP}" FILES "${FSRC}")
-endforeach()
+if(MSVC)
+	foreach(FSRC IN LISTS SRC_FILES)
+		get_filename_component(FGRP "${FSRC}" DIRECTORY)
+		string(REPLACE "/" ";" FGRP "${FGRP}")
+		list(REMOVE_AT FGRP 0)
+		string(REPLACE ";" "/" FGRP "${FGRP}")
+		source_group("${FGRP}" FILES "${FSRC}")
+	endforeach()
+	foreach(CFG IN LISTS CMAKE_CONFIGURATION_TYPES)
+		source_group("_pch" FILES "${CMAKE_BINARY_DIR}/CMakeFiles/${PROJECT_NAME}.dir/${CFG}/cmake_pch.hxx")
+	endforeach()
+	source_group("_pch" FILES "${CMAKE_BINARY_DIR}/CMakeFiles/${PROJECT_NAME}.dir/cmake_pch.cxx")
+else()
+	foreach(FSRC IN LISTS SRC_FILES)
+		source_group("" FILES "${FSRC}")	# Qt Creator is a bitch
+	endforeach()
+endif()

@@ -1,2 +1,2 @@
 R"r(#version 130
-uniform sampler2D colorMap;uniform vec4 color;noperspective in vec2 fragUV;out vec4 outColor;void main(){outColor=texture(colorMap,fragUV)*color;})r"
+uniform sampler2D f;uniform vec4 g;noperspective in vec2 e;out vec4 h;void main(){h=texture(f,e)*g;})r"

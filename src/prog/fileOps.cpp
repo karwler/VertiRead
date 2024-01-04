@@ -22,19 +22,20 @@ using namespace LibSmbclient;
 #include "engine/optional/ssh2.h"
 using namespace LibSsh2;
 #endif
+#include <format>
 #include <fstream>
 #include <queue>
 #include <stack>
 #include <archive.h>
 #include <archive_entry.h>
-#ifdef _WIN32
-#include <SDL_image.h>
-#else
+#ifndef _WIN32
+#include <dirent.h>
+#include <fcntl.h>
 #include <sys/inotify.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#include <SDL2/SDL_image.h>
 #endif
+#include <SDL2/SDL_image.h>
 
 // CREDENTIAL MANAGER
 
@@ -312,7 +313,7 @@ pair<PopplerDocument*, Data> FileOps::loadArchivePdf(archive* arch, archive_entr
 	return esiz > int64(signaturePdf.size()) ? loadPdfChecked(arch, esiz, archive_read_data, error) : pair(nullptr, Data());
 }
 
-template <class H, class F>
+template <IntegerPointer H, class F>
 pair<PopplerDocument*, Data> FileOps::loadPdfChecked(H fd, size_t esiz, F eread, string* error) {
 	array<byte_t, signaturePdf.size()> sig;
 	int64 len = eread(fd, sig.data(), sig.size());

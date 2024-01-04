@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/settings.h"
+#include <format>
 #include <fstream>
 #include <thread>
 #ifdef _WIN32
@@ -47,6 +48,30 @@ void IniLine::writeKeyVal(std::ofstream& ofs, P&& prp, K&& key, T&&... val) {
 	((ofs << std::forward<P>(prp) << '[' << std::forward<K>(key) << "]=") << ... << std::forward<T>(val)) << LINEND;
 }
 
+struct CsvText {
+	enum class Code : uint8 {
+		end,
+		field,
+		last
+	};
+
+	string field;
+	const char* text;
+	const char* lineStart;
+	const char* lineEnd;
+	bool nextLine = true;
+
+	CsvText(const char* str);
+
+	template <bool fill = true> Code readField();
+
+	static string makeLine(const vector<string>& fields);
+};
+
+inline CsvText::CsvText(const char* str) :
+	text(str + strspn(str, "\r\n"))
+{}
+
 // handles all filesystem interactions
 class FileSys {
 private:
@@ -56,7 +81,7 @@ private:
 	static constexpr char fileThemes[] = "themes.ini";
 	static constexpr char fileSettings[] = "settings.ini";
 	static constexpr char fileBindings[] = "bindings.ini";
-	static constexpr char fileBooks[] = "books.dat";
+	static constexpr char fileBooks[] = "books.csv";
 
 	static constexpr char iniKeywordMaximized[] = "maximized";
 	static constexpr char iniKeywordScreen[] = "screen";
@@ -107,8 +132,8 @@ public:
 	vector<string> getAvailableThemes() const;
 	array<vec4, Settings::defaultColors.size()> loadColors(string_view theme) const;	// updates settings' colors according to settings' theme
 	vector<string> getLastPage(string_view book) const;
-	void saveLastPage(string_view book, const vector<string>& paths) const;
-	Settings* loadSettings() const;
+	void saveLastPage(const vector<string>& paths) const;
+	Settings* loadSettings(const uset<string>* cmdFlags = nullptr) const;
 	void saveSettings(const Settings* sets) const;
 	array<Binding, Binding::names.size()> loadBindings() const;
 	void saveBindings(const array<Binding, Binding::names.size()>& bindings) const;
@@ -143,6 +168,9 @@ private:
 #endif
 	static fs::path localFontDir();
 	static fs::path systemFontDir();
+	static bool toBool(string_view str);
+	static string tmToDateStr(const tm& tim);
+	static string tmToTimeStr(const tm& tim);
 	static void SDLCALL logWrite(void* userdata, int category, SDL_LogPriority priority, const char* message);
 };
 
@@ -165,3 +193,16 @@ inline fs::path FileSys::systemFontDir() {
 	return "/usr/share/fonts";
 #endif
 }
+
+inline bool FileSys::toBool(string_view str) {
+	return strciequal(str, "true") || strciequal(str, "on") || strciequal(str, "y") || rng::any_of(str, [](char c) -> bool { return c >= '1' && c <= '9'; });
+}
+
+inline string FileSys::tmToDateStr(const tm& tim) {
+	return std::format("{}-{:02}-{:02}", tim.tm_year + 1900, tim.tm_mon + 1, tim.tm_mday);
+}
+
+inline string FileSys::tmToTimeStr(const tm& tim) {
+	return std::format("{:02}:{:02}:{:02}", tim.tm_hour, tim.tm_min, tim.tm_sec);
+}
+

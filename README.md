@@ -4,10 +4,9 @@ It's basically just an image viewer that shows all pictures of a directory/archi
 Currently supported file formats are whatever SDL2_image and libarchive support.  
 
 ## Build
-The CMakeLists.txt is written for at least CMake 3.12.4 with Clang, GCC, MinGW or MSVC which need to support C++ 20.  
-You can generate project files for a debug build by running CMake with the "-DCMAKE_BUILD_TYPE=Debug" option. Otherwise it'll default to a release build.  
-By default the Program uses OpenGL 3.0 which can be switched to OpenGL ES 3.0 with "-DOPENGLES=ON" or entirely disabled with "-DOPENGL=OFF".  
-Support for DirectX 11 and Vulkan 1.0 can be enabled by setting the options "-DDIRECTX=ON" and "-DVULKAN=ON".  
+The CMakeLists.txt is written for at least CMake 3.16.9 with Clang, GCC, MinGW or MSVC which need to support C++ 20.  
+By default the Program uses OpenGL with the lowest possible version which can be disabled with "-DOPENGL=OFF".  
+Support for Direct3D 11 and Vulkan 1.0 can be disabled by setting the options "-DDIRECT3D=OFF" and "-DVULKAN=OFF".  
 
 ### Linux
 Most dependencies need to be installed manually. Installing the development packages for SDL 2, SDL_image 2, FreeType 2 and libarchive should be enough.  
@@ -21,29 +20,29 @@ Example:
 ```bash
 mkdir build
 cd build
-cmake .. -DVULKAN=ON
+cmake .. -DCMAKE_BUILD_TYPE=Release
 make
 ```
 
 ### Windows
-All necessary libraries are downloaded while running CMake.  
+All necessary libraries are downloaded and compiled while running CMake. For this to work MSVC/MinGW must be in the console's PATH.  
 Settings files are being saved in "%AppData%\VertiRead".  
 
 Example:  
 ```batch
 mkdir build
 cd build
-cmake .. -G "NMake Makefiles" -DDIRECTX=ON
+cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release
 nmake
 ```
 
 ### Directly used Libraries
 |Library|Optional|Description|
 |-|-|-|
-|d3d11 & dxgi|compile time|Rendering with DirectX 11. (linked if present at compile time)|
+|d3d11 & dxgi|runtime|Rendering with Direct3D. (loaded dynamically at runtime)|
 |fontconfig|runtime|Speeds up font file lookup. (loaded dynamically at runtime)|
 |freetype2|no|Needed for rendering text.|
-|GL/GLESv2|compile time|Rendering with OpenGL/OpenGL ES. (linked if present at compile time)|
+|GL/GLES|runtime|Rendering with OpenGL/OpenGL ES. (linked dynamically at runtime)|
 |glm|no|Needed mostly for widget positioning.|
 |ICU|compile time|Improves sorting of file lists. (linked if present at compile time)|
 |libarchive|no|Needed for reading archive files.|
@@ -53,10 +52,10 @@ nmake
 |SDL2|no|Needed for everything.|
 |SDL2_image|no|Needed to load images.|
 |smbclient|runtime|For browsing SMB shares. (loaded dynamically at runtime)|
-|vulkan|compile time|Rendering with Vulkan. (linked if present at compile time)|
+|vulkan|runtime|Rendering with Vulkan. (loaded dynamically at runtime)|
 
 ### Recompiling shaders
-The shader code for DirectX, OpenGL and Vulkan is stored in the header files in "src/engine/shaders".  
+The shader code for Direct3D, OpenGL and Vulkan is stored in the header files in "src/engine/shaders".  
 These files can be recreated from the files in "rsc/shaders" with these python scripts as long as fxc or glslc are installed.  
 
 ```bash
@@ -82,7 +81,13 @@ Among the program's resource files is a "themes.ini" file which can be used to e
 |-|-|
 |&lt;path&gt;|Path to a file or directory to open.|
 |-c|Don't bypass the X11 compositor.|
+|-d11|Force to launch with Direct3D 11.|
+|-e3|Force to launch with OpenGL ES 3.0.|
+|-g1|Force to launch with OpenGL 1.1.|
+|-g3|Force to launch with OpenGL 3.0.|
 |-l|Don't write to a log file.|
+|-sf|Force to launch with a software renderer.|
+|-vk|Force to launch with Vulkan 1.0.|
 
 ## Supported files
 - images: bmp, gif, jpg, lbm, pcx, png, pnm, svg, tga, tiff, webp, xcf, xpm, xv

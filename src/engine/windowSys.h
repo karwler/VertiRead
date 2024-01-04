@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/settings.h"
+#include <SDL2/SDL_events.h>
 
 // handles window events and contains video settings
 class WindowSys {
@@ -31,7 +32,6 @@ public:
 	void moveCursor(ivec2 mov);
 	void toggleOpacity();
 	void setScreenMode(Settings::Screen sm);
-	void reposizeWindow(ivec2 dres, ivec2 wsiz);
 	void resetSettings();
 	void recreateWindows();
 
@@ -47,6 +47,7 @@ private:
 	void exec();
 
 	void createWindow();
+	uint32 initWindow(bool shared);
 	void createSingleWindow(uint32 flags, SDL_Surface* icon);
 	void createMultiWindow(uint32 flags, SDL_Surface* icon);
 	void destroyWindows();

@@ -129,10 +129,10 @@ bool tstrciequal(std::basic_string_view<C> a, std::basic_string_view<C> b) {
 		return false;
 	for (size_t i = 0; i < a.length(); ++i) {
 		if constexpr (sizeof(C) == sizeof(char)) {
-			if (std::tolower(a[i]) != std::tolower(b[i]))
+			if (toupper(a[i]) != toupper(b[i]))
 				return false;
 		} else
-			if (std::towlower(a[i]) != std::towlower(b[i]))
+			if (towupper(a[i]) != towupper(b[i]))
 				return false;
 	}
 	return true;
@@ -151,7 +151,7 @@ bool strnciequal(string_view a, string_view b, size_t n) {
 	if (alen != std::min(b.length(), n))
 		return false;
 	for (size_t i = 0; i < alen; ++i)
-		if (std::tolower(a[i]) != std::tolower(b[i]))
+		if (toupper(a[i]) != toupper(b[i]))
 			return false;
 	return true;
 }
@@ -164,70 +164,55 @@ string_view parentPath(string_view path) {
 	return len || path.empty() || notDsep(path[0]) ? string_view(path.data(), len) : "/";
 }
 
-static bool pathCompareLoop(string_view as, string_view bs, string_view::iterator& ai, string_view::iterator& bi) {
-	while (ai != as.end() && bi != bs.end()) {
+static bool pathCompareLoop(string_view::iterator& ai, string_view::iterator ae, string_view::iterator& bi, string_view::iterator be) {
+	while (ai != ae && bi != be) {
 		// comparee names of next entry
-		string_view::iterator an = std::find_if(ai, as.end(), isDsep);
-		string_view::iterator bn = std::find_if(bi, bs.end(), isDsep);
+		string_view::iterator an = std::find_if(ai, ae, isDsep);
+		string_view::iterator bn = std::find_if(bi, be, isDsep);
 		if (!std::equal(ai, an, bi, bn))
 			return false;
 
 		// skip directory separators
-		ai = std::find_if(an, as.end(), notDsep);
-		bi = std::find_if(bn, bs.end(), notDsep);
+		ai = std::find_if(an, ae, notDsep);
+		bi = std::find_if(bn, be, notDsep);
 	}
 	return true;	// one has reached it's end so don't forget to check later which one (paths are equal if both have ended)
 }
 
+static bool pathCompareLoop(const char*& ai, const char*& bi) {
+#ifdef _WIN32
+	constexpr char dseps[] = "\\/";
+#else
+	constexpr char dseps[] = "/";
+#endif
+	while (*ai && *bi) {
+		const char* an = ai + strcspn(ai, dseps);
+		const char* bn = bi + strcspn(bi, dseps);
+		if (!std::equal(ai, an, bi, bn))
+			return false;
+		ai = an + strspn(an, dseps);
+		bi = bn + strspn(bn, dseps);
+	}
+	return true;
+}
+
+bool pathEqual(string_view a, string_view b) {
+	string_view::iterator ai = a.begin(), bi = b.begin();	// check if both paths have reached their ends simultaneously
+	return pathCompareLoop(ai, a.end(), bi, b.end()) && ai == a.end() && bi == b.end();
+}
+
+bool pathEqual(const char* a, const char* b) {
+	return pathCompareLoop(a, b) && !*a && !*b;
+}
+
 string_view relativePath(string_view path, string_view base) {
 	string_view::iterator ai = path.begin(), bi = base.begin();
-	return pathCompareLoop(path, base, ai, bi) && bi == base.end() ? string_view(ai, path.end()) : string_view();
+	return pathCompareLoop(ai, path.end(), bi, base.end()) && bi == base.end() ? string_view(ai, path.end()) : string_view();
 }
 
 bool isSubpath(string_view path, string_view base) {
 	string_view::iterator ai = path.begin(), bi = base.begin();	// parent has to have reached its end while path was still matching
-	return pathCompareLoop(path, base, ai, bi) && bi == base.end();
-}
-
-string strEnclose(string_view str) {
-	string txt(str);
-	for (size_t i = 0; (i = txt.find_first_of("\"\\", i)) != string::npos; i += 2)
-		txt.insert(txt.begin() + i, '\\');
-	return '"' + txt + '"';
-}
-
-string strUnenclose(string_view& str) {	// TODO: test
-	size_t p = str.find('"');
-	if (p == string::npos) {
-		string word(str);
-		str = string_view();
-		return word;
-	}
-
-	string word;
-	size_t e;
-	for (e = ++p; e < str.length() && str[e] != '"'; ++e)
-		if (str[e] == '\\') {
-			word.append(str.data() + p, e - p);
-			p = ++e;
-		}
-
-	word += str.substr(p, e);
-	str = e < str.length() ? str.substr(e) : string_view();
-	return word;
-}
-
-vector<string_view> getWords(string_view str) {
-	vector<string_view> words;
-	size_t p = 0;
-	for (; p < str.length() && isSpace(str[p]); ++p);
-	while (p < str.length()) {
-		size_t i = p;
-		for (; i < str.length() && notSpace(str[i]); ++i);
-		words.emplace_back(str.data() + p, i - p);
-		for (p = i; p < str.length() && isSpace(str[p]); ++p);
-	}
-	return words;
+	return pathCompareLoop(ai, path.end(), bi, base.end()) && bi == base.end();
 }
 
 tm currentDateTime() {

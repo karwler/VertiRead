@@ -675,6 +675,24 @@ void ReaderBox::onMouseMove(ivec2 mPos, ivec2 mMov) {
 void ReaderBox::setPictures(vector<pair<Cstring, Texture*>>& imgs, string_view startPic, bool fwd) {
 	deselectWidgets();
 	clearWidgets();
+
+	switch (World::sets()->zoomType) {
+	using enum Settings::Zoom;
+	case first:
+		if (!imgs.empty())
+			if (uint res = imgs[0].second->getRes()[direction.horizontal()])
+				zoomStep = zoomStepToFit(res);
+		break;
+	case largest: {
+		int di = direction.horizontal();
+		uint maxRes = 0;
+		for (auto& [name, tex] : imgs)
+			if (tex->getRes()[di] > maxRes)
+				maxRes = tex->getRes()[di];
+		if (maxRes)
+			zoomStep = zoomStepToFit(maxRes);
+	} }
+
 	numWgts = imgs.size();
 	widgets = std::make_unique_for_overwrite<Widget*[]>(numWgts);
 	positions = std::make_unique_for_overwrite<ivec2[]>(numWgts + 1);
@@ -736,6 +754,12 @@ void ReaderBox::setZoom(F zset, int8 step) {
 	zset(step);
 	Layout::onResize();
 	setListPos(ivec2(loc * vec2(vswap(getListSize()[!vi], getListSize()[vi] - totSpace, !vi))) + vswap(0, preSpace, !vi) - sh);
+}
+
+int8 ReaderBox::zoomStepToFit(uint res) const {
+	double target = double(World::drawSys()->getViewRes()[direction.horizontal()]) / double(res);
+	double zoom = std::floor(std::log(target) / std::log(Settings::zoomBase));
+	return int8(std::clamp(zoom, double(-Settings::zoomLimit), double(Settings::zoomLimit)));
 }
 
 void ReaderBox::centerList() {

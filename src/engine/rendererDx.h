@@ -1,10 +1,12 @@
 #pragma once
 
-#ifdef WITH_DIRECTX
+#ifdef WITH_DIRECT3D
 #include "renderer.h"
+#define WIN32_LEAN_AND_MEAN
+#define D3D11_NO_HELPERS
 #include <d3d11.h>
 
-class RendererDx final : public Renderer {
+class RendererDx11 final : public Renderer {
 private:
 	class TextureDx : public Texture {
 	private:
@@ -12,14 +14,14 @@ private:
 
 		TextureDx(uvec2 size, ID3D11ShaderResourceView* textureView) : Texture(size), view(textureView) {}
 
-		friend class RendererDx;
+		friend class RendererDx11;
 	};
 
 	struct ViewDx : View {
-		IDXGISwapChain* sc;
-		ID3D11RenderTargetView* tgt;
+		IDXGISwapChain* sc = nullptr;
+		ID3D11RenderTargetView* tgt = nullptr;
 
-		ViewDx(SDL_Window* window, const Recti& area, IDXGISwapChain* swapchain, ID3D11RenderTargetView* backbuffer);
+		using View::View;
 	};
 
 	struct Pview {
@@ -42,7 +44,6 @@ private:
 	ID3D11Device* dev = nullptr;
 	ID3D11DeviceContext* ctx = nullptr;
 	ID3D11BlendState* blendState = nullptr;
-	ID3D11SamplerState* sampleState = nullptr;
 	ID3D11RasterizerState* rasterizerGui = nullptr;
 	ID3D11RasterizerState* rasterizerSel = nullptr;
 
@@ -56,22 +57,24 @@ private:
 	ID3D11PixelShader* pixlSel = nullptr;
 	ID3D11Buffer* instAddrBuf = nullptr;
 	ID3D11Texture2D* texAddr = nullptr;
-	ID3D11RenderTargetView* tgtAddr = nullptr;
 	ID3D11Texture2D* outAddr = nullptr;
+	ID3D11RenderTargetView* tgtAddr = nullptr;
 
 	vec4 bgColor;
 	uint syncInterval;
-	bool squashPicTexels;
+	bool canBgra5551;
+	bool canBgr565;
+	bool canBgra4;
 
 public:
-	RendererDx(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
-	~RendererDx() override;
+	RendererDx11(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
+	~RendererDx11() override;
 
 	void setClearColor(const vec4& color) override;
 	void setVsync(bool vsync) override;
 	void updateView(ivec2& viewRes) override;
 	void setCompression(Settings::Compression compression) override;
-	pair<uint, Settings::Compression> getSettings(vector<pair<u32vec2, string>>& devices) const override;
+	Info getInfo() const override;
 
 	void startDraw(View* view) override;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) override;
@@ -89,10 +92,6 @@ public:
 	bool texFromText(Texture* tex, const PixmapRgba& pm) override;
 	void freeTexture(Texture* tex) override;
 
-protected:
-	uint maxTexSize() const override;
-	const umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>* getSquashableFormats() const override;
-
 private:
 	static IDXGIFactory* createFactory();
 	pair<IDXGISwapChain*, ID3D11RenderTargetView*> createSwapchain(IDXGIFactory* factory, SDL_Window* win, uvec2 res);
@@ -102,10 +101,11 @@ private:
 	ID3D11Texture2D* createTexture(uvec2 res, DXGI_FORMAT format, D3D11_USAGE usage, uint bindFlags, uint accessFlags = 0, const D3D11_SUBRESOURCE_DATA* subrscData = nullptr) const;
 	ID3D11ShaderResourceView* createTextureView(ID3D11Texture2D* tex, DXGI_FORMAT format);
 
-	template <class T> void uploadBuffer(ID3D11Buffer* buffer, const T& data);
+	template <Class T> void uploadBuffer(ID3D11Buffer* buffer, const T& data);
 	ID3D11ShaderResourceView* createTexture(const byte_t* pix, uvec2 res, uint pitch, DXGI_FORMAT format);
-	static pair<SDL_Surface*, DXGI_FORMAT> pickPixFormat(SDL_Surface* img);
-	template <class T> static void comRelease(T*& obj);
+	static void replaceTexture(TextureDx* tex, ID3D11ShaderResourceView* tview, uvec2 res);
+	pair<SDL_Surface*, DXGI_FORMAT> pickPixFormat(SDL_Surface* img) const;
+	template <Derived<IUnknown> T> static void comRelease(T*& obj);
 	static string hresultToStr(HRESULT rs);
 };
 #endif

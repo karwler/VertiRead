@@ -185,12 +185,13 @@ class ProgSettings final : public ProgState {
 public:
 	string oldPathBuffer;	// for keeping old library path between decisions
 	LabelEdit* libraryDir;
+	Layout* zoomLine;
 	Layout* limitLine;
 private:
 	ComboBox* screen;
 	CheckBox* showHidden;
 	ComboBox* fontList;
-	vector<pair<u32vec2, string>> devices;
+	vector<u32vec2> devices;
 	std::jthread moveThread, fontThread;
 
 public:
@@ -204,17 +205,20 @@ public:
 	void eventFileDrop(const char* file) override;
 
 	RootLayout* createLayout() override;
+	Widget* createZoomEdit();
 	Widget* createLimitEdit();
-	u32vec2 getDevice(size_t id) const { return devices[id].first; }
+	u32vec2 getDevice(size_t id) const { return devices[id]; }
 	static Cstring makeZoomText();
 
 	void stopFonts();
-	void setFontField(vector<Cstring>&& families, uptr<Cstring[]>&& files, size_t select);
+	void setFontField(vector<Cstring>&& families, uptr<Cstring[]>&& files, uint select);
 	void startMove();
 	void stopMove();
 	static void logMoveErrors(const string* errors);
 private:
 	void startFonts();
+	uint getSettingsNumberDisplayLength() const;
+	template <Iterator T> static uptr<Cstring[]> makeCmbTips(T pos, T end);
 };
 
 class ProgSearchDir final : public ProgFileExplorer {
