@@ -6,8 +6,8 @@
 #include "optional/d3d.h"
 #include "prog/program.h"
 #include "prog/progs.h"
-#include <SDL2/SDL_image.h>
-#include <SDL2/SDL_vulkan.h>
+#include <SDL_image.h>
+#include <SDL_vulkan.h>
 
 int WindowSys::start(vector<string>&& cmdVals,  uset<string>&& cmdFlags) {
 	fileSys = nullptr;
@@ -153,7 +153,7 @@ void WindowSys::createWindow() {
 	case multiFullscreen:
 		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_SKIP_TASKBAR;
 	}
-	SDL_Surface* icon = IMG_Load((fromPath(fileSys->dirIcons()) / DrawSys::iconName(DrawSys::Tex::vertiread)).c_str());
+	SDL_Surface* icon = IMG_Load((fromPath(fileSys->dirIcons()) / DrawSys::iconName(DrawSys::Tex::vertiread)).data());
 
 	vector<Settings::Renderer> renderers;
 	switch (sets->renderer) {
@@ -274,7 +274,8 @@ uint32 WindowSys::initWindow(bool shared) {
 	using enum Settings::Renderer;
 #ifdef WITH_DIRECT3D
 	case direct3d11:
-		LibD3d11::load();
+		if (!symD3d11())
+			throw std::runtime_error("Failed to load D3D11 libraries");
 		break;
 #endif
 #ifdef WITH_OPENGL
@@ -328,7 +329,7 @@ void WindowSys::createMultiWindow(uint32 flags, SDL_Surface* icon) {
 	windows.reserve(sets->displays.size());
 	int minId = rng::min_element(sets->displays, [](const pair<const int, Recti>& a, const pair<const int, Recti>& b) -> bool { return a.first < b.first; })->first;
 	for (const auto& [id, rect] : sets->displays) {
-		SDL_Window* win = windows.emplace(id, SDL_CreateWindow(std::format("{} {}", title, id).c_str(), SDL_WINDOWPOS_CENTERED_DISPLAY(id), SDL_WINDOWPOS_CENTERED_DISPLAY(id), rect.w, rect.h, id != minId ? flags : flags & ~SDL_WINDOW_SKIP_TASKBAR)).first->second;
+		SDL_Window* win = windows.emplace(id, SDL_CreateWindow(std::format("{} {}", title, id).data(), SDL_WINDOWPOS_CENTERED_DISPLAY(id), SDL_WINDOWPOS_CENTERED_DISPLAY(id), rect.w, rect.h, id != minId ? flags : flags & ~SDL_WINDOW_SKIP_TASKBAR)).first->second;
 		if (!win)
 			throw std::runtime_error(std::format("Failed to create window:" LINEND "{}", SDL_GetError()));
 		SDL_SetWindowIcon(win, icon);
@@ -347,7 +348,7 @@ void WindowSys::destroyWindows() {
 	using enum Settings::Renderer;
 #ifdef WITH_DIRECT3D
 	case direct3d11:
-		LibD3d11::free();
+		closeD3d11();
 		break;
 #endif
 #ifdef WITH_OPENGL

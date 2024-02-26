@@ -20,7 +20,7 @@ Program::~Program() {
 void Program::start(const vector<string>& cmdVals) {
 	eventOpenBookList();
 	if (!cmdVals.empty())
-		openFile(cmdVals[0]);
+		openFile(cmdVals[0].data());
 }
 
 void Program::tick() {
@@ -42,6 +42,18 @@ void Program::handleGeneralEvent(const SDL_UserEvent& event) {
 		break;
 	case resizeComboContext:
 		eventResizeComboContext(static_cast<Context*>(event.data1));
+		break;
+	case startRequestPassphrase:
+		eventStartRequestPassphrase(static_cast<ArchiveData*>(event.data1), static_cast<std::binary_semaphore*>(event.data2));
+		break;
+	case requestPassphrase:
+		eventRequestPassphrase();
+		break;
+	case confirmPassphrase:
+		eventSetPassphrase(true);
+		break;
+	case cancelPassphrase:
+		eventSetPassphrase(false);
 		break;
 	case exit:
 		eventExit();
@@ -120,7 +132,7 @@ void Program::handleProgPageBrowserEvent(const SDL_UserEvent& event) {
 	switch (ProgPageBrowserEvent(event.code)) {
 	using enum ProgPageBrowserEvent;
 	case fileLoadingCancelled:
-		eventFileLoadingCancelled();
+		browser.requestStop();
 		break;
 	case goFile:
 		eventBrowserGoFile(static_cast<PushButton*>(event.data1));
@@ -349,12 +361,11 @@ void Program::eventOpenPageBrowserGeneral() {
 }
 
 void Program::eventOpenBookContext(Widget* wgt) {
-	FileOpCapabilities caps = browser.fileOpCapabilities();
-	vector<pair<Cstring, EventId>> items = { pair("Continue", ProgBooksEvent::openLastPage) };
-	if (bool(caps & FileOpCapabilities::rename))
-		items.emplace_back("Rename", ProgBooksEvent::queryRenameBook);
-	if (bool(caps & FileOpCapabilities::remove))
-		items.emplace_back("Delete", ProgBooksEvent::askDeleteBook);
+	vector<pair<Cstring, EventId>> items = {
+		pair("Continue", ProgBooksEvent::openLastPage),
+		pair("Rename", ProgBooksEvent::queryRenameBook),
+		pair("Delete", ProgBooksEvent::askDeleteBook)
+	};
 	state->showContext(std::move(items), wgt);
 }
 
@@ -403,7 +414,7 @@ void Program::eventDeleteBook() {
 void Program::eventQueryRenameBook() {
 	auto pb = static_cast<ProgBooks*>(state);
 	pb->contextBook = World::scene()->getContext()->owner<PushButton>();
-	state->showPopupInput("Rename book", pb->contextBook->getText().data(), ProgBooksEvent::renameBook, GeneralEvent::closePopup, "Rename");
+	state->showPopupInput("Rename book", pb->contextBook->getText().data(), ProgBooksEvent::renameBook, GeneralEvent::closePopup, true, "Rename");
 }
 
 void Program::eventRenameBook() {
@@ -413,14 +424,14 @@ void Program::eventRenameBook() {
 		auto box = static_cast<TileBox*>(pb->contextBook->getParent());
 		box->deleteWidget(pb->contextBook->getIndex());
 		std::span<Widget*> wgts = box->getWidgets();
-		uint id = std::lower_bound(wgts.begin(), wgts.end(), newName, [](const Widget* a, const string& b) -> bool { return Strcomp::less(static_cast<const PushButton*>(a)->getText().data(), b.c_str()); }) - wgts.begin();
+		uint id = std::lower_bound(wgts.begin(), wgts.end(), newName, [](const Widget* a, const string& b) -> bool { return Strcomp::less(static_cast<const PushButton*>(a)->getText().data(), b.data()); }) - wgts.begin();
 		box->insertWidget(id, pb->makeBookTile(newName));
 		World::scene()->setPopup(nullptr);
 	} else
 		state->showPopupMessage("Failed to rename");
 }
 
-void Program::openFile(string_view file) {
+void Program::openFile(const char* file) {
 	try {
 		if (uptr<RemoteLocation> rl = browser.prepareFileOps(file))
 			browserLoginAuto(std::move(*rl), ProgBooksEvent::openFileLogin, [this](const RemoteLocation& prl, vector<string>&& pwds) { openFileHandle(prl, std::move(pwds)); });
@@ -454,23 +465,30 @@ void Program::eventOpenSettings() {
 void Program::eventArchiveFinished(const SDL_UserEvent& event) {
 	browser.stopThread();
 	auto ra = static_cast<BrowserResultArchive*>(event.data1);
-	if (ra->error.empty()) {
+	switch (ra->rc) {
+	using enum ResultCode;
+	case ok:
 		if (browser.finishArchive(std::move(*ra)))
 			setState<ProgPageBrowser>();
 		else
 			setPopupLoading();
-	} else
-		state->showPopupMessage(ra->error);
+		break;
+	case stop:
+		startBrowserPreview();
+		World::scene()->setPopup(nullptr);
+		break;
+	case error:
+		startBrowserPreview();
+		state->showPopupMessage(!ra->error.empty() ? ra->error : "Failed to load archive");
+	}
 	delete ra;
 }
 
-void Program::eventFileLoadingCancelled() {
-	browser.stopThread();
+void Program::startBrowserPreview() {
 	if (auto pe = dynamic_cast<ProgFileExplorer*>(state))
 		if (World::sets()->preview)
 			if (auto [files, dirs] = browser.listCurDir(); pe->fileList->getWidgets().size() == files.size() + dirs.size())
 				browser.startPreview(files, dirs, pe->getLineHeight());
-	World::scene()->setPopup(nullptr);
 }
 
 void Program::eventBrowserGoUp() {
@@ -586,7 +604,9 @@ void Program::eventReaderProgress(BrowserPictureProgress* pp, char* text) {
 
 void Program::eventReaderFinished(BrowserResultPicture* rp, bool fwd) {
 	browser.stopThread();
-	if (rp->error.empty()) {
+	switch (rp->rc) {
+	using enum ResultCode;
+	case ok:
 		if (rp->hasArchive())	// when loading from an archive then the pictures will likely be out of order
 			rng::sort(rp->pics, [](const pair<Cstring, Texture*>& a, const pair<Cstring, Texture*>& b) -> bool { return Strcomp::less(a.first.data(), b.first.data()); });
 		else if (!fwd)
@@ -595,8 +615,15 @@ void Program::eventReaderFinished(BrowserResultPicture* rp, bool fwd) {
 		browser.finishLoadPictures(*rp);
 		setState<ProgReader>();
 		static_cast<ProgReader*>(state)->reader->setPictures(rp->pics, rp->picname, fwd);
-	} else
-		state->showPopupMessage(rp->error);
+		break;
+	case stop:
+		startBrowserPreview();
+		World::scene()->setPopup(nullptr);
+		break;
+	case error:
+		startBrowserPreview();
+		state->showPopupMessage(!rp->error.empty() ? rp->error : "Failed to load pictures");
+	}
 	delete rp;
 }
 
@@ -875,6 +902,30 @@ uint Program::finishComboBox(PushButton* but) {
 
 void Program::eventResizeComboContext(Context* ctx) {
 	ctx->setRect(ProgState::calcTextContextRect(ctx->getWidget<ScrollArea>(0)->getWidgets(), ctx->owner()->position(), ctx->owner()->size(), ctx->getSpacing()));
+}
+
+void Program::eventStartRequestPassphrase(ArchiveData* ad, std::binary_semaphore* done) {
+	archiveRequest = ad;
+	archiveRequestDone = done;
+	prevPopup = World::scene()->releasePopup();
+	if (ad->pc != ArchiveData::PassCode::set)
+		eventRequestPassphrase();
+	else
+		state->showPopupMessage("Incorrect password", GeneralEvent::requestPassphrase);
+}
+
+void Program::eventRequestPassphrase() {
+	state->showPopupInput("Archive password", string(), GeneralEvent::confirmPassphrase, GeneralEvent::cancelPassphrase, false);
+}
+
+void Program::eventSetPassphrase(bool ok) {
+	if (ok) {
+		archiveRequest->passphrase = ProgState::inputFromPopup();
+		archiveRequest->pc = ArchiveData::PassCode::set;
+	} else
+		archiveRequest->pc = ArchiveData::PassCode::ignore;
+	archiveRequestDone->release();
+	World::scene()->setPopup(prevPopup);
 }
 
 void Program::eventExit() {

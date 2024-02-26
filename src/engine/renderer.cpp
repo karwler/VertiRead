@@ -1,6 +1,6 @@
 #include "renderer.h"
-#include <SDL2/SDL_cpuinfo.h>
-#include <SDL2/SDL_timer.h>
+#include <SDL_cpuinfo.h>
+#include <SDL_timer.h>
 
 // RENDERER
 
@@ -184,9 +184,9 @@ Texture* RendererSf::texFromRpic(SDL_Surface* img) {
 }
 
 Texture* RendererSf::texFromText(const PixmapRgba& pm) {
-	if (pm.pix)
+	if (pm.res.x)
 		if (SDL_Surface* img = SDL_CreateRGBSurfaceWithFormat(0, std::min(pm.res.x, maxTextureSize), std::min(pm.res.y, maxTextureSize), 32, SDL_PIXELFORMAT_RGBA32)) {
-			copyPixels(static_cast<byte_t*>(img->pixels), reinterpret_cast<const byte_t*>(pm.pix), img->pitch, pm.res.x * 4, pm.res.x * 4, pm.res.y);
+			copyPixels(static_cast<byte_t*>(img->pixels), reinterpret_cast<const byte_t*>(pm.pix.get()), img->pitch, pm.res.x * 4, pm.res.x * 4, pm.res.y);
 			SDL_SetSurfaceRLE(img, SDL_TRUE);
 			return new TextureSf(uvec2(img->w, img->h), img);
 		}
@@ -194,9 +194,9 @@ Texture* RendererSf::texFromText(const PixmapRgba& pm) {
 }
 
 bool RendererSf::texFromText(Texture* tex, const PixmapRgba& pm) {
-	if (pm.pix)
+	if (pm.res.x)
 		if (SDL_Surface* img = SDL_CreateRGBSurfaceWithFormat(0, std::min(pm.res.x, maxTextureSize), std::min(pm.res.y, maxTextureSize), 32, SDL_PIXELFORMAT_RGBA32)) {
-			copyPixels(static_cast<byte_t*>(img->pixels), reinterpret_cast<const byte_t*>(pm.pix), img->pitch, pm.res.x * 4, pm.res.x * 4, pm.res.y);
+			copyPixels(static_cast<byte_t*>(img->pixels), reinterpret_cast<const byte_t*>(pm.pix.get()), img->pitch, pm.res.x * 4, pm.res.x * 4, pm.res.y);
 			SDL_SetSurfaceRLE(img, SDL_TRUE);
 
 			auto stx = static_cast<TextureSf*>(tex);

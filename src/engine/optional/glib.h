@@ -3,8 +3,6 @@
 #if defined(CAN_SECRET) || defined(CAN_PDF)
 #include <glib-object.h>
 
-namespace LibGlib {
-
 extern decltype(g_object_unref)* gObjectUnref;
 
 extern decltype(g_hash_table_new)* gHashTableNew;
@@ -19,6 +17,4 @@ extern decltype(g_error_free)* gErrorFree;
 
 bool symGlib();
 void closeGlib();
-
-}
 #endif

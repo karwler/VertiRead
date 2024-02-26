@@ -9,7 +9,7 @@ By default the Program uses OpenGL with the lowest possible version which can be
 Support for Direct3D 11 and Vulkan 1.0 can be disabled by setting the options "-DDIRECT3D=OFF" and "-DVULKAN=OFF".  
 
 ### Linux
-Most dependencies need to be installed manually. Installing the development packages for SDL 2, SDL_image 2, FreeType 2 and libarchive should be enough.  
+All dependencies except for GLM need to be installed manually. Installing the development packages for SDL 2, SDL_image 2, FreeType 2 and libarchive should be enough.  
 To build an AppImage run CMake with the "-DAPPIMAGE=ON" option.  
 Settings files are being saved in "~/.local/share/vertiread".  
 
@@ -25,7 +25,8 @@ make
 ```
 
 ### Windows
-All necessary libraries are downloaded and compiled while running CMake. For this to work MSVC/MinGW must be in the console's PATH.  
+When building with MSVC, all necessary libraries are downloaded and compiled while running CMake. For this to work, MSVC must be in the console's PATH.  
+Otherwise the needed MinGW libraries except for GLM have to be installed.  
 Settings files are being saved in "%AppData%\VertiRead".  
 
 Example:  

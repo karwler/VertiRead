@@ -3,10 +3,9 @@
 #include <regex>
 #include <ft2build.h>
 #include FT_FREETYPE_H
-#include <SDL2/SDL_filesystem.h>
+#include <SDL_filesystem.h>
 #ifdef CAN_FONTCFG
 #include "optional/fontconfig.h"
-using namespace LibFontconfig;
 #endif
 
 namespace {
@@ -76,7 +75,7 @@ string Fontconfig::search(const char* font) {
 }
 
 void Fontconfig::list(char32_t first, char32_t last, vector<fs::path>& fonts) {
-	if (FcPattern* pattern = fcNameParse(reinterpret_cast<const FcChar8*>(std::format(":charset={:X} {:X}", uint32(first), uint32(last)).c_str()))) {
+	if (FcPattern* pattern = fcNameParse(reinterpret_cast<const FcChar8*>(std::format(":charset={:X} {:X}", uint32(first), uint32(last)).data()))) {
 		if (FcObjectSet* objects = fcObjectSetBuild(FC_FILE, FC_CHARSET, nullptr)) {
 			if (FcFontSet* flist = fcFontList(config, pattern, objects)) {
 				for (int i = 0; i < flist->nfont; ++i)
@@ -91,7 +90,7 @@ void Fontconfig::list(char32_t first, char32_t last, vector<fs::path>& fonts) {
 }
 
 void Fontconfig::list(char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts) {
-	if (FcPattern* pattern = fcNameParse(reinterpret_cast<const FcChar8*>(std::format(":charset={:X} {:X}", uint32(first), uint32(last)).c_str()))) {
+	if (FcPattern* pattern = fcNameParse(reinterpret_cast<const FcChar8*>(std::format(":charset={:X} {:X}", uint32(first), uint32(last)).data()))) {
 		if (FcObjectSet* objects = fcObjectSetBuild(FC_FAMILY, FC_STYLE, FC_FILE, FC_CHARSET, nullptr)) {
 			if (FcFontSet* flist = fcFontList(config, pattern, objects)) {
 				FcChar8* family;
@@ -323,7 +322,7 @@ array<vec4, Settings::defaultColors.size()> FileSys::loadColors(string_view them
 
 vector<string> FileSys::getLastPage(string_view book) const {
 	string text = readTextFile(dirSets / fileBooks);
-	CsvText csv = text.c_str();
+	CsvText csv = text.data();
 	for (CsvText::Code cc; (cc = csv.readField()) != CsvText::Code::end;)
 		if (cc == CsvText::Code::field) {
 			if (csv.field == book) {
@@ -344,7 +343,7 @@ vector<string> FileSys::getLastPage(string_view book) const {
 void FileSys::saveLastPage(const vector<string>& paths) const {
 	fs::path file = dirSets / fileBooks;
 	string text = readTextFile(file);
-	CsvText csv = text.c_str();
+	CsvText csv = text.data();
 	CsvText::Code cc;
 	while ((cc = csv.readField()) != CsvText::Code::end) {
 		if (csv.field == paths[0]) {
@@ -359,11 +358,11 @@ void FileSys::saveLastPage(const vector<string>& paths) const {
 		if (cc == CsvText::Code::end) {
 			if (!text.empty() && text.back() != '\n' && text.back() != '\r')
 				ofs.write(LINEND, strlen(LINEND));
-			ofs.write(line.c_str(), line.length());
+			ofs.write(line.data(), line.length());
 			ofs.write(LINEND, strlen(LINEND));
 		} else {
-			text.replace(csv.lineStart - text.c_str(), csv.lineEnd - csv.lineStart, line);
-			ofs.write(text.c_str(), text.length());
+			text.replace(csv.lineStart - text.data(), csv.lineEnd - csv.lineStart, line);
+			ofs.write(text.data(), text.length());
 		}
 	} else
 		logError("Failed to write books file: ", file);
@@ -489,7 +488,7 @@ array<Binding, Binding::names.size()> FileSys::loadBindings() const {
 
 		switch (toupper(bdsc[0])) {
 		case keyKey[0]:			// keyboard key
-			bindings[bid].setKey(SDL_GetScancodeFromName(string(bdsc).c_str() + 2));
+			bindings[bid].setKey(SDL_GetScancodeFromName(string(bdsc).data() + 2));
 			break;
 		case keyButton[0]:		// joystick button
 			bindings[bid].setJbutton(toNum<uint8>(bdsc.substr(2)));
@@ -662,9 +661,15 @@ fs::path FileSys::findFont(const fs::path& font) const {
 	if (fs::path path = searchFontDirectory(font, dirConfs); !path.empty())
 		return path;
 #ifdef CAN_FONTCFG
-	if (fontconfig)
-		if (string path = static_cast<Fontconfig*>(fontconfig)->search(font.c_str()); !path.empty())
+	if (fontconfig) {
+#ifdef _WIN32
+		string path = static_cast<Fontconfig*>(fontconfig)->search(swtos(font.native()).data());
+#else
+		string path = static_cast<Fontconfig*>(fontconfig)->search(font.c_str());
+#endif
+		if (!path.empty())
 			return path;
+	}
 #endif
 #ifdef _WIN32
 	if (fs::path path = searchFontRegistry(font); !path.empty())
@@ -701,13 +706,12 @@ vector<fs::path> FileSys::listFontFiles(FT_Library lib, char32_t first, char32_t
 	vector<fs::path> fonts;
 	listFontFilesInDirectory(lib, dirConfs, first, last, fonts);
 #ifdef CAN_FONTCFG
-	if (fontconfig)
+	if (fontconfig) {
 		static_cast<Fontconfig*>(fontconfig)->list(first, last, fonts);
-	else {
-		listFontFilesInDirectory(lib, localFontDir(), first, last, fonts);
-		listFontFilesInDirectory(lib, systemFontDir(), first, last, fonts);
+		return fonts;
 	}
-#elif defined(_WIN32) && !defined(__MINGW32__)
+#endif
+#if defined(_WIN32) && !defined(__MINGW32__)
 	listFontFilesInRegistry<HKEY_CURRENT_USER>(lib, first, last, fonts);
 	listFontFilesInRegistry<HKEY_LOCAL_MACHINE>(lib, first, last, fonts);
 #else
@@ -772,21 +776,24 @@ void FileSys::listFontFamiliesThread(std::stop_token stoken, fs::path cdir, stri
 			desiredPath = it->second.data();
 	}
 
+	bool skip = false;
 #ifdef CAN_FONTCFG
 	try {
-		if (!stoken.stop_requested() && symFontconfig())
+		if (!stoken.stop_requested() && symFontconfig()) {
 			Fontconfig().list(first, last, fonts);
-	} catch (const std::runtime_error&) {
+			skip = true;
+		}
+	} catch (const std::runtime_error&) {}
+#endif
+	if (!skip) {
+#if defined(_WIN32) && !defined(__MINGW32__)
+		listFontFamiliesInRegistryThread<HKEY_CURRENT_USER>(stoken, lib, first, last, fonts);
+		listFontFamiliesInRegistryThread<HKEY_LOCAL_MACHINE>(stoken, lib, first, last, fonts);
+#else
 		listFontFamiliesInDirectoryThread(stoken, lib, localFontDir(), first, last, fonts);
 		listFontFamiliesInDirectoryThread(stoken, lib, systemFontDir(), first, last, fonts);
-	}
-#elif defined(_WIN32) && !defined(__MINGW32__)
-	listFontFamiliesInRegistryThread<HKEY_CURRENT_USER>(stoken, lib, first, last, fonts);
-	listFontFamiliesInRegistryThread<HKEY_LOCAL_MACHINE>(stoken, lib, first, last, fonts);
-#else
-	listFontFamiliesInDirectoryThread(stoken, lib, localFontDir(), first, last, fonts);
-	listFontFamiliesInDirectoryThread(stoken, lib, systemFontDir(), first, last, fonts);
 #endif
+	}
 	FT_Done_FreeType(lib);
 	rng::sort(fonts, [](const pair<Cstring, Cstring>& a, const pair<Cstring, Cstring>& b) -> bool {
 		int cmp = strcmp(a.first.data(), b.first.data());
@@ -795,8 +802,8 @@ void FileSys::listFontFamiliesThread(std::stop_token stoken, fs::path cdir, stri
 
 	size_t sel;
 	if (!desiredPath.empty())
-		sel = rng::find_if(fonts, [&desiredPath](const pair<Cstring, Cstring>& fp) -> bool { return !strcmp(fp.second.data(), desiredPath.c_str()); }) - fonts.begin();
-	else if (vector<pair<Cstring, Cstring>>::iterator it = rng::find_if(fonts, [&desired](const pair<Cstring, Cstring>& fp) -> bool { return !strcmp(fp.second.data(), desired.c_str()); }); it != fonts.end())
+		sel = rng::find_if(fonts, [&desiredPath](const pair<Cstring, Cstring>& fp) -> bool { return !strcmp(fp.second.data(), desiredPath.data()); }) - fonts.begin();
+	else if (vector<pair<Cstring, Cstring>>::iterator it = rng::find_if(fonts, [&desired](const pair<Cstring, Cstring>& fp) -> bool { return !strcmp(fp.second.data(), desired.data()); }); it != fonts.end())
 		sel = it - fonts.begin();
 	else {
 		fonts.emplace(fonts.begin(), desired, Cstring());
@@ -852,7 +859,7 @@ void FileSys::listFontFamiliesInRegistryThread(std::stop_token stoken, FT_Librar
 #endif
 
 FT_Face FileSys::openFace(FT_Library lib, const fs::path& file, char32_t first, char32_t last, Data& fdata) {
-	fdata = FileOpsLocal::readFile(file);
+	fdata = FileOpsLocal::readFile(file.c_str());
 	if (FT_Face face; !FT_New_Memory_Face(lib, reinterpret_cast<FT_Byte*>(fdata.data()), fdata.size(), 0, &face)) {
 		char32_t ch;
 		for (ch = first; FT_Get_Char_Index(face, ch) && ch <= last; ++ch);

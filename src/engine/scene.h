@@ -52,6 +52,7 @@ public:
 	RootLayout* getLayout() { return layout; }
 	Overlay* getOverlay() { return overlay; }
 	Popup* getPopup() { return popup; }
+	Popup* releasePopup();	// can only be used for popups without capture or contexts
 	void setPopup(Popup* newPopup, Widget* newCapture = nullptr);
 	Context* getContext() { return context; }
 	void setContext(Context* newContext);

@@ -7,7 +7,7 @@
 #include "prog/progs.h"
 #include <cfloat>
 #include <format>
-#include <SDL2/SDL_clipboard.h>
+#include <SDL_clipboard.h>
 
 template <Class T>
 TextDsp<T>::~TextDsp() {
@@ -740,11 +740,11 @@ void LabelEdit::onKeypress(const SDL_Keysym& key) {
 		break;
 	case SDL_SCANCODE_C:	// copy text
 		if (kmodCtrl(key.mod))
-			SDL_SetClipboardText(text.c_str());
+			SDL_SetClipboardText(text.data());
 		break;
 	case SDL_SCANCODE_X:	// cut text
 		if (kmodCtrl(key.mod)) {
-			SDL_SetClipboardText(text.c_str());
+			SDL_SetClipboardText(text.data());
 			setText(string());
 		}
 		break;
@@ -821,7 +821,12 @@ void LabelEdit::setCPos(uint cp) {
 }
 
 int LabelEdit::caretPos() const {
-	return World::drawSys()->textLength(string_view(text.c_str(), cpos), size().y) + textOfs;
+	if (textType != TextType::password)
+		return World::drawSys()->textLength(string_view(text.data(), cpos), size().y) + textOfs;
+
+	uint cnt = 0;
+	for (uint i = 0; i < cpos; i = jumpCharF(i), ++cnt);
+	return World::drawSys()->textLength(string(cnt, '*'), size().y) + textOfs;
 }
 
 void LabelEdit::confirm() {
@@ -843,17 +848,17 @@ void LabelEdit::cancel() {
 		pushEvent(EventId(cancEtype, cancEcode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
 }
 
-uint LabelEdit::jumpCharB(uint i) {
+uint LabelEdit::jumpCharB(uint i) const {
 	while (--i && (text[i] & 0xC0) == 0x80);
 	return i;
 }
 
-uint LabelEdit::jumpCharF(uint i) {
+uint LabelEdit::jumpCharF(uint i) const {
 	while (++i < text.length() && (text[i] & 0xC0) == 0x80);
 	return i;
 }
 
-uint LabelEdit::findWordStart() {
+uint LabelEdit::findWordStart() const {
 	uint i = cpos;
 	if (i == text.length() && i)
 		--i;
@@ -865,7 +870,7 @@ uint LabelEdit::findWordStart() {
 	return i ? i + 1 : i;			// correct position if necessary
 }
 
-uint LabelEdit::findWordEnd() {
+uint LabelEdit::findWordEnd() const {
 	uint i = cpos;
 	for (; isSpace(text[i]) && i < text.length(); ++i);		// skip first spaces
 	for (; notSpace(text[i]) && i < text.length(); ++i);	// skip word

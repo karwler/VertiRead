@@ -1,18 +1,19 @@
 #pragma once
 
 #include "browser.h"
+#include <semaphore>
 
 // handles the front-end
 class Program {
 private:
-	static constexpr float resModeBorder = 0.85f;
-	static constexpr float resModeRatio = 0.75f;
-
 	ProgState* state = nullptr;
 	Browser browser;
 #ifdef CAN_SECRET
 	optional<CredentialManager*> credential;	// loaded lazily
 #endif
+	ArchiveData* archiveRequest;
+	std::binary_semaphore* archiveRequestDone;
+	Popup* prevPopup;	// might wanna implement a popup stack instead
 
 public:
 	~Program();
@@ -37,7 +38,7 @@ public:
 	void handleProgSearchDirEvent(const SDL_UserEvent& event);
 
 	void eventOpenBookList();
-	void openFile(string_view file);
+	void openFile(const char* file);
 	void eventBrowserGoUp();
 	void eventZoomIn();
 	void eventZoomOut();
@@ -69,7 +70,6 @@ private:
 	void eventOpenSettings();
 
 	// browser
-	void eventFileLoadingCancelled();
 	void eventBrowserGoIn(PushButton* lbl);
 	void eventBrowserGoFile(PushButton* lbl);
 	void eventBrowserGoTo(LabelEdit* le);
@@ -110,13 +110,16 @@ private:
 	// other
 	void eventConfirmComboBox(PushButton* cbut);
 	void eventResizeComboContext(Context* ctx);
+	void eventStartRequestPassphrase(ArchiveData* ad, std::binary_semaphore* done);
+	void eventRequestPassphrase();
+	void eventSetPassphrase(bool ok);
 
-private:
 	template <class... A> void openBookListHandle(A&&... args);
 	template <class... A> void openFileHandle(A&&... args);
 	template <class... A> void browserGoToHandle(A&&... args);
 	template <Invocable<const RemoteLocation&, vector<string>&&> F> void browserLoginAuto(RemoteLocation&& rl, EventId kcal, F func);
 	template <Invocable<const RemoteLocation&> F> void browserLoginManual(F func);
+	void startBrowserPreview();
 	void switchPictures(bool fwd, string_view picname);
 	static uint finishComboBox(PushButton* but);
 	template <Derived<ProgState> T, class... A> void setState(A&&... args);

@@ -76,7 +76,7 @@ void Cstring::set(const char* s, size_t l) {
 void Cstring::set(const string& s) {
 	size_t len = s.length() + 1;
 	ptr = new char[len];
-	std::copy_n(s.c_str(), len, ptr);
+	std::copy_n(s.data(), len, ptr);
 }
 
 #ifdef _WIN32
@@ -255,5 +255,13 @@ wstring sstow(string_view src) {
 		MultiByteToWideChar(CP_UTF8, 0, src.data(), src.length(), dst.data(), len);
 	}
 	return dst;
+}
+
+string winErrorMessage(uint32 msgId) {
+	wchar_t* buff = nullptr;
+	string msg = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, nullptr, msgId, 0, reinterpret_cast<LPWSTR>(&buff), 0, nullptr) ? swtos(trim(buff)) : string();
+	if (buff)
+		LocalFree(buff);
+	return msg;
 }
 #endif

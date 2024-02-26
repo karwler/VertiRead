@@ -31,15 +31,16 @@ private:
 	uint height;
 	int mode;
 
-	uptr<uint32[]> buffer;
+	PixmapRgba pm;
 	size_t bufSize = 0;
 	vector<string_view::iterator> lineBreaks;
 	string_view::iterator wordStart;
 	string_view::iterator ptr;
 	size_t len;
-	size_t cpos;
-	uint xpos, ypos;
-	uint mfin;
+	size_t cpos;		// current UTF-8 character index
+	uint xpos, ypos;	// current x position and y baseline position
+	uint xofs;			// additional width padding before the first character
+	uint mfin;			// total line width
 	uint wordXpos;
 	uint maxWidth;
 
@@ -52,23 +53,24 @@ public:
 	void setMode(Settings::Hinting hinting);
 	uint measureText(string_view text, uint size);
 	uvec2 measureText(string_view text, uint size, uint limit);
-	PixmapRgba renderText(string_view text, uint size);
-	PixmapRgba renderText(string_view text, uint size, uint limit);
+	const PixmapRgba& renderText(string_view text, uint size);
+	const PixmapRgba& renderText(string_view text, uint size, uint limit);
 	FT_LibraryRec_* getLib() const { return lib; }
 
 private:
 	Font openFont(const fs::path& path, uint size) const;
-	void prepareBuffer(uvec2 res);
-	void prepareAdvance(string_view::iterator begin, size_t length);
+	void prepareBuffer();
+	void prepareAdvance(string_view::iterator begin, size_t length, uint xstart);
 	void advanceTab(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs);
 	template <bool cached> void advanceChar(FT_FaceRec_* face, char32_t ch, char32_t prev, long advance);
 	template <bool cached> void advanceChar(FT_FaceRec_* face, char32_t ch, char32_t prev, long advance, int left, uint width);
+	void checkXofs(int left);
 	bool checkSpace(uint limit, int left, uint width);
 	void advanceLine(string_view::iterator pos);
 	bool setSize(string_view text, uint size);
 	void cacheGlyph(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs, char32_t ch, uint id);
 	vector<Font>::iterator loadGlyph(char32_t ch, int32 flags);
-	void copyGlyph(uvec2 res, const FT_Bitmap_& bmp, int top, int left);
+	void copyGlyph(const FT_Bitmap_& bmp, int top, int left);
 };
 
 // handles the drawing

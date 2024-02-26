@@ -5,8 +5,6 @@
 #include <poppler-document.h>
 #include <poppler-page.h>
 
-namespace LibPoppler {
-
 extern decltype(poppler_document_new_from_bytes)* popplerDocumentNewFromBytes;
 extern decltype(poppler_document_get_n_pages)* popplerDocumentGetNPages;
 extern decltype(poppler_document_get_page)* popplerDocumentGetPage;
@@ -30,6 +28,4 @@ extern decltype(cairo_surface_destroy)* cairoSurfaceDestroy;
 
 bool symPoppler();	// loads glib because of dependency
 void closePoppler();
-
-}
 #endif

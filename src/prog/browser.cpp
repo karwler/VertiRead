@@ -7,8 +7,6 @@
 #ifdef CAN_PDF
 #include "engine/optional/glib.h"
 #include "engine/optional/poppler.h"
-using namespace LibGlib;
-using namespace LibPoppler;
 #endif
 #include <functional>
 #include <archive.h>
@@ -90,6 +88,7 @@ void Browser::start(string&& root, string&& path) {
 	} else
 		curDir = root;
 	rootDir = std::move(root);
+	arch.clear();
 	fsop->setWatch(curDir);
 }
 
@@ -101,7 +100,7 @@ bool Browser::goTo(const RemoteLocation& location, vector<string>&& passwords) {
 	});
 }
 
-bool Browser::goTo(string_view path) {
+bool Browser::goTo(const string& path) {
 	switch (fsop->fileType(path)) {
 	using enum fs::file_type;
 	case regular:
@@ -113,12 +112,11 @@ bool Browser::goTo(string_view path) {
 			startLoadPictures(new BrowserResultPicture(BRS_LOC | BRS_PDF, isSubpath(path, rootDir) ? std::nullopt : optional(fsop->prefix()), string(path)));
 			return true;
 		}
-		if (fsop->isArchive(path)) {
-			startArchive(new BrowserResultArchive(isSubpath(path, rootDir) ? std::nullopt : optional(fsop->prefix()), ArchiveDir(path)));
+		if (ArchiveData ad(path); fsop->isArchive(ad)) {
+			startArchive(new BrowserResultArchive(isSubpath(path, rootDir) ? std::nullopt : optional(fsop->prefix()), std::move(ad)));
 			return true;
 		}
-		if (path = parentPath(path); !fsop->isDirectory(path))
-			break;
+		break;
 	case directory:
 		if (!isSubpath(path, rootDir))
 			rootDir = fsop->prefix();
@@ -141,8 +139,8 @@ bool Browser::openPicture(string&& rdir, vector<string>&& paths) {
 			startLoadPictures(new BrowserResultPicture(BRS_LOC | BRS_PDF, std::move(rdir), std::move(paths[0]), paths.size() > 1 ? std::move(paths[1]) : string()));
 			return true;
 		}
-		if (fsop->isArchive(paths[0])) {
-			startArchive(new BrowserResultArchive(std::move(rdir), ArchiveDir(std::move(paths[0])), paths.size() > 1 ? std::move(paths[1]) : string(), paths.size() > 2 ? std::move(paths[2]) : string()));
+		if (ArchiveData ad(std::move(paths[0])); fsop->isArchive(ad)) {
+			startArchive(new BrowserResultArchive(std::move(rdir), std::move(ad), paths.size() > 1 ? std::move(paths[1]) : string(), paths.size() > 2 ? std::move(paths[2]) : string()));
 			return true;
 		}
 		break;
@@ -173,8 +171,8 @@ bool Browser::goFile(string_view fname) {
 	if (inArchive()) {
 		if (auto [dir, fil] = arch.find(path); fil && (fil->size || fil->isPdf)) {
 			startLoadPictures(fil->isPdf
-				? new BrowserResultPicture(BRS_LOC | BRS_PDF, std::nullopt, std::move(path), string(), valcp(arch.name))
-				: new BrowserResultPicture(BRS_NONE, std::nullopt, valcp(curDir), string(fname), valcp(arch.name)));
+				? new BrowserResultPicture(BRS_LOC | BRS_PDF, std::nullopt, std::move(path), string(), arch.copyLight())
+				: new BrowserResultPicture(BRS_NONE, std::nullopt, valcp(curDir), string(fname), arch.copyLight()));
 			return true;
 		}
 	} else if (fsop->isRegular(path)) {
@@ -186,8 +184,8 @@ bool Browser::goFile(string_view fname) {
 			startLoadPictures(new BrowserResultPicture(BRS_LOC | BRS_PDF, std::nullopt, std::move(path)));
 			return true;
 		}
-		if (fsop->isArchive(path)) {
-			startArchive(new BrowserResultArchive(std::nullopt, ArchiveDir(path)));
+		if (ArchiveData ad(path); fsop->isArchive(ad)) {
+			startArchive(new BrowserResultArchive(std::nullopt, std::move(ad)));
 			return true;
 		}
 	}
@@ -218,7 +216,7 @@ bool Browser::goNext(bool fwd, string_view picname) {
 	bool curPdf = inPdf();
 	if (!picname.empty())	// move to the next batch of pictures if the given picture name can be found
 		if (string file = curPdf ? nextPdfPage(picname, fwd) : curArch ? nextArchiveFile(picname, fwd) : nextDirFile(picname, fwd); !file.empty()) {
-			startLoadPictures(new BrowserResultPicture((curPdf ? BRS_PDF : BRS_NONE), std::nullopt, valcp(curDir), std::move(file), curArch ? ArchiveDir(valcp(arch.name)) : ArchiveDir()), fwd);
+			startLoadPictures(new BrowserResultPicture((curPdf ? BRS_PDF : BRS_NONE), std::nullopt, valcp(curDir), std::move(file), arch.copyLight()), fwd);
 			return true;
 		}
 
@@ -262,7 +260,7 @@ bool Browser::nextDir(const Cstring& dit, bool fwd, const string& pdir) {
 
 bool Browser::nextArchiveDir(const ArchiveDir* dit, bool fwd, const string& pdir) {
 	if (rng::any_of(dit->files, [](const ArchiveFile& it) -> bool { return it.size; })) {
-		startLoadPictures(new BrowserResultPicture(BRS_LOC, std::nullopt, pdir / dit->name.data(), string(), valcp(arch.name)), fwd);
+		startLoadPictures(new BrowserResultPicture(BRS_LOC, std::nullopt, pdir / dit->name.data(), string(), arch.copyLight()), fwd);
 		return true;
 	}
 	return false;
@@ -278,7 +276,7 @@ bool Browser::nextPdf(const Cstring& fit, bool fwd, const string& pdir) {
 
 bool Browser::nextArchivePdf(const ArchiveFile* fit, bool fwd, const string& pdir) {
 	if (fit->isPdf) {
-		startLoadPictures(new BrowserResultPicture(BRS_LOC | BRS_PDF, std::nullopt, pdir / fit->name.data(), string(), valcp(arch.name)), fwd);
+		startLoadPictures(new BrowserResultPicture(BRS_LOC | BRS_PDF, std::nullopt, pdir / fit->name.data(), string(), arch.copyLight()), fwd);
 		return true;
 	}
 	return false;
@@ -316,16 +314,16 @@ string Browser::nextArchiveFile(string_view file, bool fwd) {
 }
 
 string Browser::nextPdfPage(string_view file, bool fwd) {
+	string ret;
 #ifdef CAN_PDF
-	PopplerDocument* doc = nullptr;
-	Data fdat;
+	PdfFile pdf;
 	string error;
 	if (inArchive()) {
-		if (archive* ar = fsop->openArchive(arch.name.data(), &error)) {
+		if (archive* ar = fsop->openArchive(arch, &error)) {
 			int rc;
 			for (archive_entry* entry; (rc = archive_read_next_header(ar, &entry)) == ARCHIVE_OK;)
-				if (pathEqual(archive_entry_pathname_utf8(entry), curDir.c_str())) {
-					std::tie(doc, fdat) = FileOps::loadArchivePdf(ar, entry);
+				if (pathEqual(archive_entry_pathname_utf8(entry), curDir.data())) {
+					pdf = FileOps::loadArchivePdf(ar, entry);
 					break;
 				}
 			if (rc != ARCHIVE_OK && rc != ARCHIVE_EOF)
@@ -333,20 +331,17 @@ string Browser::nextPdfPage(string_view file, bool fwd) {
 			archive_read_free(ar);
 		}
 	} else
-		std::tie(doc, fdat) = fsop->loadPdf(curDir, &error);
+		pdf = fsop->loadPdf(curDir, &error);
 
-	string ret;
-	if (doc) {
-		if (int pcnt = popplerDocumentGetNPages(doc); pcnt > 0)
+	if (pdf.pdoc) {
+		if (int pcnt = popplerDocumentGetNPages(pdf.pdoc); pcnt > 0)
 			if (uint npage = toNum<uint>(file) + (fwd ? 1 : -1); npage < uint(pcnt))
 				ret = toStr(npage);
-		gObjectUnref(doc);
+		gObjectUnref(pdf.pdoc);
 	} else if (!error.empty())
 		logError(error);
-	return ret;
-#else
-	return string();
 #endif
+	return ret;
 }
 
 void Browser::exitFile() {
@@ -403,7 +398,7 @@ pair<vector<Cstring>, vector<Cstring>> Browser::listCurDir() {
 	return fsop->listDirectorySep(curDir, World::sets()->showHidden);
 }
 
-vector<Cstring> Browser::listDirDirs(string_view path) const {
+vector<Cstring> Browser::listDirDirs(const string& path) const {
 	return fsop->listDirectory(path, false, true, World::sets()->showHidden);
 }
 
@@ -413,10 +408,6 @@ bool Browser::deleteEntry(string_view ename) {
 
 bool Browser::renameEntry(string_view oldName, string_view newName) {
 	return !inArchive() && fsop->renameEntry(curDir / oldName, curDir / newName);
-}
-
-FileOpCapabilities Browser::fileOpCapabilities() const {
-	return !inArchive() ? fsop->capabilities() : FileOpCapabilities::none;
 }
 
 bool Browser::directoryUpdate(vector<FileChange>& files) {
@@ -475,9 +466,13 @@ void Browser::cleanupArchive() {
 void Browser::startPreview(const vector<Cstring>& files, const vector<Cstring>& dirs, int maxHeight) {
 	stopThread();
 	curThread = ThreadType::preview;
-	thread = inArchive()
-		? std::jthread(&Browser::previewArchThread, fsop, sliceCurrentArchiveDir(), curDir, fromPath(World::fileSys()->dirIcons()), maxHeight)
-		: std::jthread(&Browser::previewDirThread, fsop, curDir, files, dirs, fromPath(World::fileSys()->dirIcons()), World::sets()->showHidden, maxHeight);
+	if (inArchive()) {
+		ArchiveData ad = arch.copyLight();
+		if (auto [dir, fil] = arch.find(curDir); dir)
+			ad.copySlicedDentsFrom(*dir);
+		thread = std::jthread(&Browser::previewArchThread, fsop, std::move(ad), curDir, fromPath(World::fileSys()->dirIcons()), maxHeight);
+	} else
+		thread = std::jthread(&Browser::previewDirThread, fsop, curDir, files, dirs, fromPath(World::fileSys()->dirIcons()), World::sets()->showHidden, maxHeight);;
 }
 
 void Browser::cleanupPreview() {
@@ -490,7 +485,7 @@ void Browser::cleanupPreview() {
 }
 
 void Browser::previewDirThread(std::stop_token stoken, FileOps* fsop, string curDir, vector<Cstring> files, vector<Cstring> dirs, string iconPath, bool showHidden, int maxHeight) {
-	if (uptr<SDL_Surface> dicon(!dirs.empty() ? World::drawSys()->getRenderer()->makeCompatible(World::drawSys()->loadIcon((iconPath / DrawSys::iconName(DrawSys::Tex::folder)).c_str(), maxHeight), false) : nullptr); dicon)
+	if (uptr<SDL_Surface> dicon(!dirs.empty() ? World::drawSys()->getRenderer()->makeCompatible(World::drawSys()->loadIcon((iconPath / DrawSys::iconName(DrawSys::Tex::folder)).data(), maxHeight), false) : nullptr); dicon)
 		for (const Cstring& it : dirs) {
 			if (stoken.stop_requested())
 				return;
@@ -508,7 +503,7 @@ void Browser::previewDirThread(std::stop_token stoken, FileOps* fsop, string cur
 
 		if (string fpath = curDir / it.data(); SDL_Surface* img = scaleDown(fsop->loadPicture(fpath), maxHeight))
 			pushEvent(SDL_USEREVENT_THREAD_PREVIEW, ThreadEvent::progress, allocatePreviewName(it.data(), true), img);
-		else if (archive* arch = fsop->openArchive(fpath)) {
+		else if (ArchiveData ad(fpath, ArchiveData::PassCode::ignore); archive* arch = fsop->openArchive(ad)) {
 			CountedStopReq csr(previewSpeedyStopCheckInterval);
 			vector<Cstring> entries;	// list all available files first to get a sorted list
 			for (archive_entry* entry; archive_read_next_header(arch, &entry) == ARCHIVE_OK;) {
@@ -522,7 +517,7 @@ void Browser::previewDirThread(std::stop_token stoken, FileOps* fsop, string cur
 			archive_read_free(arch);
 			rng::sort(entries, Strcomp());
 
-			for (size_t i = 0; i < entries.size() && (arch = fsop->openArchive(fpath));) {
+			for (size_t i = 0; i < entries.size() && (arch = fsop->openArchive(ad));) {
 				size_t orig = i;
 				for (archive_entry* entry; i < entries.size() && archive_read_next_header(arch, &entry) == ARCHIVE_OK;) {
 					if (csr.stopReq(stoken)) {
@@ -543,18 +538,18 @@ void Browser::previewDirThread(std::stop_token stoken, FileOps* fsop, string cur
 			}
 		}
 #ifdef CAN_PDF
-		else if (auto [doc, fdat] = fsop->loadPdf(fpath); doc)
-			previewPdf(stoken, doc, maxHeight, it.data());
+		else if (PdfFile pdf = fsop->loadPdf(fpath); pdf.pdoc)
+			previewPdf(stoken, pdf.pdoc, maxHeight, it.data());
 #endif
 	}
 	pushEvent(SDL_USEREVENT_THREAD_PREVIEW, ThreadEvent::finished);
 }
 
-void Browser::previewArchThread(std::stop_token stoken, FileOps* fsop, ArchiveDir slice, string curDir, string iconPath, int maxHeight) {
+void Browser::previewArchThread(std::stop_token stoken, FileOps* fsop, ArchiveData slice, string curDir, string iconPath, int maxHeight) {
 	CountedStopReq csr(previewSpeedyStopCheckInterval);
 	vector<ArchiveDir*> dirs = slice.listDirs();
 	vector<ArchiveFile*> files = slice.listFiles();
-	uptr<SDL_Surface> dicon(!dirs.empty() ? World::drawSys()->getRenderer()->makeCompatible(World::drawSys()->loadIcon((iconPath / DrawSys::iconName(DrawSys::Tex::folder)).c_str(), maxHeight), false) : nullptr);
+	uptr<SDL_Surface> dicon(!dirs.empty() ? World::drawSys()->getRenderer()->makeCompatible(World::drawSys()->loadIcon((iconPath / DrawSys::iconName(DrawSys::Tex::folder)).data(), maxHeight), false) : nullptr);
 	umap<string, pair<bool, bool>> entries;	// path, pair(isFile, isPdf)
 	entries.reserve(dicon ? dirs.size() + files.size() : files.size());
 	if (dicon)
@@ -572,7 +567,8 @@ void Browser::previewArchThread(std::stop_token stoken, FileOps* fsop, ArchiveDi
 			entries.emplace(curDir / it->name.data(), pair(true, it->isPdf));
 	}
 
-	if (archive* arch = fsop->openArchive(slice.name.data())) {
+	slice.pc = ArchiveData::PassCode::attempt;
+	if (archive* arch = fsop->openArchive(slice)) {
 		for (archive_entry* entry; !entries.empty() && archive_read_next_header(arch, &entry) == ARCHIVE_OK;) {
 			if (stoken.stop_requested()) {
 				archive_read_free(arch);
@@ -588,8 +584,8 @@ void Browser::previewArchThread(std::stop_token stoken, FileOps* fsop, ArchiveDi
 						pushEvent(SDL_USEREVENT_THREAD_PREVIEW, ThreadEvent::progress, allocatePreviewName(filename(parentPath(pit->first)), false), img);
 				}
 #ifdef CAN_PDF
-				else if (auto [doc, fdat] = FileOps::loadArchivePdf(arch, entry); doc)
-					previewPdf(stoken, doc, maxHeight, filename(pit->first));
+				else if (PdfFile pdf = FileOps::loadArchivePdf(arch, entry); pdf.pdoc)
+					previewPdf(stoken, pdf.pdoc, maxHeight, filename(pit->first));
 #endif
 				entries.erase(pit);
 			}
@@ -624,15 +620,6 @@ void Browser::previewPdf(std::stop_token stoken, PopplerDocument* doc, int maxHe
 	gObjectUnref(doc);
 }
 #endif
-
-ArchiveDir Browser::sliceCurrentArchiveDir() {
-	ArchiveDir slice;
-	if (auto [dir, fil] = arch.find(curDir); dir) {
-		slice.name = arch.name;
-		slice.copySlicedDentsFrom(*dir);
-	}
-	return slice;
-}
 
 SDL_Surface* Browser::combineIcons(SDL_Surface* dir, SDL_Surface* img) {
 	if (!img)
@@ -692,6 +679,9 @@ void Browser::finishLoadPictures(BrowserResultPicture& rp) {
 			curDir.clear();
 			arch = std::move(rp.arch);
 			fsop->setWatch(arch.name.data());
+		} else {
+			arch.passphrase = std::move(rp.arch.passphrase);
+			arch.pc = rp.arch.pc;
 		}
 		if (rp.newCurDir)
 			curDir = std::move(rp.curDir);
@@ -728,14 +718,19 @@ void Browser::loadPicturesDirThread(std::stop_token stoken, BrowserResultPicture
 	vector<Cstring> files = fsop->listDirectory(rp->curDir, true, false, showHidden);
 	size_t start = fwd ? 0 : files.size() - 1;
 	if (picLim.type != PicLim::Type::none && !rp->picname.empty())
-		if (vector<Cstring>::iterator it = std::lower_bound(files.begin(), files.end(), rp->picname, [](const Cstring& a, const string& b) -> bool { return Strcomp::less(a.data(), b.c_str()); }); it != files.end() && *it == rp->picname)
+		if (vector<Cstring>::iterator it = std::lower_bound(files.begin(), files.end(), rp->picname, [](const Cstring& a, const string& b) -> bool { return Strcomp::less(a.data(), b.data()); }); it != files.end() && *it == rp->picname)
 			start = it - files.begin();
 	auto [lim, mem, sizMag] = initLoadLimits(picLim, fwd ? files.size() - start : start + 1);	// picture count limit, picture size limit, magnitude index
 	string progLim = limitToStr(picLim, lim, mem, sizMag);
 	uintptr_t m = 0;
 
 	// iterate over files until one of the limits is hit (it should be the one associated with the setting)
-	for (size_t mov = btom<size_t>(fwd), i = start, c = 0; i < files.size() && c < lim && m < mem && !stoken.stop_requested(); i += mov)
+	for (size_t mov = btom<size_t>(fwd), i = start, c = 0; i < files.size() && c < lim && m < mem; i += mov) {
+		if (stoken.stop_requested()) {
+			rp->rc = ResultCode::stop;
+			break;
+		}
+
 		if (SDL_Surface* img = World::drawSys()->getRenderer()->makeCompatible(fsop->loadPicture(rp->curDir / files[i].data()), true)) {
 			rp->mpic.lock();
 			rp->pics.emplace_back(std::move(files[i]), nullptr);
@@ -744,6 +739,7 @@ void Browser::loadPicturesDirThread(std::stop_token stoken, BrowserResultPicture
 			++c;
 			pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::progress, new BrowserPictureProgress(rp, img, c - 1), progressText(limitToStr(picLim, c, m, sizMag), progLim));
 		}
+	}
 	pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::finished, rp, std::bit_cast<void*>(uintptr_t(fwd)));	// even if the thread was cancelled push this event so the textures can be freed in the main thread
 }
 
@@ -752,16 +748,20 @@ void Browser::loadPicturesArchThread(std::stop_token stoken, BrowserResultPictur
 	string progLim = limitToStr(picLim, lim, mem, sizMag);
 	size_t c = 0;
 	uintptr_t m = 0;
-	archive* arch = fsop->openArchive(rp->arch.name.data(), &rp->error);
+	archive* arch = fsop->openArchive(rp->arch, &rp->error);
 	if (!arch) {
-		if (rp->error.empty())
-			rp->error = "Failed to load archive";
+		rp->rc = ResultCode::error;
 		pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::finished, rp);
 		return;
 	}
 
 	int rc = ARCHIVE_OK;
-	for (archive_entry* entry; !files.empty() && (rc = archive_read_next_header(arch, &entry)) == ARCHIVE_OK && !stoken.stop_requested();)
+	for (archive_entry* entry; !files.empty() && (rc = archive_read_next_header(arch, &entry)) == ARCHIVE_OK;) {
+		if (stoken.stop_requested()) {
+			rp->rc = ResultCode::stop;
+			break;
+		}
+
 		if (umap<string, uintptr_t>::iterator fit = files.find(archive_entry_pathname_utf8(entry)); fit != files.end()) {
 			if (SDL_Surface* img = World::drawSys()->getRenderer()->makeCompatible(FileOps::loadArchivePicture(arch, entry), true)) {
 				rp->mpic.lock();
@@ -773,22 +773,24 @@ void Browser::loadPicturesArchThread(std::stop_token stoken, BrowserResultPictur
 			}
 			files.erase(fit);
 		}
-	if (rc != ARCHIVE_EOF && rc != ARCHIVE_OK)
+	}
+	if (rc != ARCHIVE_EOF && rc != ARCHIVE_OK) {
 		rp->error = archive_error_string(arch);
+		rp->rc = rp->error.starts_with("Passphrase") ? ResultCode::stop : ResultCode::error;
+	}
 	archive_read_free(arch);
 	pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::finished, rp, std::bit_cast<void*>(uintptr_t(fwd)));	// even if the thread was cancelled push this event so the textures can be freed in the main thread
 }
 
 #ifdef CAN_PDF
 void Browser::loadPicturesPdfThread(std::stop_token stoken, BrowserResultPicture* rp, FileOps* fsop, PicLim picLim, uint compress, bool imageOnly, bool fwd) {
-	PopplerDocument* doc = nullptr;
-	Data fdata;
+	PdfFile pdf;
 	if (rp->hasArchive()) {
-		if (archive* arch = fsop->openArchive(rp->arch.name.data(), &rp->error)) {
+		if (archive* arch = fsop->openArchive(rp->arch, &rp->error)) {
 			int rc;
 			for (archive_entry* entry; (rc = archive_read_next_header(arch, &entry)) == ARCHIVE_OK;)
-				if (pathEqual(archive_entry_pathname_utf8(entry), rp->curDir.c_str())) {
-					std::tie(doc, fdata) = FileOps::loadArchivePdf(arch, entry, &rp->error);
+				if (pathEqual(archive_entry_pathname_utf8(entry), rp->curDir.data())) {
+					pdf = FileOps::loadArchivePdf(arch, entry, &rp->error);
 					break;
 				}
 			if (rc != ARCHIVE_OK)
@@ -796,12 +798,13 @@ void Browser::loadPicturesPdfThread(std::stop_token stoken, BrowserResultPicture
 			archive_read_free(arch);
 		}
 	} else
-		std::tie(doc, fdata) = fsop->loadPdf(rp->curDir, &rp->error);
+		pdf = fsop->loadPdf(rp->curDir, &rp->error);
 
 	int pcnt;
-	if (!doc || (pcnt = popplerDocumentGetNPages(doc)) <= 0) {
+	if (!pdf.pdoc || (pcnt = popplerDocumentGetNPages(pdf.pdoc)) <= 0) {
 		if (rp->error.empty())
-			rp->error = doc ? "No pages" : "Failed to load PDF file";
+			rp->error = pdf.pdoc ? "No pages" : "Failed to load PDF file";
+		rp->rc = ResultCode::error;
 		pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::finished, rp);
 		return;
 	}
@@ -826,8 +829,13 @@ void Browser::loadPicturesPdfThread(std::stop_token stoken, BrowserResultPicture
 		return false;
 	};
 
-	for (uint mov = btom<uint>(fwd), i = start; i < uint(pcnt) && c < lim && m < mem && !stoken.stop_requested(); i += mov) {
-		PopplerPage* page = popplerDocumentGetPage(doc, i);
+	for (uint mov = btom<uint>(fwd), i = start; i < uint(pcnt) && c < lim && m < mem; i += mov) {
+		if (stoken.stop_requested()) {
+			rp->rc = ResultCode::stop;
+			break;
+		}
+
+		PopplerPage* page = popplerDocumentGetPage(pdf.pdoc, i);
 		if (imageOnly) {
 			bool hit = false;
 			for (auto& [pos, id] : getPdfPageImagesInfo(page)) {
@@ -850,7 +858,7 @@ void Browser::loadPicturesPdfThread(std::stop_token stoken, BrowserResultPicture
 		}
 		gObjectUnref(page);
 	}
-	gObjectUnref(doc);
+	gObjectUnref(pdf.pdoc);
 	pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::finished, rp, std::bit_cast<void*>(uintptr_t(fwd)));	// even if the thread was cancelled push this event so the textures can be freed in the main thread
 }
 
@@ -896,7 +904,7 @@ umap<string, uintptr_t> Browser::prepareArchiveDirPicLoad(BrowserResultPicture* 
 	vector<ArchiveFile*> files = (rp->newArchive ? rp->arch.find(rp->curDir).first : arch.find(rp->curDir).first)->listFiles();	// rp->curDir must be guaranteed to be a valid path
 	size_t start = fwd ? 0 : files.size() - 1;
 	if (picLim.type != PicLim::Type::none && !rp->picname.empty())
-		if (vector<ArchiveFile*>::const_iterator it = std::lower_bound(files.begin(), files.end(), rp->picname, [](const ArchiveFile* a, const string& b) -> bool { return Strcomp::less(a->name.data(), b.c_str()); }); it != files.end() && (*it)->name == rp->picname)
+		if (vector<ArchiveFile*>::const_iterator it = std::lower_bound(files.begin(), files.end(), rp->picname, [](const ArchiveFile* a, const string& b) -> bool { return Strcomp::less(a->name.data(), b.data()); }); it != files.end() && (*it)->name == rp->picname)
 			start = it - files.begin();
 
 	vector<pair<string, uintptr_t>> stage;

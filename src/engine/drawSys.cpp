@@ -15,7 +15,6 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
-#include <SDL2/SDL_image.h>
 
 // FONT SET
 
@@ -55,7 +54,7 @@ void FontSet::init(const fs::path& path, Settings::Hinting hinting) {
 }
 
 FontSet::Font FontSet::openFont(const fs::path& path, uint size) const {
-	Font face = FileOpsLocal::readFile(path);
+	Font face = FileOpsLocal::readFile(path.c_str());
 	if (FT_Error err = FT_New_Memory_Face(lib, reinterpret_cast<FT_Byte*>(face.data.data()), face.data.size(), 0, &face.face))
 		throw std::runtime_error(FT_Error_String(err));
 	if (FT_Error err = FT_Set_Pixel_Sizes(face.face, 0, size)) {
@@ -71,43 +70,43 @@ void FontSet::clearCache() {
 			FT_Done_Glyph(&it->root);
 	asciiCache.clear();
 	height = 0;
-	buffer.reset();
+	pm.pix.reset();
 	bufSize = 0;
 }
 
-PixmapRgba FontSet::renderText(string_view text, uint size) {
-	uvec2 res(measureText(text, size), size);
-	if (!res.x)
-		return PixmapRgba();
-	prepareBuffer(res);
-	prepareAdvance(text.begin(), text.length());
-	ypos = uint(float(size) * baseScale);
+const PixmapRgba& FontSet::renderText(string_view text, uint size) {
+	if (pm.res = uvec2(measureText(text, size), size); pm.res.x) {
+		prepareBuffer();
+		prepareAdvance(text.begin(), text.length(), xofs);
+		ypos = uint(float(size) * baseScale);
 
-	array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
-	for (char32_t ch, prev = '\0'; len; prev = ch) {
-		ch = mbstowc(ptr, len);
-		if (iswcntrl(ch)) {
-			if (ch == '\t')
-				advanceTab(glyphs);
-			continue;
-		}
+		array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
+		for (char32_t ch, prev = '\0'; len; prev = ch) {
+			ch = mbstowc(ptr, len);
+			if (iswcntrl(ch)) {
+				if (ch == '\t')
+					advanceTab(glyphs);
+				continue;
+			}
 
-		if (uint id = ch - ' '; id < glyphs.size()) {
-			copyGlyph(res, glyphs[id]->bitmap, glyphs[id]->top, glyphs[id]->left);
-			advanceChar<true>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x);
-		} else {
-			vector<Font>::iterator ft = loadGlyph(ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_RENDER | FT_LOAD_TARGET_(mode));
-			copyGlyph(res, ft->face->glyph->bitmap, ft->face->glyph->bitmap_top, ft->face->glyph->bitmap_left);
-			advanceChar<false>(ft->face, ch, prev, ft->face->glyph->advance.x);
+			if (uint id = ch - ' '; id < glyphs.size()) {
+				copyGlyph(glyphs[id]->bitmap, glyphs[id]->top, glyphs[id]->left);
+				advanceChar<true>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x);
+			} else {
+				vector<Font>::iterator ft = loadGlyph(ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_RENDER | FT_LOAD_TARGET_(mode));
+				copyGlyph(ft->face->glyph->bitmap, ft->face->glyph->bitmap_top, ft->face->glyph->bitmap_left);
+				advanceChar<false>(ft->face, ch, prev, ft->face->glyph->advance.x);
+			}
 		}
 	}
-	return PixmapRgba(buffer.get(), res);
+	return pm;
 }
 
 uint FontSet::measureText(string_view text, uint size) {
 	if (!setSize(text, size))
 		return 0;
-	prepareAdvance(text.begin(), text.length());
+	prepareAdvance(text.begin(), text.length(), 0);
+	xofs = 0;
 	mfin = 0;
 
 	array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
@@ -121,57 +120,59 @@ uint FontSet::measureText(string_view text, uint size) {
 
 		if (uint id = ch - ' '; id < glyphs.size()) {
 			cacheGlyph(glyphs, ch, id);
+			checkXofs(glyphs[id]->left);
 			advanceChar<true>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x, glyphs[id]->left, glyphs[id]->bitmap.width);
 		} else {
 			vector<Font>::iterator ft = loadGlyph(ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_BITMAP_METRICS_ONLY);
+			checkXofs(ft->face->glyph->bitmap_left);
 			advanceChar<false>(ft->face, ch, prev, ft->face->glyph->advance.x, ft->face->glyph->bitmap_left, ft->face->glyph->bitmap.width);
 		}
 	}
 	return mfin;
 }
 
-PixmapRgba FontSet::renderText(string_view text, uint size, uint limit) {
-	uvec2 res = measureText(text, size, limit);
-	if (!res.x)
-		return PixmapRgba();
-	ypos = uint(float(size) * baseScale);
+const PixmapRgba& FontSet::renderText(string_view text, uint size, uint limit) {
+	if (pm.res = measureText(text, size, limit); pm.res.x) {
+		ypos = uint(float(size) * baseScale);
 
-	array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
-	prepareBuffer(res);
-	for (size_t i = 0; i < lineBreaks.size() - 1; ++i) {
-		prepareAdvance(lineBreaks[i], lineBreaks[i + 1] - lineBreaks[i]);
-		for (char32_t ch, prev = '\0'; len; prev = ch) {
-			ch = mbstowc(ptr, len);
-			if (iswcntrl(ch)) {
-				if (ch == '\t')
-					advanceTab(glyphs);
-				continue;
-			}
+		array<FT_BitmapGlyph, cacheSize>& glyphs = asciiCache.at(height);
+		prepareBuffer();
+		for (size_t i = 0; i < lineBreaks.size() - 1; ++i) {
+			prepareAdvance(lineBreaks[i], lineBreaks[i + 1] - lineBreaks[i], xofs);
+			for (char32_t ch, prev = '\0'; len; prev = ch) {
+				ch = mbstowc(ptr, len);
+				if (iswcntrl(ch)) {
+					if (ch == '\t')
+						advanceTab(glyphs);
+					continue;
+				}
 
-			if (uint id = ch - ' '; id < glyphs.size()) {
-				if (glyphs[id]->left + glyphs[id]->bitmap.width <= limit) {	// for worst case scenario from checkSpace
-					copyGlyph(res, glyphs[id]->bitmap, glyphs[id]->top, glyphs[id]->left);
-					advanceChar<true>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x);
-				}
-			} else {
-				vector<Font>::iterator ft = loadGlyph(ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_RENDER | FT_LOAD_TARGET_(mode));
-				if (ft->face->glyph->bitmap_left + ft->face->glyph->bitmap.width <= limit) {	// for worst case scenario from checkSpace
-					copyGlyph(res, ft->face->glyph->bitmap, ft->face->glyph->bitmap_top, ft->face->glyph->bitmap_left);
-					advanceChar<false>(ft->face, ch, prev, ft->face->glyph->advance.x);
+				if (uint id = ch - ' '; id < glyphs.size()) {
+					if (glyphs[id]->left + glyphs[id]->bitmap.width <= limit) {	// for worst case scenario from checkSpace
+						copyGlyph(glyphs[id]->bitmap, glyphs[id]->top, glyphs[id]->left);
+						advanceChar<true>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x);
+					}
+				} else {
+					vector<Font>::iterator ft = loadGlyph(ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_RENDER | FT_LOAD_TARGET_(mode));
+					if (ft->face->glyph->bitmap_left + ft->face->glyph->bitmap.width <= limit) {	// for worst case scenario from checkSpace
+						copyGlyph(ft->face->glyph->bitmap, ft->face->glyph->bitmap_top, ft->face->glyph->bitmap_left);
+						advanceChar<false>(ft->face, ch, prev, ft->face->glyph->advance.x);
+					}
 				}
 			}
+			ypos += size;
 		}
-		ypos += size;
 	}
-	return PixmapRgba(buffer.get(), res);
+	return pm;
 }
 
 uvec2 FontSet::measureText(string_view text, uint size, uint limit) {
 	if (!setSize(text, size))
 		return uvec2(0);
-	prepareAdvance(text.begin(), text.length());
+	prepareAdvance(text.begin(), text.length(), 0);
 	lineBreaks = { text.begin() };
 	wordStart = text.begin();
+	xofs = 0;
 	mfin = 0;
 	wordXpos = 0;
 	maxWidth = 0;
@@ -193,10 +194,12 @@ uvec2 FontSet::measureText(string_view text, uint size, uint limit) {
 
 		if (uint id = ch - ' '; id < glyphs.size()) {
 			cacheGlyph(glyphs, ch, id);
+			checkXofs(glyphs[id]->left);
 			if (checkSpace(limit, glyphs[id]->left, glyphs[id]->bitmap.width))
 				advanceChar<true>(fonts[0].face, ch, prev, glyphs[id]->root.advance.x, glyphs[id]->left, glyphs[id]->bitmap.width);
 		} else {
 			vector<Font>::iterator ft = loadGlyph(ch, FT_LOAD_IGNORE_TRANSFORM | FT_LOAD_BITMAP_METRICS_ONLY);
+			checkXofs(ft->face->glyph->bitmap_left);
 			if (checkSpace(limit, ft->face->glyph->bitmap_left, ft->face->glyph->bitmap.width))
 				advanceChar<false>(ft->face, ch, prev, ft->face->glyph->advance.x, ft->face->glyph->bitmap_left, ft->face->glyph->bitmap.width);
 		}
@@ -210,20 +213,20 @@ uvec2 FontSet::measureText(string_view text, uint size, uint limit) {
 	return uvec2(std::max(maxWidth, mfin), (lineBreaks.size() - 1) * size);
 }
 
-void FontSet::prepareBuffer(uvec2 res) {
-	size_t size = size_t(res.x) * size_t(res.y);
+void FontSet::prepareBuffer() {
+	size_t size = size_t(pm.res.x) * size_t(pm.res.y);
 	if (size > bufSize) {
-		buffer = std::make_unique_for_overwrite<uint32[]>(size);
+		pm.pix = std::make_unique_for_overwrite<uint32[]>(size);
 		bufSize = size;
 	}
-	std::fill_n(buffer.get(), size, 0);
+	std::fill_n(pm.pix.get(), size, 0);
 }
 
-void FontSet::prepareAdvance(string_view::iterator begin, size_t length) {
+void FontSet::prepareAdvance(string_view::iterator begin, size_t length, uint xstart) {
 	ptr = begin;
 	len = length;
 	cpos = 0;
-	xpos = 0;
+	xpos = xstart;
 }
 
 void FontSet::advanceTab(array<FT_BitmapGlyph, cacheSize>& glyphs) {
@@ -251,6 +254,14 @@ template <bool cached>
 void FontSet::advanceChar(FT_Face face, char32_t ch, char32_t prev, long advance, int left, uint width) {
 	mfin = xpos + left + width;
 	advanceChar<cached>(face, ch, prev, advance);
+}
+
+void FontSet::checkXofs(int left) {
+	if (int dif = int64(xpos) + left; dif < 0) {
+		xpos -= dif;
+		xofs -= dif;
+		mfin -= dif;
+	}
 }
 
 bool FontSet::checkSpace(uint limit, int left, uint width) {
@@ -336,23 +347,21 @@ vector<FontSet::Font>::iterator FontSet::loadGlyph(char32_t ch, int32 flags) {
 	return fonts.begin();
 }
 
-void FontSet::copyGlyph(uvec2 res, const FT_Bitmap& bmp, int top, int left) {
-	uint32* dst;
-	byte_t* src;
+void FontSet::copyGlyph(const FT_Bitmap& bmp, int top, int left) {
+	uint32* dst = pm.pix.get() + xpos + left;
+	uchar* src = bmp.buffer;
 	int offs = ypos - top;
-	if (offs >= 0) {
-		dst = buffer.get() + uint(offs) * res.x + xpos + left;
-		src = reinterpret_cast<byte_t*>(bmp.buffer);
-	} else {
-		dst = buffer.get() + xpos + left;
-		src = reinterpret_cast<byte_t*>(bmp.buffer) + uint(-offs) * bmp.pitch;
-	}
+	if (offs >= 0)
+		dst += size_t(offs) * size_t(pm.res.x);
+	else
+		src += uint(-offs) * bmp.pitch;
 	uint bot = offs + bmp.rows;
-	uint rows = bot <= res.y ? bmp.rows : bmp.rows - bot + res.y;
+	uint rows = bot <= pm.res.y ? bmp.rows : bmp.rows - bot + pm.res.y;
 
-	for (uint r = 0; r < rows; ++r, dst += res.x, src += bmp.pitch)
+	for (uint r = 0; r < rows; ++r, dst += pm.res.x, src += bmp.pitch)
 		for (uint c = 0; c < bmp.width; ++c)
-			dst[c] = 0x00FFFFFF | (uint32(std::max(reinterpret_cast<byte_t*>(dst + c)[3], src[c])) << 24);
+			if (reinterpret_cast<uchar*>(dst + c)[3] < src[c])
+				dst[c] = 0x00FFFFFF | (uint32(src[c]) << 24);
 }
 
 void FontSet::setMode(Settings::Hinting hinting) {
@@ -428,7 +437,7 @@ DrawSys::~DrawSys() {
 
 SDL_Surface* DrawSys::loadIcon(const string& path, int size) {
 #if SDL_IMAGE_VERSION_ATLEAST(2, 6, 0)
-	if (SDL_RWops* ifh = SDL_RWFromFile(path.c_str(), "rb")) {
+	if (SDL_RWops* ifh = SDL_RWFromFile(path.data(), "rb")) {
 		if (SDL_Surface* img = IMG_LoadSizedSVG_RW(ifh, 0, size)) {
 			SDL_RWclose(ifh);
 			return img;
@@ -441,7 +450,7 @@ SDL_Surface* DrawSys::loadIcon(const string& path, int size) {
 	}
 	return nullptr;
 #else
-	return IMG_Load(path.c_str());
+	return IMG_Load(path.data());
 #endif
 }
 

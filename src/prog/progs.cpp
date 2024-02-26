@@ -162,7 +162,7 @@ void ProgState::showPopupChoice(Cstring&& msg, EventId kcal, EventId ccal, Align
 	World::scene()->setPopup(new Popup(svec2(std::max(mglen, yeslen + nolen) + Layout::defaultItemSpacing * 3, popupLineHeight * 2 + Layout::defaultItemSpacing * 3), std::move(con), ccal, kcal, first));
 }
 
-void ProgState::showPopupInput(Cstring&& msg, string&& text, EventId kcal, EventId ccal, Cstring&& ktxt, Alignment malign) {
+void ProgState::showPopupInput(Cstring&& msg, string&& text, EventId kcal, EventId ccal, bool visible, Cstring&& ktxt, Alignment malign) {
 	Widget* first;
 	Children bot = {
 		new PushButton(1.f, std::move(ktxt), kcal, ACT_LEFT, Cstring(), Alignment::center),
@@ -170,7 +170,7 @@ void ProgState::showPopupInput(Cstring&& msg, string&& text, EventId kcal, Event
 	};
 	Children con = {
 		new Label(1.f, std::move(msg), malign),
-		first = new LabelEdit(1.f, std::move(text), kcal, ccal, ACT_LEFT, Cstring(), LabelEdit::TextType::any, false),
+		first = new LabelEdit(1.f, std::move(text), kcal, ccal, ACT_LEFT, Cstring(), visible ? LabelEdit::TextType::any : LabelEdit::TextType::password, false),
 		new Layout(1.f, std::move(bot), Direction::right, 0)
 	};
 	World::scene()->setPopup(new Popup(svec2(0.75f, popupLineHeight * 3 + Layout::defaultItemSpacing * 4), std::move(con), ccal, kcal, first), first);
@@ -360,7 +360,7 @@ void ProgFileExplorer::processFileChanges(Browser* browser) {
 		return fileChanges.clear();
 	}
 
-	auto compare = [](const Widget* a, const string& b) -> bool { return Strcomp::less(static_cast<const PushButton*>(a)->getText().data(), b.c_str()); };
+	auto compare = [](const Widget* a, const string& b) -> bool { return Strcomp::less(static_cast<const PushButton*>(a)->getText().data(), b.data()); };
 	std::span<Widget*> wgts = fileList->getWidgets();
 	for (FileChange& fc : fileChanges) {
 		if (fc.type == FileChange::deleteEntry) {
@@ -784,11 +784,6 @@ RootLayout* ProgSettings::createLayout() {
 		"all pictures in directory/archive",
 		"number of pictures",
 		"total size of pictures"
-	};
-	static constexpr std::initializer_list<const char*> compressLines = {
-		"load textures uncompressed",
-		"squash texels to 16 bits",
-		"use compressed textures"
 	};
 	static constexpr char tipDeadzone[] = "Controller axis deadzone";
 	static constexpr char tipMaxPicRes[] = "Maximum picture resolution";

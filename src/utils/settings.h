@@ -2,8 +2,8 @@
 
 #include "utils.h"
 #include <unordered_set>
-#include <SDL2/SDL_gamecontroller.h>
-#include <SDL2/SDL_scancode.h>
+#include <SDL_gamecontroller.h>
+#include <SDL_scancode.h>
 
 template <class... T> using uset = std::unordered_set<T...>;
 

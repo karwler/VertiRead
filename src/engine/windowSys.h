@@ -1,7 +1,7 @@
 #pragma once
 
 #include "utils/settings.h"
-#include <SDL2/SDL_events.h>
+#include <SDL_events.h>
 
 // handles window events and contains video settings
 class WindowSys {

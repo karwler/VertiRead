@@ -1,6 +1,6 @@
 #include "types.h"
 #include "utils/compare.h"
-#include <SDL2/SDL_timer.h>
+#include <SDL_timer.h>
 
 void pushEvent(UserEvent type, int32 code, void* data1, void* data2) {
 	SDL_Event event = { .user = {
@@ -112,12 +112,6 @@ void ArchiveDir::finalize() {
 	files.sort([](const ArchiveFile& a, const ArchiveFile& b) -> bool { return strcmp(a.name.data(), b.name.data()) < 0; });
 }
 
-void ArchiveDir::clear() {
-	name.clear();
-	dirs.clear();
-	files.clear();
-}
-
 pair<ArchiveDir*, ArchiveFile*> ArchiveDir::find(string_view path) {
 	ArchiveDir* node = this;
 	size_t p = path.find_first_not_of('/');
@@ -151,9 +145,18 @@ void ArchiveDir::copySlicedDentsFrom(const ArchiveDir& src) {
 	files = src.files;
 }
 
+ArchiveData ArchiveData::copyLight() const {
+	ArchiveData ad;
+	ad.name = name;
+	ad.dref = &data;
+	ad.passphrase = passphrase;
+	ad.pc = pc;
+	return ad;
+}
+
 // RESULT ASYNC
 
-BrowserResultArchive::BrowserResultArchive(optional<string>&& root, ArchiveDir&& aroot, string&& fpath, string&& ppage) :
+BrowserResultArchive::BrowserResultArchive(optional<string>&& root, ArchiveData&& aroot, string&& fpath, string&& ppage) :
 	rootDir(root ? std::move(*root) : string()),
 	opath(std::move(fpath)),
 	page(std::move(ppage)),
@@ -161,7 +164,7 @@ BrowserResultArchive::BrowserResultArchive(optional<string>&& root, ArchiveDir&&
 	hasRootDir(root)
 {}
 
-BrowserResultPicture::BrowserResultPicture(BrowserResultState brs, optional<string>&& root, string&& container, string&& pname, ArchiveDir&& aroot) :
+BrowserResultPicture::BrowserResultPicture(BrowserResultState brs, optional<string>&& root, string&& container, string&& pname, ArchiveData&& aroot) :
 	rootDir(root ? std::move(*root) : string()),
 	curDir(std::move(container)),
 	picname(std::move(pname)),

@@ -1,16 +1,10 @@
 #ifdef CAN_PDF
 #include "glib.h"
 #include "poppler.h"
-#include <iostream>
-#include <dlfcn.h>
+#include "internal.h"
 
-#define PLIB_NAME "poppler-glib"
-#define CLIB_NAME "cairo"
-
-namespace LibPoppler {
-
-static void* libp = nullptr;
-static void* libc = nullptr;
+static LibType libp = nullptr;
+static LibType libc = nullptr;
 static bool failed = false;
 decltype(poppler_document_new_from_bytes)* popplerDocumentNewFromBytes = nullptr;
 decltype(poppler_document_get_n_pages)* popplerDocumentGetNPages = nullptr;
@@ -33,73 +27,37 @@ decltype(cairo_surface_unmap_image)* cairoSurfaceUnmapImage = nullptr;
 decltype(cairo_surface_destroy)* cairoSurfaceDestroy = nullptr;
 
 bool symPoppler() {
-	if (libp || failed)
-		return libp;
-	if (!LibGlib::symGlib()) {
+	if (!(libp || failed || (symGlib() && (libc = libOpen("libcairo" LIB_EXT)) && (libp = libOpen("libpoppler-glib" LIB_EXT))
+		&& (cairoCreate = libSym<decltype(cairoCreate)>(libc, "cairo_create"))
+		&& (cairoDestroy = libSym<decltype(cairoDestroy)>(libc, "cairo_destroy"))
+		&& (cairoPdfSurfaceCreate = libSym<decltype(cairoPdfSurfaceCreate)>(libc, "cairo_pdf_surface_create"))
+		&& (cairoSurfaceMapToImage = libSym<decltype(cairoSurfaceMapToImage)>(libc, "cairo_surface_map_to_image"))
+		&& (cairoImageSurfaceGetFormat = libSym<decltype(cairoImageSurfaceGetFormat)>(libc, "cairo_image_surface_get_format"))
+		&& (cairoImageSurfaceGetData = libSym<decltype(cairoImageSurfaceGetData)>(libc, "cairo_image_surface_get_data"))
+		&& (cairoImageSurfaceGetWidth = libSym<decltype(cairoImageSurfaceGetWidth)>(libc, "cairo_image_surface_get_width"))
+		&& (cairoImageSurfaceGetHeight = libSym<decltype(cairoImageSurfaceGetHeight)>(libc, "cairo_image_surface_get_height"))
+		&& (cairoImageSurfaceGetStride = libSym<decltype(cairoImageSurfaceGetStride)>(libc, "cairo_image_surface_get_stride"))
+		&& (cairoSurfaceUnmapImage = libSym<decltype(cairoSurfaceUnmapImage)>(libc, "cairo_surface_unmap_image"))
+		&& (cairoSurfaceDestroy = libSym<decltype(cairoSurfaceDestroy)>(libc, "cairo_surface_destroy"))
+		&& (popplerDocumentNewFromBytes = libSym<decltype(popplerDocumentNewFromBytes)>(libp, "poppler_document_new_from_bytes"))
+		&& (popplerDocumentGetNPages = libSym<decltype(popplerDocumentGetNPages)>(libp, "poppler_document_get_n_pages"))
+		&& (popplerDocumentGetPage = libSym<decltype(popplerDocumentGetPage)>(libp, "poppler_document_get_page"))
+		&& (popplerPageGetImageMapping = libSym<decltype(popplerPageGetImageMapping)>(libp, "poppler_page_get_image_mapping"))
+		&& (popplerPageFreeImageMapping = libSym<decltype(popplerPageFreeImageMapping)>(libp, "poppler_page_free_image_mapping"))
+		&& (popplerPageGetImage = libSym<decltype(popplerPageGetImage)>(libp, "poppler_page_get_image"))
+		&& (popplerPageGetSize = libSym<decltype(popplerPageGetSize)>(libp, "poppler_page_get_size"))
+		&& (popplerPageRender = libSym<decltype(popplerPageRender)>(libp, "poppler_page_render"))
+	))) {
+		libClose(libp);
+		libClose(libc);
 		failed = true;
-		return false;
 	}
-	try {
-		if (libc = dlopen("lib" CLIB_NAME ".so", RTLD_LAZY | RTLD_GLOBAL); !libc)
-			throw "Failed to open " CLIB_NAME;
-		if (libp = dlopen("lib" PLIB_NAME ".so", RTLD_LAZY | RTLD_LOCAL); !libp)
-			throw "Failed to open " PLIB_NAME;
-	} catch (const char* msg) {
-		const char* err = dlerror();
-		std::cerr << (err ? err : msg) << std::endl;
-		if (libp)
-			dlclose(libp);
-		if (libc)
-			dlclose(libc);
-		libp = libc = nullptr;
-		failed = true;
-		return false;
-	}
-
-	try {
-		if (!((cairoCreate = reinterpret_cast<decltype(cairoCreate)>(dlsym(libc, "cairo_create")))
-			&& (cairoDestroy = reinterpret_cast<decltype(cairoDestroy)>(dlsym(libc, "cairo_destroy")))
-			&& (cairoPdfSurfaceCreate = reinterpret_cast<decltype(cairoPdfSurfaceCreate)>(dlsym(libc, "cairo_pdf_surface_create")))
-			&& (cairoSurfaceMapToImage = reinterpret_cast<decltype(cairoSurfaceMapToImage)>(dlsym(libc, "cairo_surface_map_to_image")))
-			&& (cairoImageSurfaceGetFormat = reinterpret_cast<decltype(cairoImageSurfaceGetFormat)>(dlsym(libc, "cairo_image_surface_get_format")))
-			&& (cairoImageSurfaceGetData = reinterpret_cast<decltype(cairoImageSurfaceGetData)>(dlsym(libc, "cairo_image_surface_get_data")))
-			&& (cairoImageSurfaceGetWidth = reinterpret_cast<decltype(cairoImageSurfaceGetWidth)>(dlsym(libc, "cairo_image_surface_get_width")))
-			&& (cairoImageSurfaceGetHeight = reinterpret_cast<decltype(cairoImageSurfaceGetHeight)>(dlsym(libc, "cairo_image_surface_get_height")))
-			&& (cairoImageSurfaceGetStride = reinterpret_cast<decltype(cairoImageSurfaceGetStride)>(dlsym(libc, "cairo_image_surface_get_stride")))
-			&& (cairoSurfaceUnmapImage = reinterpret_cast<decltype(cairoSurfaceUnmapImage)>(dlsym(libc, "cairo_surface_unmap_image")))
-			&& (cairoSurfaceDestroy = reinterpret_cast<decltype(cairoSurfaceDestroy)>(dlsym(libc, "cairo_surface_destroy")))
-		))
-			throw "Failed to find " CLIB_NAME " functions";
-
-		if (!((popplerDocumentNewFromBytes = reinterpret_cast<decltype(popplerDocumentNewFromBytes)>(dlsym(libp, "poppler_document_new_from_bytes")))
-			&& (popplerDocumentGetNPages = reinterpret_cast<decltype(popplerDocumentGetNPages)>(dlsym(libp, "poppler_document_get_n_pages")))
-			&& (popplerDocumentGetPage = reinterpret_cast<decltype(popplerDocumentGetPage)>(dlsym(libp, "poppler_document_get_page")))
-			&& (popplerPageGetImageMapping = reinterpret_cast<decltype(popplerPageGetImageMapping)>(dlsym(libp, "poppler_page_get_image_mapping")))
-			&& (popplerPageFreeImageMapping = reinterpret_cast<decltype(popplerPageFreeImageMapping)>(dlsym(libp, "poppler_page_free_image_mapping")))
-			&& (popplerPageGetImage = reinterpret_cast<decltype(popplerPageGetImage)>(dlsym(libp, "poppler_page_get_image")))
-			&& (popplerPageGetSize = reinterpret_cast<decltype(popplerPageGetSize)>(dlsym(libp, "poppler_page_get_size")))
-			&& (popplerPageRender = reinterpret_cast<decltype(popplerPageRender)>(dlsym(libp, "poppler_page_render")))
-		))
-			throw "Failed to find " PLIB_NAME " functions";
-	} catch (const char* msg) {
-		std::cerr << msg << std::endl;
-		dlclose(libp);
-		dlclose(libc);
-		libp = libc = nullptr;
-		failed = true;
-		return false;
-	}
-	return true;
+	return libp;
 }
 
 void closePoppler() {
-	if (libp) {
-		dlclose(libp);
-		dlclose(libc);
-		libp = libc = nullptr;
-	}
+	libClose(libp);
+	libClose(libc);
 	failed = false;
-}
-
 }
 #endif

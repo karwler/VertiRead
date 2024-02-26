@@ -1,5 +1,4 @@
 #include "compare.h"
-#include <cwctype>
 
 char32_t mbstowc(string_view::iterator& pos, size_t& len) {
 	if (!len)

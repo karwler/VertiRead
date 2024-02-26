@@ -1,13 +1,8 @@
 #ifdef CAN_SFTP
 #include "ssh2.h"
-#include <iostream>
-#include <dlfcn.h>
+#include "internal.h"
 
-#define LIB_NAME "libssh2"
-
-namespace LibSsh2 {
-
-static void* lib = nullptr;
+static LibType lib = nullptr;
 static bool failed = false;
 decltype(libssh2_init)* sshInit = nullptr;
 decltype(libssh2_exit)* sshExit = nullptr;
@@ -23,6 +18,9 @@ decltype(libssh2_sftp_init)* sftpInit = nullptr;
 decltype(libssh2_sftp_shutdown)* sftpShutdown = nullptr;
 decltype(libssh2_sftp_open_ex)* sftpOpenEx = nullptr;
 decltype(libssh2_sftp_read)* sftpRead = nullptr;
+decltype(libssh2_sftp_write)* sftpWrite = nullptr;
+decltype(libssh2_sftp_seek64)* sftpSeek64 = nullptr;
+decltype(libssh2_sftp_tell64)* sftpTell64 = nullptr;
 decltype(libssh2_sftp_readdir_ex)* sftpReaddirEx = nullptr;
 decltype(libssh2_sftp_close_handle)* sftpClose = nullptr;
 decltype(libssh2_sftp_stat_ex)* sftpStatEx = nullptr;
@@ -32,53 +30,40 @@ decltype(libssh2_sftp_rmdir_ex)* sftpRmdirEx = nullptr;
 decltype(libssh2_sftp_rename_ex)* sftpRenameEx = nullptr;
 
 bool symLibssh2() {
-	if (lib || failed)
-		return lib;
-	if (lib = dlopen(LIB_NAME ".so", RTLD_LAZY | RTLD_LOCAL); !lib) {
-		const char* err = dlerror();
-		std::cerr << (err ? err : "Failed to open " LIB_NAME) << std::endl;
+	if (!(lib || failed || ((lib = libOpen("libssh2" LIB_EXT))
+		&& (sshInit = libSym<decltype(sshInit)>(lib, "libssh2_init"))
+		&& (sshExit = libSym<decltype(sshExit)>(lib, "libssh2_exit"))
+		&& (sshSessionInitEx = libSym<decltype(sshSessionInitEx)>(lib, "libssh2_session_init_ex"))
+		&& (sshSessionSetBlocking = libSym<decltype(sshSessionSetBlocking)>(lib, "libssh2_session_set_blocking"))
+		&& (sshSessionHandshake = libSym<decltype(sshSessionHandshake)>(lib, "libssh2_session_handshake"))
+		&& (sshUserauthList = libSym<decltype(sshUserauthList)>(lib, "libssh2_userauth_list"))
+		&& (sshUserauthPasswordEx = libSym<decltype(sshUserauthPasswordEx)>(lib, "libssh2_userauth_password_ex"))
+		&& (sshUserauthPublickeyFromfileEx = libSym<decltype(sshUserauthPublickeyFromfileEx)>(lib, "libssh2_userauth_publickey_fromfile_ex"))
+		&& (sshSessionDisconnectEx = libSym<decltype(sshSessionDisconnectEx)>(lib, "libssh2_session_disconnect_ex"))
+		&& (sshSessionFree = libSym<decltype(sshSessionFree)>(lib, "libssh2_session_free"))
+		&& (sftpInit = libSym<decltype(sftpInit)>(lib, "libssh2_sftp_init"))
+		&& (sftpShutdown = libSym<decltype(sftpShutdown)>(lib, "libssh2_sftp_shutdown"))
+		&& (sftpOpenEx = libSym<decltype(sftpOpenEx)>(lib, "libssh2_sftp_open_ex"))
+		&& (sftpRead = libSym<decltype(sftpRead)>(lib, "libssh2_sftp_read"))
+		&& (sftpWrite = libSym<decltype(sftpWrite)>(lib, "libssh2_sftp_write"))
+		&& (sftpSeek64 = libSym<decltype(sftpSeek64)>(lib, "libssh2_sftp_seek64"))
+		&& (sftpTell64 = libSym<decltype(sftpTell64)>(lib, "libssh2_sftp_tell64"))
+		&& (sftpReaddirEx = libSym<decltype(sftpReaddirEx)>(lib, "libssh2_sftp_readdir_ex"))
+		&& (sftpClose = libSym<decltype(sftpClose)>(lib, "libssh2_sftp_close_handle"))
+		&& (sftpStatEx = libSym<decltype(sftpStatEx)>(lib, "libssh2_sftp_stat_ex"))
+		&& (sftpFstatEx = libSym<decltype(sftpFstatEx)>(lib, "libssh2_sftp_fstat_ex"))
+		&& (sftpUnlinkEx = libSym<decltype(sftpUnlinkEx)>(lib, "libssh2_sftp_unlink_ex"))
+		&& (sftpRmdirEx = libSym<decltype(sftpRmdirEx)>(lib, "libssh2_sftp_rmdir_ex"))
+		&& (sftpRenameEx = libSym<decltype(sftpRenameEx)>(lib, "libssh2_sftp_ename_ex"))
+	))) {
+		libClose(lib);
 		failed = true;
-		return false;
 	}
-
-	if (!((sshInit = reinterpret_cast<decltype(sshInit)>(dlsym(lib, "libssh2_init")))
-		&& (sshExit = reinterpret_cast<decltype(sshExit)>(dlsym(lib, "libssh2_exit")))
-		&& (sshSessionInitEx = reinterpret_cast<decltype(sshSessionInitEx)>(dlsym(lib, "libssh2_session_init_ex")))
-		&& (sshSessionSetBlocking = reinterpret_cast<decltype(sshSessionSetBlocking)>(dlsym(lib, "libssh2_session_set_blocking")))
-		&& (sshSessionHandshake = reinterpret_cast<decltype(sshSessionHandshake)>(dlsym(lib, "libssh2_session_handshake")))
-		&& (sshSessionDisconnectEx = reinterpret_cast<decltype(sshSessionDisconnectEx)>(dlsym(lib, "libssh2_session_disconnect_ex")))
-		&& (sshSessionFree = reinterpret_cast<decltype(sshSessionFree)>(dlsym(lib, "libssh2_session_free")))
-		&& (sftpInit = reinterpret_cast<decltype(sftpInit)>(dlsym(lib, "libssh2_sftp_init")))
-		&& (sftpShutdown = reinterpret_cast<decltype(sftpShutdown)>(dlsym(lib, "libssh2_sftp_shutdown")))
-		&& (sftpOpenEx = reinterpret_cast<decltype(sftpOpenEx)>(dlsym(lib, "libssh2_sftp_open_ex")))
-		&& (sftpRead = reinterpret_cast<decltype(sftpRead)>(dlsym(lib, "libssh2_sftp_read")))
-		&& (sftpReaddirEx = reinterpret_cast<decltype(sftpReaddirEx)>(dlsym(lib, "libssh2_sftp_readdir_ex")))
-		&& (sftpClose = reinterpret_cast<decltype(sftpClose)>(dlsym(lib, "libssh2_sftp_close_handle")))
-		&& (sftpStatEx = reinterpret_cast<decltype(sftpStatEx)>(dlsym(lib, "libssh2_sftp_stat_ex")))
-		&& (sftpFstatEx = reinterpret_cast<decltype(sftpFstatEx)>(dlsym(lib, "libssh2_sftp_fstat_ex")))
-	)) {
-		std::cerr << "Failed to find " LIB_NAME " functions" << std::endl;
-		dlclose(lib);
-		lib = nullptr;
-		failed = true;
-		return false;
-	}
-	sshUserauthList = reinterpret_cast<decltype(sshUserauthList)>(dlsym(lib, "libssh2_userauth_list"));
-	sshUserauthPasswordEx = reinterpret_cast<decltype(sshUserauthPasswordEx)>(dlsym(lib, "libssh2_userauth_password_ex"));
-	sshUserauthPublickeyFromfileEx = reinterpret_cast<decltype(sshUserauthPublickeyFromfileEx)>(dlsym(lib, "libssh2_userauth_publickey_fromfile_ex"));
-	sftpUnlinkEx = reinterpret_cast<decltype(sftpUnlinkEx)>(dlsym(lib, "libssh2_sftp_unlink_ex"));
-	sftpRmdirEx = reinterpret_cast<decltype(sftpRmdirEx)>(dlsym(lib, "libssh2_sftp_rmdir_ex"));
-	sftpRenameEx = reinterpret_cast<decltype(sftpRenameEx)>(dlsym(lib, "libssh2_sftp_ename_ex"));
-	return true;
+	return lib;
 }
 
 void closeLibssh2() {
-	if (lib) {
-		dlclose(lib);
-		lib = nullptr;
-	}
+	libClose(lib);
 	failed = false;
-}
-
 }
 #endif

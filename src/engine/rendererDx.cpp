@@ -3,8 +3,7 @@
 #include "optional/d3d.h"
 #include <format>
 #include <glm/gtc/type_ptr.hpp>
-#include <SDL2/SDL_syswm.h>
-using namespace LibD3d11;
+#include <SDL_syswm.h>
 
 RendererDx11::RendererDx11(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor) :
 	Renderer(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION),
@@ -492,20 +491,20 @@ Texture* RendererDx11::texFromRpic(SDL_Surface* img) {
 }
 
 Texture* RendererDx11::texFromText(const PixmapRgba& pm) {
-	if (pm.pix) {
+	if (pm.res.x) {
 		try {
 			uvec2 res = glm::min(pm.res, uvec2(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION));
-			return new TextureDx(res, createTexture(reinterpret_cast<const byte_t*>(pm.pix), res, pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM));
+			return new TextureDx(res, createTexture(reinterpret_cast<const byte_t*>(pm.pix.get()), res, pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM));
 		} catch (const std::runtime_error&) {}
 	}
 	return nullptr;
 }
 
 bool RendererDx11::texFromText(Texture* tex, const PixmapRgba& pm) {
-	if (pm.pix) {
+	if (pm.res.x) {
 		try {
 			uvec2 res = glm::min(pm.res, uvec2(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION));
-			replaceTexture(static_cast<TextureDx*>(tex), createTexture(reinterpret_cast<const byte_t*>(pm.pix), res, pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM), res);
+			replaceTexture(static_cast<TextureDx*>(tex), createTexture(reinterpret_cast<const byte_t*>(pm.pix.get()), res, pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM), res);
 			return true;
 		} catch (const std::runtime_error&) {}
 	}
@@ -566,9 +565,6 @@ pair<SDL_Surface*, DXGI_FORMAT> RendererDx11::pickPixFormat(SDL_Surface* img) co
 	case SDL_PIXELFORMAT_ARGB4444:
 		if (canBgra4)
 			return pair(img, DXGI_FORMAT_B4G4R4A4_UNORM);
-		break;
-	case SDL_PIXELFORMAT_ARGB2101010:
-		return pair(img, DXGI_FORMAT_R10G10B10A2_UNORM);
 	}
 
 	if (img->format->BytesPerPixel < 3) {
@@ -586,14 +582,6 @@ void RendererDx11::comRelease(T*& obj) {
 		obj->Release();
 		obj = nullptr;
 	}
-}
-
-string RendererDx11::hresultToStr(HRESULT rs) {
-	wchar_t* buff = nullptr;
-	string msg = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, nullptr, HRESULT_CODE(rs), 0, reinterpret_cast<LPWSTR>(&buff), 0, nullptr) ? swtos(buff) : string();
-	if (buff)
-		LocalFree(buff);
-	return string(trim(msg));
 }
 
 void RendererDx11::setCompression(Settings::Compression compression) {

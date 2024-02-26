@@ -39,7 +39,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	uset<string> flags;
 #ifdef __MINGW32__
 	if (strfilled(lpCmdLine))
-		if (int argc; LPWSTR* argv = CommandLineToArgvW(sstow(lpCmdLine).c_str(), &argc)) {
+		if (int argc; LPWSTR* argv = CommandLineToArgvW(sstow(lpCmdLine).data(), &argc)) {
 #else
 	if (strfilled(pCmdLine))
 		if (int argc; LPWSTR* argv = CommandLineToArgvW(pCmdLine, &argc)) {
@@ -60,22 +60,22 @@ int main(int argc, char** argv) {
 	Strcomp::free();
 #endif
 #ifdef CAN_SFTP
-	LibSsh2::closeLibssh2();
+	closeLibssh2();
 #endif
 #ifdef CAN_SMB
-	LibSmbclient::closeSmbclient();
+	closeSmbclient();
 #endif
 #ifdef CAN_SECRET
-	LibSecret::closeLibsecret();
+	closeLibsecret();
 #endif
 #ifdef CAN_PDF
-	LibPoppler::closePoppler();
+	closePoppler();
 #endif
 #if defined(CAN_SECRET) || defined(CAN_PDF)
-	LibGlib::closeGlib();
+	closeGlib();
 #endif
 #ifdef CAN_FONTCFG
-	LibFontconfig::closeFontconfig();
+	closeFontconfig();
 #endif
 	return rc;
 }

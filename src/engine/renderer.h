@@ -2,14 +2,11 @@
 
 #include "utils/settings.h"
 #include <set>
-#include <SDL2/SDL_video.h>
+#include <SDL_video.h>
 
 struct PixmapRgba {
-	const uint32* pix = nullptr;
+	uptr<uint32[]> pix;
 	uvec2 res;
-
-	PixmapRgba() = default;
-	PixmapRgba(const uint32* data, uvec2 size) : pix(data), res(size) {}
 };
 
 class Texture {

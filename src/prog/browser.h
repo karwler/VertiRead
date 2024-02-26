@@ -26,7 +26,7 @@ public:
 private:
 	string rootDir;		// the top directory one can visit
 	string curDir;		// directory or PDF in which one currently is
-	ArchiveDir arch;	// archive directory tree root
+	ArchiveData arch;	// current archive directory tree root and info
 
 	FileOps* fsop = nullptr;
 	std::jthread thread;
@@ -40,7 +40,7 @@ public:
 	void start(string&& root, const RemoteLocation& location, vector<string>&& passwords = vector<string>());
 	void start(string&& root, string&& path);
 	bool goTo(const RemoteLocation& location, vector<string>&& passwords = vector<string>());	// returns whether to wait
-	bool goTo(string_view path);	// ^
+	bool goTo(const string& path);	// ^
 	bool openPicture(string&& rootDir, vector<string>&& paths);
 	bool goIn(string_view dname);
 	bool goFile(string_view fname);
@@ -52,17 +52,17 @@ public:
 	string locationForDisplay() const;
 	vector<string> locationForStore(string_view pname) const;
 	pair<vector<Cstring>, vector<Cstring>> listCurDir();
-	vector<Cstring> listDirDirs(string_view path) const;
+	vector<Cstring> listDirDirs(const string& path) const;
 	bool deleteEntry(string_view ename);
 	bool renameEntry(string_view oldName, string_view newName);
 	bool directoryUpdate(vector<FileChange>& files);
-	FileOpCapabilities fileOpCapabilities() const;
 
 	bool finishArchive(BrowserResultArchive&& ra);
 	void startPreview(const vector<Cstring>& files, const vector<Cstring>& dirs, int maxHeight);
 	void startReloadPictures(string&& first);
 	void finishLoadPictures(BrowserResultPicture& rp);
 	void stopThread();
+	void requestStop();
 
 private:
 	bool inArchive() const;
@@ -83,11 +83,10 @@ private:
 
 	void cleanupPreview();
 	static void previewDirThread(std::stop_token stoken, FileOps* fsop, string curDir, vector<Cstring> files, vector<Cstring> dirs, string iconPath, bool showHidden, int maxHeight);
-	static void previewArchThread(std::stop_token stoken, FileOps* fsop, ArchiveDir slice, string curDir, string iconPath, int maxHeight);
+	static void previewArchThread(std::stop_token stoken, FileOps* fsop, ArchiveData slice, string curDir, string iconPath, int maxHeight);
 #ifdef CAN_PDF
 	static void previewPdf(std::stop_token stoken, _PopplerDocument* doc, int maxHeight, string_view fname);
 #endif
-	ArchiveDir sliceCurrentArchiveDir();
 	static SDL_Surface* combineIcons(SDL_Surface* dir, SDL_Surface* img);
 	static SDL_Surface* scaleDown(SDL_Surface* img, int maxHeight);
 	static char* allocatePreviewName(string_view name, bool file);
@@ -108,7 +107,11 @@ private:
 };
 
 inline void Browser::startReloadPictures(string&& first) {
-	startLoadPictures(new BrowserResultPicture((inPdf() ? BRS_PDF : BRS_NONE), std::nullopt, valcp(curDir), std::move(first), inArchive() ? ArchiveDir(valcp(arch.name)) : ArchiveDir()));
+	startLoadPictures(new BrowserResultPicture((inPdf() ? BRS_PDF : BRS_NONE), std::nullopt, valcp(curDir), std::move(first), arch.copyLight()));
+}
+
+inline void Browser::requestStop() {
+	thread.request_stop();
 }
 
 inline bool Browser::inArchive() const {

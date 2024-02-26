@@ -1,14 +1,9 @@
 #ifdef CAN_SECRET
 #include "glib.h"
 #include "secret.h"
-#include <iostream>
-#include <dlfcn.h>
+#include "internal.h"
 
-#define LIB_NAME "libsecret-1"
-
-namespace LibSecret {
-
-static void* lib = nullptr;
+static LibType lib = nullptr;
 static bool failed = false;
 decltype(secret_service_get_sync)* secretServiceGetSync = nullptr;
 decltype(secret_service_search_sync)* secretServiceSearchSync = nullptr;
@@ -19,43 +14,23 @@ decltype(secret_value_new)* secretValueNew = nullptr;
 decltype(secret_value_get_text)* secretValueGetText = nullptr;
 
 bool symLibsecret() {
-	if (lib || failed)
-		return lib;
-	if (!LibGlib::symGlib()) {
+	if (!(lib || failed || (symGlib() && (lib = libOpen("libsecret-1" LIB_EXT))
+		&& (secretServiceGetSync = libSym<decltype(secretServiceGetSync)>(lib, "secret_service_get_sync"))
+		&& (secretServiceSearchSync = libSym<decltype(secretServiceSearchSync)>(lib, "secret_service_search_sync"))
+		&& (secretServiceStoreSync = libSym<decltype(secretServiceStoreSync)>(lib, "secret_service_store_sync"))
+		&& (secretItemGetSecret = libSym<decltype(secretItemGetSecret)>(lib, "secret_item_get_secret"))
+		&& (secretItemLoadSecretSync = libSym<decltype(secretItemLoadSecretSync)>(lib, "secret_item_load_secret_sync"))
+		&& (secretValueNew = libSym<decltype(secretValueNew)>(lib, "secret_value_new"))
+		&& (secretValueGetText = libSym<decltype(secretValueGetText)>(lib, "secret_value_get_text"))
+	))) {
+		libClose(lib);
 		failed = true;
-		return false;
 	}
-	if (lib = dlopen(LIB_NAME ".so", RTLD_LAZY | RTLD_LOCAL); !lib) {
-		const char* err = dlerror();
-		std::cerr << (err ? err : "Failed to open " LIB_NAME) << std::endl;
-		failed = true;
-		return false;
-	}
-
-	if (!((secretServiceGetSync = reinterpret_cast<decltype(secretServiceGetSync)>(dlsym(lib, "secret_service_get_sync")))
-		&& (secretServiceSearchSync = reinterpret_cast<decltype(secretServiceSearchSync)>(dlsym(lib, "secret_service_search_sync")))
-		&& (secretServiceStoreSync = reinterpret_cast<decltype(secretServiceStoreSync)>(dlsym(lib, "secret_service_store_sync")))
-		&& (secretItemGetSecret = reinterpret_cast<decltype(secretItemGetSecret)>(dlsym(lib, "secret_item_get_secret")))
-		&& (secretItemLoadSecretSync = reinterpret_cast<decltype(secretItemLoadSecretSync)>(dlsym(lib, "secret_item_load_secret_sync")))
-		&& (secretValueNew = reinterpret_cast<decltype(secretValueNew)>(dlsym(lib, "secret_value_new")))
-		&& (secretValueGetText = reinterpret_cast<decltype(secretValueGetText)>(dlsym(lib, "secret_value_get_text")))
-	)) {
-		std::cerr << "Failed to find " LIB_NAME " functions" << std::endl;
-		dlclose(lib);
-		lib = nullptr;
-		failed = true;
-		return false;
-	}
-	return true;
+	return lib;
 }
 
 void closeLibsecret() {
-	if (lib) {
-		dlclose(lib);
-		lib = nullptr;
-	}
+	libClose(lib);
 	failed = false;
-}
-
 }
 #endif

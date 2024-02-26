@@ -108,4 +108,8 @@ private:
 	template <Derived<IUnknown> T> static void comRelease(T*& obj);
 	static string hresultToStr(HRESULT rs);
 };
+
+inline string RendererDx11::hresultToStr(HRESULT rs) {
+	return winErrorMessage(HRESULT_CODE(rs));
+}
 #endif

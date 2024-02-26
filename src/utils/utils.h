@@ -14,7 +14,7 @@
 #include <glm/common.hpp>
 #include <glm/fwd.hpp>
 #define SDL_MAIN_HANDLED
-#include <SDL2/SDL_log.h>
+#include <SDL_log.h>
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 namespace fs = std::filesystem;
@@ -379,7 +379,7 @@ public:
 
 	bool operator==(const Cstring& s) const { return !strcmp(ptr, s.ptr); }
 	bool operator==(const char* s) const { return !strcmp(ptr, s); }
-	bool operator==(const string& s) const { return !strcmp(ptr, s.c_str()); }
+	bool operator==(const string& s) const { return !strcmp(ptr, s.data()); }
 	bool operator==(string_view s) const;
 
 	char& operator[](size_t i) { return ptr[i]; }
@@ -617,6 +617,7 @@ std::basic_string<T> operator/(const T* a, const std::basic_string<T>& b) {
 #ifdef _WIN32
 string swtos(wstring_view wstr);
 wstring sstow(string_view str);
+string winErrorMessage(uint32 msgId);
 #endif
 
 inline fs::path toPath(string_view path) {
@@ -719,7 +720,7 @@ void logInfo(A&&... args) {
 	try {
 		std::ostringstream ss;
 		(ss << ... << std::forward<A>(args));
-		SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", ss.str().c_str());
+		SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", ss.str().data());
 	} catch (...) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to log");
 	}
@@ -730,7 +731,7 @@ void logError(A&&... args) {
 	try {
 		std::ostringstream ss;
 		(ss << ... << std::forward<A>(args));
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", ss.str().c_str());
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", ss.str().data());
 	} catch (...) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to log");
 	}

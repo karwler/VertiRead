@@ -4,7 +4,7 @@
 #include <forward_list>
 #include <mutex>
 #include <stop_token>
-#include <SDL2/SDL_events.h>
+#include <SDL_events.h>
 
 enum UserEvent : uint32 {
 	SDL_USEREVENT_GENERAL = SDL_USEREVENT,
@@ -28,6 +28,10 @@ enum class GeneralEvent : int32 {
 	closeContext,
 	confirmComboBox,
 	resizeComboContext,
+	startRequestPassphrase,
+	requestPassphrase,
+	confirmPassphrase,
+	cancelPassphrase,
 	exit
 };
 
@@ -115,20 +119,18 @@ enum class ThreadEvent : int32 {
 	finished
 };
 
-#define constructorEventId(etype, clazz) constexpr EventId(clazz e) : type(etype), code(int32(e)) {}
-
 struct EventId {
 	UserEvent type;
 	int32 code;	// should not exceed 16 bits for widget events because of the packing in Button
 
 	constexpr EventId(UserEvent t, int32 c) : type(t), code(c) {}
-	constructorEventId(SDL_USEREVENT_GENERAL, GeneralEvent)
-	constructorEventId(SDL_USEREVENT_PROG_BOOKS, ProgBooksEvent)
-	constructorEventId(SDL_USEREVENT_PROG_FILE_EXPLORER, ProgFileExplorerEvent)
-	constructorEventId(SDL_USEREVENT_PROG_PAGE_BROWSER, ProgPageBrowserEvent)
-	constructorEventId(SDL_USEREVENT_PROG_READER, ProgReaderEvent)
-	constructorEventId(SDL_USEREVENT_PROG_SETTINGS, ProgSettingsEvent)
-	constructorEventId(SDL_USEREVENT_PROG_SEARCH_DIR, ProgSearchDirEvent)
+	constexpr EventId(GeneralEvent e) : type(SDL_USEREVENT_GENERAL), code(int32(e)) {}
+	constexpr EventId(ProgBooksEvent e) : type(SDL_USEREVENT_PROG_BOOKS), code(int32(e)) {}
+	constexpr EventId(ProgFileExplorerEvent e) : type(SDL_USEREVENT_PROG_FILE_EXPLORER), code(int32(e)) {}
+	constexpr EventId(ProgPageBrowserEvent e) : type(SDL_USEREVENT_PROG_PAGE_BROWSER), code(int32(e)) {}
+	constexpr EventId(ProgReaderEvent e) : type(SDL_USEREVENT_PROG_READER), code(int32(e)) {}
+	constexpr EventId(ProgSettingsEvent e) : type(SDL_USEREVENT_PROG_SETTINGS), code(int32(e)) {}
+	constexpr EventId(ProgSearchDirEvent e) : type(SDL_USEREVENT_PROG_SEARCH_DIR), code(int32(e)) {}
 
 	constexpr operator bool() const { return bool(type); }
 };
@@ -251,11 +253,41 @@ struct ArchiveDir {
 	vector<ArchiveDir*> listDirs();
 	vector<ArchiveFile*> listFiles();
 	void finalize();
-	void clear();
 	pair<ArchiveDir*, ArchiveFile*> find(string_view path);
 	ArchiveDir* findDir(string_view dname);
 	ArchiveFile* findFile(string_view fname);
 	void copySlicedDentsFrom(const ArchiveDir& src);
+};
+
+// archive file tree with optional passphrase and its loaded memory
+struct ArchiveData : public ArchiveDir {
+	enum class PassCode : uint8 {
+		none,
+		set,
+		ignore,
+		attempt
+	};
+
+	Data data;
+	const Data* dref = nullptr;	// if this is null then the data member is used unless reading from a file
+	string passphrase;
+	PassCode pc = PassCode::none;
+
+	ArchiveData() = default;
+	ArchiveData(Cstring&& file, PassCode pass = PassCode::none) : ArchiveDir(std::move(file)), pc(pass) {}
+
+	void clear();
+	ArchiveData copyLight() const;
+};
+
+inline void ArchiveData::clear() {
+	*this = ArchiveData();
+}
+
+enum class ResultCode : uint8 {
+	ok,
+	stop,
+	error
 };
 
 enum BrowserResultState : uint8 {
@@ -270,11 +302,12 @@ struct BrowserResultArchive {
 	string rootDir;
 	string opath;	// path to the file or directory to open
 	string page;	// for PDF only
-	ArchiveDir arch;
+	ArchiveData arch;
 	string error;
 	const bool hasRootDir;
+	ResultCode rc = ResultCode::ok;
 
-	BrowserResultArchive(optional<string>&& root, ArchiveDir&& aroot, string&& fpath = string(), string&& ppage = string());
+	BrowserResultArchive(optional<string>&& root, ArchiveData&& aroot, string&& fpath = string(), string&& ppage = string());
 };
 
 // picture load info
@@ -282,7 +315,7 @@ struct BrowserResultPicture {
 	string rootDir;
 	string curDir;
 	string picname;
-	ArchiveDir arch;
+	ArchiveData arch;
 	vector<pair<Cstring, Texture*>> pics;
 	std::mutex mpic;
 	string error;
@@ -290,8 +323,9 @@ struct BrowserResultPicture {
 	const bool newCurDir;
 	const bool newArchive;
 	const bool pdf;
+	ResultCode rc = ResultCode::ok;
 
-	BrowserResultPicture(BrowserResultState brs, optional<string>&& root, string&& container, string&& pname = string(), ArchiveDir&& aroot = ArchiveDir());
+	BrowserResultPicture(BrowserResultState brs, optional<string>&& root, string&& container, string&& pname = string(), ArchiveData&& aroot = ArchiveData());
 
 	bool hasArchive() const;
 };

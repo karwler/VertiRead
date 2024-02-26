@@ -3,8 +3,6 @@
 #ifdef CAN_FONTCFG
 #include <fontconfig/fontconfig.h>
 
-namespace LibFontconfig {
-
 extern decltype(FcInitLoadConfigAndFonts)* fcInitLoadConfigAndFonts;
 extern decltype(FcPatternCreate)* fcPatternCreate;
 extern decltype(FcPatternDestroy)* fcPatternDestroy;
@@ -21,6 +19,4 @@ extern decltype(FcFontList)* fcFontList;
 
 bool symFontconfig();
 void closeFontconfig();
-
-}
 #endif

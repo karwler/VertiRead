@@ -4,15 +4,14 @@
 #include <list>
 #include <numeric>
 #include <source_location>
-#include <SDL2/SDL_vulkan.h>
+#include <SDL_vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
 
 // INSTANCE VK
 
 void InstanceVk::initGlobalFunctions() {
-	if (vkGetInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(SDL_Vulkan_GetVkGetInstanceProcAddr()); !vkGetInstanceProcAddr)
-		throw std::runtime_error("Failed to find vkGetInstanceProcAddr");
-	if (!((vkCreateInstance = reinterpret_cast<PFN_vkCreateInstance>(vkGetInstanceProcAddr(nullptr, "vkCreateInstance")))
+	if (!((vkGetInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(SDL_Vulkan_GetVkGetInstanceProcAddr()))
+		&& (vkCreateInstance = reinterpret_cast<PFN_vkCreateInstance>(vkGetInstanceProcAddr(nullptr, "vkCreateInstance")))
 		&& (vkEnumerateInstanceExtensionProperties = reinterpret_cast<PFN_vkEnumerateInstanceExtensionProperties>(vkGetInstanceProcAddr(nullptr, "vkEnumerateInstanceExtensionProperties")))
 		&& (vkEnumerateInstanceLayerProperties = reinterpret_cast<PFN_vkEnumerateInstanceLayerProperties>(vkGetInstanceProcAddr(nullptr, "vkEnumerateInstanceLayerProperties")))
 	))
@@ -240,33 +239,30 @@ void FormatConverter::createPipelines(const InstanceVk* vk) {
 	if (VkResult rs = vk->vkCreatePipelineLayout(vk->getLdev(), &pipelineLayoutInfo, nullptr, &pipelineLayout); rs != VK_SUCCESS)
 		throw std::runtime_error(std::format("Failed to create converter pipeline layout: {}", string_VkResult(rs)));
 
+	VkSpecializationMapEntry specializationEntry = {
+		.constantID = 0,
+		.offset = offsetof(SpecializationData, orderRgb),
+		.size = sizeof(SpecializationData::orderRgb)
+	};
+	SpecializationData specializationDatas[2] = { { .orderRgb = VK_FALSE }, { .orderRgb = VK_TRUE } };
+	VkSpecializationInfo specializationInfos[2]{};
+	VkComputePipelineCreateInfo pipelineInfos[2]{};
 	for (uint i = 0; i < pipelines.size(); ++i) {
-		VkSpecializationMapEntry specializationEntry = {
-			.constantID = 0,
-			.offset = offsetof(SpecializationData, orderRgb),
-			.size = sizeof(SpecializationData::orderRgb)
-		};
-		SpecializationData specializationData = { .orderRgb = i };
-		VkSpecializationInfo specializationInfo = {
-			.mapEntryCount = 1,
-			.pMapEntries = &specializationEntry,
-			.dataSize = sizeof(specializationData),
-			.pData = &specializationData
-		};
-		VkComputePipelineCreateInfo pipelineInfo = {
-			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			.stage = {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-				.module = compShaderModule,
-				.pName = "main",
-				.pSpecializationInfo = &specializationInfo
-			},
-			.layout = pipelineLayout
-		};
-		if (VkResult rs = vk->vkCreateComputePipelines(vk->getLdev(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipelines[i]); rs != VK_SUCCESS)
-			throw std::runtime_error(std::format("Failed to create converter pipeline {}: {}", i, string_VkResult(rs)));
-	}
+		specializationInfos[i].mapEntryCount = 1;
+		specializationInfos[i].pMapEntries = &specializationEntry;
+		specializationInfos[i].dataSize = sizeof(SpecializationData);
+		specializationInfos[i].pData = &specializationDatas[i];
+
+		pipelineInfos[i].sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		pipelineInfos[i].stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		pipelineInfos[i].stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+		pipelineInfos[i].stage.module = compShaderModule;
+		pipelineInfos[i].stage.pName = "main";
+		pipelineInfos[i].stage.pSpecializationInfo = &specializationInfos[i];
+		pipelineInfos[i].layout = pipelineLayout;
+	};
+	if (VkResult rs = vk->vkCreateComputePipelines(vk->getLdev(), VK_NULL_HANDLE, pipelines.size(), pipelineInfos, nullptr, pipelines.data()); rs != VK_SUCCESS)
+		throw std::runtime_error(std::format("Failed to create converter pipelines: {}", string_VkResult(rs)));
 	vk->vkDestroyShaderModule(vk->getLdev(), compShaderModule, nullptr);
 }
 
@@ -1177,7 +1173,7 @@ void RendererVk::createDevice(DeviceInfo& deviceInfo) {
 	}
 
 	uptr<const char*[]> extensions = std::make_unique_for_overwrite<const char*[]>(deviceInfo.extensions.size());
-	rng::transform(deviceInfo.extensions, extensions.get(), [](const string& it) -> const char* { return it.c_str(); });
+	rng::transform(deviceInfo.extensions, extensions.get(), [](const string& it) -> const char* { return it.data(); });
 	VkPhysicalDeviceFeatures deviceFeatures{};
 	VkDeviceCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -1571,10 +1567,10 @@ Texture* RendererVk::texFromRpic(SDL_Surface* img) {
 }
 
 Texture* RendererVk::texFromText(const PixmapRgba& pm) {
-	if (pm.pix) {
+	if (pm.res.x) {
 		auto tex = new TextureVk(glm::min(pm.res, uvec2(maxTextureSize)), RenderPass::samplerNearest);
 		try {
-			createTextureDirect(reinterpret_cast<const byte_t*>(pm.pix), pm.res.x * 4, 4, VK_FORMAT_A8B8G8R8_UNORM_PACK32, *tex);
+			createTextureDirect(reinterpret_cast<const byte_t*>(pm.pix.get()), pm.res.x * 4, 4, VK_FORMAT_A8B8G8R8_UNORM_PACK32, *tex);
 			return tex;
 		} catch (const std::runtime_error&) {
 			delete tex;
@@ -1584,11 +1580,11 @@ Texture* RendererVk::texFromText(const PixmapRgba& pm) {
 }
 
 bool RendererVk::texFromText(Texture* tex, const PixmapRgba& pm) {
-	if (pm.pix) {
+	if (pm.res.x) {
 		try {
 			auto vtx = static_cast<TextureVk*>(tex);
 			TextureVk ntex(glm::min(pm.res, uvec2(maxTextureSize)), vtx->pool, vtx->set);
-			createTextureDirect<false>(reinterpret_cast<const byte_t*>(pm.pix), pm.res.x * 4, 4, VK_FORMAT_A8B8G8R8_UNORM_PACK32, ntex);
+			createTextureDirect<false>(reinterpret_cast<const byte_t*>(pm.pix.get()), pm.res.x * 4, 4, VK_FORMAT_A8B8G8R8_UNORM_PACK32, ntex);
 			replaceTexture(*vtx, ntex);
 			return true;
 		} catch (const std::runtime_error&) {}

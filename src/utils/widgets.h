@@ -457,10 +457,10 @@ private:
 
 	static bool kmodCtrl(uint16 mod);
 	static bool kmodAlt(uint16 mod);
-	uint jumpCharB(uint i);
-	uint jumpCharF(uint i);
-	uint findWordStart();	// returns index of first character of word before cpos
-	uint findWordEnd();		// returns index of character after last character of word after cpos
+	uint jumpCharB(uint i) const;
+	uint jumpCharF(uint i) const;
+	uint findWordStart() const;	// returns index of first character of word before cpos
+	uint findWordEnd() const;	// returns index of character after last character of word after cpos
 	void cleanText();
 	void cleanSIntSpacedText();
 	void cleanUIntSpacedText();

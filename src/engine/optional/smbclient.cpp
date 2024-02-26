@@ -1,13 +1,8 @@
 #ifdef CAN_SMB
 #include "smbclient.h"
-#include <iostream>
-#include <dlfcn.h>
+#include "internal.h"
 
-#define LIB_NAME "smbclient"
-
-namespace LibSmbclient {
-
-static void* lib = nullptr;
+static LibType lib = nullptr;
 static bool failed = false;
 decltype(smbc_new_context)* smbcNewContext = nullptr;
 decltype(smbc_init_context)* smbcInitContext = nullptr;
@@ -17,6 +12,8 @@ decltype(smbc_setDebug)* smbcSetDebug = nullptr;
 decltype(smbc_setLogCallback)* smbcSetLogCallback = nullptr;
 decltype(smbc_getFunctionOpen)* smbcGetFunctionOpen = nullptr;
 decltype(smbc_getFunctionRead)* smbcGetFunctionRead = nullptr;
+decltype(smbc_getFunctionWrite)* smbcGetFunctionWrite = nullptr;
+decltype(smbc_getFunctionLseek)* smbcGetFunctionLseek = nullptr;
 decltype(smbc_getFunctionClose)* smbcGetFunctionClose = nullptr;
 decltype(smbc_getFunctionStat)* smbcGetFunctionStat = nullptr;
 decltype(smbc_getFunctionFstat)* smbcGetFunctionFstat = nullptr;
@@ -38,59 +35,45 @@ decltype(smbc_getOptionUserData)* smbcGetOptionUserData = nullptr;
 decltype(smbc_setOptionUserData)* smbcSetOptionUserData = nullptr;
 
 bool symSmbclient() {
-	if (lib || failed)
-		return lib;
-	if (lib = dlopen("lib" LIB_NAME ".so", RTLD_LAZY | RTLD_LOCAL); !lib) {
-		const char* err = dlerror();
-		std::cerr << (err ? err : "Failed to open " LIB_NAME) << std::endl;
+	if (!(lib || failed || ((lib = libOpen("libsmbclient" LIB_EXT))
+		&& (smbcNewContext = libSym<decltype(smbcNewContext)>(lib, "smbc_new_context"))
+		&& (smbcInitContext = libSym<decltype(smbcInitContext)>(lib, "smbc_init_context"))
+		&& (smbcSetContext = libSym<decltype(smbcSetContext)>(lib, "smbc_set_context"))
+		&& (smbcFreeContext = libSym<decltype(smbcFreeContext)>(lib, "smbc_free_context"))
+		&& (smbcSetDebug = libSym<decltype(smbcSetDebug)>(lib, "smbc_setDebug"))
+		&& (smbcSetLogCallback = libSym<decltype(smbcSetLogCallback)>(lib, "smbc_setLogCallback"))
+		&& (smbcGetFunctionOpen = libSym<decltype(smbcGetFunctionOpen)>(lib, "smbc_getFunctionOpen"))
+		&& (smbcGetFunctionRead = libSym<decltype(smbcGetFunctionRead)>(lib, "smbc_getFunctionRead"))
+		&& (smbcGetFunctionWrite = libSym<decltype(smbcGetFunctionWrite)>(lib, "smbc_getFunctionWrite"))
+		&& (smbcGetFunctionLseek = libSym<decltype(smbcGetFunctionLseek)>(lib, "smbc_getFunctionLseek"))
+		&& (smbcGetFunctionClose = libSym<decltype(smbcGetFunctionClose)>(lib, "smbc_getFunctionClose"))
+		&& (smbcGetFunctionStat = libSym<decltype(smbcGetFunctionStat)>(lib, "smbc_getFunctionStat"))
+		&& (smbcGetFunctionFstat = libSym<decltype(smbcGetFunctionFstat)>(lib, "smbc_getFunctionFstat"))
+		&& (smbcGetFunctionOpendir = libSym<decltype(smbcGetFunctionOpendir)>(lib, "smbc_getFunctionOpendir"))
+		&& (smbcGetFunctionReaddir = libSym<decltype(smbcGetFunctionReaddir)>(lib, "smbc_getFunctionReaddir"))
+		&& (smbcGetFunctionClosedir = libSym<decltype(smbcGetFunctionClosedir)>(lib, "smbc_getFunctionClosedir"))
+		&& (smbcGetFunctionUnlink = libSym<decltype(smbcGetFunctionUnlink)>(lib, "smbc_getFunctionUnlink"))
+		&& (smbcGetFunctionRmdir = libSym<decltype(smbcGetFunctionRmdir)>(lib, "smbc_getFunctionRmdir"))
+		&& (smbcGetFunctionRename = libSym<decltype(smbcGetFunctionRename)>(lib, "smbc_getFunctionRename"))
+		&& (smbcGetFunctionNotify = libSym<decltype(smbcGetFunctionNotify)>(lib, "smbc_getFunctionNotify"))
+		&& (smbcSetFunctionAuthDataWithContext = libSym<decltype(smbcSetFunctionAuthDataWithContext)>(lib, "smbc_setFunctionAuthDataWithContext"))
+		&& (smbcGetUser = libSym<decltype(smbcGetUser)>(lib, "smbc_getUser"))
+		&& (smbcSetUser = libSym<decltype(smbcSetUser)>(lib, "smbc_setUser"))
+		&& (smbcGetWorkgroup = libSym<decltype(smbcGetWorkgroup)>(lib, "smbc_getWorkgroup"))
+		&& (smbcSetWorkgroup = libSym<decltype(smbcSetWorkgroup)>(lib, "smbc_setWorkgroup"))
+		&& (smbcGetPort = libSym<decltype(smbcGetPort)>(lib, "smbc_getPort"))
+		&& (smbcSetPort = libSym<decltype(smbcSetPort)>(lib, "smbc_setPort"))
+		&& (smbcGetOptionUserData = libSym<decltype(smbcGetOptionUserData)>(lib, "smbc_getOptionUserData"))
+		&& (smbcSetOptionUserData = libSym<decltype(smbcSetOptionUserData)>(lib, "smbc_setOptionUserData"))
+	))) {
+		libClose(lib);
 		failed = true;
-		return false;
 	}
-
-	if (!((smbcNewContext = reinterpret_cast<decltype(smbcNewContext)>(dlsym(lib, "smbc_new_context")))
-		&& (smbcInitContext = reinterpret_cast<decltype(smbcInitContext)>(dlsym(lib, "smbc_init_context")))
-		&& (smbcSetContext = reinterpret_cast<decltype(smbcSetContext)>(dlsym(lib, "smbc_set_context")))
-		&& (smbcFreeContext = reinterpret_cast<decltype(smbcFreeContext)>(dlsym(lib, "smbc_free_context")))
-		&& (smbcGetFunctionOpen = reinterpret_cast<decltype(smbcGetFunctionOpen)>(dlsym(lib, "smbc_getFunctionOpen")))
-		&& (smbcGetFunctionRead = reinterpret_cast<decltype(smbcGetFunctionRead)>(dlsym(lib, "smbc_getFunctionRead")))
-		&& (smbcGetFunctionClose = reinterpret_cast<decltype(smbcGetFunctionClose)>(dlsym(lib, "smbc_getFunctionClose")))
-		&& (smbcGetFunctionStat = reinterpret_cast<decltype(smbcGetFunctionStat)>(dlsym(lib, "smbc_getFunctionStat")))
-		&& (smbcGetFunctionFstat = reinterpret_cast<decltype(smbcGetFunctionFstat)>(dlsym(lib, "smbc_getFunctionFstat")))
-		&& (smbcGetFunctionOpendir = reinterpret_cast<decltype(smbcGetFunctionOpendir)>(dlsym(lib, "smbc_getFunctionOpendir")))
-		&& (smbcGetFunctionReaddir = reinterpret_cast<decltype(smbcGetFunctionReaddir)>(dlsym(lib, "smbc_getFunctionReaddir")))
-		&& (smbcGetFunctionClosedir = reinterpret_cast<decltype(smbcGetFunctionClosedir)>(dlsym(lib, "smbc_getFunctionClosedir")))
-		&& (smbcSetFunctionAuthDataWithContext = reinterpret_cast<decltype(smbcSetFunctionAuthDataWithContext)>(dlsym(lib, "smbc_setFunctionAuthDataWithContext")))
-		&& (smbcGetUser = reinterpret_cast<decltype(smbcGetUser)>(dlsym(lib, "smbc_getUser")))
-		&& (smbcSetUser = reinterpret_cast<decltype(smbcSetUser)>(dlsym(lib, "smbc_setUser")))
-		&& (smbcGetWorkgroup = reinterpret_cast<decltype(smbcGetWorkgroup)>(dlsym(lib, "smbc_getWorkgroup")))
-		&& (smbcSetWorkgroup = reinterpret_cast<decltype(smbcSetWorkgroup)>(dlsym(lib, "smbc_setWorkgroup")))
-		&& (smbcGetPort = reinterpret_cast<decltype(smbcGetPort)>(dlsym(lib, "smbc_getPort")))
-		&& (smbcSetPort = reinterpret_cast<decltype(smbcSetPort)>(dlsym(lib, "smbc_setPort")))
-		&& (smbcGetOptionUserData = reinterpret_cast<decltype(smbcGetOptionUserData)>(dlsym(lib, "smbc_getOptionUserData")))
-		&& (smbcSetOptionUserData = reinterpret_cast<decltype(smbcSetOptionUserData)>(dlsym(lib, "smbc_setOptionUserData")))
-	)) {
-		std::cerr << "Failed to find " LIB_NAME " functions" << std::endl;
-		dlclose(lib);
-		lib = nullptr;
-		failed = true;
-		return false;
-	}
-	smbcSetDebug = reinterpret_cast<decltype(smbcSetDebug)>(dlsym(lib, "smbc_setDebug"));
-	smbcSetLogCallback = reinterpret_cast<decltype(smbcSetLogCallback)>(dlsym(lib, "smbc_setLogCallback"));
-	smbcGetFunctionUnlink = reinterpret_cast<decltype(smbcGetFunctionUnlink)>(dlsym(lib, "smbc_getFunctionUnlink"));
-	smbcGetFunctionRmdir = reinterpret_cast<decltype(smbcGetFunctionRmdir)>(dlsym(lib, "smbc_getFunctionRmdir"));
-	smbcGetFunctionRename = reinterpret_cast<decltype(smbcGetFunctionRename)>(dlsym(lib, "smbc_getFunctionRename"));
-	smbcGetFunctionNotify = reinterpret_cast<decltype(smbcGetFunctionNotify)>(dlsym(lib, "smbc_getFunctionNotify"));
-	return true;
+	return lib;
 }
 
 void closeSmbclient() {
-	if (lib) {
-		dlclose(lib);
-		lib = nullptr;
-	}
+	libClose(lib);
 	failed = false;
-}
-
 }
 #endif

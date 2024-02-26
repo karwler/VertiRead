@@ -3,7 +3,7 @@
 #ifdef WITH_OPENGL
 #include "renderer.h"
 #include <glm/mat4x4.hpp>
-#include <SDL2/SDL_opengl.h>
+#include <SDL_opengl.h>
 
 struct FunctionsGl {
 	decltype(glBindTexture)* bindTexture;

@@ -2,29 +2,24 @@
 #include "utils/compare.h"
 #if defined(CAN_SECRET) || defined(CAN_PDF)
 #include "engine/optional/glib.h"
-using namespace LibGlib;
 #endif
 #ifdef CAN_PDF
 #include "engine/optional/poppler.h"
-using namespace LibPoppler;
 #endif
 #ifdef CAN_SECRET
 #include "engine/optional/secret.h"
-using namespace LibSecret;
 #endif
 #ifdef CAN_SMB
 #include "engine/optional/smbclient.h"
-using namespace LibSmbclient;
 #endif
 #ifdef CAN_SFTP
 #include <netdb.h>
 #include <netinet/tcp.h>
 #include "engine/optional/ssh2.h"
-using namespace LibSsh2;
 #endif
 #include <format>
-#include <fstream>
 #include <queue>
+#include <semaphore>
 #include <stack>
 #include <archive.h>
 #include <archive_entry.h>
@@ -35,7 +30,6 @@ using namespace LibSsh2;
 #include <sys/mman.h>
 #include <unistd.h>
 #endif
-#include <SDL2/SDL_image.h>
 
 // CREDENTIAL MANAGER
 
@@ -104,9 +98,9 @@ vector<string> CredentialManager::loadPasswords(const RemoteLocation& rl) {
 void CredentialManager::saveCredentials(const RemoteLocation& rl) {
 	string portTmp;
 	setAttributes(rl, portTmp);
-	SecretValue* svalue = secretValueNew(rl.password.c_str(), (rl.password.length() + 1) * sizeof(char), "string");	// TODO: what should this last argument be?
+	SecretValue* svalue = secretValueNew(rl.password.data(), (rl.password.length() + 1) * sizeof(char), "string");	// TODO: what should this last argument be?
 	GError* error = nullptr;
-	secretServiceStoreSync(service, &schema, attributes, SECRET_COLLECTION_DEFAULT, std::format("VertiRead credentials for {}://{}{}", protocolNames[eint(rl.protocol)], rl.server, rl.path).c_str(), svalue, nullptr, &error);
+	secretServiceStoreSync(service, &schema, attributes, SECRET_COLLECTION_DEFAULT, std::format("VertiRead credentials for {}://{}{}", protocolNames[eint(rl.protocol)], rl.server, rl.path).data(), svalue, nullptr, &error);
 	if (error) {
 		logError(error);
 		gErrorFree(error);
@@ -115,15 +109,15 @@ void CredentialManager::saveCredentials(const RemoteLocation& rl) {
 
 void CredentialManager::setAttributes(const RemoteLocation& rl, string& portTmp) {
 	gHashTableInsert(attributes, const_cast<char*>(keyProtocol), const_cast<char*>(protocolNames[eint(rl.protocol)]));
-	gHashTableInsert(attributes, const_cast<char*>(keyServer), const_cast<char*>(rl.server.c_str()));
-	gHashTableInsert(attributes, const_cast<char*>(keyPath), const_cast<char*>(rl.path.c_str()));
-	gHashTableInsert(attributes, const_cast<char*>(keyUser), const_cast<char*>(rl.user.c_str()));
+	gHashTableInsert(attributes, const_cast<char*>(keyServer), const_cast<char*>(rl.server.data()));
+	gHashTableInsert(attributes, const_cast<char*>(keyPath), const_cast<char*>(rl.path.data()));
+	gHashTableInsert(attributes, const_cast<char*>(keyUser), const_cast<char*>(rl.user.data()));
 	if (rl.protocol == Protocol::smb)
-		gHashTableInsert(attributes, const_cast<char*>(keyWorkgroup), const_cast<char*>(rl.workgroup.c_str()));
+		gHashTableInsert(attributes, const_cast<char*>(keyWorkgroup), const_cast<char*>(rl.workgroup.data()));
 	else
 		gHashTableRemove(attributes, keyWorkgroup);
 	portTmp = toStr(rl.port);
-	gHashTableInsert(attributes, const_cast<char*>(keyPort), const_cast<char*>(portTmp.c_str()));
+	gHashTableInsert(attributes, const_cast<char*>(keyPort), portTmp.data());
 	if (rl.protocol == Protocol::sftp)
 		gHashTableInsert(attributes, const_cast<char*>(keyFamily), const_cast<char*>(familyNames[eint(rl.family)]));
 	else
@@ -132,8 +126,6 @@ void CredentialManager::setAttributes(const RemoteLocation& rl, string& portTmp)
 #endif
 
 // FILE OPS
-
-FileOps::~FileOps() {}
 
 FileOps* FileOps::instantiate(const RemoteLocation& rl, vector<string>&& passwords) {
 #if defined(CAN_SMB) || defined(CAN_SFTP)
@@ -176,14 +168,14 @@ fs::file_type FileOps:: modeToType(mode_t mode) {
 }
 #endif
 
-bool FileOps::isPicture(SDL_RWops* ifh, string_view ext) {
+bool FileOps::isPicture(const string& path) {
 	static constexpr int (SDLCALL* const magics[])(SDL_RWops*) = {
 		IMG_isJPG,
 		IMG_isPNG,
 		IMG_isBMP,
+		IMG_isWEBP,
 		IMG_isGIF,
 		IMG_isTIF,
-		IMG_isWEBP,
 		IMG_isCUR,
 		IMG_isICO,
 		IMG_isLBM,
@@ -199,14 +191,14 @@ bool FileOps::isPicture(SDL_RWops* ifh, string_view ext) {
 		IMG_isQOI
 #endif
 	};
-	if (ifh) {
+	if (SDL_RWops* ifh = makeRWops(path)) {
 		for (int (SDLCALL* const test)(SDL_RWops*) : magics)
 			if (test(ifh)) {
 				SDL_RWclose(ifh);
 				return true;
 			}
 
-		if (strciequal(ext, "TGA"))
+		if (strciequal(fileExtension(path), "TGA"))
 			if (SDL_Surface* img = IMG_LoadTGA_RW(ifh)) {
 				SDL_FreeSurface(img);
 				SDL_RWclose(ifh);
@@ -217,40 +209,30 @@ bool FileOps::isPicture(SDL_RWops* ifh, string_view ext) {
 	return false;
 }
 
-bool FileOps::isPdf(string_view path) {
+bool FileOps::isPdf(const string& path) {
+	bool ok = false;
 #ifdef CAN_PDF
-	array<byte_t, signaturePdf.size()> sig;
-	return readFileStart(path, sig.data(), sig.size()) == sig.size() && rng::equal(sig, signaturePdf) && symPoppler();
-#else
-	return false;
+	if (SDL_RWops* ifh = makeRWops(path)) {
+		byte_t sig[signaturePdf.size()];
+		ok = SDL_RWread(ifh, sig, 1, sizeof(sig)) == sizeof(sig) && rng::equal(sig, signaturePdf) && symPoppler();
+		SDL_RWclose(ifh);
+	}
 #endif
+	return ok;
 }
 
-bool FileOps::isArchive(string_view path) {
-	if (archive* arch = openArchive(path)) {
+bool FileOps::isArchive(ArchiveData& ad) {
+	if (archive* arch = openArchive(ad)) {
 		archive_read_free(arch);
 		return true;
 	}
 	return false;
 }
 
-Data FileOps::readArchiveEntry(archive* arch, archive_entry* entry) {
-	int64 bsiz = archive_entry_size(entry);
-	if (bsiz <= 0)
-		return Data();
-
-	Data data(bsiz);
-	if (la_ssize_t len = archive_read_data(arch, data.data(), bsiz); len < bsiz) {
-		if (len <= 0)
-			return Data();
-		data.resize(len);
-	}
-	return data;
-}
-
 void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultArchive* ra, uint maxRes) {
-	archive* arch = openArchive(ra->arch.name.data(), &ra->error);
+	archive* arch = openArchive(ra->arch, &ra->error);
 	if (!arch) {
+		ra->rc = ResultCode::error;
 		pushEvent(SDL_USEREVENT_THREAD_ARCHIVE_FINISHED, 0, ra);
 		return;
 	}
@@ -258,8 +240,9 @@ void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultArchive
 	int rc;
 	for (archive_entry* entry; (rc = archive_read_next_header(arch, &entry)) == ARCHIVE_OK;) {
 		if (stoken.stop_requested()) {
-			delete ra;
 			archive_read_free(arch);
+			ra->rc = ResultCode::stop;
+			pushEvent(SDL_USEREVENT_THREAD_ARCHIVE_FINISHED, 0, ra);
 			return;
 		}
 
@@ -284,8 +267,6 @@ void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultArchive
 	}
 
 	if (rc == ARCHIVE_EOF) {
-		archive_read_free(arch);
-
 		std::queue<ArchiveDir*> dirs;
 		dirs.push(&ra->arch);
 		do {
@@ -295,10 +276,13 @@ void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultArchive
 				dirs.push(&it);
 			dirs.pop();
 		} while (!dirs.empty());
-	} else {
+	} else if (ra->arch.pc == ArchiveData::PassCode::ignore)
+		ra->rc = ResultCode::stop;
+	else {
 		ra->error = archive_error_string(arch);
-		archive_read_free(arch);
+		ra->rc = ResultCode::error;
 	}
+	archive_read_free(arch);
 	pushEvent(SDL_USEREVENT_THREAD_ARCHIVE_FINISHED, 0, ra);
 }
 
@@ -307,50 +291,129 @@ SDL_Surface* FileOps::loadArchivePicture(archive* arch, archive_entry* entry) {
 	return IMG_Load_RW(SDL_RWFromConstMem(data.data(), data.size()), SDL_TRUE);
 }
 
-#ifdef CAN_PDF
-pair<PopplerDocument*, Data> FileOps::loadArchivePdf(archive* arch, archive_entry* entry, string* error) {
-	int64 esiz = archive_entry_size(entry);
-	return esiz > int64(signaturePdf.size()) ? loadPdfChecked(arch, esiz, archive_read_data, error) : pair(nullptr, Data());
+Data FileOps::readArchiveEntry(archive* arch, archive_entry* entry) {
+	int64 bsiz = archive_entry_size(entry);
+	if (bsiz <= 0)
+		return Data();
+
+	Data data(bsiz);
+	if (la_ssize_t len = archive_read_data(arch, data.data(), bsiz); len < bsiz) {
+		if (len <= 0)
+			return Data();
+		data.resize(len);
+	}
+	return data;
 }
 
-template <IntegerPointer H, class F>
-pair<PopplerDocument*, Data> FileOps::loadPdfChecked(H fd, size_t esiz, F eread, string* error) {
-	array<byte_t, signaturePdf.size()> sig;
-	int64 len = eread(fd, sig.data(), sig.size());
-	if (size_t(len) == sig.size() && std::equal(signaturePdf.begin(), signaturePdf.end(), sig.data()) && symPoppler()) {
-		Data fdata(esiz);
-		rng::copy(sig, fdata.data());
-		int64 toRead = esiz - signaturePdf.size();
-		if (len = eread(fd, fdata.data() + signaturePdf.size(), toRead); len < toRead) {
-			if (len <= 0) {
-				if (error)
-					*error = "Failed to read PDF data";
-				return pair(nullptr, Data());
-			}
-			fdata.resize(signaturePdf.size() + len);
+#ifdef CAN_PDF
+PdfFile FileOps::loadPdfChecked(SDL_RWops* ops, string* error) {
+	PdfFile pdf;
+	if (ops) {
+		if (int64 esiz = SDL_RWsize(ops); esiz > int64(signaturePdf.size())) {
+			byte_t sig[signaturePdf.size()];
+			if (size_t len = SDL_RWread(ops, sig, 1, sizeof(sig)); len == sizeof(sig) && rng::equal(signaturePdf, sig) && symPoppler()) {
+				pdf.resize(esiz);
+				rng::copy(sig, pdf.data());
+				size_t toRead = esiz - signaturePdf.size();
+				if (len = SDL_RWread(ops, pdf.data() + signaturePdf.size(), sizeof(byte_t), toRead); len) {
+					if (len < toRead)
+						pdf.resize(signaturePdf.size() + len);
+
+					GError* gerr = nullptr;
+					GBytes* bytes = gBytesNewStatic(pdf.data(), pdf.size());
+					if (pdf.pdoc = popplerDocumentNewFromBytes(bytes, nullptr, &gerr); !pdf.pdoc) {
+						if (error)
+							*error = gerr->message;
+						gErrorFree(gerr);
+					}
+					gBytesUnref(bytes);
+				}
+			} else if (error)
+				*error = "Missing PDF signature";
 		}
-		GError* gerr = nullptr;
-		GBytes* bytes = gBytesNewStatic(fdata.data(), fdata.size());
-		PopplerDocument* doc = popplerDocumentNewFromBytes(bytes, nullptr, &gerr);
-		if (!doc) {
-			if (error)
-				*error = gerr->message;
-			gErrorFree(gerr);
-		}
-		gBytesUnref(bytes);
-		return pair(doc, std::move(fdata));
+		SDL_RWclose(ops);
 	}
-	if (error)
-		*error = "Missing PDF signature";
-	return pair(nullptr, Data());
+	if (!pdf.pdoc) {
+		pdf.clear();
+		if (error && error->empty())
+			*error = "Failed to read PDF data";
+	}
+	return pdf;
 }
 #endif
+
+template <InvocableR<int, archive*, ArchiveData&> F>
+archive* FileOps::initArchive(ArchiveData& ad, string* error, F openArch) {
+	archive* arch = archive_read_new();
+	if (arch) {
+		archive_read_support_filter_all(arch);
+		archive_read_support_format_all(arch);
+		if (ad.pc == ArchiveData::PassCode::set || ad.pc == ArchiveData::PassCode::attempt)
+			archive_read_add_passphrase(arch, ad.passphrase.data());
+		if (ad.pc <= ArchiveData::PassCode::set)
+			archive_read_set_passphrase_callback(arch, &ad, requestArchivePassphrase);
+		if (openArch(arch, ad) != ARCHIVE_OK) {
+			if (error)
+				*error = archive_error_string(arch);
+			archive_read_free(arch);
+			return nullptr;
+		}
+	} else if (error)
+		*error = "Failed to allocate archive object";
+	return arch;
+}
+
+const char* FileOps::requestArchivePassphrase(archive* arch, void* data) {
+	auto ad = static_cast<ArchiveData*>(data);
+	std::binary_semaphore sem(0);
+	pushEvent(SDL_USEREVENT_GENERAL, GeneralEvent::startRequestPassphrase, ad, &sem);
+	sem.acquire();	// wait for user input
+	if (ad->pc == ArchiveData::PassCode::set)
+		return ad->passphrase.data();
+	archive_read_set_passphrase_callback(arch, nullptr, nullptr);	// just returning nullptr causes this function to be called again
+	return nullptr;
+}
+
+SDL_RWops* FileOps::makeArchiveEntryRWops(archive* arch, archive_entry* entry) {
+	SDL_RWops* ops = SDL_AllocRW();
+	if (ops) {
+		ops->size = sdlArchiveEntrySize;
+		ops->seek = sdlArchiveEntrySeek;
+		ops->read = sdlArchiveEntryRead;
+		ops->write = sdlArchiveEntryWrite;
+		ops->close = sdlArchiveEntryClose;
+		ops->hidden.unknown.data1 = arch;
+		ops->hidden.unknown.data2 = entry;
+	}
+	return ops;
+}
+
+Sint64 SDLCALL FileOps::sdlArchiveEntrySize(SDL_RWops* context) {
+	return archive_entry_size(static_cast<archive_entry*>(context->hidden.unknown.data2));
+}
+
+Sint64 SDLCALL FileOps::sdlArchiveEntrySeek(SDL_RWops*, Sint64, int) {
+	return -1;
+}
+
+size_t SDLCALL FileOps::sdlArchiveEntryRead(SDL_RWops* context, void* ptr, size_t size, size_t maxnum) {
+	return std::max(archive_read_data(static_cast<archive*>(context->hidden.unknown.data1), ptr, size * maxnum), la_ssize_t(0));
+}
+
+size_t SDLCALL FileOps::sdlArchiveEntryWrite(SDL_RWops*, const void*, size_t, size_t) {
+	return 0;
+}
+
+int SDLCALL FileOps::sdlArchiveEntryClose(SDL_RWops* context) {
+	SDL_FreeRW(context);
+	return 0;
+}
 
 // FILE OPS LOCAL
 
 FileOpsLocal::FileOpsLocal() :
 #ifdef _WIN32
-	ebuf(static_cast<byte_t*>(HeapAlloc(GetProcessHeap(), HEAP_GENERATE_EXCEPTIONS, esiz)))
+	ebuf(static_cast<byte_t*>(HeapAlloc(GetProcessHeap(), 0, esiz)))
 #else
 	ebuf(static_cast<byte_t*>(mmap(nullptr, esiz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)))
 #endif
@@ -373,7 +436,7 @@ FileOpsLocal::~FileOpsLocal() {
 #endif
 }
 
-vector<Cstring> FileOpsLocal::listDirectory(string_view path, bool files, bool dirs, bool hidden) {
+vector<Cstring> FileOpsLocal::listDirectory(const string& path, bool files, bool dirs, bool hidden) {
 #ifdef _WIN32
 	if (path.empty())	// if in "root" directory, get drive letters and present them as directories
 		return dirs ? FileOpsLocal::listDrives() : vector<Cstring>();
@@ -381,7 +444,7 @@ vector<Cstring> FileOpsLocal::listDirectory(string_view path, bool files, bool d
 	vector<Cstring> entries;
 #ifdef _WIN32
 	WIN32_FIND_DATAW data;
-	if (HANDLE hFind = FindFirstFileW((sstow(path) / L"*").c_str(), &data); hFind != INVALID_HANDLE_VALUE) {
+	if (HANDLE hFind = FindFirstFileW((sstow(path) / L"*").data(), &data); hFind != INVALID_HANDLE_VALUE) {
 		do {
 			if (hidden || !(data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
 				if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
@@ -393,7 +456,7 @@ vector<Cstring> FileOpsLocal::listDirectory(string_view path, bool files, bool d
 		} while (FindNextFileW(hFind, &data));
 		FindClose(hFind);
 #else
-	if (string drc(path); DIR* directory = opendir(drc.c_str())) {
+	if (DIR* directory = opendir(path.data())) {
 		struct stat ps;
 		while (dirent* entry = readdir(directory))
 			if (hidden || entry->d_name[0] != '.')
@@ -407,7 +470,7 @@ vector<Cstring> FileOpsLocal::listDirectory(string_view path, bool files, bool d
 						entries.emplace_back(entry->d_name);
 					break;
 				case DT_LNK:
-					if (!stat((drc / entry->d_name).c_str(), &ps))
+					if (!stat((path / entry->d_name).data(), &ps))
 						switch (ps.st_mode & S_IFMT) {
 						case S_IFDIR:
 							if (dirs)
@@ -425,7 +488,7 @@ vector<Cstring> FileOpsLocal::listDirectory(string_view path, bool files, bool d
 	return entries;
 }
 
-pair<vector<Cstring>, vector<Cstring>> FileOpsLocal::listDirectorySep(string_view path, bool hidden) {
+pair<vector<Cstring>, vector<Cstring>> FileOpsLocal::listDirectorySep(const string& path, bool hidden) {
 #ifdef _WIN32
 	if (path.empty())	// if in "root" directory, get drive letters and present them as directories
 		return pair(vector<Cstring>(), listDrives());
@@ -433,7 +496,7 @@ pair<vector<Cstring>, vector<Cstring>> FileOpsLocal::listDirectorySep(string_vie
 	vector<Cstring> files, dirs;
 #ifdef _WIN32
 	WIN32_FIND_DATAW data;
-	if (HANDLE hFind = FindFirstFileW((sstow(path) / L"*").c_str(), &data); hFind != INVALID_HANDLE_VALUE) {
+	if (HANDLE hFind = FindFirstFileW((sstow(path) / L"*").data(), &data); hFind != INVALID_HANDLE_VALUE) {
 		do {
 			if (hidden || !(data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
 				if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
@@ -445,7 +508,7 @@ pair<vector<Cstring>, vector<Cstring>> FileOpsLocal::listDirectorySep(string_vie
 		} while (FindNextFileW(hFind, &data));
 		FindClose(hFind);
 #else
-	if (string drc(path); DIR* directory = opendir(drc.c_str())) {
+	if (DIR* directory = opendir(path.data())) {
 		struct stat ps;
 		while (dirent* entry = readdir(directory))
 			if (hidden || entry->d_name[0] != '.')
@@ -458,7 +521,7 @@ pair<vector<Cstring>, vector<Cstring>> FileOpsLocal::listDirectorySep(string_vie
 					files.emplace_back(entry->d_name);
 					break;
 				case DT_LNK:
-					if (!stat((drc / entry->d_name).c_str(), &ps))
+					if (!stat((path / entry->d_name).data(), &ps))
 						switch (ps.st_mode & S_IFMT) {
 						case S_IFDIR:
 							dirs.emplace_back(entry->d_name);
@@ -486,10 +549,10 @@ vector<Cstring> FileOpsLocal::listDrives() {
 }
 #endif
 
-bool FileOpsLocal::deleteEntry(string_view base) {
+bool FileOpsLocal::deleteEntry(const string& base) {
 	bool ok = true;
-	fs::path path = toPath(base);
 #ifdef _WIN32
+	fs::path path = toPath(base);
 	if (DWORD attr = GetFileAttributesW(path.c_str()); attr == INVALID_FILE_ATTRIBUTES)
 		return false;
 	else if (!(attr & FILE_ATTRIBUTE_DIRECTORY))
@@ -523,14 +586,15 @@ bool FileOpsLocal::deleteEntry(string_view base) {
 		} while (!handles.empty() && !FindNextFileW(handles.top(), &data));
 	} while (!handles.empty());
 #else
-	if (struct stat ps; lstat(path.c_str(), &ps))
+	if (struct stat ps; lstat(base.data(), &ps))
 		return false;
 	else if (!S_ISDIR(ps.st_mode))
-		return !unlink(path.c_str());
-	DIR* dir = opendir(path.c_str());
+		return !unlink(base.data());
+	DIR* dir = opendir(base.data());
 	if (!dir)
 		return false;
 
+	fs::path path = toPath(base);
 	std::stack<DIR*> dirs;
 	dirs.push(dir);
 	do {
@@ -556,22 +620,26 @@ bool FileOpsLocal::deleteEntry(string_view base) {
 	return ok;
 }
 
-bool FileOpsLocal::renameEntry(string_view oldPath, string_view newPath) {
+bool FileOpsLocal::renameEntry(const string& oldPath, const string& newPath) {
 #ifdef _WIN32
-	return MoveFileW(sstow(oldPath).c_str(), sstow(newPath).c_str());
+	return MoveFileW(sstow(oldPath).data(), sstow(newPath).data());
 #else
-	return !rename(string(oldPath).c_str(), string(newPath).c_str());
+	return !rename(oldPath.data(), newPath.data());
 #endif
 }
 
-Data FileOpsLocal::readFile(string_view path) {
-	return readFile(toPath(path));
+Data FileOpsLocal::readFile(const string& path) {
+#ifdef _WIN32
+	return readFile(sstow(path).data());
+#else
+	return readFile(path.data());
+#endif
 }
 
-Data FileOpsLocal::readFile(const fs::path& path) {
+Data FileOpsLocal::readFile(const fs::path::value_type* path) {
 	Data data;
 #ifdef _WIN32
-	if (HANDLE fh = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr); fh != INVALID_HANDLE_VALUE) {
+	if (HANDLE fh = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr); fh != INVALID_HANDLE_VALUE) {
 		if (LARGE_INTEGER siz; GetFileSizeEx(fh, &siz)) {
 			data.resize(siz.QuadPart);
 			if (DWORD len; ReadFile(fh, data.data(), data.size(), &len, nullptr)) {
@@ -583,7 +651,7 @@ Data FileOpsLocal::readFile(const fs::path& path) {
 		CloseHandle(fh);
 	}
 #else
-	if (int fd = open(path.c_str(), O_RDONLY); fd != -1) {
+	if (int fd = open(path, O_RDONLY); fd != -1) {
 		if (struct stat ps; !fstat(fd, &ps)) {
 			data.resize(ps.st_size);
 			if (ssize_t len = read(fd, data.data(), data.size()); len < ps.st_size)
@@ -595,50 +663,32 @@ Data FileOpsLocal::readFile(const fs::path& path) {
 	return data;
 }
 
-size_t FileOpsLocal::readFileStart(string_view path, byte_t* buf, size_t n) {
-	size_t len = 0;
+fs::file_type FileOpsLocal::fileType(const string& path) {
 #ifdef _WIN32
-	if (HANDLE fh = CreateFileW(sstow(path).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr); fh != INVALID_HANDLE_VALUE) {
-		if (DWORD l; ReadFile(fh, buf, n, &l, nullptr))
-			len = l;
-		CloseHandle(fh);
-	};
-#else
-	if (int fd = open(string(path).c_str(), O_RDONLY); fd != -1) {
-		if (ssize_t l = read(fd, buf, n); l > 0)
-			len = l;
-		close(fd);
-	}
-#endif
-	return len;
-}
-
-fs::file_type FileOpsLocal::fileType(string_view path) {
-#ifdef _WIN32
-	DWORD attr = GetFileAttributesW(sstow(path).c_str());
+	DWORD attr = GetFileAttributesW(sstow(path).data());
 	if (attr == INVALID_FILE_ATTRIBUTES)
 		return fs::file_type::not_found;
 	return attr & FILE_ATTRIBUTE_DIRECTORY ? fs::file_type::directory : fs::file_type::regular;
 #else
 	struct stat ps;
-	return !stat(string(path).c_str(), &ps) ? modeToType(ps.st_mode) : fs::file_type::not_found;
+	return !stat(path.data(), &ps) ? modeToType(ps.st_mode) : fs::file_type::not_found;
 #endif
 }
 
-bool FileOpsLocal::isRegular(string_view path) {
+bool FileOpsLocal::isRegular(const string& path) {
 #ifdef _WIN32
-	DWORD attr = GetFileAttributesW(sstow(path).c_str());
+	DWORD attr = GetFileAttributesW(sstow(path).data());
 	return attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY);
 #else
-	return hasModeFlags(string(path).c_str(), S_IFREG);
+	return hasModeFlags(path.data(), S_IFREG);
 #endif
 }
 
-bool FileOpsLocal::isDirectory(string_view path) {
+bool FileOpsLocal::isDirectory(const string& path) {
 #ifdef _WIN32
-	return isDirectory(sstow(path).c_str());
+	return isDirectory(sstow(path).data());
 #else
-	return hasModeFlags(string(path).c_str(), S_IFDIR);
+	return hasModeFlags(path.data(), S_IFDIR);
 #endif
 }
 
@@ -656,71 +706,33 @@ bool FileOpsLocal::hasModeFlags(const char* path, mode_t flags) {
 }
 #endif
 
-bool FileOpsLocal::isPicture(string_view path) {
-	return FileOps::isPicture(SDL_RWFromFile(string(path).c_str(), "rb"), fileExtension(path));
-}
-
-SDL_Surface* FileOpsLocal::loadPicture(string_view path) {
-	return IMG_Load(string(path).c_str());
-}
-
-#ifdef CAN_PDF
-pair<PopplerDocument*, Data> FileOpsLocal::loadPdf(string_view path, string* error) {
-	pair<PopplerDocument*, Data> ret(nullptr, Data());
+archive* FileOpsLocal::openArchive(ArchiveData& ad, string* error) {
+	return initArchive(ad, error, [](archive* a, ArchiveData& d) -> int {
 #ifdef _WIN32
-	if (HANDLE fh = CreateFileW(sstow(path).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr); fh != INVALID_HANDLE_VALUE) {
-		if (LARGE_INTEGER siz; GetFileSizeEx(fh, &siz)) {
-			ret = loadPdfChecked(fh, siz.QuadPart, [](HANDLE h, byte_t* b, DWORD s) -> DWORD {
-				DWORD len;
-				return ReadFile(h, b, s, &len, nullptr) ? len : 0;
-			}, error);
-		}
-		CloseHandle(fh);
-	}
+		return archive_read_open_filename_w(a, sstow(d.name.data()).data(), archiveReadBlockSize);
 #else
-	if (int fd = open(string(path).c_str(), O_RDONLY); fd != -1) {
-		if (struct stat ps; !fstat(fd, &ps) && ps.st_size > off_t(signaturePdf.size()))
-			ret = loadPdfChecked(fd, ps.st_size, read, error);
-		close(fd);
-	}
+		return archive_read_open_filename(a, d.name.data(), archiveReadBlockSize);
 #endif
-	return ret;
-}
-#endif
-
-archive* FileOpsLocal::openArchive(string_view path, string* error) {
-	archive* arch = archive_read_new();
-	if (arch) {
-		archive_read_support_filter_all(arch);
-		archive_read_support_format_all(arch);
-#ifdef _WIN32
-		if (archive_read_open_filename_w(arch, sstow(path).c_str(), archiveReadBlockSize) != ARCHIVE_OK) {
-#else
-		if (archive_read_open_filename(arch, string(path).c_str(), archiveReadBlockSize) != ARCHIVE_OK) {
-#endif
-			if (error)
-				*error = archive_error_string(arch);
-			archive_read_free(arch);
-			return nullptr;
-		}
-	} else if (error)
-		*error = "Failed to allocate archive object";
-	return arch;
+	});
 }
 
-void FileOpsLocal::setWatch(string_view path) {
+SDL_RWops* FileOpsLocal::makeRWops(const string& path) {
+	return SDL_RWFromFile(path.data(), "rb");
+}
+
+void FileOpsLocal::setWatch(const string& path) {
 #ifdef _WIN32
 	if (overlapped.hEvent) {
 		if (dirc != INVALID_HANDLE_VALUE)
 			unsetWatch();
 
-		if (wstring wp = sstow(path); isDirectory(wp.c_str())) {
-			dirc = CreateFileW(wp.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
+		if (wstring wp = sstow(path); isDirectory(wp.data())) {
+			dirc = CreateFileW(wp.data(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
 			flags = FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME;
 			filter.clear();
 			wpdir = std::move(wp);
-		} else if (wp = sstow(parentPath(path)); isDirectory(wp.c_str())) {
-			dirc = CreateFileW(wp.c_str(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
+		} else if (wp = sstow(parentPath(path)); isDirectory(wp.data())) {
+			dirc = CreateFileW(wp.data(), FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
 			flags = FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_SIZE;
 			filter = filename(wp);
 			wpdir.clear();
@@ -733,15 +745,14 @@ void FileOpsLocal::setWatch(string_view path) {
 		if (watch != -1)
 			unsetWatch();
 
-		fs::path wp = toPath(path);
-		if (struct stat ps; !stat(wp.c_str(), &ps))
+		if (struct stat ps; !stat(path.data(), &ps))
 			switch (ps.st_mode & S_IFMT) {
 			case S_IFDIR:
-				watch = inotify_add_watch(ino, wp.c_str(), IN_CREATE | IN_DELETE | IN_DELETE_SELF | IN_MOVE_SELF | IN_MOVED_FROM | IN_MOVED_TO);
-				wpdir = std::move(wp);
+				watch = inotify_add_watch(ino, path.data(), IN_CREATE | IN_DELETE | IN_DELETE_SELF | IN_MOVE_SELF | IN_MOVED_FROM | IN_MOVED_TO);
+				wpdir = path;
 				break;
 			case S_IFREG:
-				watch = inotify_add_watch(ino, wp.c_str(), IN_DELETE_SELF | IN_MODIFY | IN_MOVE_SELF);
+				watch = inotify_add_watch(ino, path.data(), IN_DELETE_SELF | IN_MODIFY | IN_MOVE_SELF);
 				wpdir.clear();
 			}
 	}
@@ -758,24 +769,23 @@ bool FileOpsLocal::pollWatch(vector<FileChange>& files) {
 			return unsetWatch();
 
 		for (auto event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(ebuf);; event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(reinterpret_cast<byte_t*>(event) + event->NextEntryOffset)) {
-			switch (event->Action) {
-			case FILE_ACTION_ADDED: case FILE_ACTION_RENAMED_NEW_NAME:
-				if (filter.empty()) {
-					wstring_view name(event->FileName, event->FileNameLength / sizeof(wchar_t));
-					if (DWORD attr = GetFileAttributesW((wpdir / name).c_str()); attr != INVALID_FILE_ATTRIBUTES)
-						files.emplace_back(swtos(name), attr & FILE_ATTRIBUTE_DIRECTORY ? FileChange::addDirectory : FileChange::addFile);
-				}
-				break;
-			case FILE_ACTION_REMOVED: case FILE_ACTION_RENAMED_OLD_NAME:
-				if (wstring_view file(event->FileName, event->FileNameLength / sizeof(wchar_t)); filter.empty())
-					files.emplace_back(swtos(file), FileChange::deleteEntry);
-				else if (file == filter.c_str())
-					return unsetWatch();
-				break;
-			case FILE_ACTION_MODIFIED:
-				if (!filter.empty())
-					if (wstring_view file(event->FileName, event->FileNameLength / sizeof(wchar_t)); file == filter.c_str())
+			if (wstring_view name(event->FileName, event->FileNameLength / sizeof(wchar_t)); rng::none_of(name, [](wchar_t ch) -> bool { return isDsep(ch); })) {
+				switch (event->Action) {
+				case FILE_ACTION_ADDED: case FILE_ACTION_RENAMED_NEW_NAME:
+					if (filter.empty())
+						if (DWORD attr = GetFileAttributesW((wpdir / name).data()); attr != INVALID_FILE_ATTRIBUTES)
+							files.emplace_back(swtos(name), attr & FILE_ATTRIBUTE_DIRECTORY ? FileChange::addDirectory : FileChange::addFile);
+					break;
+				case FILE_ACTION_REMOVED: case FILE_ACTION_RENAMED_OLD_NAME:
+					if (filter.empty())
+						files.emplace_back(swtos(name), FileChange::deleteEntry);
+					else if (name == filter)
 						return unsetWatch();
+					break;
+				case FILE_ACTION_MODIFIED:
+					if (name == filter)
+						return unsetWatch();
+				}
 			}
 			if (!event->NextEntryOffset)
 				break;
@@ -798,7 +808,7 @@ bool FileOpsLocal::pollWatch(vector<FileChange>& files) {
 			if (int bias = bool(event->mask & IN_CREATE) + bool(event->mask & IN_MOVED_TO) - bool(event->mask & IN_DELETE) - bool(event->mask & IN_MOVED_FROM)) {
 				if (string name(event->name, event->len); bias < 0)
 					files.emplace_back(std::move(name), FileChange::deleteEntry);
-				else if (!stat((wpdir / name).c_str(), &ps))
+				else if (!stat((wpdir / name).data(), &ps))
 					files.emplace_back(std::move(name), S_ISDIR(ps.st_mode) ? FileChange::addDirectory : FileChange::addFile);
 			}
 		}
@@ -817,8 +827,8 @@ bool FileOpsLocal::unsetWatch() {
 	return true;
 }
 
-FileOpCapabilities FileOpsLocal::capabilities() const {
-	return FileOpCapabilities::remove | FileOpCapabilities::rename | FileOpCapabilities::watch;
+bool FileOpsLocal::canWatch() const {
+	return true;
 }
 
 string FileOpsLocal::prefix() const {
@@ -836,30 +846,13 @@ bool FileOpsLocal::equals(const RemoteLocation& rl) const {
 // FILE OPS REMOTE
 
 #if defined(CAN_SMB) || defined(CAN_SFTP)
-bool FileOpsRemote::isPicture(string_view path) {
-	Data data = readFile(path);
-	return FileOps::isPicture(SDL_RWFromConstMem(data.data(), data.size()), fileExtension(path));
-}
-
-SDL_Surface* FileOpsRemote::loadPicture(string_view path) {
-	Data data = readFile(path);
-	return IMG_Load_RW(SDL_RWFromConstMem(data.data(), data.size()), SDL_TRUE);
-}
-
-archive* FileOpsRemote::openArchive(string_view path, string* error) {
-	archive* arch = archive_read_new();
-	if (arch) {
-		archive_read_support_filter_all(arch);
-		archive_read_support_format_all(arch);
-		if (Data data = readFile(path); archive_read_open_memory(arch, data.data(), data.size()) != ARCHIVE_OK) {
-			if (error)
-				*error = archive_error_string(arch);
-			archive_read_free(arch);
-			return nullptr;
-		}
-	} else if (error)
-		*error = "Failed to allocate archive object";
-	return arch;
+archive* FileOpsRemote::openArchive(ArchiveData& ad, string* error) {
+	return initArchive(ad, error, [this](archive* a, ArchiveData& d) -> int {
+		if (d.dref)
+			return archive_read_open_memory(a, d.dref->data(), d.dref->size());
+		d.data = readFile(d.name.data());
+		return archive_read_open_memory(a, d.data.data(), d.data.size());
+	});
 }
 
 string FileOpsRemote::prefix() const {
@@ -875,44 +868,44 @@ FileOpsSmb::FileOpsSmb(const RemoteLocation& rl, vector<string>&& passwords) :
 	ctx(smbcNewContext())
 {
 	if (!ctx)
-		throw std::runtime_error("Failed to create smb context");
-	if (!smbcInitContext(ctx)) {
-		smbcFreeContext(ctx, 0);
-		throw std::runtime_error("Failed to init smb context");
-	}
+		throw std::runtime_error("Failed to create SMB context");
+	if (!smbcInitContext(ctx))
+		throw std::runtime_error("Failed to init SMB context");
 	smbcSetContext(ctx);
 #ifndef NDEBUG
-	if (smbcSetDebug)
-		smbcSetDebug(ctx, 1);
+	smbcSetDebug(ctx, 1);
 #endif
-	if (smbcSetLogCallback)
-		smbcSetLogCallback(ctx, this, logMsg);
+	smbcSetLogCallback(ctx, this, logMsg);
 
-	sopen = smbcGetFunctionOpen(ctx);
-	sread = smbcGetFunctionRead(ctx);
-	sclose = smbcGetFunctionClose(ctx);
-	sstat = smbcGetFunctionStat(ctx);
-	sfstat = smbcGetFunctionFstat(ctx);
-	sopendir = smbcGetFunctionOpendir(ctx);
-	sreaddir = smbcGetFunctionReaddir(ctx);
-	sclosedir = smbcGetFunctionClosedir(ctx);
-	sunlink = smbcGetFunctionUnlink ? smbcGetFunctionUnlink(ctx) : nullptr;
-	srmdir = smbcGetFunctionRmdir ? smbcGetFunctionRmdir(ctx) : nullptr;
-	srename = smbcGetFunctionRename ? smbcGetFunctionRename(ctx) : nullptr;
-	snotify = smbcGetFunctionNotify ? smbcGetFunctionNotify(ctx) : nullptr;
+	if (!((sopen = smbcGetFunctionOpen(ctx))
+		&& (sread = smbcGetFunctionRead(ctx))
+		&& (swrite = smbcGetFunctionWrite(ctx))
+		&& (slseek = smbcGetFunctionLseek(ctx))
+		&& (sclose = smbcGetFunctionClose(ctx))
+		&& (sstat = smbcGetFunctionStat(ctx))
+		&& (sfstat = smbcGetFunctionFstat(ctx))
+		&& (sopendir = smbcGetFunctionOpendir(ctx))
+		&& (sreaddir = smbcGetFunctionReaddir(ctx))
+		&& (sclosedir = smbcGetFunctionClosedir(ctx))
+		&& (sunlink = smbcGetFunctionUnlink(ctx))
+		&& (srmdir = smbcGetFunctionRmdir(ctx))
+		&& (srename = smbcGetFunctionRename(ctx))
+		&& (snotify = smbcGetFunctionNotify(ctx))
+	))
+		throw std::runtime_error("Failed to get SMB context functions");
 
 	smbcSetFunctionAuthDataWithContext(ctx, [](SMBCCTX* c, const char*, const char*, char*, int, char*, int, char* pw, int pwlen) {
 		auto self = static_cast<FileOpsSmb*>(smbcGetOptionUserData(c));
-		std::copy_n(self->pwd.c_str(), std::min(int(self->pwd.length()) + 1, pwlen), pw);
+		std::copy_n(self->pwd.data(), std::min(int(self->pwd.length()) + 1, pwlen), pw);
 	});
-	smbcSetUser(ctx, rl.user.c_str());
-	smbcSetWorkgroup(ctx, rl.workgroup.c_str());
+	smbcSetUser(ctx, rl.user.data());
+	smbcSetWorkgroup(ctx, rl.workgroup.data());
 	smbcSetPort(ctx, rl.port);
 	smbcSetOptionUserData(ctx, this);
 
 	string spath = prefix();
 	for (string& it : passwords)
-		if (pwd = std::move(it); SMBCFILE* dir = sopendir(ctx, spath.c_str())) {
+		if (pwd = std::move(it); SMBCFILE* dir = sopendir(ctx, spath.data())) {
 			sclosedir(ctx, dir);
 			return;
 		}
@@ -921,14 +914,17 @@ FileOpsSmb::FileOpsSmb(const RemoteLocation& rl, vector<string>&& passwords) :
 }
 
 FileOpsSmb::~FileOpsSmb() {
-	sclosedir(ctx, wndir);
-	smbcFreeContext(ctx, 0);
+	if (ctx) {
+		if (wndir)
+			sclosedir(ctx, wndir);
+		smbcFreeContext(ctx, 0);
+	}
 }
 
-vector<Cstring> FileOpsSmb::listDirectory(string_view path, bool files, bool dirs, bool hidden) {
+vector<Cstring> FileOpsSmb::listDirectory(const string& path, bool files, bool dirs, bool hidden) {
 	std::lock_guard lockg(mlock);
 	vector<Cstring> entries;
-	if (string drc(path); SMBCFILE* dir = sopendir(ctx, drc.c_str())) {
+	if (SMBCFILE* dir = sopendir(ctx, path.data())) {
 		struct stat ps;
 		while (smbc_dirent* it = sreaddir(ctx, dir)) {
 			if (hidden || it->name[0] != '.') {
@@ -943,7 +939,7 @@ vector<Cstring> FileOpsSmb::listDirectory(string_view path, bool files, bool dir
 						entries.emplace_back(name);
 					break;
 				case SMBC_LINK:
-					if (!sstat(ctx, (drc / name).c_str(), &ps))
+					if (!sstat(ctx, (path / name).data(), &ps))
 						switch (ps.st_mode & S_IFMT) {	// TODO: is this right?
 						case S_IFDIR:
 							if (dirs)
@@ -962,10 +958,10 @@ vector<Cstring> FileOpsSmb::listDirectory(string_view path, bool files, bool dir
 	return entries;
 }
 
-pair<vector<Cstring>, vector<Cstring>> FileOpsSmb::listDirectorySep(string_view path, bool hidden) {
+pair<vector<Cstring>, vector<Cstring>> FileOpsSmb::listDirectorySep(const string& path, bool hidden) {
 	std::lock_guard lockg(mlock);
 	vector<Cstring> files, dirs;
-	if (string drc(path); SMBCFILE* dir = sopendir(ctx, drc.c_str())) {
+	if (SMBCFILE* dir = sopendir(ctx, path.data())) {
 		struct stat ps;
 		while (smbc_dirent* it = sreaddir(ctx, dir)) {
 			if (hidden || it->name[0] != '.') {
@@ -979,7 +975,7 @@ pair<vector<Cstring>, vector<Cstring>> FileOpsSmb::listDirectorySep(string_view 
 					files.emplace_back(name);
 					break;
 				case SMBC_LINK:
-					if (!sstat(ctx, (drc / name).c_str(), &ps))
+					if (!sstat(ctx, (path / name).data(), &ps))
 						switch (ps.st_mode & S_IFMT) {	// TODO: is this right?
 						case S_IFDIR:
 							dirs.emplace_back(name);
@@ -997,19 +993,17 @@ pair<vector<Cstring>, vector<Cstring>> FileOpsSmb::listDirectorySep(string_view 
 	return pair(std::move(files), std::move(dirs));
 }
 
-bool FileOpsSmb::deleteEntry(string_view base) {
-	if (!(sunlink && srmdir))
-		return false;
+bool FileOpsSmb::deleteEntry(const string& base) {
 	std::lock_guard lockg(mlock);
-	string path(base);
-	if (struct stat ps; sstat(ctx, path.c_str(), &ps))
+	if (struct stat ps; sstat(ctx, base.data(), &ps))
 		return false;
 	else if (!S_ISDIR(ps.st_mode))
-		return !sunlink(ctx, path.c_str());
-	SMBCFILE* dir = sopendir(ctx, path.c_str());
+		return !sunlink(ctx, base.data());
+	SMBCFILE* dir = sopendir(ctx, base.data());
 	if (!dir)
 		return false;
 
+	string path = base;
 	std::stack<SMBCFILE*> dirs;
 	dirs.push(dir);
 	bool ok = true;
@@ -1019,16 +1013,16 @@ bool FileOpsSmb::deleteEntry(string_view base) {
 			if (it->smbc_type == SMBC_DIR) {
 				if (notDotName(it->name)) {
 					path = std::move(path) / name;
-					if (dir = sopendir(ctx, path.c_str()); dir)
+					if (dir = sopendir(ctx, path.data()); dir)
 						dirs.push(dir);
 					else
 						path = parentPath(path);
 				}
 			} else
-				sunlink(ctx, (path / name).c_str());
+				sunlink(ctx, (path / name).data());
 		}
 		sclosedir(ctx, dirs.top());
-		if (srmdir(ctx, path.c_str()))
+		if (srmdir(ctx, path.data()))
 			ok = false;
 		path = parentPath(path);
 		dirs.pop();
@@ -1036,14 +1030,14 @@ bool FileOpsSmb::deleteEntry(string_view base) {
 	return ok;
 }
 
-bool FileOpsSmb::renameEntry(string_view oldPath, string_view newPath) {
-	return srename && !srename(ctx, string(oldPath).c_str(), ctx, string(newPath).c_str());
+bool FileOpsSmb::renameEntry(const string& oldPath, const string& newPath) {
+	return !srename(ctx, oldPath.data(), ctx, newPath.data());
 }
 
-Data FileOpsSmb::readFile(string_view path) {
+Data FileOpsSmb::readFile(const string& path) {
 	std::lock_guard lockg(mlock);
 	Data data;
-	if (SMBCFILE* fh = sopen(ctx, string(path).c_str(), O_RDONLY, 0)) {	// TODO: check if this works if there's no open handle to the directory/share
+	if (SMBCFILE* fh = sopen(ctx, path.data(), O_RDONLY, 0)) {	// TODO: check if this works if there's no open handle to the directory/share
 		if (struct stat ps; !sfstat(ctx, fh, &ps)) {
 			data.resize(ps.st_size);
 			if (ssize_t len = sread(ctx, fh, data.data(), data.size()); len < ssize_t(data.size()))
@@ -1054,68 +1048,93 @@ Data FileOpsSmb::readFile(string_view path) {
 	return data;
 }
 
-size_t FileOpsSmb::readFileStart(string_view path, byte_t* buf, size_t n) {
-	std::lock_guard lockg(mlock);
-	size_t len = 0;
-	if (SMBCFILE* fh = sopen(ctx, string(path).c_str(), O_RDONLY, 0)) {	// TODO: check if this works if there's no open handle to the directory/share
-		if (ssize_t l = sread(ctx, fh, buf, n); l > 0)
-			len = l;
-		sclose(ctx, fh);
-	}
-	return len;
-}
-
-fs::file_type FileOpsSmb::fileType(string_view path) {
+fs::file_type FileOpsSmb::fileType(const string& path) {
 	std::lock_guard lockg(mlock);
 	struct stat ps;
-	return !sstat(ctx, string(path).c_str(), &ps) ? modeToType(ps.st_mode) : fs::file_type::not_found;
+	return !sstat(ctx, path.data(), &ps) ? modeToType(ps.st_mode) : fs::file_type::not_found;
 }
 
-bool FileOpsSmb::isRegular(string_view path) {
-	return hasModeFlags(path, S_IFREG);
+bool FileOpsSmb::isRegular(const string& path) {
+	return hasModeFlags(path.data(), S_IFREG);
 }
 
-bool FileOpsSmb::isDirectory(string_view path) {
-	return hasModeFlags(path, S_IFDIR);
+bool FileOpsSmb::isDirectory(const string& path) {
+	return hasModeFlags(path.data(), S_IFDIR);
 }
 
-bool FileOpsSmb::hasModeFlags(string_view path, mode_t mdes) {
+bool FileOpsSmb::hasModeFlags(const char* path, mode_t mdes) {
 	std::lock_guard lockg(mlock);
 	struct stat ps;
-	return !sstat(ctx, string(path).c_str(), &ps) && (ps.st_mode & mdes);	// TODO: is this right with S_IFDIR and S_IFREG?
+	return !sstat(ctx, path, &ps) && (ps.st_mode & mdes);	// TODO: is this right with S_IFDIR and S_IFREG?
 }
 
-#ifdef CAN_PDF
-pair<PopplerDocument*, Data> FileOpsSmb::loadPdf(string_view path, string* error) {
+SDL_RWops* FileOpsSmb::makeRWops(const string& path) {
 	std::lock_guard lockg(mlock);
-	pair<PopplerDocument*, Data> ret(nullptr, Data());
-	if (SMBCFILE* fh = sopen(ctx, string(path).c_str(), O_RDONLY, 0)) {	// TODO: check if this works if there's no open handle to the directory/share
-		if (struct stat ps; !sfstat(ctx, fh, &ps) && ps.st_size > off_t(signaturePdf.size()))
-			ret = loadPdfChecked(fh, ps.st_size, [this](SMBCFILE* h, byte_t* b, size_t s) -> ssize_t { return sread(ctx, h, b, s); }, error);
-		sclose(ctx, fh);
-	}
-	return ret;
-}
-#endif
-
-void FileOpsSmb::setWatch(string_view path) {
-	if (snotify) {
-		std::lock_guard lockg(mlock);
-		if (wndir)
-			unsetWatch();
-
-		struct stat ps;
-		if (string wp(path); !sstat(ctx, wp.c_str(), &ps) && S_ISDIR(ps.st_mode)) {
-			wndir = sopendir(ctx, string(path).c_str());
-			flags = SMBC_NOTIFY_CHANGE_FILE_NAME | SMBC_NOTIFY_CHANGE_DIR_NAME;
-			filter.clear();
-			wpdir = path;
-		} else if (wp = parentPath(path); !sstat(ctx, wp.c_str(), &ps) && S_ISDIR(ps.st_mode)) {
-			wndir = sopendir(ctx, string(wp).c_str());
-			flags = SMBC_NOTIFY_CHANGE_FILE_NAME | SMBC_NOTIFY_CHANGE_SIZE;
-			filter = filename(wp);
-			wpdir.clear();
+	if (SMBCFILE* fh = sopen(ctx, path.data(), O_RDONLY, 0)) {
+		if (SDL_RWops* ops = SDL_AllocRW()) {
+			ops->size = sdlSize;
+			ops->seek = sdlSeek;
+			ops->read = sdlRead;
+			ops->write = sdlWrite;
+			ops->close = sdlClose;
+			ops->hidden.unknown.data1 = this;
+			ops->hidden.unknown.data2 = fh;
+			return ops;
 		}
+		sclose(ctx, fh);
+	}
+	return nullptr;
+}
+
+Sint64 SDLCALL FileOpsSmb::sdlSize(SDL_RWops* context) {
+	auto self = static_cast<FileOpsSmb*>(context->hidden.unknown.data1);
+	std::lock_guard lockg(self->mlock);
+	struct stat ps;
+	return !self->sfstat(self->ctx, static_cast<SMBCFILE*>(context->hidden.unknown.data2), &ps) ? ps.st_size : -1;
+}
+
+Sint64 SDLCALL FileOpsSmb::sdlSeek(SDL_RWops* context, Sint64 offset, int whence) {
+	auto self = static_cast<FileOpsSmb*>(context->hidden.unknown.data1);
+	std::lock_guard lockg(self->mlock);
+	return self->slseek(self->ctx, static_cast<SMBCFILE*>(context->hidden.unknown.data2), offset, whence);
+}
+
+size_t SDLCALL FileOpsSmb::sdlRead(SDL_RWops* context, void* ptr, size_t size, size_t maxnum) {
+	auto self = static_cast<FileOpsSmb*>(context->hidden.unknown.data1);
+	std::lock_guard lockg(self->mlock);
+	return std::max(self->sread(self->ctx, static_cast<SMBCFILE*>(context->hidden.unknown.data2), ptr, size * maxnum), ssize_t(0));
+}
+
+size_t SDLCALL FileOpsSmb::sdlWrite(SDL_RWops* context, const void* ptr, size_t size, size_t num) {
+	auto self = static_cast<FileOpsSmb*>(context->hidden.unknown.data1);
+	std::lock_guard lockg(self->mlock);
+	return std::max(self->swrite(self->ctx, static_cast<SMBCFILE*>(context->hidden.unknown.data2), ptr, size * num), ssize_t(0));
+}
+
+int SDLCALL FileOpsSmb::sdlClose(SDL_RWops* context) {
+	auto self = static_cast<FileOpsSmb*>(context->hidden.unknown.data1);
+	std::lock_guard lockg(self->mlock);
+	int rc = self->sclose(self->ctx, static_cast<SMBCFILE*>(context->hidden.unknown.data2));
+	SDL_FreeRW(context);
+	return rc;
+}
+
+void FileOpsSmb::setWatch(const string& path) {
+	std::lock_guard lockg(mlock);
+	if (wndir)
+		unsetWatch();
+
+	struct stat ps;
+	if (!sstat(ctx, path.data(), &ps) && S_ISDIR(ps.st_mode)) {
+		wndir = sopendir(ctx, string(path).data());
+		flags = SMBC_NOTIFY_CHANGE_FILE_NAME | SMBC_NOTIFY_CHANGE_DIR_NAME;
+		filter.clear();
+		wpdir = path;
+	} else if (string wp(parentPath(path)); !sstat(ctx, wp.data(), &ps) && S_ISDIR(ps.st_mode)) {
+		wndir = sopendir(ctx, wp.data());
+		flags = SMBC_NOTIFY_CHANGE_FILE_NAME | SMBC_NOTIFY_CHANGE_SIZE;
+		filter = filename(wp);
+		wpdir.clear();
 	}
 }
 
@@ -1132,7 +1151,7 @@ bool FileOpsSmb::pollWatch(vector<FileChange>& files) {
 		for (size_t i = 0; i < numActions; ++i) {
 			switch (actions[i].action) {
 			case SMBC_NOTIFY_ACTION_ADDED: case SMBC_NOTIFY_ACTION_NEW_NAME:
-				if (self->filter.empty() && !self->sstat(self->ctx, (self->wpdir / actions[i].filename).c_str(), &ps))
+				if (self->filter.empty() && !self->sstat(self->ctx, (self->wpdir / actions[i].filename).data(), &ps))
 					fp->emplace_back(actions[i].filename, S_ISDIR(ps.st_mode) ? FileChange::addDirectory : FileChange::addFile);
 				break;
 			case SMBC_NOTIFY_ACTION_REMOVED: case SMBC_NOTIFY_ACTION_OLD_NAME:
@@ -1161,13 +1180,8 @@ bool FileOpsSmb::unsetWatch() {
 	return true;
 }
 
-FileOpCapabilities FileOpsSmb::capabilities() const {
-	FileOpCapabilities caps = FileOpCapabilities::none;
-	if (sunlink && srmdir)
-		caps |= FileOpCapabilities::remove;
-	if (snotify)
-		caps |= FileOpCapabilities::watch;
-	return caps;
+bool FileOpsSmb::canWatch() const {
+	return true;
 }
 
 bool FileOpsSmb::equals(const RemoteLocation& rl) const {
@@ -1190,14 +1204,15 @@ FileOpsSftp::FileOpsSftp(const RemoteLocation& rl, const vector<string>& passwor
 	if (sshInit(0))
 		throw std::runtime_error("Failed to initialize SSH");
 	try {
+		static constexpr int families[familyNames.size()] = { AF_UNSPEC, AF_INET, AF_INET6 };
 		addrinfo hints = {
 			.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG | AI_NUMERICSERV,
-			.ai_family = array<int, familyNames.size()>{ AF_UNSPEC, AF_INET, AF_INET6 }[eint(rl.family)],
+			.ai_family = families[eint(rl.family)],
 			.ai_socktype = SOCK_STREAM,
 			.ai_protocol = IPPROTO_TCP
 		};
 		addrinfo* addr;
-		if (getaddrinfo(rl.server.c_str(), toStr(port).c_str(), &hints, &addr) || !addr)
+		if (getaddrinfo(rl.server.data(), toStr(port).data(), &hints, &addr) || !addr)
 			throw std::runtime_error("Failed to resolve address");
 
 		for (addrinfo* it = addr; it; it = it->ai_next) {
@@ -1239,8 +1254,6 @@ FileOpsSftp::~FileOpsSftp() {
 }
 
 void FileOpsSftp::authenticate(const vector<string>& passwords) {
-	if (!sshUserauthList)
-		return;
 	if (char* userauthlist = sshUserauthList(session, user.data(), user.length())) {
 		bool canPassword = false, canKey = false;
 		for (char* next, *pos = userauthlist; *pos; pos = next) {
@@ -1256,7 +1269,7 @@ void FileOpsSftp::authenticate(const vector<string>& passwords) {
 
 		if (canPassword)
 			for (const string& pwd : passwords)
-				if (!sshUserauthPasswordEx(session, user.data(), user.length(), pwd.c_str(), pwd.length(), nullptr))
+				if (!sshUserauthPasswordEx(session, user.data(), user.length(), pwd.data(), pwd.length(), nullptr))
 					return;
 		if (canKey) {
 			constexpr string_view hostsFile = "known_hosts";
@@ -1270,14 +1283,14 @@ void FileOpsSftp::authenticate(const vector<string>& passwords) {
 			for (const fs::path& pub : publicKeys)
 				for (const fs::path& prv : privateKeys)
 					for (const string& pwd : passwords)
-						if (!sshUserauthPublickeyFromfileEx(session, user.data(), user.length(), pub.c_str(), prv.c_str(), pwd.c_str()))
+						if (!sshUserauthPublickeyFromfileEx(session, user.data(), user.length(), pub.c_str(), prv.c_str(), pwd.data()))
 							return;
 		}
 		throw std::runtime_error("Authentication failed");
 	}
 }
 
-vector<Cstring> FileOpsSftp::listDirectory(string_view path, bool files, bool dirs, bool hidden) {
+vector<Cstring> FileOpsSftp::listDirectory(const string& path, bool files, bool dirs, bool hidden) {
 	std::lock_guard lockg(mlock);
 	vector<Cstring> entries;
 	if (LIBSSH2_SFTP_HANDLE* dir = sftpOpenEx(sftp, path.data(), path.length(), 0, 0, LIBSSH2_SFTP_OPENDIR)) {
@@ -1295,7 +1308,7 @@ vector<Cstring> FileOpsSftp::listDirectory(string_view path, bool files, bool di
 						entries.emplace_back(name);
 					break;
 				case S_IFLNK:
-					if (string fpath = string(path) / name; !sftpStatEx(sftp, fpath.c_str(), fpath.length(), LIBSSH2_SFTP_STAT, &attr))
+					if (string fpath = string(path) / name; !sftpStatEx(sftp, fpath.data(), fpath.length(), LIBSSH2_SFTP_STAT, &attr))
 						switch (attr.flags & S_IFMT) {
 						case S_IFDIR:
 							if (dirs)
@@ -1313,7 +1326,7 @@ vector<Cstring> FileOpsSftp::listDirectory(string_view path, bool files, bool di
 	return entries;
 }
 
-pair<vector<Cstring>, vector<Cstring>> FileOpsSftp::listDirectorySep(string_view path, bool hidden) {
+pair<vector<Cstring>, vector<Cstring>> FileOpsSftp::listDirectorySep(const string& path, bool hidden) {
 	std::lock_guard lockg(mlock);
 	vector<Cstring> files, dirs;
 	if (LIBSSH2_SFTP_HANDLE* dir = sftpOpenEx(sftp, path.data(), path.length(), 0, 0, LIBSSH2_SFTP_OPENDIR)) {
@@ -1330,7 +1343,7 @@ pair<vector<Cstring>, vector<Cstring>> FileOpsSftp::listDirectorySep(string_view
 					files.emplace_back(name);
 					break;
 				case S_IFLNK:
-					if (string fpath = string(path) / name; !sftpStatEx(sftp, fpath.c_str(), fpath.length(), LIBSSH2_SFTP_STAT, &attr))
+					if (string fpath = string(path) / name; !sftpStatEx(sftp, fpath.data(), fpath.length(), LIBSSH2_SFTP_STAT, &attr))
 						switch (attr.flags & S_IFMT) {
 						case S_IFDIR:
 							dirs.emplace_back(name);
@@ -1347,9 +1360,7 @@ pair<vector<Cstring>, vector<Cstring>> FileOpsSftp::listDirectorySep(string_view
 	return pair(std::move(files), std::move(dirs));
 }
 
-bool FileOpsSftp::deleteEntry(string_view base) {
-	if (!(sftpUnlinkEx && sftpRmdirEx))
-		return false;
+bool FileOpsSftp::deleteEntry(const string& base) {
 	std::lock_guard lockg(mlock);
 	LIBSSH2_SFTP_ATTRIBUTES attr;
 	if (sftpStatEx(sftp, base.data(), base.length(), LIBSSH2_SFTP_LSTAT, &attr))
@@ -1362,7 +1373,7 @@ bool FileOpsSftp::deleteEntry(string_view base) {
 
 	std::stack<LIBSSH2_SFTP_HANDLE*> dirs;
 	dirs.push(dir);
-	string path(base);
+	string path = base;
 	char name[2048], longentry[2048];	// TODO: no need for longentry
 	bool ok = true;
 	do {
@@ -1370,18 +1381,18 @@ bool FileOpsSftp::deleteEntry(string_view base) {
 			if (S_ISDIR(attr.flags)) {
 				if (notDotName(name)) {
 					path = std::move(path) / name;
-					if (dir = sftpOpenEx(sftp, path.c_str(), path.length(), 0, 0, LIBSSH2_SFTP_OPENDIR); dir)
+					if (dir = sftpOpenEx(sftp, path.data(), path.length(), 0, 0, LIBSSH2_SFTP_OPENDIR); dir)
 						dirs.push(dir);
 					else
 						path = parentPath(path);
 				}
 			} else {
 				string file = path / name;
-				sftpUnlinkEx(sftp, file.c_str(), file.length());
+				sftpUnlinkEx(sftp, file.data(), file.length());
 			}
 		}
 		sftpClose(dirs.top());
-		if (sftpRmdirEx(sftp, path.c_str(), path.length()))
+		if (sftpRmdirEx(sftp, path.data(), path.length()))
 			ok = false;
 		path = parentPath(path);
 		dirs.pop();
@@ -1389,11 +1400,11 @@ bool FileOpsSftp::deleteEntry(string_view base) {
 	return ok;
 }
 
-bool FileOpsSftp::renameEntry(string_view oldPath, string_view newPath) {
-	return sftpRenameEx && !sftpRenameEx(sftp, oldPath.data(), oldPath.length(), newPath.data(), newPath.length(), LIBSSH2_SFTP_RENAME_ATOMIC | LIBSSH2_SFTP_RENAME_NATIVE);
+bool FileOpsSftp::renameEntry(const string& oldPath, const string& newPath) {
+	return !sftpRenameEx(sftp, oldPath.data(), oldPath.length(), newPath.data(), newPath.length(), LIBSSH2_SFTP_RENAME_ATOMIC | LIBSSH2_SFTP_RENAME_NATIVE);
 }
 
-Data FileOpsSftp::readFile(string_view path) {
+Data FileOpsSftp::readFile(const string& path) {
 	std::lock_guard lockg(mlock);
 	Data data;
 	if (LIBSSH2_SFTP_HANDLE* fh = sftpOpenEx(sftp, path.data(), path.length(), LIBSSH2_FXF_READ, 0, LIBSSH2_SFTP_OPENFILE)) {
@@ -1407,28 +1418,17 @@ Data FileOpsSftp::readFile(string_view path) {
 	return data;
 }
 
-size_t FileOpsSftp::readFileStart(string_view path, byte_t* buf, size_t n) {
-	std::lock_guard lockg(mlock);
-	size_t len = 0;
-	if (LIBSSH2_SFTP_HANDLE* fh = sftpOpenEx(sftp, path.data(), path.length(), LIBSSH2_FXF_READ, 0, LIBSSH2_SFTP_OPENFILE)) {
-		if (ssize_t l = sftpRead(fh, reinterpret_cast<char*>(buf), n); l > 0)
-			len = l;
-		sftpClose(fh);
-	}
-	return len;
-}
-
-fs::file_type FileOpsSftp::fileType(string_view path) {
+fs::file_type FileOpsSftp::fileType(const string& path) {
 	std::lock_guard lockg(mlock);
 	LIBSSH2_SFTP_ATTRIBUTES attr;
 	return !sftpStatEx(sftp, path.data(), path.length(), LIBSSH2_SFTP_STAT, &attr) ? modeToType(attr.flags) : fs::file_type::not_found;
 }
 
-bool FileOpsSftp::isRegular(string_view path) {
+bool FileOpsSftp::isRegular(const string& path) {
 	return hasAttributeFlags(path, S_IFREG);
 }
 
-bool FileOpsSftp::isDirectory(string_view path) {
+bool FileOpsSftp::isDirectory(const string& path) {
 	return hasAttributeFlags(path, S_IFDIR);
 }
 
@@ -1438,30 +1438,77 @@ bool FileOpsSftp::hasAttributeFlags(string_view path, ulong flags) {
 	return !sftpStatEx(sftp, path.data(), path.length(), LIBSSH2_SFTP_STAT, &attr) && (attr.flags & flags);
 }
 
-#ifdef CAN_PDF
-pair<PopplerDocument*, Data> FileOpsSftp::loadPdf(string_view path, string* error) {
+SDL_RWops* FileOpsSftp::makeRWops(const string& path) {
 	std::lock_guard lockg(mlock);
-	pair<PopplerDocument*, Data> ret(nullptr, Data());
 	if (LIBSSH2_SFTP_HANDLE* fh = sftpOpenEx(sftp, path.data(), path.length(), LIBSSH2_FXF_READ, 0, LIBSSH2_SFTP_OPENFILE)) {
-		if (LIBSSH2_SFTP_ATTRIBUTES attr; !sftpFstatEx(fh, &attr, 0) && attr.filesize > signaturePdf.size())
-			ret = loadPdfChecked(fh, attr.filesize, [](LIBSSH2_SFTP_HANDLE* h, byte_t* b, size_t s) -> ssize_t { return sftpRead(h, reinterpret_cast<char*>(b), s); }, error);
+		if (SDL_RWops* ops = SDL_AllocRW()) {
+			ops->size = sdlSize;
+			ops->seek = sdlSeek;
+			ops->read = sdlRead;
+			ops->write = sdlWrite;
+			ops->close = sdlClose;;
+			ops->hidden.unknown.data1 = this;
+			ops->hidden.unknown.data2 = fh;
+			return ops;
+		}
 		sftpClose(fh);
 	}
-	return ret;
+	return nullptr;
 }
-#endif
+
+Sint64 SDLCALL FileOpsSftp::sdlSize(SDL_RWops* context) {
+	std::lock_guard lockg(static_cast<FileOpsSftp*>(context->hidden.unknown.data1)->mlock);
+	LIBSSH2_SFTP_ATTRIBUTES attr;
+	return !sftpFstatEx(static_cast<LIBSSH2_SFTP_HANDLE*>(context->hidden.unknown.data2), &attr, 0) ? attr.filesize : -1;
+}
+
+Sint64 SDLCALL FileOpsSftp::sdlSeek(SDL_RWops* context, Sint64 offset, int whence) {
+	std::lock_guard lockg(static_cast<FileOpsSftp*>(context->hidden.unknown.data1)->mlock);
+	auto fh = static_cast<LIBSSH2_SFTP_HANDLE*>(context->hidden.unknown.data2);
+	uint64_t pos;
+	switch (whence) {
+	case RW_SEEK_SET:
+		pos = offset;
+		break;
+	case RW_SEEK_CUR:
+		pos = sftpTell64(fh) + whence;
+		break;
+	case RW_SEEK_END: {
+		LIBSSH2_SFTP_ATTRIBUTES attr;
+		if (sftpFstatEx(fh, &attr, 0))
+			return -1;
+		pos = attr.filesize + whence;
+		break; }
+	default:
+		return -1;
+	}
+	sftpSeek64(fh, pos);
+	return pos;
+}
+
+size_t SDLCALL FileOpsSftp::sdlRead(SDL_RWops* context, void* ptr, size_t size, size_t maxnum) {
+	std::lock_guard lockg(static_cast<FileOpsSftp*>(context->hidden.unknown.data1)->mlock);
+	return std::max(sftpRead(static_cast<LIBSSH2_SFTP_HANDLE*>(context->hidden.unknown.data2), static_cast<char*>(ptr), size * maxnum), ssize_t(0));
+}
+
+size_t SDLCALL FileOpsSftp::sdlWrite(SDL_RWops* context, const void* ptr, size_t size, size_t num) {
+	std::lock_guard lockg(static_cast<FileOpsSftp*>(context->hidden.unknown.data1)->mlock);
+	return std::max(sftpWrite(static_cast<LIBSSH2_SFTP_HANDLE*>(context->hidden.unknown.data2), static_cast<const char*>(ptr), size * num), ssize_t(0));
+}
+
+int SDLCALL FileOpsSftp::sdlClose(SDL_RWops* context) {
+	std::lock_guard lockg(static_cast<FileOpsSftp*>(context->hidden.unknown.data1)->mlock);
+	int rc = sftpClose(static_cast<LIBSSH2_SFTP_HANDLE*>(context->hidden.unknown.data2));
+	SDL_FreeRW(context);
+	return rc;
+}
 
 bool FileOpsSftp::pollWatch(vector<FileChange>&) {
 	return false;
 }
 
-FileOpCapabilities FileOpsSftp::capabilities() const {
-	FileOpCapabilities caps = FileOpCapabilities::none;
-	if (sftpUnlinkEx && sftpRmdirEx)
-		caps |= FileOpCapabilities::remove;
-	if (sftpRenameEx)
-		caps |= FileOpCapabilities::rename;
-	return caps;
+bool FileOpsSftp::canWatch() const {
+	return false;
 }
 
 bool FileOpsSftp::equals(const RemoteLocation& rl) const {

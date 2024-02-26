@@ -2,7 +2,6 @@
 
 #include "types.h"
 #include "utils/settings.h"
-#include <span>
 #include <thread>
 
 // for handling program state specific things that occur in all states
@@ -65,7 +64,7 @@ public:
 	void updatePopupMessage(Cstring&& msg);
 	void showPopupMultiline(Cstring&& msg, EventId ccal = GeneralEvent::closePopup, Cstring&& ctxt = "Okay");
 	void showPopupChoice(Cstring&& msg, EventId kcal, EventId ccal = GeneralEvent::closePopup, Alignment malign = Alignment::left);
-	void showPopupInput(Cstring&& msg, string&& text, EventId kcal, EventId ccal = GeneralEvent::closePopup, Cstring&& ktxt = "Okay", Alignment malign = Alignment::left);
+	void showPopupInput(Cstring&& msg, string&& text, EventId kcal, EventId ccal = GeneralEvent::closePopup, bool visible = true, Cstring&& ktxt = "Okay", Alignment malign = Alignment::left);
 	static const string& inputFromPopup();
 	void showPopupRemoteLogin(RemoteLocation&& rl, EventId kcall, EventId ccal = GeneralEvent::closePopup);
 	static pair<RemoteLocation, bool> remoteLocationFromPopup();

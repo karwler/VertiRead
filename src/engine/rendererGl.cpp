@@ -343,7 +343,7 @@ Texture* RendererGl::texFromRpic(SDL_Surface* img) {
 }
 
 Texture* RendererGl::texFromText(const PixmapRgba& pm) {
-	if (pm.pix) {
+	if (pm.res.x) {
 		gfget
 		auto tex = new TextureGl(glm::min(pm.res, uvec2(maxTextureSize)), initTexture(GL_NEAREST));
 		uploadTexture(tex, pm);
@@ -353,7 +353,7 @@ Texture* RendererGl::texFromText(const PixmapRgba& pm) {
 }
 
 bool RendererGl::texFromText(Texture* tex, const PixmapRgba& pm) {
-	if (pm.pix) {
+	if (pm.res.x) {
 		gfget
 		auto gtx = static_cast<TextureGl*>(tex);
 		gtx->res = glm::min(pm.res, uvec2(maxTextureSize));
@@ -395,7 +395,7 @@ void RendererGl::uploadTexture(TextureGl* tex, const PixmapRgba& pm) {
 	gfget
 	gl.pixelStorei(GL_UNPACK_ROW_LENGTH, pm.res.x);
 	gl.pixelStorei(GL_UNPACK_ALIGNMENT, sizeof(uint32));
-	gl.texImage2D(texType, 0, GL_RGBA8, tex->res.x, tex->res.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, pm.pix);
+	gl.texImage2D(texType, 0, GL_RGBA8, tex->res.x, tex->res.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, pm.pix.get());
 }
 
 template <bool keep>
@@ -431,44 +431,44 @@ RendererGl::SurfaceInfo RendererGl::pickPixFormat(SDL_Surface* img) const {
 		}
 		break;
 	case SDL_PIXELFORMAT_BGR565:
+		if (core && hasPackedPixels)
+			return SurfaceInfo(img, GL_RGB5, GL_RGB, GL_UNSIGNED_SHORT_5_6_5_REV);
+		break;
+	case SDL_PIXELFORMAT_RGB565:
 		if (hasPackedPixels)
 			return SurfaceInfo(img, core ? GL_RGB5 : GL_RGB565, GL_RGB, GL_UNSIGNED_SHORT_5_6_5);
 		break;
-	case SDL_PIXELFORMAT_RGB565:
-		if (hasPackedPixels && hasBgra)
-			return SurfaceInfo(img, core ? GL_RGB5 : GL_RGB565, GL_BGR, GL_UNSIGNED_SHORT_5_6_5);
-		break;
 	case SDL_PIXELFORMAT_ABGR1555:
-		if (hasPackedPixels)
-			return SurfaceInfo(img, GL_RGB5_A1, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1);
-		break;
-	case SDL_PIXELFORMAT_ARGB1555:
-		if (hasPackedPixels && hasBgra)
-			return SurfaceInfo(img, GL_RGB5_A1, GL_BGRA, GL_UNSIGNED_SHORT_5_5_5_1);
-		break;
-	case SDL_PIXELFORMAT_BGRA5551:
 		if (core && hasPackedPixels)
 			return SurfaceInfo(img, GL_RGB5_A1, GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV);
 		break;
-	case SDL_PIXELFORMAT_RGBA5551:
+	case SDL_PIXELFORMAT_ARGB1555:
 		if (core && hasPackedPixels && hasBgra)
 			return SurfaceInfo(img, GL_RGB5_A1, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV);
 		break;
-	case SDL_PIXELFORMAT_ABGR4444:
-		if (hasPackedPixels)
-			return SurfaceInfo(img, GL_RGBA4, GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4);
-		break;
-	case SDL_PIXELFORMAT_ARGB4444:
+	case SDL_PIXELFORMAT_BGRA5551:
 		if (hasPackedPixels && hasBgra)
-			return SurfaceInfo(img, GL_RGBA4, GL_BGRA, GL_UNSIGNED_SHORT_4_4_4_4);
+			return SurfaceInfo(img, GL_RGB5_A1, GL_BGRA, GL_UNSIGNED_SHORT_5_5_5_1);
 		break;
-	case SDL_PIXELFORMAT_BGRA4444:
+	case SDL_PIXELFORMAT_RGBA5551:
+		if (hasPackedPixels)
+			return SurfaceInfo(img, GL_RGB5_A1, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1);
+		break;
+	case SDL_PIXELFORMAT_ABGR4444:
 		if (core && hasPackedPixels)
 			return SurfaceInfo(img, GL_RGBA4, GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4_REV);
 		break;
-	case SDL_PIXELFORMAT_RGBA4444:
+	case SDL_PIXELFORMAT_ARGB4444:
 		if (core && hasPackedPixels && hasBgra)
 			return SurfaceInfo(img, GL_RGBA4, GL_BGRA, GL_UNSIGNED_SHORT_4_4_4_4_REV);
+		break;
+	case SDL_PIXELFORMAT_BGRA4444:
+		if (hasPackedPixels && hasBgra)
+			return SurfaceInfo(img, GL_RGBA4, GL_BGRA, GL_UNSIGNED_SHORT_4_4_4_4);
+		break;
+	case SDL_PIXELFORMAT_RGBA4444:
+		if (hasPackedPixels)
+			return SurfaceInfo(img, GL_RGBA4, GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4);
 		break;
 	case SDL_PIXELFORMAT_RGB332:
 		if (core && hasPackedPixels)
@@ -477,9 +477,9 @@ RendererGl::SurfaceInfo RendererGl::pickPixFormat(SDL_Surface* img) const {
 	case SDL_PIXELFORMAT_ARGB2101010:
 		if (core && hasPackedPixels && hasBgra) {
 			if constexpr (keep)
-				return SurfaceInfo(img, GL_RGB10_A2, GL_BGRA, GL_UNSIGNED_INT_10_10_10_2);
+				return SurfaceInfo(img, GL_RGB10_A2, GL_BGRA, GL_UNSIGNED_INT_2_10_10_10_REV);
 			else
-				return SurfaceInfo(img, iformRgba10, GL_BGRA, GL_UNSIGNED_INT_10_10_10_2);
+				return SurfaceInfo(img, iformRgba10, GL_BGRA, GL_UNSIGNED_INT_2_10_10_10_REV);
 		}
 	}
 
@@ -496,7 +496,7 @@ RendererGl::SurfaceInfo RendererGl::pickPixFormat(SDL_Surface* img) const {
 		ifmt = img->format->Amask ? GL_RGB5_A1 : core ? GL_RGB5 : GL_RGB565;
 		pfmt = img->format->Amask ? GL_RGBA : GL_RGB;
 		type = img->format->Amask ? GL_UNSIGNED_SHORT_5_5_5_1 : GL_UNSIGNED_SHORT_5_6_5;
-		img = convertReplace(img, img->format->Amask ? SDL_PIXELFORMAT_ABGR1555 : SDL_PIXELFORMAT_BGR565);
+		img = convertReplace(img, img->format->Amask ? SDL_PIXELFORMAT_RGBA5551 : SDL_PIXELFORMAT_RGB565);
 	}
 	return img ? SurfaceInfo(img, ifmt, pfmt, type) : SurfaceInfo();
 }
@@ -814,8 +814,8 @@ GLuint RendererGl3::createShader(const char* vertSrc, const char* fragSrc, const
 			vertTmp = std::regex_replace(vertTmp, rgx, rpl);
 			fragTmp = std::regex_replace(fragTmp, rgx, rpl);
 		}
-		vertSrc = vertTmp.c_str();
-		fragSrc = fragTmp.c_str();
+		vertSrc = vertTmp.data();
+		fragSrc = fragTmp.data();
 	}
 
 	GLuint vert = gl3.createShader(GL_VERTEX_SHADER);

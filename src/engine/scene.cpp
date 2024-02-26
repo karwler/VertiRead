@@ -173,6 +173,13 @@ void Scene::setCapture(Widget* inter) {
 	captureLen = 0;
 }
 
+Popup* Scene::releasePopup() {
+	deselect();
+	Popup* ret = popup;
+	popup = nullptr;
+	return ret;
+}
+
 void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
 	deselect();	// clear select and capture in case of a dangling pointer
 	setCapture(nullptr);
