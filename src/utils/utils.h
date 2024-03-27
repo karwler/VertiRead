@@ -418,7 +418,6 @@ bool pathEqual(string_view a, string_view b);
 bool pathEqual(const char* a, const char* b);
 string_view relativePath(string_view path, string_view base);
 bool isSubpath(string_view path, string_view base);
-tm currentDateTime();
 #ifdef _WIN32
 bool isAbsolute(string_view path);
 #endif
@@ -703,6 +702,9 @@ T toVec(string_view str, typename T::value_type fill = typename T::value_type(0)
 }
 
 // other
+
+tm currentDateTime();
+void copyPixels(void* dst, const void* src, uint dpitch, uint spitch, uint bwidth, uint height);
 
 template <Number T>
 T btom(bool b) {

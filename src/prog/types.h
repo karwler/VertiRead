@@ -6,6 +6,10 @@
 #include <stop_token>
 #include <SDL_events.h>
 
+struct fz_context;
+struct fz_document;
+struct _PopplerDocument;
+
 enum UserEvent : uint32 {
 	SDL_USEREVENT_GENERAL = SDL_USEREVENT,
 	SDL_USEREVENT_PROG_BOOKS,
@@ -89,7 +93,6 @@ enum class ProgSettingsEvent : int32 {
 	setCompression,
 	setVsync,
 	setGpuSelecting,
-	setPdfImages,
 	setMultiFullscreen,
 	setPreview,
 	setHide,
@@ -364,3 +367,29 @@ public:
 
 	bool stopReq(std::stop_token stoken);
 };
+
+#if defined(CAN_MUPDF) || defined(CAN_POPPLER)
+// mupdf/poppler wrapper
+class PdfFile : private Data {
+public:
+	static constexpr array<byte_t, 5> signature = { '%'_b, 'P'_b, 'D'_b, 'F'_b, '-'_b };
+
+private:
+	fz_context* mctx;
+	fz_document* mdoc = nullptr;
+	_PopplerDocument* pdoc = nullptr;
+
+public:
+	PdfFile() = default;
+	PdfFile(PdfFile&& pdf);
+	PdfFile(SDL_RWops* ops, string* error);
+	~PdfFile();
+
+	PdfFile& operator=(PdfFile&& pdf);
+	operator bool() const { return mdoc || pdoc; }
+	int numPages() const;
+	SDL_Surface* renderPage(int pid);
+
+	static bool canOpen(SDL_RWops* ops);
+};
+#endif

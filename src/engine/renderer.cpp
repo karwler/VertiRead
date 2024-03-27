@@ -44,14 +44,6 @@ SDL_Surface* Renderer::limitSize(SDL_Surface* img, uint32 limit) {
 	return img;
 }
 
-void Renderer::copyPixels(byte_t* dst, const byte_t* src, uint dpitch, uint spitch, uint bwidth, uint height) {
-	if (dpitch == spitch)
-		memcpy(dst, src, size_t(dpitch) * size_t(height));
-	else
-		for (uint r = 0; r < height; ++r, dst += dpitch, src += spitch)
-			memcpy(dst, src, bwidth);
-}
-
 Rectf Renderer::cropTexRect(const Recti& isct, const Recti& rect, uvec2 texRes) {
 	vec2 fac = vec2(texRes) / vec2(rect.size());
 	return Rectf(vec2(isct.pos() - rect.pos()) * fac, glm::ceil(vec2(isct.size()) * fac));
@@ -186,7 +178,7 @@ Texture* RendererSf::texFromRpic(SDL_Surface* img) {
 Texture* RendererSf::texFromText(const PixmapRgba& pm) {
 	if (pm.res.x)
 		if (SDL_Surface* img = SDL_CreateRGBSurfaceWithFormat(0, std::min(pm.res.x, maxTextureSize), std::min(pm.res.y, maxTextureSize), 32, SDL_PIXELFORMAT_RGBA32)) {
-			copyPixels(static_cast<byte_t*>(img->pixels), reinterpret_cast<const byte_t*>(pm.pix.get()), img->pitch, pm.res.x * 4, pm.res.x * 4, pm.res.y);
+			copyPixels(img->pixels, pm.pix.get(), img->pitch, pm.res.x * 4, pm.res.x * 4, pm.res.y);
 			SDL_SetSurfaceRLE(img, SDL_TRUE);
 			return new TextureSf(uvec2(img->w, img->h), img);
 		}
@@ -196,7 +188,7 @@ Texture* RendererSf::texFromText(const PixmapRgba& pm) {
 bool RendererSf::texFromText(Texture* tex, const PixmapRgba& pm) {
 	if (pm.res.x)
 		if (SDL_Surface* img = SDL_CreateRGBSurfaceWithFormat(0, std::min(pm.res.x, maxTextureSize), std::min(pm.res.y, maxTextureSize), 32, SDL_PIXELFORMAT_RGBA32)) {
-			copyPixels(static_cast<byte_t*>(img->pixels), reinterpret_cast<const byte_t*>(pm.pix.get()), img->pitch, pm.res.x * 4, pm.res.x * 4, pm.res.y);
+			copyPixels(img->pixels, pm.pix.get(), img->pitch, pm.res.x * 4, pm.res.x * 4, pm.res.y);
 			SDL_SetSurfaceRLE(img, SDL_TRUE);
 
 			auto stx = static_cast<TextureSf*>(tex);

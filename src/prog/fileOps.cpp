@@ -1,12 +1,7 @@
 #include "fileOps.h"
 #include "utils/compare.h"
-#if defined(CAN_SECRET) || defined(CAN_PDF)
-#include "engine/optional/glib.h"
-#endif
-#ifdef CAN_PDF
-#include "engine/optional/poppler.h"
-#endif
 #ifdef CAN_SECRET
+#include "engine/optional/glib.h"
 #include "engine/optional/secret.h"
 #endif
 #ifdef CAN_SMB
@@ -209,18 +204,6 @@ bool FileOps::isPicture(const string& path) {
 	return false;
 }
 
-bool FileOps::isPdf(const string& path) {
-	bool ok = false;
-#ifdef CAN_PDF
-	if (SDL_RWops* ifh = makeRWops(path)) {
-		byte_t sig[signaturePdf.size()];
-		ok = SDL_RWread(ifh, sig, 1, sizeof(sig)) == sizeof(sig) && rng::equal(sig, signaturePdf) && symPoppler();
-		SDL_RWclose(ifh);
-	}
-#endif
-	return ok;
-}
-
 bool FileOps::isArchive(ArchiveData& ad) {
 	if (archive* arch = openArchive(ad)) {
 		archive_read_free(arch);
@@ -257,7 +240,7 @@ void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultArchive
 				if (Data data = readArchiveEntry(arch, entry); SDL_Surface* img = IMG_Load_RW(SDL_RWFromConstMem(data.data(), data.size()), SDL_TRUE)) {
 					node->files.emplace_front(path, std::min(uint(img->w), maxRes) * std::min(uint(img->h), maxRes) * 4);
 					SDL_FreeSurface(img);
-				} else if (data.size() >= signaturePdf.size() && std::equal(signaturePdf.begin(), signaturePdf.end(), data.data()))
+				} else if (data.size() >= PdfFile::signature.size() && std::equal(PdfFile::signature.begin(), PdfFile::signature.end(), data.data()))
 					node->files.emplace_front(path);
 				else
 					node->files.emplace_front(path, 0);
@@ -304,43 +287,6 @@ Data FileOps::readArchiveEntry(archive* arch, archive_entry* entry) {
 	}
 	return data;
 }
-
-#ifdef CAN_PDF
-PdfFile FileOps::loadPdfChecked(SDL_RWops* ops, string* error) {
-	PdfFile pdf;
-	if (ops) {
-		if (int64 esiz = SDL_RWsize(ops); esiz > int64(signaturePdf.size())) {
-			byte_t sig[signaturePdf.size()];
-			if (size_t len = SDL_RWread(ops, sig, 1, sizeof(sig)); len == sizeof(sig) && rng::equal(signaturePdf, sig) && symPoppler()) {
-				pdf.resize(esiz);
-				rng::copy(sig, pdf.data());
-				size_t toRead = esiz - signaturePdf.size();
-				if (len = SDL_RWread(ops, pdf.data() + signaturePdf.size(), sizeof(byte_t), toRead); len) {
-					if (len < toRead)
-						pdf.resize(signaturePdf.size() + len);
-
-					GError* gerr = nullptr;
-					GBytes* bytes = gBytesNewStatic(pdf.data(), pdf.size());
-					if (pdf.pdoc = popplerDocumentNewFromBytes(bytes, nullptr, &gerr); !pdf.pdoc) {
-						if (error)
-							*error = gerr->message;
-						gErrorFree(gerr);
-					}
-					gBytesUnref(bytes);
-				}
-			} else if (error)
-				*error = "Missing PDF signature";
-		}
-		SDL_RWclose(ops);
-	}
-	if (!pdf.pdoc) {
-		pdf.clear();
-		if (error && error->empty())
-			*error = "Failed to read PDF data";
-	}
-	return pdf;
-}
-#endif
 
 template <InvocableR<int, archive*, ArchiveData&> F>
 archive* FileOps::initArchive(ArchiveData& ad, string* error, F openArch) {

@@ -392,8 +392,6 @@ Settings* FileSys::loadSettings(const uset<string>* cmdFlags) const {
 				sets->vsync = toBool(trim(il.val));
 			else if (strciequal(il.prp, iniKeywordGpuSelecting))
 				sets->gpuSelecting = toBool(trim(il.val));
-			else if (strciequal(il.prp, iniKeywordPdfImages))
-				sets->pdfImages = toBool(trim(il.val));
 			else if (strciequal(il.prp, iniKeywordDirection))
 				sets->direction = strToEnum(Direction::names, trim(il.val), Settings::defaultDirection);
 			else if (strciequal(il.prp, iniKeywordZoom))
@@ -452,7 +450,6 @@ void FileSys::saveSettings(const Settings* sets) const {
 	IniLine::writeVal(ofs, iniKeywordCompression, Settings::compressionNames[eint(sets->compression)]);
 	IniLine::writeVal(ofs, iniKeywordVSync, toStr(sets->vsync));
 	IniLine::writeVal(ofs, iniKeywordGpuSelecting, toStr(sets->gpuSelecting));
-	IniLine::writeVal(ofs, iniKeywordPdfImages, toStr(sets->pdfImages));
 	IniLine::writeVal(ofs, iniKeywordZoom, Settings::zoomNames[eint(sets->zoomType)], ' ', int(sets->zoom));
 	IniLine::writeVal(ofs, iniKeywordPictureLimit, PicLim::names[eint(sets->picLim.type)], ' ', sets->picLim.count, ' ', PicLim::memoryString(sets->picLim.size));
 	IniLine::writeVal(ofs, iniKeywordMaxPictureRes, sets->maxPicRes);

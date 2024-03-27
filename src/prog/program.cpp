@@ -235,9 +235,6 @@ void Program::handleProgSettingsEvent(const SDL_UserEvent& event) {
 	case setGpuSelecting:
 		World::sets()->gpuSelecting = static_cast<CheckBox*>(event.data1)->on;
 		break;
-	case setPdfImages:
-		World::sets()->pdfImages = static_cast<CheckBox*>(event.data1)->on;
-		break;
 	case setMultiFullscreen:
 		eventSetMultiFullscreen(static_cast<WindowArranger*>(event.data1));
 		break;
@@ -337,14 +334,14 @@ void Program::eventOpenBookListLogin() {
 
 template <class... A>
 void Program::openBookListHandle(A&&... args) {
-	browser.start(string(), std::forward<A>(args)...);
+	browser.startFs(string(), std::forward<A>(args)...);
 	browser.exCall = &Program::eventOpenBookList;
 	setState<ProgBooks>();
 }
 
 void Program::eventOpenPageBrowser(PushButton* lbl) {
 	try {
-		browser.start(World::sets()->dirLib / lbl->getText().data(), World::sets()->dirLib / lbl->getText().data());	// browser should already be in the right state
+		browser.startFs(World::sets()->dirLib / lbl->getText().data(), World::sets()->dirLib / lbl->getText().data());	// browser should already be in the right state
 		setState<ProgPageBrowser>();
 	} catch (const std::runtime_error& err) {
 		state->showPopupMessage(err.what());
@@ -353,7 +350,7 @@ void Program::eventOpenPageBrowser(PushButton* lbl) {
 
 void Program::eventOpenPageBrowserGeneral() {
 	try {
-		browser.start(string(), string());	// browser should already be in the right state
+		browser.startFs(string(), string());	// browser should already be in the right state
 		setState<ProgPageBrowser>();
 	} catch (const std::runtime_error& err) {
 		state->showPopupMessage(err.what());
@@ -712,7 +709,7 @@ void Program::eventOpenLibDirBrowser() {
 #endif
 	try {
 		browser.prepareFileOps(string_view());
-		browser.start(string(), SDL_getenv(home));
+		browser.startFs(string(), SDL_getenv(home));
 		browser.exCall = &Program::eventOpenSettings;
 		setState<ProgSearchDir>();
 	} catch (const std::runtime_error& err) {

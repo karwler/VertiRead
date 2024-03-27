@@ -92,7 +92,6 @@ private:
 	static constexpr char iniKeywordCompression[] = "compression";
 	static constexpr char iniKeywordVSync[] = "vsync";
 	static constexpr char iniKeywordGpuSelecting[] = "gpu_selecting";
-	static constexpr char iniKeywordPdfImages[] = "pdf_images";
 	static constexpr char iniKeywordDirection[] = "direction";
 	static constexpr char iniKeywordZoom[] = "zoom";
 	static constexpr char iniKeywordSpacing[] = "spacing";

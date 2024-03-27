@@ -22,7 +22,8 @@ if(MSVC)
 	endif()
 else()
 	option(USE_FONTCONFIG "Build with fontconfig if available." ON)
-	option(USE_PDF "Build with Poppler support." ON)
+	option(USE_MUPDF "Build with MuPDF support." ON)
+	option(USE_POPPLER "Build with Poppler support." ON)
 endif()
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 	option(NATIVE "Build for the current CPU." OFF)
@@ -204,7 +205,22 @@ function(compileLib URL LIBDIR CMDV WDIR ORIG_LIBDIR)
 endfunction()
 
 if(USE_FONTCONFIG)
-	list(APPEND PKGCONFIG_ARGS "fontconfig")
+	CHECK_INCLUDE_FILE_CXX("fontconfig/fontconfig.h" FOUND_FONTCONFIG)
+	if(FOUND_FONTCONFIG)
+		list(APPEND SRC_FILES
+			"src/engine/optional/fontconfig.cpp"
+			"src/engine/optional/fontconfig.h")
+		add_compile_definitions(CAN_FONTCFG)
+	endif()
+endif()
+if(USE_MUPDF)
+	CHECK_INCLUDE_FILE_CXX("mupdf/fitz.h" FOUND_MUPDF)
+	if(FOUND_MUPDF)
+		list(APPEND SRC_FILES
+			"src/engine/optional/mupdf.cpp"
+			"src/engine/optional/mupdf.h")
+		add_compile_definitions(CAN_MUPDF)
+	endif()
 endif()
 if(USE_SECRET AND (USE_SMBCLIENT OR USE_SSH2))
 	list(APPEND PKGCONFIG_ARGS "libsecret-1")
@@ -215,7 +231,7 @@ endif()
 if(USE_SSH2)
 	list(APPEND PKGCONFIG_ARGS "libssh2")
 endif()
-if(USE_PDF)
+if(USE_POPPLER)
 	list(APPEND PKGCONFIG_ARGS "poppler-glib")
 endif()
 if(PKGCONFIG_ARGS)
@@ -224,39 +240,33 @@ if(PKGCONFIG_ARGS)
 		pkg_check_modules(PKGCONFS ${PKGCONFIG_ARGS})
 		include_directories(SYSTEM ${PKGCONFS_INCLUDE_DIRS})
 
-		if(USE_FONTCONFIG AND (PKGCONFS_fontconfig_FOUND OR PKGCONFS_fontconfig_VERSION))
-			list(APPEND SRC_FILES
-				"src/engine/optional/fontconfig.cpp"
-				"src/engine/optional/fontconfig.h")
-			add_compile_definitions(CAN_FONTCFG)
-		endif()
-		if(USE_SECRET AND (USE_SMBCLIENT OR USE_SSH2) AND (PKGCONFS_libsecret-1_FOUND OR PKGCONFS_libsecret-1_VERSION) AND (PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION OR PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION))
+		if((PKGCONFS_libsecret-1_FOUND OR PKGCONFS_libsecret-1_VERSION) AND (PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION OR PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION))
 			list(APPEND SRC_FILES
 				"src/engine/optional/secret.cpp"
 				"src/engine/optional/secret.h")
 			add_compile_definitions(CAN_SECRET)
 			set(NEED_GLIB TRUE)
 		endif()
-		if(USE_SMBCLIENT AND (PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION))
+		if(PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION)
 			list(APPEND SRC_FILES
 				"src/engine/optional/smbclient.cpp"
 				"src/engine/optional/smbclient.h")
 			add_compile_definitions(CAN_SMB)
 		endif()
-		if(USE_SSH2 AND (PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION))
+		if(PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION)
 			list(APPEND SRC_FILES
 				"src/engine/optional/ssh2.cpp"
 				"src/engine/optional/ssh2.h")
 			add_compile_definitions(CAN_SFTP)
 		endif()
-		if(USE_PDF AND (PKGCONFS_poppler-glib_FOUND OR PKGCONFS_poppler-glib_VERSION))
+		if(PKGCONFS_poppler-glib_FOUND OR PKGCONFS_poppler-glib_VERSION)
 			list(APPEND SRC_FILES
 				"src/engine/optional/poppler.cpp"
 				"src/engine/optional/poppler.h")
-			add_compile_definitions(CAN_PDF)
+			add_compile_definitions(CAN_POPPLER)
 			set(NEED_GLIB TRUE)
 		endif()
-		if (NEED_GLIB)
+		if(NEED_GLIB)
 			list(APPEND SRC_FILES
 				"src/engine/optional/glib.cpp"
 				"src/engine/optional/glib.h")

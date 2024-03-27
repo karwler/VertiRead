@@ -260,7 +260,7 @@ void FormatConverter::createPipelines(const InstanceVk* vk) {
 		pipelineInfos[i].stage.pName = "main";
 		pipelineInfos[i].stage.pSpecializationInfo = &specializationInfos[i];
 		pipelineInfos[i].layout = pipelineLayout;
-	};
+	}
 	if (VkResult rs = vk->vkCreateComputePipelines(vk->getLdev(), VK_NULL_HANDLE, pipelines.size(), pipelineInfos, nullptr, pipelines.data()); rs != VK_SUCCESS)
 		throw std::runtime_error(std::format("Failed to create converter pipelines: {}", string_VkResult(rs)));
 	vk->vkDestroyShaderModule(vk->getLdev(), compShaderModule, nullptr);

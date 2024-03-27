@@ -14,18 +14,10 @@
 
 struct archive;
 struct archive_entry;
-struct _PopplerDocument;
 struct _SecretService;
 struct _GHashTable;
 struct _LIBSSH2_SESSION;
 struct _LIBSSH2_SFTP;
-
-#ifdef CAN_PDF
-class PdfFile : public Data {
-public:
-	_PopplerDocument* pdoc = nullptr;
-};
-#endif
 
 #ifdef CAN_SECRET
 // loads and stores logins via libsecret
@@ -56,9 +48,6 @@ private:
 
 // file operations interface
 class FileOps {
-private:
-	static constexpr array<byte_t, 5> signaturePdf = { '%'_b, 'P'_b, 'D'_b, 'F'_b, '-'_b };
-
 public:
 	virtual ~FileOps() = default;
 
@@ -86,7 +75,7 @@ public:
 	void makeArchiveTreeThread(std::stop_token stoken, BrowserResultArchive* ra, uint maxRes);
 	static Data readArchiveEntry(archive* arch, archive_entry* entry);
 	static SDL_Surface* loadArchivePicture(archive* arch, archive_entry* entry);
-#ifdef CAN_PDF
+#if defined(CAN_MUPDF) || defined(CAN_POPPLER)
 	PdfFile loadPdf(const string& path, string* error = nullptr);	// loads Poppler if necessary
 	static PdfFile loadArchivePdf(archive* arch, archive_entry* entry, string* error = nullptr);
 #endif
@@ -94,9 +83,6 @@ public:
 protected:
 	virtual SDL_RWops* makeRWops(const string& path) = 0;
 
-#ifdef CAN_PDF
-	static PdfFile loadPdfChecked(SDL_RWops* ops, string* error);
-#endif
 #if !defined(_WIN32) || defined(CAN_SMB) || defined(CAN_SFTP)
 	static fs::file_type modeToType(mode_t mode);
 #endif
@@ -112,17 +98,25 @@ private:
 	static int SDLCALL sdlArchiveEntryClose(SDL_RWops* context);
 };
 
+inline bool FileOps::isPdf(const string& path) {
+#if defined(CAN_MUPDF) || defined(CAN_POPPLER)
+	return PdfFile::canOpen(makeRWops(path));
+#else
+	return false;
+#endif
+}
+
 inline SDL_Surface* FileOps::loadPicture(const string& path) {
 	return IMG_Load_RW(makeRWops(path), SDL_TRUE);
 }
 
-#ifdef CAN_PDF
+#if defined(CAN_MUPDF) || defined(CAN_POPPLER)
 inline PdfFile FileOps::loadPdf(const string& path, string* error) {
-	return loadPdfChecked(makeRWops(path), error);
+	return PdfFile(makeRWops(path), error);
 }
 
 inline PdfFile FileOps::loadArchivePdf(archive* arch, archive_entry* entry, string* error) {
-	return loadPdfChecked(makeArchiveEntryRWops(arch, entry), error);
+	return PdfFile(makeArchiveEntryRWops(arch, entry), error);
 }
 #endif
 

@@ -1,4 +1,4 @@
-#ifdef CAN_PDF
+#ifdef CAN_POPPLER
 #include "glib.h"
 #include "poppler.h"
 #include "internal.h"

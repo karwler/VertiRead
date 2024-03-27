@@ -1,6 +1,7 @@
 #include "world.h"
 #include "optional/fontconfig.h"
 #include "optional/glib.h"
+#include "optional/mupdf.h"
 #include "optional/poppler.h"
 #include "optional/secret.h"
 #include "optional/smbclient.h"
@@ -68,10 +69,13 @@ int main(int argc, char** argv) {
 #ifdef CAN_SECRET
 	closeLibsecret();
 #endif
-#ifdef CAN_PDF
+#ifdef CAN_MUPDF
+	closeMupdf();
+#endif
+#ifdef CAN_POPPLER
 	closePoppler();
 #endif
-#if defined(CAN_SECRET) || defined(CAN_PDF)
+#if defined(CAN_SECRET) || defined(CAN_POPPLER)
 	closeGlib();
 #endif
 #ifdef CAN_FONTCFG

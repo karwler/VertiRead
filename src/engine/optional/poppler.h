@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef CAN_PDF
+#ifdef CAN_POPPLER
 #include <cairo-pdf.h>
 #include <poppler-document.h>
 #include <poppler-page.h>

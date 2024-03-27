@@ -716,9 +716,6 @@ RootLayout* ProgSettings::createLayout() {
 		"Image compression",
 		"VSync",
 		"GPU selecting",
-#ifdef CAN_PDF
-		"PDF images only",
-#endif
 		"Preview",
 		"Show hidden",
 		"Show tooltips",
@@ -868,13 +865,6 @@ RootLayout* ProgSettings::createLayout() {
 		});
 	}
 	++itxs;
-
-#ifdef CAN_PDF
-	lx.emplace_back(lineHeight, Children{
-		new Label(descLength, *itxs++),
-		new CheckBox(lineHeight, World::sets()->pdfImages, ProgSettingsEvent::setPdfImages, "Only load a PDF file's images instead of rendering the pages fully")
-	});
-#endif
 
 	array<pair<Size, Children>, 8> sec1 = {
 		pair(lineHeight, Children{

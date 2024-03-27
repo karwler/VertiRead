@@ -3,10 +3,6 @@
 #include "types.h"
 #include <thread>
 
-struct _PopplerDocument;
-struct _PopplerPage;
-struct _cairo_surface;
-
 // logic for browsing files
 class Browser {
 public:
@@ -37,8 +33,8 @@ public:
 
 	string prepareNavigationPath(string_view path) const;
 	uptr<RemoteLocation> prepareFileOps(string_view path);	// returns a location if a new connection is needed
-	void start(string&& root, const RemoteLocation& location, vector<string>&& passwords = vector<string>());
-	void start(string&& root, string&& path);
+	void startFs(string&& root, const RemoteLocation& location, vector<string>&& passwords = vector<string>());
+	void startFs(string&& root, string&& path);
 	bool goTo(const RemoteLocation& location, vector<string>&& passwords = vector<string>());	// returns whether to wait
 	bool goTo(const string& path);	// ^
 	bool openPicture(string&& rootDir, vector<string>&& paths);
@@ -84,8 +80,8 @@ private:
 	void cleanupPreview();
 	static void previewDirThread(std::stop_token stoken, FileOps* fsop, string curDir, vector<Cstring> files, vector<Cstring> dirs, string iconPath, bool showHidden, int maxHeight);
 	static void previewArchThread(std::stop_token stoken, FileOps* fsop, ArchiveData slice, string curDir, string iconPath, int maxHeight);
-#ifdef CAN_PDF
-	static void previewPdf(std::stop_token stoken, _PopplerDocument* doc, int maxHeight, string_view fname);
+#if defined(CAN_MUPDF) || defined(CAN_POPPLER)
+	static void previewPdf(std::stop_token stoken, PdfFile& pdf, int maxHeight, string_view fname);
 #endif
 	static SDL_Surface* combineIcons(SDL_Surface* dir, SDL_Surface* img);
 	static SDL_Surface* scaleDown(SDL_Surface* img, int maxHeight);
@@ -96,10 +92,8 @@ private:
 	umap<string, uintptr_t> prepareArchiveDirPicLoad(BrowserResultPicture* rp, const PicLim& picLim, uint compress, bool fwd);
 	static void loadPicturesDirThread(std::stop_token stoken, BrowserResultPicture* rp, FileOps* fsop, PicLim picLim, uint compress, bool fwd, bool showHidden);
 	static void loadPicturesArchThread(std::stop_token stoken, BrowserResultPicture* rp, FileOps* fsop, umap<string, uintptr_t> files, PicLim picLim, bool fwd);
-#ifdef CAN_PDF
-	static void loadPicturesPdfThread(std::stop_token stoken, BrowserResultPicture* rp, FileOps* fsop, PicLim picLim, uint compress, bool imageOnly, bool fwd);
-	static vector<pair<dvec2, int>> getPdfPageImagesInfo(_PopplerPage* page);
-	static SDL_Surface* cairoImageToSdl(_cairo_surface* img);
+#if defined(CAN_MUPDF) || defined(CAN_POPPLER)
+	static void loadPicturesPdfThread(std::stop_token stoken, BrowserResultPicture* rp, FileOps* fsop, PicLim picLim, uint compress, bool fwd);
 #endif
 	static tuple<size_t, uintptr_t, pair<uint8, uint8>> initLoadLimits(const PicLim& picLim, size_t max);
 	static string limitToStr(const PicLim& picLim, uintptr_t c, uintptr_t m, pair<uint8, uint8> mag);

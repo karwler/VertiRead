@@ -1,4 +1,11 @@
 #include "types.h"
+#ifdef CAN_MUPDF
+#include "engine/optional/mupdf.h"
+#endif
+#ifdef CAN_POPPLER
+#include "engine/optional/glib.h"
+#include "engine/optional/poppler.h"
+#endif
 #include "utils/compare.h"
 #include <SDL_timer.h>
 
@@ -197,3 +204,155 @@ bool CountedStopReq::stopReq(std::stop_token stoken) {
 	}
 	return false;
 }
+
+// PDF FILE
+#if defined(CAN_MUPDF) || defined(CAN_POPPLER)
+PdfFile::PdfFile(PdfFile&& pdf) :
+	Data(std::move(pdf)),
+	mctx(pdf.mctx),
+	mdoc(pdf.mdoc),
+	pdoc(pdf.pdoc)
+{
+	pdf.mdoc = nullptr;
+	pdf.pdoc = nullptr;
+}
+
+PdfFile::PdfFile(SDL_RWops* ops, string* error) {
+	if (ops) {
+		if (int64 esiz = SDL_RWsize(ops); esiz > int64(signature.size())) {
+			byte_t sig[signature.size()];
+			if (size_t blen = SDL_RWread(ops, sig, 1, sizeof(sig)); blen == sizeof(sig) && rng::equal(signature, sig)) {
+				resize(esiz);
+				rng::copy(sig, data());
+				size_t toRead = esiz - signature.size();
+				if (blen = SDL_RWread(ops, data() + signature.size(), sizeof(byte_t), toRead); blen) {
+					if (blen < toRead)
+						resize(signature.size() + blen);
+#ifdef CAN_MUPDF
+					if (symMupdf() && (mctx = fzNewContextImp(nullptr, nullptr, FZ_STORE_UNLIMITED, FZ_VERSION))) {
+						fz_buffer* bytes = nullptr;
+						fzVar(bytes);
+						fzTry(mctx) {
+							fzRegisterDocumentHandlers(mctx);
+							bytes = fzNewBufferFromSharedData(mctx, reinterpret_cast<uchar*>(data()), size());
+							mdoc = fzOpenDocumentWithBuffer(mctx, "%PDF-", bytes);
+						} fzAlways(mctx) {
+							fzDropBuffer(mctx, bytes);
+						} fzCatch(mctx) {
+							fzDropContext(mctx);
+						}
+					}
+#endif
+#ifdef CAN_POPPLER
+					if (!mdoc && symPoppler()) {
+						GError* gerr = nullptr;
+						GBytes* bytes = gBytesNewStatic(data(), size());
+						if (pdoc = popplerDocumentNewFromBytes(bytes, nullptr, &gerr); !pdoc) {
+							if (error)
+								*error = gerr->message;
+							gErrorFree(gerr);
+						}
+						gBytesUnref(bytes);
+					}
+#endif
+				}
+			} else if (error)
+				*error = "Missing PDF signature";
+		}
+		SDL_RWclose(ops);
+	}
+	if (!(mdoc || pdoc)) {
+		clear();
+		if (error && error->empty())
+			*error = "Failed to read PDF data";
+	}
+}
+
+PdfFile::~PdfFile() {
+#ifdef CAN_MUPDF
+	if (mdoc) {
+		fzDropDocument(mctx, mdoc);
+		fzDropContext(mctx);
+	}
+#endif
+#ifdef CAN_POPPLER
+	if (pdoc)
+		gObjectUnref(pdoc);
+#endif
+}
+
+PdfFile& PdfFile::operator=(PdfFile&& pdf) {
+	Data::operator=(std::move(pdf));
+	mctx = pdf.mctx;
+	mdoc = pdf.mdoc;
+	pdoc = pdf.pdoc;
+	pdf.mdoc = nullptr;
+	pdf.pdoc = nullptr;
+	return *this;
+}
+
+int PdfFile::numPages() const {
+	int pcnt = 0;
+#ifdef CAN_MUPDF
+	if (mdoc) {
+		fzTry(mctx) {
+			pcnt = fzCountPages(mctx, mdoc);
+		} fzCatch(mctx) {}
+	}
+#endif
+#ifdef CAN_POPPLER
+	if (pdoc)
+		pcnt = popplerDocumentGetNPages(pdoc);
+#endif
+	return pcnt;
+}
+
+SDL_Surface* PdfFile::renderPage(int pid) {
+	SDL_Surface* pic = nullptr;
+#ifdef CAN_MUPDF
+	if (mdoc) {
+		fz_matrix ctm = fzScale(1.f, 1.f);
+		fz_pixmap* pm;
+		fzTry(mctx) {
+			pm = fzNewPixmapFromPageNumber(mctx, mdoc, pid, ctm, fzDeviceRgb(mctx), 0);
+			if (pm->n == 3 + pm->alpha)
+				if (pic = SDL_CreateRGBSurfaceWithFormat(0, pm->w, pm->h, pm->n * 8, pm->alpha ? SDL_PIXELFORMAT_ABGR8888 : SDL_PIXELFORMAT_RGB24); pic)
+					copyPixels(pic->pixels, pm->samples, pic->pitch, pm->stride, pic->w * pic->format->BytesPerPixel, pic->h);
+			fzDropPixmap(mctx, pm);
+		} fzCatch(mctx) {}
+	}
+#endif
+#ifdef CAN_POPPLER
+	if (pdoc && !pic) {
+		dvec2 size;
+		PopplerPage* page = popplerDocumentGetPage(pdoc, pid);
+		popplerPageGetSize(page, &size.x, &size.y);
+		cairo_surface_t* tgt = cairoPdfSurfaceCreate(nullptr, size.x, size.y);
+		cairo_t* ctx = cairoCreate(tgt);
+		cairoSurfaceDestroy(tgt);
+		popplerPageRender(page, ctx);
+		cairo_surface_t* img = cairoSurfaceMapToImage(tgt, nullptr);
+		if (cairo_format_t fmt = cairoImageSurfaceGetFormat(img); fmt == CAIRO_FORMAT_ARGB32 || fmt == CAIRO_FORMAT_RGB24)
+			if (pic = SDL_CreateRGBSurfaceWithFormat(0, cairoImageSurfaceGetWidth(img), cairoImageSurfaceGetHeight(img), fmt == CAIRO_FORMAT_ARGB32 ? 32 : 24, fmt == CAIRO_FORMAT_ARGB32 ? SDL_PIXELFORMAT_ABGR8888 : SDL_PIXELFORMAT_RGB24); pic)
+				copyPixels(pic->pixels, cairoImageSurfaceGetData(img), pic->pitch, cairoImageSurfaceGetStride(img), pic->w * pic->format->BytesPerPixel, pic->h);
+		cairoSurfaceUnmapImage(tgt, img);
+		cairoDestroy(ctx);
+		gObjectUnref(page);
+	}
+#endif
+	return pic;
+}
+
+bool PdfFile::canOpen(SDL_RWops* ops) {
+	byte_t sig[signature.size()];
+	bool ok = SDL_RWread(ops, sig, 1, sizeof(sig)) == sizeof(sig) && rng::equal(sig, signature);
+	SDL_RWclose(ops);
+#if defined(CAN_MUPDF) && defined(CAN_POPPLER)
+	return ok && (symMupdf() || symPoppler());
+#elif defined(CAN_MUPDF)
+	return ok && symMupdf();
+#else
+	return ok && symPoppler();
+#endif
+}
+#endif

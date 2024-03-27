@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(CAN_SECRET) || defined(CAN_PDF)
+#if defined(CAN_SECRET) || defined(CAN_POPPLER)
 #include <glib-object.h>
 
 extern decltype(g_object_unref)* gObjectUnref;

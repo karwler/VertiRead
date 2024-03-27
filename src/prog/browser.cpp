@@ -4,10 +4,6 @@
 #include "engine/fileSys.h"
 #include "engine/world.h"
 #include "utils/compare.h"
-#ifdef CAN_PDF
-#include "engine/optional/glib.h"
-#include "engine/optional/poppler.h"
-#endif
 #include <functional>
 #include <archive.h>
 #include <archive_entry.h>
@@ -66,14 +62,14 @@ auto Browser::beginRemoteOps(const RemoteLocation& location, vector<string>&& pa
 	}
 }
 
-void Browser::start(string&& root, const RemoteLocation& location, vector<string>&& passwords) {
+void Browser::startFs(string&& root, const RemoteLocation& location, vector<string>&& passwords) {
 	beginRemoteOps(location, std::move(passwords), [this, &root](FileOps* backup, const RemoteLocation& rl) {
-		start(std::move(root), valcp(rl.path));
+		startFs(std::move(root), valcp(rl.path));
 		delete backup;
 	});
 }
 
-void Browser::start(string&& root, string&& path) {
+void Browser::startFs(string&& root, string&& path) {
 	if (root.empty())
 		root = fsop->prefix();
 	else if (!fsop->isDirectory(root))
@@ -315,7 +311,7 @@ string Browser::nextArchiveFile(string_view file, bool fwd) {
 
 string Browser::nextPdfPage(string_view file, bool fwd) {
 	string ret;
-#ifdef CAN_PDF
+#if defined(CAN_MUPDF) || defined(CAN_POPPLER)
 	PdfFile pdf;
 	string error;
 	if (inArchive()) {
@@ -333,11 +329,9 @@ string Browser::nextPdfPage(string_view file, bool fwd) {
 	} else
 		pdf = fsop->loadPdf(curDir, &error);
 
-	if (pdf.pdoc) {
-		if (int pcnt = popplerDocumentGetNPages(pdf.pdoc); pcnt > 0)
-			if (uint npage = toNum<uint>(file) + (fwd ? 1 : -1); npage < uint(pcnt))
-				ret = toStr(npage);
-		gObjectUnref(pdf.pdoc);
+	if (int pcnt = pdf.numPages(); pcnt > 0) {
+		if (uint npage = toNum<uint>(file) + (fwd ? 1 : -1); npage < uint(pcnt))
+			ret = toStr(npage);
 	} else if (!error.empty())
 		logError(error);
 #endif
@@ -537,9 +531,9 @@ void Browser::previewDirThread(std::stop_token stoken, FileOps* fsop, string cur
 				archive_read_free(arch);
 			}
 		}
-#ifdef CAN_PDF
-		else if (PdfFile pdf = fsop->loadPdf(fpath); pdf.pdoc)
-			previewPdf(stoken, pdf.pdoc, maxHeight, it.data());
+#if defined(CAN_MUPDF) || defined(CAN_POPPLER)
+		else if (PdfFile pdf = fsop->loadPdf(fpath))
+			previewPdf(stoken, pdf, maxHeight, it.data());
 #endif
 	}
 	pushEvent(SDL_USEREVENT_THREAD_PREVIEW, ThreadEvent::finished);
@@ -583,9 +577,9 @@ void Browser::previewArchThread(std::stop_token stoken, FileOps* fsop, ArchiveDa
 					} else if (SDL_Surface* img = combineIcons(dicon.get(), FileOps::loadArchivePicture(arch, entry)))
 						pushEvent(SDL_USEREVENT_THREAD_PREVIEW, ThreadEvent::progress, allocatePreviewName(filename(parentPath(pit->first)), false), img);
 				}
-#ifdef CAN_PDF
-				else if (PdfFile pdf = FileOps::loadArchivePdf(arch, entry); pdf.pdoc)
-					previewPdf(stoken, pdf.pdoc, maxHeight, filename(pit->first));
+#if defined(CAN_MUPDF) || defined(CAN_POPPLER)
+				else if (PdfFile pdf = FileOps::loadArchivePdf(arch, entry))
+					previewPdf(stoken, pdf, maxHeight, filename(pit->first));
 #endif
 				entries.erase(pit);
 			}
@@ -595,29 +589,14 @@ void Browser::previewArchThread(std::stop_token stoken, FileOps* fsop, ArchiveDa
 	pushEvent(SDL_USEREVENT_THREAD_PREVIEW, ThreadEvent::finished);
 }
 
-#ifdef CAN_PDF
-void Browser::previewPdf(std::stop_token stoken, PopplerDocument* doc, int maxHeight, string_view fname) {
-	for (int i = 0, pcnt = popplerDocumentGetNPages(doc); i < pcnt; ++i) {
-		PopplerPage* page = popplerDocumentGetPage(doc, i);
-		for (auto& [pos, id] : getPdfPageImagesInfo(page)) {
-			if (stoken.stop_requested()) {
-				gObjectUnref(page);
-				gObjectUnref(doc);
-				return;
-			}
-
-			cairo_surface_t* img = popplerPageGetImage(page, id);
-			SDL_Surface* pic = scaleDown(cairoImageToSdl(img), maxHeight);
-			cairoSurfaceDestroy(img);
-			if (pic) {
-				pushEvent(SDL_USEREVENT_THREAD_PREVIEW, ThreadEvent::progress, allocatePreviewName(fname, true), pic);
-				i = pcnt - 1;
-				break;
-			}
+#if defined(CAN_MUPDF) || defined(CAN_POPPLER)
+void Browser::previewPdf(std::stop_token stoken, PdfFile& pdf, int maxHeight, string_view fname) {
+	int pcnt = pdf.numPages();
+	for (int i = 0; i < pcnt && !stoken.stop_requested(); ++i)
+		if (SDL_Surface* pic = scaleDown(pdf.renderPage(i), maxHeight)) {
+			pushEvent(SDL_USEREVENT_THREAD_PREVIEW, ThreadEvent::progress, allocatePreviewName(fname, true), pic);
+			break;
 		}
-		gObjectUnref(page);
-	}
-	gObjectUnref(doc);
 }
 #endif
 
@@ -660,9 +639,9 @@ void Browser::startLoadPictures(BrowserResultPicture* rp, bool fwd) {
 	stopThread();
 	curThread = ThreadType::reader;
 	uint compress = World::sets()->compression != Settings::Compression::b16 ? 1 : 2;
-#ifdef CAN_PDF
+#if defined(CAN_MUPDF) || defined(CAN_POPPLER)
 	if (rp->pdf)
-		thread = std::jthread(&Browser::loadPicturesPdfThread, rp, fsop, World::sets()->picLim, compress, World::sets()->pdfImages, fwd);
+		thread = std::jthread(&Browser::loadPicturesPdfThread, rp, fsop, World::sets()->picLim, compress, fwd);
 	else
 #endif
 	if (rp->hasArchive())
@@ -782,8 +761,8 @@ void Browser::loadPicturesArchThread(std::stop_token stoken, BrowserResultPictur
 	pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::finished, rp, std::bit_cast<void*>(uintptr_t(fwd)));	// even if the thread was cancelled push this event so the textures can be freed in the main thread
 }
 
-#ifdef CAN_PDF
-void Browser::loadPicturesPdfThread(std::stop_token stoken, BrowserResultPicture* rp, FileOps* fsop, PicLim picLim, uint compress, bool imageOnly, bool fwd) {
+#if defined(CAN_MUPDF) || defined(CAN_POPPLER)
+void Browser::loadPicturesPdfThread(std::stop_token stoken, BrowserResultPicture* rp, FileOps* fsop, PicLim picLim, uint compress, bool fwd) {
 	PdfFile pdf;
 	if (rp->hasArchive()) {
 		if (archive* arch = fsop->openArchive(rp->arch, &rp->error)) {
@@ -800,10 +779,10 @@ void Browser::loadPicturesPdfThread(std::stop_token stoken, BrowserResultPicture
 	} else
 		pdf = fsop->loadPdf(rp->curDir, &rp->error);
 
-	int pcnt;
-	if (!pdf.pdoc || (pcnt = popplerDocumentGetNPages(pdf.pdoc)) <= 0) {
+	int pcnt = pdf.numPages();
+	if (!pdf || pcnt <= 0) {
 		if (rp->error.empty())
-			rp->error = pdf.pdoc ? "No pages" : "Failed to load PDF file";
+			rp->error = pdf ? "No pages" : "Failed to load PDF file";
 		rp->rc = ResultCode::error;
 		pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::finished, rp);
 		return;
@@ -817,86 +796,22 @@ void Browser::loadPicturesPdfThread(std::stop_token stoken, BrowserResultPicture
 	size_t c = 0;
 	size_t texCnt = 0;
 
-	auto processImage = [rp, &c, &m, &texCnt, &picLim, &progLim, sizMag, compress](cairo_surface_t* img, uint pid) -> bool {
-		if (SDL_Surface* pic = World::drawSys()->getRenderer()->makeCompatible(cairoImageToSdl(img), true)) {
-			rp->mpic.lock();
-			rp->pics.emplace_back(toStr(pid), nullptr);
-			rp->mpic.unlock();
-			m += uintptr_t(pic->w) * uintptr_t(pic->h) * 4 / compress;
-			pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::progress, new BrowserPictureProgress(rp, pic, texCnt++), progressText(limitToStr(picLim, c + 1, m, sizMag), progLim));
-			return true;
-		}
-		return false;
-	};
-
 	for (uint mov = btom<uint>(fwd), i = start; i < uint(pcnt) && c < lim && m < mem; i += mov) {
 		if (stoken.stop_requested()) {
 			rp->rc = ResultCode::stop;
 			break;
 		}
 
-		PopplerPage* page = popplerDocumentGetPage(pdf.pdoc, i);
-		if (imageOnly) {
-			bool hit = false;
-			for (auto& [pos, id] : getPdfPageImagesInfo(page)) {
-				cairo_surface_t* img = popplerPageGetImage(page, id);
-				hit |= processImage(img, i);
-				cairoSurfaceDestroy(img);
-			}
-			c += hit;
-		} else {
-			dvec2 size;
-			popplerPageGetSize(page, &size.x, &size.y);
-			cairo_surface_t* tgt = cairoPdfSurfaceCreate(nullptr, size.x, size.y);
-			cairo_t* ctx = cairoCreate(tgt);
-			cairoSurfaceDestroy(tgt);
-			popplerPageRender(page, ctx);
-			cairo_surface_t* img = cairoSurfaceMapToImage(tgt, nullptr);
-			c += processImage(img, i);
-			cairoSurfaceUnmapImage(tgt, img);
-			cairoDestroy(ctx);
+		if (SDL_Surface* pic = World::drawSys()->getRenderer()->makeCompatible(pdf.renderPage(i), true)) {
+			rp->mpic.lock();
+			rp->pics.emplace_back(toStr(i), nullptr);
+			rp->mpic.unlock();
+			m += uintptr_t(pic->w) * uintptr_t(pic->h) * 4 / compress;
+			++c;
+			pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::progress, new BrowserPictureProgress(rp, pic, texCnt++), progressText(limitToStr(picLim, c + 1, m, sizMag), progLim));
 		}
-		gObjectUnref(page);
 	}
-	gObjectUnref(pdf.pdoc);
 	pushEvent(SDL_USEREVENT_THREAD_READER, ThreadEvent::finished, rp, std::bit_cast<void*>(uintptr_t(fwd)));	// even if the thread was cancelled push this event so the textures can be freed in the main thread
-}
-
-vector<pair<dvec2, int>> Browser::getPdfPageImagesInfo(PopplerPage* page) {
-	vector<pair<dvec2, int>> positions;
-	GList* imaps = popplerPageGetImageMapping(page);
-	for (GList* it = imaps; it; it = it->next) {
-		auto im = static_cast<PopplerImageMapping*>(it->data);
-		positions.emplace_back(dvec2(im->area.x1, im->area.y1), im->image_id);
-	}
-	popplerPageFreeImageMapping(imaps);
-	rng::sort(positions, [](const pair<const dvec2, int>& a, const pair<const dvec2, int>& b) -> bool { return a.first.y < b.first.y || (a.first.y == b.first.y && a.first.x < b.first.x); });
-	return positions;
-}
-
-SDL_Surface* Browser::cairoImageToSdl(cairo_surface_t* img) {
-	if (cairo_format_t fmt = cairoImageSurfaceGetFormat(img); fmt == CAIRO_FORMAT_ARGB32 || fmt == CAIRO_FORMAT_RGB24)
-		if (SDL_Surface* pic = SDL_CreateRGBSurfaceWithFormat(0, cairoImageSurfaceGetWidth(img), cairoImageSurfaceGetHeight(img), 32, SDL_PIXELFORMAT_BGRA32)) {
-			uchar* src = cairoImageSurfaceGetData(img);
-			auto dst = static_cast<uint8*>(pic->pixels);
-			uint rlen = pic->w * 4;
-			int spitch = cairoImageSurfaceGetStride(img);
-			if (fmt == CAIRO_FORMAT_ARGB32) {
-				for (int y = 0; y < pic->h; ++y, src += spitch, dst += pic->pitch)
-					std::copy_n(src, rlen, dst);
-			} else
-				for (int y = 0; y < pic->h; ++y, src += spitch, dst += pic->pitch) {
-					std::copy_n(src, rlen, dst);
-					for (int x = 0; x < pic->w; ++x) {
-						if constexpr (std::endian::native == std::endian::little)
-							dst[x * 4 + 3] = UINT8_MAX;
-						else
-							dst[x * 4] = UINT8_MAX;
-					}
-				}
-			return pic;
-		}
-	return nullptr;
 }
 #endif
 

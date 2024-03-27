@@ -226,6 +226,17 @@ tm currentDateTime() {
 	return tim;
 }
 
+void copyPixels(void* dst, const void* src, uint dpitch, uint spitch, uint bwidth, uint height) {
+	if (dpitch == spitch)
+		memcpy(dst, src, size_t(dpitch) * size_t(height));
+	else {
+		auto dp = static_cast<uint8*>(dst);
+		auto sp = static_cast<const uint8*>(src);
+		for (uint r = 0; r < height; ++r, dp += dpitch, sp += spitch)
+			memcpy(dp, sp, bwidth);
+	}
+}
+
 #ifdef _WIN32
 static bool hasDriveLetter(const char* path) {
 	return ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':';

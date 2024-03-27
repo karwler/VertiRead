@@ -92,7 +92,6 @@ public:
 protected:
 	static SDL_Surface* convertReplace(SDL_Surface* img, SDL_PixelFormatEnum format = SDL_PIXELFORMAT_ABGR8888);
 	static SDL_Surface* limitSize(SDL_Surface* img, uint32 limit);	// scales down the image so that it's width/height fits within the limit
-	static void copyPixels(byte_t* dst, const byte_t* src, uint dpitch, uint spitch, uint bwidth, uint height);
 	static Rectf cropTexRect(const Recti& isct, const Recti& rect, uvec2 texRes);
 	static void recommendPicRamLimit(uintptr_t& mem);
 };
