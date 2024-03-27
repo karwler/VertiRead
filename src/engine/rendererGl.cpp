@@ -97,7 +97,7 @@ void FunctionsGl3::initFunctions() {
 
 // RENDERER GL
 
-RendererGl::SurfaceInfo::SurfaceInfo(SDL_Surface* surface, uint16 internal, uint16 format, uint16 texel) :
+RendererGl::SurfaceInfo::SurfaceInfo(SDL_Surface* surface, uint16 internal, uint16 format, uint16 texel) noexcept :
 	img(surface),
 	ifmt(internal),
 	pfmt(format),
@@ -116,38 +116,44 @@ RendererGl::RendererGl() :
 	hasTextureCompression = core;
 }
 
-template <Class T>
-T* RendererGl::setContext(View* view) {
-	auto vw = static_cast<T*>(view);
+void RendererGl::setContext(View* view) {
+	auto vw = static_cast<ViewGl*>(view);
 #ifdef _WIN32
 	cvw = vw;
 #endif
 	if (SDL_GL_MakeCurrent(vw->win, vw->ctx))
 		throw std::runtime_error(SDL_GetError());
-	return vw;
 }
 
 template <Class T, class F>
 void RendererGl::initContexts(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, F initGl) {
-	if (isSingleWindow(windows)) {
-		SDL_GL_GetDrawableSize(windows.begin()->second, &viewRes.x, &viewRes.y);
-		auto vw = static_cast<T*>(views.emplace(singleDspId, new T(windows.begin()->second, Recti(ivec2(0), viewRes))).first->second);
-		if (vw->ctx = SDL_GL_CreateContext(vw->win); !vw->ctx)
-			throw std::runtime_error(std::format("Failed to create context:" LINEND "{}", SDL_GetError()));
-		setContext(vw);
-		initGl(vw);
-	} else {
-		views.reserve(windows.size());
-		for (auto [id, win] : windows) {
-			Recti wrect = sets->displays.at(id).translate(-origin);
-			SDL_GL_GetDrawableSize(windows.begin()->second, &wrect.w, &wrect.h);
-			viewRes = glm::max(viewRes, wrect.end());
-			auto vw = static_cast<T*>(views.emplace(id, new T(win, wrect)).first->second);
-			if (vw->ctx = SDL_GL_CreateContext(win); !vw->ctx)
+	T* vtmp = nullptr;
+	try {
+		if (isSingleWindow(windows)) {
+			SDL_GL_GetDrawableSize(windows.begin()->second, &viewRes.x, &viewRes.y);
+			auto vw = static_cast<T*>(views.emplace(singleDspId, vtmp = new T(windows.begin()->second, Recti(ivec2(0), viewRes))).first->second);
+			vtmp = nullptr;
+			if (vw->ctx = SDL_GL_CreateContext(vw->win); !vw->ctx)
 				throw std::runtime_error(std::format("Failed to create context:" LINEND "{}", SDL_GetError()));
 			setContext(vw);
 			initGl(vw);
+		} else {
+			views.reserve(windows.size());
+			for (auto [id, win] : windows) {
+				Recti wrect = sets->displays.at(id).translate(-origin);
+				SDL_GL_GetDrawableSize(windows.begin()->second, &wrect.w, &wrect.h);
+				viewRes = glm::max(viewRes, wrect.end());
+				auto vw = static_cast<T*>(views.emplace(id, vtmp = new T(win, wrect)).first->second);
+				vtmp = nullptr;
+				if (vw->ctx = SDL_GL_CreateContext(win); !vw->ctx)
+					throw std::runtime_error(std::format("Failed to create context:" LINEND "{}", SDL_GetError()));
+				setContext(vw);
+				initGl(vw);
+			}
 		}
+	} catch (...) {
+		delete vtmp;
+		throw;
 	}
 }
 
@@ -364,11 +370,12 @@ bool RendererGl::texFromText(Texture* tex, const PixmapRgba& pm) {
 	return false;
 }
 
-void RendererGl::freeTexture(Texture* tex) {
-	gfget
-	auto gtx = static_cast<TextureGl*>(tex);
-	gl.deleteTextures(1, &gtx->id);
-	delete gtx;
+void RendererGl::freeTexture(Texture* tex) noexcept {
+	if (auto gtx = static_cast<TextureGl*>(tex)) {
+		gfget
+		gl.deleteTextures(1, &gtx->id);
+		delete gtx;
+	}
 }
 
 GLuint RendererGl::initTexture(GLint filter) {
@@ -399,7 +406,7 @@ void RendererGl::uploadTexture(TextureGl* tex, const PixmapRgba& pm) {
 }
 
 template <bool keep>
-RendererGl::SurfaceInfo RendererGl::pickPixFormat(SDL_Surface* img) const {
+RendererGl::SurfaceInfo RendererGl::pickPixFormat(SDL_Surface* img) const noexcept {
 	if (!img)
 		return SurfaceInfo();
 
@@ -523,7 +530,7 @@ void RendererGl::setCompression(Settings::Compression compression) {
 
 // RENDERER GL 1
 
-RendererGl1::ViewGl1::ViewGl1(SDL_Window* window, const Recti& area) :
+RendererGl1::ViewGl1::ViewGl1(SDL_Window* window, const Recti& area) noexcept :
 	ViewGl(window, area),
 	proj(glm::ortho(float(area.x), float(area.x + area.w), float(area.y + area.h), float(area.y)))
 {}
@@ -533,24 +540,25 @@ RendererGl1::RendererGl1(const umap<int, SDL_Window*>& windows, Settings* sets, 
 	gl.initFunctions();
 	gl1.initFunctions();
 #endif
-	bool canTexRect = true;
-	uintptr_t availableMemory = 0;
-	initContexts<ViewGl1>(windows, sets, viewRes, origin, [this, sets, bgcolor, &canTexRect, &availableMemory](ViewGl1* vw) { initGl(vw, sets->vsync, bgcolor, canTexRect, availableMemory); });
-	for (auto [id, view] : views) {
-		setContext(view);
-		gfget
-		gl.enable(texType);
+	try {
+		bool canTexRect = true;
+		uintptr_t availableMemory = 0;
+		initContexts<ViewGl1>(windows, sets, viewRes, origin, [this, sets, bgcolor, &canTexRect, &availableMemory](ViewGl1* vw) { initGl(vw, sets->vsync, bgcolor, canTexRect, availableMemory); });
+		for (auto [id, view] : views) {
+			setContext(view);
+			gfget
+			gl.enable(texType);
+		}
+		finalizeConstruction(sets, availableMemory);
+		sets->gpuSelecting = false;
+	} catch (...) {
+		cleanup();
+		throw;
 	}
-	finalizeConstruction(sets, availableMemory);
-	sets->gpuSelecting = false;
 }
 
 RendererGl1::~RendererGl1() {
-	for (auto [id, view] : views) {
-		auto vw = static_cast<ViewGl1*>(view);
-		SDL_GL_DeleteContext(vw->ctx);
-		delete vw;
-	}
+	cleanup();
 }
 
 void RendererGl1::initGl(ViewGl1* view, bool vsync, const vec4& bgcolor, bool& canTexRect, uintptr_t& availableMemory) {
@@ -584,6 +592,14 @@ void RendererGl1::initGl(ViewGl1* view, bool vsync, const vec4& bgcolor, bool& c
 	gl1.texCoordPointer(vec2::length(), GL_FLOAT, 0, vertices.data());
 }
 
+void RendererGl1::cleanup() noexcept {
+	for (auto [id, view] : views) {
+		auto vw = static_cast<ViewGl1*>(view);
+		SDL_GL_DeleteContext(vw->ctx);
+		delete vw;
+	}
+}
+
 void RendererGl1::updateView(ivec2& viewRes) {
 	if (views.size() == 1) {
 		auto vw = static_cast<ViewGl1*>(views.begin()->second);
@@ -596,15 +612,15 @@ void RendererGl1::updateView(ivec2& viewRes) {
 }
 
 void RendererGl1::startDraw(View* view) {
-	ViewGl1* vw = setContext<ViewGl1>(view);
+	setContext(view);
 	gf1get
 	gl.clear(GL_COLOR_BUFFER_BIT);
 	gl1.matrixMode(GL_PROJECTION);
-	gl1.loadMatrixf(glm::value_ptr(vw->proj));
+	gl1.loadMatrixf(glm::value_ptr(static_cast<ViewGl1*>(view)->proj));
 }
 
 void RendererGl1::drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) {
-	if (Recti isct; SDL_IntersectRect(reinterpret_cast<const SDL_Rect*>(&rect), reinterpret_cast<const SDL_Rect*>(&frame), reinterpret_cast<SDL_Rect*>(&isct))) {
+	if (Recti isct; SDL_IntersectRect(&rect.asRect(), &frame.asRect(), &isct.asRect())) {
 		gf1get
 
 		setPosScale(model, isct);
@@ -653,14 +669,46 @@ RendererGl3::RendererGl3(const umap<int, SDL_Window*>& windows, Settings* sets, 
 	gl.initFunctions();
 	gl3.initFunctions();
 #endif
-	uintptr_t availableMemory = 0;
-	initContexts<ViewGl3>(windows, sets, viewRes, origin, [this, sets, bgcolor, &availableMemory](ViewGl3* vw) { initGl(vw, sets->vsync, bgcolor, availableMemory); });
-	initShader();
-	finalizeConstruction(sets, availableMemory);
+	try {
+		uintptr_t availableMemory = 0;
+		initContexts<ViewGl3>(windows, sets, viewRes, origin, [this, sets, bgcolor, &availableMemory](ViewGl3* vw) { initGl(vw, sets->vsync, bgcolor, availableMemory); });
+		initShader();
+		finalizeConstruction(sets, availableMemory);
+	} catch (...) {
+		cleanup();
+		throw;
+	}
 }
 
 RendererGl3::~RendererGl3() {
-#ifdef  _WIN32
+	cleanup();
+}
+
+void RendererGl3::initGl(ViewGl3* view, bool vsync, const vec4& bgcolor, uintptr_t& availableMemory) {
+#ifdef _WIN32
+	gf3get
+	gl.initFunctions();
+	gl3.initFunctions();
+#endif
+	if (core) {
+		if (SDL_GL_ExtensionSupported("GL_NVX_gpu_memory_info")) {
+			int mem;
+			if (gl.getIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, &mem); uint(mem) > availableMemory)
+				availableMemory = mem;
+		} else if (SDL_GL_ExtensionSupported("GL_ATI_meminfo")) {
+			int mem[4];
+			if (gl.getIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, mem); uint(mem[0]) > availableMemory)
+				availableMemory = mem[0];
+		}
+	} else
+		hasBgra = hasBgra && SDL_GL_ExtensionSupported("GL_MESA_bgra");
+
+	initGlCommon(view, vsync, bgcolor);
+	gl.disable(GL_DITHER);
+}
+
+void RendererGl3::cleanup() noexcept {
+#ifdef _WIN32
 	if (!cvw)
 		return;
 #endif
@@ -694,29 +742,6 @@ RendererGl3::~RendererGl3() {
 		}
 		gf3set
 	}
-}
-
-void RendererGl3::initGl(ViewGl3* view, bool vsync, const vec4& bgcolor, uintptr_t& availableMemory) {
-#ifdef _WIN32
-	gf3get
-	gl.initFunctions();
-	gl3.initFunctions();
-#endif
-	if (core) {
-		if (SDL_GL_ExtensionSupported("GL_NVX_gpu_memory_info")) {
-			int mem;
-			if (gl.getIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, &mem); uint(mem) > availableMemory)
-				availableMemory = mem;
-		} else if (SDL_GL_ExtensionSupported("GL_ATI_meminfo")) {
-			int mem[4];
-			if (gl.getIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, mem); uint(mem[0]) > availableMemory)
-				availableMemory = mem[0];
-		}
-	} else
-		hasBgra = hasBgra && SDL_GL_ExtensionSupported("GL_MESA_bgra");
-
-	initGlCommon(view, vsync, bgcolor);
-	gl.disable(GL_DITHER);
 }
 
 void RendererGl3::initShader() {

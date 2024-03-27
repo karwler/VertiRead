@@ -12,8 +12,9 @@ RendererDx11::RendererDx11(const umap<int, SDL_Window*>& windows, Settings* sets
 {
 	IDXGIFactory* factory = createFactory();
 	IDXGIAdapter* adapter = nullptr;
-	DXGI_ADAPTER_DESC adapterDesc;
+	ViewDx* vtmp = nullptr;
 	try {
+		DXGI_ADAPTER_DESC adapterDesc;
 #ifdef NDEBUG
 		uint flags = 0;
 #else
@@ -54,7 +55,8 @@ RendererDx11::RendererDx11(const umap<int, SDL_Window*>& windows, Settings* sets
 #else
 			SDL_GetWindowSize(windows.begin()->second, &viewRes.x, &viewRes.y);
 #endif
-			auto vw = static_cast<ViewDx*>(views.emplace(singleDspId, new ViewDx(windows.begin()->second, Recti(ivec2(0), viewRes))).first->second);
+			auto vw = static_cast<ViewDx*>(views.emplace(singleDspId, vtmp = new ViewDx(windows.begin()->second, Recti(ivec2(0), viewRes))).first->second);
+			vtmp = nullptr;
 			std::tie(vw->sc, vw->tgt) = createSwapchain(factory, windows.begin()->second, viewRes);
 		} else {
 			views.reserve(windows.size());
@@ -66,80 +68,87 @@ RendererDx11::RendererDx11(const umap<int, SDL_Window*>& windows, Settings* sets
 				SDL_GetWindowSize(win, &wrect.w, &wrect.h);
 #endif
 				viewRes = glm::max(viewRes, wrect.end());
-				auto vw = static_cast<ViewDx*>(views.emplace(id, new ViewDx(win, wrect)).first->second);
+				auto vw = static_cast<ViewDx*>(views.emplace(id, vtmp = new ViewDx(win, wrect)).first->second);
+				vtmp = nullptr;
 				std::tie(vw->sc, vw->tgt) = createSwapchain(factory, win, wrect.size());
 			}
 		}
 		comRelease(factory);
-	} catch (const std::runtime_error&) {
+
+		D3D11_BLEND_DESC blendDesc = {
+			.RenderTarget = { {
+				.BlendEnable = TRUE,
+				.SrcBlend = D3D11_BLEND_SRC_ALPHA,
+				.DestBlend = D3D11_BLEND_INV_SRC_ALPHA,
+				.BlendOp = D3D11_BLEND_OP_ADD,
+				.SrcBlendAlpha = D3D11_BLEND_ONE,
+				.DestBlendAlpha = D3D11_BLEND_ZERO,
+				.BlendOpAlpha = D3D11_BLEND_OP_ADD,
+				.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL
+			} }
+		};
+		if (HRESULT rs = dev->CreateBlendState(&blendDesc, &blendState); FAILED(rs))
+			throw std::runtime_error(std::format("Failed to create blend state: {}", hresultToStr(rs)));
+		ctx->OMSetBlendState(blendState, nullptr, 0xFFFFFFFF);
+
+		D3D11_RASTERIZER_DESC rasterizerDesc = {
+			.FillMode = D3D11_FILL_SOLID,
+			.CullMode = D3D11_CULL_NONE,
+			.DepthClipEnable = TRUE,
+			.ScissorEnable = FALSE
+		};
+		if (HRESULT rs = dev->CreateRasterizerState(&rasterizerDesc, &rasterizerGui); FAILED(rs))
+			throw std::runtime_error(std::format("Failed to create graphics rasterizer: {}", hresultToStr(rs)));
+		ctx->RSSetState(rasterizerGui);
+
+		rasterizerDesc.ScissorEnable = TRUE;
+		if (HRESULT rs = dev->CreateRasterizerState(&rasterizerDesc, &rasterizerSel); FAILED(rs))
+			throw std::runtime_error(std::format("Failed to create address rasterizer: {}", hresultToStr(rs)));
+		D3D11_RECT scissor = { .left = 0, .top = 0, .right = 1, .bottom = 1 };
+		ctx->RSSetScissorRects(1, &scissor);
+
+		D3D11_SAMPLER_DESC samplerDesc = {
+			.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+			.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP,
+			.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP,
+			.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP,
+			.MaxAnisotropy = 1,
+			.ComparisonFunc = D3D11_COMPARISON_ALWAYS,
+			.MaxLOD = D3D11_FLOAT32_MAX
+		};
+		ID3D11SamplerState* sampleState;
+		if (HRESULT rs = dev->CreateSamplerState(&samplerDesc, &sampleState); FAILED(rs))
+			throw std::runtime_error(std::format("Failed to create sampler state: {}", hresultToStr(rs)));
+		ctx->PSSetSamplers(0, 1, &sampleState);
+		comRelease(sampleState);
+
+		initShader();
+		uint format;
+		canBgra5551 = SUCCEEDED(dev->CheckFormatSupport(DXGI_FORMAT_B5G5R5A1_UNORM, &format)) && (format & D3D11_FORMAT_SUPPORT_TEXTURE2D);
+		canBgr565 = SUCCEEDED(dev->CheckFormatSupport(DXGI_FORMAT_B5G6R5_UNORM, &format)) && (format & D3D11_FORMAT_SUPPORT_TEXTURE2D);
+		canBgra4 = SUCCEEDED(dev->CheckFormatSupport(DXGI_FORMAT_B4G4R4A4_UNORM, &format)) && (format & D3D11_FORMAT_SUPPORT_TEXTURE2D);
+		setCompression(sets->compression);
+		setMaxPicRes(sets->maxPicRes);
+		if (!sets->picLim.size) {
+			if (adapterDesc.DedicatedVideoMemory)
+				sets->picLim.size = adapterDesc.DedicatedVideoMemory / 2;
+			else
+				recommendPicRamLimit(sets->picLim.size);
+		}
+	} catch (...) {
 		comRelease(factory);
 		comRelease(adapter);
+		delete vtmp;
+		cleanup();
 		throw;
-	}
-
-	D3D11_BLEND_DESC blendDesc = {
-		.RenderTarget = { {
-			.BlendEnable = TRUE,
-			.SrcBlend = D3D11_BLEND_SRC_ALPHA,
-			.DestBlend = D3D11_BLEND_INV_SRC_ALPHA,
-			.BlendOp = D3D11_BLEND_OP_ADD,
-			.SrcBlendAlpha = D3D11_BLEND_ONE,
-			.DestBlendAlpha = D3D11_BLEND_ZERO,
-			.BlendOpAlpha = D3D11_BLEND_OP_ADD,
-			.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL
-		} }
-	};
-	if (HRESULT rs = dev->CreateBlendState(&blendDesc, &blendState); FAILED(rs))
-		throw std::runtime_error(std::format("Failed to create blend state: {}", hresultToStr(rs)));
-	ctx->OMSetBlendState(blendState, nullptr, 0xFFFFFFFF);
-
-	D3D11_RASTERIZER_DESC rasterizerDesc = {
-		.FillMode = D3D11_FILL_SOLID,
-		.CullMode = D3D11_CULL_NONE,
-		.DepthClipEnable = TRUE,
-		.ScissorEnable = FALSE
-	};
-	if (HRESULT rs = dev->CreateRasterizerState(&rasterizerDesc, &rasterizerGui); FAILED(rs))
-		throw std::runtime_error(std::format("Failed to create graphics rasterizer: {}", hresultToStr(rs)));
-	ctx->RSSetState(rasterizerGui);
-
-	rasterizerDesc.ScissorEnable = TRUE;
-	if (HRESULT rs = dev->CreateRasterizerState(&rasterizerDesc, &rasterizerSel); FAILED(rs))
-		throw std::runtime_error(std::format("Failed to create address rasterizer: {}", hresultToStr(rs)));
-	D3D11_RECT scissor = { .left = 0, .top = 0, .right = 1, .bottom = 1 };
-	ctx->RSSetScissorRects(1, &scissor);
-
-	D3D11_SAMPLER_DESC samplerDesc = {
-		.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR,
-		.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP,
-		.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP,
-		.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP,
-		.MaxAnisotropy = 1,
-		.ComparisonFunc = D3D11_COMPARISON_ALWAYS,
-		.MaxLOD = D3D11_FLOAT32_MAX
-	};
-	ID3D11SamplerState* sampleState;
-	if (HRESULT rs = dev->CreateSamplerState(&samplerDesc, &sampleState); FAILED(rs))
-		throw std::runtime_error(std::format("Failed to create sampler state: {}", hresultToStr(rs)));
-	ctx->PSSetSamplers(0, 1, &sampleState);
-	comRelease(sampleState);
-
-	initShader();
-	uint format;
-	canBgra5551 = SUCCEEDED(dev->CheckFormatSupport(DXGI_FORMAT_B5G5R5A1_UNORM, &format)) && (format & D3D11_FORMAT_SUPPORT_TEXTURE2D);
-	canBgr565 = SUCCEEDED(dev->CheckFormatSupport(DXGI_FORMAT_B5G6R5_UNORM, &format)) && (format & D3D11_FORMAT_SUPPORT_TEXTURE2D);
-	canBgra4 = SUCCEEDED(dev->CheckFormatSupport(DXGI_FORMAT_B4G4R4A4_UNORM, &format)) && (format & D3D11_FORMAT_SUPPORT_TEXTURE2D);
-	setCompression(sets->compression);
-	setMaxPicRes(sets->maxPicRes);
-	if (!sets->picLim.size) {
-		if (adapterDesc.DedicatedVideoMemory)
-			sets->picLim.size = adapterDesc.DedicatedVideoMemory / 2;
-		else
-			recommendPicRamLimit(sets->picLim.size);
 	}
 }
 
 RendererDx11::~RendererDx11() {
+	cleanup();
+}
+
+void RendererDx11::cleanup() noexcept {
 	comRelease(tgtAddr);
 	comRelease(outAddr);
 	comRelease(texAddr);
@@ -368,7 +377,11 @@ void RendererDx11::setVsync(bool vsync) {
 
 void RendererDx11::updateView(ivec2& viewRes) {
 	if (views.size() == 1) {
+#if SDL_VERSION_ATLEAST(2, 26, 0)
+		SDL_GetWindowSizeInPixels(views.begin()->second->win, &viewRes.x, &viewRes.y);
+#else
 		SDL_GetWindowSize(views.begin()->second->win, &viewRes.x, &viewRes.y);
+#endif
 		views.begin()->second->rect.size() = viewRes;
 
 		IDXGIFactory* factory = createFactory();
@@ -395,7 +408,7 @@ void RendererDx11::startDraw(View* view) {
 }
 
 void RendererDx11::drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) {
-	uploadBuffer(instBuf, Instance{ rect.toVec(), frame.toVec() });
+	uploadBuffer(instBuf, Instance{ rect.asVec(), frame.asVec() });
 	uploadBuffer(instColorBuf, InstanceColor{ color });
 	ctx->PSSetShaderResources(0, 1, &static_cast<const TextureDx*>(tex)->view);
 	ctx->Draw(vertices.size(), 0);
@@ -424,7 +437,7 @@ void RendererDx11::startSelDraw(View* view, ivec2 pos) {
 }
 
 void RendererDx11::drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) {
-	uploadBuffer(instBuf, Instance{ rect.toVec(), frame.toVec() });
+	uploadBuffer(instBuf, Instance{ rect.asVec(), frame.asVec() });
 	uploadBuffer(instAddrBuf, InstanceAddr{ uvec2(uintptr_t(wgt), uintptr_t(wgt) >> 32) });
 	ctx->Draw(vertices.size(), 0);
 }
@@ -511,10 +524,11 @@ bool RendererDx11::texFromText(Texture* tex, const PixmapRgba& pm) {
 	return false;
 }
 
-void RendererDx11::freeTexture(Texture* tex) {
-	auto dtx = static_cast<TextureDx*>(tex);
-	comRelease(dtx->view);
-	delete dtx;
+void RendererDx11::freeTexture(Texture* tex) noexcept {
+	if (auto dtx = static_cast<TextureDx*>(tex)) {
+		comRelease(dtx->view);
+		delete dtx;
+	}
 }
 
 ID3D11ShaderResourceView* RendererDx11::createTexture(const byte_t* pix, uvec2 res, uint pitch, DXGI_FORMAT format) {
@@ -543,7 +557,7 @@ void RendererDx11::replaceTexture(TextureDx* tex, ID3D11ShaderResourceView* tvie
 	tex->view = tview;
 }
 
-pair<SDL_Surface*, DXGI_FORMAT> RendererDx11::pickPixFormat(SDL_Surface* img) const {
+pair<SDL_Surface*, DXGI_FORMAT> RendererDx11::pickPixFormat(SDL_Surface* img) const noexcept {
 	if (!img)
 		return pair(nullptr, DXGI_FORMAT_UNKNOWN);
 

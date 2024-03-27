@@ -97,12 +97,11 @@ public:
 	ScrollArea* fileList;
 	size_t dirEnd, fileEnd;
 
-	~ProgFileExplorer() override = default;
-
 	void eventHide() override;
 	void eventRefresh() override;
 	void processFileChanges(Browser* browser);
 
+	virtual void fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs, bool ok = true) = 0;
 protected:
 	virtual PushButton* makeDirectoryEntry(const Size& size, Cstring&& name) = 0;
 	virtual PushButton* makeFileEntry(const Size& size, Cstring&& name);
@@ -113,12 +112,11 @@ class ProgBooks final : public ProgFileExplorer {
 public:
 	PushButton* contextBook;	// for keeping track of right clicked button
 
-	~ProgBooks() override = default;
-
 	void eventSpecEscape() override;
 	void eventFileDrop(const char* file) override;
 
 	RootLayout* createLayout() override;
+	void fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs, bool ok = true) override;
 	PushButton* makeBookTile(Cstring&& name);
 protected:
 	PushButton* makeDirectoryEntry(const Size& size, Cstring&& name) override;
@@ -134,6 +132,7 @@ public:
 	void resetFileIcons();
 
 	RootLayout* createLayout() override;
+	void fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs, bool ok = true) override;
 protected:
 	PushButton* makeDirectoryEntry(const Size& size, Cstring&& name) override;
 	PushButton* makeFileEntry(const Size& size, Cstring&& name) override;
@@ -146,8 +145,6 @@ private:
 	static constexpr float scrollFactor = 2.f;
 
 public:
-	~ProgReader() override = default;
-
 	void eventSpecEscape() override;
 	void eventUp() override;
 	void eventDown() override;
@@ -224,11 +221,10 @@ class ProgSearchDir final : public ProgFileExplorer {
 public:
 	PushButton* selected = nullptr;
 
-	~ProgSearchDir() override = default;
-
 	void eventSpecEscape() override;
 
 	RootLayout* createLayout() override;
+	void fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs, bool ok = true) override;
 protected:
 	PushButton* makeDirectoryEntry(const Size& size, Cstring&& name) override;
 };

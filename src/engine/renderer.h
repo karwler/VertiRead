@@ -38,7 +38,7 @@ public:
 			Cstring name;
 			uintptr_t dmem;
 
-			Device(u32vec2 vendev, Cstring&& devname, uintptr_t memory = 0);
+			Device(u32vec2 vendev, Cstring&& devname, uintptr_t memory = 0) noexcept;
 		};
 
 		vector<Device> devices;
@@ -60,7 +60,7 @@ protected:
 	uint maxTextureSize;
 	uint maxPictureSize;	// should only get accessed from one thread at a time
 
-	Renderer(uint maxTexRes);
+	Renderer(uint maxTexRes) : maxTextureSize(maxTexRes) {}
 public:
 	virtual ~Renderer() = default;
 
@@ -82,24 +82,19 @@ public:
 	virtual Texture* texFromRpic(SDL_Surface* img) = 0;		// image must have been scaled down in advance
 	virtual Texture* texFromText(const PixmapRgba& pm) = 0;	// cuts off image if it's too large and uses nearest filter if possible
 	virtual bool texFromText(Texture* tex, const PixmapRgba& pm) = 0;	// ^ but refills tex and returns true if successful
-	virtual void freeTexture(Texture* tex) = 0;
+	virtual void freeTexture(Texture* tex) noexcept = 0;
 	virtual void synchTransfer() {}
 
 	const umap<int, View*>& getViews() const { return views; }
-	void setMaxPicRes(uint& size);
-	SDL_Surface* makeCompatible(SDL_Surface* img, bool rpic) const;	// converts the image to a format and size that can be directly handed to the graphics driver (must be thread safe)
+	void setMaxPicRes(uint& size) noexcept;
+	SDL_Surface* makeCompatible(SDL_Surface* img, bool rpic) const noexcept;	// converts the image to a format and size that can be directly handed to the graphics driver (must be thread safe)
 	static bool isSingleWindow(const umap<int, SDL_Window*>& windows);
 protected:
-	static SDL_Surface* convertReplace(SDL_Surface* img, SDL_PixelFormatEnum format = SDL_PIXELFORMAT_ABGR8888);
-	static SDL_Surface* limitSize(SDL_Surface* img, uint32 limit);	// scales down the image so that it's width/height fits within the limit
-	static void copyPixels(byte_t* dst, const byte_t* src, uint dpitch, uint spitch, uint bwidth, uint height);
-	static Rectf cropTexRect(const Recti& isct, const Recti& rect, uvec2 texRes);
-	static void recommendPicRamLimit(uintptr_t& mem);
+	static SDL_Surface* convertReplace(SDL_Surface* img, SDL_PixelFormatEnum format = SDL_PIXELFORMAT_ABGR8888) noexcept;
+	static SDL_Surface* limitSize(SDL_Surface* img, uint32 limit) noexcept;	// scales down the image so that it's width/height fits within the limit
+	static Rectf cropTexRect(const Recti& isct, const Recti& rect, uvec2 texRes) noexcept;
+	static void recommendPicRamLimit(uintptr_t& mem) noexcept;
 };
-
-inline Renderer::Renderer(uint maxTexRes) :
-	maxTextureSize(maxTexRes)
-{}
 
 inline bool Renderer::isSingleWindow(const umap<int, SDL_Window*>& windows) {
 	return windows.size() == 1 && windows.begin()->first == singleDspId;
@@ -142,9 +137,10 @@ public:
 	Texture* texFromRpic(SDL_Surface* img) override;
 	Texture* texFromText(const PixmapRgba& pm) override;
 	bool texFromText(Texture* tex, const PixmapRgba& pm) override;
-	void freeTexture(Texture* tex) override;
+	void freeTexture(Texture* tex) noexcept override;
 
 private:
+	void cleanup() noexcept;
 	static u8vec4 colorToBytes(const vec4& color);
 };
 

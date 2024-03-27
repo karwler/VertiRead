@@ -11,8 +11,7 @@
 
 template <Class T>
 TextDsp<T>::~TextDsp() {
-	if (textTex)
-		World::drawSys()->getRenderer()->freeTexture(textTex);
+	World::drawSys()->getRenderer()->freeTexture(textTex);
 }
 
 template <Class T>
@@ -38,9 +37,9 @@ void TextDsp<T>::recreateTextTex(string_view str, uint height, uint limit) {
 }
 
 template <Class T>
-ivec2 TextDsp<T>::alignedTextPos(ivec2 pos, int sizx, Alignment align) const {
+ivec2 TextDsp<T>::alignedTextPos(ivec2 pos, int sizx, Alignment align) const noexcept {
 	switch (align) {
-		using enum Alignment;
+	using enum Alignment;
 	case left:
 		return ivec2(pos.x + textMargin, pos.y);
 	case center:
@@ -51,7 +50,7 @@ ivec2 TextDsp<T>::alignedTextPos(ivec2 pos, int sizx, Alignment align) const {
 	return pos;
 }
 
-// SCROLL BAR
+// SCROLLABLE
 
 bool Scrollable::tick(float dSec) {
 	if (motion != vec2(0.f)) {
@@ -64,7 +63,7 @@ bool Scrollable::tick(float dSec) {
 	return false;
 }
 
-bool Scrollable::hold(ivec2 mPos, uint8 mBut, Widget* wgt, ivec2 pos, ivec2 size, bool vert) {
+bool Scrollable::hold(ivec2 mPos, uint8 mBut, Widget* wgt, ivec2 pos, ivec2 size, bool vert) noexcept {
 	bool moved = false;
 	motion = vec2(0.f);	// get rid of scroll motion
 	if (mBut == SDL_BUTTON_LEFT) {	// check scroll bar left click
@@ -80,14 +79,14 @@ bool Scrollable::hold(ivec2 mPos, uint8 mBut, Widget* wgt, ivec2 pos, ivec2 size
 	return moved;
 }
 
-void Scrollable::drag(ivec2 mPos, ivec2 mMov, ivec2 pos, bool vert) {
+void Scrollable::drag(ivec2 mPos, ivec2 mMov, ivec2 pos, bool vert) noexcept {
 	if (draggingSlider)
 		setSlider(mPos.y - diffSliderMouse, pos, vert);
 	else
 		moveListPos(mMov * vswap(0, -1, !vert));
 }
 
-void Scrollable::undrag(ivec2 mPos, uint8 mBut, bool vert) {
+void Scrollable::undrag(ivec2 mPos, uint8 mBut, bool vert) noexcept {
 	if (mBut == SDL_BUTTON_LEFT) {
 		if (!World::scene()->cursorInClickRange(mPos, mBut) && !draggingSlider)
 			motion = World::inputSys()->getMouseMove() * vswap(0, -1, !vert);
@@ -96,19 +95,19 @@ void Scrollable::undrag(ivec2 mPos, uint8 mBut, bool vert) {
 	}
 }
 
-void Scrollable::scroll(ivec2 wMov, bool vert) {
+void Scrollable::scroll(ivec2 wMov, bool vert) noexcept {
 	moveListPos(vswap(wMov.x, wMov.y, !vert));
 	motion = vec2(0.f);
 }
 
-void Scrollable::setLimits(ivec2 lsize, ivec2 wsize, bool vert) {
+void Scrollable::setLimits(ivec2 lsize, ivec2 wsize, bool vert) noexcept {
 	listSize = lsize;
 	listMax = ivec2(wsize.x < lsize.x ? lsize.x - wsize.x : 0, wsize.y < listSize.y ? lsize.y - wsize.y : 0);
 	sliderSize = wsize[vert] < lsize[vert] ? wsize[vert] * wsize[vert] / lsize[vert] : wsize[vert];
 	sliderMax = wsize[vert] - sliderSize;
 }
 
-void Scrollable::throttleMotion(float& mov, float dSec) {
+void Scrollable::throttleMotion(float& mov, float dSec) noexcept {
 	if (mov > 0.f) {
 		if (mov -= throttle * dSec; mov < 0.f)
 			mov = 0.f;
@@ -116,17 +115,17 @@ void Scrollable::throttleMotion(float& mov, float dSec) {
 		mov = 0.f;
 }
 
-void Scrollable::setSlider(int spos, ivec2 pos, bool vert) {
+void Scrollable::setSlider(int spos, ivec2 pos, bool vert) noexcept {
 	int lim = listMax[vert];
 	listPos[vert] = std::clamp((spos - pos[vert]) * lim / sliderMax, 0, lim);
 }
 
-Recti Scrollable::barRect(ivec2 pos, ivec2 size, bool vert) const {
+Recti Scrollable::barRect(ivec2 pos, ivec2 size, bool vert) const noexcept {
 	int bs = barSize(size, vert);
 	return vert ? Recti(pos.x + size.x - bs, pos.y, bs, size.y) : Recti(pos.x, pos.y + size.y - bs, size.x, bs);
 }
 
-Recti Scrollable::sliderRect(ivec2 pos, ivec2 size, bool vert) const {
+Recti Scrollable::sliderRect(ivec2 pos, ivec2 size, bool vert) const noexcept {
 	int bs = barSize(size, vert);
 	int sp = sliderPos(pos, size, vert);
 	return vert ? Recti(pos.x + size.x - bs, sp, bs, sliderSize) : Recti(sp, pos.y + size.y - bs, sliderSize, bs);
@@ -134,15 +133,15 @@ Recti Scrollable::sliderRect(ivec2 pos, ivec2 size, bool vert) const {
 
 // WIDGET
 
-bool Widget::navSelectable() const {
+bool Widget::navSelectable() const noexcept {
 	return false;
 }
 
-bool Widget::hasDoubleclick() const {
+bool Widget::hasDoubleclick() const noexcept {
 	return false;
 }
 
-void Widget::setParent(Layout* pnt, uint id) {
+void Widget::setParent(Layout* pnt, uint id) noexcept {
 	parent = pnt;
 	relSize.id = id;
 }
@@ -184,7 +183,7 @@ int Widget::sizeToPixAbs(const Size& siz, int res) const {
 
 // PICTURE
 
-Picture::Picture(const Size& size, Texture* texture) :
+Picture::Picture(const Size& size, Texture* texture) noexcept :
 	Widget(size),
 	tex(texture)
 {}
@@ -199,7 +198,7 @@ void Picture::drawSelf(const Recti& view) {
 
 // LABEL
 
-Label::Label(const Size& size, Cstring&& line, Alignment alignment, bool bg) :
+Label::Label(const Size& size, Cstring&& line, Alignment alignment, bool bg) noexcept :
 	Widget(size),
 	TextDsp(std::move(line)),
 	showBg(bg),
@@ -247,7 +246,7 @@ void Label::updateTextTexNow() {
 
 // TEXT BOX
 
-TextBox::TextBox(const Size& size, uint lineH, Cstring&& lines, bool bg) :
+TextBox::TextBox(const Size& size, uint lineH, Cstring&& lines, bool bg) noexcept :
 	Label(size, std::move(lines), Alignment::left, bg),
 	lineSize(lineH)
 {}
@@ -277,7 +276,7 @@ void TextBox::onScroll(ivec2 wMov) {
 	scroll(wMov, true);
 }
 
-bool TextBox::navSelectable() const {
+bool TextBox::navSelectable() const noexcept {
 	return true;
 }
 
@@ -302,7 +301,7 @@ void TextBox::updateTextTex() {
 
 // BUTTON
 
-Button::Button(const Size& size, EventId eid, Actions amask, Cstring&& tip) :
+Button::Button(const Size& size, EventId eid, Actions amask, Cstring&& tip) noexcept :
 	Widget(size),
 	tooltip(std::move(tip)),
 	etype(eid.type),
@@ -336,25 +335,25 @@ void Button::onUnhover() {
 		bgColor = Color::normal;
 }
 
-bool Button::toggleHighlighted() {
+bool Button::toggleHighlighted() noexcept {
 	bool off = bgColor != Color::light;
 	bgColor = off ? Color::light : navSelectable() && World::scene()->getSelect() == this ? Color::select : Color::normal;
 	return !off;
 }
 
-bool Button::navSelectable() const {
-	return (etype && actions) || !tooltip.empty();
+bool Button::navSelectable() const noexcept {
+	return (etype && actions) || tooltip.filled();
 }
 
-bool Button::hasDoubleclick() const {
+bool Button::hasDoubleclick() const noexcept {
 	return actions & ACT_DOUBLE;
 }
 
 const char* Button::getTooltip() const {
-	return !tooltip.empty() ? tooltip.data() : nullptr;
+	return tooltip.filled() ? tooltip.data() : nullptr;
 }
 
-void Button::setEvent(EventId eid, Actions amask) {
+void Button::setEvent(EventId eid, Actions amask) noexcept {
 	etype = eid.type;
 	ecode = eid.code;
 	actions = amask;
@@ -362,7 +361,7 @@ void Button::setEvent(EventId eid, Actions amask) {
 
 // CHECK BOX
 
-CheckBox::CheckBox(const Size& size, bool checked, EventId eid, Cstring&& tip) :
+CheckBox::CheckBox(const Size& size, bool checked, EventId eid, Cstring&& tip) noexcept :
 	Button(size, eid, ACT_LEFT, std::move(tip)),
 	on(checked)
 {}
@@ -385,7 +384,7 @@ Recti CheckBox::boxRect() const {
 
 // SLIDER
 
-Slider::Slider(const Size& size, int value, int minimum, int maximum, EventId eid, Actions amask, Cstring&& tip) :
+Slider::Slider(const Size& size, int value, int minimum, int maximum, EventId eid, Actions amask, Cstring&& tip) noexcept :
 	Button(size, eid, amask, std::move(tip)),
 	val(value),
 	vmin(minimum),
@@ -481,7 +480,7 @@ int Slider::sliderLim() const {
 
 // PUSH BUTTON
 
-PushButton::PushButton(const Size& size, Cstring&& line, EventId eid, Actions amask, Cstring&& tip, Alignment alignment) :
+PushButton::PushButton(const Size& size, Cstring&& line, EventId eid, Actions amask, Cstring&& tip, Alignment alignment) noexcept :
 	Button(size, eid, amask, std::move(tip)),
 	TextDsp(std::move(line)),
 	align(alignment)
@@ -528,7 +527,7 @@ void PushButton::updateTextTexNow() {
 
 // ICON BUTTON
 
-IconButton::IconButton(const Size& size, const Texture* texture, EventId eid, Actions amask, Cstring&& tip) :
+IconButton::IconButton(const Size& size, const Texture* texture, EventId eid, Actions amask, Cstring&& tip) noexcept :
 	Button(size, eid, amask, std::move(tip)),
 	tex(texture)
 {}
@@ -544,13 +543,13 @@ Recti IconButton::texRect() const {
 
 // ICON PUSH BUTTON
 
-IconPushButton::IconPushButton(const Size& size, Cstring&& line, const Texture* texture, EventId eid, Actions amask, Cstring&& tip) :
+IconPushButton::IconPushButton(const Size& size, Cstring&& line, const Texture* texture, EventId eid, Actions amask, Cstring&& tip) noexcept :
 	PushButton(size, std::move(line), eid, amask, std::move(tip), Alignment::left),
 	freeIcon(false),
 	iconTex(const_cast<Texture*>(texture))
 {}
 
-IconPushButton::IconPushButton(const Size& size, Cstring&& line, Texture* texture, EventId eid, Actions amask, Cstring&& tip) :
+IconPushButton::IconPushButton(const Size& size, Cstring&& line, Texture* texture, EventId eid, Actions amask, Cstring&& tip) noexcept :
 	PushButton(size, std::move(line), eid, amask, std::move(tip), Alignment::left),
 	freeIcon(true),
 	iconTex(texture)
@@ -637,7 +636,7 @@ void ComboBox::setCurOpt(uint id) {
 
 // LABEL EDIT
 
-LabelEdit::LabelEdit(const Size& size, string&& line, EventId eid, EventId cid, Actions amask, Cstring&& tip, TextType type, bool focusLossConfirm) :
+LabelEdit::LabelEdit(const Size& size, string&& line, EventId eid, EventId cid, Actions amask, Cstring&& tip, TextType type, bool focusLossConfirm) noexcept :
 	Button(size, eid, amask, std::move(tip)),
 	TextDsp(std::move(line)),
 	oldText(text),
@@ -671,7 +670,7 @@ void LabelEdit::onClick(ivec2, uint8 mBut) {
 		Recti rct = rect();
 		World::scene()->setCapture(this);
 		SDL_StartTextInput();
-		SDL_SetTextInputRect(reinterpret_cast<SDL_Rect*>(&rct));
+		SDL_SetTextInputRect(&rct.asRect());
 		setCPos(text.length());
 	} else if (mBut == SDL_BUTTON_RIGHT && (actions & ACT_RIGHT))
 		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_RIGHT)));
@@ -848,17 +847,17 @@ void LabelEdit::cancel() {
 		pushEvent(EventId(cancEtype, cancEcode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
 }
 
-uint LabelEdit::jumpCharB(uint i) const {
+uint LabelEdit::jumpCharB(uint i) const noexcept {
 	while (--i && (text[i] & 0xC0) == 0x80);
 	return i;
 }
 
-uint LabelEdit::jumpCharF(uint i) const {
+uint LabelEdit::jumpCharF(uint i) const noexcept {
 	while (++i < text.length() && (text[i] & 0xC0) == 0x80);
 	return i;
 }
 
-uint LabelEdit::findWordStart() const {
+uint LabelEdit::findWordStart() const noexcept {
 	uint i = cpos;
 	if (i == text.length() && i)
 		--i;
@@ -870,7 +869,7 @@ uint LabelEdit::findWordStart() const {
 	return i ? i + 1 : i;			// correct position if necessary
 }
 
-uint LabelEdit::findWordEnd() const {
+uint LabelEdit::findWordEnd() const noexcept {
 	uint i = cpos;
 	for (; isSpace(text[i]) && i < text.length(); ++i);		// skip first spaces
 	for (; notSpace(text[i]) && i < text.length(); ++i);	// skip word
@@ -943,7 +942,7 @@ void LabelEdit::cleanSFloatText() {
 	for (string::iterator it = text.begin() + ptrdiff_t(text[0] == '-'); it != text.end();) {
 		if (isdigit(*it))
 			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
-		else if (*it == '.'  && !dot) {
+		else if (*it == '.' && !dot) {
 			dot = true;
 			++it;
 		} else {
@@ -980,7 +979,7 @@ void LabelEdit::cleanUFloatText() {
 	for (string::iterator it = text.begin(); it != text.end();) {
 		if (isdigit(*it))
 			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
-		else if (*it == '.'  && !dot) {
+		else if (*it == '.' && !dot) {
 			dot = true;
 			++it;
 		} else {
@@ -1012,7 +1011,7 @@ void LabelEdit::cleanUFloatSpacedText() {
 
 // KEY GETTER
 
-KeyGetter::KeyGetter(const Size& size, AcceptType type, Binding::Type binding, Cstring&& tip) :
+KeyGetter::KeyGetter(const Size& size, AcceptType type, Binding::Type binding, Cstring&& tip) noexcept :
 	PushButton(size, bindingText(binding, type), nullEvent, ACT_NONE, std::move(tip), Alignment::center),
 	acceptType(type),
 	bindingType(binding)
@@ -1053,7 +1052,7 @@ void KeyGetter::onJHat(uint8 jhat, uint8 value) {
 				value = SDL_HAT_LEFT;
 		}
 		World::inputSys()->getBinding(bindingType).setJhat(jhat, value);
-		setText(std::format(fmtHat, jhat, Binding::hatNames.at(value)));
+		setText(std::format(fmtHat, jhat, Binding::hatValueToName(value)));
 	}
 	World::scene()->setCapture(nullptr);
 }
@@ -1082,7 +1081,7 @@ void KeyGetter::onGAxis(SDL_GameControllerAxis gaxis, bool positive) {
 	World::scene()->setCapture(nullptr);
 }
 
-bool KeyGetter::navSelectable() const {
+bool KeyGetter::navSelectable() const noexcept {
 	return true;
 }
 
@@ -1112,7 +1111,7 @@ string KeyGetter::bindingText(Binding::Type binding, KeyGetter::AcceptType accep
 		if (bind.jbuttonAssigned())
 			return std::format(fmtButton, bind.getJctID());
 		else if (bind.jhatAssigned())
-			return std::format(fmtHat, bind.getJctID(), Binding::hatNames.at(bind.getJhatVal()));
+			return std::format(fmtHat, bind.getJctID(), Binding::hatValueToName(bind.getJhatVal()));
 		else if (bind.jaxisAssigned())
 			return std::format(fmtAxis, bind.jposAxisAssigned() ? prefAxisPos : prefAxisNeg, bind.getJctID());
 		break;
@@ -1127,12 +1126,12 @@ string KeyGetter::bindingText(Binding::Type binding, KeyGetter::AcceptType accep
 
 // WINDOW ARRANGER
 
-WindowArranger::Dsp::Dsp(const Recti& vdsp, bool on) :
+WindowArranger::Dsp::Dsp(const Recti& vdsp, bool on) noexcept :
 	full(vdsp),
 	active(on)
 {}
 
-WindowArranger::WindowArranger(const Size& size, float baseScale, bool vertExp, EventId eid, Actions amask, Cstring&& tip) :
+WindowArranger::WindowArranger(const Size& size, float baseScale, bool vertExp, EventId eid, Actions amask, Cstring&& tip) noexcept :
 	Button(size, eid, amask, std::move(tip)),
 	bscale(baseScale),
 	vertical(vertExp)
@@ -1146,8 +1145,7 @@ WindowArranger::~WindowArranger() {
 
 void WindowArranger::freeTextures() {
 	for (auto& [id, dsp] : disps)
-		if (dsp.txt)
-			World::drawSys()->getRenderer()->freeTexture(dsp.txt);
+		World::drawSys()->getRenderer()->freeTexture(dsp.txt);
 }
 
 void WindowArranger::calcDisplays() {
@@ -1162,7 +1160,7 @@ void WindowArranger::calcDisplays() {
 	ivec2 border = vswap(totalDim[vertical], 0, vertical);
 	for (auto& [id, rect] : all) {
 		Recti dst = rect;
-		if (rng::any_of(disps, [&dst](const pair<int, Dsp>& p) -> bool { return p.second.full.overlaps(dst); })) {
+		if (rng::any_of(disps, [&dst](const pair<const int, Dsp>& p) -> bool { return p.second.full.overlaps(dst); })) {
 			dst.pos() = border;
 			border[vertical] += dst.size()[vertical];
 		}
@@ -1236,8 +1234,7 @@ void WindowArranger::onUndrag(ivec2, uint8 mBut) {
 		ivec2 spos = snapDrag();
 		float scale = entryScale(size()[!vertical]);
 		Dsp& dsp = disps.find(dragging)->second;
-		dsp.full.pos() = spos.x >= 0 && spos.y >= 0 ? spos : ivec2(vec2(dragr.pos() - position() - winMargin) / scale);
-		glm::clamp(dsp.full.pos(), ivec2(0), totalDim);
+		dsp.full.pos() = glm::clamp(spos.x >= 0 && spos.y >= 0 ? spos : ivec2(vec2(dragr.pos() - position() - winMargin) / scale), ivec2(0), totalDim);
 		totalDim = glm::max(totalDim, dsp.full.end());
 		dsp.rect.pos() = vec2(dsp.full.pos()) * scale;
 		if (actions & ACT_LEFT)
@@ -1284,7 +1281,7 @@ ivec2 WindowArranger::snapDrag() const {
 		: ivec2(INT_MIN);
 }
 
-array<ivec2, 8> WindowArranger::getSnapPoints(const Recti& rect) {
+array<ivec2, 8> WindowArranger::getSnapPoints(const Recti& rect) noexcept {
 	return {
 		rect.pos(),
 		ivec2(rect.x + rect.w / 2, rect.y),
@@ -1315,15 +1312,15 @@ void WindowArranger::onDisplayChange() {
 	buildEntries();
 }
 
-bool WindowArranger::navSelectable() const {
+bool WindowArranger::navSelectable() const noexcept {
 	return true;
 }
 
 const char* WindowArranger::getTooltip() const {
-	return !tooltip.empty() && disps.contains(selected) ? tooltip.data() : nullptr;
+	return tooltip.filled() && disps.contains(selected) ? tooltip.data() : nullptr;
 }
 
-bool WindowArranger::draggingDisp(int id) const {
+bool WindowArranger::draggingDisp(int id) const noexcept {
 	return id == dragging && World::scene()->getCapture() == this;
 }
 
@@ -1335,7 +1332,7 @@ int WindowArranger::dispUnderPos(ivec2 pnt) const {
 	return Renderer::singleDspId;
 }
 
-float WindowArranger::entryScale(int fsiz) const {
+float WindowArranger::entryScale(int fsiz) const noexcept {
 	fsiz -= winMargin * 2;
 	return int(float(totalDim[!vertical]) * bscale) <= fsiz ? bscale : float(totalDim[!vertical]) / float(fsiz);
 }

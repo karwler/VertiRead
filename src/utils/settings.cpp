@@ -184,26 +184,26 @@ void Binding::reset(Type newType) {
 	}
 }
 
-void Binding::setKey(SDL_Scancode kkey) {
+void Binding::setKey(SDL_Scancode kkey) noexcept {
 	key = kkey;
 	asg |= ASG_KEY;
 }
 
-void Binding::setJbutton(uint8 but) {
+void Binding::setJbutton(uint8 but) noexcept {
 	jctID = but;
 
 	clearAsgJct();
 	asg |= ASG_JBUTTON;
 }
 
-void Binding::setJaxis(uint8 axis, bool positive) {
+void Binding::setJaxis(uint8 axis, bool positive) noexcept {
 	jctID = axis;
 
 	clearAsgJct();
 	asg |= positive ? ASG_JAXIS_P : ASG_JAXIS_N;
 }
 
-void Binding::setJhat(uint8 hat, uint8 val) {
+void Binding::setJhat(uint8 hat, uint8 val) noexcept {
 	jctID = hat;
 	jHatVal = val;
 
@@ -211,18 +211,32 @@ void Binding::setJhat(uint8 hat, uint8 val) {
 	asg |= ASG_JHAT;
 }
 
-void Binding::setGbutton(SDL_GameControllerButton but) {
+void Binding::setGbutton(SDL_GameControllerButton but) noexcept {
 	gctID = but;
 
 	clearAsgGct();
 	asg |= ASG_GBUTTON;
 }
 
-void Binding::setGaxis(SDL_GameControllerAxis axis, bool positive) {
+void Binding::setGaxis(SDL_GameControllerAxis axis, bool positive) noexcept {
 	gctID = axis;
 
 	clearAsgGct();
 	asg |= positive ? ASG_GAXIS_P : ASG_GAXIS_N;
+}
+
+uint8 Binding::hatNameToValue(string_view name) noexcept {
+	for (size_t i = 0; i < hatNames.size(); ++i)
+		if (strciequal(hatNames[i], name))
+			return hatValues[i];
+	return SDL_HAT_CENTERED;
+}
+
+const char* Binding::hatValueToName(uint8 val) noexcept {
+	for (size_t i = 0; i < hatValues.size(); ++i)
+		if (hatValues[i] == val)
+			return hatNames[i];
+	return "Center";
 }
 
 // PICTURE LIMIT
@@ -307,7 +321,7 @@ umap<int, Recti> Settings::displayArrangement() {
 	ivec2 origin(INT_MAX);
 	umap<int, Recti> dsps;
 	for (int i = 0, e = SDL_GetNumVideoDisplays(); i < e; ++i)
-		if (Recti rect; !SDL_GetDisplayBounds(i, reinterpret_cast<SDL_Rect*>(&rect))) {
+		if (Recti rect; !SDL_GetDisplayBounds(i, &rect.asRect())) {
 			dsps.emplace(i, rect);
 			origin = glm::min(origin, rect.pos());
 		}
@@ -318,13 +332,15 @@ umap<int, Recti> Settings::displayArrangement() {
 
 void Settings::unionDisplays() {
 	umap<int, Recti> dsps = displayArrangement();
-	for (umap<int, Recti>::iterator it = displays.begin(); it != displays.end(); ++it)
-		if (!dsps.contains(it->first))
-			displays.erase(it);
-	for (umap<int, Recti>::iterator ds = dsps.begin(); ds != dsps.end(); ++ds)
-		if (umap<int, Recti>::iterator it = displays.find(ds->first); it != displays.end() && it->second.size() != ds->second.size())
-			displays.erase(it);
-	if (displays.empty())
+	vector<int> invalids;
+	for (const auto& [id, rect] : displays)
+		if (umap<int, Recti>::iterator it = dsps.find(id); it == dsps.end() || it->second.size() != rect.size())
+			invalids.push_back(id);
+
+	if (invalids.size() < displays.size()) {
+		for (int id : invalids)
+			displays.erase(id);
+	} else
 		displays = std::move(dsps);
 }
 

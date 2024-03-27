@@ -286,8 +286,8 @@ private:
 		uint sid;
 
 		TextureVk(uvec2 size, uint samplerId) : Texture(size), sid(samplerId) {}
-		TextureVk(uvec2 size, VkDescriptorPool descriptorPool, VkDescriptorSet descriptorSet);
-		TextureVk(uvec2 size, VkDescriptorPool descriptorPool, VkDescriptorSet descriptorSet, uint samplerId);
+		TextureVk(uvec2 size, VkDescriptorPool descriptorPool, VkDescriptorSet descriptorSet) noexcept;
+		TextureVk(uvec2 size, VkDescriptorPool descriptorPool, VkDescriptorSet descriptorSet, uint samplerId) noexcept;
 
 		friend class RendererVk;
 	};
@@ -381,7 +381,6 @@ private:
 	uint currentFrame = 0;
 	uint32 imageIndex;
 	VkClearValue bgColor;
-	VkPresentModeKHR presentMode;
 	VkSurfaceFormatKHR surfaceFormat;
 	uint currentTransfer = 0;
 	uint32 maxComputeWorkGroups;
@@ -415,7 +414,7 @@ public:
 	Texture* texFromRpic(SDL_Surface* img) override;
 	Texture* texFromText(const PixmapRgba& pm) override;
 	bool texFromText(Texture* tex, const PixmapRgba& pm) override;
-	void freeTexture(Texture* tex) override;
+	void freeTexture(Texture* tex) noexcept override;
 	void synchTransfer() override;
 
 	pair<VkImage, VkDeviceMemory> createImage(u32vec2 size, VkImageType type, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags properties) const;
@@ -434,6 +433,7 @@ public:
 	void copyImageToBuffer(VkCommandBuffer commandBuffer, VkImage image, VkBuffer buffer, u32vec2 size) const;
 
 private:
+	void cleanup() noexcept;
 	InstanceInfo createInstance(SDL_Window* window);
 	uptr<DeviceInfo> pickPhysicalDevice(const InstanceInfo& instanceInfo, u32vec2& preferred);
 	void createDevice(DeviceInfo& deviceInfo);
@@ -458,7 +458,7 @@ private:
 	template <bool conv> void uploadInputData(const byte_t* pix, u32vec2 res, uint32 pitch, uint8 bpp);
 	template <bool fresh> void finalizeTexture(TextureVk& tex, VkFormat format);
 	void replaceTexture(TextureVk& tex, TextureVk& ntex);
-	tuple<SDL_Surface*, VkFormat, bool> pickPixFormat(SDL_Surface* img) const;
+	tuple<SDL_Surface*, VkFormat, bool> pickPixFormat(SDL_Surface* img) const noexcept;
 	bool canSquashTextures() const;
 	InstanceInfo checkInstanceExtensionSupport() const;
 #ifndef NDEBUG

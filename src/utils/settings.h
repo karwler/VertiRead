@@ -37,12 +37,6 @@ T strToEnum(const array<const char*, N>& names, string_view str, T defaultValue 
 	return p != names.end() ? T(p - names.begin()) : defaultValue;
 }
 
-template <IntEnumFloat T>
-T strToVal(const umap<T, const char*>& names, string_view str, T defaultValue = T(0)) {
-	typename umap<T, const char*>::const_iterator it = rng::find_if(names, [str](const pair<const T, const char*>& nit) -> bool { return strciequal(nit.second, str); });
-	return it != names.end() ? it->first : defaultValue;
-}
-
 class Direction {
 public:
 	enum Dir : uint8 {
@@ -156,17 +150,6 @@ public:
 	};
 	static constexpr Type holders = Type::scrollUp;
 
-	static inline const umap<uint8, const char*> hatNames = {
-		pair(SDL_HAT_CENTERED, "Center"),
-		pair(SDL_HAT_UP, "Up"),
-		pair(SDL_HAT_RIGHT, "Right"),
-		pair(SDL_HAT_DOWN, "Down"),
-		pair(SDL_HAT_LEFT, "Left"),
-		pair(SDL_HAT_RIGHTUP, "Right-Up"),
-		pair(SDL_HAT_RIGHTDOWN, "Right-Down"),
-		pair(SDL_HAT_LEFTDOWN, "Left-Down"),
-		pair(SDL_HAT_LEFTUP, "Left-Up")
-	};
 	static constexpr array gbuttonNames = {
 		"A",
 		"B",
@@ -205,54 +188,78 @@ private:
 	Assignment asg = ASG_NONE;	// stores data for checking whether key and/or button/axis are assigned
 	Type type;
 
+	static constexpr array hatNames = {
+		"Up",
+		"Right",
+		"Down",
+		"Left",
+		"Right-Up",
+		"Right-Down",
+		"Left-Down",
+		"Left-Up"
+	};
+	static constexpr array<uint8, hatNames.size()> hatValues = {
+		SDL_HAT_UP,
+		SDL_HAT_RIGHT,
+		SDL_HAT_DOWN,
+		SDL_HAT_LEFT,
+		SDL_HAT_RIGHTUP,
+		SDL_HAT_RIGHTDOWN,
+		SDL_HAT_LEFTDOWN,
+		SDL_HAT_LEFTUP
+	};
+
 public:
 	void reset(Type newType);
 
 	SDL_Scancode getKey() const { return key; }
 	bool keyAssigned() const { return asg & ASG_KEY; }
-	void clearAsgKey();
-	void setKey(SDL_Scancode kkey);
+	void clearAsgKey() noexcept;
+	void setKey(SDL_Scancode kkey) noexcept;
 
 	uint8 getJctID() const { return jctID; }
 	bool jctAssigned() const { return asg & (ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N); }
-	void clearAsgJct();
+	void clearAsgJct() noexcept;
 
 	bool jbuttonAssigned() const { return asg & ASG_JBUTTON; }
-	void setJbutton(uint8 but);
+	void setJbutton(uint8 but) noexcept;
 
 	bool jaxisAssigned() const { return asg & (ASG_JAXIS_P | ASG_JAXIS_N); }
 	bool jposAxisAssigned() const { return asg & ASG_JAXIS_P; }
 	bool jnegAxisAssigned() const { return asg & ASG_JAXIS_N; }
-	void setJaxis(uint8 axis, bool positive);
+	void setJaxis(uint8 axis, bool positive) noexcept;
 
 	uint8 getJhatVal() const { return jHatVal; }
 	bool jhatAssigned() const { return asg & ASG_JHAT; }
-	void setJhat(uint8 hat, uint8 val);
+	void setJhat(uint8 hat, uint8 val) noexcept;
 
 	uint8 getGctID() const { return gctID; }
 	bool gctAssigned() const { return asg & (ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N); }
-	void clearAsgGct();
+	void clearAsgGct() noexcept;
 
 	SDL_GameControllerButton getGbutton() const { return SDL_GameControllerButton(gctID); }
 	bool gbuttonAssigned() const { return asg & ASG_GBUTTON; }
-	void setGbutton(SDL_GameControllerButton but);
+	void setGbutton(SDL_GameControllerButton but) noexcept;
 
 	SDL_GameControllerAxis getGaxis() const { return SDL_GameControllerAxis(gctID); }
 	bool gaxisAssigned() const { return asg & (ASG_GAXIS_P | ASG_GAXIS_N); }
 	bool gposAxisAssigned() const { return asg & ASG_GAXIS_P; }
 	bool gnegAxisAssigned() const { return asg & ASG_GAXIS_N; }
-	void setGaxis(SDL_GameControllerAxis axis, bool positive);
+	void setGaxis(SDL_GameControllerAxis axis, bool positive) noexcept;
+
+	static uint8 hatNameToValue(string_view name) noexcept;
+	static const char* hatValueToName(uint8 val) noexcept;
 };
 
-inline void Binding::clearAsgKey() {
+inline void Binding::clearAsgKey() noexcept {
 	asg &= ~ASG_KEY;
 }
 
-inline void Binding::clearAsgJct() {
+inline void Binding::clearAsgJct() noexcept {
 	asg &= ~(ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N);
 }
 
-inline void Binding::clearAsgGct() {
+inline void Binding::clearAsgGct() noexcept {
 	asg &= ~(ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N);
 }
 
@@ -454,7 +461,6 @@ public:
 	Renderer renderer = defaultRenderer;
 	bool gpuSelecting = false;
 	Hinting hinting = defaultHinting;
-	bool pdfImages = true;
 
 	Settings(const fs::path& dirSets, vector<string>&& themes);
 

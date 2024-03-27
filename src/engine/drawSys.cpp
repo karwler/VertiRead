@@ -222,7 +222,7 @@ void FontSet::prepareBuffer() {
 	std::fill_n(pm.pix.get(), size, 0);
 }
 
-void FontSet::prepareAdvance(string_view::iterator begin, size_t length, uint xstart) {
+void FontSet::prepareAdvance(string_view::iterator begin, size_t length, uint xstart) noexcept {
 	ptr = begin;
 	len = length;
 	cpos = 0;
@@ -256,7 +256,7 @@ void FontSet::advanceChar(FT_Face face, char32_t ch, char32_t prev, long advance
 	advanceChar<cached>(face, ch, prev, advance);
 }
 
-void FontSet::checkXofs(int left) {
+void FontSet::checkXofs(int left) noexcept {
 	if (int dif = int64(xpos) + left; dif < 0) {
 		xpos -= dif;
 		xofs -= dif;
@@ -347,7 +347,7 @@ vector<FontSet::Font>::iterator FontSet::loadGlyph(char32_t ch, int32 flags) {
 	return fonts.begin();
 }
 
-void FontSet::copyGlyph(const FT_Bitmap& bmp, int top, int left) {
+void FontSet::copyGlyph(const FT_Bitmap& bmp, int top, int left) noexcept {
 	uint32* dst = pm.pix.get() + xpos + left;
 	uchar* src = bmp.buffer;
 	int offs = ypos - top;
@@ -364,7 +364,7 @@ void FontSet::copyGlyph(const FT_Bitmap& bmp, int top, int left) {
 				dst[c] = 0x00FFFFFF | (uint32(src[c]) << 24);
 }
 
-void FontSet::setMode(Settings::Hinting hinting) {
+void FontSet::setMode(Settings::Hinting hinting) noexcept {
 	height = 0;
 	mode = hinting != Settings::Hinting::mono ? FT_RENDER_MODE_NORMAL : FT_RENDER_MODE_MONO;
 }
@@ -402,36 +402,29 @@ DrawSys::DrawSys(const umap<int, SDL_Window*>& windows) :
 		renderer = new RendererSf(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
 	}
 
-	for (auto [id, win] : windows)
-		if (float vdpi; !SDL_GetDisplayDPI(SDL_GetWindowDisplayIndex(win), nullptr, nullptr, &vdpi) && vdpi > winDpi)
-			winDpi = vdpi;
-	if (winDpi <= 0.f)
-		winDpi = fallbackDpi;
-	cursorHeight = int(assumedCursorHeight / fallbackDpi * winDpi);
+	try {
+		SDL_Surface* white = SDL_CreateRGBSurfaceWithFormat(0, 2, 2, 32, SDL_PIXELFORMAT_RGBA32);
+		if (!white)
+			throw std::runtime_error(std::format("Failed to create blank texture: {}", SDL_GetError()));
+		SDL_FillRect(white, nullptr, 0xFFFFFFFF);
+		if (texes[eint(Tex::blank)] = renderer->texFromIcon(white); !texes[eint(Tex::blank)])
+			throw std::runtime_error("Failed to create blank texture");
 
-	SDL_Surface* white = SDL_CreateRGBSurfaceWithFormat(0, 2, 2, 32, SDL_PIXELFORMAT_RGBA32);
-	if (!white)
-		throw std::runtime_error(std::format("Failed to create blank texture: {}", SDL_GetError()));
-	SDL_FillRect(white, nullptr, 0xFFFFFFFF);
-	if (texes[eint(Tex::blank)] = renderer->texFromIcon(white); !texes[eint(Tex::blank)])
-		throw std::runtime_error("Failed to create blank texture");
+		winDpi = maxDpi();
+		cursorHeight = std::ceil(assumedCursorHeight * winDpi / fallbackDpi);
 
-	int iconSize = int(assumedIconSize / fallbackDpi * winDpi);
-	string dirIcons = fromPath(World::fileSys()->dirIcons());
-	for (size_t i = 0; i < iconStems.size() - 1; ++i)
-		if (texes[i + fileTexBegin] = renderer->texFromIcon(loadIcon(dirIcons / iconStems[i] + iconExt, iconSize)); !texes[i + fileTexBegin])
-			logError("Failed to load texture '", iconStems[i], iconExt, '\'');
+		int iconSize = std::ceil(assumedIconSize * winDpi / fallbackDpi);
+		string dirIcons = fromPath(World::fileSys()->dirIcons());
+		for (size_t i = 0; i < iconStems.size() - 1; ++i)
+			if (texes[i + fileTexBegin] = renderer->texFromIcon(loadIcon(dirIcons / iconStems[i] + iconExt, iconSize)); !texes[i + fileTexBegin])
+				logError("Failed to load texture '", iconStems[i], iconExt, '\'');
 
-	setFont(toPath(World::sets()->font));
-	texes[eint(Tex::tooltip)] = renderer->texFromEmpty();
-	renderer->synchTransfer();
-}
-
-DrawSys::~DrawSys() {
-	if (renderer) {
-		for (Texture* tex : texes)
-			renderer->freeTexture(tex);
-		delete renderer;
+		setFont(toPath(World::sets()->font));
+		texes[eint(Tex::tooltip)] = renderer->texFromEmpty();
+		renderer->synchTransfer();
+	} catch (...) {
+		cleanup();
+		throw;
 	}
 }
 
@@ -454,22 +447,31 @@ SDL_Surface* DrawSys::loadIcon(const string& path, int size) {
 #endif
 }
 
+void DrawSys::cleanup() {
+	renderer->synchTransfer();
+	for (Texture* tex : texes)
+		renderer->freeTexture(tex);
+	delete renderer;
+}
+
 void DrawSys::updateView() {
 	renderer->updateView(viewRes);
 	fonts.clearCache();
 }
 
-int DrawSys::findPointInView(ivec2 pos) const {
-	umap<int, Renderer::View*>::const_iterator vit = findViewForPoint(pos);
-	return vit != renderer->getViews().end() ? vit->first : Renderer::singleDspId;
+Renderer::View* DrawSys::findViewForPoint(ivec2 pos) {
+	for (auto [id, view] : renderer->getViews())
+		if (view->rect.contains(pos))
+			return view;
+	return nullptr;
 }
 
-bool DrawSys::updateDpi(int dsp) {
-	if (float vdpi; !SDL_GetDisplayDPI(dsp, nullptr, nullptr, &vdpi) && vdpi != winDpi) {
+bool DrawSys::updateDpi() {
+	if (float vdpi = maxDpi(); vdpi != winDpi) {
 		winDpi = vdpi;
-		cursorHeight = int(assumedCursorHeight / fallbackDpi * winDpi);
+		cursorHeight = std::ceil(assumedCursorHeight * winDpi / fallbackDpi);
 
-		int iconSize = int(assumedIconSize / fallbackDpi * winDpi);
+		int iconSize = std::ceil(assumedIconSize * winDpi / fallbackDpi);
 		string dirIcons = fromPath(World::fileSys()->dirIcons());
 		for (size_t i = 0; i < iconStems.size() - 1; ++i)
 			if (!renderer->texFromIcon(texes[i + fileTexBegin], loadIcon(dirIcons / iconStems[i] + iconExt, iconSize)))
@@ -478,6 +480,14 @@ bool DrawSys::updateDpi(int dsp) {
 		return true;
 	}
 	return false;
+}
+
+float DrawSys::maxDpi() const {
+	float mdpi = 0.f;
+	for (auto [id, view] : renderer->getViews())
+		if (float vdpi; !SDL_GetDisplayDPI(SDL_GetWindowDisplayIndex(view->win), nullptr, nullptr, &vdpi) && vdpi > mdpi)
+			mdpi = vdpi;
+	return mdpi > 0.f ? mdpi : fallbackDpi;
 }
 
 void DrawSys::setTheme(string_view name) {
@@ -604,7 +614,7 @@ void DrawSys::drawLabelEdit(const LabelEdit* wgt, const Recti& view) {
 
 void DrawSys::drawCaret(const Recti& rect, const Recti& frame, const Recti& view) {
 	if (rect.overlaps(view))
-		renderer->drawRect(texes[eint(Tex::blank)], rect, frame, colors[eint(Color::light)]);
+		renderer->drawRect(texes[eint(Tex::blank)], rect, frame, colors[eint(Color::text)]);
 }
 
 void DrawSys::drawWindowArranger(const WindowArranger* wgt, const Recti& view) {
@@ -703,13 +713,13 @@ optional<bool> DrawSys::prepareTooltip() {
 }
 
 Widget* DrawSys::getSelectedWidget(Layout* box, ivec2 mPos) {
-	umap<int, Renderer::View*>::const_iterator vit = findViewForPoint(mPos);
-	if (vit == renderer->getViews().end())
+	Renderer::View* view = findViewForPoint(mPos);
+	if (!view)
 		return nullptr;
 
-	renderer->startSelDraw(vit->second, mPos - vit->second->rect.pos());
-	box->drawAddr(vit->second->rect);
-	return renderer->finishSelDraw(vit->second);
+	renderer->startSelDraw(view, mPos - view->rect.pos());
+	box->drawAddr(view->rect);
+	return renderer->finishSelDraw(view);
 }
 
 void DrawSys::drawButtonAddr(const Button* wgt, const Recti& view) {

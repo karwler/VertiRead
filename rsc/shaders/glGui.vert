@@ -20,7 +20,7 @@ void main() {
 		fragUV = vpos * uvrc.zw + uvrc.xy;
 		vec2 loc = vpos * dst.zw + dst.xy;
 		gl_Position = vec4((loc.x - pview.x) / pview[2] - 1.0, -(loc.y - pview.y) / pview[3] + 1.0, 0.0, 1.0);
-   } else {
+	} else {
 		fragUV = vec2(0.0);
 		gl_Position = vec4(-2.0, -2.0, 0.0, 1.0);
 	}

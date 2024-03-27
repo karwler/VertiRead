@@ -11,6 +11,6 @@ extern decltype(secret_item_load_secret_sync)* secretItemLoadSecretSync;
 extern decltype(secret_value_new)* secretValueNew;
 extern decltype(secret_value_get_text)* secretValueGetText;
 
-bool symLibsecret();	// loads glib because of dependency
-void closeLibsecret();
+bool symLibsecret() noexcept;	// loads glib because of dependency
+void closeLibsecret() noexcept;
 #endif

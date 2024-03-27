@@ -27,10 +27,15 @@ void InputSys::Controller::close() {
 InputSys::InputSys() :
 	bindings(World::fileSys()->loadBindings())
 {
-	reloadControllers();
+	try {
+		reloadControllers();
+	} catch (...) {
+		cleanup();
+		throw;
+	}
 }
 
-InputSys::~InputSys() {
+void InputSys::cleanup() noexcept {
 	for (Controller& it : controllers)
 		it.close();
 }
@@ -125,17 +130,17 @@ void InputSys::eventGamepadAxis(const SDL_ControllerAxisEvent& gaxis) const {
 
 void InputSys::eventFingerMove(const SDL_TouchFingerEvent& fin) {
 	vec2 size = World::drawSys()->getViewRes();
-	SDL_MouseMotionEvent event{};
-	event.type = fin.type;
-	event.timestamp = fin.timestamp;
-	event.windowID = fin.windowID;
-	event.which = SDL_TOUCH_MOUSEID;
-	event.state = SDL_BUTTON_LMASK;
-	event.x = int(fin.x * size.x);
-	event.y = int(fin.y * size.y);
-	event.x = int(fin.dx * size.x);
-	event.y = int(fin.dy * size.y);
-	eventMouseMotion(event);
+	eventMouseMotion({
+		.type = fin.type,
+		.timestamp = fin.timestamp,
+		.windowID = fin.windowID,
+		.which = SDL_TOUCH_MOUSEID,
+		.state = SDL_BUTTON_LMASK,
+		.x = int(fin.x * size.x),
+		.y = int(fin.y * size.y),
+		.xrel = int(fin.dx * size.x),
+		.yrel = int(fin.dy * size.y),
+	});
 }
 
 void InputSys::eventFingerDown(const SDL_TouchFingerEvent& fin) {
@@ -147,18 +152,18 @@ void InputSys::eventFingerUp(const SDL_TouchFingerEvent& fin) {
 	World::scene()->deselect();
 }
 
-SDL_MouseButtonEvent InputSys::toMouseEvent(const SDL_TouchFingerEvent& fin, uint8 state, vec2 winSize) {
-	SDL_MouseButtonEvent event{};
-	event.type = fin.type;
-	event.timestamp = fin.timestamp;
-	event.windowID = fin.windowID;
-	event.which = SDL_TOUCH_MOUSEID;
-	event.button = SDL_BUTTON_LEFT;
-	event.state = state;
-	event.clicks = 1;
-	event.x = int(fin.x * winSize.x);
-	event.y = int(fin.y * winSize.y);
-	return event;
+SDL_MouseButtonEvent InputSys::toMouseEvent(const SDL_TouchFingerEvent& fin, uint8 state, vec2 winSize) noexcept {
+	return {
+		.type = fin.type,
+		.timestamp = fin.timestamp,
+		.windowID = fin.windowID,
+		.which = SDL_TOUCH_MOUSEID,
+		.button = SDL_BUTTON_LEFT,
+		.state = state,
+		.clicks = 1,
+		.x = int(fin.x * winSize.x),
+		.y = int(fin.y * winSize.y)
+	};
 }
 
 void InputSys::tick() const {
@@ -260,12 +265,12 @@ string InputSys::getBoundName(Binding::Type type) const {
 	if (bind.jbuttonAssigned())
 		return toStr(bind.getJctID());
 	if (bind.jhatAssigned())
-		return std::format("{:d} {}", bind.getJctID(), Binding::hatNames.at(bind.getJhatVal()));
+		return std::format("{:d} {}", bind.getJctID(), Binding::hatValueToName(bind.getJhatVal()));
 	if (bind.jaxisAssigned())
 		return std::format("{}{:d}", bind.jposAxisAssigned() ? '+' : '-', bind.getJctID());
 	if (bind.gbuttonAssigned())
 		return Binding::gbuttonNames[eint(bind.getGbutton())];
-	if (bind.gbuttonAssigned())
+	if (bind.gaxisAssigned())
 		return std::format("{}{}", bind.gposAxisAssigned() ? '+' : '-', Binding::gaxisNames[eint(bind.getGaxis())]);
 	return string();
 }
@@ -276,8 +281,7 @@ void InputSys::resetBindings() {
 }
 
 void InputSys::reloadControllers() {
-	for (Controller& it : controllers)
-		it.close();
+	cleanup();
 	controllers.clear();
 
 	for (int i = 0; i < SDL_NumJoysticks(); ++i) {
@@ -293,8 +297,7 @@ int InputSys::checkAxisValue(int value) const {
 }
 
 void InputSys::simulateMouseMove() {
-	SDL_MouseMotionEvent event{};
-	event.timestamp = SDL_GetTicks();
+	SDL_MouseMotionEvent event = { .timestamp = SDL_GetTicks() };
 	if (mouseWin) {
 		event.type = SDL_MOUSEMOTION;
 		event.windowID = *mouseWin;

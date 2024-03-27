@@ -26,11 +26,14 @@ public:
 
 	void handleGeneralEvent(const SDL_UserEvent& event);
 	void handleProgBooksEvent(const SDL_UserEvent& event);
+	void eventListFinished(const SDL_UserEvent& event);
+	void eventDeleteFinished(const SDL_UserEvent& event);
 	void handleProgFileExplorerEvent(const SDL_UserEvent& event);
 	void handleProgPageBrowserEvent(const SDL_UserEvent& event);
 	void eventArchiveFinished(const SDL_UserEvent& event);
 	void handleThreadPreviewEvent(const SDL_UserEvent& event);
 	void handleProgReaderEvent(const SDL_UserEvent& event);
+	void eventGoNextFinished(const SDL_UserEvent& event);
 	void handleThreadReaderEvent(const SDL_UserEvent& event);
 	void handleProgSettingsEvent(const SDL_UserEvent& event);
 	void handleThreadMoveEvent(const SDL_UserEvent& event);
@@ -50,7 +53,7 @@ public:
 	void eventExitReader();
 	void setLibraryDir(string_view path, bool byText = false);
 	void setFont(const fs::path& font);
-	void setPopupLoading();
+	void setPopupProgress(Cstring&& msg = "Loading...");
 	void eventExit();
 
 private:
@@ -79,7 +82,7 @@ private:
 
 	// reader
 	void eventReaderProgress(BrowserPictureProgress* pp, char* text);
-	void eventReaderFinished(BrowserResultPicture* rp, bool fwd);
+	void eventReaderFinished(ResultCode rc, BrowserResultPicture* rp);
 
 	// settings
 	void eventSetLibraryDirBw();
@@ -120,7 +123,6 @@ private:
 	template <Invocable<const RemoteLocation&, vector<string>&&> F> void browserLoginAuto(RemoteLocation&& rl, EventId kcal, F func);
 	template <Invocable<const RemoteLocation&> F> void browserLoginManual(F func);
 	void startBrowserPreview();
-	void switchPictures(bool fwd, string_view picname);
 	static uint finishComboBox(PushButton* but);
 	template <Derived<ProgState> T, class... A> void setState(A&&... args);
 };

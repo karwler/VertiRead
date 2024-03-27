@@ -29,7 +29,7 @@ decltype(libssh2_sftp_unlink_ex)* sftpUnlinkEx = nullptr;
 decltype(libssh2_sftp_rmdir_ex)* sftpRmdirEx = nullptr;
 decltype(libssh2_sftp_rename_ex)* sftpRenameEx = nullptr;
 
-bool symLibssh2() {
+bool symLibssh2() noexcept {
 	if (!(lib || failed || ((lib = libOpen("libssh2" LIB_EXT))
 		&& (sshInit = libSym<decltype(sshInit)>(lib, "libssh2_init"))
 		&& (sshExit = libSym<decltype(sshExit)>(lib, "libssh2_exit"))
@@ -54,7 +54,7 @@ bool symLibssh2() {
 		&& (sftpFstatEx = libSym<decltype(sftpFstatEx)>(lib, "libssh2_sftp_fstat_ex"))
 		&& (sftpUnlinkEx = libSym<decltype(sftpUnlinkEx)>(lib, "libssh2_sftp_unlink_ex"))
 		&& (sftpRmdirEx = libSym<decltype(sftpRmdirEx)>(lib, "libssh2_sftp_rmdir_ex"))
-		&& (sftpRenameEx = libSym<decltype(sftpRenameEx)>(lib, "libssh2_sftp_ename_ex"))
+		&& (sftpRenameEx = libSym<decltype(sftpRenameEx)>(lib, "libssh2_sftp_rename_ex"))
 	))) {
 		libClose(lib);
 		failed = true;
@@ -62,7 +62,7 @@ bool symLibssh2() {
 	return lib;
 }
 
-void closeLibssh2() {
+void closeLibssh2() noexcept {
 	libClose(lib);
 	failed = false;
 }

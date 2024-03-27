@@ -186,7 +186,7 @@ void Program::handleThreadReaderEvent(const SDL_UserEvent& event) {
 		eventReaderProgress(static_cast<BrowserPictureProgress*>(event.data1), static_cast<char*>(event.data2));
 		break;
 	case finished:
-		eventReaderFinished(static_cast<BrowserResultPicture*>(event.data1), event.data2);
+		eventReaderFinished(ResultCode(uintptr_t(event.data1)), static_cast<BrowserResultPicture*>(event.data2));
 	}
 }
 
@@ -234,9 +234,6 @@ void Program::handleProgSettingsEvent(const SDL_UserEvent& event) {
 		break;
 	case setGpuSelecting:
 		World::sets()->gpuSelecting = static_cast<CheckBox*>(event.data1)->on;
-		break;
-	case setPdfImages:
-		World::sets()->pdfImages = static_cast<CheckBox*>(event.data1)->on;
 		break;
 	case setMultiFullscreen:
 		eventSetMultiFullscreen(static_cast<WindowArranger*>(event.data1));
@@ -337,14 +334,15 @@ void Program::eventOpenBookListLogin() {
 
 template <class... A>
 void Program::openBookListHandle(A&&... args) {
-	browser.start(string(), std::forward<A>(args)...);
+	browser.beginFs(string(), std::forward<A>(args)...);
 	browser.exCall = &Program::eventOpenBookList;
 	setState<ProgBooks>();
 }
 
 void Program::eventOpenPageBrowser(PushButton* lbl) {
 	try {
-		browser.start(World::sets()->dirLib / lbl->getText().data(), World::sets()->dirLib / lbl->getText().data());	// browser should already be in the right state
+		string root = World::sets()->dirLib / lbl->getText().data();
+		browser.beginFs(valcp(root), valcp(root));	// browser should already be in the right state
 		setState<ProgPageBrowser>();
 	} catch (const std::runtime_error& err) {
 		state->showPopupMessage(err.what());
@@ -353,11 +351,23 @@ void Program::eventOpenPageBrowser(PushButton* lbl) {
 
 void Program::eventOpenPageBrowserGeneral() {
 	try {
-		browser.start(string(), string());	// browser should already be in the right state
+		browser.beginFs(string(), string());	// browser should already be in the right state
 		setState<ProgPageBrowser>();
 	} catch (const std::runtime_error& err) {
 		state->showPopupMessage(err.what());
 	}
+}
+
+void Program::eventListFinished(const SDL_UserEvent& event) {
+	browser.stopThread();
+	auto rl = static_cast<BrowserResultList*>(event.data2);
+	auto pe = static_cast<ProgFileExplorer*>(state);
+	if (ResultCode(uintptr_t(event.data1)) == ResultCode::ok) {
+		pe->fillFileList(std::move(rl->files), std::move(rl->dirs));
+		browser.setDirectoryWatch();
+	} else
+		pe->fillFileList(vector<Cstring>(), vector<Cstring>(), false);
+	delete rl;
 }
 
 void Program::eventOpenBookContext(Widget* wgt) {
@@ -379,7 +389,7 @@ void Program::eventOpenLastPage() {
 		string root = World::sets()->dirLib / bname;
 		paths[0] = !paths[0].empty() ? root / paths[0] : root;
 		if (browser.openPicture(std::move(root), std::move(paths)))
-			setPopupLoading();
+			setPopupProgress();
 		else
 			state->showPopupMessage("Invalid last page entry");
 	} else
@@ -389,7 +399,7 @@ void Program::eventOpenLastPage() {
 void Program::eventOpenLastPageGeneral() {
 	if (vector<string> paths = World::fileSys()->getLastPage(Browser::dotStr); !paths.empty()) {
 		if (browser.openPicture(string(), std::move(paths)))
-			setPopupLoading();
+			setPopupProgress();
 		else
 			state->showPopupMessage("Invalid last page entry");
 	} else
@@ -403,12 +413,23 @@ void Program::eventAskDeleteBook() {
 }
 
 void Program::eventDeleteBook() {
+	if (browser.startDeleteEntry(static_cast<ProgBooks*>(state)->contextBook->getText().data()))
+		setPopupProgress("Deleting...");
+}
+
+void Program::eventDeleteFinished(const SDL_UserEvent& event) {
+	browser.stopThread();
 	auto pb = static_cast<ProgBooks*>(state);
-	if (browser.deleteEntry(pb->contextBook->getText().data())) {
+	switch (ResultCode(uintptr_t(event.data1))) {
+	using enum ResultCode;
+	case ok:
 		pb->contextBook->getParent()->deleteWidget(pb->contextBook->getIndex());
+	case stop:
 		World::scene()->setPopup(nullptr);
-	} else
+		break;
+	case error:
 		state->showPopupMessage("Failed to delete all files");
+	}
 }
 
 void Program::eventQueryRenameBook() {
@@ -451,7 +472,7 @@ void Program::openFileHandle(A&&... args) {
 	if (browser.goTo(std::forward<A>(args)...)) {
 		if (auto pb = dynamic_cast<ProgPageBrowser*>(state))
 			pb->resetFileIcons();
-		setPopupLoading();
+		setPopupProgress();
 	} else
 		setState<ProgPageBrowser>();
 }
@@ -471,7 +492,7 @@ void Program::eventArchiveFinished(const SDL_UserEvent& event) {
 		if (browser.finishArchive(std::move(*ra)))
 			setState<ProgPageBrowser>();
 		else
-			setPopupLoading();
+			setPopupProgress();
 		break;
 	case stop:
 		startBrowserPreview();
@@ -487,8 +508,7 @@ void Program::eventArchiveFinished(const SDL_UserEvent& event) {
 void Program::startBrowserPreview() {
 	if (auto pe = dynamic_cast<ProgFileExplorer*>(state))
 		if (World::sets()->preview)
-			if (auto [files, dirs] = browser.listCurDir(); pe->fileList->getWidgets().size() == files.size() + dirs.size())
-				browser.startPreview(files, dirs, pe->getLineHeight());
+			browser.startPreview(pe->getLineHeight());
 }
 
 void Program::eventBrowserGoUp() {
@@ -506,7 +526,7 @@ void Program::eventBrowserGoIn(PushButton* lbl) {
 void Program::eventBrowserGoFile(PushButton* lbl) {
 	if (browser.goFile(lbl->getText().data())) {
 		static_cast<ProgPageBrowser*>(state)->resetFileIcons();
-		setPopupLoading();
+		setPopupProgress();
 	}
 }
 
@@ -530,7 +550,7 @@ template <class... A>
 void Program::browserGoToHandle(A&&... args) {
 	if (browser.goTo(std::forward<A>(args)...)) {
 		static_cast<ProgPageBrowser*>(state)->resetFileIcons();
-		setPopupLoading();
+		setPopupProgress();
 	} else
 		World::scene()->resetLayouts();
 }
@@ -602,19 +622,19 @@ void Program::eventReaderProgress(BrowserPictureProgress* pp, char* text) {
 	delete[] text;
 }
 
-void Program::eventReaderFinished(BrowserResultPicture* rp, bool fwd) {
+void Program::eventReaderFinished(ResultCode rc, BrowserResultPicture* rp) {
 	browser.stopThread();
-	switch (rp->rc) {
+	switch (rc) {
 	using enum ResultCode;
 	case ok:
-		if (rp->hasArchive())	// when loading from an archive then the pictures will likely be out of order
+		if (rp->arch)	// when loading from an archive then the pictures will likely be out of order
 			rng::sort(rp->pics, [](const pair<Cstring, Texture*>& a, const pair<Cstring, Texture*>& b) -> bool { return Strcomp::less(a.first.data(), b.first.data()); });
-		else if (!fwd)
+		else if (!rp->fwd)
 			rng::reverse(rp->pics);	// when loading from a directory or pdf backwards then the pictures are gonna be sorted but in reverse order
 
 		browser.finishLoadPictures(*rp);
 		setState<ProgReader>();
-		static_cast<ProgReader*>(state)->reader->setPictures(rp->pics, rp->picname, fwd);
+		static_cast<ProgReader*>(state)->reader->setPictures(rp->pics, rp->picname, rp->fwd);
 		break;
 	case stop:
 		startBrowserPreview();
@@ -655,16 +675,30 @@ void Program::eventCenterView() {
 }
 
 void Program::eventNextDir() {
-	switchPictures(true, static_cast<ProgReader*>(state)->reader->lastPage());
+	browser.startGoNext(static_cast<ProgReader*>(state)->reader->lastPage(), true);
+	setPopupProgress();
 }
 
 void Program::eventPrevDir() {
-	switchPictures(false, static_cast<ProgReader*>(state)->reader->firstPage());
+	browser.startGoNext(static_cast<ProgReader*>(state)->reader->firstPage(), false);
+	setPopupProgress();
 }
 
-void Program::switchPictures(bool fwd, string_view picname) {
-	if (browser.goNext(fwd, picname))
-		setPopupLoading();
+void Program::eventGoNextFinished(const SDL_UserEvent& event) {
+	browser.stopThread();
+	auto rp = static_cast<BrowserResultPicture*>(event.data2);
+	switch (ResultCode(uintptr_t(event.data1))) {
+	using enum ResultCode;
+	case ok:
+		browser.startLoadPictures(rp);
+		return;
+	case stop:
+		World::scene()->setPopup(nullptr);
+		break;
+	case error:
+		state->showPopupMessage("No more images");
+	}
+	delete rp;
 }
 
 void Program::eventExitReader() {
@@ -712,7 +746,7 @@ void Program::eventOpenLibDirBrowser() {
 #endif
 	try {
 		browser.prepareFileOps(string_view());
-		browser.start(string(), SDL_getenv(home));
+		browser.beginFs(string(), SDL_getenv(home));
 		browser.exCall = &Program::eventOpenSettings;
 		setState<ProgSearchDir>();
 	} catch (const std::runtime_error& err) {
@@ -736,7 +770,7 @@ void Program::eventMoveFinished(string* errors) {
 		World::scene()->setPopup(nullptr);
 	else {
 		ProgSettings::logMoveErrors(errors);
-		state->showPopupMultiline(std::move(*errors));
+		state->showPopupMultiline(*errors);
 	}
 	delete errors;
 }
@@ -933,8 +967,8 @@ void Program::eventExit() {
 	World::winSys()->close();
 }
 
-void Program::setPopupLoading() {
-	state->showPopupMessage("Loading...", ProgPageBrowserEvent::fileLoadingCancelled, "Cancel", Alignment::center);
+void Program::setPopupProgress(Cstring&& msg) {
+	state->showPopupMessage(std::move(msg), ProgPageBrowserEvent::fileLoadingCancelled, "Cancel", Alignment::center);
 }
 
 template <Derived<ProgState> T, class... A>

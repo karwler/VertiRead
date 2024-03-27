@@ -25,7 +25,7 @@ public:
 	optional<uint32> mouseWin;		// last window id the mouse was in
 
 	InputSys();
-	~InputSys();
+	~InputSys() { cleanup(); }
 
 	void eventMouseMotion(const SDL_MouseMotionEvent& motion);
 	void eventMouseButtonDown(const SDL_MouseButtonEvent& button);
@@ -59,6 +59,8 @@ public:
 	void simulateMouseMove();
 
 private:
+	void cleanup() noexcept;
+
 	void checkBindingsK(SDL_Scancode key, uint8 repeat) const;
 	void checkBindingsB(uint8 jbutton) const;
 	void checkBindingsH(uint8 jhat, uint8 val) const;
@@ -68,7 +70,7 @@ private:
 
 	int checkAxisValue(int value) const;	// check deadzone in axis value
 	static float axisToFloat(int axisValue);
-	static SDL_MouseButtonEvent toMouseEvent(const SDL_TouchFingerEvent& fin, uint8 state, vec2 winSize);
+	static SDL_MouseButtonEvent toMouseEvent(const SDL_TouchFingerEvent& fin, uint8 state, vec2 winSize) noexcept;
 };
 
 inline bool InputSys::isPressed(Binding::Type type, float& amt) const {

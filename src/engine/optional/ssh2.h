@@ -29,6 +29,6 @@ extern decltype(libssh2_sftp_unlink_ex)* sftpUnlinkEx;
 extern decltype(libssh2_sftp_rmdir_ex)* sftpRmdirEx;
 extern decltype(libssh2_sftp_rename_ex)* sftpRenameEx;
 
-bool symLibssh2();
-void closeLibssh2();
+bool symLibssh2() noexcept;
+void closeLibssh2() noexcept;
 #endif

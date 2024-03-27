@@ -6,6 +6,10 @@
 #include <stop_token>
 #include <SDL_events.h>
 
+struct fz_context;
+struct fz_document;
+struct _PopplerDocument;
+
 enum UserEvent : uint32 {
 	SDL_USEREVENT_GENERAL = SDL_USEREVENT,
 	SDL_USEREVENT_PROG_BOOKS,
@@ -15,9 +19,12 @@ enum UserEvent : uint32 {
 	SDL_USEREVENT_PROG_SETTINGS,
 	SDL_USEREVENT_PROG_SEARCH_DIR,
 	SDL_USEREVENT_PROG_MAX = SDL_USEREVENT_PROG_SEARCH_DIR,
+	SDL_USEREVENT_THREAD_LIST_FINISHED,
+	SDL_USEREVENT_THREAD_DELETE_FINISHED,
 	SDL_USEREVENT_THREAD_ARCHIVE_FINISHED,
 	SDL_USEREVENT_THREAD_PREVIEW,
 	SDL_USEREVENT_THREAD_READER,
+	SDL_USEREVENT_THREAD_GO_NEXT_FINISHED,
 	SDL_USEREVENT_THREAD_MOVE,
 	SDL_USEREVENT_THREAD_FONTS_FINISHED,
 	SDL_USEREVENT_MAX
@@ -89,7 +96,6 @@ enum class ProgSettingsEvent : int32 {
 	setCompression,
 	setVsync,
 	setGpuSelecting,
-	setPdfImages,
 	setMultiFullscreen,
 	setPreview,
 	setHide,
@@ -135,18 +141,14 @@ struct EventId {
 	constexpr operator bool() const { return bool(type); }
 };
 
-constexpr EventId nullEvent = EventId(UserEvent(0), 0);
+inline constexpr EventId nullEvent = EventId(UserEvent(0), 0);
 
+void pushEvent(EventId id, void* data1 = nullptr, void* data2 = nullptr);
 void pushEvent(UserEvent type, int32 code, void* data1 = nullptr, void* data2 = nullptr);
 
 template <Enumeration T>
 void pushEvent(UserEvent type, T code, void* data1 = nullptr, void* data2 = nullptr) {
 	pushEvent(type, int32(code), data1, data2);
-}
-
-inline void pushEvent(EventId id, void* data1 = nullptr, void* data2 = nullptr) {
-	if (id)
-		pushEvent(id.type, id.code, data1, data2);
 }
 
 template <Invocable<SDL_UserEvent&> F>
@@ -160,24 +162,17 @@ void cleanupEvent(UserEvent type, F dealloc) {
 	}
 }
 
-enum class FileOpCapabilities : uint8 {
-	none = 0x0,
-	remove = 0x1,
-	rename = 0x2,
-	watch = 0x4
-};
-
 enum class Protocol : uint8 {
 	none,
 	smb,
 	sftp
 };
-constexpr array protocolNames = {
+inline constexpr array protocolNames = {
 	"",
 	"smb",
 	"sftp"
 };
-constexpr array<uint16, protocolNames.size()> protocolPorts = {
+inline constexpr array<uint16, protocolNames.size()> protocolPorts = {
 	0,
 	445,
 	22
@@ -188,7 +183,7 @@ enum class Family : uint8 {
 	v4,
 	v6
 };
-constexpr array familyNames = {
+inline constexpr array familyNames = {
 	"any",
 	"IPv4",
 	"IPv6"
@@ -205,7 +200,7 @@ struct RemoteLocation {
 	Protocol protocol = Protocol::none;
 	Family family = Family::any;
 
-	static Protocol getProtocol(string_view str);
+	static Protocol getProtocol(string_view str) noexcept;
 	static RemoteLocation fromPath(string_view str, Protocol proto);
 private:
 	static uint16 sanitizePort(string_view port, Protocol protocol);
@@ -219,10 +214,10 @@ struct FileChange {
 		addDirectory
 	};
 
-	string name;
+	Cstring name;
 	Type type;
 
-	FileChange(string&& entry, Type change) : name(std::move(entry)), type(change) {}
+	FileChange(Cstring&& entry, Type change) : name(std::move(entry)), type(change) {}
 };
 
 // archive file with image size
@@ -232,13 +227,8 @@ struct ArchiveFile {
 	uint64 size : 63 = 0;
 
 	ArchiveFile() = default;
-	ArchiveFile(const ArchiveFile& af) = default;
-	ArchiveFile(ArchiveFile&& af) = default;
 	ArchiveFile(Cstring&& filename, uint64 mem) : name(std::move(filename)), size(mem) {}
 	ArchiveFile(Cstring&& pdfName) : name(std::move(pdfName)), isPdf(true) {}
-
-	ArchiveFile& operator=(const ArchiveFile& af) = default;
-	ArchiveFile& operator=(ArchiveFile&& af) = default;
 };
 
 // archive directory node
@@ -252,10 +242,10 @@ struct ArchiveDir {
 
 	vector<ArchiveDir*> listDirs();
 	vector<ArchiveFile*> listFiles();
-	void finalize();
+	void finalize() noexcept;
 	pair<ArchiveDir*, ArchiveFile*> find(string_view path);
-	ArchiveDir* findDir(string_view dname);
-	ArchiveFile* findFile(string_view fname);
+	ArchiveDir* findDir(string_view dname) noexcept;
+	ArchiveFile* findFile(string_view fname) noexcept;
 	void copySlicedDentsFrom(const ArchiveDir& src);
 };
 
@@ -276,13 +266,57 @@ struct ArchiveData : public ArchiveDir {
 	ArchiveData() = default;
 	ArchiveData(Cstring&& file, PassCode pass = PassCode::none) : ArchiveDir(std::move(file)), pc(pass) {}
 
-	void clear();
+	operator bool() const;
 	ArchiveData copyLight() const;
 };
 
-inline void ArchiveData::clear() {
-	*this = ArchiveData();
+inline ArchiveData::operator bool() const {
+	return name.filled();
 }
+
+#if defined(CAN_MUPDF) || defined(CAN_POPPLER)
+// mupdf/poppler wrapper
+class PdfFile : private Data {
+public:
+	static constexpr char signature[] = "%PDF-";
+	static constexpr uint signatureLen = sizeof(signature) - sizeof(char);
+private:
+	static constexpr double defaultDpi = 72.0;
+
+	fz_context* mctx;
+	fz_document* mdoc = nullptr;
+	_PopplerDocument* pdoc = nullptr;
+	bool owner = false;
+
+public:
+	PdfFile() = default;
+	PdfFile(PdfFile&& pdf) noexcept;
+	PdfFile(SDL_RWops* ops, string* error);
+	~PdfFile() { freeDoc(); }
+
+	PdfFile& operator=(PdfFile&& pdf) noexcept;
+	operator bool() const noexcept;
+	int numPages() const noexcept;
+	SDL_Surface* renderPage(int pid, double dpi) noexcept;
+	PdfFile copyLight() const noexcept;
+
+	static bool canOpen(SDL_RWops* ops) noexcept;	// closes ops if it's not a nullptr
+
+private:
+	void freeDoc() noexcept;
+};
+
+inline PdfFile::operator bool() const noexcept {
+	return mdoc || pdoc;
+}
+
+#else
+class PdfFile {
+public:
+	constexpr operator bool() const { return false; }
+	constexpr PdfFile copyLight() const { return PdfFile(); }
+};
+#endif
 
 enum class ResultCode : uint8 {
 	ok,
@@ -294,7 +328,13 @@ enum BrowserResultState : uint8 {
 	BRS_NONE = 0x0,
 	BRS_LOC = 0x1,
 	BRS_PDF = 0x2,
-	BRS_ARCH = 0x4
+	BRS_ARCH = 0x4,
+	BRS_FWD = 0x8
+};
+
+// files and directories info
+struct BrowserResultList {
+	vector<Cstring> files, dirs;
 };
 
 // archive load info
@@ -307,7 +347,7 @@ struct BrowserResultArchive {
 	const bool hasRootDir;
 	ResultCode rc = ResultCode::ok;
 
-	BrowserResultArchive(optional<string>&& root, ArchiveData&& aroot, string&& fpath = string(), string&& ppage = string());
+	BrowserResultArchive(optional<string>&& root, ArchiveData&& aroot, string&& fpath = string(), string&& ppage = string()) noexcept;
 };
 
 // picture load info
@@ -316,23 +356,18 @@ struct BrowserResultPicture {
 	string curDir;
 	string picname;
 	ArchiveData arch;
+	PdfFile pdf;
 	vector<pair<Cstring, Texture*>> pics;
 	std::mutex mpic;
 	string error;
 	const bool hasRootDir;
 	const bool newCurDir;
 	const bool newArchive;
-	const bool pdf;
-	ResultCode rc = ResultCode::ok;
+	const bool newPdf;
+	const bool fwd;
 
-	BrowserResultPicture(BrowserResultState brs, optional<string>&& root, string&& container, string&& pname = string(), ArchiveData&& aroot = ArchiveData());
-
-	bool hasArchive() const;
+	BrowserResultPicture(BrowserResultState brs, optional<string>&& root, string&& container, string&& pname = string(), ArchiveData&& aroot = ArchiveData(), PdfFile&& pdfFile = PdfFile()) noexcept;
 };
-
-inline bool BrowserResultPicture::hasArchive() const {
-	return !arch.name.empty();
-}
 
 // intermediate picture load buffer
 struct BrowserPictureProgress {
@@ -340,7 +375,7 @@ struct BrowserPictureProgress {
 	SDL_Surface* img;
 	size_t id;
 
-	BrowserPictureProgress(BrowserResultPicture* rp, SDL_Surface* pic, size_t index);
+	BrowserPictureProgress(BrowserResultPicture* rp, SDL_Surface* pic, size_t index) noexcept;
 };
 
 // list of font families, files and which to select
@@ -362,5 +397,5 @@ private:
 public:
 	CountedStopReq(uint steps) : lim(steps) {}
 
-	bool stopReq(std::stop_token stoken);
+	bool stopReq(std::stop_token stoken) noexcept;
 };

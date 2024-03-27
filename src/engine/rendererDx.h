@@ -90,9 +90,10 @@ public:
 	Texture* texFromRpic(SDL_Surface* img) override;
 	Texture* texFromText(const PixmapRgba& pm) override;
 	bool texFromText(Texture* tex, const PixmapRgba& pm) override;
-	void freeTexture(Texture* tex) override;
+	void freeTexture(Texture* tex) noexcept override;
 
 private:
+	void cleanup() noexcept;
 	static IDXGIFactory* createFactory();
 	pair<IDXGISwapChain*, ID3D11RenderTargetView*> createSwapchain(IDXGIFactory* factory, SDL_Window* win, uvec2 res);
 	void recreateSwapchain(IDXGIFactory* factory, ViewDx* view);
@@ -104,7 +105,7 @@ private:
 	template <Class T> void uploadBuffer(ID3D11Buffer* buffer, const T& data);
 	ID3D11ShaderResourceView* createTexture(const byte_t* pix, uvec2 res, uint pitch, DXGI_FORMAT format);
 	static void replaceTexture(TextureDx* tex, ID3D11ShaderResourceView* tview, uvec2 res);
-	pair<SDL_Surface*, DXGI_FORMAT> pickPixFormat(SDL_Surface* img) const;
+	pair<SDL_Surface*, DXGI_FORMAT> pickPixFormat(SDL_Surface* img) const noexcept;
 	template <Derived<IUnknown> T> static void comRelease(T*& obj);
 	static string hresultToStr(HRESULT rs);
 };

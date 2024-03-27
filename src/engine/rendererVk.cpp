@@ -260,7 +260,7 @@ void FormatConverter::createPipelines(const InstanceVk* vk) {
 		pipelineInfos[i].stage.pName = "main";
 		pipelineInfos[i].stage.pSpecializationInfo = &specializationInfos[i];
 		pipelineInfos[i].layout = pipelineLayout;
-	};
+	}
 	if (VkResult rs = vk->vkCreateComputePipelines(vk->getLdev(), VK_NULL_HANDLE, pipelines.size(), pipelineInfos, nullptr, pipelines.data()); rs != VK_SUCCESS)
 		throw std::runtime_error(std::format("Failed to create converter pipelines: {}", string_VkResult(rs)));
 	vk->vkDestroyShaderModule(vk->getLdev(), compShaderModule, nullptr);
@@ -931,13 +931,13 @@ void AddressPass::free(const InstanceVk* vk) {
 
 // RENDERER VK
 
-RendererVk::TextureVk::TextureVk(uvec2 size, VkDescriptorPool descriptorPool, VkDescriptorSet descriptorSet) :
+RendererVk::TextureVk::TextureVk(uvec2 size, VkDescriptorPool descriptorPool, VkDescriptorSet descriptorSet) noexcept :
 	Texture(size),
 	pool(descriptorPool),
 	set(descriptorSet)
 {}
 
-RendererVk::TextureVk::TextureVk(uvec2 size, VkDescriptorPool descriptorPool, VkDescriptorSet descriptorSet, uint samplerId) :
+RendererVk::TextureVk::TextureVk(uvec2 size, VkDescriptorPool descriptorPool, VkDescriptorSet descriptorSet, uint samplerId) noexcept :
 	Texture(size),
 	pool(descriptorPool),
 	set(descriptorSet),
@@ -949,69 +949,84 @@ RendererVk::RendererVk(const umap<int, SDL_Window*>& windows, Settings* sets, iv
 	bgColor{ { { bgcolor.r, bgcolor.g, bgcolor.b, bgcolor.a } } },
 	immediatePresent(!sets->vsync)
 {
-	InstanceInfo instanceInfo = createInstance(windows.begin()->second);	// using just one window to get extensions should be fine
-	if (isSingleWindow(windows)) {
-		SDL_Vulkan_GetDrawableSize(windows.begin()->second, &viewRes.x, &viewRes.y);
-		if (auto view = static_cast<ViewVk*>(views.emplace(singleDspId, new ViewVk(windows.begin()->second, Recti(ivec2(0), viewRes))).first->second); !SDL_Vulkan_CreateSurface(windows.begin()->second, instance, &view->surface))
-			throw std::runtime_error(SDL_GetError());
-	} else {
-		views.reserve(windows.size());
-		for (auto [id, win] : windows) {
-			Recti wrect = sets->displays.at(id).translate(-origin);
-			SDL_Vulkan_GetDrawableSize(windows.begin()->second, &wrect.w, &wrect.h);
-			viewRes = glm::max(viewRes, wrect.end());
-			if (auto view = static_cast<ViewVk*>(views.emplace(id, new ViewVk(win, wrect)).first->second); !SDL_Vulkan_CreateSurface(win, instance, &view->surface))
+	ViewVk* vtmp = nullptr;
+	try {
+		InstanceInfo instanceInfo = createInstance(windows.begin()->second);	// using just one window to get extensions should be fine
+		if (isSingleWindow(windows)) {
+			SDL_Vulkan_GetDrawableSize(windows.begin()->second, &viewRes.x, &viewRes.y);
+			auto view = static_cast<ViewVk*>(views.emplace(singleDspId, vtmp = new ViewVk(windows.begin()->second, Recti(ivec2(0), viewRes))).first->second);
+			vtmp = nullptr;
+			if (!SDL_Vulkan_CreateSurface(windows.begin()->second, instance, &view->surface))
 				throw std::runtime_error(SDL_GetError());
+		} else {
+			views.reserve(windows.size());
+			for (auto [id, win] : windows) {
+				Recti wrect = sets->displays.at(id).translate(-origin);
+				SDL_Vulkan_GetDrawableSize(windows.begin()->second, &wrect.w, &wrect.h);
+				viewRes = glm::max(viewRes, wrect.end());
+				auto view = static_cast<ViewVk*>(views.emplace(id, new ViewVk(win, wrect)).first->second);
+				vtmp = nullptr;
+				if (!SDL_Vulkan_CreateSurface(win, instance, &view->surface))
+					throw std::runtime_error(SDL_GetError());
+			}
 		}
-	}
-	uptr<DeviceInfo> deviceInfo = pickPhysicalDevice(instanceInfo, sets->device);
-	createDevice(*deviceInfo);
+		uptr<DeviceInfo> deviceInfo = pickPhysicalDevice(instanceInfo, sets->device);
+		createDevice(*deviceInfo);
 
-	tcmdPool = createCommandPool(deviceInfo->tfam);
-	allocateCommandBuffers(tcmdPool, tcmdBuffers.data(), tcmdBuffers.size());
-	rng::generate(tfences, [this]() -> VkFence { return createFence(VK_FENCE_CREATE_SIGNALED_BIT); });
-	if (deviceInfo->canCompute) {
-		try {
-			fmtConv.init(this);
-			transferAtomSize = roundToMultiple(FormatConverter::convWgrpSize * 3 * sizeof(uint32), transferAtomSize);	// before this transferAtomSize must be set to nonCoherentAtomSize
-		} catch (const std::runtime_error& err) {
-			logError(err.what());
-			fmtConv.free(this);
-			fmtConv = FormatConverter();
+		tcmdPool = createCommandPool(deviceInfo->tfam);
+		allocateCommandBuffers(tcmdPool, tcmdBuffers.data(), tcmdBuffers.size());
+		rng::generate(tfences, [this]() -> VkFence { return createFence(VK_FENCE_CREATE_SIGNALED_BIT); });
+		if (deviceInfo->canCompute) {
+			try {
+				fmtConv.init(this);
+				transferAtomSize = roundToMultiple(FormatConverter::convWgrpSize * 3 * sizeof(uint32), transferAtomSize);	// before this transferAtomSize must be set to nonCoherentAtomSize
+			} catch (const std::runtime_error& err) {
+				logError(err.what());
+				fmtConv.free(this);
+				fmtConv = FormatConverter();
+			}
 		}
-	}
 
-	gcmdPool = createCommandPool(deviceInfo->gfam);
-	vector<VkDescriptorSet> descriptorSets = renderPass.init(this, surfaceFormat.format, views.size());
-	for (size_t d = 0; auto [id, view] : views) {
-		auto vw = static_cast<ViewVk*>(view);
-		createSwapchain(vw);
-		initView(vw, descriptorSets[d++]);
-	}
+		gcmdPool = createCommandPool(deviceInfo->gfam);
+		vector<VkDescriptorSet> descriptorSets = renderPass.init(this, surfaceFormat.format, views.size());
+		for (size_t d = 0; auto [id, view] : views) {
+			auto vw = static_cast<ViewVk*>(view);
+			createSwapchain(vw);
+			initView(vw, descriptorSets[d++]);
+		}
 
-	addressPass.init(this);
-	std::tie(addrImage, addrImageMemory) = createImage(u32vec2(1), VK_IMAGE_TYPE_1D, AddressPass::format, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	addrView = createImageView(addrImage, VK_IMAGE_VIEW_TYPE_1D, AddressPass::format);
-	addrFramebuffer = createFramebuffer(addressPass.getHandle(), addrView, u32vec2(1));
-	std::tie(addrBuffer, addrBufferMemory) = createBuffer(sizeof(u32vec2), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-	if (VkResult rs = vkMapMemory(ldev, addrBufferMemory, 0, sizeof(u32vec2), 0, reinterpret_cast<void**>(&addrMappedMemory)); rs != VK_SUCCESS)
-		throw std::runtime_error(std::format("Failed to map address lookup memory: {}", string_VkResult(rs)));
-	allocateCommandBuffers(gcmdPool, &commandBufferAddr, 1);
-	addrFence = createFence();
+		addressPass.init(this);
+		std::tie(addrImage, addrImageMemory) = createImage(u32vec2(1), VK_IMAGE_TYPE_1D, AddressPass::format, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		addrView = createImageView(addrImage, VK_IMAGE_VIEW_TYPE_1D, AddressPass::format);
+		addrFramebuffer = createFramebuffer(addressPass.getHandle(), addrView, u32vec2(1));
+		std::tie(addrBuffer, addrBufferMemory) = createBuffer(sizeof(u32vec2), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		if (VkResult rs = vkMapMemory(ldev, addrBufferMemory, 0, sizeof(u32vec2), 0, reinterpret_cast<void**>(&addrMappedMemory)); rs != VK_SUCCESS)
+			throw std::runtime_error(std::format("Failed to map address lookup memory: {}", string_VkResult(rs)));
+		allocateCommandBuffers(gcmdPool, &commandBufferAddr, 1);
+		addrFence = createFence();
 
-	createVertexBuffer();
-	setCompression(sets->compression);
-	setMaxPicRes(sets->maxPicRes);
-	if (!sets->picLim.size) {
-		for (uint32 i = 0; i < pdevMemProperties.memoryHeapCount; ++i)
-			if ((pdevMemProperties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) && pdevMemProperties.memoryHeaps[i].size > sets->picLim.size)
-				sets->picLim.size = pdevMemProperties.memoryHeaps[i].size;
-		sets->picLim.size /= 2;
-		recommendPicRamLimit(sets->picLim.size);
+		createVertexBuffer();
+		setCompression(sets->compression);
+		setMaxPicRes(sets->maxPicRes);
+		if (!sets->picLim.size) {
+			for (uint32 i = 0; i < pdevMemProperties.memoryHeapCount; ++i)
+				if ((pdevMemProperties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) && pdevMemProperties.memoryHeaps[i].size > sets->picLim.size)
+					sets->picLim.size = pdevMemProperties.memoryHeaps[i].size;
+			sets->picLim.size /= 2;
+			recommendPicRamLimit(sets->picLim.size);
+		}
+	} catch (...) {
+		delete vtmp;
+		cleanup();
+		throw;
 	}
 }
 
 RendererVk::~RendererVk() {
+	cleanup();
+}
+
+void RendererVk::cleanup() noexcept {
 	if (!functionsInitialized())
 		return;
 	vkDeviceWaitIdle(ldev);
@@ -1422,8 +1437,8 @@ void RendererVk::startDraw(View* view) {
 void RendererVk::drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) {
 	auto vtx = static_cast<const TextureVk*>(tex);
 	RenderPass::PushData pd = {
-		.rect = rect.toVec(),
-		.frame = frame.toVec(),
+		.rect = rect.asVec(),
+		.frame = frame.asVec(),
 		.color = color,
 		.sid = vtx->sid
 	};
@@ -1503,8 +1518,8 @@ void RendererVk::startSelDraw(View* view, ivec2 pos) {
 
 void RendererVk::drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) {
 	AddressPass::PushData pd = {
-		.rect = rect.toVec(),
-		.frame = frame.toVec(),
+		.rect = rect.asVec(),
+		.frame = frame.asVec(),
 		.addr = uvec2(uintptr_t(wgt), uintptr_t(wgt) >> 32)
 	};
 	vkCmdPushConstants(commandBufferAddr, addressPass.getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(AddressPass::PushData), &pd);
@@ -1592,14 +1607,15 @@ bool RendererVk::texFromText(Texture* tex, const PixmapRgba& pm) {
 	return false;
 }
 
-void RendererVk::freeTexture(Texture* tex) {
-	auto vtx = static_cast<TextureVk*>(tex);
-	vkQueueWaitIdle(gqueue);
-	renderPass.freeDescriptorSetTex(this, vtx->pool, vtx->set);
-	vkDestroyImageView(ldev, vtx->view, nullptr);
-	vkDestroyImage(ldev, vtx->image, nullptr);
-	vkFreeMemory(ldev, vtx->memory, nullptr);
-	delete vtx;
+void RendererVk::freeTexture(Texture* tex) noexcept {
+	if (auto vtx = static_cast<TextureVk*>(tex)) {
+		vkQueueWaitIdle(gqueue);
+		renderPass.freeDescriptorSetTex(this, vtx->pool, vtx->set);
+		vkDestroyImageView(ldev, vtx->view, nullptr);
+		vkDestroyImage(ldev, vtx->image, nullptr);
+		vkFreeMemory(ldev, vtx->memory, nullptr);
+		delete vtx;
+	}
 }
 
 void RendererVk::replaceTexture(TextureVk& tex, TextureVk& ntex) {
@@ -1940,7 +1956,7 @@ void RendererVk::copyImageToBuffer(VkCommandBuffer commandBuffer, VkImage image,
 	vkCmdCopyImageToBuffer(commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buffer, 1, &region);
 }
 
-tuple<SDL_Surface*, VkFormat, bool> RendererVk::pickPixFormat(SDL_Surface* img) const {
+tuple<SDL_Surface*, VkFormat, bool> RendererVk::pickPixFormat(SDL_Surface* img) const noexcept {
 	if (!img)
 		return tuple(nullptr, VK_FORMAT_UNDEFINED, false);
 

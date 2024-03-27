@@ -8,7 +8,7 @@
 
 // CLICK STAMP
 
-ClickStamp::ClickStamp(Widget* wgt, ScrollArea* sarea, ivec2 cursPos) :
+ClickStamp::ClickStamp(Widget* wgt, ScrollArea* sarea, ivec2 cursPos) noexcept :
 	widget(wgt),
 	area(sarea),
 	mPos(cursPos)
@@ -168,7 +168,7 @@ void Scene::setLayouts() {
 	World::drawSys()->getRenderer()->synchTransfer();
 }
 
-void Scene::setCapture(Widget* inter) {
+void Scene::setCapture(Widget* inter) noexcept {
 	capture = inter;
 	captureLen = 0;
 }
@@ -266,7 +266,7 @@ Widget* Scene::getSelected(ivec2 mPos) {
 	}
 }
 
-ScrollArea* Scene::getSelectedScrollArea() const {
+ScrollArea* Scene::getSelectedScrollArea() const noexcept {
 	auto parent = dynamic_cast<Layout*>(select);
 	if (select && !parent)
 		parent = select->getParent();

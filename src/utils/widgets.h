@@ -29,12 +29,12 @@ public:
 protected:
 	void recreateTextTex(string_view str, uint height);
 	void recreateTextTex(string_view str, uint height, uint limit);
-	Recti dspTextFrame(const Recti& rect, const Recti& frame) const;
-	ivec2 alignedTextPos(ivec2 pos, int sizx, Alignment align) const;
+	Recti dspTextFrame(const Recti& rect, const Recti& frame) const noexcept;
+	ivec2 alignedTextPos(ivec2 pos, int sizx, Alignment align) const noexcept;
 };
 
 template <Class T>
-Recti TextDsp<T>::dspTextFrame(const Recti& rect, const Recti& frame) const {
+Recti TextDsp<T>::dspTextFrame(const Recti& rect, const Recti& frame) const noexcept {
 	return Recti(rect.x + textMargin, rect.y, rect.w - textMargin * 2, rect.h).intersect(frame);
 }
 
@@ -57,39 +57,39 @@ private:
 
 public:
 	bool tick(float dSec);	// returns whether the list has moved
-	bool hold(ivec2 mPos, uint8 mBut, Widget* wgt, ivec2 pos, ivec2 size, bool vert);	// returns whether the list has moved
-	void drag(ivec2 mPos, ivec2 mMov, ivec2 pos, bool vert);
-	void undrag(ivec2 mPos, uint8 mBut, bool vert);
-	void scroll(ivec2 wMov, bool vert);
+	bool hold(ivec2 mPos, uint8 mBut, Widget* wgt, ivec2 pos, ivec2 size, bool vert) noexcept;	// returns whether the list has moved
+	void drag(ivec2 mPos, ivec2 mMov, ivec2 pos, bool vert) noexcept;
+	void undrag(ivec2 mPos, uint8 mBut, bool vert) noexcept;
+	void scroll(ivec2 wMov, bool vert) noexcept;
 
 	bool getDraggingSlider() const { return draggingSlider; }
-	void setLimits(ivec2 lsize, ivec2 wsize, bool vert);
+	void setLimits(ivec2 lsize, ivec2 wsize, bool vert) noexcept;
 	ivec2 getListSize() const { return listSize; }
 	ivec2 getListMax() const { return listMax; }
-	void setListPos(ivec2 pos);
-	void moveListPos(ivec2 mov);
-	int barSize(ivec2 wsize, bool vert) const;	// returns 0 if slider isn't needed
-	Recti barRect(ivec2 pos, ivec2 size, bool vert) const;
-	Recti sliderRect(ivec2 pos, ivec2 size, bool vert) const;
+	void setListPos(ivec2 pos) noexcept;
+	void moveListPos(ivec2 mov) noexcept;
+	int barSize(ivec2 wsize, bool vert) const noexcept;	// returns 0 if slider isn't needed
+	Recti barRect(ivec2 pos, ivec2 size, bool vert) const noexcept;
+	Recti sliderRect(ivec2 pos, ivec2 size, bool vert) const noexcept;
 private:
-	void setSlider(int spos, ivec2 pos, bool vert);
-	int sliderPos(ivec2 pos, ivec2 wsize, bool vert) const;
-	static void throttleMotion(float& mov, float dSec);
+	void setSlider(int spos, ivec2 pos, bool vert) noexcept;
+	int sliderPos(ivec2 pos, ivec2 wsize, bool vert) const noexcept;
+	static void throttleMotion(float& mov, float dSec) noexcept;
 };
 
-inline void Scrollable::setListPos(ivec2 pos) {
+inline void Scrollable::setListPos(ivec2 pos) noexcept {
 	listPos = glm::clamp(pos, ivec2(0), listMax);
 }
 
-inline void Scrollable::moveListPos(ivec2 mov) {
+inline void Scrollable::moveListPos(ivec2 mov) noexcept {
 	setListPos(listPos + mov);
 }
 
-inline int Scrollable::barSize(ivec2 wsize, bool vert) const {
+inline int Scrollable::barSize(ivec2 wsize, bool vert) const noexcept {
 	return listSize[vert] > wsize[vert] ? barSizeVal : 0;
 }
 
-inline int Scrollable::sliderPos(ivec2 pos, ivec2 wsize, bool vert) const {
+inline int Scrollable::sliderPos(ivec2 pos, ivec2 wsize, bool vert) const noexcept {
 	return listSize[vert] > wsize[vert] ? pos[vert] + listPos[vert] * sliderMax / listMax[vert] : 0;
 }
 
@@ -128,11 +128,11 @@ public:
 	virtual void onText(string_view, uint) {}
 	virtual void onDisplayChange() {}
 	virtual void onNavSelect(Direction dir);
-	virtual bool navSelectable() const;
-	virtual bool hasDoubleclick() const;
+	virtual bool navSelectable() const noexcept;
+	virtual bool hasDoubleclick() const noexcept;
 
 	Layout* getParent() const { return parent; }
-	void setParent(Layout* pnt, uint id);
+	void setParent(Layout* pnt, uint id) noexcept;
 	uint getIndex() const { return relSize.id; }
 	const Size& getRelSize() const { return relSize; }
 	virtual ivec2 position() const;
@@ -158,7 +158,7 @@ private:
 	Texture* tex;
 
 public:
-	Picture(const Size& size, Texture* texture);
+	Picture(const Size& size, Texture* texture) noexcept;
 	~Picture() override;
 
 	void drawSelf(const Recti& view) override;
@@ -173,8 +173,7 @@ public:
 	const Alignment align;
 
 public:
-	Label(const Size& size, Cstring&& line, Alignment alignment = Alignment::left, bool bg = true);
-	~Label() override = default;
+	Label(const Size& size, Cstring&& line, Alignment alignment = Alignment::left, bool bg = true) noexcept;
 
 	void drawSelf(const Recti& view) override;
 	void onResize() override;
@@ -200,8 +199,7 @@ private:
 	const uint lineSize;
 
 public:
-	TextBox(const Size& size, uint lineH, Cstring&& lines, bool bg = true);
-	~TextBox() override = default;
+	TextBox(const Size& size, uint lineH, Cstring&& lines, bool bg = true) noexcept;
 
 	void tick(float dSec) override;
 	void onResize() override;
@@ -209,7 +207,7 @@ public:
 	void onDrag(ivec2 mPos, ivec2 mMov) override;
 	void onUndrag(ivec2 mPos, uint8 but) override;
 	void onScroll(ivec2 wMov) override;
-	bool navSelectable() const override;
+	bool navSelectable() const noexcept override;
 
 	void setText(const Cstring& str) override;
 	void setText(Cstring&& str) override;
@@ -228,34 +226,28 @@ protected:
 	Color bgColor = Color::normal;
 
 public:
-	Button(const Size& size, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring());
-	~Button() override = default;
+	Button(const Size& size, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring()) noexcept;
 
 	void drawAddr(const Recti& view) override;
 	void onClick(ivec2 mPos, uint8 mBut) override;
 	void onDoubleClick(ivec2 mPos, uint8 mBut) override;
 	void onHover() override;
 	void onUnhover() override;
-	bool navSelectable() const override;
-	bool hasDoubleclick() const override;
+	bool navSelectable() const noexcept override;
+	bool hasDoubleclick() const noexcept override;
 
 	virtual const char* getTooltip() const;
-	void setEvent(EventId eid, Actions amask);
-	Color getBgColor() const;
-	bool toggleHighlighted();
+	void setEvent(EventId eid, Actions amask) noexcept;
+	Color getBgColor() const { return bgColor; }
+	bool toggleHighlighted() noexcept;
 };
-
-inline Color Button::getBgColor() const {
-	return bgColor;
-}
 
 // if you don't know what a checkbox is then I don't know what to tell ya
 class CheckBox final : public Button {
 public:
 	bool on;
 
-	CheckBox(const Size& size, bool checked, EventId eid, Cstring&& tip = Cstring());
-	~CheckBox() override = default;
+	CheckBox(const Size& size, bool checked, EventId eid, Cstring&& tip = Cstring()) noexcept;
 
 	void drawSelf(const Recti& view) override;
 	void onClick(ivec2 mPos, uint8 mBut) override;
@@ -280,8 +272,7 @@ private:
 	int diffSliderMouse = 0;
 
 public:
-	Slider(const Size& size, int value, int minimum, int maximum, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring());
-	~Slider() override = default;
+	Slider(const Size& size, int value, int minimum, int maximum, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring()) noexcept;
 
 	void drawSelf(const Recti& view) override;
 	void onClick(ivec2 mPos, uint8 mBut) override;
@@ -316,8 +307,7 @@ private:
 	const Alignment align;
 
 public:
-	PushButton(const Size& size, Cstring&& line, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring(), Alignment alignment = Alignment::left);
-	~PushButton() override = default;
+	PushButton(const Size& size, Cstring&& line, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring(), Alignment alignment = Alignment::left) noexcept;
 
 	void drawSelf(const Recti& view) override;
 	void onResize() override;
@@ -346,8 +336,7 @@ private:
 	const Texture* tex;
 
 public:
-	IconButton(const Size& size, const Texture* texture, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring());
-	~IconButton() override = default;
+	IconButton(const Size& size, const Texture* texture, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring()) noexcept;
 
 	void drawSelf(const Recti& view) override;
 
@@ -362,8 +351,8 @@ private:
 	Texture* iconTex;
 
 public:
-	IconPushButton(const Size& size, Cstring&& line, const Texture* texture, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring());
-	IconPushButton(const Size& size, Cstring&& line, Texture* texture, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring());	// gains ownership of texture
+	IconPushButton(const Size& size, Cstring&& line, const Texture* texture, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring()) noexcept;
+	IconPushButton(const Size& size, Cstring&& line, Texture* texture, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring()) noexcept;	// gains ownership of texture
 	~IconPushButton() override;
 
 	void drawSelf(const Recti& view) override;
@@ -389,7 +378,6 @@ private:
 public:
 	ComboBox(const Size& size, Cstring&& curOption, vector<Cstring>&& opts, EventId call, Cstring&& tip = Cstring(), uptr<Cstring[]> otips = nullptr, Alignment alignment = Alignment::left);
 	ComboBox(const Size& size, uint curOption, vector<Cstring>&& opts, EventId call, Cstring&& tip = Cstring(), uptr<Cstring[]> otips = nullptr, Alignment alignment = Alignment::left);
-	~ComboBox() override = default;
 
 	void onClick(ivec2 mPos, uint8 mBut) override;
 
@@ -428,8 +416,7 @@ private:
 public:
 	const bool unfocusConfirm;
 
-	LabelEdit(const Size& size, string&& line, EventId eid, EventId cid = nullEvent, Actions amask = ACT_LEFT, Cstring&& tip = Cstring(), TextType type = TextType::any, bool focusLossConfirm = true);
-	~LabelEdit() override = default;
+	LabelEdit(const Size& size, string&& line, EventId eid, EventId cid = nullEvent, Actions amask = ACT_LEFT, Cstring&& tip = Cstring(), TextType type = TextType::any, bool focusLossConfirm = true) noexcept;
 
 	void drawSelf(const Recti& view) override;
 	void drawTop(const Recti& view) const override;
@@ -457,10 +444,10 @@ private:
 
 	static bool kmodCtrl(uint16 mod);
 	static bool kmodAlt(uint16 mod);
-	uint jumpCharB(uint i) const;
-	uint jumpCharF(uint i) const;
-	uint findWordStart() const;	// returns index of first character of word before cpos
-	uint findWordEnd() const;	// returns index of character after last character of word after cpos
+	uint jumpCharB(uint i) const noexcept;
+	uint jumpCharF(uint i) const noexcept;
+	uint findWordStart() const noexcept;	// returns index of first character of word before cpos
+	uint findWordEnd() const noexcept;		// returns index of character after last character of word after cpos
 	void cleanText();
 	void cleanSIntSpacedText();
 	void cleanUIntSpacedText();
@@ -503,8 +490,7 @@ private:
 	const Binding::Type bindingType;	// index of what is currently being edited
 
 public:
-	KeyGetter(const Size& size, AcceptType type, Binding::Type binding, Cstring&& tip = Cstring());
-	~KeyGetter() override = default;
+	KeyGetter(const Size& size, AcceptType type, Binding::Type binding, Cstring&& tip = Cstring()) noexcept;
 
 	void onClick(ivec2 mPos, uint8 mBut) override;
 	void onKeypress(const SDL_Keysym& key) override;
@@ -513,7 +499,7 @@ public:
 	void onJAxis(uint8 jaxis, bool positive) override;
 	void onGButton(SDL_GameControllerButton gbutton) override;
 	void onGAxis(SDL_GameControllerAxis gaxis, bool positive) override;
-	bool navSelectable() const override;
+	bool navSelectable() const noexcept override;
 
 	void restoreText();
 	void clearBinding();
@@ -534,12 +520,7 @@ private:
 		bool active;
 
 		Dsp() = default;
-		Dsp(const Dsp&) = default;
-		Dsp(Dsp&&) = default;
-		Dsp(const Recti& vdsp, bool on);
-
-		Dsp& operator=(const Dsp&) = default;
-		Dsp& operator=(Dsp&&) = default;
+		Dsp(const Recti& vdsp, bool on) noexcept;
 	};
 
 	static constexpr int winMargin = 5;
@@ -553,7 +534,7 @@ private:
 	const bool vertical;
 
 public:
-	WindowArranger(const Size& size, float baseScale, bool vertExp, EventId eid, Actions amask, Cstring&& tip = Cstring());
+	WindowArranger(const Size& size, float baseScale, bool vertExp, EventId eid, Actions amask, Cstring&& tip = Cstring()) noexcept;
 	~WindowArranger() override;
 
 	void drawSelf(const Recti& view) override;
@@ -566,10 +547,10 @@ public:
 	void onDrag(ivec2 mPos, ivec2 mMov) override;
 	void onUndrag(ivec2 mPos, uint8 mBut) override;
 	void onDisplayChange() override;
-	bool navSelectable() const override;
+	bool navSelectable() const noexcept override;
 
 	const char* getTooltip() const override;
-	bool draggingDisp(int id) const;
+	bool draggingDisp(int id) const noexcept;
 	const umap<int, Dsp>& getDisps() const { return disps; }
 	umap<int, Recti> getActiveDisps() const;
 	Recti offsetDisp(const Recti& rect, ivec2 pos) const;
@@ -579,10 +560,10 @@ private:
 	int dispUnderPos(ivec2 pnt) const;
 	void calcDisplays();
 	void buildEntries();
-	float entryScale(int fsiz) const;
+	float entryScale(int fsiz) const noexcept;
 	void freeTextures();
 	ivec2 snapDrag() const;
-	static array<ivec2, 8> getSnapPoints(const Recti& rect);
+	static array<ivec2, 8> getSnapPoints(const Recti& rect) noexcept;
 	template <size_t S> static void scanClosestSnapPoint(const array<pair<uint, uint>, S>& relations, const Recti& rect, const array<ivec2, 8>& snaps, uint& snapId, ivec2& snapPnt, float& minDist);
 };
 

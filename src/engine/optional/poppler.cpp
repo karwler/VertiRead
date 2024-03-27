@@ -1,4 +1,4 @@
-#ifdef CAN_PDF
+#ifdef CAN_POPPLER
 #include "glib.h"
 #include "poppler.h"
 #include "internal.h"
@@ -16,6 +16,7 @@ decltype(poppler_page_get_size)* popplerPageGetSize = nullptr;
 decltype(poppler_page_render)* popplerPageRender = nullptr;
 decltype(cairo_create)* cairoCreate = nullptr;
 decltype(cairo_destroy)* cairoDestroy = nullptr;
+decltype(cairo_scale)* cairoScale = nullptr;
 decltype(cairo_pdf_surface_create)* cairoPdfSurfaceCreate = nullptr;
 decltype(cairo_surface_map_to_image)* cairoSurfaceMapToImage = nullptr;
 decltype(cairo_image_surface_get_format)* cairoImageSurfaceGetFormat = nullptr;
@@ -26,10 +27,11 @@ decltype(cairo_image_surface_get_stride)* cairoImageSurfaceGetStride = nullptr;
 decltype(cairo_surface_unmap_image)* cairoSurfaceUnmapImage = nullptr;
 decltype(cairo_surface_destroy)* cairoSurfaceDestroy = nullptr;
 
-bool symPoppler() {
+bool symPoppler() noexcept {
 	if (!(libp || failed || (symGlib() && (libc = libOpen("libcairo" LIB_EXT)) && (libp = libOpen("libpoppler-glib" LIB_EXT))
 		&& (cairoCreate = libSym<decltype(cairoCreate)>(libc, "cairo_create"))
 		&& (cairoDestroy = libSym<decltype(cairoDestroy)>(libc, "cairo_destroy"))
+		&& (cairoScale = libSym<decltype(cairoScale)>(libc, "cairo_scale"))
 		&& (cairoPdfSurfaceCreate = libSym<decltype(cairoPdfSurfaceCreate)>(libc, "cairo_pdf_surface_create"))
 		&& (cairoSurfaceMapToImage = libSym<decltype(cairoSurfaceMapToImage)>(libc, "cairo_surface_map_to_image"))
 		&& (cairoImageSurfaceGetFormat = libSym<decltype(cairoImageSurfaceGetFormat)>(libc, "cairo_image_surface_get_format"))
@@ -55,7 +57,7 @@ bool symPoppler() {
 	return libp;
 }
 
-void closePoppler() {
+void closePoppler() noexcept {
 	libClose(libp);
 	libClose(libc);
 	failed = false;

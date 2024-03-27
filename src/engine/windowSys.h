@@ -18,11 +18,11 @@ private:
 	Scene* scene;
 	Settings* sets;
 	umap<int, SDL_Window*> windows;
-	float dSec = 0.f;		// delta seconds, aka the time between each iteration of the above mentioned loop
-	bool run = true;		// whether the loop in which the program runs should continue
+	float dSec;		// delta seconds, aka the time between each iteration of the above mentioned loop
+	bool run;		// whether the loop in which the program runs should continue
 
 public:
-	int start(vector<string>&& cmdVals, uset<string>&& cmdFlags);
+	int start(vector<string>&& cmdVals, uset<string>&& cmdFlags) noexcept;
 	void close();
 
 	float getDSec() const { return dSec; }

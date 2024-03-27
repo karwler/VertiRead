@@ -17,6 +17,6 @@ extern decltype(FcConfigSubstitute)* fcConfigSubstitute;
 extern decltype(FcFontMatch)* fcFontMatch;
 extern decltype(FcFontList)* fcFontList;
 
-bool symFontconfig();
-void closeFontconfig();
+bool symFontconfig() noexcept;
+void closeFontconfig() noexcept;
 #endif

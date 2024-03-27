@@ -193,16 +193,7 @@ void ProgState::showPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, EventId 
 	};
 	std::initializer_list<const char*>::iterator itxs = txs.begin();
 	uint descLength = findMaxLength(txs.begin(), txs.end(), popupLineHeight);
-	uint protocolLength = findMaxLength(protocolNames.begin(), protocolNames.end(), popupLineHeight);
-	uint portLength = measureText("00000", popupLineHeight) + LabelEdit::caretWidth;
-	uint familyLblLength = measureText(txs.end()[-1], popupLineHeight);
-	uint familyValLength = findMaxLength(familyNames.begin(), familyNames.end(), popupLineHeight);
-	uint valLength = std::max(protocolLength + Layout::defaultItemSpacing + descLength * 2, portLength + familyLblLength + familyValLength + Layout::defaultItemSpacing * 2);
 
-	string msg = std::format("{} Login", rl.protocol == Protocol::smb ? "SMB" : "SFTP");
-	uint mglen = measureText(msg, popupLineHeight);
-	uint yeslen = measureText("Log In", popupLineHeight);
-	uint nolen = measureText("Cancel", popupLineHeight);
 	Children user = {
 		new Label(descLength, *itxs++),
 		new LabelEdit(1.f, std::move(rl.user), nullEvent, nullEvent, ACT_NONE, "Username")
@@ -219,15 +210,10 @@ void ProgState::showPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, EventId 
 		new Label(descLength, *itxs++),
 		new LabelEdit(1.f, std::move(rl.path), nullEvent, nullEvent, ACT_NONE, "Directory to open"s + (rl.protocol == Protocol::smb ? " (must start with the share name)" : ""))
 	};
-	vector<Widget*> port = {
+	Children port = {
 		new Label(descLength, *itxs++),
 		new LabelEdit(1.f, toStr(rl.port), nullEvent, nullEvent, ACT_NONE, "Port", rl.protocol == Protocol::smb ? LabelEdit::TextType::uInt : LabelEdit::TextType::any)
 	};
-	if (rl.protocol == Protocol::sftp)
-		port.insert(port.end(), {
-			new Label(familyLblLength, *++itxs),
-			new ComboBox(familyValLength, eint(Family::any), vector<Cstring>(familyNames.begin(), familyNames.end()), GeneralEvent::confirmComboBox, "Family for resolving the server address")
-		});
 	Children bot = {
 		new PushButton(1.f, "Log In", kcal, ACT_LEFT, Cstring(), Alignment::center),
 		new PushButton(1.f, "Cancel", ccal, ACT_LEFT, Cstring(), Alignment::center)
@@ -235,13 +221,13 @@ void ProgState::showPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, EventId 
 	Widget* first = rl.user.empty() ? user[1] : password[1];
 
 	vector<Widget*> con {
-		new Label(popupLineHeight, std::move(msg), Alignment::center),
+		new Label(popupLineHeight, std::format("{} Login", rl.protocol == Protocol::smb ? "SMB" : "SFTP"), Alignment::center),
 		new Layout(popupLineHeight, std::move(user), Direction::right),
 		new Layout(popupLineHeight, std::move(password), Direction::right),
 		new Layout(popupLineHeight, std::move(server), Direction::right),
 		new Layout(popupLineHeight, std::move(path), Direction::right),
 		new Layout(popupLineHeight, std::move(port), Direction::right),
-		new Layout(popupLineHeight, std::move(bot), Direction::right),
+		new Layout(popupLineHeight, std::move(bot), Direction::right)
 	};
 	if (rl.protocol == Protocol::smb) {
 		Children workgroup = {
@@ -249,6 +235,14 @@ void ProgState::showPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, EventId 
 			new LabelEdit(1.f, std::move(rl.workgroup), nullEvent, nullEvent, ACT_NONE, "Workgroup")
 		};
 		con.insert(con.begin() + 2, new Layout(popupLineHeight, std::move(workgroup), Direction::right));
+	}
+	++itxs;
+	if (rl.protocol == Protocol::sftp) {
+		Children family = {
+			new Label(descLength, *itxs),
+			new ComboBox(1.f, eint(Family::any), vector<Cstring>(familyNames.begin(), familyNames.end()), GeneralEvent::confirmComboBox, "Family for resolving the server address")
+		};
+		con.insert(con.begin() + 6, new Layout(popupLineHeight, std::move(family), Direction::right));
 	}
 	++itxs;
 	if (World::program()->canStoreCredentials()) {
@@ -259,23 +253,22 @@ void ProgState::showPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, EventId 
 		con.insert(con.end() - 1, new Layout(popupLineHeight, std::move(saveCredentials), Direction::right));
 	}
 	uint numLines = con.size();
-	World::scene()->setPopup(new Popup(svec2(std::max(std::max(mglen, yeslen + nolen), descLength + valLength) + Layout::defaultItemSpacing * 3, popupLineHeight * numLines + Layout::defaultItemSpacing * (numLines + 1)), std::move(con), ccal, kcal, first));
+	World::scene()->setPopup(new Popup(svec2(0.75f, popupLineHeight * numLines + Layout::defaultItemSpacing * (numLines + 1)), std::move(con), ccal, kcal, first));
 }
 
 pair<RemoteLocation, bool> ProgState::remoteLocationFromPopup() {
 	std::span<Widget*> con = World::scene()->getPopup()->getWidgets();
-	uint offs = con.size() == uint(8 + World::program()->canStoreCredentials());
-	std::span<Widget*> portfam = static_cast<Layout*>(con[5 + offs])->getWidgets();
+	uint smb = static_cast<Layout*>(con[2])->getWidget<Label>(0)->getText() == "Workgroup";
 	return pair(RemoteLocation{
-		.server = static_cast<Layout*>(con[2 + offs])->getWidget<LabelEdit>(2)->getText(),
-		.path = static_cast<Layout*>(con[4 + offs])->getWidget<LabelEdit>(1)->getText(),
+		.server = static_cast<Layout*>(con[3 + smb])->getWidget<LabelEdit>(1)->getText(),
+		.path = static_cast<Layout*>(con[4 + smb])->getWidget<LabelEdit>(1)->getText(),
 		.user = static_cast<Layout*>(con[1])->getWidget<LabelEdit>(1)->getText(),
-		.workgroup = offs ? static_cast<Layout*>(con[2])->getWidget<LabelEdit>(1)->getText() : string(),
-		.password = static_cast<Layout*>(con[2 + offs])->getWidget<LabelEdit>(1)->getText(),
-		.port = toNum<uint16>(static_cast<LabelEdit*>(portfam[1])->getText()),
-		.protocol = offs ? Protocol::smb : Protocol::sftp,
-		.family = !offs ? Family(static_cast<ComboBox*>(portfam[3])->getCurOpt()) : Family::any
-	}, World::program()->canStoreCredentials() ? static_cast<Layout*>(con[con.size() - 2])->getWidget<CheckBox>(1)->on : false);
+		.workgroup = smb ? static_cast<Layout*>(con[2])->getWidget<LabelEdit>(1)->getText() : string(),
+		.password = static_cast<Layout*>(con[2 + smb])->getWidget<LabelEdit>(1)->getText(),
+		.port = toNum<uint16>(static_cast<Layout*>(con[5 + smb])->getWidget<LabelEdit>(1)->getText()),
+		.protocol = smb ? Protocol::smb : Protocol::sftp,
+		.family = !smb ? Family(static_cast<Layout*>(con[6])->getWidget<ComboBox>(1)->getCurOpt()) : Family::any
+	}, World::program()->canStoreCredentials() && static_cast<Layout*>(con[con.size() - 2])->getWidget<CheckBox>(1)->on);
 }
 
 void ProgState::showContext(vector<pair<Cstring, EventId>>&& items, Widget* parent) {
@@ -360,7 +353,7 @@ void ProgFileExplorer::processFileChanges(Browser* browser) {
 		return fileChanges.clear();
 	}
 
-	auto compare = [](const Widget* a, const string& b) -> bool { return Strcomp::less(static_cast<const PushButton*>(a)->getText().data(), b.data()); };
+	auto compare = [](const Widget* a, const Cstring& b) -> bool { return Strcomp::less(static_cast<const PushButton*>(a)->getText().data(), b.data()); };
 	std::span<Widget*> wgts = fileList->getWidgets();
 	for (FileChange& fc : fileChanges) {
 		if (fc.type == FileChange::deleteEntry) {
@@ -379,7 +372,7 @@ void ProgFileExplorer::processFileChanges(Browser* browser) {
 		} else {
 			auto [pos, end] = fc.type == FileChange::addDirectory ? pair(wgts.begin(), wgts.begin() + dirEnd) : pair(wgts.begin() + dirEnd, wgts.begin() + fileEnd);
 			uint id = std::lower_bound(pos, end, fc.name, compare) - wgts.begin();
-			Size size = fileEntrySize(fc.name);
+			Size size = fileEntrySize(fc.name.data());
 			if (fc.type == FileChange::addDirectory) {
 				fileList->insertWidget(id, makeDirectoryEntry(size, std::move(fc.name)));
 				++dirEnd;
@@ -412,27 +405,29 @@ void ProgBooks::eventFileDrop(const char* file) {
 }
 
 RootLayout* ProgBooks::createLayout() {
+	World::program()->getBrowser()->startListCurDir();
+
 	// top bar
 	Children top = {
 		new PushButton(measureText("Settings", topHeight), "Settings", ProgBooksEvent::openSettings),
 		new PushButton(measureText("Exit", topHeight), "Exit", GeneralEvent::exit)
 	};
 
-	// book list
-	vector<Cstring> books = World::program()->getBrowser()->listDirDirs(World::sets()->dirLib);
-	Children tiles(books.size() + 1);
-	for (size_t i = 0; i < books.size(); ++i)
-		tiles[i] = makeBookTile(std::move(books[i]));
-	tiles[books.size()] = new IconButton(TileBox::defaultItemHeight, World::drawSys()->texture(DrawSys::Tex::search), ProgBooksEvent::openPageBrowserGeneral, ACT_LEFT | ACT_RIGHT, "Browse other directories");
-	dirEnd = books.size();
-	fileEnd = dirEnd;
-
 	// root layout
 	Children cont = {
 		new Layout(topHeight, std::move(top), Direction::right, topSpacing),
-		fileList = new TileBox(1.f, std::move(tiles))
+		fileList = new TileBox(1.f, { new Label(lineHeight, "Loading...", Alignment::center, false) })
 	};
 	return new RootLayout(1.f, std::move(cont), Direction::down, topSpacing);
+}
+
+void ProgBooks::fillFileList(vector<Cstring>&&, vector<Cstring>&& dirs, bool) {
+	Children tiles(dirs.size() + 1);
+	rng::transform(dirs, tiles.wgts.get(), [this](Cstring& s) -> Widget* { return makeBookTile(std::move(s)); });
+	tiles[dirs.size()] = new IconButton(TileBox::defaultItemHeight, World::drawSys()->texture(DrawSys::Tex::search), ProgBooksEvent::openPageBrowserGeneral, ACT_LEFT | ACT_RIGHT, "Browse other directories");
+	fileList->setWidgets(std::move(tiles));
+	dirEnd = dirs.size();
+	fileEnd = dirEnd;
 }
 
 PushButton* ProgBooks::makeBookTile(Cstring&& name) {
@@ -474,6 +469,8 @@ void ProgPageBrowser::resetFileIcons() {
 }
 
 RootLayout* ProgPageBrowser::createLayout() {
+	World::program()->getBrowser()->startListCurDir();
+
 	// sidebar
 	static constexpr std::initializer_list<const char*> txs = {
 		"Exit",
@@ -486,39 +483,37 @@ RootLayout* ProgPageBrowser::createLayout() {
 		new PushButton(lineHeight, *itxs++, ProgFileExplorerEvent::goUp)
 	};
 
-	// list of files and directories
-	Browser* browser = World::program()->getBrowser();
-	auto [files, dirs] = browser->listCurDir();
-	if (World::sets()->preview)
-		browser->startPreview(files, dirs, lineHeight);
-	Children items(files.size() + dirs.size());
-	for (size_t i = 0; i < dirs.size(); ++i)
-		items[i] = makeDirectoryEntry(lineHeight, std::move(dirs[i]));
-	for (size_t i = 0; i < files.size(); ++i)
-		items[dirs.size() + i] = makeFileEntry(lineHeight, std::move(files[i]));
-	dirEnd = dirs.size();
-	fileEnd = dirEnd + files.size();
-
 	// main content
 	Children mid = {
 		new Layout(txsWidth, std::move(bar)),
-		fileList = new ScrollArea(1.f, std::move(items))
+		fileList = new ScrollArea(1.f, { new Label(lineHeight, "Loading...", Alignment::center, false) })
 	};
 
 	// root layout
 	Children cont = {
-		locationBar = new LabelEdit(lineHeight, browser->locationForDisplay(), ProgFileExplorerEvent::goTo),
+		locationBar = new LabelEdit(lineHeight, World::program()->getBrowser()->locationForDisplay(), ProgFileExplorerEvent::goTo),
 		new Layout(1.f, std::move(mid), Direction::right, topSpacing)
 	};
 	return new RootLayout(1.f, std::move(cont), Direction::down, topSpacing);
+}
+
+void ProgPageBrowser::fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs, bool ok) {
+	Children items(files.size() + dirs.size());
+	rng::transform(dirs, items.wgts.get(), [this](Cstring& s) -> Widget* { return makeDirectoryEntry(lineHeight, std::move(s)); });
+	rng::transform(files, items.wgts.get() + dirs.size(), [this](Cstring& s) -> Widget* { return makeFileEntry(lineHeight, std::move(s)); });
+	fileList->setWidgets(std::move(items));
+	dirEnd = dirs.size();
+	fileEnd = dirEnd + files.size();
+	if (ok && World::sets()->preview)
+		World::program()->getBrowser()->startPreview(lineHeight);
 }
 
 PushButton* ProgPageBrowser::makeDirectoryEntry(const Size& size, Cstring&& name) {
 	return new IconPushButton(size, std::move(name), World::drawSys()->texture(DrawSys::Tex::folder), ProgFileExplorerEvent::goIn);
 }
 
-PushButton* ProgPageBrowser::makeFileEntry(const Size&, Cstring&& name) {
-	return new IconPushButton(lineHeight, std::move(name), World::drawSys()->texture(DrawSys::Tex::file), ProgPageBrowserEvent::goFile);
+PushButton* ProgPageBrowser::makeFileEntry(const Size& size, Cstring&& name) {
+	return new IconPushButton(size, std::move(name), World::drawSys()->texture(DrawSys::Tex::file), ProgPageBrowserEvent::goFile);
 }
 
 // PROG READER
@@ -608,7 +603,7 @@ void ProgReader::eventPrevDir() {
 void ProgReader::eventHide() {
 	ProgState::eventHide();
 	World::program()->getBrowser()->startReloadPictures(string(reader->firstPage()));
-	World::program()->setPopupLoading();
+	World::program()->setPopupProgress();
 }
 
 void ProgReader::eventRefresh() {
@@ -690,7 +685,7 @@ void ProgSettings::eventRefresh() {
 }
 
 void ProgSettings::eventFileDrop(const char* file) {
-	if (fs::path path = toPath(file);  FileSys::isFont(path))
+	if (fs::path path = toPath(file); FileSys::isFont(path))
 		World::program()->setFont(path);
 	else if (fs::is_directory(toPath(file)))
 		World::program()->setLibraryDir(file);
@@ -716,9 +711,6 @@ RootLayout* ProgSettings::createLayout() {
 		"Image compression",
 		"VSync",
 		"GPU selecting",
-#ifdef CAN_PDF
-		"PDF images only",
-#endif
 		"Preview",
 		"Show hidden",
 		"Show tooltips",
@@ -748,10 +740,10 @@ RootLayout* ProgSettings::createLayout() {
 			curDev = i;
 	}
 	static constexpr array compressionTipLines = {
-		"load textures uncompressed",
-		"squash texels to 8 bits",
-		"squash texels to 16 bits",
-		"use compressed textures"
+		"Load textures uncompressed",
+		"Squash texels to 8 bits",
+		"Squash texels to 16 bits",
+		"Use compressed textures"
 	};
 	vector<Cstring> compressionNames(rinf.compressions.size());
 	uptr<Cstring[]> compressionTips = std::make_unique<Cstring[]>(rinf.compressions.size());
@@ -765,7 +757,7 @@ RootLayout* ProgSettings::createLayout() {
 	}
 
 	Cstring bnames[Binding::names.size()];
-	for (uint8 i = 0; i < Binding::names.size(); ++i) {
+	for (size_t i = 0; i < Binding::names.size(); ++i) {
 		bnames[i] = Binding::names[i];
 		bnames[i][0] = toupper(bnames[i][0]);
 		for (size_t j = 1; bnames[i][j]; ++j)
@@ -775,15 +767,21 @@ RootLayout* ProgSettings::createLayout() {
 	uint ztypLength = findMaxLength(Settings::zoomNames.begin(), Settings::zoomNames.end(), lineHeight);
 	uint plimLength = findMaxLength(PicLim::names.begin(), PicLim::names.end(), lineHeight);
 	uint descLength = std::max(findMaxLength(txs.begin(), txs.end(), lineHeight), findMaxLength(Binding::names.begin(), Binding::names.end(), lineHeight));
+	static constexpr std::initializer_list<const char*> tipsDirection = {
+		"Bottom to top",
+		"Top to bottom",
+		"Right to left",
+		"Left to right"
+	};
 	static constexpr std::initializer_list<const char*> tipsZoomType = {
-		"use a default zoom value",
-		"fit the first picture into the window",
-		"fit the largest picture into the window"
+		"Use a default zoom value",
+		"Fit the first picture into the window",
+		"Fit the largest picture into the window"
 	};
 	static constexpr std::initializer_list<const char*> tipsPicLim = {
-		"all pictures in directory/archive",
-		"number of pictures",
-		"total size of pictures"
+		"All pictures in directory/archive",
+		"Number of pictures",
+		"Total size of pictures"
 	};
 	static constexpr char tipDeadzone[] = "Controller axis deadzone";
 	static constexpr char tipMaxPicRes[] = "Maximum picture resolution";
@@ -803,7 +801,7 @@ RootLayout* ProgSettings::createLayout() {
 	array<pair<Size, Children>, 7> sec0 = {
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
-			new ComboBox(1.f, uint(World::sets()->direction), vector<Cstring>(Direction::names.begin(), Direction::names.end()), ProgSettingsEvent::setDirection, "Reading direction")
+			new ComboBox(1.f, uint(World::sets()->direction), vector<Cstring>(Direction::names.begin(), Direction::names.end()), ProgSettingsEvent::setDirection, "Reading direction", makeCmbTips(tipsDirection.begin(), tipsDirection.end()))
 		}),
 		pair(lineHeight, Children{
 			new Label(descLength, *itxs++),
@@ -868,13 +866,6 @@ RootLayout* ProgSettings::createLayout() {
 		});
 	}
 	++itxs;
-
-#ifdef CAN_PDF
-	lx.emplace_back(lineHeight, Children{
-		new Label(descLength, *itxs++),
-		new CheckBox(lineHeight, World::sets()->pdfImages, ProgSettingsEvent::setPdfImages, "Only load a PDF file's images instead of rendering the pages fully")
-	});
-#endif
 
 	array<pair<Size, Children>, 8> sec1 = {
 		pair(lineHeight, Children{
@@ -1049,6 +1040,9 @@ void ProgSearchDir::eventSpecEscape() {
 }
 
 RootLayout* ProgSearchDir::createLayout() {
+	string cdir = World::program()->getBrowser()->getCurDir();
+	World::program()->getBrowser()->startListDirDirs(valcp(cdir));
+
 	// sidebar
 	static constexpr std::initializer_list<const char*> txs = {
 		"Exit",
@@ -1063,27 +1057,26 @@ RootLayout* ProgSearchDir::createLayout() {
 		new PushButton(lineHeight, *itxs++, ProgSearchDirEvent::setLibraryDirBw)
 	};
 
-	// directory list
-	Browser* browser = World::program()->getBrowser();
-	vector<Cstring> strs = browser->listDirDirs(browser->getCurDir());
-	Children items(strs.size());
-	for (size_t i = 0; i < strs.size(); ++i)
-		items[i] = makeDirectoryEntry(lineHeight, std::move(strs[i]));
-	dirEnd = strs.size();
-	fileEnd = dirEnd;
-
 	// main content
 	Children mid = {
 		new Layout(txsWidth, std::move(bar)),
-		fileList = new ScrollArea(1.f, std::move(items))
+		fileList = new ScrollArea(1.f, { new Label(lineHeight, "Loading...", Alignment::center, false) })
 	};
 
 	// root layout
 	Children cont = {
-		locationBar = new LabelEdit(lineHeight, valcp(browser->getCurDir()), ProgFileExplorerEvent::goTo),
+		locationBar = new LabelEdit(lineHeight, std::move(cdir), ProgFileExplorerEvent::goTo),
 		new Layout(1.f, std::move(mid), Direction::right, topSpacing)
 	};
 	return new RootLayout(1.f, std::move(cont), Direction::down, topSpacing);
+}
+
+void ProgSearchDir::fillFileList(vector<Cstring>&&, vector<Cstring>&& dirs, bool) {
+	Children items(dirs.size());
+	rng::transform(dirs, items.wgts.get(), [this](Cstring& s) -> Widget* { return makeDirectoryEntry(lineHeight, std::move(s)); });
+	fileList->setWidgets(std::move(items));
+	dirEnd = dirs.size();
+	fileEnd = dirEnd;
 }
 
 PushButton* ProgSearchDir::makeDirectoryEntry(const Size& size, Cstring&& name) {

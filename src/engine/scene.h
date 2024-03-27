@@ -9,7 +9,7 @@ struct ClickStamp {
 	ScrollArea* area;
 	ivec2 mPos;
 
-	ClickStamp(Widget* wgt = nullptr, ScrollArea* sarea = nullptr, ivec2 cursPos = ivec2(0));
+	ClickStamp(Widget* wgt = nullptr, ScrollArea* sarea = nullptr, ivec2 cursPos = ivec2(0)) noexcept;
 };
 
 // handles more back-end UI interactions, works with widgets (UI elements), and contains Program and Library
@@ -45,7 +45,7 @@ public:
 
 	Widget* getSelect() const { return select; }
 	Widget* getCapture() const { return capture; }
-	void setCapture(Widget* inter);
+	void setCapture(Widget* inter) noexcept;
 	void resetLayouts();
 	void clearLayouts();
 	void setLayouts();
@@ -64,7 +64,7 @@ public:
 	void selectFirst();
 	bool cursorInClickRange(ivec2 mPos, uint8 mBut);
 
-	ScrollArea* getSelectedScrollArea() const;
+	ScrollArea* getSelectedScrollArea() const noexcept;
 private:
 	Widget* getSelected(ivec2 mPos);
 	bool overlayFocused(ivec2 mPos) const;

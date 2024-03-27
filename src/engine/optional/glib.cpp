@@ -1,4 +1,4 @@
-#if defined(CAN_SECRET) || defined(CAN_PDF)
+#if defined(CAN_SECRET) || defined(CAN_POPPLER)
 #include "glib.h"
 #include "internal.h"
 
@@ -16,7 +16,7 @@ decltype(g_bytes_new_static)* gBytesNewStatic = nullptr;
 decltype(g_bytes_unref)* gBytesUnref = nullptr;
 decltype(g_error_free)* gErrorFree = nullptr;
 
-bool symGlib() {
+bool symGlib() noexcept {
 	if (!(libo || failed || ((libg = libOpen<true>("libglib-2.0" LIB_EXT)) && (libo = libOpen<true>("libgobject-2.0" LIB_EXT))
 		&& (gHashTableNew = libSym<decltype(gHashTableNew)>(libg, "g_hash_table_new"))
 		&& (gHashTableInsert = libSym<decltype(gHashTableInsert)>(libg, "g_hash_table_insert"))
@@ -36,7 +36,7 @@ bool symGlib() {
 	return libo;
 }
 
-void closeGlib() {
+void closeGlib() noexcept {
 	libClose(libo);
 	libClose(libg);
 	failed = false;

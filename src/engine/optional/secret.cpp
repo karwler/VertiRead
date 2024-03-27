@@ -13,7 +13,7 @@ decltype(secret_item_load_secret_sync)* secretItemLoadSecretSync = nullptr;
 decltype(secret_value_new)* secretValueNew = nullptr;
 decltype(secret_value_get_text)* secretValueGetText = nullptr;
 
-bool symLibsecret() {
+bool symLibsecret() noexcept {
 	if (!(lib || failed || (symGlib() && (lib = libOpen("libsecret-1" LIB_EXT))
 		&& (secretServiceGetSync = libSym<decltype(secretServiceGetSync)>(lib, "secret_service_get_sync"))
 		&& (secretServiceSearchSync = libSym<decltype(secretServiceSearchSync)>(lib, "secret_service_search_sync"))
@@ -29,7 +29,7 @@ bool symLibsecret() {
 	return lib;
 }
 
-void closeLibsecret() {
+void closeLibsecret() noexcept {
 	libClose(lib);
 	failed = false;
 }

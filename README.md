@@ -49,6 +49,7 @@ nmake
 |libarchive|no|Needed for reading archive files.|
 |libsecret|runtime|For storing credentials to remote locations. (loaded dynamically at runtime)|
 |libssh2|runtime|For browsing SFTP locations. (loaded dynamically at runtime)|
+|MuPDF|runtime|For displaying PDF files more quickly. If not available, then the fallback is Poppler. (loaded dynamically at runtime)|
 |Poppler|runtime|For displaying PDF files. (loaded dynamically at runtime)|
 |SDL2|no|Needed for everything.|
 |SDL2_image|no|Needed to load images.|

@@ -15,12 +15,6 @@ Children::Children(uint size) :
 	num(size)
 {}
 
-Children& Children::operator=(Children&& ch) {
-	wgts = std::move(ch.wgts);
-	num = ch.num;
-	return *this;
-}
-
 // LAYOUT
 
 Layout::Layout(const Size& size, Children&& children, Direction dir, ushort space, bool pad) :
@@ -29,7 +23,12 @@ Layout::Layout(const Size& size, Children&& children, Direction dir, ushort spac
 	margin(pad),
 	direction(dir)
 {
-	initWidgets(std::move(children));
+	try {
+		initWidgets(std::move(children));
+	} catch (...) {
+		clearWidgets();
+		throw;
+	}
 }
 
 Layout::~Layout() {
@@ -107,7 +106,7 @@ void Layout::onDisplayChange() {
 		widgets[i]->onDisplayChange();
 }
 
-bool Layout::navSelectable() const {
+bool Layout::navSelectable() const noexcept {
 	return numWgts;
 }
 
@@ -164,7 +163,7 @@ void Layout::initWidgets(Children&& children) {
 		widgets[i]->setParent(this, i);
 }
 
-void Layout::clearWidgets() {
+void Layout::clearWidgets() noexcept {
 	for (uint i = 0; i < numWgts; ++i)
 		delete widgets[i];
 }
@@ -246,7 +245,7 @@ void Layout::deselectWidget(const Widget* wgt) const {
 		World::scene()->deselect();
 }
 
-bool Layout::isParentOf(const Widget* wgt) const {
+bool Layout::isParentOf(const Widget* wgt) const noexcept {
 	if (!wgt || this == wgt)
 		return wgt;
 	for (Layout* box = wgt->getParent(); box; box = box->getParent())
@@ -338,7 +337,7 @@ ivec2 Context::position() const {
 	return ivec2(sizeToPixAbs(pos.x, res.x), sizeToPixAbs(pos.y, res.y));
 }
 
-void Context::setRect(const Recti& rct) {
+void Context::setRect(const Recti& rct) noexcept {
 	pos = rct.pos();
 	relSize = rct.w;
 	sizeY = rct.h;
@@ -720,7 +719,7 @@ void ReaderBox::setPictures(vector<pair<Cstring, Texture*>>& imgs, string_view s
 	centerList();
 }
 
-bool ReaderBox::showBar() const {
+bool ReaderBox::showBar() const noexcept {
 	return barRect().contains(World::winSys()->mousePos()) || getDraggingSlider();
 }
 
@@ -756,13 +755,13 @@ void ReaderBox::setZoom(F zset, int8 step) {
 	setListPos(ivec2(loc * vec2(vswap(getListSize()[!vi], getListSize()[vi] - totSpace, !vi))) + vswap(0, preSpace, !vi) - sh);
 }
 
-int8 ReaderBox::zoomStepToFit(uint res) const {
+int8 ReaderBox::zoomStepToFit(uint res) const noexcept {
 	double target = double(World::drawSys()->getViewRes()[direction.horizontal()]) / double(res);
 	double zoom = std::floor(std::log(target) / std::log(Settings::zoomBase));
 	return int8(std::clamp(zoom, double(-Settings::zoomLimit), double(Settings::zoomLimit)));
 }
 
-void ReaderBox::centerList() {
+void ReaderBox::centerList() noexcept {
 	int di = direction.horizontal();
 	listPos[di] = getListMax()[di] / 2;
 }

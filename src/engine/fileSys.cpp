@@ -1,5 +1,6 @@
 #include "fileSys.h"
 #include "prog/fileOps.h"
+#include <fstream>
 #include <regex>
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -51,10 +52,8 @@ public:
 	void list(char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts);
 };
 
-Fontconfig::Fontconfig() :
-	config(fcInitLoadConfigAndFonts())
-{
-	if (!config)
+Fontconfig::Fontconfig() {
+	if (config = fcInitLoadConfigAndFonts(); !config)
 		throw std::runtime_error("Failed to init fontconfig");
 }
 
@@ -112,9 +111,25 @@ void Fontconfig::list(char32_t first, char32_t last, vector<pair<Cstring, Cstrin
 }
 #endif
 
-}
+struct IniLine {
+	enum class Type : uint8 {
+		empty,
+		prpVal,
+		prpKeyVal,
+		title
+	};
 
-// INI LINE
+	Type type = Type::empty;
+	string_view prp;
+	string_view key;
+	string_view val;
+
+	Type setLine(string_view str);
+
+	template <class... T> static void writeTitle(std::ofstream& ofs, T&&... title);
+	template <class P, class... T> static void writeVal(std::ofstream& ofs, P&& prp, T&&... val);
+	template <class P, class K, class... T> static void writeKeyVal(std::ofstream& ofs, P&& prp, K&& key, T&&... val);
+};
 
 IniLine::Type IniLine::setLine(string_view str) {
 	size_t i0 = str.find_first_of('=');
@@ -143,7 +158,44 @@ IniLine::Type IniLine::setLine(string_view str) {
 	return type = Type::empty;
 }
 
-// CSV TEXT
+template <class... T>
+void IniLine::writeTitle(std::ofstream& ofs, T&&... title) {
+	((ofs << '[') << ... << std::forward<T>(title)) << ']' << LINEND;
+}
+
+template <class P, class... T>
+void IniLine::writeVal(std::ofstream& ofs, P&& prp, T&&... val) {
+	((ofs << std::forward<P>(prp) << '=') << ... << std::forward<T>(val)) << LINEND;
+}
+
+template <class P, class K, class... T>
+void IniLine::writeKeyVal(std::ofstream& ofs, P&& prp, K&& key, T&&... val) {
+	((ofs << std::forward<P>(prp) << '[' << std::forward<K>(key) << "]=") << ... << std::forward<T>(val)) << LINEND;
+}
+
+struct CsvText {
+	enum class Code : uint8 {
+		end,
+		field,
+		last
+	};
+
+	string field;
+	const char* text;
+	const char* lineStart;
+	const char* lineEnd;
+	bool nextLine = true;
+
+	CsvText(const char* str);
+
+	template <bool fill = true> Code readField();
+
+	static string makeLine(const vector<string>& fields);
+};
+
+CsvText::CsvText(const char* str) :
+	text(str + strspn(str, "\r\n"))
+{}
 
 template <bool fill>
 CsvText::Code CsvText::readField() {
@@ -218,7 +270,7 @@ string CsvText::makeLine(const vector<string>& fields) {
 	return line;
 }
 
-// FILE SYS
+}
 
 FileSys::FileSys(const uset<string>& cmdFlags) {
 	// set up file/directory path constants
@@ -253,19 +305,18 @@ FileSys::FileSys(const uset<string>& cmdFlags) {
 	}
 
 	if (!cmdFlags.contains(Settings::flagLog)) {
-		fs::path logPath = dirSets / std::format("log_{}.txt", tmToDateStr(currentDateTime()));
-		if (logFile.open(logPath, std::ios::binary); logFile.good())
+		if (logFile = SDL_RWFromFile(fromPath(dirSets / std::format("log_{}.txt", tmToDateStr(currentDateTime()))).data(), "wb"); logFile)
 			SDL_LogSetOutputFunction(logWrite, &logFile);
 		else
-			logError("Failed to create log file: ", logPath);
+			logError("Failed to create log file: ", SDL_GetError());
 	}
 
 	// check if all (more or less) necessary files and directories exist
-	if (fs::create_directories(dirSets, ec))
+	if (!fs::create_directories(dirSets, ec) && ec)
 		logError("Failed to create settings directory: ", ec.message());
-	if (!fs::is_directory(dirIcons(), ec) || ec)
+	if (!fs::is_directory(dirIcons(), ec))
 		logError("Failed to find icons directory: ", ec.message());
-	if (!fs::is_regular_file(dirConfs / fileThemes, ec) || ec)
+	if (!fs::is_regular_file(dirConfs / fileThemes, ec))
 		logError("Failed to find themes file: ", ec.message());
 
 #ifdef CAN_FONTCFG
@@ -282,7 +333,10 @@ FileSys::~FileSys() {
 #ifdef CAN_FONTCFG
 	delete static_cast<Fontconfig*>(fontconfig);
 #endif
-	SDL_LogSetOutputFunction(nullptr, nullptr);
+	if (logFile) {
+		SDL_LogSetOutputFunction(nullptr, nullptr);
+		SDL_RWclose(logFile);
+	}
 }
 
 vector<string> FileSys::getAvailableThemes() const {
@@ -392,8 +446,6 @@ Settings* FileSys::loadSettings(const uset<string>* cmdFlags) const {
 				sets->vsync = toBool(trim(il.val));
 			else if (strciequal(il.prp, iniKeywordGpuSelecting))
 				sets->gpuSelecting = toBool(trim(il.val));
-			else if (strciequal(il.prp, iniKeywordPdfImages))
-				sets->pdfImages = toBool(trim(il.val));
 			else if (strciequal(il.prp, iniKeywordDirection))
 				sets->direction = strToEnum(Direction::names, trim(il.val), Settings::defaultDirection);
 			else if (strciequal(il.prp, iniKeywordZoom))
@@ -452,7 +504,6 @@ void FileSys::saveSettings(const Settings* sets) const {
 	IniLine::writeVal(ofs, iniKeywordCompression, Settings::compressionNames[eint(sets->compression)]);
 	IniLine::writeVal(ofs, iniKeywordVSync, toStr(sets->vsync));
 	IniLine::writeVal(ofs, iniKeywordGpuSelecting, toStr(sets->gpuSelecting));
-	IniLine::writeVal(ofs, iniKeywordPdfImages, toStr(sets->pdfImages));
 	IniLine::writeVal(ofs, iniKeywordZoom, Settings::zoomNames[eint(sets->zoomType)], ' ', int(sets->zoom));
 	IniLine::writeVal(ofs, iniKeywordPictureLimit, PicLim::names[eint(sets->picLim.type)], ' ', sets->picLim.count, ' ', PicLim::memoryString(sets->picLim.size));
 	IniLine::writeVal(ofs, iniKeywordMaxPictureRes, sets->maxPicRes);
@@ -495,7 +546,7 @@ array<Binding, Binding::names.size()> FileSys::loadBindings() const {
 			break;
 		case keyHat[0]:			// joystick hat
 			if (size_t id = std::find_if(bdsc.begin() + 2, bdsc.end(), [](char c) -> bool { return !isdigit(c); }) - bdsc.begin(); id < bdsc.length())
-				bindings[bid].setJhat(toNum<uint8>(bdsc.substr(2, id - 2)), strToVal(Binding::hatNames, bdsc.substr(id + 1)));
+				bindings[bid].setJhat(toNum<uint8>(bdsc.substr(2, id - 2)), Binding::hatNameToValue(bdsc.substr(id + 1)));
 			break;
 		case keyAxisPos[0]:		// joystick axis
 			bindings[bid].setJaxis(toNum<uint8>(bdsc.substr(3)), bdsc[2] != keyAxisNeg[2]);
@@ -530,7 +581,7 @@ void FileSys::saveBindings(const array<Binding, Binding::names.size()>& bindings
 		if (bindings[i].jbuttonAssigned())
 			IniLine::writeVal(ofs, Binding::names[i], keyButton, uint(bindings[i].getJctID()));
 		else if (bindings[i].jhatAssigned())
-			IniLine::writeVal(ofs, Binding::names[i], keyHat, uint(bindings[i].getJctID()), keySep, Binding::hatNames.at(bindings[i].getJhatVal()));
+			IniLine::writeVal(ofs, Binding::names[i], keyHat, uint(bindings[i].getJctID()), keySep, Binding::hatValueToName(bindings[i].getJhatVal()));
 		else if (bindings[i].jaxisAssigned())
 			IniLine::writeVal(ofs, Binding::names[i], (bindings[i].jposAxisAssigned() ? keyAxisPos : keyAxisNeg), uint(bindings[i].getJctID()));
 
@@ -870,26 +921,29 @@ FT_Face FileSys::openFace(FT_Library lib, const fs::path& file, char32_t first, 
 }
 
 void SDLCALL FileSys::logWrite(void* userdata, int, SDL_LogPriority priority, const char* message) {
-	std::ofstream& ofs = *static_cast<std::ofstream*>(userdata);
-	ofs << tmToTimeStr(currentDateTime());
+	auto ofs = static_cast<SDL_RWops*>(userdata);
+	string dtime = tmToTimeStr(currentDateTime());
+	SDL_RWwrite(ofs, dtime.data(), sizeof(*dtime.data()), dtime.length());
 	switch (priority) {
 	case SDL_LOG_PRIORITY_VERBOSE:
-		ofs << " VERBOSE: ";
+		SDL_RWwrite(ofs, " VERBOSE", sizeof(char), 8);
 		break;
 	case SDL_LOG_PRIORITY_DEBUG:
-		ofs << " DEBUG: ";
+		SDL_RWwrite(ofs, " DEBUG", sizeof(char), 6);
 		break;
 	case SDL_LOG_PRIORITY_INFO:
-		ofs << " INFO: ";
+		SDL_RWwrite(ofs, " INFO", sizeof(char), 5);
 		break;
 	case SDL_LOG_PRIORITY_WARN:
-		ofs << " WARN: ";
+		SDL_RWwrite(ofs, " WARN", sizeof(char), 5);
 		break;
 	case SDL_LOG_PRIORITY_ERROR:
-		ofs << " ERROR: ";
+		SDL_RWwrite(ofs, " ERROR", sizeof(char), 6);
 		break;
 	case SDL_LOG_PRIORITY_CRITICAL:
-		ofs << " CRITICAL: ";
+		SDL_RWwrite(ofs, " CRITICAL", sizeof(char), 9);
 	}
-	ofs << message << LINEND;
+	SDL_RWwrite(ofs, ": ", sizeof(char), 2);
+	SDL_RWwrite(ofs, message, sizeof(*message), strlen(message));
+	SDL_RWwrite(ofs, LINEND, sizeof(char), strlen(LINEND));
 }

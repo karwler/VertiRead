@@ -34,7 +34,7 @@ decltype(smbc_setPort)* smbcSetPort = nullptr;
 decltype(smbc_getOptionUserData)* smbcGetOptionUserData = nullptr;
 decltype(smbc_setOptionUserData)* smbcSetOptionUserData = nullptr;
 
-bool symSmbclient() {
+bool symSmbclient() noexcept {
 	if (!(lib || failed || ((lib = libOpen("libsmbclient" LIB_EXT))
 		&& (smbcNewContext = libSym<decltype(smbcNewContext)>(lib, "smbc_new_context"))
 		&& (smbcInitContext = libSym<decltype(smbcInitContext)>(lib, "smbc_init_context"))
@@ -72,7 +72,7 @@ bool symSmbclient() {
 	return lib;
 }
 
-void closeSmbclient() {
+void closeSmbclient() noexcept {
 	libClose(lib);
 	failed = false;
 }

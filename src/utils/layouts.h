@@ -8,12 +8,10 @@ struct Children {
 	uint num = 0;
 
 	Children() = default;
-	Children(Children&&) = default;
 	Children(std::initializer_list<Widget*> ilist);
 	template <Class T> Children(T&& view);
 	Children(uint size);
 
-	Children& operator=(Children&& ch);
 	Widget*& operator[](uint id) { return wgts[id]; }
 	Widget* const& operator[](uint id) const { return wgts[id]; }
 };
@@ -52,7 +50,7 @@ public:
 	void onMouseMove(ivec2 mPos, ivec2 mMov) override;
 	void onDisplayChange() override;
 	void onNavSelect(Direction) override {}
-	bool navSelectable() const override;
+	bool navSelectable() const noexcept override;
 
 	virtual void navSelectNext(uint id, int mid, Direction dir);
 	virtual void navSelectFrom(int mid, Direction dir);
@@ -67,11 +65,11 @@ public:
 	virtual ivec2 wgtSize(uint id) const;
 	int getSpacing() const { return spacing; }
 	bool isVertical() const { return direction.vertical(); }
-	bool isParentOf(const Widget* wgt) const;
+	bool isParentOf(const Widget* wgt) const noexcept;
 
 protected:
 	void initWidgets(Children&& children);
-	void clearWidgets();
+	void clearWidgets() noexcept;
 	virtual void calculateWidgetPositions();
 	virtual void postWidgetsChange();
 
@@ -87,7 +85,6 @@ private:
 class RootLayout : public Layout {
 public:
 	using Layout::Layout;
-	~RootLayout() override = default;
 
 	ivec2 position() const override;
 	ivec2 size() const override;
@@ -107,7 +104,6 @@ protected:
 
 public:
 	Popup(const svec2& size, Children&& children, EventId cancelCall = nullEvent, EventId confirmCall = nullEvent, Widget* first = nullptr, Color background = Color::normal, Direction dir = defaultDirection, ushort space = defaultItemSpacing, bool pad = true);
-	~Popup() override = default;
 
 	void drawSelf(const Recti& view) override;
 
@@ -125,7 +121,6 @@ private:
 
 public:
 	Overlay(const svec2& position, const svec2& size, const svec2& activationPos, const svec2& activationSize, Children&& children, Color background = Color::normal, Direction dir = defaultDirection, ushort space = defaultItemSpacing, bool pad = false);
-	~Overlay() override = default;
 
 	ivec2 position() const override;
 	Recti actRect() const;
@@ -139,20 +134,18 @@ private:
 
 public:
 	Context(const svec2& position, const svec2& size, Children&& children, Widget* first = nullptr, Widget* owner = nullptr, Color background = Color::dark, EventId resize = nullEvent, Direction dir = defaultDirection, ushort space = defaultItemSpacing, bool pad = true);
-	~Context() override = default;
 
 	void onResize() override;
 	ivec2 position() const override;
 
 	template <Class T = Widget> T* owner() const { return reinterpret_cast<T*>(parent); }
-	void setRect(const Recti& rct);
+	void setRect(const Recti& rct) noexcept;
 };
 
 // places widgets vertically through which the user can scroll (DON"T PUT SCROLL AREAS INTO OTHER SCROLL AREAS)
 class ScrollArea : public Layout, protected Scrollable {
 public:
 	using Layout::Layout;
-	~ScrollArea() override = default;
 
 	void drawSelf(const Recti& view) override;
 	void onResize() override;
@@ -210,7 +203,6 @@ private:
 
 public:
 	TileBox(const Size& size, Children&& children, int childHeight = defaultItemHeight, Direction dir = defaultDirection, ushort space = defaultItemSpacing, bool pad = false);
-	~TileBox() override = default;
 
 	void navSelectNext(uint id, int mid, Direction dir) override;
 	void navSelectFrom(int mid, Direction dir) override;
@@ -242,18 +234,17 @@ private:
 
 public:
 	ReaderBox(const Size& size, Direction dir, int8 zstep, ushort space, bool pad = false);
-	~ReaderBox() override = default;
 
 	void drawSelf(const Recti& view) override;
 	void tick(float dSec) override;
 	void onMouseMove(ivec2 mPos, ivec2 mMov) override;
 
 	void setPictures(vector<pair<Cstring, Texture*>>& imgs, string_view startPic, bool fwd);
-	bool showBar() const;
+	bool showBar() const noexcept;
 	void setZoom(int8 step);
 	void addZoom(int8 step);
-	int8 zoomStepToFit(uint res) const;
-	void centerList();		// set listPos.x so that the view will be in the center
+	int8 zoomStepToFit(uint res) const noexcept;
+	void centerList() noexcept;		// set listPos.x so that the view will be in the center
 	const char* firstPage() const;
 	const char* lastPage() const;
 	const char* curPage() const;

@@ -23,7 +23,7 @@ private:
 		Font(Data&& font) : data(std::move(font)) {}
 	};
 
-	FT_LibraryRec_* lib = nullptr;
+	FT_LibraryRec_* lib;
 	vector<Font> fonts;
 	umap<uint, array<FT_BitmapGlyphRec_*, cacheSize>> asciiCache;
 	float heightScale;
@@ -50,7 +50,7 @@ public:
 
 	void init(const fs::path& path, Settings::Hinting hinting);
 	void clearCache();
-	void setMode(Settings::Hinting hinting);
+	void setMode(Settings::Hinting hinting) noexcept;
 	uint measureText(string_view text, uint size);
 	uvec2 measureText(string_view text, uint size, uint limit);
 	const PixmapRgba& renderText(string_view text, uint size);
@@ -60,17 +60,17 @@ public:
 private:
 	Font openFont(const fs::path& path, uint size) const;
 	void prepareBuffer();
-	void prepareAdvance(string_view::iterator begin, size_t length, uint xstart);
+	void prepareAdvance(string_view::iterator begin, size_t length, uint xstart) noexcept;
 	void advanceTab(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs);
 	template <bool cached> void advanceChar(FT_FaceRec_* face, char32_t ch, char32_t prev, long advance);
 	template <bool cached> void advanceChar(FT_FaceRec_* face, char32_t ch, char32_t prev, long advance, int left, uint width);
-	void checkXofs(int left);
+	void checkXofs(int left) noexcept;
 	bool checkSpace(uint limit, int left, uint width);
 	void advanceLine(string_view::iterator pos);
 	bool setSize(string_view text, uint size);
 	void cacheGlyph(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs, char32_t ch, uint id);
 	vector<Font>::iterator loadGlyph(char32_t ch, int32 flags);
-	void copyGlyph(const FT_Bitmap_& bmp, int top, int left);
+	void copyGlyph(const FT_Bitmap_& bmp, int top, int left) noexcept;
 };
 
 // handles the drawing
@@ -117,25 +117,25 @@ private:
 		"vertiread"
 	};
 
-	Renderer* renderer = nullptr;
+	Renderer* renderer;
 	ivec2 viewRes = ivec2(0);
 	array<vec4, Settings::defaultColors.size()> colors;
 	FontSet fonts;
 	array<Texture*, size_t(Tex::vertiread)> texes{};
 	const char* curTooltip = nullptr;	// reference to text of the currently rendered tooltip texture
-	float winDpi = 0.f;
+	float winDpi;
 	int cursorHeight;
 
 public:
 	DrawSys(const umap<int, SDL_Window*>& windows);
-	~DrawSys();
+	~DrawSys() { cleanup(); }
 
 	Renderer* getRenderer() { return renderer; }
 	ivec2 getViewRes() const { return viewRes; }
 	void updateView();
-	int findPointInView(ivec2 pos) const;
+	Renderer::View* findViewForPoint(ivec2 pos);
 	float getWinDpi() const { return winDpi; }
-	bool updateDpi(int dsp);	// should only be called when there's only one window
+	bool updateDpi();
 	void setTheme(string_view name);
 	void setFont(const fs::path& font);
 	void setFontHinting(Settings::Hinting hinting);
@@ -173,8 +173,9 @@ public:
 	FT_LibraryRec_* ftLib() const { return fonts.getLib(); }
 
 private:
-	umap<int, Renderer::View*>::const_iterator findViewForPoint(ivec2 pos) const;
+	void cleanup();
 	optional<bool> prepareTooltip();	// returns if a new texture has been created or nullopt to not display a tooltip
+	float maxDpi() const;
 };
 
 inline string DrawSys::iconName(Tex name) {
@@ -211,8 +212,4 @@ inline void DrawSys::setFontHinting(Settings::Hinting hinting) {
 
 inline void DrawSys::resetTooltip() {
 	curTooltip = nullptr;
-}
-
-inline umap<int, Renderer::View*>::const_iterator DrawSys::findViewForPoint(ivec2 pos) const {
-	return rng::find_if(renderer->getViews(), [&pos](const pair<int, Renderer::View*>& it) -> bool { return it.second->rect.contains(pos); });
 }

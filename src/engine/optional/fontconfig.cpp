@@ -18,7 +18,7 @@ decltype(FcConfigSubstitute)* fcConfigSubstitute = nullptr;
 decltype(FcFontMatch)* fcFontMatch = nullptr;
 decltype(FcFontList)* fcFontList = nullptr;
 
-bool symFontconfig() {
+bool symFontconfig() noexcept {
 	if (!(lib || failed || ((lib = libOpen("libfontconfig" LIB_EXT))
 		&& (fcInitLoadConfigAndFonts = libSym<decltype(fcInitLoadConfigAndFonts)>(lib, "FcInitLoadConfigAndFonts"))
 		&& (fcPatternCreate = libSym<decltype(fcPatternCreate)>(lib, "FcPatternCreate"))
@@ -40,7 +40,7 @@ bool symFontconfig() {
 	return lib;
 }
 
-void closeFontconfig() {
+void closeFontconfig() noexcept {
 	libClose(lib);
 	failed = false;
 }

@@ -18,103 +18,137 @@ void Data::resize(size_t siz) {
 		clear();
 }
 
-void Data::clear() {
+void Data::clear() noexcept {
 	ptr.reset();
 	len = 0;
 }
 
 // CSTRING
 
-#define cstringOperatorAssign(type) \
-	Cstring& Cstring::operator=(type s) { \
-		free(); \
-		set(s); \
-		return *this; \
-	}
-
-Cstring& Cstring::operator=(Cstring&& s) {
-	free();
-	set(std::move(s));
-	return *this;
-}
-
-cstringOperatorAssign(const Cstring&)
-cstringOperatorAssign(const char*)
-cstringOperatorAssign(const string&)
-cstringOperatorAssign(const fs::path&)
-cstringOperatorAssign(std::initializer_list<char>)
-
-Cstring& Cstring::operator=(string_view s) {
-	free();
-	set(s.data(), s.length());
-	return *this;
-}
-
-void Cstring::set(const Cstring& s) {
-	size_t len = s.length() + 1;
-	ptr = new char[len];
-	std::copy_n(s.ptr, len, ptr);
-}
-
-void Cstring::set(Cstring&& s) {
-	ptr = s.ptr;
+Cstring::Cstring(Cstring&& s) noexcept :
+	ptr(s.ptr)
+{
 	s.ptr = &nullch;
 }
 
-void Cstring::set(const char* s) {
-	size_t len = strlen(s) + 1;
-	ptr = new char[len];
-	std::copy_n(s, len, ptr);
-}
-
-void Cstring::set(const char* s, size_t l) {
-	ptr = new char[l + 1];
-	std::copy_n(s, l, ptr);
-	ptr[l] = '\0';
-}
-
-void Cstring::set(const string& s) {
-	size_t len = s.length() + 1;
-	ptr = new char[len];
-	std::copy_n(s.data(), len, ptr);
-}
-
-#ifdef _WIN32
-void Cstring::set(const wchar_t* s) {
-	if (int len = WideCharToMultiByte(CP_UTF8, 0, s, -1, nullptr, 0, nullptr, nullptr); len > 1) {
-		ptr = new char[len];
-		WideCharToMultiByte(CP_UTF8, 0, s, -1, ptr, len, nullptr, nullptr);
-	} else
-		ptr = &nullch;
-}
-#endif
-
-void Cstring::set(const fs::path& s) {
-	size_t slen = s.native().length() + 1;
-#ifdef _WIN32
-	if (int len = WideCharToMultiByte(CP_UTF8, 0, s.c_str(), slen, nullptr, 0, nullptr, nullptr); len > 1) {
-		ptr = new char[len];
-		WideCharToMultiByte(CP_UTF8, 0, s.c_str(), slen, ptr, len, nullptr, nullptr);
-	} else
-		ptr = &nullch;
-#else
-	ptr = new char[slen];
-	std::copy_n(s.c_str(), slen, ptr);
-#endif
-}
-
-void Cstring::set(std::initializer_list<char> s) {
-	ptr = new char[s.size() + 1];
-	std::copy(s.begin(), s.end(), ptr);
-	ptr[s.size()] = '\0';
-}
-
-void Cstring::free() {
+Cstring::~Cstring() {
 	if (ptr != &nullch)
 		delete[] ptr;
 }
 
-void Cstring::clear() {
+Cstring& Cstring::operator=(const Cstring& s) {
+	return assign(s);
+}
+
+Cstring& Cstring::operator=(Cstring&& s) noexcept {
+	if (ptr != &nullch)
+		delete[] ptr;
+	ptr = s.ptr;
+	s.ptr = &nullch;
+	return *this;
+}
+
+Cstring& Cstring::operator=(const char* s) {
+	return assign(s);
+}
+
+Cstring& Cstring::operator=(const string& s) {
+	return assign(s);
+}
+
+#ifdef _WIN32
+Cstring& Cstring::operator=(const wchar_t* s) {
+	return assign(s);
+}
+
+Cstring& Cstring::operator=(wstring_view s) {
+	return assign(s);
+}
+#endif
+
+Cstring& Cstring::operator=(const fs::path& s) {
+	return assign(s);
+}
+
+Cstring& Cstring::operator=(string_view s) {
+	return assign(s);
+}
+
+Cstring& Cstring::operator=(std::initializer_list<char> s) {
+	return assign(s);
+}
+
+template <class T>
+Cstring& Cstring::assign(T&& s) {
+	clear();
+	set(std::forward<T>(s));
+	return *this;
+}
+
+void Cstring::set(const char* s) {
+	if (size_t len = strlen(s)) {
+		ptr = new char[++len];
+		std::copy_n(s, len, ptr);
+	}
+}
+
+void Cstring::set(const char* s, size_t l) {
+	if (l) {
+		ptr = new char[l + 1];
+		std::copy_n(s, l, ptr);
+		ptr[l] = '\0';
+	}
+}
+
+void Cstring::set(const string& s) {
+	if (size_t len = s.length()) {
+		ptr = new char[++len];
+		std::copy_n(s.data(), len, ptr);
+	}
+}
+
+#ifdef _WIN32
+void Cstring::set(const wchar_t* s) {
+	if (*s)
+		if (int len = WideCharToMultiByte(CP_UTF8, 0, s, -1, nullptr, 0, nullptr, nullptr); len > 1) {
+			ptr = new char[len];
+			WideCharToMultiByte(CP_UTF8, 0, s, -1, ptr, len, nullptr, nullptr);
+		}
+}
+
+void Cstring::set(wstring_view s) {
+	if (!s.empty())
+		if (int len = WideCharToMultiByte(CP_UTF8, 0, s.data(), s.length(), nullptr, 0, nullptr, nullptr); len > 0) {
+			ptr = new char[len + 1];
+			WideCharToMultiByte(CP_UTF8, 0, s.data(), s.length(), ptr, len, nullptr, nullptr);
+			ptr[len] = '\0';
+		}
+}
+#endif
+
+void Cstring::set(const fs::path& s) {
+	if (size_t slen = s.native().length()) {
+#ifdef _WIN32
+		if (int len = WideCharToMultiByte(CP_UTF8, 0, s.c_str(), ++slen, nullptr, 0, nullptr, nullptr); len > 1) {
+			ptr = new char[len];
+			WideCharToMultiByte(CP_UTF8, 0, s.c_str(), slen, ptr, len, nullptr, nullptr);
+		}
+#else
+		ptr = new char[++slen];
+		std::copy_n(s.c_str(), slen, ptr);
+#endif
+	}
+}
+
+void Cstring::set(std::initializer_list<char> s) {
+	if (size_t len = s.size()) {
+		ptr = new char[len + 1];
+		rng::copy(s, ptr);
+		ptr[len] = '\0';
+	}
+}
+
+void Cstring::clear() noexcept {
 	if (ptr != &nullch) {
 		delete[] ptr;
 		ptr = &nullch;
@@ -138,25 +172,15 @@ bool tstrciequal(std::basic_string_view<C> a, std::basic_string_view<C> b) {
 	return true;
 }
 
-bool strciequal(string_view a, string_view b) {
+bool strciequal(string_view a, string_view b) noexcept {
 	return tstrciequal(a, b);
 }
 
-bool strciequal(wstring_view a, wstring_view b) {
+bool strciequal(wstring_view a, wstring_view b) noexcept {
 	return tstrciequal(a, b);
 }
 
-bool strnciequal(string_view a, string_view b, size_t n) {
-	size_t alen = std::min(a.length(), n);
-	if (alen != std::min(b.length(), n))
-		return false;
-	for (size_t i = 0; i < alen; ++i)
-		if (toupper(a[i]) != toupper(b[i]))
-			return false;
-	return true;
-}
-
-string_view parentPath(string_view path) {
+string_view parentPath(string_view path) noexcept {
 	string_view::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), notDsep);
 	it = std::find_if(it, path.rend(), isDsep);
 	it = std::find_if(it, path.rend(), notDsep);
@@ -196,26 +220,26 @@ static bool pathCompareLoop(const char*& ai, const char*& bi) {
 	return true;
 }
 
-bool pathEqual(string_view a, string_view b) {
+bool pathEqual(string_view a, string_view b) noexcept {
 	string_view::iterator ai = a.begin(), bi = b.begin();	// check if both paths have reached their ends simultaneously
 	return pathCompareLoop(ai, a.end(), bi, b.end()) && ai == a.end() && bi == b.end();
 }
 
-bool pathEqual(const char* a, const char* b) {
+bool pathEqual(const char* a, const char* b) noexcept {
 	return pathCompareLoop(a, b) && !*a && !*b;
 }
 
-string_view relativePath(string_view path, string_view base) {
+string_view relativePath(string_view path, string_view base) noexcept {
 	string_view::iterator ai = path.begin(), bi = base.begin();
 	return pathCompareLoop(ai, path.end(), bi, base.end()) && bi == base.end() ? string_view(ai, path.end()) : string_view();
 }
 
-bool isSubpath(string_view path, string_view base) {
+bool isSubpath(string_view path, string_view base) noexcept {
 	string_view::iterator ai = path.begin(), bi = base.begin();	// parent has to have reached its end while path was still matching
 	return pathCompareLoop(ai, path.end(), bi, base.end()) && bi == base.end();
 }
 
-tm currentDateTime() {
+tm currentDateTime() noexcept {
 	time_t rawt = time(nullptr);
 	tm tim;
 #ifdef _WIN32
@@ -224,6 +248,17 @@ tm currentDateTime() {
 	localtime_r(&rawt, &tim);
 #endif
 	return tim;
+}
+
+void copyPixels(void* dst, const void* src, uint dpitch, uint spitch, uint bwidth, uint height) noexcept {
+	if (dpitch == spitch)
+		memcpy(dst, src, size_t(dpitch) * size_t(height));
+	else {
+		auto dp = static_cast<uint8*>(dst);
+		auto sp = static_cast<const uint8*>(src);
+		for (uint r = 0; r < height; ++r, dp += dpitch, sp += spitch)
+			memcpy(dp, sp, bwidth);
+	}
 }
 
 #ifdef _WIN32
@@ -235,7 +270,7 @@ static bool isUnc(const char* path) {
 	return isDsep(path[0]) && isDsep(path[1]) && notDsep(path[2]);
 }
 
-bool isAbsolute(string_view path) {
+bool isAbsolute(string_view path) noexcept {
 	return path.length() >= 3 && ((hasDriveLetter(path.data()) && isDsep(path[2])) || isUnc(path.data()));
 }
 

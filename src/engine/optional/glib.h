@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(CAN_SECRET) || defined(CAN_PDF)
+#if defined(CAN_SECRET) || defined(CAN_POPPLER)
 #include <glib-object.h>
 
 extern decltype(g_object_unref)* gObjectUnref;
@@ -15,6 +15,6 @@ extern decltype(g_bytes_new_static)* gBytesNewStatic;
 extern decltype(g_bytes_unref)* gBytesUnref;
 extern decltype(g_error_free)* gErrorFree;
 
-bool symGlib();
-void closeGlib();
+bool symGlib() noexcept;
+void closeGlib() noexcept;
 #endif

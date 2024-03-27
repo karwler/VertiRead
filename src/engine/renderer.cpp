@@ -4,7 +4,7 @@
 
 // RENDERER
 
-Renderer::Info::Device::Device(u32vec2 vendev, Cstring&& devname, uintptr_t memory) :
+Renderer::Info::Device::Device(u32vec2 vendev, Cstring&& devname, uintptr_t memory) noexcept :
 	id(vendev),
 	name(std::move(devname)),
 	dmem(memory)
@@ -14,25 +14,25 @@ Widget* Renderer::finishSelDraw(View*) {
 	return nullptr;
 }
 
-void Renderer::setMaxPicRes(uint& size) {
+void Renderer::setMaxPicRes(uint& size) noexcept {
 	size = std::clamp(size, Settings::minPicRes, maxTextureSize);
 	maxPictureSize = size;
 }
 
-SDL_Surface* Renderer::makeCompatible(SDL_Surface* img, bool rpic) const {
+SDL_Surface* Renderer::makeCompatible(SDL_Surface* img, bool rpic) const noexcept {
 	if (img = limitSize(img, rpic ? maxPictureSize : maxTextureSize); !img)
 		return nullptr;
 	umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum>::const_iterator sit = preconvertFormats.find(SDL_PixelFormatEnum(img->format->format));
 	return sit == preconvertFormats.end() ? img : convertReplace(img, sit->second);
 }
 
-SDL_Surface* Renderer::convertReplace(SDL_Surface* img, SDL_PixelFormatEnum format) {
+SDL_Surface* Renderer::convertReplace(SDL_Surface* img, SDL_PixelFormatEnum format) noexcept {
 	SDL_Surface* dst = SDL_ConvertSurfaceFormat(img, format, 0);
 	SDL_FreeSurface(img);
 	return dst;
 }
 
-SDL_Surface* Renderer::limitSize(SDL_Surface* img, uint32 limit) {
+SDL_Surface* Renderer::limitSize(SDL_Surface* img, uint32 limit) noexcept {
 	if (img && (uint32(img->w) > limit || uint32(img->h) > limit)) {
 		float scale = float(limit) / float(img->w > img->h ? img->w : img->h);
 		SDL_Surface* dst = SDL_CreateRGBSurfaceWithFormat(0, int(float(img->w) * scale), int(float(img->h) * scale), img->format->BitsPerPixel, img->format->format);
@@ -44,20 +44,12 @@ SDL_Surface* Renderer::limitSize(SDL_Surface* img, uint32 limit) {
 	return img;
 }
 
-void Renderer::copyPixels(byte_t* dst, const byte_t* src, uint dpitch, uint spitch, uint bwidth, uint height) {
-	if (dpitch == spitch)
-		memcpy(dst, src, size_t(dpitch) * size_t(height));
-	else
-		for (uint r = 0; r < height; ++r, dst += dpitch, src += spitch)
-			memcpy(dst, src, bwidth);
-}
-
-Rectf Renderer::cropTexRect(const Recti& isct, const Recti& rect, uvec2 texRes) {
+Rectf Renderer::cropTexRect(const Recti& isct, const Recti& rect, uvec2 texRes) noexcept {
 	vec2 fac = vec2(texRes) / vec2(rect.size());
 	return Rectf(vec2(isct.pos() - rect.pos()) * fac, glm::ceil(vec2(isct.size()) * fac));
 }
 
-void Renderer::recommendPicRamLimit(uintptr_t& mem) {
+void Renderer::recommendPicRamLimit(uintptr_t& mem) noexcept {
 	if (!mem)
 		mem = uintptr_t(SDL_GetSystemRAM() / 2) * 1024 * 1024;
 }
@@ -68,31 +60,44 @@ RendererSf::RendererSf(const umap<int, SDL_Window*>& windows, Settings* sets, iv
 	Renderer(uint(std::sqrt(INT_MAX / 4))),
 	bgColor(colorToBytes(bgcolor))
 {
-	if (isSingleWindow(windows)) {
-		SDL_Surface* srf = SDL_GetWindowSurface(windows.begin()->second);
-		if (!srf)
-			throw std::runtime_error(SDL_GetError());
-		viewRes = ivec2(srf->w, srf->h);
-		views.emplace(singleDspId, new View(windows.begin()->second, Recti(ivec2(0), viewRes)));
-	} else {
-		views.reserve(windows.size());
-		for (auto [id, win] : windows) {
-			SDL_Surface* srf = SDL_GetWindowSurface(win);
+	View* vtmp = nullptr;
+	try {
+		if (isSingleWindow(windows)) {
+			SDL_Surface* srf = SDL_GetWindowSurface(windows.begin()->second);
 			if (!srf)
 				throw std::runtime_error(SDL_GetError());
-			Recti wrect(sets->displays.at(id).pos() - origin, ivec2(srf->w, srf->h));
-			viewRes = glm::max(viewRes, wrect.end());
-			views.emplace(id, new View(win, wrect));
+			viewRes = ivec2(srf->w, srf->h);
+			views.emplace(singleDspId, vtmp = new View(windows.begin()->second, Recti(ivec2(0), viewRes)));
+			vtmp = nullptr;
+		} else {
+			views.reserve(windows.size());
+			for (auto [id, win] : windows) {
+				SDL_Surface* srf = SDL_GetWindowSurface(win);
+				if (!srf)
+					throw std::runtime_error(SDL_GetError());
+				Recti wrect(sets->displays.at(id).pos() - origin, ivec2(srf->w, srf->h));
+				viewRes = glm::max(viewRes, wrect.end());
+				views.emplace(id, vtmp = new View(win, wrect));
+				vtmp = nullptr;
+			}
 		}
+		setVsync(sets->vsync);
+		setCompression(sets->compression);
+		setMaxPicRes(sets->maxPicRes);
+		sets->gpuSelecting = false;
+		recommendPicRamLimit(sets->picLim.size);
+	} catch (...) {
+		delete vtmp;
+		cleanup();
+		throw;
 	}
-	setVsync(sets->vsync);
-	setCompression(sets->compression);
-	setMaxPicRes(sets->maxPicRes);
-	sets->gpuSelecting = false;
-	recommendPicRamLimit(sets->picLim.size);
 }
 
 RendererSf::~RendererSf() {
+	cleanup();
+}
+
+void RendererSf::cleanup() noexcept {
 	for (auto [id, view] : views)
 		delete view;
 }
@@ -131,14 +136,14 @@ void RendererSf::startDraw(View* view) {
 }
 
 void RendererSf::drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) {
-	if (Recti isct; SDL_IntersectRect(reinterpret_cast<const SDL_Rect*>(&rect), reinterpret_cast<const SDL_Rect*>(&frame), reinterpret_cast<SDL_Rect*>(&isct))) {
+	if (Recti isct; SDL_IntersectRect(&rect.asRect(), &frame.asRect(), &isct.asRect())) {
 		Recti crop = cropTexRect(isct, rect, tex->getRes());
 		isct.pos() -= curViewPos;
 		u8vec4 bclr = colorToBytes(color);
 		SDL_Surface* img = static_cast<const TextureSf*>(tex)->srf;
 		SDL_SetSurfaceColorMod(img, bclr.r, bclr.g, bclr.b);
 		SDL_SetSurfaceAlphaMod(img, bclr.a);
-		SDL_BlitScaled(img, reinterpret_cast<const SDL_Rect*>(&crop), curViewSrf, reinterpret_cast<SDL_Rect*>(&isct));
+		SDL_BlitScaled(img, &crop.asRect(), curViewSrf, &isct.asRect());
 	}
 }
 
@@ -186,7 +191,7 @@ Texture* RendererSf::texFromRpic(SDL_Surface* img) {
 Texture* RendererSf::texFromText(const PixmapRgba& pm) {
 	if (pm.res.x)
 		if (SDL_Surface* img = SDL_CreateRGBSurfaceWithFormat(0, std::min(pm.res.x, maxTextureSize), std::min(pm.res.y, maxTextureSize), 32, SDL_PIXELFORMAT_RGBA32)) {
-			copyPixels(static_cast<byte_t*>(img->pixels), reinterpret_cast<const byte_t*>(pm.pix.get()), img->pitch, pm.res.x * 4, pm.res.x * 4, pm.res.y);
+			copyPixels(img->pixels, pm.pix.get(), img->pitch, pm.res.x * 4, pm.res.x * 4, pm.res.y);
 			SDL_SetSurfaceRLE(img, SDL_TRUE);
 			return new TextureSf(uvec2(img->w, img->h), img);
 		}
@@ -196,7 +201,7 @@ Texture* RendererSf::texFromText(const PixmapRgba& pm) {
 bool RendererSf::texFromText(Texture* tex, const PixmapRgba& pm) {
 	if (pm.res.x)
 		if (SDL_Surface* img = SDL_CreateRGBSurfaceWithFormat(0, std::min(pm.res.x, maxTextureSize), std::min(pm.res.y, maxTextureSize), 32, SDL_PIXELFORMAT_RGBA32)) {
-			copyPixels(static_cast<byte_t*>(img->pixels), reinterpret_cast<const byte_t*>(pm.pix.get()), img->pitch, pm.res.x * 4, pm.res.x * 4, pm.res.y);
+			copyPixels(img->pixels, pm.pix.get(), img->pitch, pm.res.x * 4, pm.res.x * 4, pm.res.y);
 			SDL_SetSurfaceRLE(img, SDL_TRUE);
 
 			auto stx = static_cast<TextureSf*>(tex);
@@ -208,10 +213,11 @@ bool RendererSf::texFromText(Texture* tex, const PixmapRgba& pm) {
 	return false;
 }
 
-void RendererSf::freeTexture(Texture* tex) {
-	auto stx = static_cast<TextureSf*>(tex);
-	SDL_FreeSurface(stx->srf);
-	delete stx;
+void RendererSf::freeTexture(Texture* tex) noexcept {
+	if (auto stx = static_cast<TextureSf*>(tex)) {
+		SDL_FreeSurface(stx->srf);
+		delete stx;
+	}
 }
 
 void RendererSf::setCompression(Settings::Compression compression) {

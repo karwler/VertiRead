@@ -8,6 +8,6 @@
 extern decltype(CreateDXGIFactory)* createDXGIFactory;
 extern decltype(D3D11CreateDevice)* d3d11CreateDevice;
 
-bool symD3d11();
-void closeD3d11();
+bool symD3d11() noexcept;
+void closeD3d11() noexcept;
 #endif

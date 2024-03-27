@@ -1,6 +1,6 @@
 #include "compare.h"
 
-char32_t mbstowc(string_view::iterator& pos, size_t& len) {
+char32_t mbstowc(string_view::iterator& pos, size_t& len) noexcept {
 	if (!len)
 		return '\0';
 
@@ -8,10 +8,8 @@ char32_t mbstowc(string_view::iterator& pos, size_t& len) {
 	--len;
 	if (c < 0x80)
 		return c;
-	if ((c >= 0x80 && c <= 0xBF) || c >= 0xF5) {
-		for (; len && (c = *pos, (c >= 0x80 && c <= 0xBF) || c >= 0xF5); ++pos, --len);
+	if (c < 0xC0 || c >= 0xF5)
 		return '\0';
-	}
 
 	char32_t w;
 	size_t l;
@@ -27,22 +25,20 @@ char32_t mbstowc(string_view::iterator& pos, size_t& len) {
 	}
 
 	if (len < l) {
-		for (; len && (c = *pos, (c >= 0x80 && c <= 0xBF) || c >= 0xF5); ++pos, --len);
+		pos += len;
+		len = 0;
 		return '\0';
 	}
-	len -= l;
 
-	for (; l; --l, ++pos) {
-		if (c = *pos; c < 0x80 || c > 0xBF) {
-			len += l;
+	for (; l--; ++pos, --len) {
+		if (c = *pos; c < 0x80 || c >= 0xC0)
 			return '\0';
-		}
 		w = (w << 6) | (c & 0x3F);
 	}
 	return !(w >= 0x110000 || (w >= 0x00D800 && w <= 0x00DFFF)) ? w : '\0';
 }
 
-char32_t mbstowc(const char*& pos) {
+char32_t mbstowc(const char*& pos) noexcept {
 	uchar c = *pos;
 	if (!c)
 		return '\0';
@@ -50,10 +46,8 @@ char32_t mbstowc(const char*& pos) {
 	++pos;
 	if (c < 0x80)
 		return c;
-	if ((c >= 0x80 && c <= 0xBF) || c >= 0xF5) {
-		for (; (c = *pos) && ((c >= 0x80 && c <= 0xBF) || c >= 0xF5); ++pos);
+	if (c < 0xC0 || c >= 0xF5)
 		return '\0';
-	}
 
 	char32_t w;
 	size_t l;
@@ -68,11 +62,9 @@ char32_t mbstowc(const char*& pos) {
 		l = 1;
 	}
 
-	for (; l; --l, ++pos) {
-		if (c = *pos; c < 0x80 || c > 0xBF) {
-			for (; (c = *pos) && c >= 0xF5; ++pos);
+	for (; l--; ++pos) {
+		if (c = *pos; c < 0x80 || c >= 0xC0)
 			return '\0';
-		}
 		w = (w << 6) | (c & 0x3F);
 	}
 	return !(w >= 0x110000 || (w >= 0x00D800 && w <= 0x00DFFF)) ? w : '\0';
@@ -81,8 +73,7 @@ char32_t mbstowc(const char*& pos) {
 #ifdef WITH_ICU
 void Strcomp::init() {
 	UErrorCode status = U_ZERO_ERROR;
-	collator = icu::Collator::createInstance(icu::Locale::getDefault(), status);
-	if (U_FAILURE(status))
+	if (collator = icu::Collator::createInstance(icu::Locale::getDefault(), status); U_FAILURE(status))
 		throw std::runtime_error(u_errorName(status));
 
 	collator->setAttribute(UCOL_STRENGTH, UCOL_SECONDARY, status);
@@ -91,7 +82,7 @@ void Strcomp::init() {
 
 #else
 
-std::strong_ordering Strcomp::cmp(string_view sa, string_view sb) {
+std::strong_ordering Strcomp::cmp(string_view sa, string_view sb) noexcept {
 	string_view::iterator a = sa.begin(), b = sb.begin();
 	size_t alen = sa.length(), blen = sb.length();
 	while (alen && blen) {
@@ -105,7 +96,7 @@ std::strong_ordering Strcomp::cmp(string_view sa, string_view sb) {
 	return alen == 0 && blen == 0 ? std::strong_ordering::equal : alen == 0 ? std::strong_ordering::less : std::strong_ordering::greater;
 }
 
-std::strong_ordering Strcomp::cmpLeft(char32_t ca, string_view::iterator a, size_t alen, char32_t cb, string_view::iterator b, size_t blen) {
+std::strong_ordering Strcomp::cmpLeft(char32_t ca, string_view::iterator a, size_t alen, char32_t cb, string_view::iterator b, size_t blen) noexcept {
 	for (;; ca = mbstowc(a, alen), cb = mbstowc(b, blen)) {
 		bool nad = !iswdigit(ca), nbd = !iswdigit(cb);
 		if (nad && nbd)
@@ -121,7 +112,7 @@ std::strong_ordering Strcomp::cmpLeft(char32_t ca, string_view::iterator a, size
 	}
 }
 
-std::strong_ordering Strcomp::cmpRight(char32_t ca, string_view::iterator a, size_t alen, char32_t cb, string_view::iterator b, size_t blen) {
+std::strong_ordering Strcomp::cmpRight(char32_t ca, string_view::iterator a, size_t alen, char32_t cb, string_view::iterator b, size_t blen) noexcept {
 	for (std::strong_ordering bias = std::strong_ordering::equal;; ca = mbstowc(a, alen), cb = mbstowc(b, blen)) {
 		bool nad = !iswdigit(ca), nbd = !iswdigit(cb);
 		if (nad && nbd)
@@ -137,7 +128,7 @@ std::strong_ordering Strcomp::cmpRight(char32_t ca, string_view::iterator a, siz
 	}
 }
 
-char32_t Strcomp::skipSpaces(string_view::iterator& p, size_t& l) {
+char32_t Strcomp::skipSpaces(string_view::iterator& p, size_t& l) noexcept {
 	char32_t c;
 	do {
 		c = mbstowc(p, l);
@@ -145,7 +136,7 @@ char32_t Strcomp::skipSpaces(string_view::iterator& p, size_t& l) {
 	return c;
 }
 
-std::strong_ordering Strcomp::cmpLetter(char32_t a, char32_t b) {
+std::strong_ordering Strcomp::cmpLetter(char32_t a, char32_t b) noexcept {
 	if (a != b) {
 		wint_t au = towupper(a), bu = towupper(b);
 		return au != bu ? au <=> bu : a <=> b;
@@ -153,7 +144,7 @@ std::strong_ordering Strcomp::cmpLetter(char32_t a, char32_t b) {
 	return std::strong_ordering::equal;
 }
 
-std::strong_ordering Strcomp::cmp(const char* a, const char* b) {
+std::strong_ordering Strcomp::cmp(const char* a, const char* b) noexcept {
 	for (;;) {
 		char32_t ca = skipSpaces(a), cb = skipSpaces(b);
 		if (iswdigit(ca) && iswdigit(cb))
@@ -166,7 +157,7 @@ std::strong_ordering Strcomp::cmp(const char* a, const char* b) {
 	}
 }
 
-std::strong_ordering Strcomp::cmpLeft(char32_t ca, const char* a, char32_t cb, const char* b) {
+std::strong_ordering Strcomp::cmpLeft(char32_t ca, const char* a, char32_t cb, const char* b) noexcept {
 	for (;; ca = mbstowc(a), cb = mbstowc(b)) {
 		bool nad = !iswdigit(ca), nbd = !iswdigit(cb);
 		if (nad && nbd)
@@ -180,7 +171,7 @@ std::strong_ordering Strcomp::cmpLeft(char32_t ca, const char* a, char32_t cb, c
 	}
 }
 
-std::strong_ordering Strcomp::cmpRight(char32_t ca, const char* a, char32_t cb, const char* b) {
+std::strong_ordering Strcomp::cmpRight(char32_t ca, const char* a, char32_t cb, const char* b) noexcept {
 	for (std::strong_ordering bias = std::strong_ordering::equal;; ca = mbstowc(a), cb = mbstowc(b)) {
 		bool nad = !iswdigit(ca), nbd = !iswdigit(cb);
 		if (nad && nbd)
@@ -196,7 +187,7 @@ std::strong_ordering Strcomp::cmpRight(char32_t ca, const char* a, char32_t cb, 
 	}
 }
 
-char32_t Strcomp::skipSpaces(const char*& p) {
+char32_t Strcomp::skipSpaces(const char*& p) noexcept {
 	char32_t c;
 	do {
 		c = mbstowc(p);

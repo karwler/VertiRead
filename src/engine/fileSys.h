@@ -2,8 +2,7 @@
 
 #include "utils/settings.h"
 #include <format>
-#include <fstream>
-#include <thread>
+#include <stop_token>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -12,65 +11,6 @@
 
 struct FT_FaceRec_;
 struct FT_LibraryRec_;
-
-struct IniLine {
-	enum class Type : uint8 {
-		empty,
-		prpVal,
-		prpKeyVal,
-		title
-	};
-
-	Type type = Type::empty;
-	string_view prp;
-	string_view key;
-	string_view val;
-
-	Type setLine(string_view str);
-
-	template <class... T> static void writeTitle(std::ofstream& ofs, T&&... title);
-	template <class P, class... T> static void writeVal(std::ofstream& ofs, P&& prp, T&&... val);
-	template <class P, class K, class... T> static void writeKeyVal(std::ofstream& ofs, P&& prp, K&& key, T&&... val);
-};
-
-template <class... T>
-void IniLine::writeTitle(std::ofstream& ofs, T&&... title) {
-	((ofs << '[') << ... << std::forward<T>(title)) << ']' << LINEND;
-}
-
-template <class P, class... T>
-void IniLine::writeVal(std::ofstream& ofs, P&& prp, T&&... val) {
-	((ofs << std::forward<P>(prp) << '=') << ... << std::forward<T>(val)) << LINEND;
-}
-
-template <class P, class K, class... T>
-void IniLine::writeKeyVal(std::ofstream& ofs, P&& prp, K&& key, T&&... val) {
-	((ofs << std::forward<P>(prp) << '[' << std::forward<K>(key) << "]=") << ... << std::forward<T>(val)) << LINEND;
-}
-
-struct CsvText {
-	enum class Code : uint8 {
-		end,
-		field,
-		last
-	};
-
-	string field;
-	const char* text;
-	const char* lineStart;
-	const char* lineEnd;
-	bool nextLine = true;
-
-	CsvText(const char* str);
-
-	template <bool fill = true> Code readField();
-
-	static string makeLine(const vector<string>& fields);
-};
-
-inline CsvText::CsvText(const char* str) :
-	text(str + strspn(str, "\r\n"))
-{}
 
 // handles all filesystem interactions
 class FileSys {
@@ -92,7 +32,6 @@ private:
 	static constexpr char iniKeywordCompression[] = "compression";
 	static constexpr char iniKeywordVSync[] = "vsync";
 	static constexpr char iniKeywordGpuSelecting[] = "gpu_selecting";
-	static constexpr char iniKeywordPdfImages[] = "pdf_images";
 	static constexpr char iniKeywordDirection[] = "direction";
 	static constexpr char iniKeywordZoom[] = "zoom";
 	static constexpr char iniKeywordSpacing[] = "spacing";
@@ -121,7 +60,7 @@ private:
 	fs::path dirBase;	// application base directory
 	fs::path dirSets;	// settings directory
 	fs::path dirConfs;	// internal config directory
-	std::ofstream logFile;
+	SDL_RWops* logFile;
 #ifdef CAN_FONTCFG
 	void* fontconfig = nullptr;	// is class Fontconfig
 #endif

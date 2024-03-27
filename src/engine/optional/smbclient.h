@@ -33,6 +33,6 @@ extern decltype(smbc_setPort)* smbcSetPort;
 extern decltype(smbc_getOptionUserData)* smbcGetOptionUserData;
 extern decltype(smbc_setOptionUserData)* smbcSetOptionUserData;
 
-bool symSmbclient();
-void closeSmbclient();
+bool symSmbclient() noexcept;
+void closeSmbclient() noexcept;
 #endif

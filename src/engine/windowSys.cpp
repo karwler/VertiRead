@@ -9,8 +9,9 @@
 #include <SDL_image.h>
 #include <SDL_vulkan.h>
 
-int WindowSys::start(vector<string>&& cmdVals,  uset<string>&& cmdFlags) {
+int WindowSys::start(vector<string>&& cmdVals, uset<string>&& cmdFlags) noexcept {
 	fileSys = nullptr;
+	drawSys = nullptr;
 	inputSys = nullptr;
 	program = nullptr;
 	scene = nullptr;
@@ -36,7 +37,6 @@ int WindowSys::start(vector<string>&& cmdVals,  uset<string>&& cmdFlags) {
 	destroyWindows();
 	delete fileSys;
 	delete sets;
-
 	IMG_Quit();
 	SDL_Quit();
 	return rc;
@@ -110,6 +110,7 @@ void WindowSys::init(vector<string>&& cmdVals, uset<string>&& cmdFlags) {
 	scene = new Scene;
 	program = new Program;
 	program->start(cmdVals);
+	run = true;
 
 	SDL_PumpEvents();
 	SDL_FlushEvents(SDL_FIRSTEVENT, SDL_USEREVENT - 1);
@@ -464,6 +465,12 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 	case SDL_USEREVENT_PROG_SEARCH_DIR:
 		program->handleProgSearchDirEvent(event.user);
 		break;
+	case SDL_USEREVENT_THREAD_LIST_FINISHED:
+		program->eventListFinished(event.user);
+		break;
+	case SDL_USEREVENT_THREAD_DELETE_FINISHED:
+		program->eventDeleteFinished(event.user);
+		break;
 	case SDL_USEREVENT_THREAD_ARCHIVE_FINISHED:
 		program->eventArchiveFinished(event.user);
 		break;
@@ -472,6 +479,9 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 		break;
 	case SDL_USEREVENT_THREAD_READER:
 		program->handleThreadReaderEvent(event.user);
+		break;
+	case SDL_USEREVENT_THREAD_GO_NEXT_FINISHED:
+		program->eventGoNextFinished(event.user);
 		break;
 	case SDL_USEREVENT_THREAD_MOVE:
 		program->handleThreadMoveEvent(event.user);
@@ -511,11 +521,10 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 		break;
 #if SDL_VERSION_ATLEAST(2, 0, 18)
 	case SDL_WINDOWEVENT_DISPLAY_CHANGED:
-		if (Renderer::isSingleWindow(windows) && drawSys->updateDpi(winEvent.data1))
 #else
 	case SDL_WINDOWEVENT_MOVED:
-		if (Renderer::isSingleWindow(windows) && drawSys->updateDpi(SDL_GetWindowDisplayIndex(SDL_GetWindowFromID(winEvent.windowID))))
 #endif
+		if (Renderer::isSingleWindow(windows) && drawSys->updateDpi())
 			scene->onResize();
 	}
 }
@@ -529,7 +538,9 @@ void WindowSys::eventDisplay(const SDL_DisplayEvent& dspEvent) {
 	for (uint32 i = SDL_DISPLAYEVENT_ORIENTATION; i <= last; ++i)
 		if (dspEvent.type == i) {
 			sets->unionDisplays();
-			if (windows.size() > 1)
+			if (windows.size() == 1)
+				drawSys->updateDpi();
+			else
 				recreateWindows();
 			scene->onDisplayChange();
 			break;
@@ -538,7 +549,7 @@ void WindowSys::eventDisplay(const SDL_DisplayEvent& dspEvent) {
 
 ivec2 WindowSys::winViewOffset(uint32 wid) {
 	if (SDL_Window* win = SDL_GetWindowFromID(wid))
-		if (umap<int, SDL_Window*>::const_iterator it = rng::find_if(windows, [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; }); it != windows.end())
+		if (umap<int, SDL_Window*>::const_iterator it = rng::find_if(windows, [win](const pair<const int, SDL_Window*>& p) -> bool { return p.second == win; }); it != windows.end())
 			return drawSys->getRenderer()->getViews().at(it->first)->rect.pos();
 	return ivec2(INT_MIN);
 }
@@ -547,19 +558,18 @@ ivec2 WindowSys::mousePos() {
 	ivec2 mp;
 	SDL_GetMouseState(&mp.x, &mp.y);
 	SDL_Window* win = SDL_GetMouseFocus();
-	umap<int, SDL_Window*>::const_iterator it = rng::find_if(windows, [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; });
+	umap<int, SDL_Window*>::const_iterator it = rng::find_if(windows, [win](const pair<const int, SDL_Window*>& p) -> bool { return p.second == win; });
 	return it != windows.end() ? mp + drawSys->getRenderer()->getViews().at(it->first)->rect.pos() : mp;
 }
 
 void WindowSys::moveCursor(ivec2 mov) {
 	SDL_Window* win = SDL_GetMouseFocus();
-	if (umap<int, SDL_Window*>::iterator it = rng::find_if(windows, [win](const pair<int, SDL_Window*>& p) -> bool { return p.second == win; }); it != windows.end()) {
+	if (umap<int, SDL_Window*>::iterator it = rng::find_if(windows, [win](const pair<const int, SDL_Window*>& p) -> bool { return p.second == win; }); it != windows.end()) {
 		ivec2 wpos;
 		SDL_GetMouseState(&wpos.x, &wpos.y);
 		wpos += drawSys->getRenderer()->getViews().at(it->first)->rect.pos() + mov;
-		int id = drawSys->findPointInView(wpos);
-		if (it = windows.find(id); it != windows.end()) {
-			ivec2 vpos = drawSys->getRenderer()->getViews().at(id)->rect.pos();
+		if (Renderer::View* view = drawSys->findViewForPoint(wpos)) {
+			ivec2 vpos = view->rect.pos();
 			SDL_WarpMouseInWindow(it->second, wpos.x - vpos.x, wpos.y - vpos.y);
 		}
 	}

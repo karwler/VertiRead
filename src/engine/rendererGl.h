@@ -113,7 +113,7 @@ private:
 		uint8 align;
 
 		SurfaceInfo() = default;
-		SurfaceInfo(SDL_Surface* surface, uint16 internal, uint16 format, uint16 texel);
+		SurfaceInfo(SDL_Surface* surface, uint16 internal, uint16 format, uint16 texel) noexcept;
 	};
 
 	uint16 iformRgb;
@@ -146,13 +146,13 @@ public:
 	Texture* texFromRpic(SDL_Surface* img) override;
 	Texture* texFromText(const PixmapRgba& pm) override;
 	bool texFromText(Texture* tex, const PixmapRgba& pm) override;
-	void freeTexture(Texture* tex) override;
+	void freeTexture(Texture* tex) noexcept override;
 
 protected:
 #ifdef _WIN32
-	template <Class T = ViewGl> T* setContext(View* view);
+	void setContext(View* view);
 #else
-	template <Class T = ViewGl> static T* setContext(View* view);
+	static void setContext(View* view);
 #endif
 	template <Class T, class F> void initContexts(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, F initGl);
 	void initGlCommon(ViewGl* view, bool vsync, const vec4& bgcolor);
@@ -162,7 +162,7 @@ private:
 	GLuint initTexture(GLint filter);
 	void uploadTexture(TextureGl* tex, SurfaceInfo& si);
 	void uploadTexture(TextureGl* tex, const PixmapRgba& pm);
-	template <bool keep> SurfaceInfo pickPixFormat(SDL_Surface* img) const;
+	template <bool keep> SurfaceInfo pickPixFormat(SDL_Surface* img) const noexcept;
 #ifndef NDEBUG
 	static void APIENTRY debugMessage(GLenum source, GLenum type, uint id, GLenum severity, GLsizei length, const char* message, const void* userParam);
 #endif
@@ -176,7 +176,7 @@ private:
 #endif
 		mat4 proj;
 
-		ViewGl1(SDL_Window* window, const Recti& area);
+		ViewGl1(SDL_Window* window, const Recti& area) noexcept;
 	};
 
 #ifndef _WIN32
@@ -197,6 +197,7 @@ public:
 
 private:
 	void initGl(ViewGl1* view, bool vsync, const vec4& bgcolor, bool& canTexRect, uintptr_t& availableMemory);
+	void cleanup() noexcept;
 	template <Number T> static void setPosScale(mat4& matrix, const Rect<T>& rect);
 };
 
@@ -237,6 +238,7 @@ public:
 private:
 	void initGl(ViewGl3* view, bool vsync, const vec4& bgcolor, uintptr_t& availableMemory);
 	void initShader();
+	void cleanup() noexcept;
 	GLuint createShader(const char* vertSrc, const char* fragSrc, const char* name) const;
 	void checkFramebufferStatus(const char* name);
 	static void checkStatus(GLuint id, GLenum stat, PFNGLGETSHADERIVPROC check, PFNGLGETSHADERINFOLOGPROC info, const string& name);

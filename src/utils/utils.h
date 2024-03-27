@@ -15,6 +15,7 @@
 #include <glm/fwd.hpp>
 #define SDL_MAIN_HANDLED
 #include <SDL_log.h>
+#include <SDL_rect.h>
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 namespace fs = std::filesystem;
@@ -119,15 +120,11 @@ template <class T, class R, class... A> concept InvocableR = std::is_invocable_r
 
 #ifdef _WIN32
 #define LINEND "\r\n"
-constexpr char directorySeparator = '\\';
+inline constexpr char directorySeparator = '\\';
 #else
 #define LINEND "\n"
-constexpr char directorySeparator = '/';
+inline constexpr char directorySeparator = '/';
 #endif
-
-constexpr byte_t operator""_b(char ch) {
-	return byte_t(ch);
-}
 
 template <Enumeration T>
 constexpr T operator~(T a) {
@@ -220,7 +217,7 @@ T valcp(const T& v) {
 }
 
 #ifndef NDEBUG
-inline void dbgPass() {}
+inline void dbgPass() { /* for setting break points in awkward places */ }
 #endif
 
 // SDL_Rect equivalent (must be reinterpretable)
@@ -245,10 +242,12 @@ struct Rect {
 	tvec2& size() { return reinterpret_cast<tvec2*>(this)[1]; }
 	constexpr tvec2 size() const { return tvec2(w, h); }
 	constexpr tvec2 end() const { return pos() + size(); }
-	tvec4& toVec() { return *reinterpret_cast<tvec4*>(this); }
-	constexpr tvec4 toVec() const { return tvec4(x, y, w, h); }
+	tvec4& asVec() { return *reinterpret_cast<tvec4*>(this); }
+	const tvec4& asVec() const { return *reinterpret_cast<const tvec4*>(this); }
+	SDL_Rect& asRect() { return *reinterpret_cast<SDL_Rect*>(this); }
+	const SDL_Rect& asRect() const { return *reinterpret_cast<const SDL_Rect*>(this); }
 
-	bool operator==(const Rect& rect) const;
+	constexpr bool operator==(const Rect& rect) const;
 	constexpr bool empty() const;
 	constexpr bool contains(const tvec2& point) const;
 	constexpr bool overlaps(const Rect& rect) const;
@@ -261,7 +260,7 @@ using Rectu = Rect<uint>;
 using Rectf = Rect<float>;
 
 template <Number T>
-bool Rect<T>::operator==(const Rect& rect) const {
+constexpr bool Rect<T>::operator==(const Rect& rect) const {
 	return x == rect.x && y == rect.y && w == rect.w && h == rect.h;
 }
 
@@ -292,7 +291,7 @@ constexpr Rect<T> Rect<T>::intersect(const Rect& rect) const {
 		tvec2 dend = glm::min(end(), rect.end());
 		return Rect(dpos, dend - dpos);
 	}
-	return false;
+	return Rect(T(0));
 }
 
 template <Number T>
@@ -327,22 +326,20 @@ using svec2 = glm::vec<2, Size, glm::defaultp>;
 
 // byte sequence that shouldn't change its location
 class Data {
-private:
+protected:
 	uptr<byte_t[]> ptr;
 	size_t len = 0;
 
 public:
 	Data() = default;
-	Data(Data&& d) = default;
 	Data(size_t siz) : ptr(std::make_unique_for_overwrite<byte_t[]>(siz)), len(siz) {}
-
-	Data& operator=(Data&& d) = default;
+	Data(uptr<byte_t[]>&& p, size_t l) : ptr(std::move(p)), len(l) {}
 
 	byte_t* data() { return ptr.get(); }
 	const byte_t* data() const { return ptr.get(); }
 	size_t size() const { return len; }
 	void resize(size_t siz);
-	void clear();
+	void clear() noexcept;
 };
 
 // constant dynamic C string
@@ -356,23 +353,28 @@ private:
 public:
 	Cstring() = default;
 	Cstring(const Cstring& s) { set(s); }
-	Cstring(Cstring&& s) { set(std::move(s)); }
+	Cstring(Cstring&& s) noexcept;
 	Cstring(const char* s) { set(s); }
 	Cstring(const char* s, size_t l) { set(s, l); }
 	Cstring(const char* p, const char* e) { set(p, e - p); }
 	Cstring(const string& s) { set(s); }
 #ifdef _WIN32
 	Cstring(const wchar_t* s) { set(s); }
+	Cstring(wstring_view s) { set(s); }
 #endif
 	Cstring(const fs::path& s) { set(s); }
-	Cstring(string_view s) { set(s.data(), s.length()); }
+	Cstring(string_view s) { set(s); }
 	Cstring(std::initializer_list<char> s) { set(s); }
-	~Cstring() { free(); }
+	~Cstring();
 
 	Cstring& operator=(const Cstring& s);
-	Cstring& operator=(Cstring&& s);
+	Cstring& operator=(Cstring&& s) noexcept;
 	Cstring& operator=(const char* s);
 	Cstring& operator=(const string& s);
+#ifdef _WIN32
+	Cstring& operator=(const wchar_t* s);
+	Cstring& operator=(wstring_view s);
+#endif
 	Cstring& operator=(const fs::path& s);
 	Cstring& operator=(string_view s);
 	Cstring& operator=(std::initializer_list<char> s);
@@ -387,21 +389,22 @@ public:
 	char* data() { return ptr; }
 	const char* data() const { return ptr; }
 	size_t length() const { return strlen(ptr); }
-	bool empty() const { return ptr == &nullch; }
+	bool filled() const { return *ptr; }
+	void clear() noexcept;
 
-	void clear();
 private:
-	void set(const Cstring& s);
-	void set(Cstring&& s);
+	template <class T> Cstring& assign(T&& s);
+	void set(const Cstring& s) { set(s.data()); }
 	void set(const char* s);
 	void set(const char* s, size_t l);
 	void set(const string& s);
 #ifdef _WIN32
 	void set(const wchar_t* s);
+	void set(wstring_view s);
 #endif
 	void set(const fs::path& s);
+	void set(string_view s) { set(s.data(), s.length()); }
 	void set(std::initializer_list<char> s);
-	void free();
 };
 
 inline bool Cstring::operator==(string_view s) const {
@@ -410,17 +413,15 @@ inline bool Cstring::operator==(string_view s) const {
 
 // files and strings
 
-bool strciequal(string_view a, string_view b);
-bool strciequal(wstring_view a, wstring_view b);
-bool strnciequal(string_view a, string_view b, size_t n);
-string_view parentPath(string_view path);
-bool pathEqual(string_view a, string_view b);
-bool pathEqual(const char* a, const char* b);
-string_view relativePath(string_view path, string_view base);
-bool isSubpath(string_view path, string_view base);
-tm currentDateTime();
+bool strciequal(string_view a, string_view b) noexcept;
+bool strciequal(wstring_view a, wstring_view b) noexcept;
+string_view parentPath(string_view path) noexcept;
+bool pathEqual(string_view a, string_view b) noexcept;
+bool pathEqual(const char* a, const char* b) noexcept;
+string_view relativePath(string_view path, string_view base) noexcept;
+bool isSubpath(string_view path, string_view base) noexcept;
 #ifdef _WIN32
-bool isAbsolute(string_view path);
+bool isAbsolute(string_view path) noexcept;
 #endif
 
 template <Integer T>
@@ -539,7 +540,7 @@ std::basic_string_view<T> trim(const T* str) {
 template <Integer T>
 std::basic_string<T> operator/(std::basic_string<T>&& a, std::basic_string_view<T> b) {
 	size_t alen = a.length();
-	uint nds = alen && notDsep(a.back());
+	uint nds = alen && !b.empty() && notDsep(a.back()) && notDsep(b[0]);
 	a.resize(alen + nds + b.length());
 	if (nds)
 		a[alen] = directorySeparator;
@@ -550,7 +551,7 @@ std::basic_string<T> operator/(std::basic_string<T>&& a, std::basic_string_view<
 template <Integer T>
 std::basic_string<T> operator/(const std::basic_string<T>& a, std::basic_string_view<T> b) {
 	std::basic_string<T> r;
-	uint nds = !a.empty() && notDsep(a.back());
+	uint nds = !a.empty() && !b.empty() && notDsep(a.back()) && notDsep(b[0]);
 	r.resize(a.length() + nds + b.length());
 	rng::copy(a, r.begin());
 	if (nds)
@@ -562,7 +563,7 @@ std::basic_string<T> operator/(const std::basic_string<T>& a, std::basic_string_
 template <Integer T>
 std::basic_string<T> operator/(std::basic_string_view<T> a, std::basic_string<T>&& b) {
 	size_t blen = b.length();
-	uint nds = !a.empty() && notDsep(a.back());
+	uint nds = !a.empty() && blen && notDsep(a.back()) && notDsep(b[0]);
 	b.resize(a.length() + nds + blen);
 	std::move_backward(b.begin(), b.begin() + blen, b.end());
 	rng::copy(a, b.begin());
@@ -574,7 +575,7 @@ std::basic_string<T> operator/(std::basic_string_view<T> a, std::basic_string<T>
 template <Integer T>
 std::basic_string<T> operator/(std::basic_string_view<T> a, const std::basic_string<T>& b) {
 	std::basic_string<T> r;
-	uint nds = !a.empty() && notDsep(a.back());
+	uint nds = !a.empty() && !b.empty() && notDsep(a.back()) && notDsep(b[0]);
 	r.resize(a.length() + nds + b.length());
 	rng::copy(a, r.begin());
 	if (nds)
@@ -703,6 +704,9 @@ T toVec(string_view str, typename T::value_type fill = typename T::value_type(0)
 }
 
 // other
+
+tm currentDateTime() noexcept;
+void copyPixels(void* dst, const void* src, uint dpitch, uint spitch, uint bwidth, uint height) noexcept;
 
 template <Number T>
 T btom(bool b) {
