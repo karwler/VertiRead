@@ -41,6 +41,26 @@ private:
 		alignas(16) uvec2 addr = uvec2(0);
 	};
 
+	struct Offset {
+		alignas(4) uint offset;
+	};
+
+	enum class FormatConv : uint8 {
+		rgb24,
+		bgr24,
+		index8
+	};
+
+	struct SurfaceInfo {
+		SDL_Surface* img = nullptr;
+		DXGI_FORMAT fmt = DXGI_FORMAT_UNKNOWN;
+		FormatConv fcid;
+
+		SurfaceInfo() = default;
+		SurfaceInfo(SDL_Surface* surface, DXGI_FORMAT format) : img(surface), fmt(format) {}
+		SurfaceInfo(SDL_Surface* surface, FormatConv convert) : img(surface), fcid(convert) {}
+	};
+
 	ID3D11Device* dev = nullptr;
 	ID3D11DeviceContext* ctx = nullptr;
 	ID3D11BlendState* blendState = nullptr;
@@ -60,6 +80,13 @@ private:
 	ID3D11Texture2D* outAddr = nullptr;
 	ID3D11RenderTargetView* tgtAddr = nullptr;
 
+	array<ID3D11ComputeShader*, eint(FormatConv::index8) + 1> compConv{};
+	ID3D11Buffer* offsetBuf = nullptr;
+	ID3D11Buffer* colorBuf = nullptr;
+	ID3D11Buffer* inputBuf = nullptr;
+	ID3D11ShaderResourceView* inputView = nullptr;
+	uint inputSize = 0;
+
 	vec4 bgColor;
 	uint syncInterval;
 	bool canBgra5551;
@@ -67,7 +94,7 @@ private:
 	bool canBgra4;
 
 public:
-	RendererDx11(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
+	RendererDx11(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, Settings* sets, const vec4& bgcolor);
 	~RendererDx11() override;
 
 	void setClearColor(const vec4& color) override;
@@ -94,19 +121,24 @@ public:
 
 private:
 	void cleanup() noexcept;
+	void cleanupConverter() noexcept;
 	static IDXGIFactory* createFactory();
 	pair<IDXGISwapChain*, ID3D11RenderTargetView*> createSwapchain(IDXGIFactory* factory, SDL_Window* win, uvec2 res);
 	void recreateSwapchain(IDXGIFactory* factory, ViewDx* view);
 	void initShader();
+	void initConverter();
 	ID3D11Buffer* createConstantBuffer(uint size) const;
 	ID3D11Texture2D* createTexture(uvec2 res, DXGI_FORMAT format, D3D11_USAGE usage, uint bindFlags, uint accessFlags = 0, const D3D11_SUBRESOURCE_DATA* subrscData = nullptr) const;
 	ID3D11ShaderResourceView* createTextureView(ID3D11Texture2D* tex, DXGI_FORMAT format);
+	ID3D11ShaderResourceView* createBufferView(ID3D11Buffer* buffer, uint size);
 
 	template <Class T> void uploadBuffer(ID3D11Buffer* buffer, const T& data);
-	ID3D11ShaderResourceView* createTexture(const byte_t* pix, uvec2 res, uint pitch, DXGI_FORMAT format);
-	static void replaceTexture(TextureDx* tex, ID3D11ShaderResourceView* tview, uvec2 res);
-	pair<SDL_Surface*, DXGI_FORMAT> pickPixFormat(SDL_Surface* img) const noexcept;
-	template <Derived<IUnknown> T> static void comRelease(T*& obj);
+	ID3D11ShaderResourceView* createTextureDirect(const byte_t* pix, uvec2 res, uint pitch, DXGI_FORMAT format);
+	ID3D11ShaderResourceView* createTextureIndirect(const SDL_Surface* img, FormatConv fcid);
+	static void replaceTexture(TextureDx* tex, ID3D11ShaderResourceView* tview, uvec2 res) noexcept;
+	void replaceInputBuffer(uint inputSize);
+	SurfaceInfo pickPixFormat(SDL_Surface* img) const noexcept;
+	template <Derived<IUnknown> T> static void comRelease(T*& obj) noexcept;
 	static string hresultToStr(HRESULT rs);
 };
 

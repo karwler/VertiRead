@@ -7,10 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(OPENGL "Build with OpenGL 1.1, 3.0 and ES 3.0 support." ON)
 option(VULKAN "Build with Vulkan 1.0 support." ON)
-option(USE_ICU "Build with ICU." ON)
-if(WIN32)
-	option(DIRECT3D "Build with Direct3D 11 support." ON)
-else()
+if(UNIX)
 	option(APPIMAGE "Package as an AppImage." OFF)
 	option(USE_MUPDF "Build with MuPDF support." ON)
 	option(USE_SECRET "Build with libsecret if available." ON)
@@ -18,17 +15,21 @@ else()
 	option(USE_SSH2 "Build with libssh2 if available." ON)
 endif()
 if(MSVC)
+	option(DIRECT3D "Build with Direct3D 11 support." ON)
+	option(USE_ARCHIVE "Build with libarchive." OFF)
+	option(USE_ICU "Build with ICU." OFF)
 	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 		option(PREBUILT_ARCHIVE "Use the pre-built libarchive binaries." OFF)
 	endif()
 else()
+	option(USE_ARCHIVE "Build with libarchive." ON)
 	option(USE_FONTCONFIG "Build with fontconfig if available." ON)
+	option(USE_ICU "Build with ICU." ON)
 	option(USE_POPPLER "Build with Poppler support." ON)
 endif()
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 	option(NATIVE "Build for the current CPU." OFF)
 endif()
-string(TOLOWER ${PROJECT_NAME} PROJECT_NAME_LOWER)
 
 # source files
 set(SRC_FILES
@@ -76,10 +77,16 @@ if(DIRECT3D)
 			"src/engine/rendererDx.h"
 			"src/engine/optional/d3d.cpp"
 			"src/engine/optional/d3d.h"
+			"src/engine/shaders/dxBgrCs.dbg.h"
+			"src/engine/shaders/dxBgrCs.rel.h"
 			"src/engine/shaders/dxGuiPs.dbg.h"
 			"src/engine/shaders/dxGuiPs.rel.h"
 			"src/engine/shaders/dxGuiVs.dbg.h"
 			"src/engine/shaders/dxGuiVs.rel.h"
+			"src/engine/shaders/dxIdxCs.dbg.h"
+			"src/engine/shaders/dxIdxCs.rel.h"
+			"src/engine/shaders/dxRgbCs.dbg.h"
+			"src/engine/shaders/dxRgbCs.rel.h"
 			"src/engine/shaders/dxSelPs.dbg.h"
 			"src/engine/shaders/dxSelPs.rel.h"
 			"src/engine/shaders/dxSelVs.dbg.h"
@@ -114,12 +121,14 @@ if(VULKAN)
 		list(APPEND SRC_FILES
 			"src/engine/rendererVk.cpp"
 			"src/engine/rendererVk.h"
-			"src/engine/shaders/vkConv.comp.dbg.h"
-			"src/engine/shaders/vkConv.comp.rel.h"
 			"src/engine/shaders/vkGui.frag.dbg.h"
 			"src/engine/shaders/vkGui.frag.rel.h"
 			"src/engine/shaders/vkGui.vert.dbg.h"
 			"src/engine/shaders/vkGui.vert.rel.h"
+			"src/engine/shaders/vkIdx.comp.dbg.h"
+			"src/engine/shaders/vkIdx.comp.rel.h"
+			"src/engine/shaders/vkRgb.comp.dbg.h"
+			"src/engine/shaders/vkRgb.comp.rel.h"
 			"src/engine/shaders/vkSel.frag.dbg.h"
 			"src/engine/shaders/vkSel.frag.rel.h"
 			"src/engine/shaders/vkSel.vert.dbg.h"
@@ -135,7 +144,7 @@ endif()
 include_directories("${CMAKE_SOURCE_DIR}/src")
 
 # dependencies
-set(VER_SDL "2.30.3")
+set(VER_SDL "2.30.5")
 set(VER_IMG "2.8.2")
 set(VER_FT2 "2.13.2")
 set(VER_ARC "3.7.4")
@@ -144,6 +153,7 @@ set(VER_GLM "1.0.1")
 set(DIR_LIB "${CMAKE_SOURCE_DIR}/lib")
 set(DIR_RSC "${CMAKE_SOURCE_DIR}/rsc")
 set(DIR_ICN "${DIR_RSC}/icons")
+string(TOLOWER ${PROJECT_NAME} PROJECT_NAME_LOWER)
 
 if(MSVC)
 	find_program(MAKE_CMD "nmake" REQUIRED)
@@ -307,16 +317,19 @@ if(WIN32)
 		link_directories("${BIN_SDL}" "${BIN_IMG}" "${BIN_FT2}")
 		include_directories(SYSTEM "${DIR_SDL}/include" "${DIR_IMG}/include" "${DIR_FT2}/include")
 
-		if(PREBUILT_ARCHIVE)
-			set(BIN_ARC "${DIR_ARC}/bin")
-			downloadLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-v${VER_ARC}-amd64.zip" "${DIR_ARC}" "${DIR_LIB}/libarchive")
-			link_directories("${DIR_ARC}/lib")
-			include_directories(SYSTEM "${DIR_ARC}/include")
-		else()
-			set(BIN_ARC "${DIR_ARC}/build/bin")
-			compileLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-${VER_ARC}.zip" "${DIR_ARC}" "${CMAKE_COMMAND}\;..\;-G\;NMake Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DENABLE_WERROR=0\;-DENABLE_MBEDTLS=0\;-DENABLE_NETTLE=0\;-DENABLE_OPENSSL=0\;-DENABLE_LIBB2=0\;-DENABLE_LZ4=0\;-DENABLE_LZO=0\;-DENABLE_LZMA=0\;-DENABLE_ZSTD=0\;-DENABLE_ZLIB=0\;-DENABLE_BZip2=0\;-DENABLE_LIBXML2=0\;-DENABLE_EXPAT=0\;-DENABLE_PCREPOSIX=0\;-DENABLE_CNG=0\;-DENABLE_XATTR=0\;-DENABLE_ACL=0\;-DENABLE_ICONV=0\;-DENABLE_TEST=0\;-DENABLE_COVERAGE=0\;-DENABLE_INSTALL=0;${MAKE_CMD}\;archive" "${DIR_ARC}/build" "${DIR_LIB}/libarchive-${VER_ARC}")
-			link_directories("${DIR_ARC}/build/libarchive")
-			include_directories(SYSTEM "${DIR_ARC}/libarchive")
+		if(USE_ARCHIVE)
+			if(PREBUILT_ARCHIVE)
+				set(BIN_ARC "${DIR_ARC}/bin")
+				downloadLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-v${VER_ARC}-amd64.zip" "${DIR_ARC}" "${DIR_LIB}/libarchive")
+				link_directories("${DIR_ARC}/lib")
+				include_directories(SYSTEM "${DIR_ARC}/include")
+			else()
+				set(BIN_ARC "${DIR_ARC}/build/bin")
+				compileLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-${VER_ARC}.zip" "${DIR_ARC}" "${CMAKE_COMMAND}\;..\;-G\;NMake Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DENABLE_WERROR=0\;-DENABLE_MBEDTLS=0\;-DENABLE_NETTLE=0\;-DENABLE_OPENSSL=0\;-DENABLE_LIBB2=0\;-DENABLE_LZ4=0\;-DENABLE_LZO=0\;-DENABLE_LZMA=0\;-DENABLE_ZSTD=0\;-DENABLE_ZLIB=0\;-DENABLE_BZip2=0\;-DENABLE_LIBXML2=0\;-DENABLE_EXPAT=0\;-DENABLE_PCREPOSIX=0\;-DENABLE_CNG=0\;-DENABLE_XATTR=0\;-DENABLE_ACL=0\;-DENABLE_ICONV=0\;-DENABLE_TEST=0\;-DENABLE_COVERAGE=0\;-DENABLE_INSTALL=0;${MAKE_CMD}\;archive" "${DIR_ARC}/build" "${DIR_LIB}/libarchive-${VER_ARC}")
+				link_directories("${DIR_ARC}/build/libarchive")
+				include_directories(SYSTEM "${DIR_ARC}/libarchive")
+			endif()
+			add_compile_definitions(WITH_ARCHIVE)
 		endif()
 
 		if(USE_ICU)
@@ -356,9 +369,17 @@ if(NOT MSVC)
 	find_package(SDL2 REQUIRED COMPONENTS SDL2)
 	find_package(SDL2_image REQUIRED)
 	find_package(Freetype REQUIRED)
-	find_package(LibArchive REQUIRED)
-	link_directories(${FREETYPE_LIBRARY_DIRS} ${LibArchive_LIBRARY_DIRS})
-	include_directories(SYSTEM ${FREETYPE_INCLUDE_DIRS} ${LibArchive_INCLUDE_DIRS})
+	link_directories(${FREETYPE_LIBRARY_DIRS})
+	include_directories(SYSTEM ${FREETYPE_INCLUDE_DIRS})
+
+	if(USE_ARCHIVE)
+		find_package(LibArchive)
+		if(LibArchive_FOUND)
+			link_directories(${LibArchive_LIBRARY_DIRS})
+			include_directories(SYSTEM ${LibArchive_INCLUDE_DIRS})
+			add_compile_definitions(WITH_ARCHIVE)
+		endif()
+	endif()
 
 	if(USE_ICU)
 		if(WIN32)
@@ -402,11 +423,13 @@ endif()
 add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES})
 if(MSVC)
 	target_link_libraries(${PROJECT_NAME}
-		SDL2 SDL2_image freetype archive
+		SDL2 SDL2_image freetype
+		$<$<BOOL:${USE_ARCHIVE}>:archive>
 		"$<$<BOOL:${USE_ICU}>:icuuc;icuin>")
 else()
 	target_link_libraries(${PROJECT_NAME}
-		SDL2::SDL2 SDL2_image::SDL2_image ${FREETYPE_LIBRARIES} ${LibArchive_LIBRARIES}
+		SDL2::SDL2 SDL2_image::SDL2_image ${FREETYPE_LIBRARIES}
+		"$<$<BOOL:${LibArchive_FOUND}>:${LibArchive_LIBRARIES}>"
 		"$<$<BOOL:${ICU_FOUND}>:ICU::uc;$<IF:$<BOOL:${WIN32}>,ICU::in,ICU::i18n>>"
 		"$<$<BOOL:${UNIX}>:pthread;dl>")
 endif()
@@ -437,13 +460,17 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 	COMMAND_EXPAND_LISTS)
 if(MSVC)
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ARC}/$<IF:$<BOOL:${MSVC}>,archive.dll,libarchive.dll>" "${BIN_SDL}/SDL2.dll" "${BIN_IMG}/SDL2_image.dll" "$<$<BOOL:${MSVC}>:${BIN_IMG}/optional/libavif-16.dll;${BIN_IMG}/optional/libtiff-5.dll;${BIN_IMG}/optional/libwebp-7.dll;${BIN_IMG}/optional/libwebpdemux-2.dll>" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_SDL}/SDL2.dll" "${BIN_IMG}/SDL2_image.dll" "$<$<BOOL:${MSVC}>:${BIN_IMG}/optional/libavif-16.dll;${BIN_IMG}/optional/libtiff-5.dll;${BIN_IMG}/optional/libwebp-7.dll;${BIN_IMG}/optional/libwebpdemux-2.dll>" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
 		COMMAND "$<$<BOOL:${MSVC}>:${CMAKE_COMMAND};-E;copy_if_different;${BIN_IMG}/optional/LICENSE.avif.txt;${BIN_IMG}/optional/LICENSE.dav1d.txt;${BIN_IMG}/optional/LICENSE.tiff.txt;${BIN_IMG}/optional/LICENSE.webp.txt;${LICN_DIR}>"
 		COMMAND "$<$<BOOL:${MINGW}>:${CMAKE_COMMAND};-E;copy_if_different;${DIR_ARC}/COPYING;${LICN_DIR}/COPYING.libarchive.txt>"
 		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_SDL}/COPYING.txt" "${LICN_DIR}/COPYING.SDL.txt"
 		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_IMG}/LICENSE.txt" "${LICN_DIR}/LICENSE.SDL_image.txt"
 		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_FT2}/LICENSE.txt" "${LICN_DIR}/LICENSE.freetype.txt"
 		COMMAND_EXPAND_LISTS)
+	if(USE_ARCHIVE)
+		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ARC}/archive.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>")
+	endif()
 	if(USE_ICU)
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ICU}/icudt${ICU_VER_MAJ}.dll" "${BIN_ICU}/icuin${ICU_VER_MAJ}.dll" "${BIN_ICU}/icuuc${ICU_VER_MAJ}.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"

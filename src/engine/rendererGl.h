@@ -131,7 +131,7 @@ protected:
 	FunctionsGl gl;
 #endif
 
-	RendererGl();
+	RendererGl(size_t numViews);
 
 public:
 	void setClearColor(const vec4& color) override;
@@ -154,7 +154,7 @@ protected:
 #else
 	static void setContext(View* view);
 #endif
-	template <Class T, class F> void initContexts(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, F initGl);
+	template <Class T, class F> void initContexts(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, F initGl);
 	void initGlCommon(ViewGl* view, bool vsync, const vec4& bgcolor);
 	void finalizeConstruction(Settings* sets, uintptr_t availableMemory);
 	static void setSwapInterval(bool vsync);
@@ -186,7 +186,7 @@ private:
 	mat4 mtex = mat4(1.f);
 
 public:
-	RendererGl1(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
+	RendererGl1(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, Settings* sets, const vec4& bgcolor);
 	~RendererGl1() override;
 
 	void updateView(ivec2& viewRes) override;
@@ -222,7 +222,7 @@ private:
 	GLuint vbo = 0;
 
 public:
-	RendererGl3(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
+	RendererGl3(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, Settings* sets, const vec4& bgcolor);
 	~RendererGl3() override;
 
 	void updateView(ivec2& viewRes) override;

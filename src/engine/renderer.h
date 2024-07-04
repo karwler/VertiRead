@@ -55,12 +55,12 @@ protected:
 		vec2(1.f, 1.f)
 	};
 
-	umap<int, View*> views;
+	vector<View*> views;
 	umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum> preconvertFormats;	// formats of pictures to be converted
 	uint maxTextureSize;
 	uint maxPictureSize;	// should only get accessed from one thread at a time
 
-	Renderer(uint maxTexRes) : maxTextureSize(maxTexRes) {}
+	Renderer(size_t numViews, uint maxTexRes) : views(numViews), maxTextureSize(maxTexRes) {}
 public:
 	virtual ~Renderer() = default;
 
@@ -85,20 +85,17 @@ public:
 	virtual void freeTexture(Texture* tex) noexcept = 0;
 	virtual void synchTransfer() {}
 
-	const umap<int, View*>& getViews() const { return views; }
+	const vector<View*>& getViews() const { return views; }
+	View* findView(SDL_Window* win) noexcept;
+	View* findView(ivec2 point) noexcept;
 	void setMaxPicRes(uint& size) noexcept;
 	SDL_Surface* makeCompatible(SDL_Surface* img, bool rpic) const noexcept;	// converts the image to a format and size that can be directly handed to the graphics driver (must be thread safe)
-	static bool isSingleWindow(const umap<int, SDL_Window*>& windows);
 protected:
 	static SDL_Surface* convertReplace(SDL_Surface* img, SDL_PixelFormatEnum format = SDL_PIXELFORMAT_ABGR8888) noexcept;
 	static SDL_Surface* limitSize(SDL_Surface* img, uint32 limit) noexcept;	// scales down the image so that it's width/height fits within the limit
 	static Rectf cropTexRect(const Recti& isct, const Recti& rect, uvec2 texRes) noexcept;
 	static void recommendPicRamLimit(uintptr_t& mem) noexcept;
 };
-
-inline bool Renderer::isSingleWindow(const umap<int, SDL_Window*>& windows) {
-	return windows.size() == 1 && windows.begin()->first == singleDspId;
-}
 
 class RendererSf final : public Renderer {
 private:
@@ -118,7 +115,7 @@ private:
 	u8vec4 bgColor;
 
 public:
-	RendererSf(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
+	RendererSf(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, Settings* sets, const vec4& bgcolor);
 	~RendererSf() override;
 
 	void setClearColor(const vec4& color) override;

@@ -106,8 +106,8 @@ RendererGl::SurfaceInfo::SurfaceInfo(SDL_Surface* surface, uint16 internal, uint
 	for (align = 8; align > 1 && (uintptr_t(img->pixels) % align || uint(img->pitch) % align); align /= 2);
 }
 
-RendererGl::RendererGl() :
-	Renderer(UINT_MAX)
+RendererGl::RendererGl(size_t numViews) :
+	Renderer(numViews, UINT_MAX)
 {
 	int profile;
 	if (SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, &profile))
@@ -126,35 +126,26 @@ void RendererGl::setContext(View* view) {
 }
 
 template <Class T, class F>
-void RendererGl::initContexts(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, F initGl) {
-	T* vtmp = nullptr;
-	try {
-		if (isSingleWindow(windows)) {
-			SDL_GL_GetDrawableSize(windows.begin()->second, &viewRes.x, &viewRes.y);
-			auto vw = static_cast<T*>(views.emplace(singleDspId, vtmp = new T(windows.begin()->second, Recti(ivec2(0), viewRes))).first->second);
-			vtmp = nullptr;
-			if (vw->ctx = SDL_GL_CreateContext(vw->win); !vw->ctx)
+void RendererGl::initContexts(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, F initGl) {
+	if (!vofs) {
+		SDL_GL_GetDrawableSize(windows[0], &viewRes.x, &viewRes.y);
+		auto vw = static_cast<T*>(views[0] = new T(windows[0], Recti(ivec2(0), viewRes)));
+		if (vw->ctx = SDL_GL_CreateContext(windows[0]); !vw->ctx)
+			throw std::runtime_error(std::format("Failed to create context:" LINEND "{}", SDL_GetError()));
+		setContext(vw);
+		initGl(vw);
+	} else
+		for (size_t i = 0; i < views.size(); ++i) {
+			Recti wrect;
+			wrect.pos() = vofs[i] - vofs[views.size()];
+			SDL_GL_GetDrawableSize(windows[i], &wrect.w, &wrect.h);
+			viewRes = glm::max(viewRes, wrect.end());
+			auto vw = static_cast<T*>(views[i] = new T(windows[i], wrect));
+			if (vw->ctx = SDL_GL_CreateContext(windows[i]); !vw->ctx)
 				throw std::runtime_error(std::format("Failed to create context:" LINEND "{}", SDL_GetError()));
 			setContext(vw);
 			initGl(vw);
-		} else {
-			views.reserve(windows.size());
-			for (auto [id, win] : windows) {
-				Recti wrect = sets->displays.at(id).translate(-origin);
-				SDL_GL_GetDrawableSize(windows.begin()->second, &wrect.w, &wrect.h);
-				viewRes = glm::max(viewRes, wrect.end());
-				auto vw = static_cast<T*>(views.emplace(id, vtmp = new T(win, wrect)).first->second);
-				vtmp = nullptr;
-				if (vw->ctx = SDL_GL_CreateContext(win); !vw->ctx)
-					throw std::runtime_error(std::format("Failed to create context:" LINEND "{}", SDL_GetError()));
-				setContext(vw);
-				initGl(vw);
-			}
 		}
-	} catch (...) {
-		delete vtmp;
-		throw;
-	}
 }
 
 void RendererGl::initGlCommon(ViewGl* view, bool vsync, const vec4& bgcolor) {
@@ -289,16 +280,16 @@ void APIENTRY RendererGl::debugMessage(GLenum source, GLenum type, uint id, GLen
 #endif
 
 void RendererGl::setClearColor(const vec4& color) {
-	for (auto [id, view] : views) {
-		setContext(view);
+	for (View* it : views) {
+		setContext(it);
 		gfget
 		gl.clearColor(color.r, color.g, color.b, color.a);
 	}
 }
 
 void RendererGl::setVsync(bool vsync) {
-	for (auto [id, view] : views) {
-		setContext(view);
+	for (View* it : views) {
+		setContext(it);
 		setSwapInterval(vsync);
 	}
 }
@@ -535,7 +526,9 @@ RendererGl1::ViewGl1::ViewGl1(SDL_Window* window, const Recti& area) noexcept :
 	proj(glm::ortho(float(area.x), float(area.x + area.w), float(area.y + area.h), float(area.y)))
 {}
 
-RendererGl1::RendererGl1(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor) {
+RendererGl1::RendererGl1(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, Settings* sets, const vec4& bgcolor) :
+	RendererGl(windows.size())
+{
 #ifndef _WIN32
 	gl.initFunctions();
 	gl1.initFunctions();
@@ -543,9 +536,9 @@ RendererGl1::RendererGl1(const umap<int, SDL_Window*>& windows, Settings* sets, 
 	try {
 		bool canTexRect = true;
 		uintptr_t availableMemory = 0;
-		initContexts<ViewGl1>(windows, sets, viewRes, origin, [this, sets, bgcolor, &canTexRect, &availableMemory](ViewGl1* vw) { initGl(vw, sets->vsync, bgcolor, canTexRect, availableMemory); });
-		for (auto [id, view] : views) {
-			setContext(view);
+		initContexts<ViewGl1>(windows, vofs, viewRes, [this, sets, bgcolor, &canTexRect, &availableMemory](ViewGl1* vw) { initGl(vw, sets->vsync, bgcolor, canTexRect, availableMemory); });
+		for (View* it : views) {
+			setContext(it);
 			gfget
 			gl.enable(texType);
 		}
@@ -593,8 +586,8 @@ void RendererGl1::initGl(ViewGl1* view, bool vsync, const vec4& bgcolor, bool& c
 }
 
 void RendererGl1::cleanup() noexcept {
-	for (auto [id, view] : views) {
-		auto vw = static_cast<ViewGl1*>(view);
+	for (View* it : views) {
+		auto vw = static_cast<ViewGl1*>(it);
 		SDL_GL_DeleteContext(vw->ctx);
 		delete vw;
 	}
@@ -602,7 +595,7 @@ void RendererGl1::cleanup() noexcept {
 
 void RendererGl1::updateView(ivec2& viewRes) {
 	if (views.size() == 1) {
-		auto vw = static_cast<ViewGl1*>(views.begin()->second);
+		auto vw = static_cast<ViewGl1*>(views[0]);
 		gfget
 		SDL_GL_GetDrawableSize(vw->win, &viewRes.x, &viewRes.y);
 		vw->rect.size() = viewRes;
@@ -664,14 +657,16 @@ Renderer::Info RendererGl1::getInfo() const {
 
 // RENDERER GL 3
 
-RendererGl3::RendererGl3(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor) {
+RendererGl3::RendererGl3(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, Settings* sets, const vec4& bgcolor) :
+	RendererGl(windows.size())
+{
 #ifndef _WIN32
 	gl.initFunctions();
 	gl3.initFunctions();
 #endif
 	try {
 		uintptr_t availableMemory = 0;
-		initContexts<ViewGl3>(windows, sets, viewRes, origin, [this, sets, bgcolor, &availableMemory](ViewGl3* vw) { initGl(vw, sets->vsync, bgcolor, availableMemory); });
+		initContexts<ViewGl3>(windows, vofs, viewRes, [this, sets, bgcolor, &availableMemory](ViewGl3* vw) { initGl(vw, sets->vsync, bgcolor, availableMemory); });
 		initShader();
 		finalizeConstruction(sets, availableMemory);
 	} catch (...) {
@@ -712,9 +707,9 @@ void RendererGl3::cleanup() noexcept {
 	if (!cvw)
 		return;
 #endif
-	umap<int, View*>::iterator vw = views.begin();
+	vector<View*>::iterator vw = views.begin();
 	try {
-		setContext(vw->second);
+		setContext(*vw);
 	} catch (const std::runtime_error& err) {
 		logError(err.what());
 	}
@@ -727,7 +722,7 @@ void RendererGl3::cleanup() noexcept {
 		gl3.deleteProgram(progGui);
 	}
 	for (;;) {
-		auto view = static_cast<ViewGl3*>(vw->second);
+		auto view = static_cast<ViewGl3*>(*vw);
 		if (gl3.functionsInitialized())
 			gl3.deleteVertexArrays(1, &view->vao);
 		SDL_GL_DeleteContext(view->ctx);
@@ -736,7 +731,7 @@ void RendererGl3::cleanup() noexcept {
 		if (++vw == views.end())
 			break;
 		try {
-			setContext(vw->second);
+			setContext(*vw);
 		} catch (const std::runtime_error& err) {
 			logError(err.what());
 		}
@@ -745,8 +740,8 @@ void RendererGl3::cleanup() noexcept {
 }
 
 void RendererGl3::initShader() {
-	umap<int, View*>::iterator vw = views.begin();
-	setContext(vw->second);
+	vector<View*>::iterator vw = views.begin();
+	setContext(*vw);
 	gf3get
 	const char* vertSrc =
 #ifdef NDEBUG
@@ -806,7 +801,7 @@ void RendererGl3::initShader() {
 	gl3.bindBuffer(GL_ARRAY_BUFFER, vbo);
 	gl3.bufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(*vertices.data()), vertices.data(), GL_STATIC_DRAW);
 	for (;;) {
-		auto gvw = static_cast<ViewGl3*>(vw->second);
+		auto gvw = static_cast<ViewGl3*>(*vw);
 		gl3.genVertexArrays(1, &gvw->vao);
 		gl3.bindVertexArray(gvw->vao);
 		gl3.enableVertexAttribArray(attrVposGui);
@@ -819,7 +814,7 @@ void RendererGl3::initShader() {
 		gl3.useProgram(progGui);
 		if (++vw == views.end())
 			break;
-		setContext(vw->second);
+		setContext(*vw);
 		gf3set
 		gl3.bindBuffer(GL_ARRAY_BUFFER, vbo);
 	}
@@ -909,8 +904,8 @@ void RendererGl3::checkFramebufferStatus(const char* name) {
 void RendererGl3::updateView(ivec2& viewRes) {
 	if (views.size() == 1) {
 		gfget
-		SDL_GL_GetDrawableSize(views.begin()->second->win, &viewRes.x, &viewRes.y);
-		views.begin()->second->rect.size() = viewRes;
+		SDL_GL_GetDrawableSize(views[0]->win, &viewRes.x, &viewRes.y);
+		views[0]->rect.size() = viewRes;
 		gl.viewport(0, 0, viewRes.x, viewRes.y);
 	}
 }
@@ -932,7 +927,7 @@ void RendererGl3::drawRect(const Texture* tex, const Recti& rect, const Recti& f
 }
 
 void RendererGl3::startSelDraw(View* view, ivec2 pos) {
-	setContext(views.begin()->second);
+	setContext(views[0]);
 	gf3get
 	uint zero[4] = { 0, 0, 0, 0 };
 	gl.disable(GL_BLEND);

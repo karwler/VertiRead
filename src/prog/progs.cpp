@@ -345,11 +345,11 @@ void ProgFileExplorer::eventRefresh() {
 	World::scene()->updateSelect();
 }
 
-void ProgFileExplorer::processFileChanges(Browser* browser) {
-	if (browser->directoryUpdate(fileChanges)) {
+void ProgFileExplorer::processFileChanges() {
+	if (World::program()->getBrowser()->directoryUpdate(fileChanges)) {
 		fileList->setWidgets(Children());
 		if (locationBar)
-			locationBar->setText(browser->locationForDisplay());
+			locationBar->setText(World::program()->getBrowser()->locationForDisplay());
 		return fileChanges.clear();
 	}
 
@@ -386,6 +386,10 @@ void ProgFileExplorer::processFileChanges(Browser* browser) {
 	fileChanges.clear();
 }
 
+Label* ProgFileExplorer::makeLoadingLabel() const {
+	return new Label(lineHeight, "Loading...", Alignment::center, false);
+}
+
 PushButton* ProgFileExplorer::makeFileEntry(const Size&, Cstring&&) {
 	return nullptr;
 }
@@ -405,8 +409,6 @@ void ProgBooks::eventFileDrop(const char* file) {
 }
 
 RootLayout* ProgBooks::createLayout() {
-	World::program()->getBrowser()->startListCurDir();
-
 	// top bar
 	Children top = {
 		new PushButton(measureText("Settings", topHeight), "Settings", ProgBooksEvent::openSettings),
@@ -416,18 +418,19 @@ RootLayout* ProgBooks::createLayout() {
 	// root layout
 	Children cont = {
 		new Layout(topHeight, std::move(top), Direction::right, topSpacing),
-		fileList = new TileBox(1.f, { new Label(lineHeight, "Loading...", Alignment::center, false) })
+		fileList = new TileBox(1.f, { makeLoadingLabel() })
 	};
 	return new RootLayout(1.f, std::move(cont), Direction::down, topSpacing);
 }
 
-void ProgBooks::fillFileList(vector<Cstring>&&, vector<Cstring>&& dirs, bool) {
+bool ProgBooks::fillFileList(vector<Cstring>&&, vector<Cstring>&& dirs) {
 	Children tiles(dirs.size() + 1);
 	rng::transform(dirs, tiles.wgts.get(), [this](Cstring& s) -> Widget* { return makeBookTile(std::move(s)); });
 	tiles[dirs.size()] = new IconButton(TileBox::defaultItemHeight, World::drawSys()->texture(DrawSys::Tex::search), ProgBooksEvent::openPageBrowserGeneral, ACT_LEFT | ACT_RIGHT, "Browse other directories");
 	fileList->setWidgets(std::move(tiles));
 	dirEnd = dirs.size();
 	fileEnd = dirEnd;
+	return false;
 }
 
 PushButton* ProgBooks::makeBookTile(Cstring&& name) {
@@ -469,8 +472,6 @@ void ProgPageBrowser::resetFileIcons() {
 }
 
 RootLayout* ProgPageBrowser::createLayout() {
-	World::program()->getBrowser()->startListCurDir();
-
 	// sidebar
 	static constexpr std::initializer_list<const char*> txs = {
 		"Exit",
@@ -486,7 +487,7 @@ RootLayout* ProgPageBrowser::createLayout() {
 	// main content
 	Children mid = {
 		new Layout(txsWidth, std::move(bar)),
-		fileList = new ScrollArea(1.f, { new Label(lineHeight, "Loading...", Alignment::center, false) })
+		fileList = new ScrollArea(1.f, { makeLoadingLabel() })
 	};
 
 	// root layout
@@ -497,15 +498,14 @@ RootLayout* ProgPageBrowser::createLayout() {
 	return new RootLayout(1.f, std::move(cont), Direction::down, topSpacing);
 }
 
-void ProgPageBrowser::fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs, bool ok) {
+bool ProgPageBrowser::fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs) {
 	Children items(files.size() + dirs.size());
 	rng::transform(dirs, items.wgts.get(), [this](Cstring& s) -> Widget* { return makeDirectoryEntry(lineHeight, std::move(s)); });
 	rng::transform(files, items.wgts.get() + dirs.size(), [this](Cstring& s) -> Widget* { return makeFileEntry(lineHeight, std::move(s)); });
 	fileList->setWidgets(std::move(items));
 	dirEnd = dirs.size();
 	fileEnd = dirEnd + files.size();
-	if (ok && World::sets()->preview)
-		World::program()->getBrowser()->startPreview(lineHeight);
+	return World::sets()->preview;
 }
 
 PushButton* ProgPageBrowser::makeDirectoryEntry(const Size& size, Cstring&& name) {
@@ -654,8 +654,12 @@ int ProgReader::modifySpeed(float value) {
 // PROG SETTINGS
 
 ProgSettings::~ProgSettings() {
-	stopFonts();
-	stopMove();
+	try {
+		stopFonts();
+		stopMove();
+	} catch (const std::runtime_error& err) {
+		logError(err.what());
+	}
 }
 
 void ProgSettings::eventSpecEscape() {
@@ -786,7 +790,7 @@ RootLayout* ProgSettings::createLayout() {
 	static constexpr char tipDeadzone[] = "Controller axis deadzone";
 	static constexpr char tipMaxPicRes[] = "Maximum picture resolution";
 
-	Size monitorSize = Size([](const Widget* wgt) -> int {
+	Size monitorSize([](const Widget* wgt) -> int {
 		auto box = static_cast<const Layout*>(wgt);
 		return box->getWidget<WindowArranger>(1)->precalcSizeExpand(box->getParent()->size().x - box->getWidget(0)->getRelSize().pix - box->getSpacing() - Scrollable::barSizeVal);
 	});
@@ -976,12 +980,12 @@ Widget* ProgSettings::createLimitEdit() {
 }
 
 uint ProgSettings::getSettingsNumberDisplayLength() const {
-	return measureText("0000000000", lineHeight) + LabelEdit::caretWidth;
+	return measureText(string(10, '0'), lineHeight) + LabelEdit::caretWidth;
 }
 
 void ProgSettings::startFonts() {
 	stopFonts();
-	fontThread = std::jthread(&FileSys::listFontFamiliesThread, World::fileSys()->getDirConfs(), World::sets()->font, ' ', '~');
+	fontThread = std::jthread(&FileSys::listFontFamiliesThread, std::make_unique<FileSys::ListFontFamiliesData>(valcp(World::fileSys()->getDirConfs()), valcp(World::sets()->font), ' ', '~'));
 }
 
 void ProgSettings::stopFonts() {
@@ -1001,18 +1005,15 @@ void ProgSettings::setFontField(vector<Cstring>&& families, uptr<Cstring[]>&& fi
 
 void ProgSettings::startMove() {
 	stopMove();
-	moveThread = std::jthread(&FileSys::moveContentThread, toPath(oldPathBuffer), toPath(World::sets()->dirLib));
+	moveThread = std::jthread(&FileSys::moveContentThread, std::make_unique<FileSys::MoveContentData>(toPath(oldPathBuffer), toPath(World::sets()->dirLib)));
 }
 
 void ProgSettings::stopMove() {
 	if (moveThread.joinable()) {
 		moveThread = std::jthread();
 		cleanupEvent(SDL_USEREVENT_THREAD_MOVE, [](SDL_UserEvent& event) {
-			if (ThreadEvent(event.code) == ThreadEvent::finished) {
-				auto errors = static_cast<string*>(event.data1);
-				logMoveErrors(errors);
-				delete errors;
-			}
+			if (ThreadEvent(event.code) == ThreadEvent::finished)
+				logMoveErrors(uptr<string>(static_cast<string*>(event.data1)).get());
 		});
 	}
 }
@@ -1040,9 +1041,6 @@ void ProgSearchDir::eventSpecEscape() {
 }
 
 RootLayout* ProgSearchDir::createLayout() {
-	string cdir = World::program()->getBrowser()->getCurDir();
-	World::program()->getBrowser()->startListDirDirs(valcp(cdir));
-
 	// sidebar
 	static constexpr std::initializer_list<const char*> txs = {
 		"Exit",
@@ -1060,23 +1058,24 @@ RootLayout* ProgSearchDir::createLayout() {
 	// main content
 	Children mid = {
 		new Layout(txsWidth, std::move(bar)),
-		fileList = new ScrollArea(1.f, { new Label(lineHeight, "Loading...", Alignment::center, false) })
+		fileList = new ScrollArea(1.f, { makeLoadingLabel() })
 	};
 
 	// root layout
 	Children cont = {
-		locationBar = new LabelEdit(lineHeight, std::move(cdir), ProgFileExplorerEvent::goTo),
+		locationBar = new LabelEdit(lineHeight, valcp(World::program()->getBrowser()->getCurDir()), ProgFileExplorerEvent::goTo),
 		new Layout(1.f, std::move(mid), Direction::right, topSpacing)
 	};
 	return new RootLayout(1.f, std::move(cont), Direction::down, topSpacing);
 }
 
-void ProgSearchDir::fillFileList(vector<Cstring>&&, vector<Cstring>&& dirs, bool) {
+bool ProgSearchDir::fillFileList(vector<Cstring>&&, vector<Cstring>&& dirs) {
 	Children items(dirs.size());
 	rng::transform(dirs, items.wgts.get(), [this](Cstring& s) -> Widget* { return makeDirectoryEntry(lineHeight, std::move(s)); });
 	fileList->setWidgets(std::move(items));
 	dirEnd = dirs.size();
 	fileEnd = dirEnd;
+	return false;
 }
 
 PushButton* ProgSearchDir::makeDirectoryEntry(const Size& size, Cstring&& name) {

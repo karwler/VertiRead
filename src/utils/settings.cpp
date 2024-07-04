@@ -317,30 +317,30 @@ const string& Settings::setTheme(string_view name, vector<string>&& themes) {
 	return theme = themes.empty() ? string() : std::move(themes[0]);
 }
 
-umap<int, Recti> Settings::displayArrangement() {
+vector<Settings::Display> Settings::displayArrangement() {
 	ivec2 origin(INT_MAX);
-	umap<int, Recti> dsps;
+	vector<Display> dsps;
 	for (int i = 0, e = SDL_GetNumVideoDisplays(); i < e; ++i)
 		if (Recti rect; !SDL_GetDisplayBounds(i, &rect.asRect())) {
-			dsps.emplace(i, rect);
+			dsps.emplace_back(rect, i);
 			origin = glm::min(origin, rect.pos());
 		}
-	for (auto& [id, rect] : dsps)
-		rect.pos() -= origin;
+	for (Display& it : dsps)
+		it.rect.pos() -= origin;
 	return dsps;
 }
 
 void Settings::unionDisplays() {
-	umap<int, Recti> dsps = displayArrangement();
-	vector<int> invalids;
-	for (const auto& [id, rect] : displays)
-		if (umap<int, Recti>::iterator it = dsps.find(id); it == dsps.end() || it->second.size() != rect.size())
-			invalids.push_back(id);
-
-	if (invalids.size() < displays.size()) {
-		for (int id : invalids)
-			displays.erase(id);
-	} else
+	vector<Display> dsps = displayArrangement();
+	for (size_t i = 0; i < displays.size(); ++i) {
+		if (vector<Display>::iterator it = rng::find_if(dsps, [this, i](const Display& d) -> bool { return d.rect == displays[i].rect; }); it == dsps.end())
+			displays[i].did = it->did;
+		else
+			displays.erase(displays.begin() + i--);
+	}
+	if (!displays.empty())
+		std::sort(displays.begin(), displays.end());
+	else
 		displays = std::move(dsps);
 }
 

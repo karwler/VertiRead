@@ -14,6 +14,20 @@ struct FT_LibraryRec_;
 
 // handles all filesystem interactions
 class FileSys {
+public:
+	struct ListFontFamiliesData {
+		fs::path cdir;
+		string desired;
+		char32_t first, last;
+
+		ListFontFamiliesData(fs::path&& dir, string&& selected, char32_t from, char32_t to) noexcept;
+	};
+
+	struct MoveContentData {
+		fs::path src, dst;
+
+		MoveContentData(fs::path&& sdir, fs::path&& ddir) noexcept;
+	};
 private:
 #ifdef _WIN32
 	static constexpr wchar_t fontsKey[] = L"Software\\Microsoft\\Windows NT\\CurrentVersion\\Fonts";
@@ -78,9 +92,9 @@ public:
 	void saveBindings(const array<Binding, Binding::names.size()>& bindings) const;
 	fs::path findFont(const fs::path& font) const;	// on success returns absolute path to font file, otherwise returns empty path
 	vector<fs::path> listFontFiles(FT_LibraryRec_* lib, char32_t first, char32_t last) const;
-	static void listFontFamiliesThread(std::stop_token stoken, fs::path cdir, string selected, char32_t first, char32_t last);
+	static void listFontFamiliesThread(std::stop_token stoken, uptr<ListFontFamiliesData> ld);
 	static bool isFont(const fs::path& file);
-	static void moveContentThread(std::stop_token stoken, fs::path src, fs::path dst);
+	static void moveContentThread(std::stop_token stoken, uptr<MoveContentData> md);
 
 	const fs::path& getDirSets() const { return dirSets; }
 	const fs::path& getDirConfs() const { return dirConfs; }
@@ -96,13 +110,13 @@ private:
 
 	static fs::path searchFontDirectory(const fs::path& font, const fs::path& drc);
 	static void listFontFilesInDirectory(FT_LibraryRec_* lib, const fs::path& drc, char32_t first, char32_t last, vector<fs::path>& fonts);
-	static void listFontFamiliesInDirectoryThread(std::stop_token stoken, FT_LibraryRec_* lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts);
+	static void listFontFamiliesInDirectorySubthread(const std::stop_token& stoken, FT_LibraryRec_* lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts);
 	static FT_FaceRec_* openFace(FT_LibraryRec_* lib, const fs::path& file, char32_t first, char32_t last, Data& fdata);
 #ifdef _WIN32
 	static fs::path searchFontRegistry(const fs::path& font);
 #ifndef __MINGW32__
 	template <HKEY root> static void listFontFilesInRegistry(FT_LibraryRec_* lib, char32_t first, char32_t last, vector<fs::path>& fonts);
-	template <HKEY root> static void listFontFamiliesInRegistryThread(std::stop_token stoken, FT_LibraryRec_* lib, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts);
+	template <HKEY root> static void listFontFamiliesInRegistrySubthread(const std::stop_token& stoken, FT_LibraryRec_* lib, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts);
 #endif
 #endif
 	static fs::path localFontDir();

@@ -176,41 +176,6 @@ T coalesce(T val, T alt) {
 	return val ? val : alt;
 }
 
-template <Integer T>
-string operator+(std::basic_string<T>&& a, std::basic_string_view<T> b) {
-	size_t alen = a.length();
-	a.resize(alen + b.length());
-	rng::copy(b, a.begin() + alen);
-	return a;
-}
-
-template <Integer T>
-string operator+(const std::basic_string<T>& a, std::basic_string_view<T> b) {
-	std::basic_string<T> r;
-	r.resize(a.length() + b.length());
-	rng::copy(a, r.begin());
-	rng::copy(b, r.begin() + a.length());
-	return r;
-}
-
-template <Integer T>
-string operator+(std::basic_string_view<T> a, std::basic_string<T>&& b) {
-	size_t blen = b.length();
-	b.resize(a.length() + blen);
-	std::move_backward(b.begin(), b.begin() + blen, b.end());
-	rng::copy(a, b.begin());
-	return b;
-}
-
-template <Integer T>
-string operator+(std::basic_string_view<T> a, const std::basic_string<T>& b) {
-	std::basic_string<T> r;
-	r.resize(a.length() + b.length());
-	rng::copy(a, r.begin());
-	rng::copy(b, r.begin() + a.length());
-	return r;
-}
-
 template <Class T>
 T valcp(const T& v) {
 	return v;	// to avoid useless type cast warning for copying
@@ -382,7 +347,7 @@ public:
 	bool operator==(const Cstring& s) const { return !strcmp(ptr, s.ptr); }
 	bool operator==(const char* s) const { return !strcmp(ptr, s); }
 	bool operator==(const string& s) const { return !strcmp(ptr, s.data()); }
-	bool operator==(string_view s) const;
+	bool operator==(string_view s) const { return !strncmp(ptr, s.data(), s.length()) && !ptr[s.length()]; }
 
 	char& operator[](size_t i) { return ptr[i]; }
 	char operator[](size_t i) const { return ptr[i]; }
@@ -390,6 +355,7 @@ public:
 	const char* data() const { return ptr; }
 	size_t length() const { return strlen(ptr); }
 	bool filled() const { return *ptr; }
+	bool empty() const { return !*ptr; }
 	void clear() noexcept;
 
 private:
@@ -406,10 +372,6 @@ private:
 	void set(string_view s) { set(s.data(), s.length()); }
 	void set(std::initializer_list<char> s);
 };
-
-inline bool Cstring::operator==(string_view s) const {
-	return !strncmp(ptr, s.data(), s.length()) && !ptr[s.length()];
-}
 
 // files and strings
 
@@ -538,18 +500,7 @@ std::basic_string_view<T> trim(const T* str) {
 }
 
 template <Integer T>
-std::basic_string<T> operator/(std::basic_string<T>&& a, std::basic_string_view<T> b) {
-	size_t alen = a.length();
-	uint nds = alen && !b.empty() && notDsep(a.back()) && notDsep(b[0]);
-	a.resize(alen + nds + b.length());
-	if (nds)
-		a[alen] = directorySeparator;
-	rng::copy(b, a.begin() + alen + nds);
-	return a;
-}
-
-template <Integer T>
-std::basic_string<T> operator/(const std::basic_string<T>& a, std::basic_string_view<T> b) {
+std::basic_string<T> joinPaths(std::basic_string_view<T> a, std::basic_string_view<T> b) {
 	std::basic_string<T> r;
 	uint nds = !a.empty() && !b.empty() && notDsep(a.back()) && notDsep(b[0]);
 	r.resize(a.length() + nds + b.length());
@@ -558,60 +509,31 @@ std::basic_string<T> operator/(const std::basic_string<T>& a, std::basic_string_
 		r[a.length()] = directorySeparator;
 	rng::copy(b, r.begin() + a.length() + nds);
 	return r;
-}
-
-template <Integer T>
-std::basic_string<T> operator/(std::basic_string_view<T> a, std::basic_string<T>&& b) {
-	size_t blen = b.length();
-	uint nds = !a.empty() && blen && notDsep(a.back()) && notDsep(b[0]);
-	b.resize(a.length() + nds + blen);
-	std::move_backward(b.begin(), b.begin() + blen, b.end());
-	rng::copy(a, b.begin());
-	if (nds)
-		b[a.length()] = directorySeparator;
-	return b;
-}
-
-template <Integer T>
-std::basic_string<T> operator/(std::basic_string_view<T> a, const std::basic_string<T>& b) {
-	std::basic_string<T> r;
-	uint nds = !a.empty() && !b.empty() && notDsep(a.back()) && notDsep(b[0]);
-	r.resize(a.length() + nds + b.length());
-	rng::copy(a, r.begin());
-	if (nds)
-		r[a.length()] = directorySeparator;
-	rng::copy(b, r.begin() + a.length() + nds);
-	return r;
-}
-
-template <Integer T>
-std::basic_string<T> operator/(std::basic_string<T>&& a, const std::basic_string<T>& b) {
-	return std::move(a) / std::basic_string_view<T>(b);
 }
 
 template <Integer T>
 std::basic_string<T> operator/(const std::basic_string<T>& a, const std::basic_string<T>& b) {
-	return a / std::basic_string_view<T>(b);
+	return joinPaths(std::basic_string_view<T>(a), std::basic_string_view<T>(b));
 }
 
 template <Integer T>
-std::basic_string<T> operator/(std::basic_string<T>&& a, const T* b) {
-	return std::move(a) / std::basic_string_view<T>(b);
+std::basic_string<T> operator/(const std::basic_string<T>& a, std::basic_string_view<T> b) {
+	return joinPaths(std::basic_string_view<T>(a), std::basic_string_view<T>(b));
 }
 
 template <Integer T>
 std::basic_string<T> operator/(const std::basic_string<T>& a, const T* b) {
-	return a / std::basic_string_view<T>(b);
+	return joinPaths(std::basic_string_view<T>(a), std::basic_string_view<T>(b));
 }
 
 template <Integer T>
-std::basic_string<T> operator/(const T* a, std::basic_string<T>&& b) {
-	return std::basic_string_view<T>(a) / std::move(b);
+std::basic_string<T> operator/(std::basic_string_view<T> a, const std::basic_string<T>& b) {
+	return joinPaths(std::basic_string_view<T>(a), std::basic_string_view<T>(b));
 }
 
 template <Integer T>
 std::basic_string<T> operator/(const T* a, const std::basic_string<T>& b) {
-	return std::basic_string_view<T>(a) / b;
+	return joinPaths(std::basic_string_view<T>(a), std::basic_string_view<T>(b));
 }
 
 // conversions
@@ -722,21 +644,19 @@ T roundToMultiple(T val, T mul) {
 template <class... A>
 void logInfo(A&&... args) {
 	try {
-		std::ostringstream ss;
-		(ss << ... << std::forward<A>(args));
-		SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", ss.str().data());
+		string out = (std::ostringstream() << ... << std::forward<A>(args)).str();
+		SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%.*s", uint(out.length()), out.data());
 	} catch (...) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to log");
+		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to log");
 	}
 }
 
 template <class... A>
 void logError(A&&... args) {
 	try {
-		std::ostringstream ss;
-		(ss << ... << std::forward<A>(args));
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", ss.str().data());
+		string out = (std::ostringstream() << ... << std::forward<A>(args)).str();
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%.*s", uint(out.length()), out.data());
 	} catch (...) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to log");
+		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to log");
 	}
 }

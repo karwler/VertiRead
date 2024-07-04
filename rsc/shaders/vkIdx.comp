@@ -1,0 +1,46 @@
+#version 450
+
+layout(local_size_x = 32) in;
+
+layout(push_constant) uniform PushData {
+	uint offset;
+} psData;
+
+layout(set = 0, binding = 0) readonly buffer InputData {
+	uint pixels[];
+} inData;
+
+layout(set = 0, binding = 1, rgba8) writeonly uniform image2D img;
+
+layout(set = 0, binding = 2) uniform UniformData {
+	uint colors[256];
+} ud;
+
+#define storeColor(id, size, clr) \
+	vec4 co = vec4(clr & 0xFF, (clr >> 8) & 0xFF, (clr >> 16) & 0xFF, (clr >> 24) & 0xFF) / 255.0; \
+	imageStore(img, ivec2((id) % size.x, (id) / size.x), co)
+
+void main() {
+	uint iid = (gl_WorkGroupID.x + psData.offset) * gl_WorkGroupSize.x + gl_LocalInvocationID.x;
+	uint oid = iid * 4;
+	uint px = inData.pixels[iid];
+	uvec2 size = imageSize(img);
+	uint len = size.x * size.y;
+
+	if (oid < len) {
+		uint clr = ud.colors[px & 0xFF];
+		storeColor(oid, size, clr);
+	}
+	if (oid + 1 < len) {
+		uint clr = ud.colors[(px >> 8) & 0xFF];
+		storeColor(oid + 1, size, clr);
+	}
+	if (oid + 2 < len) {
+		uint clr = ud.colors[(px >> 16) & 0xFF];
+		storeColor(oid + 2, size, clr);
+	}
+	if (oid + 3 < len) {
+		uint clr = ud.colors[px >> 24];
+		storeColor(oid + 3, size, clr);
+	}
+}

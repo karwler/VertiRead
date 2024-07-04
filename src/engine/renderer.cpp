@@ -14,6 +14,20 @@ Widget* Renderer::finishSelDraw(View*) {
 	return nullptr;
 }
 
+Renderer::View* Renderer::findView(SDL_Window* win) noexcept {
+	for (View* it : views)
+		if (it->win == win)
+			return it;
+	return nullptr;
+}
+
+Renderer::View* Renderer::findView(ivec2 point) noexcept {
+	for (Renderer::View* it : views)
+		if (it->rect.contains(point))
+			return it;
+	return nullptr;
+}
+
 void Renderer::setMaxPicRes(uint& size) noexcept {
 	size = std::clamp(size, Settings::minPicRes, maxTextureSize);
 	maxPictureSize = size;
@@ -56,38 +70,32 @@ void Renderer::recommendPicRamLimit(uintptr_t& mem) noexcept {
 
 // RENDERER SF
 
-RendererSf::RendererSf(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor) :
-	Renderer(uint(std::sqrt(INT_MAX / 4))),
+RendererSf::RendererSf(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, Settings* sets, const vec4& bgcolor) :
+	Renderer(windows.size(), uint(std::sqrt(INT_MAX / 4))),
 	bgColor(colorToBytes(bgcolor))
 {
-	View* vtmp = nullptr;
 	try {
-		if (isSingleWindow(windows)) {
-			SDL_Surface* srf = SDL_GetWindowSurface(windows.begin()->second);
+		if (!vofs) {
+			SDL_Surface* srf = SDL_GetWindowSurface(windows[0]);
 			if (!srf)
 				throw std::runtime_error(SDL_GetError());
 			viewRes = ivec2(srf->w, srf->h);
-			views.emplace(singleDspId, vtmp = new View(windows.begin()->second, Recti(ivec2(0), viewRes)));
-			vtmp = nullptr;
-		} else {
-			views.reserve(windows.size());
-			for (auto [id, win] : windows) {
-				SDL_Surface* srf = SDL_GetWindowSurface(win);
+			views[0] = new View(windows[0], Recti(ivec2(0), viewRes));
+		} else
+			for (size_t i = 0; i < views.size(); ++i) {
+				SDL_Surface* srf = SDL_GetWindowSurface(windows[i]);
 				if (!srf)
 					throw std::runtime_error(SDL_GetError());
-				Recti wrect(sets->displays.at(id).pos() - origin, ivec2(srf->w, srf->h));
+				Recti wrect(vofs[i] - vofs[views.size()], srf->w, srf->h);
 				viewRes = glm::max(viewRes, wrect.end());
-				views.emplace(id, vtmp = new View(win, wrect));
-				vtmp = nullptr;
+				views[i] = new View(windows[i], wrect);
 			}
-		}
 		setVsync(sets->vsync);
 		setCompression(sets->compression);
 		setMaxPicRes(sets->maxPicRes);
 		sets->gpuSelecting = false;
 		recommendPicRamLimit(sets->picLim.size);
 	} catch (...) {
-		delete vtmp;
 		cleanup();
 		throw;
 	}
@@ -98,8 +106,8 @@ RendererSf::~RendererSf() {
 }
 
 void RendererSf::cleanup() noexcept {
-	for (auto [id, view] : views)
-		delete view;
+	for (View* it : views)
+		delete it;
 }
 
 void RendererSf::setClearColor(const vec4& color) {
@@ -121,7 +129,7 @@ void RendererSf::setVsync(bool vsync) {
 
 void RendererSf::updateView(ivec2& viewRes) {
 	if (views.size() == 1) {
-		SDL_Surface* srf = SDL_GetWindowSurface(views.begin()->second->win);
+		SDL_Surface* srf = SDL_GetWindowSurface(views[0]->win);
 		if (!srf)
 			throw std::runtime_error(SDL_GetError());
 		viewRes = ivec2(srf->w, srf->h);

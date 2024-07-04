@@ -11,8 +11,10 @@ private:
 #ifdef CAN_SECRET
 	optional<CredentialManager*> credential;	// loaded lazily
 #endif
+#ifdef WITH_ARCHIVE
 	ArchiveData* archiveRequest;
 	std::binary_semaphore* archiveRequestDone;
+#endif
 	Popup* prevPopup;	// might wanna implement a popup stack instead
 
 public:
@@ -77,19 +79,19 @@ private:
 	void eventBrowserGoFile(PushButton* lbl);
 	void eventBrowserGoTo(LabelEdit* le);
 	void eventBrowserGoToLogin();
-	void eventPreviewProgress(char* ndata, SDL_Surface* icon);
+	void eventPreviewProgress(uptr<char[]> ndata, SDL_Surface* icon);
 	void eventExitBrowser();
 
 	// reader
-	void eventReaderProgress(BrowserPictureProgress* pp, char* text);
-	void eventReaderFinished(ResultCode rc, BrowserResultPicture* rp);
+	void eventReaderProgress(uptr<BrowserPictureProgress> pp);
+	void eventReaderFinished(ResultCode rc, uptr<BrowserResultPicture> rp);
 
 	// settings
 	void eventSetLibraryDirBw();
 	void eventOpenLibDirBrowser();
 	void eventMoveBooks();
 	void eventMoveCancelled();
-	void eventMoveFinished(string* errors);
+	void eventMoveFinished(uptr<string> errors);
 	void eventSetZoomType(PushButton* but);
 	void eventSetZoom(Slider* sl);
 	void eventSetScreenMode(PushButton* but);
@@ -122,6 +124,7 @@ private:
 	template <class... A> void browserGoToHandle(A&&... args);
 	template <Invocable<const RemoteLocation&, vector<string>&&> F> void browserLoginAuto(RemoteLocation&& rl, EventId kcal, F func);
 	template <Invocable<const RemoteLocation&> F> void browserLoginManual(F func);
+	void restartBrowserList();
 	void startBrowserPreview();
 	static uint finishComboBox(PushButton* but);
 	template <Derived<ProgState> T, class... A> void setState(A&&... args);

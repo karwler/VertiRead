@@ -220,6 +220,7 @@ struct FileChange {
 	FileChange(Cstring&& entry, Type change) : name(std::move(entry)), type(change) {}
 };
 
+#ifdef WITH_ARCHIVE
 // archive file with image size
 struct ArchiveFile {
 	Cstring name;
@@ -232,7 +233,8 @@ struct ArchiveFile {
 };
 
 // archive directory node
-struct ArchiveDir {
+class ArchiveDir {
+public:
 	Cstring name;	// if this is a root node then the name is the path to the associated archive file
 	std::forward_list<ArchiveDir> dirs;
 	std::forward_list<ArchiveFile> files;
@@ -246,7 +248,11 @@ struct ArchiveDir {
 	pair<ArchiveDir*, ArchiveFile*> find(string_view path);
 	ArchiveDir* findDir(string_view dname) noexcept;
 	ArchiveFile* findFile(string_view fname) noexcept;
-	void copySlicedDentsFrom(const ArchiveDir& src);
+	void copySlicedDentsFrom(const ArchiveDir& src, bool copyHidden);
+	vector<Cstring> copySortedFiles(bool copyHidden) const;
+	vector<Cstring> copySortedDirs(bool copyHidden) const;
+private:
+	template <Class T> static vector<Cstring> copySortedDents(const std::forward_list<T>& dents, bool copyHidden);
 };
 
 // archive file tree with optional passphrase and its loaded memory
@@ -274,6 +280,14 @@ inline ArchiveData::operator bool() const {
 	return name.filled();
 }
 
+#else
+class ArchiveData {
+public:
+	operator bool() const { return false; }
+	ArchiveData copyLight() const { return ArchiveData(); }
+};
+#endif
+
 #if defined(CAN_MUPDF) || defined(CAN_POPPLER)
 // mupdf/poppler wrapper
 class PdfFile : private Data {
@@ -291,7 +305,7 @@ private:
 public:
 	PdfFile() = default;
 	PdfFile(PdfFile&& pdf) noexcept;
-	PdfFile(SDL_RWops* ops, string* error);
+	PdfFile(SDL_RWops* ops, Cstring* error);
 	~PdfFile() { freeDoc(); }
 
 	PdfFile& operator=(PdfFile&& pdf) noexcept;
@@ -324,6 +338,13 @@ enum class ResultCode : uint8 {
 	error
 };
 
+enum BrowserListOption : uint8 {
+	BLO_NONE = 0x0,
+	BLO_FILES = 0x1,
+	BLO_DIRS = 0x2,
+	BLO_HIDDEN = 0x4
+};
+
 enum BrowserResultState : uint8 {
 	BRS_NONE = 0x0,
 	BRS_LOC = 0x1,
@@ -335,20 +356,26 @@ enum BrowserResultState : uint8 {
 // files and directories info
 struct BrowserResultList {
 	vector<Cstring> files, dirs;
+	Cstring error;
+
+	BrowserResultList() = default;
+	BrowserResultList(vector<Cstring>&& fent, vector<Cstring>&& dent) noexcept;
 };
 
+#ifdef WITH_ARCHIVE
 // archive load info
 struct BrowserResultArchive {
 	string rootDir;
 	string opath;	// path to the file or directory to open
 	string page;	// for PDF only
 	ArchiveData arch;
-	string error;
+	Cstring error;
 	const bool hasRootDir;
 	ResultCode rc = ResultCode::ok;
 
 	BrowserResultArchive(optional<string>&& root, ArchiveData&& aroot, string&& fpath = string(), string&& ppage = string()) noexcept;
 };
+#endif
 
 // picture load info
 struct BrowserResultPicture {
@@ -359,7 +386,7 @@ struct BrowserResultPicture {
 	PdfFile pdf;
 	vector<pair<Cstring, Texture*>> pics;
 	std::mutex mpic;
-	string error;
+	Cstring error;
 	const bool hasRootDir;
 	const bool newCurDir;
 	const bool newArchive;
@@ -371,11 +398,12 @@ struct BrowserResultPicture {
 
 // intermediate picture load buffer
 struct BrowserPictureProgress {
-	BrowserResultPicture* pnt;
+	BrowserResultPicture* pnt;	// needed to access the texture vector and mutex (mustn't be deleted)
 	SDL_Surface* img;
 	size_t id;
+	Cstring text;
 
-	BrowserPictureProgress(BrowserResultPicture* rp, SDL_Surface* pic, size_t index) noexcept;
+	BrowserPictureProgress(BrowserResultPicture* rp, SDL_Surface* pic, size_t index, Cstring&& msg) noexcept;
 };
 
 // list of font families, files and which to select
@@ -385,7 +413,7 @@ struct FontListResult {
 	size_t select;
 	string error;
 
-	FontListResult(vector<Cstring>&& fa, uptr<Cstring[]>&& fl, size_t id, string&& msg);
+	FontListResult(vector<Cstring>&& fa, uptr<Cstring[]>&& fl, size_t id, string&& msg) noexcept;
 };
 
 // check a stop token every n iterations

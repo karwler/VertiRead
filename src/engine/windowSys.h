@@ -17,7 +17,7 @@ private:
 	Program* program;
 	Scene* scene;
 	Settings* sets;
-	umap<int, SDL_Window*> windows;
+	vector<SDL_Window*> windows;
 	float dSec;		// delta seconds, aka the time between each iteration of the above mentioned loop
 	bool run;		// whether the loop in which the program runs should continue
 
@@ -26,11 +26,11 @@ public:
 	void close();
 
 	float getDSec() const { return dSec; }
-	ivec2 mousePos();
-	ivec2 winViewOffset(uint32 wid);
-	ivec2 displayResolution() const;
-	void moveCursor(ivec2 mov);
-	void toggleOpacity();
+	ivec2 mousePos() const noexcept;
+	ivec2 winViewOffset(uint32 wid) const noexcept;
+	ivec2 displayResolution() const noexcept;
+	void moveCursor(ivec2 mov) noexcept;
+	void toggleOpacity() noexcept;
 	void setScreenMode(Settings::Screen sm);
 	void resetSettings();
 	void recreateWindows();
@@ -50,7 +50,7 @@ private:
 	uint32 initWindow(bool shared);
 	void createSingleWindow(uint32 flags, SDL_Surface* icon);
 	void createMultiWindow(uint32 flags, SDL_Surface* icon);
-	void destroyWindows();
+	void destroyWindows() noexcept;
 	void handleEvent(const SDL_Event& event);	// pass events to their specific handlers
 	void eventWindow(const SDL_WindowEvent& winEvent);
 	void eventDisplay(const SDL_DisplayEvent& dspEvent);

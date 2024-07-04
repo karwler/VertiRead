@@ -99,9 +99,10 @@ public:
 
 	void eventHide() override;
 	void eventRefresh() override;
-	void processFileChanges(Browser* browser);
+	void processFileChanges();
 
-	virtual void fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs, bool ok = true) = 0;
+	Label* makeLoadingLabel() const;
+	virtual bool fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs) = 0;
 protected:
 	virtual PushButton* makeDirectoryEntry(const Size& size, Cstring&& name) = 0;
 	virtual PushButton* makeFileEntry(const Size& size, Cstring&& name);
@@ -116,7 +117,7 @@ public:
 	void eventFileDrop(const char* file) override;
 
 	RootLayout* createLayout() override;
-	void fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs, bool ok = true) override;
+	bool fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs) override;
 	PushButton* makeBookTile(Cstring&& name);
 protected:
 	PushButton* makeDirectoryEntry(const Size& size, Cstring&& name) override;
@@ -132,7 +133,7 @@ public:
 	void resetFileIcons();
 
 	RootLayout* createLayout() override;
-	void fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs, bool ok = true) override;
+	bool fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs) override;
 protected:
 	PushButton* makeDirectoryEntry(const Size& size, Cstring&& name) override;
 	PushButton* makeFileEntry(const Size& size, Cstring&& name) override;
@@ -224,7 +225,7 @@ public:
 	void eventSpecEscape() override;
 
 	RootLayout* createLayout() override;
-	void fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs, bool ok = true) override;
+	bool fillFileList(vector<Cstring>&& files, vector<Cstring>&& dirs) override;
 protected:
 	PushButton* makeDirectoryEntry(const Size& size, Cstring&& name) override;
 };

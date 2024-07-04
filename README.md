@@ -1,7 +1,7 @@
 # VertiRead
 A simple comic/manga reader for Linux and Windows.  
-It's basically just an image viewer that shows all pictures of a directory/archive.  
-Currently supported file formats are whatever SDL2_image and libarchive support.  
+It's basically just an image viewer that shows all pictures of a directory/archive or PDFs.  
+Currently supported file formats are whatever SDL2_image, libarchive and MuPDF/Poppler support.  
 
 ## Build
 The CMakeLists.txt is written for at least CMake 3.16.9 with Clang, GCC, MinGW or MSVC which need to support C++ 20.  
@@ -9,7 +9,7 @@ By default the Program uses OpenGL with the lowest possible version which can be
 Support for Direct3D 11 and Vulkan 1.0 can be disabled by setting the options "-DDIRECT3D=OFF" and "-DVULKAN=OFF".  
 
 ### Linux
-All dependencies except for GLM need to be installed manually. Installing the development packages for SDL 2, SDL_image 2, FreeType 2 and libarchive should be enough.  
+All dependencies except for GLM need to be installed manually. Installing the development packages for SDL 2, SDL_image 2 and FreeType 2 should be enough.  
 To build an AppImage run CMake with the "-DAPPIMAGE=ON" option.  
 Settings files are being saved in "~/.local/share/vertiread".  
 
@@ -46,7 +46,7 @@ nmake
 |GL/GLES|runtime|Rendering with OpenGL/OpenGL ES. (linked dynamically at runtime)|
 |glm|no|Needed mostly for widget positioning.|
 |ICU|compile time|Improves sorting of file lists. (linked if present at compile time)|
-|libarchive|no|Needed for reading archive files.|
+|libarchive|compile time|Needed for reading archive files. (linked if present at compile time)|
 |libsecret|runtime|For storing credentials to remote locations. (loaded dynamically at runtime)|
 |libssh2|runtime|For browsing SFTP locations. (loaded dynamically at runtime)|
 |MuPDF|runtime|For displaying PDF files more quickly. If not available, then the fallback is Poppler. (loaded dynamically at runtime)|
@@ -94,3 +94,4 @@ Among the program's resource files is a "themes.ini" file which can be used to e
 ## Supported files
 - images: bmp, gif, jpg, lbm, pcx, png, pnm, svg, tga, tiff, webp, xcf, xpm, xv
 - archives: 7z, ar, cab, cpio, ISO9660, lha, lzh, mtree, pax, rar, tar, ustar, xar, zip, zipx
+- PDF

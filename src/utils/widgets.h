@@ -513,6 +513,14 @@ inline void KeyGetter::restoreText() {
 
 // for arranging multi window setup
 class WindowArranger final : public Button {
+public:
+	struct DspDisp {
+		Recti rect;
+		Recti text;
+		const Texture* tex;
+		Color color;
+	};
+
 private:
 	struct Dsp {
 		Recti rect, full;
@@ -552,10 +560,10 @@ public:
 	const char* getTooltip() const override;
 	bool draggingDisp(int id) const noexcept;
 	const umap<int, Dsp>& getDisps() const { return disps; }
-	umap<int, Recti> getActiveDisps() const;
+	vector<Settings::Display> getActiveDisps() const;
 	Recti offsetDisp(const Recti& rect, ivec2 pos) const;
 	int precalcSizeExpand(int fsiz) const;
-	tuple<Recti, Color, Recti, const Texture*> dispRect(int id, const Dsp& dsp) const;
+	DspDisp dispRect(int id, const Dsp& dsp) const;
 private:
 	int dispUnderPos(ivec2 pnt) const;
 	void calcDisplays();

@@ -407,6 +407,16 @@ public:
 		"compress"
 	};
 
+	struct Display {
+		Recti rect;
+		int did;
+
+		Display(const Recti& bounds, int dispId) : rect(bounds), did(dispId) {}
+
+		bool operator==(const Display& d) const { return rect == d.rect && did == d.rect; }
+		bool operator<(const Display& d) const { return did < d.did; }
+	};
+
 	static constexpr ushort defaultSpacing = 10;
 	static constexpr uint minPicRes = 1;
 	static constexpr int axisLimit = SHRT_MAX + 1;
@@ -438,7 +448,7 @@ private:
 public:
 	string dirLib;
 	string font = defaultFont;
-	umap<int, Recti> displays;
+	vector<Display> displays;
 	PicLim picLim;
 	u32vec2 device = u32vec2(0);
 	ivec2 resolution = ivec2(800, 600);
@@ -468,7 +478,7 @@ public:
 	const string& getTheme() const { return theme; }
 	const string& setTheme(string_view name, vector<string>&& themes);
 
-	static umap<int, Recti> displayArrangement();
+	static vector<Display> displayArrangement();
 	static double zoomValue(int step);
 	void unionDisplays();
 	static Renderer getRenderer(string_view name);

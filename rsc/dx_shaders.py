@@ -29,7 +29,8 @@ def bytes_to_text(src_file: str, dst_file: str, wsize: int):
 def compile_source(fxc: str, name: str, src_dir: str, dst_dir: str, model: str):
 	src_file = os.path.join(src_dir, name)
 	stem = os.path.splitext(name)[0]
-	version = f'vs_{model}' if stem[-2:].lower() == 'vs' else f'ps_{model}'
+	suffix = stem[-2:].lower()
+	version = f'vs_{model}' if suffix == 'vs' else f'ps_{model}' if suffix == 'ps' else f'cs_{model}'
 	for dbg in [True, False]:
 		try:
 			opt = ['/Od', '/Zi'] if dbg else ['/O1']
@@ -58,5 +59,5 @@ if __name__ == '__main__':
 
 	srcd = os.path.join(os.path.dirname(__file__), 'shaders')
 	dstd = os.path.join(os.path.dirname(__file__), os.pardir, 'src', 'engine', 'shaders')
-	for it in ['dxGuiVs.hlsl', 'dxGuiPs.hlsl', 'dxSelVs.hlsl', 'dxSelPs.hlsl']:
+	for it in ['dxGuiVs.hlsl', 'dxGuiPs.hlsl', 'dxSelVs.hlsl', 'dxSelPs.hlsl', 'dxRgbCs.hlsl', 'dxBgrCs.hlsl', 'dxIdxCs.hlsl']:
 		compile_source(comp, it, srcd, dstd, '5_0')

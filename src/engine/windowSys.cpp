@@ -22,12 +22,12 @@ int WindowSys::start(vector<string>&& cmdVals, uset<string>&& cmdFlags) noexcept
 		exec();
 	} catch (const std::runtime_error& e) {
 		logError(e.what());
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", e.what(), !windows.empty() ? windows.begin()->second : nullptr);
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", e.what(), !windows.empty() ? windows[0] : nullptr);
 		rc = EXIT_FAILURE;
 #ifdef NDEBUG
 	} catch (...) {
 		logError("Unknown fatal error");
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Unknown fatal error", !windows.empty() ? windows.begin()->second : nullptr);
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Unknown fatal error", !windows.empty() ? windows[0] : nullptr);
 		rc = EXIT_FAILURE;
 #endif
 	}
@@ -315,34 +315,35 @@ uint32 WindowSys::initWindow(bool shared) {
 
 void WindowSys::createSingleWindow(uint32 flags, SDL_Surface* icon) {
 	sets->resolution = glm::clamp(sets->resolution, windowMinSize, displayResolution());
-	SDL_Window* win = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets->resolution.x, sets->resolution.y, flags);
-	if (!win)
+	windows.resize(1);
+	if (windows[0] = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, sets->resolution.x, sets->resolution.y, flags); !windows[0])
 		throw std::runtime_error(std::format("Failed to create window:" LINEND "{}", SDL_GetError()));
 	if (sets->screen == Settings::Screen::windowed && sets->maximized)
-		SDL_MaximizeWindow(win);	// workaround for SDL_WINDOW_MAXIMIZED causing the window to not report the correct size
-	windows.emplace(Renderer::singleDspId, win);
+		SDL_MaximizeWindow(windows[0]);	// workaround for SDL_WINDOW_MAXIMIZED causing the window to not report the correct size
+	SDL_SetWindowIcon(windows[0], icon);
+	SDL_SetWindowMinimumSize(windows[0], windowMinSize.x, windowMinSize.y);
 	drawSys = new DrawSys(windows);
-	SDL_SetWindowIcon(win, icon);
-	SDL_SetWindowMinimumSize(win, windowMinSize.x, windowMinSize.y);
 }
 
 void WindowSys::createMultiWindow(uint32 flags, SDL_Surface* icon) {
-	windows.reserve(sets->displays.size());
-	int minId = rng::min_element(sets->displays, [](const pair<const int, Recti>& a, const pair<const int, Recti>& b) -> bool { return a.first < b.first; })->first;
-	for (const auto& [id, rect] : sets->displays) {
-		SDL_Window* win = windows.emplace(id, SDL_CreateWindow(std::format("{} {}", title, id).data(), SDL_WINDOWPOS_CENTERED_DISPLAY(id), SDL_WINDOWPOS_CENTERED_DISPLAY(id), rect.w, rect.h, id != minId ? flags : flags & ~SDL_WINDOW_SKIP_TASKBAR)).first->second;
-		if (!win)
+	windows.resize(sets->displays.size());
+	uptr<ivec2[]> vofs = std::make_unique_for_overwrite<ivec2[]>(windows.size() + 1);
+	vofs[windows.size()] = ivec2(INT_MAX);
+	for (size_t i = 0; i < windows.size(); ++i) {
+		if (windows[i] = SDL_CreateWindow(std::format("{} {}", title, i).data(), SDL_WINDOWPOS_CENTERED_DISPLAY(sets->displays[i].did), SDL_WINDOWPOS_CENTERED_DISPLAY(sets->displays[i].did), sets->displays[i].rect.w, sets->displays[i].rect.h, flags); !windows[i])
 			throw std::runtime_error(std::format("Failed to create window:" LINEND "{}", SDL_GetError()));
-		SDL_SetWindowIcon(win, icon);
+		SDL_SetWindowIcon(windows[i], icon);
+		vofs[i] = sets->displays[i].rect.pos();
+		vofs[windows.size()] = glm::min(vofs[windows.size()], vofs[i]);
 	}
-	drawSys = new DrawSys(windows);
+	drawSys = new DrawSys(windows, vofs.get());
 }
 
-void WindowSys::destroyWindows() {
+void WindowSys::destroyWindows() noexcept {
 	delete drawSys;
 	drawSys = nullptr;
-	for (auto [id, win] : windows)
-		SDL_DestroyWindow(win);
+	for (SDL_Window* it : windows)
+		SDL_DestroyWindow(it);
 	windows.clear();
 
 	switch (sets->renderer) {
@@ -495,7 +496,7 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 	switch (winEvent.event) {
 	case SDL_WINDOWEVENT_RESIZED:
 		if (windows.size() == 1)
-			if (uint32 flags = SDL_GetWindowFlags(windows.begin()->second); !(flags & SDL_WINDOW_FULLSCREEN_DESKTOP))
+			if (uint32 flags = SDL_GetWindowFlags(windows[0]); !(flags & SDL_WINDOW_FULLSCREEN_DESKTOP))
 				if (sets->maximized = flags & SDL_WINDOW_MAXIMIZED; !sets->maximized)
 					sets->resolution = ivec2(winEvent.data1, winEvent.data2);
 	case SDL_WINDOWEVENT_SIZE_CHANGED:
@@ -506,16 +507,16 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 		scene->onMouseLeave();
 		break;
 	case SDL_WINDOWEVENT_FOCUS_GAINED:
-		if (sets->screen == Settings::Screen::multiFullscreen && rng::any_of(windows, [](const pair<const int, SDL_Window*>& it) -> bool { return SDL_GetWindowFlags(it.second) & SDL_WINDOW_MINIMIZED; })) {
-			for (auto [id, win] : windows)
-				SDL_MaximizeWindow(win);
+		if (sets->screen == Settings::Screen::multiFullscreen && rng::any_of(windows, [](SDL_Window* it) -> bool { return SDL_GetWindowFlags(it) & SDL_WINDOW_MINIMIZED; })) {
+			for (SDL_Window* it : windows)
+				SDL_MaximizeWindow(it);
 			SDL_FlushEvent(SDL_WINDOWEVENT);
 		}
 		break;
 	case SDL_WINDOWEVENT_FOCUS_LOST:
-		if (sets->screen == Settings::Screen::multiFullscreen && rng::none_of(windows, [](const pair<const int, SDL_Window*>& it) -> bool { return SDL_GetWindowFlags(it.second) & SDL_WINDOW_INPUT_FOCUS; })) {
-			for (auto [id, win] : windows)
-				SDL_MinimizeWindow(win);
+		if (sets->screen == Settings::Screen::multiFullscreen && rng::none_of(windows, [](SDL_Window* it) -> bool { return SDL_GetWindowFlags(it) & SDL_WINDOW_INPUT_FOCUS; })) {
+			for (SDL_Window* it : windows)
+				SDL_MinimizeWindow(it);
 			SDL_FlushEvent(SDL_WINDOWEVENT);
 		}
 		break;
@@ -524,7 +525,7 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 #else
 	case SDL_WINDOWEVENT_MOVED:
 #endif
-		if (Renderer::isSingleWindow(windows) && drawSys->updateDpi())
+		if (windows.size() == 1 && drawSys->updateDpi())
 			scene->onResize();
 	}
 }
@@ -547,40 +548,39 @@ void WindowSys::eventDisplay(const SDL_DisplayEvent& dspEvent) {
 		}
 }
 
-ivec2 WindowSys::winViewOffset(uint32 wid) {
+ivec2 WindowSys::winViewOffset(uint32 wid) const noexcept {
 	if (SDL_Window* win = SDL_GetWindowFromID(wid))
-		if (umap<int, SDL_Window*>::const_iterator it = rng::find_if(windows, [win](const pair<const int, SDL_Window*>& p) -> bool { return p.second == win; }); it != windows.end())
-			return drawSys->getRenderer()->getViews().at(it->first)->rect.pos();
+		if (Renderer::View* view = drawSys->getRenderer()->findView(win))
+			return view->rect.pos();
 	return ivec2(INT_MIN);
 }
 
-ivec2 WindowSys::mousePos() {
+ivec2 WindowSys::mousePos() const noexcept {
 	ivec2 mp;
 	SDL_GetMouseState(&mp.x, &mp.y);
-	SDL_Window* win = SDL_GetMouseFocus();
-	umap<int, SDL_Window*>::const_iterator it = rng::find_if(windows, [win](const pair<const int, SDL_Window*>& p) -> bool { return p.second == win; });
-	return it != windows.end() ? mp + drawSys->getRenderer()->getViews().at(it->first)->rect.pos() : mp;
+	if (SDL_Window* win = SDL_GetMouseFocus())
+		if (Renderer::View* view = drawSys->getRenderer()->findView(win))
+			return mp + view->rect.pos();
+	return mp;
 }
 
-void WindowSys::moveCursor(ivec2 mov) {
-	SDL_Window* win = SDL_GetMouseFocus();
-	if (umap<int, SDL_Window*>::iterator it = rng::find_if(windows, [win](const pair<const int, SDL_Window*>& p) -> bool { return p.second == win; }); it != windows.end()) {
-		ivec2 wpos;
-		SDL_GetMouseState(&wpos.x, &wpos.y);
-		wpos += drawSys->getRenderer()->getViews().at(it->first)->rect.pos() + mov;
-		if (Renderer::View* view = drawSys->findViewForPoint(wpos)) {
-			ivec2 vpos = view->rect.pos();
-			SDL_WarpMouseInWindow(it->second, wpos.x - vpos.x, wpos.y - vpos.y);
+void WindowSys::moveCursor(ivec2 mov) noexcept {
+	if (SDL_Window* win = SDL_GetMouseFocus())
+		if (Renderer::View* vsrc = drawSys->getRenderer()->findView(win)) {
+			ivec2 wpos;
+			SDL_GetMouseState(&wpos.x, &wpos.y);
+			wpos += vsrc->rect.pos() + mov;
+			if (Renderer::View* vdst = drawSys->getRenderer()->findView(wpos))
+				SDL_WarpMouseInWindow(vdst->win, wpos.x - vdst->rect.x, wpos.y - vdst->rect.y);
 		}
-	}
 }
 
-void WindowSys::toggleOpacity() {
-	for (auto [id, win] : windows) {
-		if (float val; !SDL_GetWindowOpacity(win, &val))
-			SDL_SetWindowOpacity(win, val < 1.f ? 1.f : 0.f);
+void WindowSys::toggleOpacity() noexcept {
+	for (SDL_Window* it : windows) {
+		if (float val; !SDL_GetWindowOpacity(it, &val))
+			SDL_SetWindowOpacity(it, val < 1.f ? 1.f : 0.f);
 		else
-			SDL_MinimizeWindow(win);
+			SDL_MinimizeWindow(it);
 	}
 }
 
@@ -588,14 +588,14 @@ void WindowSys::setScreenMode(Settings::Screen sm) {
 	bool changeFlag = sets->screen != Settings::Screen::multiFullscreen && sm != Settings::Screen::multiFullscreen;
 	sets->screen = sm;
 	if (changeFlag)
-		SDL_SetWindowFullscreen(windows.begin()->second, sm == Settings::Screen::fullscreen ? SDL_GetWindowFlags(windows.begin()->second) | SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_GetWindowFlags(windows.begin()->second) & ~SDL_WINDOW_FULLSCREEN_DESKTOP);
+		SDL_SetWindowFullscreen(windows[0], sm == Settings::Screen::fullscreen ? SDL_GetWindowFlags(windows[0]) | SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_GetWindowFlags(windows[0]) & ~SDL_WINDOW_FULLSCREEN_DESKTOP);
 	else
 		recreateWindows();
 }
 
-ivec2 WindowSys::displayResolution() const {
+ivec2 WindowSys::displayResolution() const noexcept {
 	SDL_DisplayMode mode{};
-	if (!windows.empty() && !SDL_GetDesktopDisplayMode(SDL_GetWindowDisplayIndex(windows.begin()->second), &mode))
+	if (!windows.empty() && !SDL_GetDesktopDisplayMode(SDL_GetWindowDisplayIndex(windows[0]), &mode))
 		return ivec2(mode.w, mode.h);
 
 	ivec2 res(0);

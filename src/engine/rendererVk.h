@@ -116,12 +116,6 @@ protected:
 
 class GenericPipeline {
 protected:
-	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-
-public:
-	VkPipelineLayout getPipelineLayout() const { return pipelineLayout; }
-
-protected:
 	static VkSampler createSampler(const InstanceVk* vk, VkFilter filter);
 	static VkShaderModule createShaderModule(const InstanceVk* vk, const uint32* code, size_t clen);
 };
@@ -132,8 +126,18 @@ public:
 	static constexpr uint32 convWgrpSize = 32;
 	static constexpr uint32 convStep = convWgrpSize * 4;	// 4 texels per invocation
 
+	enum class Pipeline : uint8 {
+		rgb24,
+		bgr24,
+		index8
+	};
+
 	struct PushData {
 		alignas(4) uint offset;
+	};
+
+	struct UniformData {
+		alignas(4) uint colors[256];
 	};
 
 private:
@@ -141,39 +145,56 @@ private:
 		VkBool32 orderRgb;
 	};
 
-	array<VkPipeline, 2> pipelines{};
-	VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+	array<VkPipeline, eint(Pipeline::index8) + 1> pipelines{};
+	VkPipelineLayout pipelineLayoutRgb = VK_NULL_HANDLE;
+	VkPipelineLayout pipelineLayoutIdx = VK_NULL_HANDLE;
+	VkDescriptorSetLayout descriptorSetLayoutRgb = VK_NULL_HANDLE;
+	VkDescriptorSetLayout descriptorSetLayoutIdx = VK_NULL_HANDLE;
 	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
-	array<VkDescriptorSet, maxTransfers> descriptorSets{};
+	array<VkDescriptorSet, maxTransfers * 2> descriptorSets{};
 
-	array<VkBuffer, maxTransfers> outputBuffers{};
-	array<VkDeviceMemory, maxTransfers> outputMemory{};
-	array<VkDeviceSize, maxTransfers> outputSizesMax{};
+	array<VkBuffer, maxTransfers> uniformBuffers{};
+	array<VkDeviceMemory, maxTransfers> uniformBufferMemory{};
+	array<UniformData*, maxTransfers> uniformBufferMapped;
 
 public:
 	void init(const InstanceVk* vk);
-	void updateBufferSize(const InstanceVk* vk, uint id, VkDeviceSize texSize, VkBuffer inputBuffer, VkDeviceSize inputSize, bool& update);
-	void free(const InstanceVk* vk);
+	void updateBuffer(const InstanceVk* vk, Pipeline pid, uint id, VkBuffer inputBuffer, VkDeviceSize inputSize) noexcept;
+	void updateImage(const InstanceVk* vk, Pipeline pid, uint id, VkImageView view) noexcept;
+	void free(const InstanceVk* vk) noexcept;
 
-	bool initialized() const { return descriptorSets[maxTransfers - 1]; }	// cause it's the last thing to be initialized
-	VkPipeline getPipeline(bool rgb) const { return pipelines[rgb]; }
-	VkDescriptorSet getDescriptorSet(uint id) const { return descriptorSets[id]; }
-	VkBuffer getOutputBuffer(uint id) const { return outputBuffers[id]; }
+	bool initialized() const { return descriptorSets[0]; }	// cause it's the last thing to be initialized
+	VkPipeline getPipeline(Pipeline pid) const { return pipelines[eint(pid)]; }
+	VkPipelineLayout getPipelineLayout(Pipeline pid) const;
+	VkDescriptorSet getDescriptorSet(Pipeline pid, uint id) const;
+	UniformData* getUniformBufferMapped(uint id) const { return uniformBufferMapped[id]; }
 
 private:
-	void createDescriptorSetLayout(const InstanceVk* vk);
+	void createDescriptorSetLayoutRgb(const InstanceVk* vk);
+	void createDescriptorSetLayoutIdx(const InstanceVk* vk);
 	void createPipelines(const InstanceVk* vk);
-	void createDescriptorPoolAndSet(const InstanceVk* vk);
+	void createUniformBuffers(const InstanceVk* vk);
+	void createDescriptorPoolAndSets(const InstanceVk* vk);
 };
+
+inline VkPipelineLayout FormatConverter::getPipelineLayout(Pipeline pid) const {
+	return pid != Pipeline::index8 ? pipelineLayoutRgb : pipelineLayoutIdx;
+}
+
+inline VkDescriptorSet FormatConverter::getDescriptorSet(Pipeline pid, uint id) const {
+	return pid != Pipeline::index8 ? descriptorSets[id] : descriptorSets[maxTransfers + id];
+}
 
 class GenericPass : public GenericPipeline {
 protected:
 	VkRenderPass handle = VK_NULL_HANDLE;
 	VkPipeline pipeline = VK_NULL_HANDLE;
+	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 
 public:
 	VkRenderPass getHandle() const { return handle; }
 	VkPipeline getPipeline() const { return pipeline; }
+	VkPipelineLayout getPipelineLayout() const { return pipelineLayout; }
 };
 
 class RenderPass : public GenericPass {
@@ -211,8 +232,8 @@ public:
 	pair<VkDescriptorPool, VkDescriptorSet> newDescriptorSetTex(const InstanceVk* vk, VkImageView imageView);
 	pair<VkDescriptorPool, VkDescriptorSet> getDescriptorSetTex(const InstanceVk* vk);
 	void freeDescriptorSetTex(const InstanceVk* vk, VkDescriptorPool pool, VkDescriptorSet dset);
-	static void updateDescriptorSet(const InstanceVk* vk, VkDescriptorSet descriptorSet, VkBuffer uniformBuffer);
-	static void updateDescriptorSet(const InstanceVk* vk, VkDescriptorSet descriptorSet, VkImageView imageView);
+	static void updateDescriptorSet(const InstanceVk* vk, VkDescriptorSet descriptorSet, VkBuffer uniformBuffer) noexcept;
+	static void updateDescriptorSet(const InstanceVk* vk, VkDescriptorSet descriptorSet, VkImageView imageView) noexcept;
 	void free(const InstanceVk* vk);
 
 private:
@@ -247,7 +268,7 @@ private:
 
 public:
 	void init(const InstanceVk* vk);
-	void free(const InstanceVk* vk);
+	void free(const InstanceVk* vk) noexcept;
 
 	VkDescriptorSet getDescriptorSet() const { return descriptorSet; }
 	UniformData* getUniformBufferMapped() const { return uniformBufferMapped; }
@@ -258,12 +279,12 @@ private:
 	void createPipeline(const InstanceVk* vk);
 	void createUniformBuffer(const InstanceVk* vk);
 	void createDescriptorPoolAndSet(const InstanceVk* vk);
-	void updateDescriptorSet(const InstanceVk* vk);
+	void updateDescriptorSet(const InstanceVk* vk) noexcept;
 };
 
 class RendererVk final : public Renderer, public InstanceVk {
 private:
-	enum class OptionalTextureFormat {
+	enum class OptionalTextureFormat : uint8 {
 		B5G6R5,
 		R5G6B5,
 		A1R5G5B5,
@@ -336,6 +357,16 @@ private:
 		array<bool, size_t(OptionalTextureFormat::A2R10G10B10) + 1> formats;
 	};
 
+	struct SurfaceInfo {
+		SDL_Surface* img = nullptr;
+		VkFormat fmt = VK_FORMAT_UNDEFINED;
+		FormatConverter::Pipeline pid;
+
+		SurfaceInfo() = default;
+		SurfaceInfo(SDL_Surface* surface, VkFormat format) : img(surface), fmt(format) {}
+		SurfaceInfo(SDL_Surface* surface, FormatConverter::Pipeline conv) : img(surface), pid(conv) {}
+	};
+
 	static constexpr array<VkMemoryPropertyFlags, 2> deviceMemoryTypes = { VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
 #ifndef NDEBUG
 	static inline const char* validationLayerName = "VK_LAYER_KHRONOS_validation";
@@ -390,7 +421,7 @@ private:
 	bool immediatePresent;
 
 public:
-	RendererVk(const umap<int, SDL_Window*>& windows, Settings* sets, ivec2& viewRes, ivec2 origin, const vec4& bgcolor);
+	RendererVk(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, Settings* sets, const vec4& bgcolor);
 	~RendererVk() override;
 
 	void setClearColor(const vec4& color) override;
@@ -426,11 +457,10 @@ public:
 
 	void beginSingleTimeCommands(VkCommandBuffer cmdBuffer);
 	void endSingleTimeCommands(VkCommandBuffer cmdBuffer, VkFence fence, VkQueue queue) const;
-	void synchSingleTimeCommands(VkCommandBuffer cmdBuffer, VkFence fence) const;
-	template <VkImageLayout srcLay, VkImageLayout dstLay> void transitionImageLayout(VkCommandBuffer commandBuffer, VkImage image) const;
-	template <VkImageLayout srcLay, VkImageLayout dstLay> void transitionBufferToImageLayout(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image) const;
-	void copyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image, u32vec2 size) const;
-	void copyImageToBuffer(VkCommandBuffer commandBuffer, VkImage image, VkBuffer buffer, u32vec2 size) const;
+	void synchSingleTimeCommands(VkCommandBuffer cmdBuffer, VkFence fence) const noexcept;
+	void transitionImageLayout(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout srcLayout, VkImageLayout dstLayout, VkAccessFlags srcAccess, VkAccessFlags dstAccess, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage) const noexcept;
+	void copyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image, u32vec2 size) const noexcept;
+	void copyImageToBuffer(VkCommandBuffer commandBuffer, VkImage image, VkBuffer buffer, u32vec2 size) const noexcept;
 
 private:
 	void cleanup() noexcept;
@@ -439,10 +469,10 @@ private:
 	void createDevice(DeviceInfo& deviceInfo);
 	VkCommandPool createCommandPool(uint32 family) const;
 	void createSwapchain(ViewVk* view, VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE);
-	void freeFramebuffers(ViewVk* view);
+	void freeFramebuffers(ViewVk* view) noexcept;
 	void recreateSwapchain(ViewVk* view);
 	void initView(ViewVk* view, VkDescriptorSet descriptorSet);
-	void freeView(ViewVk* view);
+	void freeView(ViewVk* view) noexcept;
 	void createFramebuffers(ViewVk* view);
 	void createVertexBuffer();
 
@@ -454,11 +484,11 @@ private:
 	VkPresentModeKHR chooseSwapPresentMode(VkSurfaceKHR surface) const;
 	static uint scoreDevice(const DeviceInfo& devi);
 	template <bool fresh = true> void createTextureDirect(const byte_t* pix, uint32 pitch, uint8 bpp, VkFormat format, TextureVk& tex);
-	template <bool fresh = true> void createTextureIndirect(const SDL_Surface* img, VkFormat format, TextureVk& tex);
-	template <bool conv> void uploadInputData(const byte_t* pix, u32vec2 res, uint32 pitch, uint8 bpp);
-	template <bool fresh> void finalizeTexture(TextureVk& tex, VkFormat format);
-	void replaceTexture(TextureVk& tex, TextureVk& ntex);
-	tuple<SDL_Surface*, VkFormat, bool> pickPixFormat(SDL_Surface* img) const noexcept;
+	template <bool fresh = true> void createTextureIndirect(const SDL_Surface* img, TextureVk& tex, FormatConverter::Pipeline pid);
+	void uploadInputData(const byte_t* pix, u32vec2 res, uint32 pitch, uint8 bpp);
+	template <bool fresh> void finalizeTexture(TextureVk& tex);
+	void replaceTexture(TextureVk& tex, TextureVk& ntex) noexcept;
+	SurfaceInfo pickPixFormat(SDL_Surface* img) const noexcept;
 	bool canSquashTextures() const;
 	InstanceInfo checkInstanceExtensionSupport() const;
 #ifndef NDEBUG

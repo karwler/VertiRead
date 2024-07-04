@@ -886,7 +886,7 @@ void LabelEdit::cleanText() {
 		cleanSIntSpacedText();
 		break;
 	case uInt:
-		text.erase(rng::remove_if(text, [](char c) -> bool { return !isdigit(c); }).begin(), text.end());
+		text.erase(std::remove_if(text.begin(), text.end(), [](char c) -> bool { return !isdigit(c); }), text.end());
 		break;
 	case uIntSpaced:
 		cleanUIntSpacedText();
@@ -1149,22 +1149,22 @@ void WindowArranger::freeTextures() {
 }
 
 void WindowArranger::calcDisplays() {
-	umap<int, Recti> all = Settings::displayArrangement();
+	vector<Settings::Display> all = Settings::displayArrangement();
 	disps.reserve(all.size());
 	totalDim = ivec2(0);
 
-	for (auto& [id, rect] : World::sets()->displays) {
-		disps.try_emplace(id, rect, true);
-		totalDim = glm::max(totalDim, rect.end());
+	for (const Settings::Display& dit : World::sets()->displays) {
+		disps.try_emplace(dit.did, dit.rect, true);
+		totalDim = glm::max(totalDim, dit.rect.end());
 	}
 	ivec2 border = vswap(totalDim[vertical], 0, vertical);
-	for (auto& [id, rect] : all) {
-		Recti dst = rect;
+	for (const Settings::Display& dit : all) {
+		Recti dst = dit.rect;
 		if (rng::any_of(disps, [&dst](const pair<const int, Dsp>& p) -> bool { return p.second.full.overlaps(dst); })) {
 			dst.pos() = border;
 			border[vertical] += dst.size()[vertical];
 		}
-		if (auto [it, ok] = disps.try_emplace(id, dst, false); ok)
+		if (auto [it, ok] = disps.try_emplace(dit.did, dst, false); ok)
 			totalDim = glm::max(totalDim, dst.end());
 	}
 }
@@ -1337,17 +1337,22 @@ float WindowArranger::entryScale(int fsiz) const noexcept {
 	return int(float(totalDim[!vertical]) * bscale) <= fsiz ? bscale : float(totalDim[!vertical]) / float(fsiz);
 }
 
-tuple<Recti, Color, Recti, const Texture*> WindowArranger::dispRect(int id, const Dsp& dsp) const {
+WindowArranger::DspDisp WindowArranger::dispRect(int id, const Dsp& dsp) const {
 	ivec2 offs = position() + winMargin;
 	Recti rct = dsp.rect.translate(offs);
-	Color clr = id != selected || World::scene()->getSelect() != this || World::scene()->getCapture() != this ? dsp.active ? Color::light : Color::normal : Color::select;
-	return tuple(rct, clr, dsp.txt ? Recti(rct.pos() + (rct.size() - ivec2(dsp.txt->getRes())) / 2, dsp.txt->getRes()) : Recti(0), dsp.txt);
+	return {
+		.rect = rct,
+		.text = dsp.txt ? Recti(rct.pos() + (rct.size() - ivec2(dsp.txt->getRes())) / 2, dsp.txt->getRes()) : Recti(0),
+		.tex = dsp.txt,
+		.color = id != selected || World::scene()->getSelect() != this || World::scene()->getCapture() != this ? dsp.active ? Color::light : Color::normal : Color::select
+	};
 }
 
-umap<int, Recti> WindowArranger::getActiveDisps() const {
-	umap<int, Recti> act;
+vector<Settings::Display> WindowArranger::getActiveDisps() const {
+	vector<Settings::Display> act;
 	for (auto& [id, dsp] : disps)
 		if (dsp.active)
-			act.emplace(id, dsp.full);
+			act.emplace_back(dsp.full, id);
+	std::sort(act.begin(), act.end());
 	return act;
 }

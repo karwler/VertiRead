@@ -56,5 +56,5 @@ if __name__ == '__main__':
 
 	srcd = os.path.join(os.path.dirname(__file__), 'shaders')
 	dstd = os.path.join(os.path.dirname(__file__), os.pardir, 'src', 'engine', 'shaders')
-	for it in ['vkConv.comp', 'vkGui.vert', 'vkGui.frag', 'vkSel.vert', 'vkSel.frag']:
+	for it in ['vkGui.vert', 'vkGui.frag', 'vkSel.vert', 'vkSel.frag', 'vkIdx.comp', 'vkRgb.comp']:
 		compile_source(comp, it, srcd, dstd)

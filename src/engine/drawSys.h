@@ -127,13 +127,12 @@ private:
 	int cursorHeight;
 
 public:
-	DrawSys(const umap<int, SDL_Window*>& windows);
+	DrawSys(const vector<SDL_Window*>& windows, const ivec2* vofs = nullptr);
 	~DrawSys() { cleanup(); }
 
 	Renderer* getRenderer() { return renderer; }
 	ivec2 getViewRes() const { return viewRes; }
 	void updateView();
-	Renderer::View* findViewForPoint(ivec2 pos);
 	float getWinDpi() const { return winDpi; }
 	bool updateDpi();
 	void setTheme(string_view name);

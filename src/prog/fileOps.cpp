@@ -15,13 +15,16 @@
 #include <format>
 #include <queue>
 #include <semaphore>
+#ifdef WITH_ARCHIVE
 #include <archive.h>
 #include <archive_entry.h>
+#endif
 #ifndef _WIN32
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/inotify.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -105,24 +108,30 @@ void CredentialManager::saveCredentials(const RemoteLocation& rl) {
 }
 
 void CredentialManager::setAttributes(const RemoteLocation& rl, string& portTmp) {
+	portTmp = toStr(rl.port);
 	gHashTableInsert(attributes, const_cast<char*>(keyProtocol), const_cast<char*>(protocolNames[eint(rl.protocol)]));
 	gHashTableInsert(attributes, const_cast<char*>(keyServer), const_cast<char*>(rl.server.data()));
 	gHashTableInsert(attributes, const_cast<char*>(keyPath), const_cast<char*>(rl.path.data()));
 	gHashTableInsert(attributes, const_cast<char*>(keyUser), const_cast<char*>(rl.user.data()));
-	if (rl.protocol == Protocol::smb)
-		gHashTableInsert(attributes, const_cast<char*>(keyWorkgroup), const_cast<char*>(rl.workgroup.data()));
-	else
-		gHashTableRemove(attributes, keyWorkgroup);
-	portTmp = toStr(rl.port);
 	gHashTableInsert(attributes, const_cast<char*>(keyPort), portTmp.data());
-	if (rl.protocol == Protocol::sftp)
-		gHashTableInsert(attributes, const_cast<char*>(keyFamily), const_cast<char*>(familyNames[eint(rl.family)]));
-	else
+	if (rl.protocol == Protocol::smb) {
+		gHashTableInsert(attributes, const_cast<char*>(keyWorkgroup), const_cast<char*>(rl.workgroup.data()));
 		gHashTableRemove(attributes, keyFamily);
+	} else {
+		gHashTableRemove(attributes, keyWorkgroup);
+		gHashTableInsert(attributes, const_cast<char*>(keyFamily), const_cast<char*>(familyNames[eint(rl.family)]));
+	}
 }
 #endif
 
 // FILE OPS
+
+#ifdef WITH_ARCHIVE
+FileOps::MakeArchiveTreeData::MakeArchiveTreeData(uptr<BrowserResultArchive>&& res, uint mres) noexcept :
+	ra(std::move(res)),
+	maxRes(mres)
+{}
+#endif
 
 FileOps* FileOps::instantiate(const RemoteLocation& rl, vector<string>&& passwords) {
 #if defined(CAN_SMB) || defined(CAN_SFTP)
@@ -207,18 +216,21 @@ bool FileOps::isPicture(const string& path) {
 }
 
 bool FileOps::isArchive(ArchiveData& ad) {
+#ifdef WITH_ARCHIVE
 	if (archive* arch = openArchive(ad)) {
 		archive_read_free(arch);
 		return true;
 	}
+#endif
 	return false;
 }
 
-void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultArchive* ra, uint maxRes) {
-	archive* arch = openArchive(ra->arch, &ra->error);
+#ifdef WITH_ARCHIVE
+void FileOps::makeArchiveTreeThread(std::stop_token stoken, uptr<MakeArchiveTreeData> md) {
+	archive* arch = openArchive(md->ra->arch, &md->ra->error);
 	if (!arch) {
-		ra->rc = ResultCode::error;
-		pushEvent(SDL_USEREVENT_THREAD_ARCHIVE_FINISHED, 0, ra);
+		md->ra->rc = ResultCode::error;
+		pushEvent(SDL_USEREVENT_THREAD_ARCHIVE_FINISHED, 0, md->ra.release());
 		return;
 	}
 
@@ -226,12 +238,12 @@ void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultArchive
 	for (archive_entry* entry; (rc = archive_read_next_header(arch, &entry)) == ARCHIVE_OK;) {
 		if (stoken.stop_requested()) {
 			archive_read_free(arch);
-			ra->rc = ResultCode::stop;
-			pushEvent(SDL_USEREVENT_THREAD_ARCHIVE_FINISHED, 0, ra);
+			md->ra->rc = ResultCode::stop;
+			pushEvent(SDL_USEREVENT_THREAD_ARCHIVE_FINISHED, 0, md->ra.release());
 			return;
 		}
 
-		ArchiveDir* node = &ra->arch;
+		ArchiveDir* node = &md->ra->arch;
 		for (const char* path = archive_entry_pathname_utf8(entry); *path;) {
 			if (const char* next = strchr(path, '/')) {
 				string_view sname(path, next);
@@ -240,7 +252,7 @@ void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultArchive
 				path = next + 1;
 			} else {
 				if (Data data = readArchiveEntry(arch, entry); SDL_Surface* img = IMG_Load_RW(SDL_RWFromConstMem(data.data(), data.size()), SDL_TRUE)) {
-					node->files.emplace_front(path, std::min(uint(img->w), maxRes) * std::min(uint(img->h), maxRes) * 4);
+					node->files.emplace_front(path, std::min(uint(img->w), md->maxRes) * std::min(uint(img->h), md->maxRes) * 4);
 					SDL_FreeSurface(img);
 				}
 #if defined(CAN_MUPDF) || defined(CAN_POPPLER)
@@ -256,7 +268,7 @@ void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultArchive
 
 	if (rc == ARCHIVE_EOF) {
 		std::queue<ArchiveDir*> dirs;
-		dirs.push(&ra->arch);
+		dirs.push(&md->ra->arch);
 		do {
 			ArchiveDir* dit = dirs.front();
 			dit->finalize();
@@ -264,14 +276,14 @@ void FileOps::makeArchiveTreeThread(std::stop_token stoken, BrowserResultArchive
 				dirs.push(&it);
 			dirs.pop();
 		} while (!dirs.empty());
-	} else if (ra->arch.pc == ArchiveData::PassCode::ignore)
-		ra->rc = ResultCode::stop;
+	} else if (md->ra->arch.pc == ArchiveData::PassCode::ignore)
+		md->ra->rc = ResultCode::stop;
 	else {
-		ra->error = archive_error_string(arch);
-		ra->rc = ResultCode::error;
+		md->ra->error = archive_error_string(arch);
+		md->ra->rc = ResultCode::error;
 	}
 	archive_read_free(arch);
-	pushEvent(SDL_USEREVENT_THREAD_ARCHIVE_FINISHED, 0, ra);
+	pushEvent(SDL_USEREVENT_THREAD_ARCHIVE_FINISHED, 0, md->ra.release());
 }
 
 SDL_Surface* FileOps::loadArchivePicture(archive* arch, archive_entry* entry) {
@@ -294,7 +306,7 @@ Data FileOps::readArchiveEntry(archive* arch, archive_entry* entry) {
 }
 
 template <InvocableR<int, archive*, ArchiveData&> F>
-archive* FileOps::initArchive(ArchiveData& ad, string* error, F openArch) {
+archive* FileOps::initArchive(ArchiveData& ad, Cstring* error, F openArch) {
 	archive* arch = archive_read_new();
 	if (arch) {
 		archive_read_support_filter_all(arch);
@@ -359,6 +371,7 @@ int SDLCALL FileOps::sdlArchiveEntryClose(SDL_RWops* context) {
 	SDL_FreeRW(context);
 	return 0;
 }
+#endif
 
 template <Pointer T, class F>
 bool FileOps::checkStopDeleteProcess(CountedStopReq& csr, std::stop_token stoken, std::stack<T>& dirs, F dclose) {
@@ -400,26 +413,36 @@ FileOpsLocal::~FileOpsLocal() {
 #endif
 }
 
-vector<Cstring> FileOpsLocal::listDirectory(std::stop_token stoken, const string& path, bool files, bool dirs, bool hidden) {
-#ifdef _WIN32
-	if (path.empty())	// if in "root" directory, get drive letters and present them as directories
-		return dirs ? FileOpsLocal::listDrives() : vector<Cstring>();
-#endif
+BrowserResultList FileOpsLocal::listDirectory(std::stop_token stoken, const string& path, BrowserListOption opts) {
+	auto [files, dirs, hidden] = unpackListOptions(opts);
 	CountedStopReq csr(dirStopCheckInterval);
-	vector<Cstring> entries;
+	BrowserResultList rl;
 #ifdef _WIN32
-	WIN32_FIND_DATAW data;
-	if (HANDLE hFind = FindFirstFileW((sstow(path) / L"*").data(), &data); hFind != INVALID_HANDLE_VALUE) {
-		do {
-			if (hidden || !(data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
-				if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-					if (dirs && wcscmp(data.cFileName, L".") && wcscmp(data.cFileName, L".."))
-						entries.emplace_back(data.cFileName);
-				} else if (files)
-					entries.emplace_back(data.cFileName);
-			}
-		} while (!csr.stopReq(stoken) && FindNextFileW(hFind, &data));
-		FindClose(hFind);
+	if (!path.empty()) {
+		WIN32_FIND_DATAW data;
+		if (HANDLE hFind = FindFirstFileW((sstow(path) / L"*").data(), &data); hFind != INVALID_HANDLE_VALUE) {
+			do {
+				if (hidden || !(data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
+					if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+						if (dirs && notDotName(data.cFileName))
+							rl.dirs.emplace_back(data.cFileName);
+					} else if (files)
+						rl.files.emplace_back(data.cFileName);
+				}
+			} while (!csr.stopReq(stoken) && FindNextFileW(hFind, &data));
+			FindClose(hFind);
+			rng::sort(rl.files, Strcomp());
+			rng::sort(rl.dirs, Strcomp());
+		} else
+			rl.error = winErrorMessage(GetLastError());
+	} else if (dirs) {
+		if (DWORD drives = GetLogicalDrives()) {	// if in "root" directory, get drive letters and present them as directories
+			for (char i = 0; i < drivesMax; ++i)
+				if (drives & (1 << i))
+					rl.dirs.push_back(Cstring{ char('A' + i), ':', '\\' });
+		} else
+			rl.error = winErrorMessage(GetLastError());
+	}
 #else
 	if (DIR* directory = opendir(path.data())) {
 		struct stat ps;
@@ -427,102 +450,40 @@ vector<Cstring> FileOpsLocal::listDirectory(std::stop_token stoken, const string
 			if (hidden || entry->d_name[0] != '.')
 				switch (entry->d_type) {
 				case DT_DIR:
-					if (dirs && strcmp(entry->d_name, ".") && strcmp(entry->d_name, ".."))
-						entries.emplace_back(entry->d_name);
+					if (dirs && notDotName(entry->d_name))
+						rl.dirs.emplace_back(entry->d_name);
 					break;
 				case DT_REG:
 					if (files)
-						entries.emplace_back(entry->d_name);
+						rl.files.emplace_back(entry->d_name);
 					break;
 				case DT_LNK:
 					if (!stat((path / entry->d_name).data(), &ps))
 						switch (ps.st_mode & S_IFMT) {
 						case S_IFDIR:
 							if (dirs)
-								entries.emplace_back(entry->d_name);
+								rl.dirs.emplace_back(entry->d_name);
 							break;
 						case S_IFREG:
 							if (files)
-								entries.emplace_back(entry->d_name);
+								rl.files.emplace_back(entry->d_name);
 						}
 				}
 		closedir(directory);
+		rng::sort(rl.files, Strcomp());
+		rng::sort(rl.dirs, Strcomp());
+	} else
+		rl.error = strerror(errno);
 #endif
-		rng::sort(entries, Strcomp());
-	}
-	return entries;
+	return rl;
 }
 
-pair<vector<Cstring>, vector<Cstring>> FileOpsLocal::listDirectorySep(std::stop_token stoken, const string& path, bool hidden) {
-#ifdef _WIN32
-	if (path.empty())	// if in "root" directory, get drive letters and present them as directories
-		return pair(vector<Cstring>(), listDrives());
-#endif
-	CountedStopReq csr(dirStopCheckInterval);
-	vector<Cstring> files, dirs;
-#ifdef _WIN32
-	WIN32_FIND_DATAW data;
-	if (HANDLE hFind = FindFirstFileW((sstow(path) / L"*").data(), &data); hFind != INVALID_HANDLE_VALUE) {
-		do {
-			if (hidden || !(data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
-				if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-					if (notDotName(data.cFileName))
-						dirs.emplace_back(data.cFileName);
-				} else
-					files.emplace_back(data.cFileName);
-			}
-		} while (!csr.stopReq(stoken) && FindNextFileW(hFind, &data));
-		FindClose(hFind);
-#else
-	if (DIR* directory = opendir(path.data())) {
-		struct stat ps;
-		for (dirent* entry; !csr.stopReq(stoken) && (entry = readdir(directory));)
-			if (hidden || entry->d_name[0] != '.')
-				switch (entry->d_type) {
-				case DT_DIR:
-					if (notDotName(entry->d_name))
-						dirs.emplace_back(entry->d_name);
-					break;
-				case DT_REG:
-					files.emplace_back(entry->d_name);
-					break;
-				case DT_LNK:
-					if (!stat((path / entry->d_name).data(), &ps))
-						switch (ps.st_mode & S_IFMT) {
-						case S_IFDIR:
-							dirs.emplace_back(entry->d_name);
-							break;
-						case S_IFREG:
-							files.emplace_back(entry->d_name);
-						}
-				}
-		closedir(directory);
-#endif
-		rng::sort(files, Strcomp());
-		rng::sort(dirs, Strcomp());
-	}
-	return pair(std::move(files), std::move(dirs));
-}
-
-#ifdef _WIN32
-vector<Cstring> FileOpsLocal::listDrives() {
-	vector<Cstring> letters;
-	DWORD drives = GetLogicalDrives();
-	for (char i = 0; i < drivesMax; ++i)
-		if (drives & (1 << i))
-			letters.push_back(Cstring{ char('A' + i), ':', '\\' });
-	return letters;
-}
-#endif
-
-void FileOpsLocal::deleteEntryThread(std::stop_token stoken, string path) {
+void FileOpsLocal::deleteEntryThread(std::stop_token stoken, uptr<string> path) {
 	ResultCode rc = ResultCode::ok;
 #ifdef _WIN32
 	WIN32_FIND_DATAW data;
-	fs::path cpd = toPath(path);
-	if (DWORD attr = GetFileAttributesW(cpd.c_str()); attr == INVALID_FILE_ATTRIBUTES)
-		rc = ResultCode::error;
-	else if (!(attr & FILE_ATTRIBUTE_DIRECTORY)) {
+	fs::path cpd = toPath(*path);
+	if (DWORD attr = GetFileAttributesW(cpd.c_str()); attr == INVALID_FILE_ATTRIBUTES || !(attr & FILE_ATTRIBUTE_DIRECTORY)) {
 		if (!DeleteFileW(cpd.c_str()))
 			rc = ResultCode::error;
 	} else if (HANDLE hnd = FindFirstFileW((cpd / L"*").c_str(), &data); hnd != INVALID_HANDLE_VALUE) {
@@ -556,12 +517,10 @@ void FileOpsLocal::deleteEntryThread(std::stop_token stoken, string path) {
 	} else
 		rc = ResultCode::error;
 #else
-	if (struct stat ps; lstat(path.data(), &ps))
-		rc = ResultCode::error;
-	else if (!S_ISDIR(ps.st_mode)) {
-		if (unlink(path.data()))
+	if (struct stat ps; lstat(path->data(), &ps) || !S_ISDIR(ps.st_mode)) {
+		if (unlink(path->data()))
 			rc = ResultCode::error;
-	} else if (DIR* dir = opendir(path.data())) {
+	} else if (DIR* dir = opendir(path->data())) {
 		CountedStopReq csr(dirStopCheckInterval);
 		std::stack<DIR*> dirs;
 		dirs.push(dir);
@@ -572,19 +531,19 @@ void FileOpsLocal::deleteEntryThread(std::stop_token stoken, string path) {
 
 				if (entry->d_type == DT_DIR) {
 					if (notDotName(entry->d_name)) {
-						path = std::move(path) / entry->d_name;
-						if (dir = opendir(path.c_str()); dir)
+						*path = *path / entry->d_name;
+						if (dir = opendir(path->data()); dir)
 							dirs.push(dir);
 						else
-							path = parentPath(path);
+							*path = parentPath(*path);
 					}
 				} else
-					unlink((path / entry->d_name).c_str());
+					unlink((*path / entry->d_name).data());
 			}
 			closedir(dirs.top());
-			if (rmdir(path.c_str()))
+			if (rmdir(path->data()))
 				rc = ResultCode::error;
-			path = parentPath(path);
+			*path = parentPath(*path);
 			dirs.pop();
 		} while (!dirs.empty());
 	} else
@@ -679,7 +638,8 @@ bool FileOpsLocal::hasModeFlags(const char* path, mode_t flags) noexcept {
 }
 #endif
 
-archive* FileOpsLocal::openArchive(ArchiveData& ad, string* error) {
+#ifdef WITH_ARCHIVE
+archive* FileOpsLocal::openArchive(ArchiveData& ad, Cstring* error) {
 	return initArchive(ad, error, [](archive* a, ArchiveData& d) -> int {
 #ifdef _WIN32
 		return archive_read_open_filename_w(a, sstow(d.name.data()).data(), archiveReadBlockSize);
@@ -688,6 +648,7 @@ archive* FileOpsLocal::openArchive(ArchiveData& ad, string* error) {
 #endif
 	});
 }
+#endif
 
 SDL_RWops* FileOpsLocal::makeRWops(const string& path) {
 	return SDL_RWFromFile(path.data(), "rb");
@@ -751,7 +712,7 @@ bool FileOpsLocal::pollWatch(vector<FileChange>& files) {
 				return true;
 			}
 
-			for (auto event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(ebuf);; event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(reinterpret_cast<byte_t*>(event) + event->NextEntryOffset)) {
+			for (auto event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(reinterpret_cast<void*>(ebuf));; event = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(reinterpret_cast<void*>(reinterpret_cast<byte_t*>(event) + event->NextEntryOffset))) {
 				if (wstring_view name(event->FileName, event->FileNameLength / sizeof(wchar_t)); rng::none_of(name, [](wchar_t ch) -> bool { return isDsep(ch); })) {
 					switch (event->Action) {
 					case FILE_ACTION_ADDED: case FILE_ACTION_RENAMED_NEW_NAME:
@@ -828,7 +789,8 @@ bool FileOpsLocal::equals(const RemoteLocation& rl) const {
 // FILE OPS REMOTE
 
 #if defined(CAN_SMB) || defined(CAN_SFTP)
-archive* FileOpsRemote::openArchive(ArchiveData& ad, string* error) {
+#ifdef WITH_ARCHIVE
+archive* FileOpsRemote::openArchive(ArchiveData& ad, Cstring* error) {
 	return initArchive(ad, error, [this](archive* a, ArchiveData& d) -> int {
 		if (d.dref)
 			return archive_read_open_memory(a, d.dref->data(), d.dref->size());
@@ -836,6 +798,7 @@ archive* FileOpsRemote::openArchive(ArchiveData& ad, string* error) {
 		return archive_read_open_memory(a, d.data.data(), d.data.size());
 	});
 }
+#endif
 
 string FileOpsRemote::prefix() const {
 	return std::format("{}://{}", protocolNames[eint(Protocol::smb)], server);
@@ -908,89 +871,51 @@ void FileOpsSmb::cleanup() noexcept {
 	smbcFreeContext(ctx, 0);
 }
 
-vector<Cstring> FileOpsSmb::listDirectory(std::stop_token stoken, const string& path, bool files, bool dirs, bool hidden) {
+BrowserResultList FileOpsSmb::listDirectory(std::stop_token stoken, const string& path, BrowserListOption opts) {
 	std::lock_guard lockg(mlock);
+	auto [files, dirs, hidden] = unpackListOptions(opts);
 	CountedStopReq csr(dirStopCheckInterval);
-	vector<Cstring> entries;
+	BrowserResultList rl;
 	if (SMBCFILE* dir = sopendir(ctx, path.data())) {
 		struct stat ps;
-		for (smbc_dirent* it; !csr.stopReq(stoken) && (it = sreaddir(ctx, dir));) {
-			if (hidden || it->name[0] != '.') {
-				string_view name(it->name, it->namelen);
+		for (smbc_dirent* it; !csr.stopReq(stoken) && (it = sreaddir(ctx, dir));)
+			if (hidden || it->name[0] != '.')
 				switch (it->smbc_type) {
 				case SMBC_DIR:
-					if (dirs && notDotName(it->name))	// TODO: can it even be a dot name and is it null terminated?
-						entries.emplace_back(name);
+					if (dirs && notDotName(it->name))
+						rl.dirs.emplace_back(it->name, it->namelen);
 					break;
 				case SMBC_FILE:
 					if (files)
-						entries.emplace_back(name);
+						rl.files.emplace_back(it->name, it->namelen);
 					break;
 				case SMBC_LINK:
-					if (!sstat(ctx, (path / name).data(), &ps))
-						switch (ps.st_mode & S_IFMT) {	// TODO: is this right?
+					if (!sstat(ctx, (path / string_view(it->name, it->namelen)).data(), &ps))
+						switch (ps.st_mode & S_IFMT) {
 						case S_IFDIR:
 							if (dirs)
-								entries.emplace_back(name);
+								rl.dirs.emplace_back(it->name, it->namelen);
 							break;
 						case S_IFREG:
 							if (files)
-								entries.emplace_back(name);
+								rl.files.emplace_back(it->name, it->namelen);
 						}
 				}
-			}
-		}
 		sclosedir(ctx, dir);
-		rng::sort(entries, Strcomp());
-	}
-	return entries;
+		rng::sort(rl.files, Strcomp());
+		rng::sort(rl.dirs, Strcomp());
+	} else
+		rl.error = strerror(errno);
+	return rl;
 }
 
-pair<vector<Cstring>, vector<Cstring>> FileOpsSmb::listDirectorySep(std::stop_token stoken, const string& path, bool hidden) {
-	std::lock_guard lockg(mlock);
-	CountedStopReq csr(dirStopCheckInterval);
-	vector<Cstring> files, dirs;
-	if (SMBCFILE* dir = sopendir(ctx, path.data())) {
-		struct stat ps;
-		for (smbc_dirent* it; !csr.stopReq(stoken) && (it = sreaddir(ctx, dir));) {
-			if (hidden || it->name[0] != '.') {
-				string_view name(it->name, it->namelen);
-				switch (it->smbc_type) {
-				case SMBC_DIR:
-					if (notDotName(it->name))	// TODO: can name be dots and is it null terminated?
-						dirs.emplace_back(name);
-					break;
-				case SMBC_FILE:
-					files.emplace_back(name);
-					break;
-				case SMBC_LINK:
-					if (!sstat(ctx, (path / name).data(), &ps))
-						switch (ps.st_mode & S_IFMT) {	// TODO: is this right?
-						case S_IFDIR:
-							dirs.emplace_back(name);
-							break;
-						case S_IFREG:
-							files.emplace_back(name);
-						}
-				}
-			}
-		}
-		sclosedir(ctx, dir);
-		rng::sort(files, Strcomp());
-		rng::sort(dirs, Strcomp());
-	}
-	return pair(std::move(files), std::move(dirs));
-}
-
-void FileOpsSmb::deleteEntryThread(std::stop_token stoken, string path) {
+void FileOpsSmb::deleteEntryThread(std::stop_token stoken, uptr<string> path) {
 	std::lock_guard lockg(mlock);
 	ResultCode rc = ResultCode::ok;
-	if (struct stat ps; sstat(ctx, path.data(), &ps))
-		rc = ResultCode::error;
-	else if (!S_ISDIR(ps.st_mode)) {
-		if (sunlink(ctx, path.data()))
+	if (struct stat ps; sstat(ctx, path->data(), &ps) || !S_ISDIR(ps.st_mode)) {
+		if (sunlink(ctx, path->data()))
 			rc = ResultCode::error;
-	} else if (SMBCFILE* dir = sopendir(ctx, path.data())) {
+	} else if (SMBCFILE* dir = sopendir(ctx, path->data())) {
 		CountedStopReq csr(dirStopCheckInterval);
 		std::stack<SMBCFILE*> dirs;
 		dirs.push(dir);
@@ -999,22 +924,21 @@ void FileOpsSmb::deleteEntryThread(std::stop_token stoken, string path) {
 				if (checkStopDeleteProcess(csr, stoken, dirs, [this](SMBCFILE* dh) { sclosedir(ctx, dh); }))
 					return;
 
-				string_view name(it->name, it->namelen);
 				if (it->smbc_type == SMBC_DIR) {
 					if (notDotName(it->name)) {
-						path = std::move(path) / name;
-						if (dir = sopendir(ctx, path.data()); dir)
+						*path = *path / string_view(it->name, it->namelen);
+						if (dir = sopendir(ctx, path->data()); dir)
 							dirs.push(dir);
 						else
-							path = parentPath(path);
+							*path = parentPath(*path);
 					}
 				} else
-					sunlink(ctx, (path / name).data());
+					sunlink(ctx, (*path / string_view(it->name, it->namelen)).data());
 			}
 			sclosedir(ctx, dirs.top());
-			if (srmdir(ctx, path.data()))
+			if (srmdir(ctx, path->data()))
 				rc = ResultCode::error;
-			path = parentPath(path);
+			*path = parentPath(*path);
 			dirs.pop();
 		} while (!dirs.empty());
 	} else
@@ -1029,7 +953,7 @@ bool FileOpsSmb::renameEntry(const string& oldPath, const string& newPath) {
 Data FileOpsSmb::readFile(const string& path) {
 	std::lock_guard lockg(mlock);
 	Data data;
-	if (SMBCFILE* fh = sopen(ctx, path.data(), O_RDONLY, 0)) {	// TODO: check if this works if there's no open handle to the directory/share
+	if (SMBCFILE* fh = sopen(ctx, path.data(), O_RDONLY, 0)) {
 		if (struct stat ps; !sfstat(ctx, fh, &ps)) {
 			data.resize(ps.st_size);
 			if (ssize_t len = sread(ctx, fh, data.data(), data.size()); len < ssize_t(data.size()))
@@ -1057,7 +981,7 @@ bool FileOpsSmb::isDirectory(const string& path) {
 bool FileOpsSmb::hasModeFlags(const char* path, mode_t mdes) {
 	std::lock_guard lockg(mlock);
 	struct stat ps;
-	return !sstat(ctx, path, &ps) && (ps.st_mode & mdes);	// TODO: is this right with S_IFDIR and S_IFREG?
+	return !sstat(ctx, path, &ps) && (ps.st_mode & mdes);
 }
 
 SDL_RWops* FileOpsSmb::makeRWops(const string& path) {
@@ -1118,7 +1042,7 @@ void FileOpsSmb::setWatch(const string& path) {
 
 	struct stat ps;
 	if (!sstat(ctx, path.data(), &ps) && S_ISDIR(ps.st_mode)) {
-		wndir = sopendir(ctx, string(path).data());
+		wndir = sopendir(ctx, path.data());
 		flags = SMBC_NOTIFY_CHANGE_FILE_NAME | SMBC_NOTIFY_CHANGE_DIR_NAME;
 		filter.clear();
 		wpdir = path;
@@ -1212,10 +1136,10 @@ FileOpsSftp::FileOpsSftp(const RemoteLocation& rl, const vector<string>& passwor
 		for (addrinfo* it = addr; it; it = it->ai_next) {
 			if (sock = socket(it->ai_family, it->ai_socktype, it->ai_protocol); sock == -1)
 				continue;
-			if (connect(sock, it->ai_addr, it->ai_addrlen)) {
-				close(sock);
-				sock = -1;
-			}
+			if (!connect(sock, it->ai_addr, it->ai_addrlen))
+				break;
+			close(sock);
+			sock = -1;
 		}
 		freeaddrinfo(addr);
 		if (sock == -1)
@@ -1266,114 +1190,79 @@ void FileOpsSftp::cleanup() noexcept {
 	sshExit();
 }
 
-vector<Cstring> FileOpsSftp::listDirectory(std::stop_token stoken, const string& path, bool files, bool dirs, bool hidden) {
+BrowserResultList FileOpsSftp::listDirectory(std::stop_token stoken, const string& path, BrowserListOption opts) {
 	std::lock_guard lockg(mlock);
+	auto [files, dirs, hidden] = unpackListOptions(opts);
 	CountedStopReq csr(dirStopCheckInterval);
-	vector<Cstring> entries;
+	BrowserResultList rl;
 	if (LIBSSH2_SFTP_HANDLE* dir = sftpOpenEx(sftp, path.data(), path.length(), 0, 0, LIBSSH2_SFTP_OPENDIR)) {
-		char name[2048], longentry[2048];	// TODO: no need for longentry
+		char nbuf[2048];
 		LIBSSH2_SFTP_ATTRIBUTES attr;
-		while (!csr.stopReq(stoken) && sftpReaddirEx(dir, name, sizeof(name), longentry, sizeof(longentry), &attr) > 0) {
-			if (hidden || name[0] != '.')
-				switch (attr.flags & S_IFMT) {
-				case S_IFDIR:
-					if (dirs && notDotName(name))	// TODO: can this happen?
-						entries.emplace_back(name);
+		for (int nlen; !csr.stopReq(stoken) && (nlen = sftpReaddirEx(dir, nbuf, sizeof(nbuf), nullptr, 0, &attr)) > 0;)
+			if ((hidden || nbuf[0] != '.') && (attr.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS))
+				switch (attr.permissions & LIBSSH2_SFTP_S_IFMT) {
+				case LIBSSH2_SFTP_S_IFDIR:
+					if (dirs && notDotName(nbuf))
+						rl.dirs.emplace_back(nbuf, nlen);
 					break;
-				case S_IFREG:
+				case LIBSSH2_SFTP_S_IFREG:
 					if (files)
-						entries.emplace_back(name);
+						rl.files.emplace_back(nbuf, nlen);
 					break;
-				case S_IFLNK:
-					if (string fpath = string(path) / name; !sftpStatEx(sftp, fpath.data(), fpath.length(), LIBSSH2_SFTP_STAT, &attr))
-						switch (attr.flags & S_IFMT) {
-						case S_IFDIR:
+				case LIBSSH2_SFTP_S_IFLNK:
+					if (string fpath = path / string_view(nbuf, nlen); !sftpStatEx(sftp, fpath.data(), fpath.length(), LIBSSH2_SFTP_STAT, &attr) && (attr.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS))
+						switch (attr.permissions & LIBSSH2_SFTP_S_IFMT) {
+						case LIBSSH2_SFTP_S_IFDIR:
 							if (dirs)
-								entries.emplace_back(name);
+								rl.dirs.emplace_back(nbuf, nlen);
 							break;
-						case S_IFREG:
+						case LIBSSH2_SFTP_S_IFREG:
 							if (files)
-								entries.emplace_back(name);
+								rl.files.emplace_back(nbuf, nlen);
 						}
 				}
-		}
 		sftpClose(dir);
-		rng::sort(entries, Strcomp());
-	}
-	return entries;
+		rng::sort(rl.files, Strcomp());
+		rng::sort(rl.dirs, Strcomp());
+	} else
+		rl.error = lastError();
+	return rl;
 }
 
-pair<vector<Cstring>, vector<Cstring>> FileOpsSftp::listDirectorySep(std::stop_token stoken, const string& path, bool hidden) {
-	std::lock_guard lockg(mlock);
-	CountedStopReq csr(dirStopCheckInterval);
-	vector<Cstring> files, dirs;
-	if (LIBSSH2_SFTP_HANDLE* dir = sftpOpenEx(sftp, path.data(), path.length(), 0, 0, LIBSSH2_SFTP_OPENDIR)) {
-		char name[2048], longentry[2048];	// TODO: no need for longentry
-		LIBSSH2_SFTP_ATTRIBUTES attr;
-		while (!csr.stopReq(stoken) && sftpReaddirEx(dir, name, sizeof(name), longentry, sizeof(longentry), &attr) > 0) {
-			if (hidden || name[0] != '.')
-				switch (attr.flags & S_IFMT) {
-				case S_IFDIR:
-					if (notDotName(name))	// TODO: can this happen?
-						dirs.emplace_back(name);
-					break;
-				case S_IFREG:
-					files.emplace_back(name);
-					break;
-				case S_IFLNK:
-					if (string fpath = string(path) / name; !sftpStatEx(sftp, fpath.data(), fpath.length(), LIBSSH2_SFTP_STAT, &attr))
-						switch (attr.flags & S_IFMT) {
-						case S_IFDIR:
-							dirs.emplace_back(name);
-							break;
-						case S_IFREG:
-							files.emplace_back(name);
-						}
-				}
-		}
-		sftpClose(dir);
-		rng::sort(files, Strcomp());
-		rng::sort(dirs, Strcomp());
-	}
-	return pair(std::move(files), std::move(dirs));
-}
-
-void FileOpsSftp::deleteEntryThread(std::stop_token stoken, string path) {
+void FileOpsSftp::deleteEntryThread(std::stop_token stoken, uptr<string> path) {
 	std::lock_guard lockg(mlock);
 	ResultCode rc = ResultCode::ok;
 	LIBSSH2_SFTP_ATTRIBUTES attr;
-	if (sftpStatEx(sftp, path.data(), path.length(), LIBSSH2_SFTP_LSTAT, &attr))
-		rc = ResultCode::error;
-	else if (!S_ISDIR(attr.flags)) {
-		if (sftpUnlinkEx(sftp, path.data(), path.length()))
+	if (sftpStatEx(sftp, path->data(), path->length(), LIBSSH2_SFTP_LSTAT, &attr) || !(attr.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) || !LIBSSH2_SFTP_S_ISDIR(attr.permissions)) {
+		if (sftpUnlinkEx(sftp, path->data(), path->length()))
 			rc = ResultCode::error;
-	} else if (LIBSSH2_SFTP_HANDLE* dir = sftpOpenEx(sftp, path.data(), path.length(), 0, 0, LIBSSH2_SFTP_OPENDIR)) {
+	} else if (LIBSSH2_SFTP_HANDLE* dir = sftpOpenEx(sftp, path->data(), path->length(), 0, 0, LIBSSH2_SFTP_OPENDIR)) {
 		CountedStopReq csr(dirStopCheckInterval);
 		std::stack<LIBSSH2_SFTP_HANDLE*> dirs;
 		dirs.push(dir);
-		char name[2048], longentry[2048];	// TODO: no need for longentry
+		char nbuf[2048];
 		do {
-			while (sftpReaddirEx(dirs.top(), name, sizeof(name), longentry, sizeof(longentry), &attr) > 0) {
+			for (int nlen; (nlen = sftpReaddirEx(dirs.top(), nbuf, sizeof(nbuf), nullptr, 0, &attr)) > 0;) {
 				if (checkStopDeleteProcess(csr, stoken, dirs, sftpClose))
 					return;
 
-				if (S_ISDIR(attr.flags)) {
-					if (notDotName(name)) {
-						path = std::move(path) / name;
-						if (dir = sftpOpenEx(sftp, path.data(), path.length(), 0, 0, LIBSSH2_SFTP_OPENDIR); dir)
+				if ((attr.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && LIBSSH2_SFTP_S_ISDIR(attr.permissions)) {
+					if (notDotName(nbuf)) {
+						*path = *path / string_view(nbuf, nlen);
+						if (dir = sftpOpenEx(sftp, path->data(), path->length(), 0, 0, LIBSSH2_SFTP_OPENDIR); dir)
 							dirs.push(dir);
 						else
-							path = parentPath(path);
+							*path = parentPath(*path);
 					}
 				} else {
-					string file = path / name;
+					string file = *path / string_view(nbuf, nlen);
 					sftpUnlinkEx(sftp, file.data(), file.length());
 				}
 			}
 			sftpClose(dirs.top());
-			if (sftpRmdirEx(sftp, path.data(), path.length()))
+			if (sftpRmdirEx(sftp, path->data(), path->length()))
 				rc = ResultCode::error;
-			path = parentPath(path);
+			*path = parentPath(*path);
 			dirs.pop();
 		} while (!dirs.empty());
 	} else
@@ -1389,7 +1278,7 @@ Data FileOpsSftp::readFile(const string& path) {
 	std::lock_guard lockg(mlock);
 	Data data;
 	if (LIBSSH2_SFTP_HANDLE* fh = sftpOpenEx(sftp, path.data(), path.length(), LIBSSH2_FXF_READ, 0, LIBSSH2_SFTP_OPENFILE)) {
-		if (LIBSSH2_SFTP_ATTRIBUTES attr; !sftpFstatEx(fh, &attr, 0)) {
+		if (LIBSSH2_SFTP_ATTRIBUTES attr; !sftpFstatEx(fh, &attr, 0) && (attr.flags & LIBSSH2_SFTP_ATTR_SIZE)) {
 			data.resize(attr.filesize);
 			if (ssize_t len = sftpRead(fh, reinterpret_cast<char*>(data.data()), data.size()); len < ssize_t(data.size()))
 				data.resize(std::max(len, ssize_t(0)));
@@ -1402,21 +1291,28 @@ Data FileOpsSftp::readFile(const string& path) {
 fs::file_type FileOpsSftp::fileType(const string& path) {
 	std::lock_guard lockg(mlock);
 	LIBSSH2_SFTP_ATTRIBUTES attr;
-	return !sftpStatEx(sftp, path.data(), path.length(), LIBSSH2_SFTP_STAT, &attr) ? modeToType(attr.flags) : fs::file_type::not_found;
+	return !sftpStatEx(sftp, path.data(), path.length(), LIBSSH2_SFTP_STAT, &attr) && (attr.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) ? modeToType(attr.permissions) : fs::file_type::not_found;
 }
 
 bool FileOpsSftp::isRegular(const string& path) {
-	return hasAttributeFlags(path, S_IFREG);
+	return hasAttributeFlags(path, LIBSSH2_SFTP_S_IFREG);
 }
 
 bool FileOpsSftp::isDirectory(const string& path) {
-	return hasAttributeFlags(path, S_IFDIR);
+	return hasAttributeFlags(path, LIBSSH2_SFTP_S_IFDIR);
 }
 
 bool FileOpsSftp::hasAttributeFlags(string_view path, ulong flags) {
 	std::lock_guard lockg(mlock);
 	LIBSSH2_SFTP_ATTRIBUTES attr;
-	return !sftpStatEx(sftp, path.data(), path.length(), LIBSSH2_SFTP_STAT, &attr) && (attr.flags & flags);
+	return !sftpStatEx(sftp, path.data(), path.length(), LIBSSH2_SFTP_STAT, &attr) && (attr.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) && (attr.permissions & flags);
+}
+
+Cstring FileOpsSftp::lastError() const {
+	char* str;
+	int len;
+	sshSessionLastError(session, &str, &len, 0);
+	return Cstring(str, len);
 }
 
 SDL_RWops* FileOpsSftp::makeRWops(const string& path) {
@@ -1440,7 +1336,7 @@ SDL_RWops* FileOpsSftp::makeRWops(const string& path) {
 Sint64 SDLCALL FileOpsSftp::sdlSize(SDL_RWops* context) {
 	std::lock_guard lockg(static_cast<FileOpsSftp*>(context->hidden.unknown.data1)->mlock);
 	LIBSSH2_SFTP_ATTRIBUTES attr;
-	return !sftpFstatEx(static_cast<LIBSSH2_SFTP_HANDLE*>(context->hidden.unknown.data2), &attr, 0) ? attr.filesize : -1;
+	return !sftpFstatEx(static_cast<LIBSSH2_SFTP_HANDLE*>(context->hidden.unknown.data2), &attr, 0) && (attr.flags & LIBSSH2_SFTP_ATTR_SIZE) ? attr.filesize : -1;
 }
 
 Sint64 SDLCALL FileOpsSftp::sdlSeek(SDL_RWops* context, Sint64 offset, int whence) {
@@ -1456,7 +1352,7 @@ Sint64 SDLCALL FileOpsSftp::sdlSeek(SDL_RWops* context, Sint64 offset, int whenc
 		break;
 	case RW_SEEK_END: {
 		LIBSSH2_SFTP_ATTRIBUTES attr;
-		if (sftpFstatEx(fh, &attr, 0))
+		if (sftpFstatEx(fh, &attr, 0) || !(attr.flags & LIBSSH2_SFTP_ATTR_SIZE))
 			return -1;
 		pos = attr.filesize + whence;
 		break; }

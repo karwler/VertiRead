@@ -49,19 +49,29 @@ private:
 // file operations interface
 class FileOps {
 public:
+#ifdef WITH_ARCHIVE
+	struct MakeArchiveTreeData {
+		uptr<BrowserResultArchive> ra;
+		uint maxRes;
+
+		MakeArchiveTreeData(uptr<BrowserResultArchive>&& res, uint mres) noexcept;
+	};
+#endif
+
 	virtual ~FileOps() = default;
 
 	static FileOps* instantiate(const RemoteLocation& rl, vector<string>&& passwords);	// loads smbclient or libssh2 if the protocol matches SMB or SFTP
 
-	virtual vector<Cstring> listDirectory(std::stop_token stoken, const string& path, bool files = true, bool dirs = true, bool hidden = true) = 0;
-	virtual pair<vector<Cstring>, vector<Cstring>> listDirectorySep(std::stop_token stoken, const string& path, bool hidden) = 0;	// first is files, second is directories
-	virtual void deleteEntryThread(std::stop_token stoken, string path) = 0;	// TODO: test!
+	virtual BrowserResultList listDirectory(std::stop_token stoken, const string& path, BrowserListOption opts) = 0;
+	virtual void deleteEntryThread(std::stop_token stoken, uptr<string> path) = 0;	// TODO: test!
 	virtual bool renameEntry(const string& oldPath, const string& newPath) = 0;
 	virtual Data readFile(const string& path) = 0;
 	virtual fs::file_type fileType(const string& path) = 0;
 	virtual bool isRegular(const string& path) = 0;
 	virtual bool isDirectory(const string& path) = 0;
-	virtual archive* openArchive(ArchiveData& ad, string* error = nullptr) = 0;
+#ifdef WITH_ARCHIVE
+	virtual archive* openArchive(ArchiveData& ad, Cstring* error = nullptr) = 0;
+#endif
 	virtual void setWatch(const string& path) = 0;
 	virtual void unsetWatch() = 0;
 	virtual bool pollWatch(vector<FileChange>& files) = 0;	// returns true if the watched file/directory has been renamed or deleted
@@ -73,12 +83,16 @@ public:
 	bool isPdf(const string& path);	// loads Poppler if the file is has a PDF signature
 	bool isArchive(ArchiveData& ad);
 	SDL_Surface* loadPicture(const string& path);
-	void makeArchiveTreeThread(std::stop_token stoken, BrowserResultArchive* ra, uint maxRes);
+#ifdef WITH_ARCHIVE
+	void makeArchiveTreeThread(std::stop_token stoken, uptr<MakeArchiveTreeData> md);
 	static Data readArchiveEntry(archive* arch, archive_entry* entry);
 	static SDL_Surface* loadArchivePicture(archive* arch, archive_entry* entry);
+#endif
 #if defined(CAN_MUPDF) || defined(CAN_POPPLER)
-	PdfFile loadPdf(const string& path, string* error = nullptr);	// loads Poppler if necessary
-	static PdfFile loadArchivePdf(archive* arch, archive_entry* entry, string* error = nullptr);
+	PdfFile loadPdf(const string& path, Cstring* error = nullptr);	// loads Poppler if necessary
+#ifdef WITH_ARCHIVE
+	static PdfFile loadArchivePdf(archive* arch, archive_entry* entry, Cstring* error = nullptr);
+#endif
 #endif
 
 protected:
@@ -87,9 +101,11 @@ protected:
 #if !defined(_WIN32) || defined(CAN_SMB) || defined(CAN_SFTP)
 	static fs::file_type modeToType(mode_t mode) noexcept;
 #endif
+	static tuple<bool, bool, bool> unpackListOptions(BrowserListOption opts);
 	template <Integer C> static bool notDotName(const C* name);
 	template <Pointer T, class F> static bool checkStopDeleteProcess(CountedStopReq& csr, std::stop_token stoken, std::stack<T>& dirs, F dclose);
-	template <InvocableR<int, archive*, ArchiveData&> F> static archive* initArchive(ArchiveData& ad, string* error, F openArch);
+#ifdef WITH_ARCHIVE
+	template <InvocableR<int, archive*, ArchiveData&> F> static archive* initArchive(ArchiveData& ad, Cstring* error, F openArch);
 private:
 	static const char* requestArchivePassphrase(archive* arch, void* data);
 	static SDL_RWops* makeArchiveEntryRWops(archive* arch, archive_entry* entry) noexcept;
@@ -98,6 +114,7 @@ private:
 	static size_t SDLCALL sdlArchiveEntryRead(SDL_RWops* context, void* ptr, size_t size, size_t maxnum);
 	static size_t SDLCALL sdlArchiveEntryWrite(SDL_RWops* context, const void* ptr, size_t size, size_t num);
 	static int SDLCALL sdlArchiveEntryClose(SDL_RWops* context);
+#endif
 };
 
 inline bool FileOps::isPdf(const string& path) {
@@ -113,14 +130,20 @@ inline SDL_Surface* FileOps::loadPicture(const string& path) {
 }
 
 #if defined(CAN_MUPDF) || defined(CAN_POPPLER)
-inline PdfFile FileOps::loadPdf(const string& path, string* error) {
+inline PdfFile FileOps::loadPdf(const string& path, Cstring* error) {
 	return PdfFile(makeRWops(path), error);
 }
 
-inline PdfFile FileOps::loadArchivePdf(archive* arch, archive_entry* entry, string* error) {
+#ifdef WITH_ARCHIVE
+inline PdfFile FileOps::loadArchivePdf(archive* arch, archive_entry* entry, Cstring* error) {
 	return PdfFile(makeArchiveEntryRWops(arch, entry), error);
 }
 #endif
+#endif
+
+inline tuple<bool, bool, bool> FileOps::unpackListOptions(BrowserListOption opts) {
+	return tuple(opts & BLO_FILES, opts & BLO_DIRS, opts & BLO_HIDDEN);
+}
 
 template <Integer C>
 bool FileOps::notDotName(const C* name) {
@@ -153,15 +176,16 @@ public:
 	FileOpsLocal();
 	~FileOpsLocal() override;
 
-	vector<Cstring> listDirectory(std::stop_token stoken, const string& path, bool files = true, bool dirs = true, bool hidden = true) override;
-	pair<vector<Cstring>, vector<Cstring>> listDirectorySep(std::stop_token stoken, const string& path, bool hidden) override;
-	void deleteEntryThread(std::stop_token stoken, string path) override;
+	BrowserResultList listDirectory(std::stop_token stoken, const string& path, BrowserListOption opts) override;
+	void deleteEntryThread(std::stop_token stoken, uptr<string> path) override;
 	bool renameEntry(const string& oldPath, const string& newPath) override;
 	Data readFile(const string& path) override;
 	fs::file_type fileType(const string& path) override;
 	bool isRegular(const string& path) override;
 	bool isDirectory(const string& path) override;
-	archive* openArchive(ArchiveData& ad, string* error = nullptr) override;
+#ifdef WITH_ARCHIVE
+	archive* openArchive(ArchiveData& ad, Cstring* error = nullptr) override;
+#endif
 	void setWatch(const string& path) override;
 	void unsetWatch() override;
 	bool pollWatch(vector<FileChange>& files) override;
@@ -177,7 +201,6 @@ protected:
 private:
 #ifdef _WIN32
 	static bool isDirectory(const wchar_t* path) noexcept;
-	static vector<Cstring> listDrives();
 #else
 	static bool hasModeFlags(const char* path, mode_t flags) noexcept;
 #endif
@@ -196,7 +219,9 @@ public:
 	FileOpsRemote(string&& srv);
 
 	string prefix() const override;
-	archive* openArchive(ArchiveData& ad, string* error = nullptr) override;
+#ifdef WITH_ARCHIVE
+	archive* openArchive(ArchiveData& ad, Cstring* error = nullptr) override;
+#endif
 };
 
 inline FileOpsRemote::FileOpsRemote(string&& srv) :
@@ -235,9 +260,8 @@ public:
 	FileOpsSmb(const RemoteLocation& rl, vector<string>&& passwords);
 	~FileOpsSmb() override;
 
-	vector<Cstring> listDirectory(std::stop_token stoken, const string& path, bool files = true, bool dirs = true, bool hidden = true) override;
-	pair<vector<Cstring>, vector<Cstring>> listDirectorySep(std::stop_token stoken, const string& path, bool hidden) override;
-	void deleteEntryThread(std::stop_token stoken, string path) override;
+	BrowserResultList listDirectory(std::stop_token stoken, const string& path, BrowserListOption opts) override;
+	void deleteEntryThread(std::stop_token stoken, uptr<string> path) override;
 	bool renameEntry(const string& oldPath, const string& newPath) override;
 	Data readFile(const string& path) override;
 	fs::file_type fileType(const string& path) override;
@@ -278,9 +302,8 @@ public:
 	FileOpsSftp(const RemoteLocation& rl, const vector<string>& passwords);
 	~FileOpsSftp() override;
 
-	vector<Cstring> listDirectory(std::stop_token stoken, const string& path, bool files = true, bool dirs = true, bool hidden = true) override;
-	pair<vector<Cstring>, vector<Cstring>> listDirectorySep(std::stop_token stoken, const string& path, bool hidden) override;
-	void deleteEntryThread(std::stop_token stoken, string path) override;
+	BrowserResultList listDirectory(std::stop_token stoken, const string& path, BrowserListOption opts) override;
+	void deleteEntryThread(std::stop_token stoken, uptr<string> path) override;
 	bool renameEntry(const string& oldPath, const string& newPath) override;
 	Data readFile(const string& path) override;
 	fs::file_type fileType(const string& path) override;
@@ -299,6 +322,7 @@ private:
 	void authenticate(const vector<string>& passwords);
 	void cleanup() noexcept;
 	bool hasAttributeFlags(string_view path, ulong flags);
+	Cstring lastError() const;
 
 	static Sint64 SDLCALL sdlSize(SDL_RWops* context);
 	static Sint64 SDLCALL sdlSeek(SDL_RWops* context, Sint64 offset, int whence);

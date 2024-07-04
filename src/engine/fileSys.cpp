@@ -272,6 +272,18 @@ string CsvText::makeLine(const vector<string>& fields) {
 
 }
 
+FileSys::ListFontFamiliesData::ListFontFamiliesData(fs::path&& dir, string&& selected, char32_t from, char32_t to) noexcept :
+	cdir(std::move(dir)),
+	desired(std::move(selected)),
+	first(from),
+	last(to)
+{}
+
+FileSys::MoveContentData::MoveContentData(fs::path&& sdir, fs::path&& ddir) noexcept :
+	src(std::move(sdir)),
+	dst(std::move(ddir))
+{}
+
 FileSys::FileSys(const uset<string>& cmdFlags) {
 	// set up file/directory path constants
 	if (char* path = SDL_GetBasePath()) {
@@ -306,7 +318,7 @@ FileSys::FileSys(const uset<string>& cmdFlags) {
 
 	if (!cmdFlags.contains(Settings::flagLog)) {
 		if (logFile = SDL_RWFromFile(fromPath(dirSets / std::format("log_{}.txt", tmToDateStr(currentDateTime()))).data(), "wb"); logFile)
-			SDL_LogSetOutputFunction(logWrite, &logFile);
+			SDL_LogSetOutputFunction(logWrite, logFile);
 		else
 			logError("Failed to create log file: ", SDL_GetError());
 	}
@@ -389,7 +401,7 @@ vector<string> FileSys::getLastPage(string_view book) const {
 				if (!paths.empty())
 					return paths;
 			} else
-				while ((cc = csv.readField<false>()) == CsvText::Code::field);
+				while (csv.readField<false>() == CsvText::Code::field);
 		}
 	return vector<string>();
 }
@@ -477,7 +489,7 @@ Settings* FileSys::loadSettings(const uset<string>* cmdFlags) const {
 			break;
 		case prpKeyVal:
 			if (strciequal(il.prp, iniKeywordDisplay))
-				sets->displays[toNum<int>(il.key)] = toVec<ivec4>(il.val);
+				sets->displays.emplace_back(toVec<ivec4>(il.val), toNum<int>(il.key));
 		}
 	}
 	sets->unionDisplays();
@@ -496,8 +508,8 @@ void FileSys::saveSettings(const Settings* sets) const {
 
 	IniLine::writeVal(ofs, iniKeywordMaximized, toStr(sets->maximized));
 	IniLine::writeVal(ofs, iniKeywordScreen, Settings::screenModeNames[eint(sets->screen)]);
-	for (const auto& [id, rect] : sets->displays)
-		IniLine::writeKeyVal(ofs, iniKeywordDisplay, id, rect.x, ' ', rect.y, ' ', rect.w, ' ', rect.h);
+	for (const Settings::Display& it : sets->displays)
+		IniLine::writeKeyVal(ofs, iniKeywordDisplay, it.did, it.rect.x, ' ', it.rect.y, ' ', it.rect.w, ' ', it.rect.h);
 	IniLine::writeVal(ofs, iniKeywordResolution, sets->resolution.x, ' ', sets->resolution.y);
 	IniLine::writeVal(ofs, iniKeywordRenderer, Settings::rendererNames[eint(sets->renderer)]);
 	IniLine::writeVal(ofs, iniKeywordDevice, toStr<0x10>(sets->device));
@@ -684,19 +696,19 @@ bool FileSys::isFont(const fs::path& file) {
 	return false;
 }
 
-void FileSys::moveContentThread(std::stop_token stoken, fs::path src, fs::path dst) {
+void FileSys::moveContentThread(std::stop_token stoken, uptr<MoveContentData> md) {
 	uptr<string> errors = std::make_unique<string>();
 	std::error_code ec;
-	if (fs::create_directories(dst, ec); !ec) {
+	if (fs::create_directories(md->dst, ec); !ec) {
 		vector<fs::path> entries;
-		for (const fs::directory_entry& it : fs::directory_iterator(src, fs::directory_options::skip_permission_denied, ec))
+		for (const fs::directory_entry& it : fs::directory_iterator(md->src, fs::directory_options::skip_permission_denied, ec))
 			entries.push_back(it.path().filename());
 		for (uintptr_t i = 0, lim = entries.size(); i < lim; ++i) {
 			if (stoken.stop_requested())
 				break;
 
 			pushEvent(SDL_USEREVENT_THREAD_MOVE, ThreadEvent::progress, std::bit_cast<void*>(i), std::bit_cast<void*>(lim));
-			if (fs::rename(src / entries[i], dst / entries[i], ec); ec)
+			if (fs::rename(md->src / entries[i], md->dst / entries[i], ec); ec)
 				*errors += ec.message() + '\n';
 		}
 	} else
@@ -808,20 +820,20 @@ void FileSys::listFontFilesInRegistry(FT_Library lib, char32_t first, char32_t l
 }
 #endif
 
-void FileSys::listFontFamiliesThread(std::stop_token stoken, fs::path cdir, string desired, char32_t first, char32_t last) {
+void FileSys::listFontFamiliesThread(std::stop_token stoken, uptr<ListFontFamiliesData> ld) {
 	vector<pair<Cstring, Cstring>> fonts;
 	FT_Library lib;
 	if (FT_Error err = FT_Init_FreeType(&lib)) {
 		pushEvent(SDL_USEREVENT_THREAD_FONTS_FINISHED, 0, new FontListResult(vector<Cstring>(), nullptr, 0, FT_Error_String(err)));
 		return;
 	}
-	listFontFamiliesInDirectoryThread(stoken, lib, cdir, first, last, fonts);
+	listFontFamiliesInDirectorySubthread(stoken, lib, ld->cdir, ld->first, ld->last, fonts);
 
 	string desiredPath;
-	if (!isFont(toPath(desired))) {
-		vector<pair<Cstring, Cstring>>::iterator it = rng::find_if(fonts, [&desired](const pair<Cstring, Cstring>& fp) -> bool {
+	if (!isFont(toPath(ld->desired))) {
+		vector<pair<Cstring, Cstring>>::iterator it = rng::find_if(fonts, [&ld](const pair<Cstring, Cstring>& fp) -> bool {
 			string_view fname = filename(fp.second.data());
-			return strciequal(fname, desired) || strciequal(delExtension(fname), desired);
+			return strciequal(fname, ld->desired) || strciequal(delExtension(fname), ld->desired);
 		});
 		if (it != fonts.end())
 			desiredPath = it->second.data();
@@ -831,18 +843,18 @@ void FileSys::listFontFamiliesThread(std::stop_token stoken, fs::path cdir, stri
 #ifdef CAN_FONTCFG
 	try {
 		if (!stoken.stop_requested() && symFontconfig()) {
-			Fontconfig().list(first, last, fonts);
+			Fontconfig().list(ld->first, ld->last, fonts);
 			skip = true;
 		}
 	} catch (const std::runtime_error&) {}
 #endif
 	if (!skip) {
 #if defined(_WIN32) && !defined(__MINGW32__)
-		listFontFamiliesInRegistryThread<HKEY_CURRENT_USER>(stoken, lib, first, last, fonts);
-		listFontFamiliesInRegistryThread<HKEY_LOCAL_MACHINE>(stoken, lib, first, last, fonts);
+		listFontFamiliesInRegistrySubthread<HKEY_CURRENT_USER>(stoken, lib, ld->first, ld->last, fonts);
+		listFontFamiliesInRegistrySubthread<HKEY_LOCAL_MACHINE>(stoken, lib, ld->first, ld->last, fonts);
 #else
-		listFontFamiliesInDirectoryThread(stoken, lib, localFontDir(), first, last, fonts);
-		listFontFamiliesInDirectoryThread(stoken, lib, systemFontDir(), first, last, fonts);
+		listFontFamiliesInDirectorySubthread(stoken, lib, localFontDir(), ld->first, ld->last, fonts);
+		listFontFamiliesInDirectorySubthread(stoken, lib, systemFontDir(), ld->first, ld->last, fonts);
 #endif
 	}
 	FT_Done_FreeType(lib);
@@ -854,10 +866,10 @@ void FileSys::listFontFamiliesThread(std::stop_token stoken, fs::path cdir, stri
 	size_t sel;
 	if (!desiredPath.empty())
 		sel = rng::find_if(fonts, [&desiredPath](const pair<Cstring, Cstring>& fp) -> bool { return !strcmp(fp.second.data(), desiredPath.data()); }) - fonts.begin();
-	else if (vector<pair<Cstring, Cstring>>::iterator it = rng::find_if(fonts, [&desired](const pair<Cstring, Cstring>& fp) -> bool { return !strcmp(fp.second.data(), desired.data()); }); it != fonts.end())
+	else if (vector<pair<Cstring, Cstring>>::iterator it = rng::find_if(fonts, [&ld](const pair<Cstring, Cstring>& fp) -> bool { return !strcmp(fp.second.data(), ld->desired.data()); }); it != fonts.end())
 		sel = it - fonts.begin();
 	else {
-		fonts.emplace(fonts.begin(), desired, Cstring());
+		fonts.emplace(fonts.begin(), ld->desired, Cstring());
 		sel = 0;
 	}
 
@@ -870,7 +882,7 @@ void FileSys::listFontFamiliesThread(std::stop_token stoken, fs::path cdir, stri
 	pushEvent(SDL_USEREVENT_THREAD_FONTS_FINISHED, 0, new FontListResult(std::move(families), std::move(files), sel, string()));
 }
 
-void FileSys::listFontFamiliesInDirectoryThread(std::stop_token stoken, FT_Library lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts) {
+void FileSys::listFontFamiliesInDirectorySubthread(const std::stop_token& stoken, FT_Library lib, const fs::path& drc, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts) {
 	Data fdata;
 	std::error_code ec;
 	for (const fs::directory_entry& it : fs::recursive_directory_iterator(drc, fs::directory_options::follow_directory_symlink | fs::directory_options::skip_permission_denied, ec)) {
@@ -886,7 +898,7 @@ void FileSys::listFontFamiliesInDirectoryThread(std::stop_token stoken, FT_Libra
 
 #if defined(_WIN32) && !defined(__MINGW32__)
 template <HKEY root>
-void FileSys::listFontFamiliesInRegistryThread(std::stop_token stoken, FT_Library lib, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts) {
+void FileSys::listFontFamiliesInRegistrySubthread(const std::stop_token& stoken, FT_Library lib, char32_t first, char32_t last, vector<pair<Cstring, Cstring>>& fonts) {
 	Data fdata;
 	fs::path gfpath;
 	if constexpr (root == HKEY_LOCAL_MACHINE)
@@ -905,7 +917,7 @@ void FileSys::listFontFamiliesInRegistryThread(std::stop_token stoken, FT_Librar
 				}
 			}
 	} else
-		listFontFamiliesInDirectoryThread(stoken, lib, root == HKEY_CURRENT_USER ? localFontDir() : gfpath, first, last, fonts);
+		listFontFamiliesInDirectorySubthread(stoken, lib, root == HKEY_CURRENT_USER ? localFontDir() : gfpath, first, last, fonts);
 }
 #endif
 

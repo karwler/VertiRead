@@ -25,7 +25,7 @@ void Program::start(const vector<string>& cmdVals) {
 
 void Program::tick() {
 	if (auto pe = dynamic_cast<ProgFileExplorer*>(state))
-		pe->processFileChanges(&browser);
+		pe->processFileChanges();
 }
 
 void Program::handleGeneralEvent(const SDL_UserEvent& event) {
@@ -61,7 +61,7 @@ void Program::handleGeneralEvent(const SDL_UserEvent& event) {
 }
 
 void Program::handleProgBooksEvent(const SDL_UserEvent& event) {
-	Actions action = Actions(uintptr_t(event.data2));
+	auto action = Actions(uintptr_t(event.data2));
 	switch (ProgBooksEvent(event.code)) {
 	using enum ProgBooksEvent;
 	case openBookList:
@@ -143,7 +143,7 @@ void Program::handleThreadPreviewEvent(const SDL_UserEvent& event) {
 	switch (ThreadEvent(event.code)) {
 	using enum ThreadEvent;
 	case progress:
-		eventPreviewProgress(static_cast<char*>(event.data1), static_cast<SDL_Surface*>(event.data2));
+		eventPreviewProgress(uptr<char[]>(static_cast<char*>(event.data1)), static_cast<SDL_Surface*>(event.data2));
 		break;
 	case finished:
 		browser.stopThread();
@@ -183,10 +183,10 @@ void Program::handleThreadReaderEvent(const SDL_UserEvent& event) {
 	switch (ThreadEvent(event.code)) {
 	using enum ThreadEvent;
 	case progress:
-		eventReaderProgress(static_cast<BrowserPictureProgress*>(event.data1), static_cast<char*>(event.data2));
+		eventReaderProgress(uptr<BrowserPictureProgress>(static_cast<BrowserPictureProgress*>(event.data1)));
 		break;
 	case finished:
-		eventReaderFinished(ResultCode(uintptr_t(event.data1)), static_cast<BrowserResultPicture*>(event.data2));
+		eventReaderFinished(ResultCode(uintptr_t(event.data1)), uptr<BrowserResultPicture>(static_cast<BrowserResultPicture*>(event.data2)));
 	}
 }
 
@@ -295,12 +295,12 @@ void Program::handleThreadMoveEvent(const SDL_UserEvent& event) {
 		state->updatePopupMessage(std::format("Moving {}/{}", uintptr_t(event.data1), uintptr_t(event.data2)));
 		break;
 	case finished:
-		eventMoveFinished(static_cast<string*>(event.data1));
+		eventMoveFinished(uptr<string>(static_cast<string*>(event.data1)));
 	}
 }
 
 void Program::handleProgSearchDirEvent(const SDL_UserEvent& event) {
-	Actions action = Actions(uintptr_t(event.data2));
+	auto action = Actions(uintptr_t(event.data2));
 	switch (ProgSearchDirEvent(event.code)) {
 	using enum ProgSearchDirEvent;
 	case goIn:
@@ -323,8 +323,8 @@ void Program::eventOpenBookList() {
 		else
 			openBookListHandle(valcp(World::sets()->dirLib));
 	} catch (const std::runtime_error& err) {
-		state->showPopupMessage(err.what());
 		eventOpenSettings();
+		state->showPopupMessage(err.what());
 	}
 }
 
@@ -337,6 +337,7 @@ void Program::openBookListHandle(A&&... args) {
 	browser.beginFs(string(), std::forward<A>(args)...);
 	browser.exCall = &Program::eventOpenBookList;
 	setState<ProgBooks>();
+	browser.startListCurDir(false);
 }
 
 void Program::eventOpenPageBrowser(PushButton* lbl) {
@@ -344,6 +345,7 @@ void Program::eventOpenPageBrowser(PushButton* lbl) {
 		string root = World::sets()->dirLib / lbl->getText().data();
 		browser.beginFs(valcp(root), valcp(root));	// browser should already be in the right state
 		setState<ProgPageBrowser>();
+		browser.startListCurDir();
 	} catch (const std::runtime_error& err) {
 		state->showPopupMessage(err.what());
 	}
@@ -353,21 +355,27 @@ void Program::eventOpenPageBrowserGeneral() {
 	try {
 		browser.beginFs(string(), string());	// browser should already be in the right state
 		setState<ProgPageBrowser>();
+		browser.startListCurDir();
 	} catch (const std::runtime_error& err) {
 		state->showPopupMessage(err.what());
 	}
 }
 
 void Program::eventListFinished(const SDL_UserEvent& event) {
-	browser.stopThread();
-	auto rl = static_cast<BrowserResultList*>(event.data2);
+	uptr<BrowserResultList> rl(static_cast<BrowserResultList*>(event.data2));
 	auto pe = static_cast<ProgFileExplorer*>(state);
-	if (ResultCode(uintptr_t(event.data1)) == ResultCode::ok) {
-		pe->fillFileList(std::move(rl->files), std::move(rl->dirs));
+	browser.stopThread();
+	switch (ResultCode(uintptr_t(event.data1))) {
+	using enum ResultCode;
+	case ok:
 		browser.setDirectoryWatch();
-	} else
-		pe->fillFileList(vector<Cstring>(), vector<Cstring>(), false);
-	delete rl;
+		if (pe->fillFileList(std::move(rl->files), std::move(rl->dirs)))
+			browser.startPreview(state->getLineHeight());
+		break;
+	case error:
+		pe->fillFileList(vector<Cstring>(), vector<Cstring>());
+		state->showPopupMessage(std::move(rl->error));
+	}
 }
 
 void Program::eventOpenBookContext(Widget* wgt) {
@@ -473,8 +481,10 @@ void Program::openFileHandle(A&&... args) {
 		if (auto pb = dynamic_cast<ProgPageBrowser*>(state))
 			pb->resetFileIcons();
 		setPopupProgress();
-	} else
+	} else {
 		setState<ProgPageBrowser>();
+		browser.startListCurDir();
+	}
 }
 
 void Program::eventOpenSettings() {
@@ -484,14 +494,16 @@ void Program::eventOpenSettings() {
 // BROWSER
 
 void Program::eventArchiveFinished(const SDL_UserEvent& event) {
+#ifdef WITH_ARCHIVE
+	uptr<BrowserResultArchive> ra(static_cast<BrowserResultArchive*>(event.data1));
 	browser.stopThread();
-	auto ra = static_cast<BrowserResultArchive*>(event.data1);
 	switch (ra->rc) {
 	using enum ResultCode;
 	case ok:
-		if (browser.finishArchive(std::move(*ra)))
+		if (browser.finishArchive(std::move(*ra))) {
 			setState<ProgPageBrowser>();
-		else
+			browser.startListCurDir();
+		} else
 			setPopupProgress();
 		break;
 	case stop:
@@ -500,9 +512,16 @@ void Program::eventArchiveFinished(const SDL_UserEvent& event) {
 		break;
 	case error:
 		startBrowserPreview();
-		state->showPopupMessage(!ra->error.empty() ? ra->error : "Failed to load archive");
+		state->showPopupMessage(ra->error.filled() ? std::move(ra->error) : "Failed to load archive");
 	}
-	delete ra;
+#endif
+}
+
+void Program::restartBrowserList() {
+	auto pe = static_cast<ProgFileExplorer*>(state);
+	pe->locationBar->setText(browser.getCurDir());
+	pe->fileList->setWidgets({ pe->makeLoadingLabel() });
+	browser.startListCurDir();
 }
 
 void Program::startBrowserPreview() {
@@ -513,21 +532,19 @@ void Program::startBrowserPreview() {
 
 void Program::eventBrowserGoUp() {
 	if (browser.goUp())
-		World::scene()->resetLayouts();
+		restartBrowserList();
 	else
 		eventExitBrowser();
 }
 
 void Program::eventBrowserGoIn(PushButton* lbl) {
 	if (browser.goIn(lbl->getText().data()))
-		World::scene()->resetLayouts();
+		restartBrowserList();
 }
 
 void Program::eventBrowserGoFile(PushButton* lbl) {
-	if (browser.goFile(lbl->getText().data())) {
-		static_cast<ProgPageBrowser*>(state)->resetFileIcons();
+	if (browser.goFile(lbl->getText().data()))
 		setPopupProgress();
-	}
 }
 
 void Program::eventBrowserGoTo(LabelEdit* le) {
@@ -552,7 +569,7 @@ void Program::browserGoToHandle(A&&... args) {
 		static_cast<ProgPageBrowser*>(state)->resetFileIcons();
 		setPopupProgress();
 	} else
-		World::scene()->resetLayouts();
+		restartBrowserList();
 }
 
 template <Invocable<const RemoteLocation&, vector<string>&&> F>
@@ -588,13 +605,13 @@ void Program::browserLoginManual(F func) {
 	}
 }
 
-void Program::eventPreviewProgress(char* ndata, SDL_Surface* icon) {
+void Program::eventPreviewProgress(uptr<char[]> ndata, SDL_Surface* icon) {
 	Renderer* renderer = World::drawSys()->getRenderer();
 	if (Texture* tex = renderer->texFromIcon(icon)) {
 		auto pe = static_cast<ProgFileExplorer*>(state);
 		std::span<Widget*> wgts = pe->fileList->getWidgets();
 		auto [pos, end] = ndata[0] ? pair(wgts.begin() + pe->dirEnd, wgts.begin() + pe->fileEnd) : pair(wgts.begin(), wgts.begin() + pe->dirEnd);
-		char* name = ndata + 1;
+		char* name = ndata.get() + 1;
 		if (std::span<Widget*>::iterator it = std::lower_bound(pos, end, name, [](const Widget* a, const char* b) -> bool { return Strcomp::less(static_cast<const PushButton*>(a)->getText().data(), b); }); it != end && static_cast<PushButton*>(*it)->getText() == name) {
 			static_cast<IconPushButton*>(*it)->setIcon(tex);
 			renderer->synchTransfer();
@@ -603,7 +620,6 @@ void Program::eventPreviewProgress(char* ndata, SDL_Surface* icon) {
 			renderer->freeTexture(tex);
 		}
 	}
-	delete[] ndata;
 }
 
 void Program::eventExitBrowser() {
@@ -612,17 +628,14 @@ void Program::eventExitBrowser() {
 
 // READER
 
-void Program::eventReaderProgress(BrowserPictureProgress* pp, char* text) {
+void Program::eventReaderProgress(uptr<BrowserPictureProgress> pp) {
 	pp->pnt->mpic.lock();
 	pp->pnt->pics[pp->id].second = World::drawSys()->getRenderer()->texFromRpic(pp->img);
 	pp->pnt->mpic.unlock();
-	delete pp;
-
-	state->updatePopupMessage(std::format("Loading {}", text));
-	delete[] text;
+	state->updatePopupMessage(std::move(pp->text));
 }
 
-void Program::eventReaderFinished(ResultCode rc, BrowserResultPicture* rp) {
+void Program::eventReaderFinished(ResultCode rc, uptr<BrowserResultPicture> rp) {
 	browser.stopThread();
 	switch (rc) {
 	using enum ResultCode;
@@ -642,9 +655,8 @@ void Program::eventReaderFinished(ResultCode rc, BrowserResultPicture* rp) {
 		break;
 	case error:
 		startBrowserPreview();
-		state->showPopupMessage(!rp->error.empty() ? rp->error : "Failed to load pictures");
+		state->showPopupMessage(rp->error.filled() ? std::move(rp->error) : "Failed to load pictures");
 	}
-	delete rp;
 }
 
 void Program::eventZoomIn() {
@@ -685,12 +697,12 @@ void Program::eventPrevDir() {
 }
 
 void Program::eventGoNextFinished(const SDL_UserEvent& event) {
+	uptr<BrowserResultPicture> rp(static_cast<BrowserResultPicture*>(event.data2));
 	browser.stopThread();
-	auto rp = static_cast<BrowserResultPicture*>(event.data2);
 	switch (ResultCode(uintptr_t(event.data1))) {
 	using enum ResultCode;
 	case ok:
-		browser.startLoadPictures(rp);
+		browser.startLoadPictures(std::move(rp));
 		return;
 	case stop:
 		World::scene()->setPopup(nullptr);
@@ -698,13 +710,13 @@ void Program::eventGoNextFinished(const SDL_UserEvent& event) {
 	case error:
 		state->showPopupMessage("No more images");
 	}
-	delete rp;
 }
 
 void Program::eventExitReader() {
 	state->eventClosing();
 	browser.exitFile();
 	setState<ProgPageBrowser>();
+	browser.startListCurDir();
 }
 
 // SETTINGS
@@ -749,6 +761,7 @@ void Program::eventOpenLibDirBrowser() {
 		browser.beginFs(string(), SDL_getenv(home));
 		browser.exCall = &Program::eventOpenSettings;
 		setState<ProgSearchDir>();
+		browser.startListDir(valcp(browser.getCurDir()), false);
 	} catch (const std::runtime_error& err) {
 		state->showPopupMessage(err.what());
 	}
@@ -764,30 +777,28 @@ void Program::eventMoveCancelled() {
 	World::scene()->setPopup(nullptr);
 }
 
-void Program::eventMoveFinished(string* errors) {
+void Program::eventMoveFinished(uptr<string> errors) {
 	static_cast<ProgSettings*>(state)->stopMove();
 	if (errors->empty())
 		World::scene()->setPopup(nullptr);
 	else {
-		ProgSettings::logMoveErrors(errors);
+		ProgSettings::logMoveErrors(errors.get());
 		state->showPopupMultiline(*errors);
 	}
-	delete errors;
 }
 
 void Program::eventFontsFinished(const SDL_UserEvent& event) {
+	uptr<FontListResult> flr(static_cast<FontListResult*>(event.data1));
 	auto ps = static_cast<ProgSettings*>(state);
 	ps->stopFonts();
-	auto flr = static_cast<FontListResult*>(event.data1);
 	if (flr->error.empty())
 		ps->setFontField(std::move(flr->families), std::move(flr->files), flr->select);
 	else
 		logError(flr->error);
-	delete flr;
 }
 
 void Program::eventSetZoomType(PushButton* but) {
-	if (Settings::Zoom type = Settings::Zoom(finishComboBox(but)); type != World::sets()->zoomType) {
+	if (auto type = Settings::Zoom(finishComboBox(but)); type != World::sets()->zoomType) {
 		auto ps = static_cast<ProgSettings*>(state);
 		World::sets()->zoomType = type;
 		ps->zoomLine->replaceWidget(ps->zoomLine->getWidgets().size() - 1, ps->createZoomEdit());
@@ -802,12 +813,12 @@ void Program::eventSetZoom(Slider* sl) {
 }
 
 void Program::eventSetScreenMode(PushButton* but) {
-	if (Settings::Screen screen = Settings::Screen(finishComboBox(but)); World::sets()->screen != screen)
+	if (auto screen = Settings::Screen(finishComboBox(but)); World::sets()->screen != screen)
 		World::winSys()->setScreenMode(screen);
 }
 
 void Program::eventSetRenderer(PushButton* but) {
-	if (Settings::Renderer renderer = Settings::Renderer(finishComboBox(but)); World::sets()->renderer != renderer) {
+	if (auto renderer = Settings::Renderer(finishComboBox(but)); World::sets()->renderer != renderer) {
 		World::sets()->renderer = renderer;
 		World::winSys()->recreateWindows();
 	}
@@ -838,7 +849,7 @@ void Program::eventSetVsync(CheckBox* cb) {
 }
 
 void Program::eventSetMultiFullscreen(WindowArranger* wa) {
-	if (umap<int, Recti> dsps = wa->getActiveDisps(); dsps != World::sets()->displays) {
+	if (vector<Settings::Display> dsps = wa->getActiveDisps(); dsps != World::sets()->displays) {
 		World::sets()->displays = std::move(dsps);
 		if (World::sets()->screen == Settings::Screen::multiFullscreen)
 			World::winSys()->recreateWindows();
@@ -885,7 +896,7 @@ void Program::eventSetDeadzone(LabelEdit* le) {
 }
 
 void Program::eventSetPicLimType(PushButton* but) {
-	if (PicLim::Type plim = PicLim::Type(finishComboBox(but)); plim != World::sets()->picLim.type) {
+	if (auto plim = PicLim::Type(finishComboBox(but)); plim != World::sets()->picLim.type) {
 		auto ps = static_cast<ProgSettings*>(state);
 		World::sets()->picLim.type = plim;
 		ps->limitLine->replaceWidget(ps->limitLine->getWidgets().size() - 1, ps->createLimitEdit());
@@ -939,6 +950,7 @@ void Program::eventResizeComboContext(Context* ctx) {
 }
 
 void Program::eventStartRequestPassphrase(ArchiveData* ad, std::binary_semaphore* done) {
+#ifdef WITH_ARCHIVE
 	archiveRequest = ad;
 	archiveRequestDone = done;
 	prevPopup = World::scene()->releasePopup();
@@ -946,6 +958,7 @@ void Program::eventStartRequestPassphrase(ArchiveData* ad, std::binary_semaphore
 		eventRequestPassphrase();
 	else
 		state->showPopupMessage("Incorrect password", GeneralEvent::requestPassphrase);
+#endif
 }
 
 void Program::eventRequestPassphrase() {
@@ -953,6 +966,7 @@ void Program::eventRequestPassphrase() {
 }
 
 void Program::eventSetPassphrase(bool ok) {
+#ifdef WITH_ARCHIVE
 	if (ok) {
 		archiveRequest->passphrase = ProgState::inputFromPopup();
 		archiveRequest->pc = ArchiveData::PassCode::set;
@@ -960,6 +974,7 @@ void Program::eventSetPassphrase(bool ok) {
 		archiveRequest->pc = ArchiveData::PassCode::ignore;
 	archiveRequestDone->release();
 	World::scene()->setPopup(prevPopup);
+#endif
 }
 
 void Program::eventExit() {

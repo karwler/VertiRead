@@ -105,6 +105,7 @@ uint16 RemoteLocation::sanitizePort(string_view port, Protocol protocol) {
 
 // ARCHIVE NODES
 
+#ifdef WITH_ARCHIVE
 vector<ArchiveDir*> ArchiveDir::listDirs() {
 	vector<ArchiveDir*> entries;
 	rng::transform(dirs, std::back_inserter(entries), [](ArchiveDir& it) -> ArchiveDir* { return &it; });
@@ -150,11 +151,44 @@ ArchiveFile* ArchiveDir::findFile(string_view fname) noexcept {
 	return fit != files.end() && fit->name == fname ? std::to_address(fit) : nullptr;
 }
 
-void ArchiveDir::copySlicedDentsFrom(const ArchiveDir& src) {
+void ArchiveDir::copySlicedDentsFrom(const ArchiveDir& src, bool copyHidden) {
 	dirs.clear();
-	for (const ArchiveDir& it : src.dirs)
-		dirs.emplace_front(valcp(it.name)).files = it.files;
-	files = src.files;
+	if (copyHidden) {
+		for (const ArchiveDir& it : src.dirs)
+			dirs.emplace_front(valcp(it.name)).files = it.files;
+		files = src.files;
+	} else {
+		for (const ArchiveDir& it : src.dirs)
+			if (it.name[0] != '.')
+				dirs.emplace_front(valcp(it.name)).files = it.files;
+		for (const ArchiveFile& it : src.files)
+			if (it.name[0] != '.')
+				files.push_front(it);
+	}
+}
+
+vector<Cstring> ArchiveDir::copySortedFiles(bool copyHidden) const {
+	return copySortedDents(files, copyHidden);
+}
+
+vector<Cstring> ArchiveDir::copySortedDirs(bool copyHidden) const {
+	return copySortedDents(dirs, copyHidden);
+}
+
+template <Class T>
+vector<Cstring> ArchiveDir::copySortedDents(const std::forward_list<T>& dents, bool copyHidden) {
+	vector<Cstring> names;
+	if (copyHidden) {
+		size_t cnt = 0;
+		for (typename std::forward_list<T>::const_iterator it = dents.begin(); it != dents.end(); ++it, ++cnt);
+		names.resize(cnt);
+		rng::transform(dents, names.begin(), [](const T& it) -> Cstring { return it.name; });
+	} else
+		for (const T& it : dents)
+			if (it.name[0] != '.')
+				names.push_back(it.name);
+	rng::sort(names, [](const Cstring& a, const Cstring& b) -> bool { return Strcomp::less(a.data(), b.data()); });
+	return names;
 }
 
 ArchiveData ArchiveData::copyLight() const {
@@ -165,8 +199,10 @@ ArchiveData ArchiveData::copyLight() const {
 	ad.pc = pc;
 	return ad;
 }
+#endif
 
 // PDF FILE
+
 #if defined(CAN_MUPDF) || defined(CAN_POPPLER)
 PdfFile::PdfFile(PdfFile&& pdf) noexcept :
 	Data(std::move(pdf.ptr), pdf.len),
@@ -178,7 +214,7 @@ PdfFile::PdfFile(PdfFile&& pdf) noexcept :
 	pdf.owner = false;
 }
 
-PdfFile::PdfFile(SDL_RWops* ops, string* error) {
+PdfFile::PdfFile(SDL_RWops* ops, Cstring* error) {
 	if (ops) {
 		if (int64 esiz = SDL_RWsize(ops); esiz > signatureLen) {
 			byte_t sig[signatureLen];
@@ -348,6 +384,12 @@ PdfFile PdfFile::copyLight() const noexcept {
 
 // RESULT ASYNC
 
+BrowserResultList::BrowserResultList(vector<Cstring>&& fent, vector<Cstring>&& dent) noexcept :
+	files(std::move(fent)),
+	dirs(std::move(dent))
+{}
+
+#ifdef WITH_ARCHIVE
 BrowserResultArchive::BrowserResultArchive(optional<string>&& root, ArchiveData&& aroot, string&& fpath, string&& ppage) noexcept :
 	rootDir(root ? std::move(*root) : string()),
 	opath(std::move(fpath)),
@@ -355,6 +397,7 @@ BrowserResultArchive::BrowserResultArchive(optional<string>&& root, ArchiveData&
 	arch(std::move(aroot)),
 	hasRootDir(root)
 {}
+#endif
 
 BrowserResultPicture::BrowserResultPicture(BrowserResultState brs, optional<string>&& root, string&& container, string&& pname, ArchiveData&& aroot, PdfFile&& pdfFile) noexcept :
 	rootDir(root ? std::move(*root) : string()),
@@ -369,13 +412,14 @@ BrowserResultPicture::BrowserResultPicture(BrowserResultState brs, optional<stri
 	fwd(brs & BRS_FWD)
 {}
 
-BrowserPictureProgress::BrowserPictureProgress(BrowserResultPicture* rp, SDL_Surface* pic, size_t index) noexcept :
+BrowserPictureProgress::BrowserPictureProgress(BrowserResultPicture* rp, SDL_Surface* pic, size_t index, Cstring&& msg) noexcept :
 	pnt(rp),
 	img(pic),
-	id(index)
+	id(index),
+	text(std::move(msg))
 {}
 
-FontListResult::FontListResult(vector<Cstring>&& fa, uptr<Cstring[]>&& fl, size_t id, string&& msg) :
+FontListResult::FontListResult(vector<Cstring>&& fa, uptr<Cstring[]>&& fl, size_t id, string&& msg) noexcept :
 	families(std::move(fa)),
 	files(std::move(fl)),
 	select(id),

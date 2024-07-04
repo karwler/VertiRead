@@ -371,35 +371,31 @@ void FontSet::setMode(Settings::Hinting hinting) noexcept {
 
 // DRAW SYS
 
-DrawSys::DrawSys(const umap<int, SDL_Window*>& windows) :
+DrawSys::DrawSys(const vector<SDL_Window*>& windows, const ivec2* vofs) :
 	colors(World::fileSys()->loadColors(World::sets()->setTheme(World::sets()->getTheme(), World::fileSys()->getAvailableThemes())))
 {
-	ivec2 origin(INT_MAX);
-	for (auto [id, rct] : World::sets()->displays)
-		origin = glm::min(origin, rct.pos());
-
 	switch (World::sets()->renderer) {
 	using enum Settings::Renderer;
 #ifdef WITH_DIRECT3D
 	case direct3d11:
-		renderer = new RendererDx11(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
+		renderer = new RendererDx11(windows, vofs, viewRes, World::sets(), colors[eint(Color::background)]);
 		break;
 #endif
 #ifdef WITH_OPENGL
 	case opengl1:
-		renderer = new RendererGl1(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
+		renderer = new RendererGl1(windows, vofs, viewRes, World::sets(), colors[eint(Color::background)]);
 		break;
 	case opengl3: case opengles3:
-		renderer = new RendererGl3(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
+		renderer = new RendererGl3(windows, vofs, viewRes, World::sets(), colors[eint(Color::background)]);
 		break;
 #endif
 #ifdef WITH_VULKAN
 	case vulkan:
-		renderer = new RendererVk(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
+		renderer = new RendererVk(windows, vofs, viewRes, World::sets(), colors[eint(Color::background)]);
 		break;
 #endif
 	case software:
-		renderer = new RendererSf(windows, World::sets(), viewRes, origin, colors[eint(Color::background)]);
+		renderer = new RendererSf(windows, vofs, viewRes, World::sets(), colors[eint(Color::background)]);
 	}
 
 	try {
@@ -459,13 +455,6 @@ void DrawSys::updateView() {
 	fonts.clearCache();
 }
 
-Renderer::View* DrawSys::findViewForPoint(ivec2 pos) {
-	for (auto [id, view] : renderer->getViews())
-		if (view->rect.contains(pos))
-			return view;
-	return nullptr;
-}
-
 bool DrawSys::updateDpi() {
 	if (float vdpi = maxDpi(); vdpi != winDpi) {
 		winDpi = vdpi;
@@ -484,8 +473,8 @@ bool DrawSys::updateDpi() {
 
 float DrawSys::maxDpi() const {
 	float mdpi = 0.f;
-	for (auto [id, view] : renderer->getViews())
-		if (float vdpi; !SDL_GetDisplayDPI(SDL_GetWindowDisplayIndex(view->win), nullptr, nullptr, &vdpi) && vdpi > mdpi)
+	for (Renderer::View* it : renderer->getViews())
+		if (float vdpi; !SDL_GetDisplayDPI(SDL_GetWindowDisplayIndex(it->win), nullptr, nullptr, &vdpi) && vdpi > mdpi)
 			mdpi = vdpi;
 	return mdpi > 0.f ? mdpi : fallbackDpi;
 }
@@ -511,7 +500,7 @@ void DrawSys::setFont(const fs::path& font) {
 
 void DrawSys::drawWidgets(bool mouseLast) {
 	optional<bool> syncTooltip = mouseLast && World::sets()->tooltips ? prepareTooltip() : std::nullopt;
-	for (auto [id, view] : renderer->getViews()) {
+	for (Renderer::View* view : renderer->getViews()) {
 		try {
 			renderer->startDraw(view);
 
@@ -623,8 +612,8 @@ void DrawSys::drawWindowArranger(const WindowArranger* wgt, const Recti& view) {
 		renderer->drawRect(texes[eint(Tex::blank)], rect, frame, colors[eint(Color::dark)]);
 		for (const auto& [id, dsp] : wgt->getDisps())
 			if (!wgt->draggingDisp(id)) {
-				auto [rct, color, text, tex] = wgt->dispRect(id, dsp);
-				drawWaDisp(rct, color, text, tex, frame, view);
+				WindowArranger::DspDisp di = wgt->dispRect(id, dsp);
+				drawWaDisp(di.rect, di.color, di.text, di.tex, frame, view);
 			}
 	}
 }
@@ -713,7 +702,7 @@ optional<bool> DrawSys::prepareTooltip() {
 }
 
 Widget* DrawSys::getSelectedWidget(Layout* box, ivec2 mPos) {
-	Renderer::View* view = findViewForPoint(mPos);
+	Renderer::View* view = renderer->findView(mPos);
 	if (!view)
 		return nullptr;
 
