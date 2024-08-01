@@ -12,6 +12,7 @@ extern decltype(libssh2_session_handshake)* sshSessionHandshake;
 extern decltype(libssh2_session_last_error)* sshSessionLastError;
 extern decltype(libssh2_userauth_list)* sshUserauthList;
 extern decltype(libssh2_userauth_password_ex)* sshUserauthPasswordEx;
+extern decltype(libssh2_userauth_authenticated)* sshUserauthAuthenticated;
 extern decltype(libssh2_session_disconnect_ex)* sshSessionDisconnectEx;
 extern decltype(libssh2_session_free)* sshSessionFree;
 extern decltype(libssh2_sftp_init)* sftpInit;

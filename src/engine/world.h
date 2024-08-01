@@ -2,7 +2,7 @@
 
 #include "windowSys.h"
 
-// class that makes accessing stuff easier and holds command line arguments
+// makes accessing stuff easier
 class World {
 private:
 	static inline WindowSys windowSys;	// the thing on which everything runs;

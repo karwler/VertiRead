@@ -12,6 +12,7 @@ decltype(libssh2_session_handshake)* sshSessionHandshake = nullptr;
 decltype(libssh2_session_last_error)* sshSessionLastError = nullptr;
 decltype(libssh2_userauth_list)* sshUserauthList = nullptr;
 decltype(libssh2_userauth_password_ex)* sshUserauthPasswordEx = nullptr;
+decltype(libssh2_userauth_authenticated)* sshUserauthAuthenticated = nullptr;
 decltype(libssh2_session_disconnect_ex)* sshSessionDisconnectEx = nullptr;
 decltype(libssh2_session_free)* sshSessionFree = nullptr;
 decltype(libssh2_sftp_init)* sftpInit = nullptr;
@@ -39,6 +40,7 @@ bool symLibssh2() noexcept {
 		&& (sshSessionLastError = libSym<decltype(sshSessionLastError)>(lib, "libssh2_session_last_error"))
 		&& (sshUserauthList = libSym<decltype(sshUserauthList)>(lib, "libssh2_userauth_list"))
 		&& (sshUserauthPasswordEx = libSym<decltype(sshUserauthPasswordEx)>(lib, "libssh2_userauth_password_ex"))
+		&& (sshUserauthAuthenticated = libSym<decltype(sshUserauthAuthenticated)>(lib, "libssh2_userauth_authenticated"))
 		&& (sshSessionDisconnectEx = libSym<decltype(sshSessionDisconnectEx)>(lib, "libssh2_session_disconnect_ex"))
 		&& (sshSessionFree = libSym<decltype(sshSessionFree)>(lib, "libssh2_session_free"))
 		&& (sftpInit = libSym<decltype(sftpInit)>(lib, "libssh2_sftp_init"))

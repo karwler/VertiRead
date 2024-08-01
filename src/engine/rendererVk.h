@@ -3,6 +3,7 @@
 #ifdef WITH_VULKAN
 #include "renderer.h"
 #include <vulkan/vulkan.h>
+#include <set>
 
 class InstanceVk {
 public:
@@ -24,7 +25,6 @@ public:
 	PFN_vkCmdBindVertexBuffers vkCmdBindVertexBuffers;
 	PFN_vkCmdCopyBuffer vkCmdCopyBuffer;
 	PFN_vkCmdCopyBufferToImage vkCmdCopyBufferToImage;
-	PFN_vkCmdCopyImageToBuffer vkCmdCopyImageToBuffer;
 	PFN_vkCmdDispatch vkCmdDispatch;
 	PFN_vkCmdDraw vkCmdDraw;
 	PFN_vkCmdEndRenderPass vkCmdEndRenderPass;
@@ -75,7 +75,6 @@ public:
 	PFN_vkGetBufferMemoryRequirements vkGetBufferMemoryRequirements;
 	PFN_vkGetDeviceQueue vkGetDeviceQueue;
 	PFN_vkGetImageMemoryRequirements vkGetImageMemoryRequirements;
-	PFN_vkGetPhysicalDeviceFeatures2KHR vkGetPhysicalDeviceFeatures2KHR;
 	PFN_vkGetPhysicalDeviceImageFormatProperties vkGetPhysicalDeviceImageFormatProperties;
 	PFN_vkGetPhysicalDeviceMemoryProperties vkGetPhysicalDeviceMemoryProperties;
 	PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties;
@@ -94,6 +93,12 @@ public:
 	PFN_vkUnmapMemory vkUnmapMemory;
 	PFN_vkUpdateDescriptorSets vkUpdateDescriptorSets;
 	PFN_vkWaitForFences vkWaitForFences = nullptr;
+
+	PFN_vkGetPhysicalDeviceFeatures2KHR vkGetPhysicalDeviceFeatures2KHR;
+#ifndef NDEBUG
+	PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT;
+	PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT;
+#endif
 
 protected:
 	VkInstance instance = VK_NULL_HANDLE;
@@ -123,6 +128,7 @@ protected:
 class FormatConverter : public GenericPipeline {
 public:
 	static constexpr uint maxTransfers = 2;
+	static constexpr uint numLayouts = 2;
 	static constexpr uint32 convWgrpSize = 32;
 	static constexpr uint32 convStep = convWgrpSize * 4;	// 4 texels per invocation
 
@@ -137,7 +143,7 @@ public:
 	};
 
 	struct UniformData {
-		alignas(4) uint colors[256];
+		alignas(16) uint colors[256];
 	};
 
 private:
@@ -145,13 +151,17 @@ private:
 		VkBool32 orderRgb;
 	};
 
+	static constexpr uint32 bindingInput = 0;
+	static constexpr uint32 bindingOutput = 1;
+	static constexpr uint32 bindingUniform = 2;
+
 	array<VkPipeline, eint(Pipeline::index8) + 1> pipelines{};
 	VkPipelineLayout pipelineLayoutRgb = VK_NULL_HANDLE;
 	VkPipelineLayout pipelineLayoutIdx = VK_NULL_HANDLE;
 	VkDescriptorSetLayout descriptorSetLayoutRgb = VK_NULL_HANDLE;
 	VkDescriptorSetLayout descriptorSetLayoutIdx = VK_NULL_HANDLE;
 	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
-	array<VkDescriptorSet, maxTransfers * 2> descriptorSets{};
+	array<VkDescriptorSet, maxTransfers * numLayouts> descriptorSets{};
 
 	array<VkBuffer, maxTransfers> uniformBuffers{};
 	array<VkDeviceMemory, maxTransfers> uniformBufferMemory{};
@@ -159,21 +169,19 @@ private:
 
 public:
 	void init(const InstanceVk* vk);
-	void updateBuffer(const InstanceVk* vk, Pipeline pid, uint id, VkBuffer inputBuffer, VkDeviceSize inputSize) noexcept;
-	void updateImage(const InstanceVk* vk, Pipeline pid, uint id, VkImageView view) noexcept;
+	void updateDescriptorSet(const InstanceVk* vk, VkDescriptorSet dset, VkImageView view, VkBuffer inputBuffer, VkDeviceSize inputSize) noexcept;
 	void free(const InstanceVk* vk) noexcept;
 
 	bool initialized() const { return descriptorSets[0]; }	// cause it's the last thing to be initialized
 	VkPipeline getPipeline(Pipeline pid) const { return pipelines[eint(pid)]; }
 	VkPipelineLayout getPipelineLayout(Pipeline pid) const;
-	VkDescriptorSet getDescriptorSet(Pipeline pid, uint id) const;
+	pair<VkDescriptorSet, uint> getDescriptorSet(Pipeline pid, uint id) const;
 	UniformData* getUniformBufferMapped(uint id) const { return uniformBufferMapped[id]; }
 
 private:
 	void createDescriptorSetLayoutRgb(const InstanceVk* vk);
 	void createDescriptorSetLayoutIdx(const InstanceVk* vk);
 	void createPipelines(const InstanceVk* vk);
-	void createUniformBuffers(const InstanceVk* vk);
 	void createDescriptorPoolAndSets(const InstanceVk* vk);
 };
 
@@ -181,23 +189,11 @@ inline VkPipelineLayout FormatConverter::getPipelineLayout(Pipeline pid) const {
 	return pid != Pipeline::index8 ? pipelineLayoutRgb : pipelineLayoutIdx;
 }
 
-inline VkDescriptorSet FormatConverter::getDescriptorSet(Pipeline pid, uint id) const {
-	return pid != Pipeline::index8 ? descriptorSets[id] : descriptorSets[maxTransfers + id];
+inline pair<VkDescriptorSet, uint> FormatConverter::getDescriptorSet(Pipeline pid, uint id) const {
+	return pid != Pipeline::index8 ? pair(descriptorSets[id], 0) : pair(descriptorSets[maxTransfers + id], 1);
 }
 
-class GenericPass : public GenericPipeline {
-protected:
-	VkRenderPass handle = VK_NULL_HANDLE;
-	VkPipeline pipeline = VK_NULL_HANDLE;
-	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-
-public:
-	VkRenderPass getHandle() const { return handle; }
-	VkPipeline getPipeline() const { return pipeline; }
-	VkPipelineLayout getPipelineLayout() const { return pipelineLayout; }
-};
-
-class RenderPass : public GenericPass {
+class RenderPass : public GenericPipeline {
 public:
 	struct PushData {
 		alignas(16) ivec4 rect;
@@ -210,9 +206,14 @@ public:
 		alignas(16) vec4 pview;
 	};
 
+	static constexpr uint32 dsetView = 0;
+	static constexpr uint32 dsetModel = 1;
 	static constexpr uint samplerLinear = 0;
 	static constexpr uint samplerNearest = 1;
 private:
+	static constexpr uint32 bindingPview = 0;
+	static constexpr uint32 bindingSampler = 1;
+	static constexpr uint32 bindingTexture = 0;
 	static constexpr uint32 textureSetStep = 128;
 
 	struct DescriptorSetBlock {
@@ -222,6 +223,9 @@ private:
 		DescriptorSetBlock(const array<VkDescriptorSet, textureSetStep>& descriptorSets);
 	};
 
+	VkRenderPass handle = VK_NULL_HANDLE;
+	VkPipeline pipeline = VK_NULL_HANDLE;
+	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 	array<VkDescriptorSetLayout, 2> descriptorSetLayouts{};
 	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 	umap<VkDescriptorPool, DescriptorSetBlock> poolSetTex;
@@ -229,11 +233,14 @@ private:
 
 public:
 	vector<VkDescriptorSet> init(const InstanceVk* vk, VkFormat format, uint32 numViews);
+	VkRenderPass getHandle() const { return handle; }
+	VkPipeline getPipeline() const { return pipeline; }
+	VkPipelineLayout getPipelineLayout() const { return pipelineLayout; }
 	pair<VkDescriptorPool, VkDescriptorSet> newDescriptorSetTex(const InstanceVk* vk, VkImageView imageView);
 	pair<VkDescriptorPool, VkDescriptorSet> getDescriptorSetTex(const InstanceVk* vk);
 	void freeDescriptorSetTex(const InstanceVk* vk, VkDescriptorPool pool, VkDescriptorSet dset);
-	static void updateDescriptorSet(const InstanceVk* vk, VkDescriptorSet descriptorSet, VkBuffer uniformBuffer) noexcept;
-	static void updateDescriptorSet(const InstanceVk* vk, VkDescriptorSet descriptorSet, VkImageView imageView) noexcept;
+	static void updateDescriptorSetBuf(const InstanceVk* vk, VkDescriptorSet descriptorSet, VkBuffer uniformBuffer) noexcept;
+	static void updateDescriptorSetImg(const InstanceVk* vk, VkDescriptorSet descriptorSet, VkImageView imageView) noexcept;
 	void free(const InstanceVk* vk);
 
 private:
@@ -241,45 +248,6 @@ private:
 	void createDescriptorSetLayout(const InstanceVk* vk);
 	void createPipeline(const InstanceVk* vk);
 	vector<VkDescriptorSet> createDescriptorPoolAndSets(const InstanceVk* vk, uint32 numViews);
-};
-
-class AddressPass : public GenericPass {
-public:
-	static constexpr uint32 bindingUdat = 0;
-	static constexpr VkFormat format = VK_FORMAT_R32G32_UINT;
-
-	struct PushData {
-		alignas(16) ivec4 rect;
-		alignas(16) ivec4 frame;
-		alignas(8) uvec2 addr;
-	};
-
-	struct UniformData {
-		alignas(16) vec4 pview;
-	};
-
-private:
-	VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
-	VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
-	VkBuffer uniformBuffer = VK_NULL_HANDLE;
-	VkDeviceMemory uniformBufferMemory = VK_NULL_HANDLE;
-	UniformData* uniformBufferMapped;
-
-public:
-	void init(const InstanceVk* vk);
-	void free(const InstanceVk* vk) noexcept;
-
-	VkDescriptorSet getDescriptorSet() const { return descriptorSet; }
-	UniformData* getUniformBufferMapped() const { return uniformBufferMapped; }
-
-private:
-	void createRenderPass(const InstanceVk* vk);
-	void createDescriptorSetLayout(const InstanceVk* vk);
-	void createPipeline(const InstanceVk* vk);
-	void createUniformBuffer(const InstanceVk* vk);
-	void createDescriptorPoolAndSet(const InstanceVk* vk);
-	void updateDescriptorSet(const InstanceVk* vk) noexcept;
 };
 
 class RendererVk final : public Renderer, public InstanceVk {
@@ -294,7 +262,10 @@ private:
 		A4R4G4B4,
 		B4G4R4A4,
 		R4G4B4A4,
-		A2R10G10B10
+		A2B10G10R10,
+		A2R10G10B10,
+		B16G16R16,
+		A16B16G16R16
 	};
 
 	class TextureVk : public Texture {
@@ -354,17 +325,24 @@ private:
 		uint32 gfam, pfam, tfam;
 		uint score;
 		bool canCompute;
-		array<bool, size_t(OptionalTextureFormat::A2R10G10B10) + 1> formats;
+		array<bool, eint(OptionalTextureFormat::A16B16G16R16) + 1> formats;
+	};
+
+	struct Swizzle {
+		uint8 r, g, b, a;
 	};
 
 	struct SurfaceInfo {
 		SDL_Surface* img = nullptr;
-		VkFormat fmt = VK_FORMAT_UNDEFINED;
+		VkFormat fmt;
+		uint8 use;
+		Swizzle cmap;
 		FormatConverter::Pipeline pid;
+		bool direct;
 
 		SurfaceInfo() = default;
-		SurfaceInfo(SDL_Surface* surface, VkFormat format) : img(surface), fmt(format) {}
-		SurfaceInfo(SDL_Surface* surface, FormatConverter::Pipeline conv) : img(surface), pid(conv) {}
+		SurfaceInfo(SDL_Surface* surface, VkFormat format, Swizzle swizzle = {});
+		SurfaceInfo(SDL_Surface* surface, FormatConverter::Pipeline conv);
 	};
 
 	static constexpr array<VkMemoryPropertyFlags, 2> deviceMemoryTypes = { VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
@@ -384,21 +362,10 @@ private:
 #endif
 	uint32 gfamilyIndex, pfamilyIndex, tfamilyIndex;
 	RenderPass renderPass;
-	AddressPass addressPass;
 	FormatConverter fmtConv;
 
 	VkBuffer vertexBuffer = VK_NULL_HANDLE;
 	VkDeviceMemory vertexBufferMemory = VK_NULL_HANDLE;
-
-	VkImage addrImage = VK_NULL_HANDLE;
-	VkDeviceMemory addrImageMemory = VK_NULL_HANDLE;
-	VkImageView addrView = VK_NULL_HANDLE;
-	VkFramebuffer addrFramebuffer = VK_NULL_HANDLE;
-	VkBuffer addrBuffer = VK_NULL_HANDLE;
-	VkDeviceMemory addrBufferMemory = VK_NULL_HANDLE;
-	u32vec2* addrMappedMemory;
-	VkCommandBuffer commandBufferAddr = VK_NULL_HANDLE;
-	VkFence addrFence = VK_NULL_HANDLE;
 
 	array<VkCommandBuffer, FormatConverter::maxTransfers> tcmdBuffers{};
 	array<VkFence, FormatConverter::maxTransfers> tfences{};
@@ -416,8 +383,8 @@ private:
 	uint currentTransfer = 0;
 	uint32 maxComputeWorkGroups;
 	bool refreshFramebuffer = false;
-	array<bool, FormatConverter::maxTransfers> rebindInputBuffer{};
-	array<bool, size_t(OptionalTextureFormat::A2R10G10B10) + 1> optionalFormats;
+	array<array<bool, FormatConverter::numLayouts>, FormatConverter::maxTransfers> rebindInputBuffer{};
+	array<bool, eint(OptionalTextureFormat::A16B16G16R16) + 1> optionalFormats;
 	bool immediatePresent;
 
 public:
@@ -427,29 +394,26 @@ public:
 	void setClearColor(const vec4& color) override;
 	void setVsync(bool vsync) override;
 	void updateView(ivec2& viewRes) override;
-	void setCompression(Settings::Compression compression) override;
-	Info getInfo() const override;
+	void setCompression(Settings::Compression cmpr) noexcept override;
+	SDL_Surface* prepareImage(SDL_Surface* img, bool rpic) const noexcept override;
+	Info getInfo() const noexcept override;
 
 	void startDraw(View* view) override;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) override;
 	void finishDraw(View* view) override;
 	void finishRender() override;
 
-	void startSelDraw(View* view, ivec2 pos) override;
-	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) override;
-	Widget* finishSelDraw(View* view) override;
-
 	Texture* texFromEmpty() override;
-	Texture* texFromIcon(SDL_Surface* img) override;
-	bool texFromIcon(Texture* tex, SDL_Surface* img) override;
-	Texture* texFromRpic(SDL_Surface* img) override;
-	Texture* texFromText(const PixmapRgba& pm) override;
-	bool texFromText(Texture* tex, const PixmapRgba& pm) override;
+	Texture* texFromIcon(SDL_Surface* img) noexcept override;
+	bool texFromIcon(Texture* tex, SDL_Surface* img) noexcept override;
+	Texture* texFromRpic(SDL_Surface* img) noexcept override;
+	Texture* texFromText(const Pixmap& pm) noexcept override;
+	bool texFromText(Texture* tex, const Pixmap& pm) noexcept override;
 	void freeTexture(Texture* tex) noexcept override;
-	void synchTransfer() override;
+	void synchTransfer() noexcept override;
 
 	pair<VkImage, VkDeviceMemory> createImage(u32vec2 size, VkImageType type, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags properties) const;
-	VkImageView createImageView(VkImage image, VkImageViewType type, VkFormat format) const;
+	VkImageView createImageView(VkImage image, VkFormat format, Swizzle swizzle = {}) const;
 	VkFramebuffer createFramebuffer(VkRenderPass rpass, VkImageView view, u32vec2 size) const;
 	void allocateCommandBuffers(VkCommandPool commandPool, VkCommandBuffer* cmdBuffers, uint32 count) const;
 	VkSemaphore createSemaphore() const;
@@ -460,7 +424,6 @@ public:
 	void synchSingleTimeCommands(VkCommandBuffer cmdBuffer, VkFence fence) const noexcept;
 	void transitionImageLayout(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout srcLayout, VkImageLayout dstLayout, VkAccessFlags srcAccess, VkAccessFlags dstAccess, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage) const noexcept;
 	void copyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer buffer, VkImage image, u32vec2 size) const noexcept;
-	void copyImageToBuffer(VkCommandBuffer commandBuffer, VkImage image, VkBuffer buffer, u32vec2 size) const noexcept;
 
 private:
 	void cleanup() noexcept;
@@ -483,20 +446,19 @@ private:
 	bool chooseSurfaceFormat(DeviceInfo& deviceInfo) const;
 	VkPresentModeKHR chooseSwapPresentMode(VkSurfaceKHR surface) const;
 	static uint scoreDevice(const DeviceInfo& devi);
-	template <bool fresh = true> void createTextureDirect(const byte_t* pix, uint32 pitch, uint8 bpp, VkFormat format, TextureVk& tex);
-	template <bool fresh = true> void createTextureIndirect(const SDL_Surface* img, TextureVk& tex, FormatConverter::Pipeline pid);
-	void uploadInputData(const byte_t* pix, u32vec2 res, uint32 pitch, uint8 bpp);
-	template <bool fresh> void finalizeTexture(TextureVk& tex);
+	void createTexture(const SurfaceInfo& si, TextureVk& tex);
+	void createTexture(const Pixmap& pm, TextureVk& tex);
+	uint32 prepareInputBuffer(u32vec2 size, uint8 bpp);
+	void uploadTextureDirect(const TextureVk& tex);
+	void uploadTextureIndirect(const TextureVk& tex, VkDescriptorSet dset, FormatConverter::Pipeline pid);
+	void finalizeFreshTexture(TextureVk& tex);
+	void finalizeExistingTexture(TextureVk& tex);
+	void cleanupTexture(TextureVk& tex) noexcept;
 	void replaceTexture(TextureVk& tex, TextureVk& ntex) noexcept;
 	SurfaceInfo pickPixFormat(SDL_Surface* img) const noexcept;
-	bool canSquashTextures() const;
 	InstanceInfo checkInstanceExtensionSupport() const;
 #ifndef NDEBUG
-	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
+	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) noexcept;
 #endif
 };
-
-inline bool RendererVk::canSquashTextures() const {
-	return optionalFormats[eint(OptionalTextureFormat::B5G6R5)] && optionalFormats[eint(OptionalTextureFormat::R5G6B5)] && optionalFormats[eint(OptionalTextureFormat::A1R5G5B5)] && optionalFormats[eint(OptionalTextureFormat::B5G5R5A1)] && optionalFormats[eint(OptionalTextureFormat::R5G5B5A1)];
-}
 #endif

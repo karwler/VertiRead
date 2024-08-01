@@ -1,10 +1,9 @@
 #pragma once
 
 #include "utils/utils.h"
-#include <forward_list>
-#include <mutex>
-#include <stop_token>
 #include <SDL_events.h>
+#include <forward_list>
+#include <stop_token>
 
 struct fz_context;
 struct fz_document;
@@ -39,6 +38,7 @@ enum class GeneralEvent : int32 {
 	requestPassphrase,
 	confirmPassphrase,
 	cancelPassphrase,
+	setLoginPopupProtocol,
 	exit
 };
 
@@ -62,6 +62,7 @@ enum class ProgFileExplorerEvent : int32 {
 	goIn,
 	goTo,
 	goToLogin,
+	openLogin,
 	exit
 };
 
@@ -95,7 +96,6 @@ enum class ProgSettingsEvent : int32 {
 	setDevice,
 	setCompression,
 	setVsync,
-	setGpuSelecting,
 	setMultiFullscreen,
 	setPreview,
 	setHide,
@@ -103,7 +103,7 @@ enum class ProgSettingsEvent : int32 {
 	setTheme,
 	setFontCmb,
 	setFontLe,
-	setFontHinting,
+	setMonoFont,
 	setScrollSpeed,
 	setDeadzoneSl,
 	setDeadzoneLe,
@@ -164,33 +164,47 @@ void cleanupEvent(UserEvent type, F dealloc) {
 
 enum class Protocol : uint8 {
 	none,
-	smb,
-	sftp
+	ftp,
+	sftp,
+	smb
 };
 inline constexpr array protocolNames = {
 	"",
-	"smb",
-	"sftp"
+	"ftp",
+	"sftp",
+	"smb"
 };
 inline constexpr array<uint16, protocolNames.size()> protocolPorts = {
 	0,
-	445,
-	22
-};
-
-enum class Family : uint8 {
-	any,
-	v4,
-	v6
-};
-inline constexpr array familyNames = {
-	"any",
-	"IPv4",
-	"IPv6"
+	21,
+	22,
+	445
 };
 
 // connection information about a network location
 struct RemoteLocation {
+	enum class Family : uint8 {
+		any,
+		v4,
+		v6
+	};
+	static constexpr array familyNames = {
+		"any",
+		"IPv4",
+		"IPv6"
+	};
+
+	enum class Encrypt : uint8 {
+		off,
+		on,
+		force
+	};
+	static constexpr array encryptNames = {
+		"off",
+		"on",
+		"force"
+	};
+
 	string server;
 	string path;
 	string user;
@@ -199,11 +213,10 @@ struct RemoteLocation {
 	uint16 port;
 	Protocol protocol = Protocol::none;
 	Family family = Family::any;
+	Encrypt encrypt = Encrypt::on;
 
 	static Protocol getProtocol(string_view str) noexcept;
 	static RemoteLocation fromPath(string_view str, Protocol proto);
-private:
-	static uint16 sanitizePort(string_view port, Protocol protocol);
 };
 
 // a new or deleted directory entry
@@ -384,9 +397,9 @@ struct BrowserResultPicture {
 	string picname;
 	ArchiveData arch;
 	PdfFile pdf;
-	vector<pair<Cstring, Texture*>> pics;
-	std::mutex mpic;
+	std::forward_list<pair<Cstring, Texture*>> pics;
 	Cstring error;
+	uint cnt = 0;
 	const bool hasRootDir;
 	const bool newCurDir;
 	const bool newArchive;
@@ -398,12 +411,11 @@ struct BrowserResultPicture {
 
 // intermediate picture load buffer
 struct BrowserPictureProgress {
-	BrowserResultPicture* pnt;	// needed to access the texture vector and mutex (mustn't be deleted)
 	SDL_Surface* img;
-	size_t id;
+	Texture*& tex;
 	Cstring text;
 
-	BrowserPictureProgress(BrowserResultPicture* rp, SDL_Surface* pic, size_t index, Cstring&& msg) noexcept;
+	BrowserPictureProgress(SDL_Surface* pic, Texture*& ref, Cstring&& msg) noexcept;
 };
 
 // list of font families, files and which to select

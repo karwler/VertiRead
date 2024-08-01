@@ -253,10 +253,10 @@ void PicLim::set(string_view str) {
 }
 
 uintptr_t PicLim::toSize(string_view str) {
-	uintptr_t num = 0;
+	uintptr_t num;
 	const char* end = str.data() + str.length();
 	std::from_chars_result res = std::from_chars(std::find_if(str.data(), end, [](char ch) -> bool { return notSpace(ch); }), end, num);
-	if (!num)
+	if (res.ec != std::errc() || !num)
 		return 0;
 
 	const char* beg = std::find_if(res.ptr, end, [](char ch) -> bool { return notSpace(ch); });
@@ -320,11 +320,23 @@ const string& Settings::setTheme(string_view name, vector<string>&& themes) {
 vector<Settings::Display> Settings::displayArrangement() {
 	ivec2 origin(INT_MAX);
 	vector<Display> dsps;
+	Recti rect;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	if (int cnt; SDL_DisplayID* dids = SDL_GetDisplays(&cnt)) {
+		for (int i = 0; i < cnt; ++i)
+			if (SDL_GetDisplayBounds(dids[i], &rect.asRect())) {
+				dsps.emplace_back(rect, dids[i]);
+				origin = glm::min(origin, rect.pos());
+			}
+		SDL_free(dids);
+	}
+#else
 	for (int i = 0, e = SDL_GetNumVideoDisplays(); i < e; ++i)
-		if (Recti rect; !SDL_GetDisplayBounds(i, &rect.asRect())) {
+		if (!SDL_GetDisplayBounds(i, &rect.asRect())) {
 			dsps.emplace_back(rect, i);
 			origin = glm::min(origin, rect.pos());
 		}
+#endif
 	for (Display& it : dsps)
 		it.rect.pos() -= origin;
 	return dsps;
@@ -364,26 +376,49 @@ Settings::Renderer Settings::getRenderer(string_view name) {
 	return Renderer::software;
 }
 
-void Settings::setRenderer(const uset<string>& cmdFlags) {
+void Settings::setRenderer() {
+	for (int i = 1; i < argc; ++i) {
 #ifdef WITH_DIRECT3D
-	if (cmdFlags.contains(flagDirect3d11))
-		renderer = Renderer::direct3d11;
-	else
+		if (cmpFlag(flagDirect3d11, i))
+			renderer = Renderer::direct3d11;
+		else
 #endif
 #ifdef WITH_OPENGL
-	if (cmdFlags.contains(flagOpenGl1))
-		renderer = Renderer::opengl1;
-	else if (cmdFlags.contains(flagOpenGl3))
-		renderer = Renderer::opengl3;
-	else if (cmdFlags.contains(flagOpenEs3))
-		renderer = Renderer::opengles3;
-	else
+		if (cmpFlag(flagOpenGl1, i))
+			renderer = Renderer::opengl1;
+		else if (cmpFlag(flagOpenGl3, i))
+			renderer = Renderer::opengl3;
+		else if (cmpFlag(flagOpenEs3, i))
+			renderer = Renderer::opengles3;
+		else
 #endif
 #ifdef WITH_VULKAN
-	if (cmdFlags.contains(flagVulkan))
-		renderer = Renderer::vulkan;
-	else
+		if (cmpFlag(flagVulkan, i))
+			renderer = Renderer::vulkan;
+		else
 #endif
-	if (cmdFlags.contains(flagSoftware))
-		renderer = Renderer::software;
+		if (cmpFlag(flagSoftware, i))
+			renderer = Renderer::software;
+		else
+			continue;
+		break;
+	}
+}
+
+string Settings::firstArg() {
+	for (int i = 1; i < argc; ++i)
+		if (argv[i][0] != '-')
+#ifdef _WIN32
+			return swtos(argv[i] + (argv[i][0] == '\\'));
+#else
+			return argv[i] + (argv[i][0] == '\\');
+#endif
+	return string();
+}
+
+bool Settings::hasFlag(const char* name) {
+	for (int i = 1; i < argc; ++i)
+		if (cmpFlag(name, i))
+			return true;
+	return false;
 }

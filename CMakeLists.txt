@@ -6,29 +6,37 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(OPENGL "Build with OpenGL 1.1, 3.0 and ES 3.0 support." ON)
+option(SDL3 "Build with SDL3" OFF)
 option(VULKAN "Build with Vulkan 1.0 support." ON)
-if(UNIX)
+if(WIN32)
+	option(DIRECT3D "Build with Direct3D 11 support." ON)
+	option(FTP "Build with FTP support." OFF)
+else()
 	option(APPIMAGE "Package as an AppImage." OFF)
+	option(FTP "Build with FTP support." ON)
 	option(USE_MUPDF "Build with MuPDF support." ON)
 	option(USE_SECRET "Build with libsecret if available." ON)
 	option(USE_SMBCLIENT "Build with smbclient if available." ON)
 	option(USE_SSH2 "Build with libssh2 if available." ON)
 endif()
 if(MSVC)
-	option(DIRECT3D "Build with Direct3D 11 support." ON)
 	option(USE_ARCHIVE "Build with libarchive." OFF)
 	option(USE_ICU "Build with ICU." OFF)
 	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 		option(PREBUILT_ARCHIVE "Use the pre-built libarchive binaries." OFF)
 	endif()
+	set(SDL3_BIN "" CACHE STRING "SDL3 binary location.")
+	set(SDL3_INC "" CACHE STRING "SDL3 header location.")
+	set(IMG3_BIN "" CACHE STRING "SDL3_image binary location.")
+	set(IMG3_INC "" CACHE STRING "SDL3_image header location.")
 else()
+	option(NATIVE "Build for the current CPU." OFF)
 	option(USE_ARCHIVE "Build with libarchive." ON)
 	option(USE_FONTCONFIG "Build with fontconfig if available." ON)
+	option(USE_GNUTLS "Build with gnutls if available." ON)
 	option(USE_ICU "Build with ICU." ON)
+	option(USE_OPENSSL "Build with openssl if available." ON)
 	option(USE_POPPLER "Build with Poppler support." ON)
-endif()
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-	option(NATIVE "Build for the current CPU." OFF)
 endif()
 
 # source files
@@ -62,8 +70,10 @@ set(SRC_FILES
 	"src/utils/compare.h"
 	"src/utils/layouts.cpp"
 	"src/utils/layouts.h"
+	"src/utils/sdlCompat.h"
 	"src/utils/settings.cpp"
 	"src/utils/settings.h"
+	"src/utils/stvector.h"
 	"src/utils/utils.cpp"
 	"src/utils/utils.h"
 	"src/utils/widgets.cpp"
@@ -85,12 +95,10 @@ if(DIRECT3D)
 			"src/engine/shaders/dxGuiVs.rel.h"
 			"src/engine/shaders/dxIdxCs.dbg.h"
 			"src/engine/shaders/dxIdxCs.rel.h"
+			"src/engine/shaders/dxRedCs.dbg.h"
+			"src/engine/shaders/dxRedCs.rel.h"
 			"src/engine/shaders/dxRgbCs.dbg.h"
-			"src/engine/shaders/dxRgbCs.rel.h"
-			"src/engine/shaders/dxSelPs.dbg.h"
-			"src/engine/shaders/dxSelPs.rel.h"
-			"src/engine/shaders/dxSelVs.dbg.h"
-			"src/engine/shaders/dxSelVs.rel.h")
+			"src/engine/shaders/dxRgbCs.rel.h")
 		add_compile_definitions(WITH_DIRECT3D)
 	endif()
 endif()
@@ -102,14 +110,10 @@ if(OPENGL)
 		"src/engine/shaders/glGui.frag.dbg.h"
 		"src/engine/shaders/glGui.frag.rel.h"
 		"src/engine/shaders/glGui.vert.dbg.h"
-		"src/engine/shaders/glGui.vert.rel.h"
-		"src/engine/shaders/glSel.frag.dbg.h"
-		"src/engine/shaders/glSel.frag.rel.h"
-		"src/engine/shaders/glSel.vert.dbg.h"
-		"src/engine/shaders/glSel.vert.rel.h")
+		"src/engine/shaders/glGui.vert.rel.h")
 	add_compile_definitions(WITH_OPENGL)
 
-	foreach(GLFILE "rsc/shaders/glGui.frag" "rsc/shaders/glGui.vert" "rsc/shaders/glSel.frag" "rsc/shaders/glSel.vert")
+	foreach(GLFILE "rsc/shaders/glGui.frag" "rsc/shaders/glGui.vert")
 		file(READ "${CMAKE_SOURCE_DIR}/${GLFILE}" GL_CODE)
 		get_filename_component(GLFILE_NAME ${GLFILE} NAME)
 		file(WRITE "${CMAKE_SOURCE_DIR}/src/engine/shaders/${GLFILE_NAME}.dbg.h" "R\"r(${GL_CODE})r\"")
@@ -128,14 +132,16 @@ if(VULKAN)
 			"src/engine/shaders/vkIdx.comp.dbg.h"
 			"src/engine/shaders/vkIdx.comp.rel.h"
 			"src/engine/shaders/vkRgb.comp.dbg.h"
-			"src/engine/shaders/vkRgb.comp.rel.h"
-			"src/engine/shaders/vkSel.frag.dbg.h"
-			"src/engine/shaders/vkSel.frag.rel.h"
-			"src/engine/shaders/vkSel.vert.dbg.h"
-			"src/engine/shaders/vkSel.vert.rel.h")
+			"src/engine/shaders/vkRgb.comp.rel.h")
 		add_compile_definitions(WITH_VULKAN)
 		include_directories(SYSTEM ${Vulkan_INCLUDE_DIRS})
 	endif()
+endif()
+if(FTP)
+	list(APPEND SRC_FILES
+		"src/engine/network.cpp"
+		"src/engine/network.h")
+	add_compile_definitions(WITH_FTP)
 endif()
 if(WIN32)
 	list(APPEND SRC_FILES "rsc/resource.rc")
@@ -144,10 +150,10 @@ endif()
 include_directories("${CMAKE_SOURCE_DIR}/src")
 
 # dependencies
-set(VER_SDL "2.30.5")
+set(VER_SDL "2.30.8")
 set(VER_IMG "2.8.2")
-set(VER_FT2 "2.13.2")
-set(VER_ARC "3.7.4")
+set(VER_FT2 "2.13.3")
+set(VER_ARC "3.7.7")
 set(VER_ICU "75-1")
 set(VER_GLM "1.0.1")
 set(DIR_LIB "${CMAKE_SOURCE_DIR}/lib")
@@ -232,8 +238,14 @@ if(USE_MUPDF)
 		add_compile_definitions(CAN_MUPDF)
 	endif()
 endif()
-if(USE_SECRET AND (USE_SMBCLIENT OR USE_SSH2))
+if(USE_SECRET AND (FTP OR USE_SMBCLIENT OR USE_SSH2))
 	list(APPEND PKGCONFIG_ARGS "libsecret-1")
+endif()
+if(FTP AND USE_GNUTLS)
+	list(APPEND PKGCONFIG_ARGS "gnutls")
+endif()
+if(FTP AND USE_OPENSSL)
+	list(APPEND PKGCONFIG_ARGS "openssl")
 endif()
 if(USE_SMBCLIENT)
 	list(APPEND PKGCONFIG_ARGS "smbclient")
@@ -250,12 +262,24 @@ if(PKGCONFIG_ARGS)
 		pkg_check_modules(PKGCONFS ${PKGCONFIG_ARGS})
 		include_directories(SYSTEM ${PKGCONFS_INCLUDE_DIRS})
 
-		if((PKGCONFS_libsecret-1_FOUND OR PKGCONFS_libsecret-1_VERSION) AND (PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION OR PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION))
+		if((PKGCONFS_libsecret-1_FOUND OR PKGCONFS_libsecret-1_VERSION) AND (FTP OR PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION OR PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION))
 			list(APPEND SRC_FILES
 				"src/engine/optional/secret.cpp"
 				"src/engine/optional/secret.h")
 			add_compile_definitions(CAN_SECRET)
 			set(NEED_GLIB TRUE)
+		endif()
+		if(PKGCONFS_gnutls_FOUND OR PKGCONFS_gnutls_VERSION)
+			list(APPEND SRC_FILES
+				"src/engine/optional/gnutls.cpp"
+				"src/engine/optional/gnutls.h")
+			add_compile_definitions(CAN_GNUTLS)
+		endif()
+		if(PKGCONFS_openssl_FOUND OR PKGCONFS_openssl_VERSION)
+			list(APPEND SRC_FILES
+				"src/engine/optional/openssl.cpp"
+				"src/engine/optional/openssl.h")
+			add_compile_definitions(CAN_OPENSSL)
 		endif()
 		if(PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION)
 			list(APPEND SRC_FILES
@@ -311,11 +335,19 @@ if(WIN32)
 		set(BIN_FT2 "${DIR_FT2}/build")
 
 		file(MAKE_DIRECTORY "${DIR_LIB}")
-		downloadLib("https://github.com/libsdl-org/SDL/releases/download/release-${VER_SDL}/SDL2-devel-${VER_SDL}-VC.zip" "${DIR_SDL}" "${DIR_LIB}/SDL2-${VER_SDL}")
-		downloadLib("https://github.com/libsdl-org/SDL_image/releases/download/release-${VER_IMG}/SDL2_image-devel-${VER_IMG}-VC.zip" "${DIR_IMG}" "${DIR_LIB}/SDL2_image-${VER_IMG}")
 		compileLib("https://download.savannah.gnu.org/releases/freetype/freetype-${VER_FT2}.tar.gz" "${DIR_FT2}" "${CMAKE_COMMAND}\;..\;-G\;NMake Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DFT_ENABLE_ERROR_STRINGS=1\;-DFT_DISABLE_ZLIB=1\;-DFT_DISABLE_BZIP2=1\;-DFT_DISABLE_PNG=1\;-DFT_DISABLE_HARFBUZZ=1\;-DFT_DISABLE_BROTLI=1;${MAKE_CMD}" "${BIN_FT2}" "${DIR_LIB}/freetype-${VER_FT2}")
-		link_directories("${BIN_SDL}" "${BIN_IMG}" "${BIN_FT2}")
-		include_directories(SYSTEM "${DIR_SDL}/include" "${DIR_IMG}/include" "${DIR_FT2}/include")
+		link_directories("${BIN_FT2}")
+		include_directories(SYSTEM "${DIR_FT2}/include")
+
+		if(SDL3)
+			link_directories("${SDL3_BIN}" "${IMG3_BIN}")
+			include_directories(SYSTEM "${SDL3_INC}" "${SDL3_INC}/SDL3" "${IMG3_INC}" "${IMG3_INC}/SDL3_image")
+		else()
+			downloadLib("https://github.com/libsdl-org/SDL/releases/download/release-${VER_SDL}/SDL2-devel-${VER_SDL}-VC.zip" "${DIR_SDL}" "${DIR_LIB}/SDL2-${VER_SDL}")
+			downloadLib("https://github.com/libsdl-org/SDL_image/releases/download/release-${VER_IMG}/SDL2_image-devel-${VER_IMG}-VC.zip" "${DIR_IMG}" "${DIR_LIB}/SDL2_image-${VER_IMG}")
+			link_directories("${BIN_SDL}" "${BIN_IMG}")
+			include_directories(SYSTEM "${DIR_SDL}/include" "${DIR_IMG}/include")
+		endif()
 
 		if(USE_ARCHIVE)
 			if(PREBUILT_ARCHIVE)
@@ -366,8 +398,14 @@ else()
 	endif()
 endif()
 if(NOT MSVC)
-	find_package(SDL2 REQUIRED COMPONENTS SDL2)
-	find_package(SDL2_image REQUIRED)
+	if(SDL3)
+		find_package(SDL3 REQUIRED COMPONENTS SDL3)
+		find_package(SDL3_image REQUIRED)
+		include_directories(SYSTEM "$<TARGET_FILE_DIR:SDL3::SDL3>/../include/SDL3" "$<TARGET_FILE_DIR:SDL3_image::SDL3_image>/../include/SDL3_image")
+	else()
+		find_package(SDL2 REQUIRED COMPONENTS SDL2)
+		find_package(SDL2_image REQUIRED)
+	endif()
 	find_package(Freetype REQUIRED)
 	link_directories(${FREETYPE_LIBRARY_DIRS})
 	include_directories(SYSTEM ${FREETYPE_INCLUDE_DIRS})
@@ -397,7 +435,7 @@ set(ICONS_DIR "${DATA_DIR}/icons")
 set(LICN_DIR "${DATA_DIR}/licenses")
 
 # compiler flags
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "Intel")
 	add_compile_options(-Wall -Wextra -pedantic-errors -Wformat=2 -Wmissing-declarations -Wold-style-cast -Wshadow -Wunreachable-code
 		-Wno-implicit-fallthrough -Wno-missing-field-initializers -Wno-switch)
 	if(NATIVE)
@@ -421,14 +459,19 @@ endif()
 
 # set main target
 add_executable(${PROJECT_NAME} WIN32 ${SRC_FILES})
+if(WIN32 AND FTP)
+	target_link_libraries(${PROJECT_NAME} ws2_32)
+endif()
 if(MSVC)
 	target_link_libraries(${PROJECT_NAME}
-		SDL2 SDL2_image freetype
+		"$<IF:$<BOOL:${SDL3}>,SDL3;SDL3_image,SDL2;SDL2_image>"
+		freetype
 		$<$<BOOL:${USE_ARCHIVE}>:archive>
 		"$<$<BOOL:${USE_ICU}>:icuuc;icuin>")
 else()
 	target_link_libraries(${PROJECT_NAME}
-		SDL2::SDL2 SDL2_image::SDL2_image ${FREETYPE_LIBRARIES}
+		"$<IF:$<BOOL:${SDL3}>,SDL3::SDL3;SDL3_image::SDL3_image,SDL2::SDL2;SDL2_image::SDL2_image>"
+		${FREETYPE_LIBRARIES}
 		"$<$<BOOL:${LibArchive_FOUND}>:${LibArchive_LIBRARIES}>"
 		"$<$<BOOL:${ICU_FOUND}>:ICU::uc;$<IF:$<BOOL:${WIN32}>,ICU::in,ICU::i18n>>"
 		"$<$<BOOL:${UNIX}>:pthread;dl>")
@@ -460,13 +503,17 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 	COMMAND_EXPAND_LISTS)
 if(MSVC)
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_SDL}/SDL2.dll" "${BIN_IMG}/SDL2_image.dll" "$<$<BOOL:${MSVC}>:${BIN_IMG}/optional/libavif-16.dll;${BIN_IMG}/optional/libtiff-5.dll;${BIN_IMG}/optional/libwebp-7.dll;${BIN_IMG}/optional/libwebpdemux-2.dll>" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-		COMMAND "$<$<BOOL:${MSVC}>:${CMAKE_COMMAND};-E;copy_if_different;${BIN_IMG}/optional/LICENSE.avif.txt;${BIN_IMG}/optional/LICENSE.dav1d.txt;${BIN_IMG}/optional/LICENSE.tiff.txt;${BIN_IMG}/optional/LICENSE.webp.txt;${LICN_DIR}>"
-		COMMAND "$<$<BOOL:${MINGW}>:${CMAKE_COMMAND};-E;copy_if_different;${DIR_ARC}/COPYING;${LICN_DIR}/COPYING.libarchive.txt>"
-		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_SDL}/COPYING.txt" "${LICN_DIR}/COPYING.SDL.txt"
-		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_IMG}/LICENSE.txt" "${LICN_DIR}/LICENSE.SDL_image.txt"
-		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_FT2}/LICENSE.txt" "${LICN_DIR}/LICENSE.freetype.txt"
-		COMMAND_EXPAND_LISTS)
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_FT2}/LICENSE.txt" "${LICN_DIR}/LICENSE.freetype.txt")
+	if(SDL3)
+		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${SDL3_BIN}/SDL3.dll" "${IMG3_BIN}/SDL3_image.dll" "${IMG3_BIN}/libavif-16.dll" "${IMG3_BIN}/libtiff-6.dll" "${IMG3_BIN}/libwebp-7.dll" "${IMG3_BIN}/libwebpdemux-2.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>")
+	else()
+		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_SDL}/SDL2.dll" "${BIN_IMG}/SDL2_image.dll" "${BIN_IMG}/optional/libavif-16.dll" "${BIN_IMG}/optional/libtiff-5.dll" "${BIN_IMG}/optional/libwebp-7.dll" "${BIN_IMG}/optional/libwebpdemux-2.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_IMG}/optional/LICENSE.avif.txt" "${BIN_IMG}/optional/LICENSE.dav1d.txt" "${BIN_IMG}/optional/LICENSE.tiff.txt" "${BIN_IMG}/optional/LICENSE.webp.txt" "${LICN_DIR}"
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_SDL}/COPYING.txt" "${LICN_DIR}/COPYING.SDL.txt"
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_IMG}/LICENSE.txt" "${LICN_DIR}/LICENSE.SDL_image.txt")
+	endif()
 	if(USE_ARCHIVE)
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ARC}/archive.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>")

@@ -1,11 +1,10 @@
 #pragma once
 
 #include "utils/settings.h"
-#include <set>
-#include <SDL_video.h>
+#include "utils/stvector.h"
 
-struct PixmapRgba {
-	uptr<uint32[]> pix;
+struct Pixmap {
+	uptr<uint8[]> pix;
 	uvec2 res;
 };
 
@@ -42,9 +41,9 @@ public:
 		};
 
 		vector<Device> devices;
-		std::set<Settings::Compression> compressions;
+		stvector<Settings::Compression, Settings::compressionNames.size()> compressions;
 		uint texSize;
-		bool selecting;
+		Settings::Compression curCompression;
 	};
 
 protected:
@@ -56,9 +55,9 @@ protected:
 	};
 
 	vector<View*> views;
-	umap<SDL_PixelFormatEnum, SDL_PixelFormatEnum> preconvertFormats;	// formats of pictures to be converted
 	uint maxTextureSize;
 	uint maxPictureSize;	// should only get accessed from one thread at a time
+	Settings::Compression compression;
 
 	Renderer(size_t numViews, uint maxTexRes) : views(numViews), maxTextureSize(maxTexRes) {}
 public:
@@ -67,33 +66,33 @@ public:
 	virtual void setClearColor(const vec4& color) = 0;
 	virtual void setVsync(bool vsync) = 0;
 	virtual void updateView(ivec2& viewRes) = 0;
-	virtual void setCompression(Settings::Compression compression) = 0;
-	virtual Info getInfo() const = 0;
+	virtual void setCompression(Settings::Compression cmpr) noexcept = 0;
+	virtual SDL_Surface* prepareImage(SDL_Surface* img, bool rpic) const noexcept = 0;	// converts the image to a format and size that can be handed to the graphics driver (must be thread safe)
+	virtual Info getInfo() const noexcept = 0;
 	virtual void startDraw(View* view) = 0;
 	virtual void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) = 0;
 	virtual void finishDraw(View* view) = 0;
 	virtual void finishRender() {}
-	virtual void startSelDraw(View*, ivec2) {}
-	virtual void drawSelRect(const Widget*, const Recti&, const Recti&) {}
-	virtual Widget* finishSelDraw(View* view);
-	virtual Texture* texFromEmpty() = 0;					// creates empty texture handle (currently only used for text)
-	virtual Texture* texFromIcon(SDL_Surface* img) = 0;		// scales down image to largest possible size
-	virtual bool texFromIcon(Texture* tex, SDL_Surface* img) = 0;	// ^ but refills tex and returns true if successful
-	virtual Texture* texFromRpic(SDL_Surface* img) = 0;		// image must have been scaled down in advance
-	virtual Texture* texFromText(const PixmapRgba& pm) = 0;	// cuts off image if it's too large and uses nearest filter if possible
-	virtual bool texFromText(Texture* tex, const PixmapRgba& pm) = 0;	// ^ but refills tex and returns true if successful
+	virtual Texture* texFromEmpty() = 0;									// creates empty texture handle (currently only used for text)
+	virtual Texture* texFromIcon(SDL_Surface* img) noexcept = 0;			// scales down image to largest possible size
+	virtual bool texFromIcon(Texture* tex, SDL_Surface* img) noexcept = 0;	// ^ but refills tex and returns true if successful
+	virtual Texture* texFromRpic(SDL_Surface* img) noexcept = 0;			// image must have been scaled down in advance
+	virtual Texture* texFromText(const Pixmap& pm) noexcept = 0;			// cuts off image if it's too large and uses nearest filter if possible
+	virtual bool texFromText(Texture* tex, const Pixmap& pm) noexcept = 0;	// ^ but refills tex and returns true if successful
 	virtual void freeTexture(Texture* tex) noexcept = 0;
-	virtual void synchTransfer() {}
+	virtual void synchTransfer() noexcept {}
 
 	const vector<View*>& getViews() const { return views; }
 	View* findView(SDL_Window* win) noexcept;
 	View* findView(ivec2 point) noexcept;
 	void setMaxPicRes(uint& size) noexcept;
-	SDL_Surface* makeCompatible(SDL_Surface* img, bool rpic) const noexcept;	// converts the image to a format and size that can be directly handed to the graphics driver (must be thread safe)
 protected:
 	static SDL_Surface* convertReplace(SDL_Surface* img, SDL_PixelFormatEnum format = SDL_PIXELFORMAT_ABGR8888) noexcept;
 	static SDL_Surface* limitSize(SDL_Surface* img, uint32 limit) noexcept;	// scales down the image so that it's width/height fits within the limit
+	static bool isIndexedGrayscale(SDL_Surface* img) noexcept;
 	static Rectf cropTexRect(const Recti& isct, const Recti& rect, uvec2 texRes) noexcept;
+	static void copyTextPixels(void* dst, const Pixmap& pm, uvec2 res, uint dpitch) noexcept;
+	static void copyPalette(uint* dst, const SDL_Palette* palette) noexcept;
 	static void recommendPicRamLimit(uintptr_t& mem) noexcept;
 };
 
@@ -109,9 +108,9 @@ private:
 	};
 
 	SDL_Surface* curViewSrf;
+	uint64 lastDraw;
+	uint drawDelay;
 	ivec2 curViewPos;
-	uint32 lastDraw = 0;
-	uint32 drawDelay;
 	u8vec4 bgColor;
 
 public:
@@ -121,23 +120,25 @@ public:
 	void setClearColor(const vec4& color) override;
 	void setVsync(bool vsync) override;
 	void updateView(ivec2& viewRes) override;
-	void setCompression(Settings::Compression compression) override;
-	Info getInfo() const override;
+	void setCompression(Settings::Compression cmpr) noexcept override;
+	SDL_Surface* prepareImage(SDL_Surface* img, bool rpic) const noexcept override;
+	Info getInfo() const noexcept override;
 
 	void startDraw(View* view) override;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) override;
 	void finishDraw(View* view) override;
 
 	Texture* texFromEmpty() override;
-	Texture* texFromIcon(SDL_Surface* img) override;
-	bool texFromIcon(Texture* tex, SDL_Surface* img) override;
-	Texture* texFromRpic(SDL_Surface* img) override;
-	Texture* texFromText(const PixmapRgba& pm) override;
-	bool texFromText(Texture* tex, const PixmapRgba& pm) override;
+	Texture* texFromIcon(SDL_Surface* img) noexcept override;
+	bool texFromIcon(Texture* tex, SDL_Surface* img) noexcept override;
+	Texture* texFromRpic(SDL_Surface* img) noexcept override;
+	Texture* texFromText(const Pixmap& pm) noexcept override;
+	bool texFromText(Texture* tex, const Pixmap& pm) noexcept override;
 	void freeTexture(Texture* tex) noexcept override;
 
 private:
 	void cleanup() noexcept;
+	static void copyTextPixels(SDL_Surface* img, const Pixmap& pm) noexcept;
 	static u8vec4 colorToBytes(const vec4& color);
 };
 

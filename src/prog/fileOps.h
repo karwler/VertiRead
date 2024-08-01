@@ -1,7 +1,7 @@
 #pragma once
 
 #include "types.h"
-#include <stack>
+#include "engine/network.h"
 #ifdef CAN_SMB
 #include <libsmbclient.h>
 #endif
@@ -11,6 +11,9 @@
 #undef WIN32_LEAN_AND_MEAN
 #endif
 #include <SDL_image.h>
+#include <mutex>
+#include <regex>
+#include <stack>
 
 struct archive;
 struct archive_entry;
@@ -18,21 +21,23 @@ struct _SecretService;
 struct _GHashTable;
 struct _LIBSSH2_SESSION;
 struct _LIBSSH2_SFTP;
+struct _LIBSSH2_SFTP_HANDLE;
 
 #ifdef CAN_SECRET
 // loads and stores logins via libsecret
 class CredentialManager {
 private:
-	static constexpr char keyProtocol[] = "protocol";
-	static constexpr char keyServer[] = "server";
-	static constexpr char keyPath[] = "path";
-	static constexpr char keyUser[] = "user";
-	static constexpr char keyWorkgroup[] = "workgroup";
-	static constexpr char keyPort[] = "port";
-	static constexpr char keyFamily[] = "family";
+	static inline char keyProtocol[] = "protocol";
+	static inline char keyServer[] = "server";
+	static inline char keyPath[] = "path";
+	static inline char keyUser[] = "user";
+	static inline char keyWorkgroup[] = "workgroup";
+	static inline char keyPort[] = "port";
+	static inline char keyFamily[] = "family";
 
 	_SecretService* service;
 	_GHashTable* attributes;
+	string valProtocol, valServer, valPath, valUser, valWorkgroup, valPort, valFamily;
 
 public:
 	CredentialManager();	// throws if libsecrent couldn't be loaded
@@ -42,7 +47,7 @@ public:
 	void saveCredentials(const RemoteLocation& rl);
 
 private:
-	void setAttributes(const RemoteLocation& rl, string& portTmp);
+	void setAttributes(const RemoteLocation& rl);
 };
 #endif
 
@@ -77,7 +82,7 @@ public:
 	virtual bool pollWatch(vector<FileChange>& files) = 0;	// returns true if the watched file/directory has been renamed or deleted
 	virtual bool canWatch() const noexcept = 0;
 	virtual string prefix() const = 0;
-	virtual bool equals(const RemoteLocation& rl) const = 0;
+	virtual bool equals(const RemoteLocation& rl) const noexcept = 0;
 
 	bool isPicture(const string& path);
 	bool isPdf(const string& path);	// loads Poppler if the file is has a PDF signature
@@ -104,16 +109,27 @@ protected:
 	static tuple<bool, bool, bool> unpackListOptions(BrowserListOption opts);
 	template <Integer C> static bool notDotName(const C* name);
 	template <Pointer T, class F> static bool checkStopDeleteProcess(CountedStopReq& csr, std::stop_token stoken, std::stack<T>& dirs, F dclose);
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	static bool SDLCALL sdlFlush(void* userdata, SDL_IOStatus* status) noexcept;
+#endif
 #ifdef WITH_ARCHIVE
 	template <InvocableR<int, archive*, ArchiveData&> F> static archive* initArchive(ArchiveData& ad, Cstring* error, F openArch);
 private:
 	static const char* requestArchivePassphrase(archive* arch, void* data);
 	static SDL_RWops* makeArchiveEntryRWops(archive* arch, archive_entry* entry) noexcept;
-	static Sint64 SDLCALL sdlArchiveEntrySize(SDL_RWops* context);
-	static Sint64 SDLCALL sdlArchiveEntrySeek(SDL_RWops* context, Sint64 offset, int whence);
-	static size_t SDLCALL sdlArchiveEntryRead(SDL_RWops* context, void* ptr, size_t size, size_t maxnum);
-	static size_t SDLCALL sdlArchiveEntryWrite(SDL_RWops* context, const void* ptr, size_t size, size_t num);
-	static int SDLCALL sdlArchiveEntryClose(SDL_RWops* context);
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	static Sint64 SDLCALL sdlArchiveEntrySize(void* userdata) noexcept;
+	static Sint64 SDLCALL sdlArchiveEntrySeek(void* userdata, Sint64 offset, SDL_IOWhence whence) noexcept;
+	static size_t SDLCALL sdlArchiveEntryRead(void* userdata, void* ptr, size_t size, SDL_IOStatus* status) noexcept;
+	static size_t SDLCALL sdlArchiveEntryWrite(void* userdata, const void* ptr, size_t size, SDL_IOStatus* status) noexcept;
+	static bool SDLCALL sdlArchiveEntryClose(void* userdata) noexcept;
+#else
+	static Sint64 SDLCALL sdlArchiveEntrySize(SDL_RWops* context) noexcept;
+	static Sint64 SDLCALL sdlArchiveEntrySeek(SDL_RWops* context, Sint64 offset, int whence) noexcept;
+	static size_t SDLCALL sdlArchiveEntryRead(SDL_RWops* context, void* ptr, size_t size, size_t maxnum) noexcept;
+	static size_t SDLCALL sdlArchiveEntryWrite(SDL_RWops* context, const void* ptr, size_t size, size_t num) noexcept;
+	static int SDLCALL sdlArchiveEntryClose(SDL_RWops* context) noexcept;
+#endif
 #endif
 };
 
@@ -160,7 +176,7 @@ private:
 	static constexpr size_t esiz = 2048;
 	static constexpr uint dirStopCheckInterval = 64;
 
-	byte_t* ebuf;
+	alignas(void*) byte_t ebuf[esiz];
 #ifdef _WIN32
 	wstring wpdir;
 	wstring filter;
@@ -173,7 +189,7 @@ private:
 #endif
 
 public:
-	FileOpsLocal();
+	FileOpsLocal() noexcept;
 	~FileOpsLocal() override;
 
 	BrowserResultList listDirectory(std::stop_token stoken, const string& path, BrowserListOption opts) override;
@@ -191,7 +207,7 @@ public:
 	bool pollWatch(vector<FileChange>& files) override;
 	bool canWatch() const noexcept override;
 	string prefix() const override;
-	bool equals(const RemoteLocation& rl) const override;
+	bool equals(const RemoteLocation& rl) const noexcept override;
 
 	static Data readFile(const fs::path::value_type* path);
 
@@ -206,31 +222,30 @@ private:
 #endif
 };
 
-#if defined(CAN_SMB) || defined(CAN_SFTP)
 // convenience layer for handling files from remote locations
+#if defined(WITH_FTP) || defined(CAN_SFTP) || defined(CAN_SMB)
 class FileOpsRemote : public FileOps {
 protected:
 	static constexpr uint dirStopCheckInterval = 16;
 
 	std::mutex mlock;
-	const string server;
 
-public:
-	FileOpsRemote(string&& srv);
-
-	string prefix() const override;
 #ifdef WITH_ARCHIVE
+public:
 	archive* openArchive(ArchiveData& ad, Cstring* error = nullptr) override;
 #endif
-};
 
-inline FileOpsRemote::FileOpsRemote(string&& srv) :
-	server(std::move(srv))
-{}
+protected:
+#if SDL_VERSION_ATLEAST(3, 0, 0) && (defined(CAN_SMB) || defined(CAN_SFTP))
+	static size_t sdlReadFinish(ssize_t len, SDL_IOStatus* status) noexcept;
+	static size_t sdlWriteFinish(ssize_t len, SDL_IOStatus* status) noexcept;
+#endif
+	static int translateFamily(RemoteLocation::Family family);
+};
 #endif
 
-#ifdef CAN_SMB
 // SMB file operations
+#ifdef CAN_SMB
 class FileOpsSmb final : public FileOpsRemote {
 private:
 	static constexpr uint notifyTimeout = 200;
@@ -250,6 +265,7 @@ private:
 	smbc_rmdir_fn srmdir;
 	smbc_rename_fn srename;
 	smbc_notify_fn snotify;
+	const string serverShare;
 	string pwd;
 	SMBCFILE* wndir = nullptr;
 	string filter;
@@ -271,7 +287,8 @@ public:
 	void unsetWatch() override;
 	bool pollWatch(vector<FileChange>& files) override;
 	bool canWatch() const noexcept override;
-	bool equals(const RemoteLocation& rl) const override;
+	string prefix() const override;
+	bool equals(const RemoteLocation& rl) const noexcept override;
 
 protected:
 	SDL_RWops* makeRWops(const string& path) override;
@@ -279,23 +296,31 @@ protected:
 private:
 	void cleanup() noexcept;
 	bool hasModeFlags(const char* path, mode_t mdes);
-	static void logMsg(void* data, int level, const char* msg);
-	static Sint64 SDLCALL sdlSize(SDL_RWops* context);
-	static Sint64 SDLCALL sdlSeek(SDL_RWops* context, Sint64 offset, int whence);
-	static size_t SDLCALL sdlRead(SDL_RWops* context, void* ptr, size_t size, size_t maxnum);
-	static size_t SDLCALL sdlWrite(SDL_RWops* context, const void* ptr, size_t size, size_t num);
-	static int SDLCALL sdlClose(SDL_RWops* context);
+	static void logMsg(void* data, int level, const char* msg) noexcept;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	static Sint64 SDLCALL sdlSize(void* userdata) noexcept;
+	static Sint64 SDLCALL sdlSeek(void* userdata, Sint64 offset, SDL_IOWhence whence) noexcept;
+	static size_t SDLCALL sdlRead(void* userdata, void* ptr, size_t size, SDL_IOStatus* status) noexcept;
+	static size_t SDLCALL sdlWrite(void* userdata, const void* ptr, size_t size, SDL_IOStatus* status) noexcept;
+	static bool SDLCALL sdlClose(void* userdata) noexcept;
+#else
+	static Sint64 SDLCALL sdlSize(SDL_RWops* context) noexcept;
+	static Sint64 SDLCALL sdlSeek(SDL_RWops* context, Sint64 offset, int whence) noexcept;
+	static size_t SDLCALL sdlRead(SDL_RWops* context, void* ptr, size_t size, size_t maxnum) noexcept;
+	static size_t SDLCALL sdlWrite(SDL_RWops* context, const void* ptr, size_t size, size_t num) noexcept;
+	static int SDLCALL sdlClose(SDL_RWops* context) noexcept;
+#endif
 };
 #endif
 
-#ifdef CAN_SFTP
 // SFTP file operations
+#ifdef CAN_SFTP
 class FileOpsSftp final : public FileOpsRemote {
 private:
 	_LIBSSH2_SESSION* session = nullptr;
 	_LIBSSH2_SFTP* sftp = nullptr;
-	const string user;
-	int sock = -1;
+	const string server, user;
+	SOCKET sock = INVALID_SOCKET;
 	const uint16 port;
 
 public:
@@ -313,21 +338,112 @@ public:
 	void unsetWatch() override {}
 	bool pollWatch(vector<FileChange>& files) override;
 	bool canWatch() const noexcept override;
-	bool equals(const RemoteLocation& rl) const override;
+	string prefix() const override;
+	bool equals(const RemoteLocation& rl) const noexcept override;
 
 protected:
 	SDL_RWops* makeRWops(const string& path) override;
 
 private:
-	void authenticate(const vector<string>& passwords);
 	void cleanup() noexcept;
 	bool hasAttributeFlags(string_view path, ulong flags);
 	Cstring lastError() const;
 
-	static Sint64 SDLCALL sdlSize(SDL_RWops* context);
-	static Sint64 SDLCALL sdlSeek(SDL_RWops* context, Sint64 offset, int whence);
-	static size_t SDLCALL sdlRead(SDL_RWops* context, void* ptr, size_t size, size_t maxnum);
-	static size_t SDLCALL sdlWrite(SDL_RWops* context, const void* ptr, size_t size, size_t num);
-	static int SDLCALL sdlClose(SDL_RWops* context);
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	static Sint64 SDLCALL sdlSize(void* userdata) noexcept;
+	static Sint64 SDLCALL sdlSeek(void* userdata, Sint64 offset, SDL_IOWhence whence) noexcept;
+	static size_t SDLCALL sdlRead(void* userdata, void* ptr, size_t size, SDL_IOStatus* status) noexcept;
+	static size_t SDLCALL sdlWrite(void* userdata, const void* ptr, size_t size, SDL_IOStatus* status) noexcept;
+	static bool SDLCALL sdlClose(void* userdata) noexcept;
+#else
+	static Sint64 SDLCALL sdlSize(SDL_RWops* context) noexcept;
+	static Sint64 SDLCALL sdlSeek(SDL_RWops* context, Sint64 offset, int whence) noexcept;
+	static size_t SDLCALL sdlRead(SDL_RWops* context, void* ptr, size_t size, size_t maxnum) noexcept;
+	static size_t SDLCALL sdlWrite(SDL_RWops* context, const void* ptr, size_t size, size_t num) noexcept;
+	static int SDLCALL sdlClose(SDL_RWops* context) noexcept;
+#endif
+	Sint64 sdlSeek(_LIBSSH2_SFTP_HANDLE* fh, Sint64 offset, SDL_IOWhence whence) noexcept;
+};
+#endif
+
+// FTP/FTPS file operations
+#ifdef WITH_FTP
+class FileOpsFtp final : public FileOpsRemote {
+private:
+	struct FileCache {
+		Data data;
+		string path;
+		size_t pos = 0;
+		bool done = false;
+
+		FileCache(string&& fpath) : path(std::move(fpath)) {}
+	};
+
+	static constexpr uint timeoutPi = 10;
+	static constexpr uint timeoutDtp = 20;
+
+	NetConnection pi;
+	IpAddress addrPi{};
+	TlsData tlsData{};
+	const std::regex rgxPasv = std::regex(R"r((\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+))r", std::regex::optimize);
+	const std::regex rgxEpsv = std::regex(R"r(\|\s*([12]?)\s*\|\s*(.*?)\s*\|\s*(\d+)\s*\|)r", std::regex::optimize);
+	const std::regex rgxSize = std::regex(R"r(\((\d+)\s*bytes\)\s*$)r", std::regex::icase | std::regex::optimize);
+	const string server, user;
+	const uint16 port;
+	bool featMlst = false;
+	bool featTvfs = false;
+
+public:
+	FileOpsFtp(const RemoteLocation& rl, const vector<string>& passwords);
+	~FileOpsFtp() override;
+
+	BrowserResultList listDirectory(std::stop_token stoken, const string& path, BrowserListOption opts) override;
+	void deleteEntryThread(std::stop_token stoken, uptr<string> path) override;
+	bool renameEntry(const string& oldPath, const string& newPath) override;
+	Data readFile(const string& path) override;
+	fs::file_type fileType(const string& path) override;
+	bool isRegular(const string& path) override;
+	bool isDirectory(const string& path) override;
+	void setWatch(const string&) override {}
+	void unsetWatch() override {}
+	bool pollWatch(vector<FileChange>& files) override;
+	bool canWatch() const noexcept override;
+	string prefix() const override;
+	bool equals(const RemoteLocation& rl) const noexcept override;
+
+protected:
+	SDL_RWops* makeRWops(const string& path) override;
+
+private:
+	void cleanup() noexcept;
+	fs::file_type statFile(FtpReceiver& recvPi, string_view path);
+	NetConnection initPassive(FtpReceiver& recvPi);
+	string_view prepareFileOp(FtpReceiver& recvPi, string_view path);
+	static string_view getMlstType(string_view line);
+	static string replyError(string_view msg, const FtpReply& reply);
+	void handleAuthWarning(const RemoteLocation& rl, const char* msg);
+
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	static Sint64 SDLCALL sdlSize(void* userdata) noexcept;
+	static Sint64 SDLCALL sdlSeek(void* userdata, Sint64 offset, SDL_IOWhence whence) noexcept;
+	static size_t SDLCALL sdlRead(void* userdata, void* ptr, size_t size, SDL_IOStatus* status) noexcept;
+	static size_t SDLCALL sdlWrite(void* userdata, const void* ptr, size_t size, SDL_IOStatus* status) noexcept;
+	static bool SDLCALL sdlClose(void* userdata) noexcept;
+	static FileCache& prepareFileCache(void* userdata) noexcept;
+#else
+	static Sint64 SDLCALL sdlSize(SDL_RWops* context) noexcept;
+	static Sint64 SDLCALL sdlSeek(SDL_RWops* context, Sint64 offset, int whence) noexcept;
+	static size_t SDLCALL sdlRead(SDL_RWops* context, void* ptr, size_t size, size_t maxnum) noexcept;
+	static size_t SDLCALL sdlWrite(SDL_RWops* context, const void* ptr, size_t size, size_t num) noexcept;
+	static int SDLCALL sdlClose(SDL_RWops* context) noexcept;
+	static FileCache& prepareFileCache(SDL_RWops* context) noexcept;
+#endif
+	static Sint64 sdlSeek(FileCache& fc, Sint64 offset, SDL_IOWhence whence) noexcept;
+	FileCache& prepareFileCache(FileCache& fc) noexcept;
+#ifdef _WIN32
+	static string sanitizePath(string_view path);
+#else
+	static string_view sanitizePath(string_view path) { return path; }
+#endif
 };
 #endif

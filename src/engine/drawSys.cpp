@@ -10,11 +10,11 @@
 #include "prog/progs.h"
 #include "utils/compare.h"
 #include "utils/layouts.h"
-#include <cwctype>
-#include <format>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
+#include <cwctype>
+#include <format>
 
 // FONT SET
 
@@ -30,12 +30,12 @@ FontSet::~FontSet() {
 	FT_Done_FreeType(lib);
 }
 
-void FontSet::init(const fs::path& path, Settings::Hinting hinting) {
+void FontSet::init(const fs::path& path, bool mono) {
 	clearCache();
 	for (Font& it : fonts)
 		FT_Done_Face(it.face);
 	fonts.clear();
-	setMode(hinting);
+	setMode(mono);
 
 	fonts.push_back(openFont(path, fontTestHeight));
 	int ymin = 0, ymax = 0;
@@ -74,7 +74,7 @@ void FontSet::clearCache() {
 	bufSize = 0;
 }
 
-const PixmapRgba& FontSet::renderText(string_view text, uint size) {
+const Pixmap& FontSet::renderText(string_view text, uint size) {
 	if (pm.res = uvec2(measureText(text, size), size); pm.res.x) {
 		prepareBuffer();
 		prepareAdvance(text.begin(), text.length(), xofs);
@@ -131,7 +131,7 @@ uint FontSet::measureText(string_view text, uint size) {
 	return mfin;
 }
 
-const PixmapRgba& FontSet::renderText(string_view text, uint size, uint limit) {
+const Pixmap& FontSet::renderText(string_view text, uint size, uint limit) {
 	if (pm.res = measureText(text, size, limit); pm.res.x) {
 		ypos = uint(float(size) * baseScale);
 
@@ -216,7 +216,7 @@ uvec2 FontSet::measureText(string_view text, uint size, uint limit) {
 void FontSet::prepareBuffer() {
 	size_t size = size_t(pm.res.x) * size_t(pm.res.y);
 	if (size > bufSize) {
-		pm.pix = std::make_unique_for_overwrite<uint32[]>(size);
+		pm.pix = std::make_unique_for_overwrite<uint8[]>(size);
 		bufSize = size;
 	}
 	std::fill_n(pm.pix.get(), size, 0);
@@ -332,14 +332,14 @@ vector<FontSet::Font>::iterator FontSet::loadGlyph(char32_t ch, int32 flags) {
 		try {
 			Font font = openFont(path, height);
 			if (FT_Error err = FT_Load_Char(font.face, ch, flags))
-				logError(FT_Error_String(err));
+				SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", FT_Error_String(err));
 			else if (font.face->glyph->glyph_index) {
 				fonts.push_back(std::move(font));
 				return fonts.end() - 1;
 			}
 			FT_Done_Face(font.face);
 		} catch (const std::runtime_error& err) {
-			logError(err.what());
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
 		}
 	}
 	if (FT_Error err = FT_Load_Char(fonts[0].face, ch, flags))
@@ -348,7 +348,7 @@ vector<FontSet::Font>::iterator FontSet::loadGlyph(char32_t ch, int32 flags) {
 }
 
 void FontSet::copyGlyph(const FT_Bitmap& bmp, int top, int left) noexcept {
-	uint32* dst = pm.pix.get() + xpos + left;
+	uint8* dst = pm.pix.get() + xpos + left;
 	uchar* src = bmp.buffer;
 	int offs = ypos - top;
 	if (offs >= 0)
@@ -360,13 +360,13 @@ void FontSet::copyGlyph(const FT_Bitmap& bmp, int top, int left) noexcept {
 
 	for (uint r = 0; r < rows; ++r, dst += pm.res.x, src += bmp.pitch)
 		for (uint c = 0; c < bmp.width; ++c)
-			if (reinterpret_cast<uchar*>(dst + c)[3] < src[c])
-				dst[c] = 0x00FFFFFF | (uint32(src[c]) << 24);
+			if (dst[c] < src[c])
+				dst[c] = src[c];
 }
 
-void FontSet::setMode(Settings::Hinting hinting) noexcept {
+void FontSet::setMode(bool mono) noexcept {
 	height = 0;
-	mode = hinting != Settings::Hinting::mono ? FT_RENDER_MODE_NORMAL : FT_RENDER_MODE_MONO;
+	mode = !mono ? FT_RENDER_MODE_NORMAL : FT_RENDER_MODE_MONO;
 }
 
 // DRAW SYS
@@ -399,7 +399,7 @@ DrawSys::DrawSys(const vector<SDL_Window*>& windows, const ivec2* vofs) :
 	}
 
 	try {
-		SDL_Surface* white = SDL_CreateRGBSurfaceWithFormat(0, 2, 2, 32, SDL_PIXELFORMAT_RGBA32);
+		SDL_Surface* white = SDL_CreateSurface(2, 2, SDL_PIXELFORMAT_RGBA32);
 		if (!white)
 			throw std::runtime_error(std::format("Failed to create blank texture: {}", SDL_GetError()));
 		SDL_FillRect(white, nullptr, 0xFFFFFFFF);
@@ -413,7 +413,7 @@ DrawSys::DrawSys(const vector<SDL_Window*>& windows, const ivec2* vofs) :
 		string dirIcons = fromPath(World::fileSys()->dirIcons());
 		for (size_t i = 0; i < iconStems.size() - 1; ++i)
 			if (texes[i + fileTexBegin] = renderer->texFromIcon(loadIcon(dirIcons / iconStems[i] + iconExt, iconSize)); !texes[i + fileTexBegin])
-				logError("Failed to load texture '", iconStems[i], iconExt, '\'');
+				SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load texture '%s%s'", iconStems[i], iconExt);
 
 		setFont(toPath(World::sets()->font));
 		texes[eint(Tex::tooltip)] = renderer->texFromEmpty();
@@ -464,7 +464,7 @@ bool DrawSys::updateDpi() {
 		string dirIcons = fromPath(World::fileSys()->dirIcons());
 		for (size_t i = 0; i < iconStems.size() - 1; ++i)
 			if (!renderer->texFromIcon(texes[i + fileTexBegin], loadIcon(dirIcons / iconStems[i] + iconExt, iconSize)))
-				logError("Failed to reload texture '", iconStems[i], iconExt, '\'');
+				SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to reload texture '%s%s'", iconStems[i], iconExt);
 		renderer->synchTransfer();
 		return true;
 	}
@@ -473,10 +473,17 @@ bool DrawSys::updateDpi() {
 
 float DrawSys::maxDpi() const {
 	float mdpi = 0.f;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	for (Renderer::View* it : renderer->getViews())
+		if (float scl = SDL_GetWindowDisplayScale(it->win); scl > mdpi)
+			mdpi = scl;
+	return mdpi > 0.f ? mdpi * fallbackDpi : fallbackDpi;
+#else
 	for (Renderer::View* it : renderer->getViews())
 		if (float vdpi; !SDL_GetDisplayDPI(SDL_GetWindowDisplayIndex(it->win), nullptr, nullptr, &vdpi) && vdpi > mdpi)
 			mdpi = vdpi;
 	return mdpi > 0.f ? mdpi : fallbackDpi;
+#endif
 }
 
 void DrawSys::setTheme(string_view name) {
@@ -495,7 +502,7 @@ void DrawSys::setFont(const fs::path& font) {
 		path = std::move(fontPaths[0]);
 	} else
 		throw std::runtime_error(std::format("Failed to find a font file for '{}'", fromPath(font)));
-	fonts.init(path, World::sets()->hinting);
+	fonts.init(path, World::sets()->monoFont);
 }
 
 void DrawSys::drawWidgets(bool mouseLast) {
@@ -699,25 +706,4 @@ optional<bool> DrawSys::prepareTooltip() {
 		pos = brk + 1;
 	}
 	return renderer->texFromText(texes[eint(Tex::tooltip)], fonts.renderText(curTooltip, tooltipHeight, width)) ? optional(true) : std::nullopt;
-}
-
-Widget* DrawSys::getSelectedWidget(Layout* box, ivec2 mPos) {
-	Renderer::View* view = renderer->findView(mPos);
-	if (!view)
-		return nullptr;
-
-	renderer->startSelDraw(view, mPos - view->rect.pos());
-	box->drawAddr(view->rect);
-	return renderer->finishSelDraw(view);
-}
-
-void DrawSys::drawButtonAddr(const Button* wgt, const Recti& view) {
-	if (Recti rect = wgt->rect(); rect.overlaps(view))
-		renderer->drawSelRect(wgt, rect, wgt->frame());
-}
-
-void DrawSys::drawLayoutAddr(const Layout* wgt, const Recti& view) {
-	renderer->drawSelRect(wgt, wgt->rect(), wgt->frame());	// invisible background to set selection area
-	for (Widget* it : wgt->getWidgets())
-		it->drawAddr(view);
 }

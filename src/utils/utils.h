@@ -1,21 +1,19 @@
 #pragma once
 
+#include "sdlCompat.h"
+#include <SDL_rect.h>
 #include <algorithm>
 #include <array>
 #include <charconv>
 #include <cstring>
 #include <filesystem>
+#include <glm/common.hpp>
+#include <glm/fwd.hpp>
 #include <memory>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <glm/common.hpp>
-#include <glm/fwd.hpp>
-#define SDL_MAIN_HANDLED
-#include <SDL_log.h>
-#include <SDL_rect.h>
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 namespace fs = std::filesystem;
@@ -27,9 +25,8 @@ using uchar = unsigned char;
 using ushort = unsigned short;
 using uint = unsigned int;
 using ulong = unsigned long;
-using ullong = unsigned long long;
 using llong = long long;
-using ldouble = long double;
+using ullong = unsigned long long;
 
 using std::array;
 using std::optional;
@@ -42,18 +39,17 @@ using std::wstring;
 using std::wstring_view;
 
 using byte_t = std::byte;
-using int8 = int8_t;
-using uint8 = uint8_t;
-using int16 = int16_t;
-using uint16 = uint16_t;
-using int32 = int32_t;
-using uint32 = uint32_t;
-using int64 = int64_t;
-using uint64 = uint64_t;
-
 template <class... T> using umap = std::unordered_map<T...>;
 template <class... T> using uptr = std::unique_ptr<T...>;
 
+using glm::int8;
+using glm::uint8;
+using glm::int16;
+using glm::uint16;
+using glm::int32;
+using glm::uint32;
+using glm::int64;
+using glm::uint64;
 using glm::mat4;
 using glm::vec2;
 using glm::dvec2;
@@ -212,57 +208,44 @@ struct Rect {
 	SDL_Rect& asRect() { return *reinterpret_cast<SDL_Rect*>(this); }
 	const SDL_Rect& asRect() const { return *reinterpret_cast<const SDL_Rect*>(this); }
 
-	constexpr bool operator==(const Rect& rect) const;
-	constexpr bool empty() const;
-	constexpr bool contains(const tvec2& point) const;
-	constexpr bool overlaps(const Rect& rect) const;
-	constexpr Rect<T> intersect(const Rect& rect) const;
-	constexpr Rect<T> translate(const tvec2& mov) const;
+	constexpr bool operator==(const Rect& rect) const {
+		return x == rect.x && y == rect.y && w == rect.w && h == rect.h;
+	}
+
+	constexpr bool empty() const {
+		return w <= T(0) || h <= T(0);
+	}
+
+	constexpr bool contains(const tvec2& point) const {
+		return point.x >= x && point.x < x + w && point.y >= y && point.y < y + h;
+	}
+
+	constexpr bool overlaps(const Rect& rect) const {
+		if (!empty() && !rect.empty()) {
+			tvec2 dpos = glm::max(pos(), rect.pos());
+			tvec2 dend = glm::min(end(), rect.end());
+			return dend.x > dpos.x && dend.y > dpos.y;
+		}
+		return false;
+	}
+
+	constexpr Rect intersect(const Rect& rect) const {
+		if (!empty() && !rect.empty()) {
+			tvec2 dpos = glm::max(pos(), rect.pos());
+			tvec2 dend = glm::min(end(), rect.end());
+			return Rect(dpos, dend - dpos);
+		}
+		return Rect(T(0));
+	}
+
+	constexpr Rect translate(const tvec2& mov) const {
+		return Rect(pos() + mov, size());
+	}
 };
 
 using Recti = Rect<int>;
 using Rectu = Rect<uint>;
 using Rectf = Rect<float>;
-
-template <Number T>
-constexpr bool Rect<T>::operator==(const Rect& rect) const {
-	return x == rect.x && y == rect.y && w == rect.w && h == rect.h;
-}
-
-template <Number T>
-constexpr bool Rect<T>::empty() const {
-	return w <= T(0) || h <= T(0);
-}
-
-template <Number T>
-constexpr bool Rect<T>::contains(const tvec2& point) const {
-	return point.x >= x && point.x < x + w && point.y >= y && point.y < y + h;
-}
-
-template <Number T>
-constexpr bool Rect<T>::overlaps(const Rect& rect) const {
-	if (!empty() && !rect.empty()) {
-		tvec2 dpos = glm::max(pos(), rect.pos());
-		tvec2 dend = glm::min(end(), rect.end());
-		return dend.x > dpos.x && dend.y > dpos.y;
-	}
-	return false;
-}
-
-template <Number T>
-constexpr Rect<T> Rect<T>::intersect(const Rect& rect) const {
-	if (!empty() && !rect.empty()) {
-		tvec2 dpos = glm::max(pos(), rect.pos());
-		tvec2 dend = glm::min(end(), rect.end());
-		return Rect(dpos, dend - dpos);
-	}
-	return Rect(T(0));
-}
-
-template <Number T>
-constexpr Rect<T> Rect<T>::translate(const tvec2& mov) const {
-	return Rect(pos() + mov, size());
-}
 
 // size of a widget in pixels or relative to it's parent
 struct Size {
@@ -377,6 +360,12 @@ private:
 
 bool strciequal(string_view a, string_view b) noexcept;
 bool strciequal(wstring_view a, wstring_view b) noexcept;
+#ifdef _WIN32
+bool strasymequal(const char* a, const wchar_t* b) noexcept;
+#endif
+const char* readQuoteString(const char* text, string& field);
+bool pathCompare(string_view::iterator& ai, string_view::iterator ae, string_view::iterator& bi, string_view::iterator be) noexcept;
+bool pathCompare(const char*& ai, const char*& bi) noexcept;
 string_view parentPath(string_view path) noexcept;
 bool pathEqual(string_view a, string_view b) noexcept;
 bool pathEqual(const char* a, const char* b) noexcept;
@@ -389,6 +378,12 @@ bool isAbsolute(string_view path) noexcept;
 template <Integer T>
 bool strfilled(const T* str) {
 	return str && str[0];
+}
+
+template <Integer T, class F>
+void strtransform(T* str, F func) {
+	for (char ch; (ch = *str); ++str)
+		*str = func(ch);
 }
 
 inline bool isSpace(int c) {
@@ -568,6 +563,8 @@ template <Class S = string, uint8 base = 10, Integer T>
 S toStr(T num) {
 	array<char, sizeof(T) * 8 + std::is_signed_v<T>> buf;
 	std::to_chars_result res = std::to_chars(buf.data(), buf.data() + buf.size(), num, base);
+	if (res.ec != std::errc())
+		return S();
 	if constexpr (base > 10)
 		std::transform(buf.data(), res.ptr, buf.data(), toupper);
 	return S(buf.data(), res.ptr);
@@ -582,7 +579,7 @@ template <Class S = string, Floating T>
 S toStr(T num, std::chars_format fmt = std::chars_format::fixed) {
 	array<char, 64> buf;
 	std::to_chars_result res = std::to_chars(buf.data(), buf.data() + buf.size(), num, fmt);
-	return S(buf.data(), res.ptr);
+	return res.ec == std::errc() ? S(buf.data(), res.ptr) : S();
 }
 
 template <uint8 base = 10, glm::length_t L, Integer T, glm::qualifier Q>
@@ -603,11 +600,10 @@ string toStr(const glm::vec<L, T, Q>& v, const char* sep = " ") {
 
 template <Number T, class... A>
 T toNum(string_view str, A... args) {
-	T val = T(0);
+	T val;
 	size_t i = 0;
 	for (; i < str.length() && isSpace(str[i]); ++i);
-	std::from_chars(str.data() + i, str.data() + str.length(), val, args...);
-	return val;
+	return std::from_chars(str.data() + i, std::to_address(str.end()), val, args...).ec == std::errc() ? val : T(0);
 }
 
 template <VecNumber T, class... A>
@@ -617,7 +613,7 @@ T toVec(string_view str, typename T::value_type fill = typename T::value_type(0)
 	for (glm::length_t i = 0; p < str.length() && i < vec.length(); ++i) {
 		for (; p < str.length() && isSpace(str[p]); ++p);
 		for (; p < str.length(); ++p)
-			if (std::from_chars_result res = std::from_chars(str.data() + p, str.data() + str.length(), vec[i], args...); res.ec == std::errc(0)) {
+			if (std::from_chars_result res = std::from_chars(str.data() + p, str.data() + str.length(), vec[i], args...); res.ec == std::errc()) {
 				p = res.ptr - str.data();
 				break;
 			}
@@ -639,24 +635,4 @@ template <Integer T>
 T roundToMultiple(T val, T mul) {
 	T rem = val % mul;
 	return rem ? val + mul - rem : val;
-}
-
-template <class... A>
-void logInfo(A&&... args) {
-	try {
-		string out = (std::ostringstream() << ... << std::forward<A>(args)).str();
-		SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%.*s", uint(out.length()), out.data());
-	} catch (...) {
-		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to log");
-	}
-}
-
-template <class... A>
-void logError(A&&... args) {
-	try {
-		string out = (std::ostringstream() << ... << std::forward<A>(args)).str();
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%.*s", uint(out.length()), out.data());
-	} catch (...) {
-		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to log");
-	}
 }

@@ -40,10 +40,6 @@ void Layout::drawSelf(const Recti& view) {
 		widgets[i]->drawSelf(view);
 }
 
-void Layout::drawAddr(const Recti& view) {
-	World::drawSys()->drawLayoutAddr(this, view);
-}
-
 void Layout::onResize() {
 	calculateWidgetPositions();
 	for (uint i = 0; i < numWgts; ++i)
@@ -633,7 +629,11 @@ void ReaderBox::tick(float dSec) {
 	if (countDown) {
 		cursorTimer -= dSec;
 		if (cursorTimer <= 0.f) {
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+			SDL_HideCursor();
+#else
 			SDL_ShowCursor(SDL_DISABLE);
+#endif
 			countDown = false;
 		}
 	}
@@ -667,11 +667,15 @@ void ReaderBox::onMouseMove(ivec2 mPos, ivec2 mMov) {
 	countDown = World::scene()->getSelectedScrollArea() == this && !showBar() && World::scene()->getCapture() != this && cursorTimer > 0.f;
 	if (cursorTimer < menuHideTimeout) {
 		cursorTimer = menuHideTimeout;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+		SDL_ShowCursor();
+#else
 		SDL_ShowCursor(SDL_ENABLE);
+#endif
 	}
 }
 
-void ReaderBox::setPictures(vector<pair<Cstring, Texture*>>& imgs, string_view startPic, bool fwd) {
+void ReaderBox::setPictures(std::forward_list<pair<Cstring, Texture*>>& imgs, uint cnt, string_view startPic, bool fwd) {
 	deselectWidgets();
 	clearWidgets();
 
@@ -679,7 +683,7 @@ void ReaderBox::setPictures(vector<pair<Cstring, Texture*>>& imgs, string_view s
 	using enum Settings::Zoom;
 	case first:
 		if (!imgs.empty())
-			if (uint res = imgs[0].second->getRes()[direction.horizontal()])
+			if (uint res = imgs.front().second->getRes()[direction.horizontal()])
 				zoomStep = zoomStepToFit(res);
 		break;
 	case largest: {
@@ -692,18 +696,19 @@ void ReaderBox::setPictures(vector<pair<Cstring, Texture*>>& imgs, string_view s
 			zoomStep = zoomStepToFit(maxRes);
 	} }
 
-	numWgts = imgs.size();
+	numWgts = cnt;
 	widgets = std::make_unique_for_overwrite<Widget*[]>(numWgts);
 	positions = std::make_unique_for_overwrite<ivec2[]>(numWgts + 1);
 	picNames = std::make_unique<Cstring[]>(numWgts);
 	bool dp = direction.positive();
 	if (!dp)
-		rng::reverse(imgs);
+		imgs.reverse();
 
-	for (uint i = 0; i < numWgts; ++i) {
-		widgets[i] = new Picture(0, imgs[i].second);
+	uint i = 0;
+	for (std::forward_list<pair<Cstring, Texture*>>::iterator it = imgs.begin(); it != imgs.end(); ++it, ++i) {
+		widgets[i] = new Picture(0, it->second);
 		widgets[i]->setParent(this, i);
-		picNames[i] = std::move(imgs[i].first);
+		picNames[i] = std::move(it->first);
 	}
 	startPicId = std::find(picNames.get(), picNames.get() + numWgts, startPic) - picNames.get();
 	postInit();

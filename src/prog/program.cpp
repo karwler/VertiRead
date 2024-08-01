@@ -12,15 +12,15 @@
 Program::~Program() {
 	delete state;
 #ifdef CAN_SECRET
-	if (credential)
-		delete *credential;
+	if (credentialState == InitState::done)
+		delete credential;
 #endif
 }
 
-void Program::start(const vector<string>& cmdVals) {
+void Program::start() {
 	eventOpenBookList();
-	if (!cmdVals.empty())
-		openFile(cmdVals[0].data());
+	if (string book = Settings::firstArg(); !book.empty())
+		openFile(book.data());
 }
 
 void Program::tick() {
@@ -54,6 +54,9 @@ void Program::handleGeneralEvent(const SDL_UserEvent& event) {
 		break;
 	case cancelPassphrase:
 		eventSetPassphrase(false);
+		break;
+	case setLoginPopupProtocol:
+		eventSetLoginPopupProtocol(static_cast<PushButton*>(event.data1));
 		break;
 	case exit:
 		eventExit();
@@ -122,6 +125,9 @@ void Program::handleProgFileExplorerEvent(const SDL_UserEvent& event) {
 		break;
 	case goToLogin:
 		eventBrowserGoToLogin();
+		break;
+	case openLogin:
+		eventBrowserOpenLogin();
 		break;
 	case exit:
 		eventExitBrowser();
@@ -232,14 +238,11 @@ void Program::handleProgSettingsEvent(const SDL_UserEvent& event) {
 	case setVsync:
 		eventSetVsync(static_cast<CheckBox*>(event.data1));
 		break;
-	case setGpuSelecting:
-		World::sets()->gpuSelecting = static_cast<CheckBox*>(event.data1)->on;
-		break;
 	case setMultiFullscreen:
 		eventSetMultiFullscreen(static_cast<WindowArranger*>(event.data1));
 		break;
 	case setPreview:
-		World::sets()->preview = static_cast<CheckBox*>(event.data1)->on;
+		World::sets()->preview = Settings::Preview(finishComboBox(static_cast<PushButton*>(event.data1)));
 		break;
 	case setHide:
 		World::sets()->showHidden = static_cast<CheckBox*>(event.data1)->on;
@@ -256,8 +259,8 @@ void Program::handleProgSettingsEvent(const SDL_UserEvent& event) {
 	case setFontLe:
 		setFont(toPath(static_cast<LabelEdit*>(event.data1)->getText()));
 		break;
-	case setFontHinting:
-		eventSetFontHinting(static_cast<PushButton*>(event.data1));
+	case setMonoFont:
+		eventSetMonoFont(static_cast<CheckBox*>(event.data1));
 		break;
 	case setScrollSpeed:
 		World::sets()->scrollSpeed = toVec<vec2>(static_cast<LabelEdit*>(event.data1)->getText());
@@ -370,7 +373,7 @@ void Program::eventListFinished(const SDL_UserEvent& event) {
 	case ok:
 		browser.setDirectoryWatch();
 		if (pe->fillFileList(std::move(rl->files), std::move(rl->dirs)))
-			browser.startPreview(state->getLineHeight());
+			startBrowserPreview();
 		break;
 	case error:
 		pe->fillFileList(vector<Cstring>(), vector<Cstring>());
@@ -393,7 +396,7 @@ void Program::eventOpenBookContextGeneral(Widget* wgt) {
 
 void Program::eventOpenLastPage() {
 	string_view bname = static_cast<PushButton*>(World::scene()->getContext()->owner())->getText().data();
-	if (vector<string> paths = World::fileSys()->getLastPage(bname); !paths.empty()) {
+	if (stvector<string, Settings::maxPageElements> paths = World::fileSys()->getLastPage(bname); !paths.empty()) {
 		string root = World::sets()->dirLib / bname;
 		paths[0] = !paths[0].empty() ? root / paths[0] : root;
 		if (browser.openPicture(std::move(root), std::move(paths)))
@@ -405,7 +408,7 @@ void Program::eventOpenLastPage() {
 }
 
 void Program::eventOpenLastPageGeneral() {
-	if (vector<string> paths = World::fileSys()->getLastPage(Browser::dotStr); !paths.empty()) {
+	if (stvector<string, Settings::maxPageElements> paths = World::fileSys()->getLastPage(Browser::dotStr); !paths.empty()) {
 		if (browser.openPicture(string(), std::move(paths)))
 			setPopupProgress();
 		else
@@ -526,7 +529,7 @@ void Program::restartBrowserList() {
 
 void Program::startBrowserPreview() {
 	if (auto pe = dynamic_cast<ProgFileExplorer*>(state))
-		if (World::sets()->preview)
+		if ((World::sets()->preview == Settings::Preview::local && browser.isLocal()) || World::sets()->preview == Settings::Preview::all)
 			browser.startPreview(pe->getLineHeight());
 }
 
@@ -574,35 +577,41 @@ void Program::browserGoToHandle(A&&... args) {
 
 template <Invocable<const RemoteLocation&, vector<string>&&> F>
 void Program::browserLoginAuto(RemoteLocation&& rl, EventId kcal, F func) {
-#ifdef CAN_SECRET
-	try {
-		if (!credential || *credential) {
-			if (!credential) {
-				credential = nullptr;
-				credential = new CredentialManager;
-			}
-			if (vector<string> passwords = (*credential)->loadPasswords(rl); !passwords.empty())
-				func(rl, std::move(passwords));
-		}
-	} catch (const std::runtime_error& err) {
-		logError(err.what());
+	if (!rl.password.empty()) {
+		func(rl, vector<string>());
+		return;
 	}
+#ifdef CAN_SECRET
+	if (lazyInitCredentials())
+		if (vector<string> passwords = credential->loadPasswords(rl); !passwords.empty()) {
+			func(rl, std::move(passwords));
+			return;
+		}
 #endif
-	state->showPopupRemoteLogin(std::move(rl), kcal);
+	state->showPopupLogin(std::move(rl), kcal);
 }
 
 template <Invocable<const RemoteLocation&> F>
 void Program::browserLoginManual(F func) {
 	try {
 		auto [rl, save] = ProgState::remoteLocationFromPopup();
+		World::scene()->setPopup(nullptr);
 		func(rl);
 #ifdef CAN_SECRET
 		if (save)
-			(*credential)->saveCredentials(rl);
+			credential->saveCredentials(rl);
 #endif
 	} catch (const std::runtime_error& err) {
 		state->showPopupMessage(err.what());
 	}
+}
+
+void Program::eventBrowserOpenLogin() {
+	RemoteLocation rl = {
+		.port = protocolPorts[eint(defaultProtocolSelect)],
+		.protocol = defaultProtocolSelect
+	};
+	state->showPopupLogin(std::move(rl), ProgFileExplorerEvent::goToLogin);
 }
 
 void Program::eventPreviewProgress(uptr<char[]> ndata, SDL_Surface* icon) {
@@ -629,9 +638,7 @@ void Program::eventExitBrowser() {
 // READER
 
 void Program::eventReaderProgress(uptr<BrowserPictureProgress> pp) {
-	pp->pnt->mpic.lock();
-	pp->pnt->pics[pp->id].second = World::drawSys()->getRenderer()->texFromRpic(pp->img);
-	pp->pnt->mpic.unlock();
+	pp->tex = World::drawSys()->getRenderer()->texFromRpic(pp->img);
 	state->updatePopupMessage(std::move(pp->text));
 }
 
@@ -640,14 +647,9 @@ void Program::eventReaderFinished(ResultCode rc, uptr<BrowserResultPicture> rp) 
 	switch (rc) {
 	using enum ResultCode;
 	case ok:
-		if (rp->arch)	// when loading from an archive then the pictures will likely be out of order
-			rng::sort(rp->pics, [](const pair<Cstring, Texture*>& a, const pair<Cstring, Texture*>& b) -> bool { return Strcomp::less(a.first.data(), b.first.data()); });
-		else if (!rp->fwd)
-			rng::reverse(rp->pics);	// when loading from a directory or pdf backwards then the pictures are gonna be sorted but in reverse order
-
 		browser.finishLoadPictures(*rp);
 		setState<ProgReader>();
-		static_cast<ProgReader*>(state)->reader->setPictures(rp->pics, rp->picname, rp->fwd);
+		static_cast<ProgReader*>(state)->reader->setPictures(rp->pics, rp->cnt, rp->picname, rp->fwd);
 		break;
 	case stop:
 		startBrowserPreview();
@@ -794,7 +796,7 @@ void Program::eventFontsFinished(const SDL_UserEvent& event) {
 	if (flr->error.empty())
 		ps->setFontField(std::move(flr->families), std::move(flr->files), flr->select);
 	else
-		logError(flr->error);
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", flr->error.data());
 }
 
 void Program::eventSetZoomType(PushButton* but) {
@@ -878,9 +880,9 @@ void Program::setFont(const fs::path& font) {
 	}
 }
 
-void Program::eventSetFontHinting(PushButton* but) {
-	World::sets()->hinting = Settings::Hinting(finishComboBox(but));
-	World::drawSys()->setFontHinting(World::sets()->hinting);
+void Program::eventSetMonoFont(CheckBox* cb) {
+	World::sets()->monoFont = cb->on;
+	World::drawSys()->setMonoFont(World::sets()->monoFont);
 	state->eventRefresh();
 }
 
@@ -977,6 +979,13 @@ void Program::eventSetPassphrase(bool ok) {
 #endif
 }
 
+void Program::eventSetLoginPopupProtocol(PushButton* but) {
+	Protocol oldProto = strToEnum(protocolNames, World::scene()->getContext()->owner<ComboBox>()->getText().data(), defaultProtocolSelect);
+	Protocol newProto = strToEnum(protocolNames, but->getText().data(), defaultProtocolSelect);
+	if (oldProto != newProto)
+		state->resetPopupLogin(oldProto, newProto);
+}
+
 void Program::eventExit() {
 	state->eventClosing();
 	World::winSys()->close();
@@ -993,3 +1002,18 @@ void Program::setState(A&&... args) {
 	state = new T(std::forward<A>(args)...);
 	World::scene()->resetLayouts();
 }
+
+#ifdef CAN_SECRET
+bool Program::lazyInitCredentials() {
+	if (credentialState == InitState::none) {
+		try {
+			credential = new CredentialManager;
+			credentialState = InitState::done;
+		} catch (const std::runtime_error& err) {
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
+			credentialState = InitState::error;
+		}
+	}
+	return credentialState == InitState::done;
+}
+#endif

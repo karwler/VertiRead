@@ -59,5 +59,5 @@ if __name__ == '__main__':
 
 	srcd = os.path.join(os.path.dirname(__file__), 'shaders')
 	dstd = os.path.join(os.path.dirname(__file__), os.pardir, 'src', 'engine', 'shaders')
-	for it in ['dxGuiVs.hlsl', 'dxGuiPs.hlsl', 'dxSelVs.hlsl', 'dxSelPs.hlsl', 'dxRgbCs.hlsl', 'dxBgrCs.hlsl', 'dxIdxCs.hlsl']:
+	for it in ['dxGuiVs.hlsl', 'dxGuiPs.hlsl', 'dxRgbCs.hlsl', 'dxBgrCs.hlsl', 'dxRedCs.hlsl', 'dxIdxCs.hlsl']:
 		compile_source(comp, it, srcd, dstd, '5_0')

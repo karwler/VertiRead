@@ -66,9 +66,10 @@ public:
 	void showPopupChoice(Cstring&& msg, EventId kcal, EventId ccal = GeneralEvent::closePopup, Alignment malign = Alignment::left);
 	void showPopupInput(Cstring&& msg, string&& text, EventId kcal, EventId ccal = GeneralEvent::closePopup, bool visible = true, Cstring&& ktxt = "Okay", Alignment malign = Alignment::left);
 	static const string& inputFromPopup();
-	void showPopupRemoteLogin(RemoteLocation&& rl, EventId kcall, EventId ccal = GeneralEvent::closePopup);
+	void showPopupLogin(RemoteLocation&& rl, EventId kcall, EventId ccal = GeneralEvent::closePopup, bool save = false);
 	static pair<RemoteLocation, bool> remoteLocationFromPopup();
-	void showContext(vector<pair<Cstring, EventId> >&& items, Widget* parent);
+	void resetPopupLogin(Protocol oldProto, Protocol newProto);
+	void showContext(vector<pair<Cstring, EventId>>&& items, Widget* parent);
 	void showComboContext(ComboBox* parent, EventId kcal);
 
 	int getLineHeight() const { return lineHeight; }

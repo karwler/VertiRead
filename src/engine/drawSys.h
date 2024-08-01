@@ -31,7 +31,7 @@ private:
 	uint height;
 	int mode;
 
-	PixmapRgba pm;
+	Pixmap pm;
 	size_t bufSize = 0;
 	vector<string_view::iterator> lineBreaks;
 	string_view::iterator wordStart;
@@ -48,13 +48,13 @@ public:
 	FontSet();
 	~FontSet();
 
-	void init(const fs::path& path, Settings::Hinting hinting);
+	void init(const fs::path& path, bool mono);
 	void clearCache();
-	void setMode(Settings::Hinting hinting) noexcept;
+	void setMode(bool mono) noexcept;
 	uint measureText(string_view text, uint size);
 	uvec2 measureText(string_view text, uint size, uint limit);
-	const PixmapRgba& renderText(string_view text, uint size);
-	const PixmapRgba& renderText(string_view text, uint size, uint limit);
+	const Pixmap& renderText(string_view text, uint size);
+	const Pixmap& renderText(string_view text, uint size, uint limit);
 	FT_LibraryRec_* getLib() const { return lib; }
 
 private:
@@ -137,7 +137,7 @@ public:
 	bool updateDpi();
 	void setTheme(string_view name);
 	void setFont(const fs::path& font);
-	void setFontHinting(Settings::Hinting hinting);
+	void setMonoFont(bool on);
 	SDL_Surface* loadIcon(const string& path, int size);
 	static string iconName(Tex name);
 	const Texture* texture(Tex name) const;
@@ -159,10 +159,6 @@ public:
 	void drawReaderBox(const ReaderBox* box, const Recti& view);
 	void drawPopup(const Popup* box, const Recti& view);
 	void drawTooltip(optional<bool>& syncTooltip, const Recti& view);
-
-	Widget* getSelectedWidget(Layout* box, ivec2 mPos);
-	void drawButtonAddr(const Button* wgt, const Recti& view);
-	void drawLayoutAddr(const Layout* wgt, const Recti& view);
 
 	uint textLength(string_view text, uint height);
 	Texture* renderText(string_view text, uint height);
@@ -205,8 +201,8 @@ inline bool DrawSys::renderText(Texture* tex, string_view text, uint height, uin
 	return renderer->texFromText(tex, fonts.renderText(text, height, length));
 }
 
-inline void DrawSys::setFontHinting(Settings::Hinting hinting) {
-	fonts.setMode(hinting);
+inline void DrawSys::setMonoFont(bool on) {
+	fonts.setMode(on);
 }
 
 inline void DrawSys::resetTooltip() {

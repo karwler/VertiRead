@@ -37,17 +37,18 @@ private:
 		alignas(16) vec4 color;
 	};
 
-	struct InstanceAddr {
-		alignas(16) uvec2 addr = uvec2(0);
+	struct Offset {
+		alignas(16) uint offset;
 	};
 
-	struct Offset {
-		alignas(4) uint offset;
+	struct Palette {
+		alignas(16) uint colors[256];
 	};
 
 	enum class FormatConv : uint8 {
 		rgb24,
 		bgr24,
+		red,
 		index8
 	};
 
@@ -61,24 +62,25 @@ private:
 		SurfaceInfo(SDL_Surface* surface, FormatConv convert) : img(surface), fcid(convert) {}
 	};
 
+#ifdef NDEBUG
+	static constexpr uint deviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+#else
+	static constexpr uint deviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_DEBUG;
+#endif
+	static constexpr array<D3D_FEATURE_LEVEL, 3> featureLevels = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0 };
+	static constexpr uint convWgrpSize = 32;
+	static constexpr uint32 convStep = convWgrpSize * 4;	// 4 texels per invocation
+
 	ID3D11Device* dev = nullptr;
 	ID3D11DeviceContext* ctx = nullptr;
 	ID3D11BlendState* blendState = nullptr;
 	ID3D11RasterizerState* rasterizerGui = nullptr;
-	ID3D11RasterizerState* rasterizerSel = nullptr;
 
 	ID3D11VertexShader* vertGui = nullptr;
 	ID3D11PixelShader* pixlGui = nullptr;
 	ID3D11Buffer* pviewBuf = nullptr;
 	ID3D11Buffer* instBuf = nullptr;
 	ID3D11Buffer* instColorBuf = nullptr;
-
-	ID3D11VertexShader* vertSel = nullptr;
-	ID3D11PixelShader* pixlSel = nullptr;
-	ID3D11Buffer* instAddrBuf = nullptr;
-	ID3D11Texture2D* texAddr = nullptr;
-	ID3D11Texture2D* outAddr = nullptr;
-	ID3D11RenderTargetView* tgtAddr = nullptr;
 
 	array<ID3D11ComputeShader*, eint(FormatConv::index8) + 1> compConv{};
 	ID3D11Buffer* offsetBuf = nullptr;
@@ -100,23 +102,20 @@ public:
 	void setClearColor(const vec4& color) override;
 	void setVsync(bool vsync) override;
 	void updateView(ivec2& viewRes) override;
-	void setCompression(Settings::Compression compression) override;
-	Info getInfo() const override;
+	void setCompression(Settings::Compression cmpr) noexcept override;
+	SDL_Surface* prepareImage(SDL_Surface* img, bool rpic) const noexcept override;
+	Info getInfo() const noexcept override;
 
 	void startDraw(View* view) override;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) override;
 	void finishDraw(View* view) override;
 
-	void startSelDraw(View* view, ivec2 pos) override;
-	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) override;
-	Widget* finishSelDraw(View* view) override;
-
 	Texture* texFromEmpty() override;
-	Texture* texFromIcon(SDL_Surface* img) override;
-	bool texFromIcon(Texture* tex, SDL_Surface* img) override;
-	Texture* texFromRpic(SDL_Surface* img) override;
-	Texture* texFromText(const PixmapRgba& pm) override;
-	bool texFromText(Texture* tex, const PixmapRgba& pm) override;
+	Texture* texFromIcon(SDL_Surface* img) noexcept override;
+	bool texFromIcon(Texture* tex, SDL_Surface* img) noexcept override;
+	Texture* texFromRpic(SDL_Surface* img) noexcept override;
+	Texture* texFromText(const Pixmap& pm) noexcept override;
+	bool texFromText(Texture* tex, const Pixmap& pm) noexcept override;
 	void freeTexture(Texture* tex) noexcept override;
 
 private:
@@ -127,20 +126,28 @@ private:
 	void recreateSwapchain(IDXGIFactory* factory, ViewDx* view);
 	void initShader();
 	void initConverter();
+
+	D3D11_MAPPED_SUBRESOURCE mapResource(ID3D11Resource* rsc);
+	template <Class T> T* mapBuffer(ID3D11Buffer* buffer);
+	ID3D11ShaderResourceView* createTextureDirect(const byte_t* pix, uvec2 res, uint pitch, DXGI_FORMAT format);
+	ID3D11ShaderResourceView* createTextureIndirect(const byte_t* pix, uvec2 res, uint8 bpp, uint pitch, const SDL_Palette* palette, FormatConv fcid);
+	ID3D11ShaderResourceView* createTextureText(const Pixmap& pm, uvec2 res);
+	static void replaceTexture(TextureDx* tex, ID3D11ShaderResourceView* tview, uvec2 res) noexcept;
+	void replaceInputBuffer(uint isize);
+	SurfaceInfo pickPixFormat(SDL_Surface* img) const noexcept;
 	ID3D11Buffer* createConstantBuffer(uint size) const;
 	ID3D11Texture2D* createTexture(uvec2 res, DXGI_FORMAT format, D3D11_USAGE usage, uint bindFlags, uint accessFlags = 0, const D3D11_SUBRESOURCE_DATA* subrscData = nullptr) const;
 	ID3D11ShaderResourceView* createTextureView(ID3D11Texture2D* tex, DXGI_FORMAT format);
 	ID3D11ShaderResourceView* createBufferView(ID3D11Buffer* buffer, uint size);
-
-	template <Class T> void uploadBuffer(ID3D11Buffer* buffer, const T& data);
-	ID3D11ShaderResourceView* createTextureDirect(const byte_t* pix, uvec2 res, uint pitch, DXGI_FORMAT format);
-	ID3D11ShaderResourceView* createTextureIndirect(const SDL_Surface* img, FormatConv fcid);
-	static void replaceTexture(TextureDx* tex, ID3D11ShaderResourceView* tview, uvec2 res) noexcept;
-	void replaceInputBuffer(uint inputSize);
-	SurfaceInfo pickPixFormat(SDL_Surface* img) const noexcept;
+	static tuple<IDXGIAdapter*, size_t, D3D_DRIVER_TYPE> pickAdapter(IDXGIFactory* factory, u32vec2& preferred) noexcept;
 	template <Derived<IUnknown> T> static void comRelease(T*& obj) noexcept;
 	static string hresultToStr(HRESULT rs);
 };
+
+template <Class T>
+T* RendererDx11::mapBuffer(ID3D11Buffer* buffer) {
+	return static_cast<T*>(mapResource(buffer).pData);
+}
 
 inline string RendererDx11::hresultToStr(HRESULT rs) {
 	return winErrorMessage(HRESULT_CODE(rs));

@@ -1,11 +1,7 @@
 #include "types.h"
-#ifdef CAN_MUPDF
-#include "engine/optional/mupdf.h"
-#endif
-#ifdef CAN_POPPLER
 #include "engine/optional/glib.h"
+#include "engine/optional/mupdf.h"
 #include "engine/optional/poppler.h"
-#endif
 #include "utils/compare.h"
 #include <SDL_timer.h>
 
@@ -17,7 +13,11 @@ void pushEvent(EventId id, void* data1, void* data2) {
 void pushEvent(UserEvent type, int32 code, void* data1, void* data2) {
 	SDL_Event event = { .user = {
 		.type = type,
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+		.timestamp = SDL_GetTicksNS(),
+#else
 		.timestamp = SDL_GetTicks(),
+#endif
 		.code = code,
 		.data1 = data1,
 		.data2 = data2
@@ -34,73 +34,59 @@ Protocol RemoteLocation::getProtocol(string_view str) noexcept {
 	size_t i;
 	for (i = 0; i < str.length() && str[i] != ':' && notDsep(str[i]); ++i);
 	if (i < str.length() - 3 && str[i] == ':' && isDsep(str[i + 1]) && isDsep(str[i + 2])) {
-#ifdef CAN_SMB
-		if (strciequal(string_view(str.data(), i), protocolNames[eint(Protocol::smb)]))
-			return Protocol::smb;
+#ifdef WITH_FTP
+		if (strciequal(string_view(str.data(), i), protocolNames[eint(Protocol::ftp)]))
+			return Protocol::ftp;
 #endif
 #ifdef CAN_SFTP
 		if (strciequal(string_view(str.data(), i), protocolNames[eint(Protocol::sftp)]))
 			return Protocol::sftp;
+#endif
+#ifdef CAN_SMB
+		if (strciequal(string_view(str.data(), i), protocolNames[eint(Protocol::smb)]))
+			return Protocol::smb;
 #endif
 	}
 	return Protocol::none;
 }
 
 RemoteLocation RemoteLocation::fromPath(string_view str, Protocol proto) {
-	size_t i = str.find(':') + 3;	// skip ://
-	size_t beg = i;
-	for (; i < str.length() && str[i] != '@' && str[i] != ':' && notDsep(str[i]); ++i);
-	string_view pl(str.begin() + beg, str.begin() + i);
-	if (i >= str.length() || isDsep(str[i]))
-		return {
-			.server = string(pl),
-			.path = string(str.begin() + i, str.end()),
-			.port = protocolPorts[eint(proto)],
-			.protocol = proto
-		};
+	RemoteLocation rl = { .port = protocolPorts[eint(proto)], .protocol = proto };
+	str = str.substr(str.find(':') + 3);	// skip ://
 
-	string_view pr;
-	if (str[i] == ':') {
-		size_t cl = ++i;
-		for (; i < str.length() && str[i] != '@' && notDsep(str[i]); ++i);
-		pr = string_view(str.begin() + cl, str.begin() + i);
-		if (i >= str.length() || isDsep(str[i]))
-			return {
-				.server = string(pl),
-				.path = string(str.begin() + i, str.end()),
-				.port = sanitizePort(pr, proto),
-				.protocol = proto
-			};
+	size_t i;
+	for (i = 0; i < str.length() && notDsep(str[i]); ++i);
+	if (i < str.length()) {
+		rl.path = str.substr(i);
+		str = str.substr(0, i);
 	}
 
-	size_t at = ++i;
-	for (; i < str.length() && str[i] != ':' && notDsep(str[i]); ++i);
-	string_view sl(str.begin() + at, str.begin() + i);
-	if (i >= str.length() || isDsep(str[i]))
-		return {
-			.server = string(sl),
-			.path = string(str.begin() + i, str.end()),
-			.user = string(pl),
-			.password = string(pr),
-			.port = protocolPorts[eint(proto)],
-			.protocol = proto
-		};
+	if (i = str.find('@'); i != string_view::npos) {
+		string_view iden = str.substr(0, i);
+		size_t si = iden.find(':');
+		rl.user = iden.substr(0, si);
+		if (si != string_view::npos)
+			rl.password = iden.substr(si + 1);
+		str = str.substr(i + 1);
+	}
 
-	size_t cl = ++i;
-	for (; i < str.length() && notDsep(str[i]); ++i);
-	return {
-		.server = string(sl),
-		.path = string(str.begin() + i, str.end()),
-		.user = string(pl),
-		.password = string(pr),
-		.port = sanitizePort(string_view(str.begin() + cl, str.begin() + i), proto),
-		.protocol = proto
-	};
-}
+	if (!str.empty())
+		if (str[0] == '[')
+			if (i = str.find(']', 1); i != string_view::npos)
+				if (bool ate = i + 1 >= str.length(); ate || str[i + 1] == ':') {
+					rl.server = str.substr(1, i - 1);
+					if (!ate)
+						if (uint16 pnum = toNum<uint16>(str.substr(i + 2)))
+							rl.port = pnum;
+					return rl;
+				}
 
-uint16 RemoteLocation::sanitizePort(string_view port, Protocol protocol) {
-	uint16 pnum = toNum<uint16>(port);
-	return pnum ? pnum : protocolPorts[eint(protocol)];
+	i = str.find(':');
+	rl.server = str.substr(0, i);
+	if (i != string_view::npos)
+		if (uint16 pnum = toNum<uint16>(str.substr(i + 1)))
+			rl.port = pnum;
+	return rl;
 }
 
 // ARCHIVE NODES
@@ -153,18 +139,20 @@ ArchiveFile* ArchiveDir::findFile(string_view fname) noexcept {
 
 void ArchiveDir::copySlicedDentsFrom(const ArchiveDir& src, bool copyHidden) {
 	dirs.clear();
-	if (copyHidden) {
-		for (const ArchiveDir& it : src.dirs)
-			dirs.emplace_front(valcp(it.name)).files = it.files;
-		files = src.files;
-	} else {
+#ifndef _WIN32
+	if (!copyHidden) {
 		for (const ArchiveDir& it : src.dirs)
 			if (it.name[0] != '.')
 				dirs.emplace_front(valcp(it.name)).files = it.files;
 		for (const ArchiveFile& it : src.files)
 			if (it.name[0] != '.')
 				files.push_front(it);
+		return;
 	}
+#endif
+	for (const ArchiveDir& it : src.dirs)
+		dirs.emplace_front(valcp(it.name)).files = it.files;
+	files = src.files;
 }
 
 vector<Cstring> ArchiveDir::copySortedFiles(bool copyHidden) const {
@@ -318,14 +306,14 @@ SDL_Surface* PdfFile::renderPage(int pid, double dpi) noexcept {
 		fzTry(mctx) {
 			pm = fzNewPixmapFromPageNumber(mctx, mdoc, pid, ctm, fzDeviceRgb(mctx), 0);
 			if (pm->n == 3 + pm->alpha)
-				if (pic = SDL_CreateRGBSurfaceWithFormat(0, pm->w, pm->h, pm->n * 8, pm->alpha ? SDL_PIXELFORMAT_ABGR8888 : SDL_PIXELFORMAT_RGB24); pic)
-					copyPixels(pic->pixels, pm->samples, pic->pitch, pm->stride, pic->w * pic->format->BytesPerPixel, pic->h);
+				if (pic = SDL_CreateSurface(pm->w, pm->h, pm->alpha ? SDL_PIXELFORMAT_ABGR8888 : SDL_PIXELFORMAT_RGB24); pic)
+					copyPixels(pic->pixels, pm->samples, pic->pitch, pm->stride, pic->w * surfaceBytesPpx(pic), pic->h);
 			fzDropPixmap(mctx, pm);
 		} fzCatch(mctx) {}
 	}
 #endif
 #ifdef CAN_POPPLER
-	if (pdoc && !pic)
+	if (pdoc)
 		if (PopplerPage* page = popplerDocumentGetPage(pdoc, pid)) {
 			double scale = dpi / defaultDpi;
 			dvec2 size;
@@ -338,16 +326,16 @@ SDL_Surface* PdfFile::renderPage(int pid, double dpi) noexcept {
 			cairo_surface_t* img = cairoSurfaceMapToImage(tgt, nullptr);
 			switch (cairoImageSurfaceGetFormat(img)) {
 			case CAIRO_FORMAT_ARGB32:
-				pic = SDL_CreateRGBSurfaceWithFormat(0, cairoImageSurfaceGetWidth(img), cairoImageSurfaceGetHeight(img), 32, SDL_PIXELFORMAT_ARGB8888);
+				pic = SDL_CreateSurface(cairoImageSurfaceGetWidth(img), cairoImageSurfaceGetHeight(img), SDL_PIXELFORMAT_ARGB8888);
 				break;
 			case CAIRO_FORMAT_RGB24:
-				pic = SDL_CreateRGBSurfaceWithFormat(0, cairoImageSurfaceGetWidth(img), cairoImageSurfaceGetHeight(img), 24, SDL_PIXELFORMAT_RGB24);
+				pic = SDL_CreateSurface(cairoImageSurfaceGetWidth(img), cairoImageSurfaceGetHeight(img), SDL_PIXELFORMAT_RGB24);
 				break;
 			case CAIRO_FORMAT_RGB16_565:
-				pic = SDL_CreateRGBSurfaceWithFormat(0, cairoImageSurfaceGetWidth(img), cairoImageSurfaceGetHeight(img), 16, SDL_PIXELFORMAT_RGB565);
+				pic = SDL_CreateSurface(cairoImageSurfaceGetWidth(img), cairoImageSurfaceGetHeight(img), SDL_PIXELFORMAT_RGB565);
 			}
 			if (pic)
-				copyPixels(pic->pixels, cairoImageSurfaceGetData(img), pic->pitch, cairoImageSurfaceGetStride(img), pic->w * pic->format->BytesPerPixel, pic->h);
+				copyPixels(pic->pixels, cairoImageSurfaceGetData(img), pic->pitch, cairoImageSurfaceGetStride(img), pic->w * surfaceBytesPpx(pic), pic->h);
 			cairoSurfaceUnmapImage(tgt, img);
 			cairoDestroy(ctx);
 			cairoSurfaceDestroy(tgt);
@@ -412,10 +400,9 @@ BrowserResultPicture::BrowserResultPicture(BrowserResultState brs, optional<stri
 	fwd(brs & BRS_FWD)
 {}
 
-BrowserPictureProgress::BrowserPictureProgress(BrowserResultPicture* rp, SDL_Surface* pic, size_t index, Cstring&& msg) noexcept :
-	pnt(rp),
+BrowserPictureProgress::BrowserPictureProgress(SDL_Surface* pic, Texture*& ref, Cstring&& msg) noexcept :
 	img(pic),
-	id(index),
+	tex(ref),
 	text(std::move(msg))
 {}
 
