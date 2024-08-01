@@ -1,9 +1,9 @@
 #include "utils.h"
-#include <cwctype>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
+#include <cwctype>
 
 // DATA
 
@@ -180,6 +180,30 @@ bool strciequal(wstring_view a, wstring_view b) noexcept {
 	return tstrciequal(a, b);
 }
 
+#ifdef _WIN32
+bool strasymequal(const char* a, const wchar_t* b) noexcept {
+	for (size_t i = 0; a[i] && b[i]; ++i)
+		if (a[i] != b[i])
+			return false;
+	return true;
+}
+#endif
+
+const char* readQuoteString(const char* text, string& field) {
+	const char* end;
+	for (end = strchr(text, '"'); end && end[1] == '"'; end = strchr(end + 2, '"')) {
+		field.append(text, end);
+		text = end + 1;
+	}
+	if (end) {
+		field.append(text, end);
+		return end + 1;
+	}
+	size_t elen = strlen(text);
+	field.append(text, elen);
+	return text + elen;
+}
+
 string_view parentPath(string_view path) noexcept {
 	string_view::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), notDsep);
 	it = std::find_if(it, path.rend(), isDsep);
@@ -188,7 +212,7 @@ string_view parentPath(string_view path) noexcept {
 	return len || path.empty() || notDsep(path[0]) ? string_view(path.data(), len) : "/";
 }
 
-static bool pathCompareLoop(string_view::iterator& ai, string_view::iterator ae, string_view::iterator& bi, string_view::iterator be) {
+bool pathCompare(string_view::iterator& ai, string_view::iterator ae, string_view::iterator& bi, string_view::iterator be) noexcept {
 	while (ai != ae && bi != be) {
 		// comparee names of next entry
 		string_view::iterator an = std::find_if(ai, ae, isDsep);
@@ -203,7 +227,7 @@ static bool pathCompareLoop(string_view::iterator& ai, string_view::iterator ae,
 	return true;	// one has reached it's end so don't forget to check later which one (paths are equal if both have ended)
 }
 
-static bool pathCompareLoop(const char*& ai, const char*& bi) {
+bool pathCompare(const char*& ai, const char*& bi) noexcept {
 #ifdef _WIN32
 	constexpr char dseps[] = "\\/";
 #else
@@ -222,21 +246,21 @@ static bool pathCompareLoop(const char*& ai, const char*& bi) {
 
 bool pathEqual(string_view a, string_view b) noexcept {
 	string_view::iterator ai = a.begin(), bi = b.begin();	// check if both paths have reached their ends simultaneously
-	return pathCompareLoop(ai, a.end(), bi, b.end()) && ai == a.end() && bi == b.end();
+	return pathCompare(ai, a.end(), bi, b.end()) && ai == a.end() && bi == b.end();
 }
 
 bool pathEqual(const char* a, const char* b) noexcept {
-	return pathCompareLoop(a, b) && !*a && !*b;
+	return pathCompare(a, b) && !*a && !*b;
 }
 
 string_view relativePath(string_view path, string_view base) noexcept {
 	string_view::iterator ai = path.begin(), bi = base.begin();
-	return pathCompareLoop(ai, path.end(), bi, base.end()) && bi == base.end() ? string_view(ai, path.end()) : string_view();
+	return pathCompare(ai, path.end(), bi, base.end()) && bi == base.end() ? string_view(ai, path.end()) : string_view();
 }
 
 bool isSubpath(string_view path, string_view base) noexcept {
 	string_view::iterator ai = path.begin(), bi = base.begin();	// parent has to have reached its end while path was still matching
-	return pathCompareLoop(ai, path.end(), bi, base.end()) && bi == base.end();
+	return pathCompare(ai, path.end(), bi, base.end()) && bi == base.end();
 }
 
 tm currentDateTime() noexcept {

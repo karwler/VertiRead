@@ -5,9 +5,9 @@
 #include "engine/world.h"
 #include "prog/program.h"
 #include "prog/progs.h"
+#include <SDL_clipboard.h>
 #include <cfloat>
 #include <format>
-#include <SDL_clipboard.h>
 
 template <Class T>
 TextDsp<T>::~TextDsp() {
@@ -309,10 +309,6 @@ Button::Button(const Size& size, EventId eid, Actions amask, Cstring&& tip) noex
 	actions(amask)
 {}
 
-void Button::drawAddr(const Recti& view) {
-	World::drawSys()->drawButtonAddr(this, view);
-}
-
 void Button::onClick(ivec2, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT && (actions & ACT_LEFT))
 		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
@@ -421,8 +417,8 @@ void Slider::onUndrag(ivec2, uint8 mBut) {
 	}
 }
 
-void Slider::onKeypress(const SDL_Keysym& key) {
-	switch (key.scancode) {
+void Slider::onKeypress(SDL_Scancode key, SDL_Keymod) {
+	switch (key) {
 	case SDL_SCANCODE_RIGHT:
 		if (val < vmax) {
 			setVal(val + 1);
@@ -667,40 +663,44 @@ void LabelEdit::postInit() {
 
 void LabelEdit::onClick(ivec2, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
-		Recti rct = rect();
 		World::scene()->setCapture(this);
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+		SDL_StartTextInput(World::scene()->getCaptureWindow());
+#else
+		Recti rct = rect();
 		SDL_StartTextInput();
 		SDL_SetTextInputRect(&rct.asRect());
+#endif
 		setCPos(text.length());
 	} else if (mBut == SDL_BUTTON_RIGHT && (actions & ACT_RIGHT))
 		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_RIGHT)));
 }
 
-void LabelEdit::onKeypress(const SDL_Keysym& key) {
-	switch (key.scancode) {
+void LabelEdit::onKeypress(SDL_Scancode key, SDL_Keymod mod) {
+	switch (key) {
 	case SDL_SCANCODE_LEFT:	// move caret left
-		if (kmodAlt(key.mod))	// if holding alt skip word
+		if (kmodAlt(mod))	// if holding alt skip word
 			setCPos(findWordStart());
-		else if (kmodCtrl(key.mod))	// if holding ctrl move to beginning
+		else if (kmodCtrl(mod))	// if holding ctrl move to beginning
 			setCPos(0);
 		else if (cpos > 0)	// otherwise go left by one
 			setCPos(jumpCharB(cpos));
 		break;
 	case SDL_SCANCODE_RIGHT:	// move caret right
-		if (kmodAlt(key.mod))	// if holding alt skip word
+		if (kmodAlt(mod))	// if holding alt skip word
 			setCPos(findWordEnd());
-		else if (kmodCtrl(key.mod))	// if holding ctrl go to end
+		else if (kmodCtrl(mod))	// if holding ctrl go to end
 			setCPos(text.length());
 		else if (cpos < text.length())	// otherwise go right by one
 			setCPos(jumpCharF(cpos));
 		break;
 	case SDL_SCANCODE_BACKSPACE:	// delete left
-		if (kmodAlt(key.mod)) {	// if holding alt delete left word
+		if (kmodAlt(mod)) {	// if holding alt delete left word
 			uint id = findWordStart();
 			text.erase(id, cpos - id);
 			updateTextTexNow();
 			setCPos(id);
-		} else if (kmodCtrl(key.mod)) {	// if holding ctrl delete line to left
+		} else if (kmodCtrl(mod)) {	// if holding ctrl delete line to left
 			text.erase(0, cpos);
 			updateTextTexNow();
 			setCPos(0);
@@ -712,10 +712,10 @@ void LabelEdit::onKeypress(const SDL_Keysym& key) {
 		}
 		break;
 	case SDL_SCANCODE_DELETE:	// delete right character
-		if (kmodAlt(key.mod)) {	// if holding alt delete right word
+		if (kmodAlt(mod)) {	// if holding alt delete right word
 			text.erase(cpos, findWordEnd() - cpos);
 			updateTextTexNow();
-		} else if (kmodCtrl(key.mod)) {	// if holding ctrl delete line to right
+		} else if (kmodCtrl(mod)) {	// if holding ctrl delete line to right
 			text.erase(cpos, text.length() - cpos);
 			updateTextTexNow();
 		} else if (cpos < text.length()) {	// otherwise delete right character
@@ -730,7 +730,7 @@ void LabelEdit::onKeypress(const SDL_Keysym& key) {
 		setCPos(text.length());
 		break;
 	case SDL_SCANCODE_V:	// paste text
-		if (kmodCtrl(key.mod))
+		if (kmodCtrl(mod))
 			if (char* ctxt = SDL_GetClipboardText()) {
 				uint garbagio = 0;
 				onText(ctxt, garbagio);
@@ -738,17 +738,17 @@ void LabelEdit::onKeypress(const SDL_Keysym& key) {
 			}
 		break;
 	case SDL_SCANCODE_C:	// copy text
-		if (kmodCtrl(key.mod))
+		if (kmodCtrl(mod))
 			SDL_SetClipboardText(text.data());
 		break;
 	case SDL_SCANCODE_X:	// cut text
-		if (kmodCtrl(key.mod)) {
+		if (kmodCtrl(mod)) {
 			SDL_SetClipboardText(text.data());
 			setText(string());
 		}
 		break;
 	case SDL_SCANCODE_Z:	// set text to old text
-		if (kmodCtrl(key.mod))
+		if (kmodCtrl(mod))
 			setText(std::move(oldText));
 		break;
 	case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER:
@@ -813,10 +813,24 @@ Recti LabelEdit::textRect() const {
 
 void LabelEdit::setCPos(uint cp) {
 	cpos = cp;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	int cl = caretPos();
+	if (cl < 0) {
+		textOfs -= cl;
+		cl = 0;
+	} else if (int ce = cl + caretWidth, sx = size().x; ce > sx) {
+		int diff = ce - sx;
+		textOfs -= diff;
+		cl -= diff;
+	}
+	Recti rct = rect();
+	SDL_SetTextInputArea(World::scene()->getCaptureWindow(), &rct.asRect(), cl);
+#else
 	if (int cl = caretPos(); cl < 0)
 		textOfs -= cl;
 	else if (int ce = cl + caretWidth, sx = size().x; ce > sx)
 		textOfs -= ce - sx;
+#endif
 }
 
 int LabelEdit::caretPos() const {
@@ -830,8 +844,12 @@ int LabelEdit::caretPos() const {
 
 void LabelEdit::confirm() {
 	textOfs = 0;
-	World::scene()->setCapture(nullptr);
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	SDL_StopTextInput(World::scene()->getCaptureWindow());
+#else
 	SDL_StopTextInput();
+#endif
+	World::scene()->setCapture(nullptr);
 	if (actions & ACT_LEFT)
 		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
 }
@@ -841,8 +859,12 @@ void LabelEdit::cancel() {
 	text = oldText;
 	updateTextTexNow();
 
-	World::scene()->setCapture(nullptr);
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	SDL_StopTextInput(World::scene()->getCaptureWindow());
+#else
 	SDL_StopTextInput();
+#endif
+	World::scene()->setCapture(nullptr);
 	if (actions & ACT_LEFT)
 		pushEvent(EventId(cancEtype, cancEcode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
 }
@@ -1027,10 +1049,10 @@ void KeyGetter::onClick(ivec2, uint8 mBut) {
 	}
 }
 
-void KeyGetter::onKeypress(const SDL_Keysym& key) {
+void KeyGetter::onKeypress(SDL_Scancode key, SDL_Keymod) {
 	if (acceptType == AcceptType::keyboard) {
-		World::inputSys()->getBinding(bindingType).setKey(key.scancode);
-		setText(SDL_GetScancodeName(key.scancode));
+		World::inputSys()->getBinding(bindingType).setKey(key);
+		setText(SDL_GetScancodeName(key));
 	}
 	World::scene()->setCapture(nullptr);
 }

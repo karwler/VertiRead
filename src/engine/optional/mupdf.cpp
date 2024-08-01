@@ -32,7 +32,7 @@ bool symMupdf() noexcept {
 		&& (fzDoAlways = reinterpret_cast<decltype(fzDoAlways)>(dlsym(lib, "fz_do_always")))
 		&& (fzDoCatch = reinterpret_cast<decltype(fzDoCatch)>(dlsym(lib, "fz_do_catch")))
 		&& (fzNewBufferFromSharedData = reinterpret_cast<decltype(fzNewBufferFromSharedData)>(dlsym(lib, "fz_new_buffer_from_shared_data")))
-		&& (fzDropBuffer = reinterpret_cast<decltype(fzDropBuffer )>(dlsym(lib, "fz_drop_buffer")))
+		&& (fzDropBuffer = reinterpret_cast<decltype(fzDropBuffer)>(dlsym(lib, "fz_drop_buffer")))
 		&& (fzRegisterDocumentHandlers = reinterpret_cast<decltype(fzRegisterDocumentHandlers)>(dlsym(lib, "fz_register_document_handlers")))
 		&& (fzOpenDocumentWithBuffer = reinterpret_cast<decltype(fzOpenDocumentWithBuffer)>(dlsym(lib, "fz_open_document_with_buffer")))
 		&& (fzDropDocument = reinterpret_cast<decltype(fzDropDocument)>(dlsym(lib, "fz_drop_document")))

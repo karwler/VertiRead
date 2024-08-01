@@ -37,10 +37,6 @@ private:
 		alignas(16) vec4 color;
 	};
 
-	struct InstanceAddr {
-		alignas(16) uvec2 addr = uvec2(0);
-	};
-
 	struct Offset {
 		alignas(4) uint offset;
 	};
@@ -65,20 +61,12 @@ private:
 	ID3D11DeviceContext* ctx = nullptr;
 	ID3D11BlendState* blendState = nullptr;
 	ID3D11RasterizerState* rasterizerGui = nullptr;
-	ID3D11RasterizerState* rasterizerSel = nullptr;
 
 	ID3D11VertexShader* vertGui = nullptr;
 	ID3D11PixelShader* pixlGui = nullptr;
 	ID3D11Buffer* pviewBuf = nullptr;
 	ID3D11Buffer* instBuf = nullptr;
 	ID3D11Buffer* instColorBuf = nullptr;
-
-	ID3D11VertexShader* vertSel = nullptr;
-	ID3D11PixelShader* pixlSel = nullptr;
-	ID3D11Buffer* instAddrBuf = nullptr;
-	ID3D11Texture2D* texAddr = nullptr;
-	ID3D11Texture2D* outAddr = nullptr;
-	ID3D11RenderTargetView* tgtAddr = nullptr;
 
 	array<ID3D11ComputeShader*, eint(FormatConv::index8) + 1> compConv{};
 	ID3D11Buffer* offsetBuf = nullptr;
@@ -100,23 +88,20 @@ public:
 	void setClearColor(const vec4& color) override;
 	void setVsync(bool vsync) override;
 	void updateView(ivec2& viewRes) override;
-	void setCompression(Settings::Compression compression) override;
-	Info getInfo() const override;
+	void setCompression(Settings::Compression cmpr) noexcept override;
+	SDL_Surface* prepareImage(SDL_Surface* img, bool rpic) const noexcept override;
+	Info getInfo() const noexcept override;
 
 	void startDraw(View* view) override;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) override;
 	void finishDraw(View* view) override;
 
-	void startSelDraw(View* view, ivec2 pos) override;
-	void drawSelRect(const Widget* wgt, const Recti& rect, const Recti& frame) override;
-	Widget* finishSelDraw(View* view) override;
-
 	Texture* texFromEmpty() override;
-	Texture* texFromIcon(SDL_Surface* img) override;
-	bool texFromIcon(Texture* tex, SDL_Surface* img) override;
-	Texture* texFromRpic(SDL_Surface* img) override;
-	Texture* texFromText(const PixmapRgba& pm) override;
-	bool texFromText(Texture* tex, const PixmapRgba& pm) override;
+	Texture* texFromIcon(SDL_Surface* img) noexcept override;
+	bool texFromIcon(Texture* tex, SDL_Surface* img) noexcept override;
+	Texture* texFromRpic(SDL_Surface* img) noexcept override;
+	Texture* texFromText(const PixmapRgba& pm) noexcept override;
+	bool texFromText(Texture* tex, const PixmapRgba& pm) noexcept override;
 	void freeTexture(Texture* tex) noexcept override;
 
 private:
@@ -134,9 +119,9 @@ private:
 
 	template <Class T> void uploadBuffer(ID3D11Buffer* buffer, const T& data);
 	ID3D11ShaderResourceView* createTextureDirect(const byte_t* pix, uvec2 res, uint pitch, DXGI_FORMAT format);
-	ID3D11ShaderResourceView* createTextureIndirect(const SDL_Surface* img, FormatConv fcid);
+	ID3D11ShaderResourceView* createTextureIndirect(SDL_Surface* img, FormatConv fcid);
 	static void replaceTexture(TextureDx* tex, ID3D11ShaderResourceView* tview, uvec2 res) noexcept;
-	void replaceInputBuffer(uint inputSize);
+	void replaceInputBuffer(uint isize);
 	SurfaceInfo pickPixFormat(SDL_Surface* img) const noexcept;
 	template <Derived<IUnknown> T> static void comRelease(T*& obj) noexcept;
 	static string hresultToStr(HRESULT rs);

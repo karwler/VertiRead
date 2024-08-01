@@ -8,6 +8,8 @@
 #include "utils/compare.h"
 #include "utils/layouts.h"
 
+#define measuredText(txt, lh) measureText(txt, lh), txt
+
 // PROGRAM STATE
 
 void ProgState::eventEnter() {
@@ -180,8 +182,20 @@ const string& ProgState::inputFromPopup() {
 	return World::scene()->getPopup()->getWidget<LabelEdit>(1)->getText();
 }
 
-void ProgState::showPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, EventId ccal) {
+void ProgState::showPopupLogin(RemoteLocation&& rl, EventId kcal, EventId ccal, bool save) {
+#ifndef NDEBUG
+	// TODO: remove when done
+	if (rl.server.empty())
+		rl.server = "localhost";
+	if (rl.path.empty())
+		rl.path = "/";
+	if (rl.user.empty())
+		rl.user = "anonymous";
+	if (rl.password.empty())
+		rl.password = "guest";
+#endif
 	static constexpr std::initializer_list<const char*> txs = {
+		"Protocol",
 		"User",
 		"Password",
 		"Server",
@@ -189,11 +203,32 @@ void ProgState::showPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, EventId 
 		"Port",
 		"Workgroup",
 		"Family",
+		"TLS",
 		"Save"
 	};
 	std::initializer_list<const char*>::iterator itxs = txs.begin();
 	uint descLength = findMaxLength(txs.begin(), txs.end(), popupLineHeight);
 
+	vector<Cstring> protoNames = {
+#ifdef WITH_FTP
+		protocolNames[eint(Protocol::ftp)],
+#endif
+#ifdef CAN_SFTP
+		protocolNames[eint(Protocol::sftp)],
+#endif
+#ifdef CAN_SMB
+		protocolNames[eint(Protocol::smb)]
+#endif
+	};
+	Cstring selProto = protocolNames[eint(rl.protocol)];
+	for (Cstring& it : protoNames)
+		strtransform(it.data(), toupper);
+	strtransform(selProto.data(), toupper);
+
+	Children protocol = {
+		new Label(descLength, *itxs++),
+		new ComboBox(1.f, std::move(selProto), std::move(protoNames), GeneralEvent::setLoginPopupProtocol, "Protocol")
+	};
 	Children user = {
 		new Label(descLength, *itxs++),
 		new LabelEdit(1.f, std::move(rl.user), nullEvent, nullEvent, ACT_NONE, "Username")
@@ -220,8 +255,9 @@ void ProgState::showPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, EventId 
 	};
 	Widget* first = rl.user.empty() ? user[1] : password[1];
 
-	vector<Widget*> con {
-		new Label(popupLineHeight, std::format("{} Login", rl.protocol == Protocol::smb ? "SMB" : "SFTP"), Alignment::center),
+	stvector<Widget*, txs.size()> con {
+		new Label(popupLineHeight, "Login", Alignment::center),
+		new Layout(popupLineHeight, std::move(protocol), Direction::right),
 		new Layout(popupLineHeight, std::move(user), Direction::right),
 		new Layout(popupLineHeight, std::move(password), Direction::right),
 		new Layout(popupLineHeight, std::move(server), Direction::right),
@@ -234,21 +270,32 @@ void ProgState::showPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, EventId 
 			new Label(descLength, *itxs),
 			new LabelEdit(1.f, std::move(rl.workgroup), nullEvent, nullEvent, ACT_NONE, "Workgroup")
 		};
-		con.insert(con.begin() + 2, new Layout(popupLineHeight, std::move(workgroup), Direction::right));
+		con.insert(con.begin() + 3, new Layout(popupLineHeight, std::move(workgroup), Direction::right));
 	}
 	++itxs;
-	if (rl.protocol == Protocol::sftp) {
+	if (rl.protocol == Protocol::ftp || rl.protocol == Protocol::sftp) {
 		Children family = {
 			new Label(descLength, *itxs),
-			new ComboBox(1.f, eint(Family::any), vector<Cstring>(familyNames.begin(), familyNames.end()), GeneralEvent::confirmComboBox, "Family for resolving the server address")
+			new ComboBox(1.f, eint(rl.family), vector<Cstring>(RemoteLocation::familyNames.begin(), RemoteLocation::familyNames.end()), GeneralEvent::confirmComboBox, "Family for resolving the server address")
 		};
-		con.insert(con.begin() + 6, new Layout(popupLineHeight, std::move(family), Direction::right));
+		con.insert(con.begin() + 7, new Layout(popupLineHeight, std::move(family), Direction::right));
+	}
+	++itxs;
+	if (rl.protocol == Protocol::ftp) {
+		static constexpr array tlsTipLines = { "don't use encryption", "use encryption if available", "must use encryption" };
+		uptr<Cstring[]> otips = std::make_unique<Cstring[]>(RemoteLocation::encryptNames.size());
+		rng::copy(tlsTipLines, otips.get());
+		Children tls = {
+			new Label(descLength, *itxs),
+			new ComboBox(1.f, eint(rl.encrypt), vector<Cstring>(RemoteLocation::encryptNames.begin(), RemoteLocation::encryptNames.end()), GeneralEvent::confirmComboBox, "Enable encryption", std::move(otips))
+		};
+		con.insert(con.begin() + 8, new Layout(popupLineHeight, std::move(tls), Direction::right));
 	}
 	++itxs;
 	if (World::program()->canStoreCredentials()) {
 		Children saveCredentials {
 			new Label(descLength, *itxs),
-			new CheckBox(popupLineHeight, false, nullEvent, "Remember credentials")
+			new CheckBox(popupLineHeight, save, nullEvent, "Remember credentials")
 		};
 		con.insert(con.end() - 1, new Layout(popupLineHeight, std::move(saveCredentials), Direction::right));
 	}
@@ -258,17 +305,28 @@ void ProgState::showPopupRemoteLogin(RemoteLocation&& rl, EventId kcal, EventId 
 
 pair<RemoteLocation, bool> ProgState::remoteLocationFromPopup() {
 	std::span<Widget*> con = World::scene()->getPopup()->getWidgets();
-	uint smb = static_cast<Layout*>(con[2])->getWidget<Label>(0)->getText() == "Workgroup";
+	Protocol proto = strToEnum(protocolNames, static_cast<Layout*>(con[1])->getWidget<ComboBox>(1)->getText().data(), Protocol::none);
+	uint xtr = proto == Protocol::smb;
 	return pair(RemoteLocation{
-		.server = static_cast<Layout*>(con[3 + smb])->getWidget<LabelEdit>(1)->getText(),
-		.path = static_cast<Layout*>(con[4 + smb])->getWidget<LabelEdit>(1)->getText(),
-		.user = static_cast<Layout*>(con[1])->getWidget<LabelEdit>(1)->getText(),
-		.workgroup = smb ? static_cast<Layout*>(con[2])->getWidget<LabelEdit>(1)->getText() : string(),
-		.password = static_cast<Layout*>(con[2 + smb])->getWidget<LabelEdit>(1)->getText(),
-		.port = toNum<uint16>(static_cast<Layout*>(con[5 + smb])->getWidget<LabelEdit>(1)->getText()),
-		.protocol = smb ? Protocol::smb : Protocol::sftp,
-		.family = !smb ? Family(static_cast<Layout*>(con[6])->getWidget<ComboBox>(1)->getCurOpt()) : Family::any
+		.server = static_cast<Layout*>(con[4 + xtr])->getWidget<LabelEdit>(1)->getText(),
+		.path = static_cast<Layout*>(con[5 + xtr])->getWidget<LabelEdit>(1)->getText(),
+		.user = static_cast<Layout*>(con[2])->getWidget<LabelEdit>(1)->getText(),
+		.workgroup = xtr ? static_cast<Layout*>(con[3])->getWidget<LabelEdit>(1)->getText() : string(),
+		.password = static_cast<Layout*>(con[3 + xtr])->getWidget<LabelEdit>(1)->getText(),
+		.port = toNum<uint16>(static_cast<Layout*>(con[6 + xtr])->getWidget<LabelEdit>(1)->getText()),
+		.protocol = proto,
+		.family = !xtr ? RemoteLocation::Family(static_cast<Layout*>(con[7])->getWidget<ComboBox>(1)->getCurOpt()) : RemoteLocation::Family::any,
+		.encrypt = proto == Protocol::ftp ? RemoteLocation::Encrypt(static_cast<Layout*>(con[8])->getWidget<ComboBox>(1)->getCurOpt()) : RemoteLocation::Encrypt::on
 	}, World::program()->canStoreCredentials() && static_cast<Layout*>(con[con.size() - 2])->getWidget<CheckBox>(1)->on);
+}
+
+void ProgState::resetPopupLogin(Protocol oldProto, Protocol newProto) {
+	auto [rl, save] = remoteLocationFromPopup();
+	if (rl.port == protocolPorts[eint(oldProto)])
+		rl.port = protocolPorts[eint(newProto)];
+	rl.protocol = newProto;
+	std::span<Widget*> bot = static_cast<Layout*>(World::scene()->getPopup()->getWidgets().back())->getWidgets();
+	showPopupLogin(std::move(rl), static_cast<PushButton*>(bot[0])->getEvent(), static_cast<PushButton*>(bot[1])->getEvent(), save);
 }
 
 void ProgState::showContext(vector<pair<Cstring, EventId>>&& items, Widget* parent) {
@@ -411,8 +469,8 @@ void ProgBooks::eventFileDrop(const char* file) {
 RootLayout* ProgBooks::createLayout() {
 	// top bar
 	Children top = {
-		new PushButton(measureText("Settings", topHeight), "Settings", ProgBooksEvent::openSettings),
-		new PushButton(measureText("Exit", topHeight), "Exit", GeneralEvent::exit)
+		new PushButton(measuredText("Settings", topHeight), ProgBooksEvent::openSettings),
+		new PushButton(measuredText("Exit", topHeight), GeneralEvent::exit)
 	};
 
 	// root layout
@@ -475,13 +533,15 @@ RootLayout* ProgPageBrowser::createLayout() {
 	// sidebar
 	static constexpr std::initializer_list<const char*> txs = {
 		"Exit",
-		"Up"
+		"Up",
+		"Net"
 	};
 	std::initializer_list<const char*>::iterator itxs = txs.begin();
 	uint txsWidth = findMaxLength(txs.begin(), txs.end(), lineHeight);
 	Children bar = {
 		new PushButton(lineHeight, *itxs++, ProgFileExplorerEvent::exit),
-		new PushButton(lineHeight, *itxs++, ProgFileExplorerEvent::goUp)
+		new PushButton(lineHeight, *itxs++, ProgFileExplorerEvent::goUp),
+		new PushButton(lineHeight, *itxs++, ProgFileExplorerEvent::openLogin)
 	};
 
 	// main content
@@ -505,7 +565,7 @@ bool ProgPageBrowser::fillFileList(vector<Cstring>&& files, vector<Cstring>&& di
 	fileList->setWidgets(std::move(items));
 	dirEnd = dirs.size();
 	fileEnd = dirEnd + files.size();
-	return World::sets()->preview;
+	return true;
 }
 
 PushButton* ProgPageBrowser::makeDirectoryEntry(const Size& size, Cstring&& name) {
@@ -615,7 +675,11 @@ void ProgReader::eventRefresh() {
 
 void ProgReader::eventClosing() {
 	World::fileSys()->saveLastPage(World::program()->getBrowser()->locationForStore(reader->curPage()));
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	SDL_ShowCursor();
+#else
 	SDL_ShowCursor(SDL_ENABLE);
+#endif
 }
 
 RootLayout* ProgReader::createLayout() {
@@ -658,7 +722,7 @@ ProgSettings::~ProgSettings() {
 		stopFonts();
 		stopMove();
 	} catch (const std::runtime_error& err) {
-		logError(err.what());
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
 	}
 }
 
@@ -698,12 +762,13 @@ void ProgSettings::eventFileDrop(const char* file) {
 RootLayout* ProgSettings::createLayout() {
 	// top bar
 	Children top = {
-		new PushButton(measureText("Library", topHeight), "Library", ProgBooksEvent::openBookList),
-		new PushButton(measureText("Exit", topHeight), "Exit", GeneralEvent::exit)
+		new PushButton(measuredText("Library", topHeight), ProgBooksEvent::openBookList),
+		new PushButton(measuredText("Exit", topHeight), GeneralEvent::exit)
 	};
 
 	// setting buttons and labels
 	static constexpr std::initializer_list<const char*> txs = {
+		"Library",
 		"Direction",
 		"Zoom",
 		"Spacing",
@@ -714,13 +779,11 @@ RootLayout* ProgSettings::createLayout() {
 		"Device",
 		"Image compression",
 		"VSync",
-		"GPU selecting",
-		"Preview",
 		"Show hidden",
 		"Show tooltips",
+		"Preview",
 		"Theme",
 		"Font",
-		"Library",
 		"Scroll speed",
 		"Deadzone"
 	};
@@ -752,10 +815,10 @@ RootLayout* ProgSettings::createLayout() {
 	vector<Cstring> compressionNames(rinf.compressions.size());
 	uptr<Cstring[]> compressionTips = std::make_unique<Cstring[]>(rinf.compressions.size());
 	uint curCompression = 0;
-	for (size_t i = 0; Settings::Compression it : rinf.compressions) {
+	for (uint i = 0; Settings::Compression it : rinf.compressions) {
 		compressionNames[i] = Settings::compressionNames[eint(it)];
 		compressionTips[i] = compressionTipLines[eint(it)];
-		if (it == World::sets()->compression)
+		if (it == rinf.curCompression)
 			curCompression = i;
 		++i;
 	}
@@ -800,42 +863,43 @@ RootLayout* ProgSettings::createLayout() {
 	uint unumLen = getSettingsNumberDisplayLength();
 	startFonts();
 
-	vector<pair<Size, Children>> lx;
-	lx.reserve(txs.size());
-	array<pair<Size, Children>, 7> sec0 = {
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			new ComboBox(1.f, uint(World::sets()->direction), vector<Cstring>(Direction::names.begin(), Direction::names.end()), ProgSettingsEvent::setDirection, "Reading direction", makeCmbTips(tipsDirection.begin(), tipsDirection.end()))
-		}),
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			new ComboBox(ztypLength, eint(World::sets()->zoomType), vector<Cstring>(Settings::zoomNames.begin(), Settings::zoomNames.end()), ProgSettingsEvent::setZoomType, "Initial reader zoom", makeCmbTips(tipsZoomType.begin(), tipsZoomType.end())),
-			createZoomEdit()
-		}),
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			new LabelEdit(1.f, toStr(World::sets()->spacing), ProgSettingsEvent::setSpacing, nullEvent, ACT_LEFT, "Picture spacing in reader", LabelEdit::TextType::uInt)
-		}),
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			new ComboBox(plimLength, eint(World::sets()->picLim.type), vector<Cstring>(PicLim::names.begin(), PicLim::names.end()), ProgSettingsEvent::setPicLimitType, "Picture limit per batch", makeCmbTips(tipsPicLim.begin(), tipsPicLim.end())),
-			createLimitEdit()
-		}),
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			new Slider(1.f, World::sets()->maxPicRes, Settings::minPicRes, rinf.texSize, ProgSettingsEvent::setMaxPicResSl, ACT_LEFT, tipMaxPicRes),
-			new LabelEdit(unumLen, toStr(World::sets()->maxPicRes), ProgSettingsEvent::setMaxPicResLe, nullEvent, ACT_LEFT, tipMaxPicRes)
-		}),
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			screen = new ComboBox(1.f, eint(World::sets()->screen), vector<Cstring>(Settings::screenModeNames.begin(), Settings::screenModeNames.end()), ProgSettingsEvent::setScreenMode, "Window screen mode")
-		}),
-		pair(monitorSize, Children{
-			new Widget(descLength),
-			new WindowArranger(1.f, float(lineHeight * 2) / 1080.f, true, ProgSettingsEvent::setMultiFullscreen, ACT_LEFT, "Monitor arrangement for multi fullscreen")
-		})
-	};
-	lx.insert(lx.end(), std::make_move_iterator(sec0.begin()), std::make_move_iterator(sec0.end()));
+	stvector<pair<Size, Children>, txs.size() + 1> lx;
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		libraryDir = new LabelEdit(1.f, valcp(World::sets()->dirLib), ProgSettingsEvent::setLibraryDirLe, nullEvent, ACT_LEFT, "Library path"),
+		new PushButton(measuredText(KeyGetter::ellipsisStr, lineHeight), ProgSettingsEvent::openLibDirBrowser, ACT_LEFT, "Browse for library", Alignment::center)
+	});
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		new ComboBox(1.f, uint(World::sets()->direction), vector<Cstring>(Direction::names.begin(), Direction::names.end()), ProgSettingsEvent::setDirection, "Reading direction", makeCmbTips(tipsDirection.begin(), tipsDirection.end()))
+	});
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		new ComboBox(ztypLength, eint(World::sets()->zoomType), vector<Cstring>(Settings::zoomNames.begin(), Settings::zoomNames.end()), ProgSettingsEvent::setZoomType, "Initial reader zoom", makeCmbTips(tipsZoomType.begin(), tipsZoomType.end())),
+		createZoomEdit()
+	});
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		new LabelEdit(1.f, toStr(World::sets()->spacing), ProgSettingsEvent::setSpacing, nullEvent, ACT_LEFT, "Picture spacing in reader", LabelEdit::TextType::uInt)
+	});
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		new ComboBox(plimLength, eint(World::sets()->picLim.type), vector<Cstring>(PicLim::names.begin(), PicLim::names.end()), ProgSettingsEvent::setPicLimitType, "Picture limit per batch", makeCmbTips(tipsPicLim.begin(), tipsPicLim.end())),
+		createLimitEdit()
+	});
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		new Slider(1.f, World::sets()->maxPicRes, Settings::minPicRes, rinf.texSize, ProgSettingsEvent::setMaxPicResSl, ACT_LEFT, tipMaxPicRes),
+		new LabelEdit(unumLen, toStr(World::sets()->maxPicRes), ProgSettingsEvent::setMaxPicResLe, nullEvent, ACT_LEFT, tipMaxPicRes)
+	});
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		screen = new ComboBox(1.f, eint(World::sets()->screen), vector<Cstring>(Settings::screenModeNames.begin(), Settings::screenModeNames.end()), ProgSettingsEvent::setScreenMode, "Window screen mode")
+	});
+	lx.emplace_back(monitorSize, Children{
+		new Widget(descLength),
+		new WindowArranger(1.f, float(lineHeight * 2) / 1080.f, true, ProgSettingsEvent::setMultiFullscreen, ACT_LEFT, "Monitor arrangement for multi fullscreen")
+	});
 
 	if constexpr (Settings::rendererNames.size() > 1) {
 		lx.emplace_back(lineHeight, Children{
@@ -863,52 +927,37 @@ RootLayout* ProgSettings::createLayout() {
 		new Label(descLength, *itxs++),
 		new CheckBox(lineHeight, World::sets()->vsync, ProgSettingsEvent::setVsync, "Vertical synchronization")
 	});
-	if (rinf.selecting) {
-		lx.emplace_back(lineHeight, Children{
-			new Label(descLength, *itxs),
-			new CheckBox(lineHeight, World::sets()->gpuSelecting, ProgSettingsEvent::setGpuSelecting, "Use the graphics process to determine which widget is being selected")
-		});
-	}
-	++itxs;
-
-	array<pair<Size, Children>, 8> sec1 = {
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			new CheckBox(lineHeight, World::sets()->preview, ProgSettingsEvent::setPreview, "Show preview icons of pictures in browser")
-		}),
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			showHidden = new CheckBox(lineHeight, World::sets()->showHidden, ProgSettingsEvent::setHide, "Show hidden files")
-		}),
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			new CheckBox(lineHeight, World::sets()->tooltips, ProgSettingsEvent::setTooltips, "Display tooltips on hover")
-		}),
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			new ComboBox(1.f, valcp(World::sets()->getTheme()), vector<Cstring>(themes.begin(), themes.end()), ProgSettingsEvent::setTheme, "Color scheme")
-		}),
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			fontList = new ComboBox(1.f, 0, { "loading..." }, nullEvent, "Font family"),
-			new ComboBox(findMaxLength(Settings::hintingNames.begin(), Settings::hintingNames.end(), lineHeight), eint(World::sets()->hinting), vector<Cstring>(Settings::hintingNames.begin(), Settings::hintingNames.end()), ProgSettingsEvent::setFontHinting, "Font hinting")
-		}),
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			libraryDir = new LabelEdit(1.f, valcp(World::sets()->dirLib), ProgSettingsEvent::setLibraryDirLe, nullEvent, ACT_LEFT, "Library path"),
-			new PushButton(measureText(KeyGetter::ellipsisStr, lineHeight), KeyGetter::ellipsisStr, ProgSettingsEvent::openLibDirBrowser, ACT_LEFT, "Browse for library", Alignment::center)
-		}),
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			new LabelEdit(1.f, World::sets()->scrollSpeedString(), ProgSettingsEvent::setScrollSpeed, nullEvent, ACT_LEFT, "Scroll speed for button presses or axes", LabelEdit::TextType::sFloatSpaced)
-		}),
-		pair(lineHeight, Children{
-			new Label(descLength, *itxs++),
-			new Slider(1.f, World::sets()->getDeadzone(), 0, Settings::axisLimit, ProgSettingsEvent::setDeadzoneSl, ACT_LEFT, tipDeadzone),
-			new LabelEdit(unumLen, toStr(World::sets()->getDeadzone()), ProgSettingsEvent::setDeadzoneLe, nullEvent, ACT_LEFT, tipDeadzone, LabelEdit::TextType::uInt)
-		})
-	};
-	lx.insert(lx.end(), std::make_move_iterator(sec1.begin()), std::make_move_iterator(sec1.end()));
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		showHidden = new CheckBox(lineHeight, World::sets()->showHidden, ProgSettingsEvent::setHide, "Show hidden files")
+	});
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		new CheckBox(lineHeight, World::sets()->tooltips, ProgSettingsEvent::setTooltips, "Display tooltips on hover")
+	});
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		new ComboBox(1.f, eint(World::sets()->preview), vector<Cstring>(Settings::previewNames.begin(), Settings::previewNames.end()), ProgSettingsEvent::setPreview, "Show preview icons of pictures in browser")
+	});
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		new ComboBox(1.f, valcp(World::sets()->getTheme()), vector<Cstring>(themes.begin(), themes.end()), ProgSettingsEvent::setTheme, "Color scheme")
+	});
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		fontList = new ComboBox(1.f, 0, { "loading..." }, nullEvent, "Font family"),
+		new Label(measuredText("Mono", lineHeight)),
+		new CheckBox(lineHeight, World::sets()->monoFont, ProgSettingsEvent::setMonoFont, "Mono font hinting")
+	});
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		new LabelEdit(1.f, World::sets()->scrollSpeedString(), ProgSettingsEvent::setScrollSpeed, nullEvent, ACT_LEFT, "Scroll speed for button presses or axes", LabelEdit::TextType::sFloatSpaced)
+	});
+	lx.emplace_back(lineHeight, Children{
+		new Label(descLength, *itxs++),
+		new Slider(1.f, World::sets()->getDeadzone(), 0, Settings::axisLimit, ProgSettingsEvent::setDeadzoneSl, ACT_LEFT, tipDeadzone),
+		new LabelEdit(unumLen, toStr(World::sets()->getDeadzone()), ProgSettingsEvent::setDeadzoneLe, nullEvent, ACT_LEFT, tipDeadzone, LabelEdit::TextType::uInt)
+	});
 
 	uint lcnt = lx.size();
 	Children lns(lcnt + 2 + std::size(bnames) + 2);
@@ -916,13 +965,13 @@ RootLayout* ProgSettings::createLayout() {
 		lns[i] = new Layout(lx[i].first, std::move(lx[i].second), Direction::right);
 	lns[lcnt] = new Widget(0);
 	lns[lcnt + 1] = new Layout(lineHeight, { new Widget(descLength), new Label(1.f, "Keyboard", Alignment::center, false), new Label(1.f, "DirectInput", Alignment::center, false), new Label(1.f, "XInput", Alignment::center, false) }, Direction::right);
-	zoomLine = static_cast<Layout*>(lns[1]);
-	limitLine = static_cast<Layout*>(lns[3]);
+	zoomLine = static_cast<Layout*>(lns[2]);
+	limitLine = static_cast<Layout*>(lns[4]);
 
 	// shortcut entries
 	for (size_t i = 0; i < std::size(bnames); ++i) {
 		auto lbl = new Label(descLength, std::move(bnames[i]));
-		Children lin {
+		Children lin = {
 			lbl,
 			new KeyGetter(1.f, KeyGetter::AcceptType::keyboard, Binding::Type(i), std::format("{} keyboard binding", lbl->getText().data())),
 			new KeyGetter(1.f, KeyGetter::AcceptType::joystick, Binding::Type(i), std::format("{} joystick binding", lbl->getText().data())),
@@ -934,7 +983,7 @@ RootLayout* ProgSettings::createLayout() {
 
 	// reset button
 	lns[lcnt] = new Widget(0);
-	lns[lcnt + 1] = new Layout(lineHeight, { new PushButton(measureText("Reset", lineHeight), "Reset", ProgSettingsEvent::reset, ACT_LEFT, "Reset all settings") }, Direction::right);
+	lns[lcnt + 1] = new Layout(lineHeight, { new PushButton(measuredText("Reset", lineHeight), ProgSettingsEvent::reset, ACT_LEFT, "Reset all settings") }, Direction::right);
 
 	// root layout
 	Children cont = {
@@ -1021,7 +1070,7 @@ void ProgSettings::stopMove() {
 void ProgSettings::logMoveErrors(const string* errors) {
 	for (string::const_iterator pos = errors->begin(); pos != errors->end();) {
 		string::const_iterator next = std::find(pos, errors->end(), '\n');
-		logError(string_view(pos, next));
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%.*s", int(next - pos), std::to_address(pos));
 		pos = std::find_if(next, errors->end(), [](char c) -> bool { return c != '\n'; });
 	}
 }
