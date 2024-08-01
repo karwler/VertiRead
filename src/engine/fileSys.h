@@ -1,13 +1,15 @@
 #pragma once
 
 #include "utils/settings.h"
-#include <format>
-#include <stop_token>
+#include "utils/stvector.h"
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #undef WIN32_LEAN_AND_MEAN
 #endif
+#include <SDL_log.h>
+#include <format>
+#include <stop_token>
 
 struct FT_FaceRec_;
 struct FT_LibraryRec_;
@@ -45,14 +47,13 @@ private:
 	static constexpr char iniKeywordDevice[] = "device";
 	static constexpr char iniKeywordCompression[] = "compression";
 	static constexpr char iniKeywordVSync[] = "vsync";
-	static constexpr char iniKeywordGpuSelecting[] = "gpu_selecting";
 	static constexpr char iniKeywordDirection[] = "direction";
 	static constexpr char iniKeywordZoom[] = "zoom";
 	static constexpr char iniKeywordSpacing[] = "spacing";
 	static constexpr char iniKeywordPictureLimit[] = "picture_limit";
 	static constexpr char iniKeywordMaxPictureRes[] = "max_picture_res";
 	static constexpr char iniKeywordFont[] = "font";
-	static constexpr char iniKeywordHinting[] = "hinting";
+	static constexpr char iniKeywordFontMono[] = "font_mono";
 	static constexpr char iniKeywordTheme[] = "theme";
 	static constexpr char iniKeywordPreview[] = "preview";
 	static constexpr char iniKeywordShowHidden[] = "show_hidden";
@@ -79,14 +80,14 @@ private:
 	void* fontconfig = nullptr;	// is class Fontconfig
 #endif
 public:
-	FileSys(const uset<string>& cmdFlags);
+	FileSys();
 	~FileSys();
 
 	vector<string> getAvailableThemes() const;
 	array<vec4, Settings::defaultColors.size()> loadColors(string_view theme) const;	// updates settings' colors according to settings' theme
-	vector<string> getLastPage(string_view book) const;
-	void saveLastPage(const vector<string>& paths) const;
-	Settings* loadSettings(const uset<string>* cmdFlags = nullptr) const;
+	stvector<string, Settings::maxPageElements> getLastPage(string_view book) const;
+	void saveLastPage(const stvector<string, Settings::maxPageElements>& paths) const;
+	uptr<Settings> loadSettings() const;
 	void saveSettings(const Settings* sets) const;
 	array<Binding, Binding::names.size()> loadBindings() const;
 	void saveBindings(const array<Binding, Binding::names.size()>& bindings) const;

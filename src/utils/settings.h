@@ -1,9 +1,14 @@
 #pragma once
 
 #include "utils.h"
-#include <unordered_set>
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+#include <SDL_gamepad.h>
+#else
 #include <SDL_gamecontroller.h>
+#endif
 #include <SDL_scancode.h>
+#include <SDL_video.h>
+#include <unordered_set>
 
 template <class... T> using uset = std::unordered_set<T...>;
 
@@ -139,9 +144,9 @@ public:
 
 	enum Assignment : uint8 {
 		ASG_NONE	= 0x00,
-		ASG_KEY     = 0x01,
+		ASG_KEY		= 0x01,
 		ASG_JBUTTON = 0x02,
-		ASG_JHAT    = 0x04,
+		ASG_JHAT	= 0x04,
 		ASG_JAXIS_P = 0x08,	// use only positive values
 		ASG_JAXIS_N = 0x10,	// use only negative values
 		ASG_GBUTTON = 0x20,
@@ -385,13 +390,15 @@ public:
 		"Software"
 	};
 
-	enum class Hinting : uint8 {
-		normal,
-		mono
+	enum class Preview : uint8 {
+		off,
+		local,
+		all
 	};
-	static constexpr array hintingNames = {
-		"normal",
-		"mono"
+	static constexpr array previewNames = {
+		"off",
+		"local",
+		"all"
 	};
 
 	enum class Compression : uint8 {
@@ -409,9 +416,9 @@ public:
 
 	struct Display {
 		Recti rect;
-		int did;
+		SDL_DisplayID did;
 
-		Display(const Recti& bounds, int dispId) : rect(bounds), did(dispId) {}
+		Display(const Recti& bounds, SDL_DisplayID dispId) : rect(bounds), did(dispId) {}
 
 		bool operator==(const Display& d) const { return rect == d.rect && did == d.rect; }
 		bool operator<(const Display& d) const { return did < d.did; }
@@ -437,11 +444,19 @@ public:
 	static constexpr Renderer defaultRenderer = Renderer::software;
 #endif
 	static constexpr char defaultFont[] = "BrisaSans";
-	static constexpr Hinting defaultHinting = Hinting::normal;
+	static constexpr Preview defaultPreview = Preview::local;
 	static constexpr Compression defaultCompression = Compression::none;
 	static constexpr char defaultDirLib[] = "library";
 	static constexpr int8 zoomLimit = 113;
 	static constexpr double zoomBase = 1.2;
+	static constexpr uint maxPageElements = 3;
+
+#ifdef _WIN32
+	static inline wchar_t** argv;
+#else
+	static inline char** argv;
+#endif
+	static inline int argc = 0;
 
 private:
 	string theme;
@@ -460,7 +475,7 @@ public:
 	ushort spacing = defaultSpacing;
 	bool maximized = false;
 	Screen screen = defaultScreenMode;
-	bool preview = true;
+	Preview preview = defaultPreview;
 	bool showHidden = false;
 	bool tooltips = true;
 	Direction direction = defaultDirection;
@@ -469,8 +484,7 @@ public:
 	Compression compression = defaultCompression;
 	bool vsync = true;
 	Renderer renderer = defaultRenderer;
-	bool gpuSelecting = false;
-	Hinting hinting = defaultHinting;
+	bool monoFont = false;
 
 	Settings(const fs::path& dirSets, vector<string>&& themes);
 
@@ -482,10 +496,14 @@ public:
 	static double zoomValue(int step);
 	void unionDisplays();
 	static Renderer getRenderer(string_view name);
-	void setRenderer(const uset<string>& cmdFlags);
+	void setRenderer();
 	string scrollSpeedString() const { return toStr(scrollSpeed); }
 	int getDeadzone() const { return deadzone; }
 	void setDeadzone(int val);
+
+	static string firstArg();
+	static bool hasFlag(const char* name);
+	static bool cmpFlag(const char* name, int id);
 };
 
 inline double Settings::zoomValue(int step) {
@@ -494,4 +512,12 @@ inline double Settings::zoomValue(int step) {
 
 inline void Settings::setDeadzone(int val) {
 	deadzone = std::clamp(val, 0, axisLimit);
+}
+
+inline bool Settings::cmpFlag(const char* name, int id) {
+#ifdef _WIN32
+	return argv[id][0] == '-' && strasymequal(name, argv[id] + 1 + (argv[id][1] == '-'));
+#else
+	return argv[id][0] == '-' && !strcmp(name, argv[id] + 1 + (argv[id][1] == '-'));
+#endif
 }

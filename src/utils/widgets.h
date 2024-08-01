@@ -105,7 +105,6 @@ public:
 
 	virtual void drawSelf(const Recti&) {}	// calls appropriate drawing function(s) in DrawSys
 	virtual void drawTop(const Recti&) const {}
-	virtual void drawAddr(const Recti&) {}
 	virtual void onResize() {}	// for updating values when window size changed
 	virtual void tick(float) {}
 	virtual void postInit() {}	// gets called after parent is set and all set up
@@ -118,7 +117,7 @@ public:
 	virtual void onDrag(ivec2, ivec2) {}	// mouse move while left button down
 	virtual void onUndrag(ivec2, uint8) {}	// gets called on mouse button up if instance is Scene's capture
 	virtual void onScroll(ivec2) {}	// on mouse wheel y movement
-	virtual void onKeypress(const SDL_Keysym&) {}
+	virtual void onKeypress(SDL_Scancode, SDL_Keymod) {}
 	virtual void onJButton(uint8) {}
 	virtual void onJHat(uint8, uint8) {}
 	virtual void onJAxis(uint8, bool) {}
@@ -228,7 +227,6 @@ protected:
 public:
 	Button(const Size& size, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring()) noexcept;
 
-	void drawAddr(const Recti& view) override;
 	void onClick(ivec2 mPos, uint8 mBut) override;
 	void onDoubleClick(ivec2 mPos, uint8 mBut) override;
 	void onHover() override;
@@ -237,10 +235,15 @@ public:
 	bool hasDoubleclick() const noexcept override;
 
 	virtual const char* getTooltip() const;
+	EventId getEvent() const;
 	void setEvent(EventId eid, Actions amask) noexcept;
 	Color getBgColor() const { return bgColor; }
 	bool toggleHighlighted() noexcept;
 };
+
+inline EventId Button::getEvent() const {
+	return EventId(etype, ecode);
+}
 
 // if you don't know what a checkbox is then I don't know what to tell ya
 class CheckBox final : public Button {
@@ -279,7 +282,7 @@ public:
 	void onHold(ivec2 mPos, uint8 mBut) override;
 	void onDrag(ivec2 mPos, ivec2 mMov) override;
 	void onUndrag(ivec2 mPos, uint8 mBut) override;
-	void onKeypress(const SDL_Keysym& key) override;
+	void onKeypress(SDL_Scancode key, SDL_Keymod mod) override;
 
 	int getVal() const { return val; }
 	void setVal(int value);
@@ -423,7 +426,7 @@ public:
 	void onResize() override;
 	void postInit() override;
 	void onClick(ivec2 mPos, uint8 mBut) override;
-	void onKeypress(const SDL_Keysym& key) override;
+	void onKeypress(SDL_Scancode key, SDL_Keymod mod) override;
 	void onCompose(string_view str, uint olen) override;
 	void onText(string_view str, uint olen) override;
 	void confirm();
@@ -493,7 +496,7 @@ public:
 	KeyGetter(const Size& size, AcceptType type, Binding::Type binding, Cstring&& tip = Cstring()) noexcept;
 
 	void onClick(ivec2 mPos, uint8 mBut) override;
-	void onKeypress(const SDL_Keysym& key) override;
+	void onKeypress(SDL_Scancode key, SDL_Keymod mod) override;
 	void onJButton(uint8 jbutton) override;
 	void onJHat(uint8 jhat, uint8 value) override;
 	void onJAxis(uint8 jaxis, bool positive) override;

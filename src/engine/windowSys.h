@@ -5,24 +5,27 @@
 
 // handles window events and contains video settings
 class WindowSys {
-private:
+public:
 	static constexpr char title[] = "VertiRead";
-	static constexpr ivec2 windowMinSize = { 500, 300 };
+private:
+	static constexpr ivec2 windowMinSize = ivec2(500, 300);
 	static constexpr uint32 eventCheckTimeout = 50;
 	static constexpr float ticksPerSec = 1000.f;
 
-	FileSys* fileSys;
-	DrawSys* drawSys;
-	InputSys* inputSys;
-	Program* program;
-	Scene* scene;
-	Settings* sets;
+	FileSys* fileSys = nullptr;
+	DrawSys* drawSys = nullptr;
+	InputSys* inputSys = nullptr;
+	Program* program = nullptr;
+	Scene* scene = nullptr;
+	uptr<Settings> sets;
 	vector<SDL_Window*> windows;
-	float dSec;		// delta seconds, aka the time between each iteration of the above mentioned loop
-	bool run;		// whether the loop in which the program runs should continue
+	float dSec;			// delta seconds, aka the time between each iteration of the above mentioned loop
+	bool run = true;	// whether the loop in which the program runs should continue
 
 public:
-	int start(vector<string>&& cmdVals, uset<string>&& cmdFlags) noexcept;
+	void init();
+	void cleanup() noexcept;
+	void exec();
 	void close();
 
 	float getDSec() const { return dSec; }
@@ -40,12 +43,9 @@ public:
 	InputSys* getInputSys() { return inputSys; }
 	Program* getProgram() { return program; }
 	Scene* getScene() { return scene; }
-	Settings* getSets() { return sets; }
+	Settings* getSets() { return sets.get(); }
 
 private:
-	void init(vector<string>&& cmdVals, uset<string>&& cmdFlags);
-	void exec();
-
 	void createWindow();
 	uint32 initWindow(bool shared);
 	void createSingleWindow(uint32 flags, SDL_Surface* icon);
@@ -53,7 +53,7 @@ private:
 	void destroyWindows() noexcept;
 	void handleEvent(const SDL_Event& event);	// pass events to their specific handlers
 	void eventWindow(const SDL_WindowEvent& winEvent);
-	void eventDisplay(const SDL_DisplayEvent& dspEvent);
+	void eventDisplay();
 };
 
 inline void WindowSys::close() {

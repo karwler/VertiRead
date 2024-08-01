@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/utils.h"
+#include <SDL_video.h>
 #include <glm/geometric.hpp>
 
 // saves what widget is being clicked on with what button at what position
@@ -17,6 +18,9 @@ class Scene {
 private:
 	Widget* select = nullptr;	// currently selected widget
 	Widget* capture = nullptr;	// either pointer to widget currently hogging all keyboard input or ScrollArea which's slider is currently being dragged. nullptr if nothing is being captured or dragged
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	SDL_Window* captureWindow;	// window associated with currently captured widget
+#endif
 	RootLayout* layout = nullptr;
 	Popup* popup = nullptr;
 	Overlay* overlay = nullptr;
@@ -45,6 +49,9 @@ public:
 
 	Widget* getSelect() const { return select; }
 	Widget* getCapture() const { return capture; }
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	SDL_Window* getCaptureWindow() const { return captureWindow; }
+#endif
 	void setCapture(Widget* inter) noexcept;
 	void resetLayouts();
 	void clearLayouts();
@@ -59,7 +66,6 @@ public:
 
 	void updateSelect();
 	void updateSelect(Widget* sel);
-	void updateSelect(ivec2 mPos);
 	void deselect();
 	void selectFirst();
 	bool cursorInClickRange(ivec2 mPos, uint8 mBut);
@@ -68,11 +74,8 @@ public:
 private:
 	Widget* getSelected(ivec2 mPos);
 	bool overlayFocused(ivec2 mPos) const;
+	void finishNewPopup(Popup* lay);
 };
-
-inline void Scene::updateSelect(ivec2 mPos) {
-	updateSelect(getSelected(mPos));
-}
 
 inline bool Scene::cursorInClickRange(ivec2 mPos, uint8 mBut) {
 	return glm::length(vec2(mPos - stamps[mBut - 1].mPos)) <= clickMoveThreshold;

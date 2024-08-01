@@ -8,9 +8,14 @@ struct Children {
 	uint num = 0;
 
 	Children() = default;
+	Children(const Children&) = delete;
+	Children(Children&&) = default;
 	Children(std::initializer_list<Widget*> ilist);
 	template <Class T> Children(T&& view);
 	Children(uint size);
+
+	Children& operator=(const Children&) = delete;
+	Children& operator=(Children&&) = default;
 
 	Widget*& operator[](uint id) { return wgts[id]; }
 	Widget* const& operator[](uint id) const { return wgts[id]; }
@@ -43,7 +48,6 @@ public:
 	~Layout() override;
 
 	void drawSelf(const Recti& view) override;
-	void drawAddr(const Recti& view) override;
 	void onResize() override;
 	void tick(float dSec) override;
 	void postInit() override;
@@ -239,7 +243,7 @@ public:
 	void tick(float dSec) override;
 	void onMouseMove(ivec2 mPos, ivec2 mMov) override;
 
-	void setPictures(vector<pair<Cstring, Texture*>>& imgs, string_view startPic, bool fwd);
+	void setPictures(std::forward_list<pair<Cstring, Texture*>>& imgs, uint cnt, string_view startPic, bool fwd);
 	bool showBar() const noexcept;
 	void setZoom(int8 step);
 	void addZoom(int8 step);
