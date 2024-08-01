@@ -13,9 +13,8 @@ layout(set = 0, binding = 0) readonly buffer InputData {
 
 layout(set = 0, binding = 1, rgba8) writeonly uniform image2D img;
 
-#define storeColor(id, size, clr) \
-	vec3 co = vec3(clr & 0xFF, (clr >> 8) & 0xFF, (clr >> 16) & 0xFF) / 255.0; \
-	imageStore(img, ivec2((id) % size.x, (id) / size.x), vec4(co, 1.0))
+#define storeColor(id, size, r, g, b) \
+	imageStore(img, ivec2((id) % size.x, (id) / size.x), vec4(vec3((r), (g), (b)) / 255.0, 1.0))
 
 void main() {
 	uint cid = (gl_WorkGroupID.x + psData.offset) * gl_WorkGroupSize.x + gl_LocalInvocationID.x;
@@ -27,29 +26,29 @@ void main() {
 	uint p0, p1, p2;
 	if (oid < len) {
 		p0 = inData.pixels[iid];
-		uint clr = orderRgb
-			? p0
-			: ((p0 >> 16) & 0x000000FF) | (p0 & 0x0000FF00) | ((p0 << 16) & 0x00FF0000);
-		storeColor(oid, size, clr);
+		if (orderRgb)
+			storeColor(oid, size, p0 & 0xFF, (p0 >> 8) & 0xFF, (p0 >> 16) & 0xFF);
+		else
+			storeColor(oid, size, (p0 >> 16) & 0xFF, (p0 >> 8) & 0xFF, p0 & 0xFF);
 	}
 	if (oid + 1 < len) {
 		p1 = inData.pixels[iid + 1];
-		uint clr = orderRgb
-			? (p0 >> 24) | (p1 << 8)
-			: ((p1 >> 8) & 0x000000FF) | ((p1 << 8) & 0x0000FF00) | ((p0 >> 8) & 0x00FF0000);
-		storeColor(oid + 1, size, clr);
+		if (orderRgb)
+			storeColor(oid + 1, size, p0 >> 24, p1 & 0xFF, (p1 >> 8) & 0xFF);
+		else
+			storeColor(oid + 1, size, (p1 >> 8) & 0xFF, p1 & 0xFF, p0 >> 24);
 	}
 	if (oid + 2 < len) {
 		p2 = inData.pixels[iid + 2];
-		uint clr = orderRgb
-			? (p1 >> 16) | (p2 << 16)
-			: (p2 & 0x000000FF) | ((p1 >> 16) & 0x0000FF00) | (p1 & 0x00FF0000);
-		storeColor(oid + 2, size, clr);
+		if (orderRgb)
+			storeColor(oid + 2, size, (p1 >> 16) & 0xFF, p1 >> 24, p2 & 0xFF);
+		else
+			storeColor(oid + 2, size, p2 & 0xFF, p1 >> 24, (p1 >> 16) & 0xFF);
 	}
 	if (oid + 3 < len) {
-		uint clr = orderRgb
-			? (p2 >> 8)
-			: ((p2 >> 16) & 0x000000FF) | ((p2 >> 8) & 0x0000FF00) | ((p2 << 8) & 0x00FF0000);
-		storeColor(oid + 3, size, clr);
+		if (orderRgb)
+			storeColor(oid + 3, size, (p2 >> 8) & 0xFF, (p2 >> 16) & 0xFF, p2 >> 24);
+		else
+			storeColor(oid + 3, size, p2 >> 24, (p2 >> 16) & 0xFF, (p2 >> 8) & 0xFF);
 	}
 }

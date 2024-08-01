@@ -6,25 +6,42 @@
 // handles the front-end
 class Program {
 private:
+	enum class InitState : uint8 {
+		none,
+		done,
+		error
+	};
+
+#ifdef WITH_FTP
+	static constexpr Protocol defaultProtocolSelect = Protocol::ftp;
+#elif defined(CAN_SFTP)
+	static constexpr Protocol defaultProtocolSelect = Protocol::sftp;
+#elif defined(CAN_SMB)
+	static constexpr Protocol defaultProtocolSelect = Protocol::smb;
+#else
+	static constexpr Protocol defaultProtocolSelect = Protocol::none;
+#endif
+
 	ProgState* state = nullptr;
 	Browser browser;
-#ifdef CAN_SECRET
-	optional<CredentialManager*> credential;	// loaded lazily
-#endif
 #ifdef WITH_ARCHIVE
 	ArchiveData* archiveRequest;
 	std::binary_semaphore* archiveRequestDone;
 #endif
 	Popup* prevPopup;	// might wanna implement a popup stack instead
+#ifdef CAN_SECRET
+	CredentialManager* credential;	// loaded lazily
+	InitState credentialState = InitState::none;
+#endif
 
 public:
 	~Program();
 
-	void start(const vector<string>& cmdVals);
+	void start();
 	void tick();
 	ProgState* getState() { return state; }
 	Browser* getBrowser() { return &browser; }
-	bool canStoreCredentials() const;
+	bool canStoreCredentials();
 
 	void handleGeneralEvent(const SDL_UserEvent& event);
 	void handleProgBooksEvent(const SDL_UserEvent& event);
@@ -79,6 +96,7 @@ private:
 	void eventBrowserGoFile(PushButton* lbl);
 	void eventBrowserGoTo(LabelEdit* le);
 	void eventBrowserGoToLogin();
+	void eventBrowserOpenLogin();
 	void eventPreviewProgress(uptr<char[]> ndata, SDL_Surface* icon);
 	void eventExitBrowser();
 
@@ -102,7 +120,7 @@ private:
 	void eventSetMultiFullscreen(WindowArranger* wa);
 	void eventSetTheme(PushButton* lbl);
 	void eventSetFont(PushButton* but);
-	void eventSetFontHinting(PushButton* but);
+	void eventSetMonoFont(CheckBox* cb);
 	void eventSetDeadzone(Slider* sl);
 	void eventSetDeadzone(LabelEdit* le);
 	void eventSetPicLimType(PushButton* but);
@@ -118,6 +136,7 @@ private:
 	void eventStartRequestPassphrase(ArchiveData* ad, std::binary_semaphore* done);
 	void eventRequestPassphrase();
 	void eventSetPassphrase(bool ok);
+	void eventSetLoginPopupProtocol(PushButton* but);
 
 	template <class... A> void openBookListHandle(A&&... args);
 	template <class... A> void openFileHandle(A&&... args);
@@ -128,11 +147,14 @@ private:
 	void startBrowserPreview();
 	static uint finishComboBox(PushButton* but);
 	template <Derived<ProgState> T, class... A> void setState(A&&... args);
+#ifdef CAN_SECRET
+	bool lazyInitCredentials();
+#endif
 };
 
-inline bool Program::canStoreCredentials() const {
+inline bool Program::canStoreCredentials() {
 #ifdef CAN_SECRET
-	return credential && *credential;
+	return lazyInitCredentials();
 #else
 	return false;
 #endif

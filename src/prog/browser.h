@@ -2,6 +2,7 @@
 
 #include "types.h"
 #include "utils/settings.h"
+#include "utils/stvector.h"
 #include <thread>
 
 // logic for browsing files
@@ -103,7 +104,6 @@ private:
 	class LoadProgress {
 	private:
 		string suffix;		// text with the total number
-		size_t c = 0;		// entry progress
 		size_t lim = 0;		// entry count limit
 		uintptr_t m = 0;	// memory progress
 		uintptr_t mem = 0;	// memory limit
@@ -113,7 +113,7 @@ private:
 	public:
 		LoadProgress(const PicLim& picLim, size_t max);
 
-		bool ok() const { return c < lim && m < mem; }
+		bool ok(const BrowserResultPicture* rp) const { return rp->cnt < lim && m < mem; }
 		void pushImage(BrowserResultPicture* rp, Cstring&& name, SDL_Surface* img, const PicLim& picLim, uintptr_t imgSize);
 	private:
 		string numStr(const PicLim& picLim, size_t ci, uintptr_t mi) const;
@@ -123,7 +123,7 @@ public:
 	void (Program::*exCall)();		// gets called when goUp() fails, aka stepping out of rootDir into the previous menu
 private:
 	string rootDir;		// the top directory one can visit
-	string curDir;		// directory or PDF in which one currently is
+	string curDir;		// directory or PDF in which one currently is	// TODO: how to handle this with a possible prefix?
 	ArchiveData arch;	// current archive directory tree root and info
 	PdfFile pdf;		// current PDF file
 
@@ -140,7 +140,7 @@ public:
 	void beginFs(string&& root, string&& path);
 	bool goTo(const RemoteLocation& location, vector<string>&& passwords = vector<string>());	// returns whether to wait
 	bool goTo(const string& path);	// ^
-	bool openPicture(string&& rootDir, vector<string>&& paths);
+	bool openPicture(string&& rootDir, stvector<string, Settings::maxPageElements>&& paths);
 	bool goIn(string_view dname);
 	bool goFile(string_view fname);
 	bool goUp();
@@ -149,7 +149,8 @@ public:
 
 	const string& getCurDir() const { return curDir; }
 	string locationForDisplay() const;
-	vector<string> locationForStore(string_view pname) const;
+	stvector<string, Settings::maxPageElements> locationForStore(string_view pname) const;
+	bool isLocal() const;
 	void startListCurDir(bool files = true);
 	void startListDir(string&& path, bool files = true);
 	bool startDeleteEntry(string_view ename);
@@ -169,7 +170,7 @@ public:
 
 private:
 	template <Invocable<FileOps*, const RemoteLocation&> F> auto beginRemoteOps(const RemoteLocation& location, vector<string>&& passwords, F func);
-	template <class T, class F> vector<T>::iterator foreachAround(vector<T>& vec, vector<T>::iterator start, bool fwd, F check);
+	template <class T, class F> vector<T>::iterator foreachAround(vector<T>& vec, vector<T>::iterator start, bool found, bool fwd, F check);
 
 	static void listDirFsThread(std::stop_token stoken, uptr<ListDirData> ld);
 #ifdef WITH_ARCHIVE
@@ -187,13 +188,14 @@ private:
 #if defined(CAN_MUPDF) || defined(CAN_POPPLER)
 	static void previewPdf(std::stop_token stoken, PdfFile& pdfFile, int maxHeight, string_view fname);
 #endif
-	static SDL_Surface* combineIcons(SDL_Surface* dir, SDL_Surface* img);
-	static SDL_Surface* scaleDown(SDL_Surface* img, int maxHeight);
+	static SDL_Surface* combineIcons(SDL_Surface* dir, SDL_Surface* img) noexcept;
+	static SDL_Surface* scaleDown(SDL_Surface* img, int maxHeight) noexcept;
 	static char* allocatePreviewName(string_view name, bool file);
 
-	umap<string, uintptr_t> prepareArchiveDirPicLoad(BrowserResultPicture* rp, const PicLim& picLim, uint8 compress, bool showHidden);
 	static void loadPicturesDirThread(std::stop_token stoken, uptr<LoadPicturesDirData> ld);
 #ifdef WITH_ARCHIVE
+	umap<string, uintptr_t> prepareArchiveDirPicLoad(BrowserResultPicture* rp, const PicLim& picLim, uint8 compress, bool showHidden);
+	static bool canAddArchEntryToPicLoad(const ArchiveFile* file, bool showHidden);
 	static void loadPicturesArchThread(std::stop_token stoken, uptr<LoadPicturesArchData> ld);
 #endif
 #if defined(CAN_MUPDF) || defined(CAN_POPPLER)
@@ -208,3 +210,13 @@ inline void Browser::startReloadPictures(string&& first) {
 inline void Browser::requestStop() {
 	thread.request_stop();
 }
+
+#ifdef WITH_ARCHIVE
+inline bool Browser::canAddArchEntryToPicLoad(const ArchiveFile* file, bool showHidden) {
+#ifdef _WIN32
+	return file->size;
+#else
+	return file->size && (showHidden || file->name[0] != '.');
+#endif
+}
+#endif

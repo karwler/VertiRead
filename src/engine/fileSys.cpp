@@ -1,13 +1,10 @@
 #include "fileSys.h"
+#include "optional/fontconfig.h"
 #include "prog/fileOps.h"
-#include <fstream>
-#include <regex>
 #include <ft2build.h>
 #include FT_FREETYPE_H
-#include <SDL_filesystem.h>
-#ifdef CAN_FONTCFG
-#include "optional/fontconfig.h"
-#endif
+#include <fstream>
+#include <span>
 
 namespace {
 
@@ -119,19 +116,18 @@ struct IniLine {
 		title
 	};
 
-	Type type = Type::empty;
 	string_view prp;
 	string_view key;
 	string_view val;
 
-	Type setLine(string_view str);
+	Type setLine(string_view str) noexcept;
 
 	template <class... T> static void writeTitle(std::ofstream& ofs, T&&... title);
 	template <class P, class... T> static void writeVal(std::ofstream& ofs, P&& prp, T&&... val);
 	template <class P, class K, class... T> static void writeKeyVal(std::ofstream& ofs, P&& prp, K&& key, T&&... val);
 };
 
-IniLine::Type IniLine::setLine(string_view str) {
+IniLine::Type IniLine::setLine(string_view str) noexcept {
 	size_t i0 = str.find_first_of('=');
 	size_t i1 = str.find_first_of('[');
 	size_t i2 = str.find_first_of(']', i1);
@@ -140,22 +136,22 @@ IniLine::Type IniLine::setLine(string_view str) {
 		if (i2 < i0) {
 			prp = trim(str.substr(0, i1));
 			key = trim(str.substr(i1 + 1, i2 - i1 - 1));
-			return type = Type::prpKeyVal;
+			return Type::prpKeyVal;
 		}
 		prp = trim(str.substr(0, i0));
 		key = string_view();
-		return type = Type::prpVal;
+		return Type::prpVal;
 	}
 	if (i2 != string::npos) {
 		prp = trim(str.substr(i1 + 1, i2 - i1 - 1));
 		key = string_view();
 		val = string_view();
-		return type = Type::title;
+		return Type::title;
 	}
 	prp = string_view();
 	val = string_view();
 	key = string_view();
-	return type = Type::empty;
+	return Type::empty;
 }
 
 template <class... T>
@@ -190,7 +186,7 @@ struct CsvText {
 
 	template <bool fill = true> Code readField();
 
-	static string makeLine(const vector<string>& fields);
+	static string makeLine(std::span<const string> fields);
 };
 
 CsvText::CsvText(const char* str) :
@@ -214,18 +210,8 @@ CsvText::Code CsvText::readField() {
 		const char* end;
 		if constexpr (fill) {
 			field.clear();
-			for (end = strchr(++text, '"'); end && end[1] == '"'; end = strchr(end + 2, '"')) {
-				field.append(text, end);
-				text = end + 1;
-			}
-			if (end) {
-				field.append(text, end++);
-				text = end + strcspn(end, ",\r\n");
-			} else {
-				size_t elen = strlen(text);
-				field.append(text, elen);
-				text += elen;
-			}
+			text = readQuoteString(text + 1, field);
+			text += strcspn(text, ",\r\n");
 		} else {
 			for (end = strchr(++text, '"'); end && end[1] == '"'; end = strchr(end + 2, '"'));
 			text = end ? end + strcspn(end + 1, ",\r\n") : text + strlen(text);
@@ -241,7 +227,7 @@ CsvText::Code CsvText::readField() {
 	return Code::last;
 }
 
-string CsvText::makeLine(const vector<string>& fields) {
+string CsvText::makeLine(std::span<const string> fields) {
 	string line;
 	if (!fields.empty()) {
 		for (string_view fld : fields) {
@@ -284,8 +270,16 @@ FileSys::MoveContentData::MoveContentData(fs::path&& sdir, fs::path&& ddir) noex
 	dst(std::move(ddir))
 {}
 
-FileSys::FileSys(const uset<string>& cmdFlags) {
+FileSys::FileSys() {
 	// set up file/directory path constants
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	if (const char* path = SDL_GetBasePath())
+#ifdef _WIN32
+		dirBase = toPath(path);
+#else
+		dirBase = parentPath(path);
+#endif
+#else
 	if (char* path = SDL_GetBasePath()) {
 #ifdef _WIN32
 		dirBase = toPath(path);
@@ -294,8 +288,9 @@ FileSys::FileSys(const uset<string>& cmdFlags) {
 #endif
 		SDL_free(path);
 	}
+#endif
 	if (dirBase.empty())
-		logError("Failed to get base directory");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to get base directory");
 
 #ifdef _WIN32
 	dirSets = fs::path(_wgetenv(L"AppData")) / L"VertiRead";
@@ -306,37 +301,36 @@ FileSys::FileSys(const uset<string>& cmdFlags) {
 #endif
 
 	std::error_code ec;
+	if (!fs::create_directories(dirSets, ec) && ec)
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create settings directory: %s", ec.message().data());
 	try {
 		std::regex rgx(R"r(log_[\d-]+\.txt)r", std::regex::icase | std::regex::optimize);
 		for (const fs::directory_entry& it : fs::directory_iterator(dirSets, fs::directory_options::skip_permission_denied))
 			if (string name = fromPath(it.path().filename()); std::regex_match(name, rgx) && it.is_regular_file(ec))
 				if (fs::remove(it.path(), ec); ec)
-					logError("Failed to remove old log file '", name, "': ", ec.message());
+					SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to remove old log file '%s': %s", name.data(), ec.message().data());
 	} catch (const std::runtime_error& err) {
-		logError(err.what());
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
 	}
 
-	if (!cmdFlags.contains(Settings::flagLog)) {
+	if (!Settings::hasFlag(Settings::flagLog)) {
 		if (logFile = SDL_RWFromFile(fromPath(dirSets / std::format("log_{}.txt", tmToDateStr(currentDateTime()))).data(), "wb"); logFile)
 			SDL_LogSetOutputFunction(logWrite, logFile);
 		else
-			logError("Failed to create log file: ", SDL_GetError());
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create log file: %s", SDL_GetError());
 	}
-
-	// check if all (more or less) necessary files and directories exist
-	if (!fs::create_directories(dirSets, ec) && ec)
-		logError("Failed to create settings directory: ", ec.message());
 	if (!fs::is_directory(dirIcons(), ec))
-		logError("Failed to find icons directory: ", ec.message());
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to find icons directory: %s", ec.message().data());
 	if (!fs::is_regular_file(dirConfs / fileThemes, ec))
-		logError("Failed to find themes file: ", ec.message());
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to find themes file: %s", ec.message().data());
 
 #ifdef CAN_FONTCFG
 	try {
 		if (symFontconfig())
 			fontconfig = new Fontconfig;
 	} catch (const std::runtime_error& err) {
-		logError(err.what());
+		closeFontconfig();
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
 	}
 #endif
 }
@@ -344,6 +338,7 @@ FileSys::FileSys(const uset<string>& cmdFlags) {
 FileSys::~FileSys() {
 #ifdef CAN_FONTCFG
 	delete static_cast<Fontconfig*>(fontconfig);
+	closeFontconfig();
 #endif
 	if (logFile) {
 		SDL_LogSetOutputFunction(nullptr, nullptr);
@@ -357,7 +352,7 @@ vector<string> FileSys::getAvailableThemes() const {
 	const fs::path* locations[2] = { &dirSets, &dirConfs };
 	for (size_t i = 0; i < std::size(locations) && themes.empty(); ++i) {
 		string text = readTextFile(*locations[i] / fileThemes);
-		for (string_view tx = text; tx.length();)
+		for (string_view tx = text; !tx.empty();)
 			if (il.setLine(readNextLine(tx)) == IniLine::Type::title)
 				themes.emplace_back(il.prp);
 	}
@@ -372,28 +367,22 @@ array<vec4, Settings::defaultColors.size()> FileSys::loadColors(string_view them
 
 	IniLine il;	// find title equal to theme and read colors until the end of the file or another title
 	string_view tx = text;
-	while (!tx.empty())
-		if (il.setLine(readNextLine(tx)) == IniLine::Type::title && il.prp == theme)
-			break;
-
-	while (!tx.empty()) {
-		if (il.setLine(readNextLine(tx)) == IniLine::Type::title)
-			break;
-		if (il.type == IniLine::Type::prpVal)
+	while (!tx.empty() && (il.setLine(readNextLine(tx)) != IniLine::Type::title || il.prp != theme));
+	for (IniLine::Type type; !tx.empty() && (type = il.setLine(readNextLine(tx))) != IniLine::Type::title;)
+		if (type == IniLine::Type::prpVal)
 			if (size_t cid = strToEnum<size_t>(Settings::colorNames, il.prp); cid < colors.size())
 				colors[cid] = toVec<vec4>(il.val);
-	}
 	return colors;
 }
 
-vector<string> FileSys::getLastPage(string_view book) const {
+stvector<string, Settings::maxPageElements> FileSys::getLastPage(string_view book) const {
 	string text = readTextFile(dirSets / fileBooks);
 	CsvText csv = text.data();
 	for (CsvText::Code cc; (cc = csv.readField()) != CsvText::Code::end;)
 		if (cc == CsvText::Code::field) {
 			if (csv.field == book) {
-				vector<string> paths;
-				while (paths.size() < 3 && (cc = csv.readField()) != CsvText::Code::end) {
+				stvector<string, Settings::maxPageElements> paths;
+				while (paths.size() < paths.max_size() && (cc = csv.readField()) != CsvText::Code::end) {
 					paths.push_back(std::move(csv.field));
 					if (cc == CsvText::Code::last)
 						break;
@@ -403,10 +392,10 @@ vector<string> FileSys::getLastPage(string_view book) const {
 			} else
 				while (csv.readField<false>() == CsvText::Code::field);
 		}
-	return vector<string>();
+	return stvector<string, Settings::maxPageElements>();
 }
 
-void FileSys::saveLastPage(const vector<string>& paths) const {
+void FileSys::saveLastPage(const stvector<string, Settings::maxPageElements>& paths) const {
 	fs::path file = dirSets / fileBooks;
 	string text = readTextFile(file);
 	CsvText csv = text.data();
@@ -420,7 +409,7 @@ void FileSys::saveLastPage(const vector<string>& paths) const {
 	}
 
 	if (std::ofstream ofs(file, cc == CsvText::Code::end ? std::ios::binary | std::ios::app : std::ios::binary); ofs.good()) {
-		string line = CsvText::makeLine(paths);
+		string line = CsvText::makeLine(std::span(paths));
 		if (cc == CsvText::Code::end) {
 			if (!text.empty() && text.back() != '\n' && text.back() != '\r')
 				ofs.write(LINEND, strlen(LINEND));
@@ -431,11 +420,11 @@ void FileSys::saveLastPage(const vector<string>& paths) const {
 			ofs.write(text.data(), text.length());
 		}
 	} else
-		logError("Failed to write books file: ", file);
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to write books file '%s'", reinterpret_cast<char*>(file.u8string().data()));
 }
 
-Settings* FileSys::loadSettings(const uset<string>* cmdFlags) const {
-	auto sets = new Settings(dirSets, getAvailableThemes());
+uptr<Settings> FileSys::loadSettings() const {
+	uptr<Settings> sets = std::make_unique<Settings>(dirSets, getAvailableThemes());
 	IniLine il;
 	string text = readTextFile(dirSets / fileSettings);
 	for (string_view tx = text; tx.length();) {
@@ -456,8 +445,6 @@ Settings* FileSys::loadSettings(const uset<string>* cmdFlags) const {
 				sets->compression = strToEnum(Settings::compressionNames, trim(il.val), Settings::defaultCompression);
 			else if (strciequal(il.prp, iniKeywordVSync))
 				sets->vsync = toBool(trim(il.val));
-			else if (strciequal(il.prp, iniKeywordGpuSelecting))
-				sets->gpuSelecting = toBool(trim(il.val));
 			else if (strciequal(il.prp, iniKeywordDirection))
 				sets->direction = strToEnum(Direction::names, trim(il.val), Settings::defaultDirection);
 			else if (strciequal(il.prp, iniKeywordZoom))
@@ -470,12 +457,12 @@ Settings* FileSys::loadSettings(const uset<string>* cmdFlags) const {
 				sets->maxPicRes = std::max(toNum<uint>(il.val), Settings::minPicRes);
 			else if (strciequal(il.prp, iniKeywordFont))
 				sets->font = isFont(findFont(toPath(il.val))) ? il.val : Settings::defaultFont;	// will get sanitized in DrawSys if necessary
-			else if (strciequal(il.prp, iniKeywordHinting))
-				sets->hinting = strToEnum<Settings::Hinting>(Settings::hintingNames, trim(il.val), Settings::defaultHinting);
+			else if (strciequal(il.prp, iniKeywordFontMono))
+				sets->monoFont = toBool(trim(il.val));
 			else if (strciequal(il.prp, iniKeywordTheme))
 				sets->setTheme(il.val, getAvailableThemes());
 			else if (strciequal(il.prp, iniKeywordPreview))
-				sets->preview = toBool(trim(il.val));
+				sets->preview = strToEnum<Settings::Preview>(Settings::previewNames, trim(il.val), Settings::defaultPreview);
 			else if (strciequal(il.prp, iniKeywordShowHidden))
 				sets->showHidden = toBool(trim(il.val));
 			else if (strciequal(il.prp, iniKeywordTooltips))
@@ -493,8 +480,7 @@ Settings* FileSys::loadSettings(const uset<string>* cmdFlags) const {
 		}
 	}
 	sets->unionDisplays();
-	if (cmdFlags)
-		sets->setRenderer(*cmdFlags);
+	sets->setRenderer();
 	return sets;
 }
 
@@ -502,7 +488,7 @@ void FileSys::saveSettings(const Settings* sets) const {
 	fs::path file = dirSets / fileSettings;
 	std::ofstream ofs(file, std::ios::binary);
 	if (!ofs.good()) {
-		logError("Failed to write settings file: ", file);
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to write settings file '%s'", reinterpret_cast<char*>(file.u8string().data()));
 		return;
 	}
 
@@ -515,16 +501,15 @@ void FileSys::saveSettings(const Settings* sets) const {
 	IniLine::writeVal(ofs, iniKeywordDevice, toStr<0x10>(sets->device));
 	IniLine::writeVal(ofs, iniKeywordCompression, Settings::compressionNames[eint(sets->compression)]);
 	IniLine::writeVal(ofs, iniKeywordVSync, toStr(sets->vsync));
-	IniLine::writeVal(ofs, iniKeywordGpuSelecting, toStr(sets->gpuSelecting));
 	IniLine::writeVal(ofs, iniKeywordZoom, Settings::zoomNames[eint(sets->zoomType)], ' ', int(sets->zoom));
 	IniLine::writeVal(ofs, iniKeywordPictureLimit, PicLim::names[eint(sets->picLim.type)], ' ', sets->picLim.count, ' ', PicLim::memoryString(sets->picLim.size));
 	IniLine::writeVal(ofs, iniKeywordMaxPictureRes, sets->maxPicRes);
 	IniLine::writeVal(ofs, iniKeywordSpacing, sets->spacing);
 	IniLine::writeVal(ofs, iniKeywordDirection, Direction::names[uint8(sets->direction)]);
 	IniLine::writeVal(ofs, iniKeywordFont, sets->font);
-	IniLine::writeVal(ofs, iniKeywordHinting, Settings::hintingNames[eint(sets->hinting)]);
+	IniLine::writeVal(ofs, iniKeywordFontMono, toStr(sets->monoFont));
 	IniLine::writeVal(ofs, iniKeywordTheme, sets->getTheme());
-	IniLine::writeVal(ofs, iniKeywordPreview, toStr(sets->preview));
+	IniLine::writeVal(ofs, iniKeywordPreview, Settings::previewNames[eint(sets->preview)]);
 	IniLine::writeVal(ofs, iniKeywordShowHidden, toStr(sets->showHidden));
 	IniLine::writeVal(ofs, iniKeywordTooltips, toStr(sets->tooltips));
 	IniLine::writeVal(ofs, iniKeywordLibrary, sets->dirLib);
@@ -572,7 +557,7 @@ array<Binding, Binding::names.size()> FileSys::loadBindings() const {
 				bindings[bid].setGaxis(cid, (bdsc[2] != keyGAxisNeg[2]));
 			break;
 		default:
-			throw std::runtime_error(std::format("Invalid binding identifier: {}", bdsc[0]));
+			SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Invalid binding identifier: %c", bdsc[0]);
 		}
 	}
 	return bindings;
@@ -582,7 +567,7 @@ void FileSys::saveBindings(const array<Binding, Binding::names.size()>& bindings
 	fs::path file = dirSets / fileBindings;
 	std::ofstream ofs(file, std::ios::binary);
 	if (!ofs.good()) {
-		logError("Failed to write bindings file: ", file);
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to write bindings file '%s'", reinterpret_cast<char*>(file.u8string().data()));
 		return;
 	}
 
@@ -604,88 +589,29 @@ void FileSys::saveBindings(const array<Binding, Binding::names.size()>& bindings
 	}
 }
 
-string_view FileSys::readNextLine(string_view& text) {
-	string_view::iterator pos = rng::find_if(text, [](char ch) -> bool { return ch != '\n' && ch != '\r'; });
-	string_view::iterator end = std::find_if(pos, text.end(), [](char ch) -> bool { return ch == '\n' || ch == '\r'; });
-	text = string_view(end, text.end());
-	return string_view(pos, end);
-}
-
 string FileSys::readTextFile(const fs::path& file) {
-	std::ifstream ifs(file, std::ios::binary);
-	if (!ifs.good())
-		return string();
-	char bom[4];
-	std::streampos len = ifs.read(bom, std::size(bom)).gcount();
-	if (len <= 0)
-		return string();
-
-	if (len >= 4) {
-		if (!memcmp(bom, "\xFF\xFE\x00\x00", 4 * sizeof(char)))
-			return processTextFile<char32_t, std::endian::little>(ifs, 4);
-		if (!memcmp(bom, "\x00\x00\xFE\xFF", 4 * sizeof(char)))
-			return processTextFile<char32_t, std::endian::big>(ifs, 4);
-	}
-	if (len >= 3 && !memcmp(bom, "\xEF\xBB\xBF", 3 * sizeof(char)))
-		return processTextFile<char, std::endian::native>(ifs, 3);
-	if (len >= 2) {
-		if (!memcmp(bom, "\xFF\xFE", 2 * sizeof(char)))
-			return processTextFile<char16_t, std::endian::little>(ifs, 2);
-		if (!memcmp(bom, "\xFE\xFF", 2 * sizeof(char)))
-			return processTextFile<char16_t, std::endian::big>(ifs, 2);
-	}
-	return processTextFile<char, std::endian::native>(ifs, 0);
-}
-
-template <Integer C, std::endian bo>
-string FileSys::processTextFile(std::ifstream& ifs, std::streampos offs) {
 	string text;
-	if (std::streampos len = ifs.seekg(0, std::ios::end).tellg(); len > offs) {
-		len -= offs;
-		len -= len % sizeof(C);
-		ifs.seekg(offs);
-
-		if constexpr (sizeof(C) == sizeof(char)) {
-			text.resize(len);
-			if (ifs.read(text.data(), text.length()).gcount() < len)
-				text.resize(ifs.gcount());
-		} else if constexpr (sizeof(C) == sizeof(char16_t)) {
-			while (len) {
-				if (C ch = readChar<C, bo>(ifs, len); ch < 0xD800)
-					writeChar8(text, ch);
-				else if (ch < 0xDC00 && len)
-					if (C xt = readChar<C, bo>(ifs, len); xt >= 0xDC00)
-						writeChar8(text, (char32_t(ch & 0x03FF) << 10) | (xt & 0x03FF));
+	if (std::ifstream ifs(file, std::ios::binary); ifs.good()) {
+		char bom[3];
+		if (std::streampos len = ifs.read(bom, std::size(bom)).gcount(); len > 0) {
+			std::streampos offs = len < 3 || memcmp(bom, "\xEF\xBB\xBF", sizeof(bom)) ? 0 : 3;
+			if (len = ifs.seekg(0, std::ios::end).tellg(); len > offs) {
+				len -= offs;
+				ifs.seekg(offs);
+				text.resize(len);
+				if (ifs.read(text.data(), text.length()).gcount() < len)
+					text.resize(ifs.gcount());
 			}
-		} else if constexpr (sizeof(C) == sizeof(char32_t))
-			while (len)
-				writeChar8(text, readChar<C, bo>(ifs, len));
+		}
 	}
 	return text;
 }
 
-template <Integer C, std::endian bo>
-C FileSys::readChar(std::ifstream& ifs, std::streampos& len) {
-	C ch;
-	ifs.read(reinterpret_cast<char*>(&ch), sizeof(ch));
-	len -= sizeof(ch);
-	if constexpr (bo == std::endian::native)
-		return ch;
-	else if constexpr (sizeof(ch) == sizeof(char16_t))
-		return SDL_Swap16(ch);
-	else
-		return SDL_Swap32(ch);
-}
-
-void FileSys::writeChar8(string& str, char32_t ch) {
-	if (ch < 0x80)
-		str += ch;
-	else if (ch < 0x800)
-		str += { char(0xC0 | (ch >> 6)), char(0x80 | (ch & 0x3F)) };
-	else if (ch < 0x10000)
-		str += { char(0xE0 | (ch >> 12)), char(0x80 | ((ch >> 6) & 0x3F)), char(0x80 | (ch & 0x3F)) };
-	else
-		str += { char(0xF0 | (ch >> 18)), char(0x80 | ((ch >> 12) & 0x3F)), char(0x80 | ((ch >> 6) & 0x3F)), char(0x80 | (ch & 0x3F)) };
+string_view FileSys::readNextLine(string_view& text) noexcept {
+	string_view::iterator pos = rng::find_if(text, [](char ch) -> bool { return ch != '\n' && ch != '\r'; });
+	string_view::iterator end = std::find_if(pos, text.end(), [](char ch) -> bool { return ch == '\n' || ch == '\r'; });
+	text = string_view(end, text.end());
+	return string_view(pos, end);
 }
 
 bool FileSys::isFont(const fs::path& file) {
@@ -846,7 +772,9 @@ void FileSys::listFontFamiliesThread(std::stop_token stoken, uptr<ListFontFamili
 			Fontconfig().list(ld->first, ld->last, fonts);
 			skip = true;
 		}
-	} catch (const std::runtime_error&) {}
+	} catch (const std::runtime_error& err) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
+	}
 #endif
 	if (!skip) {
 #if defined(_WIN32) && !defined(__MINGW32__)
@@ -923,7 +851,7 @@ void FileSys::listFontFamiliesInRegistrySubthread(const std::stop_token& stoken,
 
 FT_Face FileSys::openFace(FT_Library lib, const fs::path& file, char32_t first, char32_t last, Data& fdata) {
 	fdata = FileOpsLocal::readFile(file.c_str());
-	if (FT_Face face; !FT_New_Memory_Face(lib, reinterpret_cast<FT_Byte*>(fdata.data()), fdata.size(), 0, &face)) {
+	if (FT_Face face; !FT_New_Memory_Face(lib, fdata.data(), fdata.size(), 0, &face)) {
 		char32_t ch;
 		for (ch = first; FT_Get_Char_Index(face, ch) && ch <= last; ++ch);
 		if (ch > last)
@@ -932,7 +860,7 @@ FT_Face FileSys::openFace(FT_Library lib, const fs::path& file, char32_t first, 
 	return nullptr;
 }
 
-void SDLCALL FileSys::logWrite(void* userdata, int, SDL_LogPriority priority, const char* message) {
+void SDLCALL FileSys::logWrite(void* userdata, int, SDL_LogPriority priority, const char* message) noexcept {
 	auto ofs = static_cast<SDL_RWops*>(userdata);
 	string dtime = tmToTimeStr(currentDateTime());
 	SDL_RWwrite(ofs, dtime.data(), sizeof(*dtime.data()), dtime.length());

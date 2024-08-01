@@ -34,7 +34,7 @@ void Scene::tick(float dSec) {
 }
 
 void Scene::onMouseMove(ivec2 mPos, ivec2 mMov) {
-	updateSelect(mPos);
+	updateSelect(getSelected(mPos));
 	if (capture)
 		capture->onDrag(mPos, mMov);
 
@@ -57,7 +57,7 @@ void Scene::onMouseDown(ivec2 mPos, uint8 mBut, uint8 mCnt) {
 	if (context && (!context->rect().contains(mPos) || mBut != SDL_BUTTON_LEFT))
 		setContext(nullptr);
 
-	updateSelect(mPos);	// update in case selection has changed through keys while cursor remained at the old position
+	updateSelect(getSelected(mPos));	// update in case selection has changed through keys while cursor remained at the old position
 	if (uint8 bid = mBut - 1; mCnt == 2 && select && stamps[bid].widget == select && cursorInClickRange(mPos, mBut) && select->hasDoubleclick())
 		select->onDoubleClick(mPos, mBut);
 	else {
@@ -170,6 +170,10 @@ void Scene::setLayouts() {
 
 void Scene::setCapture(Widget* inter) noexcept {
 	capture = inter;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	Renderer::View* view = inter ? World::drawSys()->getRenderer()->findView(inter->position()) : nullptr;
+	captureWindow = view ? view->win : nullptr;
+#endif
 	captureLen = 0;
 }
 
@@ -183,17 +187,18 @@ Popup* Scene::releasePopup() {
 void Scene::setPopup(Popup* newPopup, Widget* newCapture) {
 	deselect();	// clear select and capture in case of a dangling pointer
 	setCapture(nullptr);
-	if (context)
-		setContext(nullptr);
+	delete context;
+	context = nullptr;
 	delete popup;
 
 	if (popup = newPopup; popup)
 		popup->postInit();
 	if (newCapture)
 		newCapture->onClick(newCapture->position(), SDL_BUTTON_LEFT);
-	if (!World::inputSys()->mouseWin)
-		select = newCapture ? newCapture : popup ? popup->firstNavSelect : nullptr;
-	updateSelect();
+	if (World::inputSys()->mouseWin)
+		updateSelect(getSelected(World::winSys()->mousePos()));
+	else
+		updateSelect(newCapture ? newCapture : popup ? popup->firstNavSelect : nullptr);
 	World::drawSys()->getRenderer()->synchTransfer();
 }
 
@@ -207,7 +212,7 @@ void Scene::setContext(Context* newContext) {
 		context->postInit();
 
 	if (World::inputSys()->mouseWin)
-		updateSelect(World::winSys()->mousePos());
+		updateSelect(getSelected(World::winSys()->mousePos()));
 	else if (context)
 		updateSelect(context->firstNavSelect);
 	World::drawSys()->getRenderer()->synchTransfer();
@@ -215,7 +220,7 @@ void Scene::setContext(Context* newContext) {
 
 void Scene::updateSelect() {
 	if (World::inputSys()->mouseWin)
-		updateSelect(World::winSys()->mousePos());
+		updateSelect(getSelected(World::winSys()->mousePos()));
 }
 
 void Scene::updateSelect(Widget* sel) {
@@ -247,11 +252,6 @@ Widget* Scene::getSelected(ivec2 mPos) {
 		box = popup;
 	else if (overlayFocused(mPos))
 		box = overlay;
-
-	if (World::sets()->gpuSelecting) {
-		Widget* wgt = World::drawSys()->getSelectedWidget(box, mPos);
-		return wgt ? wgt->navSelectable() ? wgt : wgt->getParent() : nullptr;
-	}
 
 	for (;;) {
 		Recti frame = box->frame();

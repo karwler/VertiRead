@@ -11,8 +11,7 @@ private:
 		SDL_GameController* gamepad;
 		SDL_Joystick* joystick;
 
-		bool open(int id);
-		void close();
+		Controller(SDL_GameController* gmp, SDL_Joystick* joy) : gamepad(gmp), joystick(joy) {}
 	};
 
 	static constexpr uint32 moveTimeout = 50;
@@ -55,7 +54,10 @@ public:
 	const array<Binding, Binding::names.size()>& getBindings() const { return bindings; }
 	string getBoundName(Binding::Type type) const;
 	void resetBindings();
-	void reloadControllers();
+	void addJoystick(SDL_JoystickID jid);
+	void addGamepad(SDL_JoystickID jid);
+	void delJoystick(SDL_JoystickID jid);
+	void delGamepad(SDL_JoystickID jid);
 	void simulateMouseMove();
 
 private:
@@ -70,7 +72,7 @@ private:
 
 	int checkAxisValue(int value) const;	// check deadzone in axis value
 	static float axisToFloat(int axisValue);
-	static SDL_MouseButtonEvent toMouseEvent(const SDL_TouchFingerEvent& fin, uint8 state, vec2 winSize) noexcept;
+	static SDL_MouseButtonEvent toMouseEvent(const SDL_TouchFingerEvent& fin, bool down, vec2 winSize) noexcept;
 };
 
 inline bool InputSys::isPressed(Binding::Type type, float& amt) const {
