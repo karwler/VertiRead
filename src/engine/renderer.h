@@ -3,8 +3,8 @@
 #include "utils/settings.h"
 #include "utils/stvector.h"
 
-struct PixmapRgba {
-	uptr<uint32[]> pix;
+struct Pixmap {
+	uptr<uint8[]> pix;
 	uvec2 res;
 };
 
@@ -77,8 +77,8 @@ public:
 	virtual Texture* texFromIcon(SDL_Surface* img) noexcept = 0;			// scales down image to largest possible size
 	virtual bool texFromIcon(Texture* tex, SDL_Surface* img) noexcept = 0;	// ^ but refills tex and returns true if successful
 	virtual Texture* texFromRpic(SDL_Surface* img) noexcept = 0;			// image must have been scaled down in advance
-	virtual Texture* texFromText(const PixmapRgba& pm) noexcept = 0;		// cuts off image if it's too large and uses nearest filter if possible
-	virtual bool texFromText(Texture* tex, const PixmapRgba& pm) noexcept = 0;	// ^ but refills tex and returns true if successful
+	virtual Texture* texFromText(const Pixmap& pm) noexcept = 0;			// cuts off image if it's too large and uses nearest filter if possible
+	virtual bool texFromText(Texture* tex, const Pixmap& pm) noexcept = 0;	// ^ but refills tex and returns true if successful
 	virtual void freeTexture(Texture* tex) noexcept = 0;
 	virtual void synchTransfer() noexcept {}
 
@@ -90,6 +90,8 @@ protected:
 	static SDL_Surface* convertReplace(SDL_Surface* img, SDL_PixelFormatEnum format = SDL_PIXELFORMAT_ABGR8888) noexcept;
 	static SDL_Surface* limitSize(SDL_Surface* img, uint32 limit) noexcept;	// scales down the image so that it's width/height fits within the limit
 	static Rectf cropTexRect(const Recti& isct, const Recti& rect, uvec2 texRes) noexcept;
+	static void copyTextPixels(uint32* dst, const Pixmap& pm, uvec2 res) noexcept;
+	static void copyPalette(uint* dst, SDL_Surface* img);
 	static void recommendPicRamLimit(uintptr_t& mem) noexcept;
 };
 
@@ -129,12 +131,13 @@ public:
 	Texture* texFromIcon(SDL_Surface* img) noexcept override;
 	bool texFromIcon(Texture* tex, SDL_Surface* img) noexcept override;
 	Texture* texFromRpic(SDL_Surface* img) noexcept override;
-	Texture* texFromText(const PixmapRgba& pm) noexcept override;
-	bool texFromText(Texture* tex, const PixmapRgba& pm) noexcept override;
+	Texture* texFromText(const Pixmap& pm) noexcept override;
+	bool texFromText(Texture* tex, const Pixmap& pm) noexcept override;
 	void freeTexture(Texture* tex) noexcept override;
 
 private:
 	void cleanup() noexcept;
+	static void copyTextPixels(SDL_Surface* img, const Pixmap& pm) noexcept;
 	static u8vec4 colorToBytes(const vec4& color);
 };
 

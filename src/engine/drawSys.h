@@ -31,7 +31,7 @@ private:
 	uint height;
 	int mode;
 
-	PixmapRgba pm;
+	Pixmap pm;
 	size_t bufSize = 0;
 	vector<string_view::iterator> lineBreaks;
 	string_view::iterator wordStart;
@@ -53,8 +53,8 @@ public:
 	void setMode(bool mono) noexcept;
 	uint measureText(string_view text, uint size);
 	uvec2 measureText(string_view text, uint size, uint limit);
-	const PixmapRgba& renderText(string_view text, uint size);
-	const PixmapRgba& renderText(string_view text, uint size, uint limit);
+	const Pixmap& renderText(string_view text, uint size);
+	const Pixmap& renderText(string_view text, uint size, uint limit);
 	FT_LibraryRec_* getLib() const { return lib; }
 
 private:

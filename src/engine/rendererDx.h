@@ -44,6 +44,7 @@ private:
 	enum class FormatConv : uint8 {
 		rgb24,
 		bgr24,
+		red,
 		index8
 	};
 
@@ -90,6 +91,7 @@ public:
 	void updateView(ivec2& viewRes) override;
 	void setCompression(Settings::Compression cmpr) noexcept override;
 	SDL_Surface* prepareImage(SDL_Surface* img, bool rpic) const noexcept override;
+	bool canAlphaText() const noexcept override;
 	Info getInfo() const noexcept override;
 
 	void startDraw(View* view) override;

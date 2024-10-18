@@ -130,6 +130,7 @@ public:
 	enum class Pipeline : uint8 {
 		rgb24,
 		bgr24,
+		red,
 		index8
 	};
 
@@ -396,8 +397,8 @@ public:
 	Texture* texFromIcon(SDL_Surface* img) noexcept override;
 	bool texFromIcon(Texture* tex, SDL_Surface* img) noexcept override;
 	Texture* texFromRpic(SDL_Surface* img) noexcept override;
-	Texture* texFromText(const PixmapRgba& pm) noexcept override;
-	bool texFromText(Texture* tex, const PixmapRgba& pm) noexcept override;
+	Texture* texFromText(const Pixmap& pm) noexcept override;
+	bool texFromText(Texture* tex, const Pixmap& pm) noexcept override;
 	void freeTexture(Texture* tex) noexcept override;
 	void synchTransfer() noexcept override;
 
@@ -436,9 +437,8 @@ private:
 	VkPresentModeKHR chooseSwapPresentMode(VkSurfaceKHR surface) const;
 	static uint scoreDevice(const DeviceInfo& devi);
 	void createTextureDirect(const byte* pix, uint32 pitch, uint8 bpp, VkFormat format, TextureVk& tex);
-	void createTextureIndirect(SDL_Surface* img, TextureVk& tex, FormatConverter::Pipeline pid);
+	void createTextureIndirect(const byte* pix, uint32 pitch, uint8 bpp, TextureVk& tex, FormatConverter::Pipeline pid, SDL_Surface* img);
 	void uploadInputData(const byte* pix, u32vec2 res, uint32 pitch, uint8 bpp);
-	static void copyPalette(uint* dst, SDL_Surface* img);
 	void finalizeFreshTexture(TextureVk& tex);
 	void finalizeExistingTexture(TextureVk& tex);
 	void cleanupTexture(TextureVk& tex) noexcept;

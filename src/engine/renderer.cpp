@@ -52,6 +52,24 @@ Rectf Renderer::cropTexRect(const Recti& isct, const Recti& rect, uvec2 texRes) 
 	return Rectf(vec2(isct.pos() - rect.pos()) * fac, glm::ceil(vec2(isct.size()) * fac));
 }
 
+void Renderer::copyTextPixels(uint32* dst, const Pixmap& pm, uvec2 res) noexcept {
+	const uint8* sp = pm.pix.get();
+	for (uint r = 0; r < res.y; ++r, sp += pm.res.x)
+		for (uint c = 0; c < res.x; ++c)
+			*dst++ = uint32(sp[c] << 24) | 0x00FFFFFF;
+}
+
+void Renderer::copyPalette(uint* dst, SDL_Surface* img) {
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	SDL_Palette* palette = SDL_GetSurfacePalette(img);
+	if (!palette)
+		throw std::runtime_error(SDL_GetError());
+	memcpy(dst, palette->colors, uint16(palette->ncolors) * sizeof(SDL_Color));
+#else
+	memcpy(dst, img->format->palette->colors, uint16(img->format->palette->ncolors) * sizeof(SDL_Color));
+#endif
+}
+
 void Renderer::recommendPicRamLimit(uintptr_t& mem) noexcept {
 	if (!mem)
 		mem = uintptr_t(SDL_GetSystemRAM() / 2) * 1024 * 1024;
@@ -198,20 +216,20 @@ Texture* RendererSf::texFromRpic(SDL_Surface* img) noexcept {
 	return nullptr;
 }
 
-Texture* RendererSf::texFromText(const PixmapRgba& pm) noexcept {
+Texture* RendererSf::texFromText(const Pixmap& pm) noexcept {
 	if (pm.res.x)
-		if (SDL_Surface* img = SDL_CreateSurface(std::min(pm.res.x, maxTextureSize), std::min(pm.res.y, maxTextureSize), SDL_PIXELFORMAT_RGBA32)) {
-			copyPixels(img->pixels, pm.pix.get(), img->pitch, pm.res.x * 4, pm.res.x * 4, pm.res.y);
+		if (SDL_Surface* img = SDL_CreateSurface(std::min(pm.res.x, maxTextureSize), std::min(pm.res.y, maxTextureSize), SDL_PIXELFORMAT_ABGR4444)) {
+			copyTextPixels(img, pm);
 			SDL_SetSurfaceRLE(img, SDL_TRUE);
 			return new TextureSf(uvec2(img->w, img->h), img);
 		}
 	return nullptr;
 }
 
-bool RendererSf::texFromText(Texture* tex, const PixmapRgba& pm) noexcept {
+bool RendererSf::texFromText(Texture* tex, const Pixmap& pm) noexcept {
 	if (pm.res.x)
-		if (SDL_Surface* img = SDL_CreateSurface(std::min(pm.res.x, maxTextureSize), std::min(pm.res.y, maxTextureSize), SDL_PIXELFORMAT_RGBA32)) {
-			copyPixels(img->pixels, pm.pix.get(), img->pitch, pm.res.x * 4, pm.res.x * 4, pm.res.y);
+		if (SDL_Surface* img = SDL_CreateSurface(std::min(pm.res.x, maxTextureSize), std::min(pm.res.y, maxTextureSize), SDL_PIXELFORMAT_ABGR4444)) {
+			copyTextPixels(img, pm);
 			SDL_SetSurfaceRLE(img, SDL_TRUE);
 
 			auto stx = static_cast<TextureSf*>(tex);
@@ -221,6 +239,14 @@ bool RendererSf::texFromText(Texture* tex, const PixmapRgba& pm) noexcept {
 			return true;
 		}
 	return false;
+}
+
+void RendererSf::copyTextPixels(SDL_Surface* img, const Pixmap& pm) noexcept {
+	auto dp = static_cast<uint8*>(img->pixels);
+	const uint8* sp = pm.pix.get();
+	for (int r = 0; r < img->h; ++r, dp += img->pitch, sp += pm.res.x)
+		for (int c = 0; c < img->w; ++c)
+			reinterpret_cast<uint16*>(dp)[c] = (uint16(sp[c]) << 12) | 0x0FFF;
 }
 
 void RendererSf::freeTexture(Texture* tex) noexcept {

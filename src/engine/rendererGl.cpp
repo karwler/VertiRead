@@ -331,23 +331,29 @@ Texture* RendererGl::texFromRpic(SDL_Surface* img) noexcept {
 	return nullptr;
 }
 
-Texture* RendererGl::texFromText(const PixmapRgba& pm) noexcept {
+Texture* RendererGl::texFromText(const Pixmap& pm) noexcept {
 	if (pm.res.x) {
 		gfget
 		auto tex = new TextureGl(glm::min(pm.res, uvec2(maxTextureSize)), initTexture(GL_NEAREST));
-		uploadTexture(tex, pm);
+		if (hasSwizzle)
+			uploadTextureAlpha(tex, pm);
+		else
+			uploadTextureRgba(tex, pm);
 		return tex;
 	}
 	return nullptr;
 }
 
-bool RendererGl::texFromText(Texture* tex, const PixmapRgba& pm) noexcept {
+bool RendererGl::texFromText(Texture* tex, const Pixmap& pm) noexcept {
 	if (pm.res.x) {
 		gfget
 		auto gtx = static_cast<TextureGl*>(tex);
 		gtx->res = glm::min(pm.res, uvec2(maxTextureSize));
 		gl.bindTexture(texType, gtx->id);
-		uploadTexture(gtx, pm);
+		if (hasSwizzle)
+			uploadTextureAlpha(gtx, pm);
+		else
+			uploadTextureRgba(gtx, pm);
 		return true;
 	}
 	return false;
@@ -381,11 +387,24 @@ void RendererGl::uploadTexture(TextureGl* tex, SurfaceInfo& si) noexcept {
 	SDL_FreeSurface(si.img);
 }
 
-void RendererGl::uploadTexture(TextureGl* tex, const PixmapRgba& pm) noexcept {
+void RendererGl::uploadTextureRgba(TextureGl* tex, const Pixmap& pm) noexcept {
+	gfget
+	gl.pixelStorei(GL_UNPACK_ROW_LENGTH, tex->res.x);
+	gl.pixelStorei(GL_UNPACK_ALIGNMENT, sizeof(uint32));
+	uptr<uint32[]> pix = std::make_unique_for_overwrite<uint32[]>(tex->res.x * tex->res.y);
+	copyTextPixels(pix.get(), pm, tex->res);
+	gl.texImage2D(texType, 0, GL_RGBA8, tex->res.x, tex->res.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, pix.get());
+}
+
+void RendererGl::uploadTextureAlpha(TextureGl* tex, const Pixmap& pm) noexcept {
 	gfget
 	gl.pixelStorei(GL_UNPACK_ROW_LENGTH, pm.res.x);
-	gl.pixelStorei(GL_UNPACK_ALIGNMENT, sizeof(uint32));
-	gl.texImage2D(texType, 0, GL_RGBA8, tex->res.x, tex->res.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, pm.pix.get());
+	gl.pixelStorei(GL_UNPACK_ALIGNMENT, sizeof(uint8));
+	gl.texParameteri(texType, GL_TEXTURE_SWIZZLE_R, GL_ONE);	// TODO: why don't these stay bound?
+	gl.texParameteri(texType, GL_TEXTURE_SWIZZLE_G, GL_ONE);
+	gl.texParameteri(texType, GL_TEXTURE_SWIZZLE_B, GL_ONE);
+	gl.texParameteri(texType, GL_TEXTURE_SWIZZLE_A, GL_RED);
+	gl.texImage2D(texType, 0, GL_R8, tex->res.x, tex->res.y, 0, GL_RED, GL_UNSIGNED_BYTE, pm.pix.get());
 }
 
 template <bool keep>
@@ -656,6 +675,7 @@ void RendererGl1::initGl(ViewGl1* view, bool vsync, const vec4& bgcolor, bool& c
 	hasBgra = hasBgra && SDL_GL_ExtensionSupported("GL_EXT_bgra");
 	hasPackedPixels = hasPackedPixels && SDL_GL_ExtensionSupported("GL_EXT_packed_pixels");
 	hasTextureCompression = hasTextureCompression && SDL_GL_ExtensionSupported("GL_ARB_texture_compression");
+	hasSwizzle = hasSwizzle && SDL_GL_ExtensionSupported("GL_ARB_texture_swizzle");
 	if (SDL_GL_ExtensionSupported("GL_ATI_meminfo")) {
 		int mem[4];
 		if (gl.getIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, mem); uint(mem[0]) > availableMemory)
@@ -754,6 +774,7 @@ void RendererGl3::initGl(ViewGl3* view, bool vsync, const vec4& bgcolor, uintptr
 	gl3.initFunctions();
 #endif
 	if (core) {
+		hasSwizzle = hasSwizzle && SDL_GL_ExtensionSupported("GL_ARB_texture_swizzle");
 		if (SDL_GL_ExtensionSupported("GL_NVX_gpu_memory_info")) {
 			int mem;
 			if (gl.getIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, &mem); uint(mem) > availableMemory)

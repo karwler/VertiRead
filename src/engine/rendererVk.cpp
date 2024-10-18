@@ -249,6 +249,13 @@ void FormatConverter::createPipelines(const InstanceVk* vk) {
 #include "shaders/vkRgb.comp.dbg.h"
 #endif
 	};
+	static constexpr uint32 redCode[] = {
+#ifdef NDEBUG
+#include "shaders/vkRed.comp.rel.h"
+#else
+#include "shaders/vkRed.comp.dbg.h"
+#endif
+	};
 	static constexpr uint32 idxCode[] = {
 #ifdef NDEBUG
 #include "shaders/vkIdx.comp.rel.h"
@@ -256,61 +263,81 @@ void FormatConverter::createPipelines(const InstanceVk* vk) {
 #include "shaders/vkIdx.comp.dbg.h"
 #endif
 	};
-	VkShaderModule rgbShaderModule = createShaderModule(vk, rgbCode, sizeof(rgbCode));
-	VkShaderModule idxShaderModule = createShaderModule(vk, idxCode, sizeof(idxCode));
+	VkShaderModule rgbShaderModule = VK_NULL_HANDLE;
+	VkShaderModule redShaderModule = VK_NULL_HANDLE;
+	VkShaderModule idxShaderModule = VK_NULL_HANDLE;
+	try {
+		rgbShaderModule = createShaderModule(vk, rgbCode, sizeof(rgbCode));
+		redShaderModule = createShaderModule(vk, redCode, sizeof(redCode));
+		idxShaderModule = createShaderModule(vk, idxCode, sizeof(idxCode));
 
-	VkPushConstantRange pushConstant = {
-		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-		.size = sizeof(PushData)
-	};
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = 1,
-		.pSetLayouts = &descriptorSetLayoutRgb,
-		.pushConstantRangeCount = 1,
-		.pPushConstantRanges = &pushConstant
-	};
-	if (VkResult rs = vk->vkCreatePipelineLayout(vk->getLdev(), &pipelineLayoutInfo, nullptr, &pipelineLayoutRgb); rs != VK_SUCCESS)
-		throw std::runtime_error(std::format("Failed to create converter pipeline layout: {}", string_VkResult(rs)));
+		VkPushConstantRange pushConstant = {
+			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			.size = sizeof(PushData)
+		};
+		VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			.setLayoutCount = 1,
+			.pSetLayouts = &descriptorSetLayoutRgb,
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &pushConstant
+		};
+		if (VkResult rs = vk->vkCreatePipelineLayout(vk->getLdev(), &pipelineLayoutInfo, nullptr, &pipelineLayoutRgb); rs != VK_SUCCESS)
+			throw std::runtime_error(std::format("Failed to create converter pipeline layout: {}", string_VkResult(rs)));
 
-	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayoutIdx;
-	if (VkResult rs = vk->vkCreatePipelineLayout(vk->getLdev(), &pipelineLayoutInfo, nullptr, &pipelineLayoutIdx); rs != VK_SUCCESS)
-		throw std::runtime_error(std::format("Failed to create converter pipeline layout: {}", string_VkResult(rs)));
+		pipelineLayoutInfo.pSetLayouts = &descriptorSetLayoutIdx;
+		if (VkResult rs = vk->vkCreatePipelineLayout(vk->getLdev(), &pipelineLayoutInfo, nullptr, &pipelineLayoutIdx); rs != VK_SUCCESS)
+			throw std::runtime_error(std::format("Failed to create converter pipeline layout: {}", string_VkResult(rs)));
 
-	constexpr uint li = eint(Pipeline::index8);
-	VkSpecializationMapEntry specializationEntry = {
-		.constantID = 0,
-		.offset = offsetof(SpecializationData, orderRgb),
-		.size = sizeof(SpecializationData::orderRgb)
-	};
-	SpecializationData specializationData[li] = { { .orderRgb = VK_TRUE }, { .orderRgb = VK_FALSE } };
-	VkSpecializationInfo specializationInfos[li]{};
-	VkComputePipelineCreateInfo pipelineInfos[li + 1]{};
-	for (uint i = 0; i < li; ++i) {
-		specializationInfos[i].mapEntryCount = 1;
-		specializationInfos[i].pMapEntries = &specializationEntry;
-		specializationInfos[i].dataSize = sizeof(SpecializationData);
-		specializationInfos[i].pData = &specializationData[i];
+		constexpr uint lr = eint(Pipeline::red);
+		constexpr uint li = eint(Pipeline::index8);
+		VkSpecializationMapEntry specializationEntry = {
+			.constantID = 0,
+			.offset = offsetof(SpecializationData, orderRgb),
+			.size = sizeof(SpecializationData::orderRgb)
+		};
+		SpecializationData specializationData[2] = { { .orderRgb = VK_TRUE }, { .orderRgb = VK_FALSE } };
+		VkSpecializationInfo specializationInfos[std::size(specializationData)]{};
+		VkComputePipelineCreateInfo pipelineInfos[li + 1]{};
+		for (uint i = 0; i < std::size(specializationData); ++i) {
+			specializationInfos[i].mapEntryCount = 1;
+			specializationInfos[i].pMapEntries = &specializationEntry;
+			specializationInfos[i].dataSize = sizeof(SpecializationData);
+			specializationInfos[i].pData = &specializationData[i];
 
-		pipelineInfos[i].sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-		pipelineInfos[i].stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		pipelineInfos[i].stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-		pipelineInfos[i].stage.module = rgbShaderModule;
-		pipelineInfos[i].stage.pName = "main";
-		pipelineInfos[i].stage.pSpecializationInfo = &specializationInfos[i];
-		pipelineInfos[i].layout = pipelineLayoutRgb;
+			pipelineInfos[i].sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+			pipelineInfos[i].stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			pipelineInfos[i].stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+			pipelineInfos[i].stage.module = rgbShaderModule;
+			pipelineInfos[i].stage.pName = "main";
+			pipelineInfos[i].stage.pSpecializationInfo = &specializationInfos[i];
+			pipelineInfos[i].layout = pipelineLayoutRgb;
+		}
+		pipelineInfos[lr].sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		pipelineInfos[lr].stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		pipelineInfos[lr].stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+		pipelineInfos[lr].stage.module = redShaderModule;
+		pipelineInfos[lr].stage.pName = "main";
+		pipelineInfos[lr].layout = pipelineLayoutRgb;
+
+		pipelineInfos[li].sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		pipelineInfos[li].stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		pipelineInfos[li].stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+		pipelineInfos[li].stage.module = idxShaderModule;
+		pipelineInfos[li].stage.pName = "main";
+		pipelineInfos[li].layout = pipelineLayoutIdx;
+		if (VkResult rs = vk->vkCreateComputePipelines(vk->getLdev(), VK_NULL_HANDLE, pipelines.size(), pipelineInfos, nullptr, pipelines.data()); rs != VK_SUCCESS)
+			throw std::runtime_error(std::format("Failed to create converter pipelines: {}", string_VkResult(rs)));
+
+		vk->vkDestroyShaderModule(vk->getLdev(), rgbShaderModule, nullptr);
+		vk->vkDestroyShaderModule(vk->getLdev(), redShaderModule, nullptr);
+		vk->vkDestroyShaderModule(vk->getLdev(), idxShaderModule, nullptr);
+	} catch (const std::runtime_error&) {
+		vk->vkDestroyShaderModule(vk->getLdev(), rgbShaderModule, nullptr);
+		vk->vkDestroyShaderModule(vk->getLdev(), redShaderModule, nullptr);
+		vk->vkDestroyShaderModule(vk->getLdev(), idxShaderModule, nullptr);
+		throw;
 	}
-	pipelineInfos[li].sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	pipelineInfos[li].stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	pipelineInfos[li].stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	pipelineInfos[li].stage.module = idxShaderModule;
-	pipelineInfos[li].stage.pName = "main";
-	pipelineInfos[li].layout = pipelineLayoutIdx;
-	if (VkResult rs = vk->vkCreateComputePipelines(vk->getLdev(), VK_NULL_HANDLE, pipelines.size(), pipelineInfos, nullptr, pipelines.data()); rs != VK_SUCCESS)
-		throw std::runtime_error(std::format("Failed to create converter pipelines: {}", string_VkResult(rs)));
-
-	vk->vkDestroyShaderModule(vk->getLdev(), rgbShaderModule, nullptr);
-	vk->vkDestroyShaderModule(vk->getLdev(), idxShaderModule, nullptr);
 }
 
 void FormatConverter::createDescriptorPoolAndSets(const InstanceVk* vk) {
@@ -1310,7 +1337,7 @@ bool RendererVk::texFromIcon(Texture* tex, SDL_Surface* img) noexcept {
 			if (si.fmt)
 				createTextureDirect(static_cast<byte*>(si.img->pixels), si.img->pitch, surfaceBytesPpx(si.img), si.fmt, ntex);
 			else
-				createTextureIndirect(si.img, ntex, si.pid);
+				createTextureIndirect(static_cast<byte*>(si.img->pixels), si.img->pitch, surfaceBytesPpx(img), ntex, si.pid, si.img);
 			finalizeExistingTexture(ntex);
 			replaceTexture(*vtx, ntex);
 			SDL_FreeSurface(si.img);
@@ -1331,7 +1358,7 @@ Texture* RendererVk::texFromRpic(SDL_Surface* img) noexcept {
 			if (si.fmt)
 				createTextureDirect(static_cast<byte*>(si.img->pixels), si.img->pitch, surfaceBytesPpx(si.img), si.fmt, *tex);
 			else
-				createTextureIndirect(si.img, *tex, si.pid);
+				createTextureIndirect(static_cast<byte*>(si.img->pixels), si.img->pitch, surfaceBytesPpx(si.img), *tex, si.pid, si.img);
 			finalizeFreshTexture(*tex);
 			SDL_FreeSurface(si.img);
 			return tex;
@@ -1345,11 +1372,17 @@ Texture* RendererVk::texFromRpic(SDL_Surface* img) noexcept {
 	return nullptr;
 }
 
-Texture* RendererVk::texFromText(const PixmapRgba& pm) noexcept {
+Texture* RendererVk::texFromText(const Pixmap& pm) noexcept {
 	if (pm.res.x) {
 		auto tex = new TextureVk(glm::min(pm.res, uvec2(maxTextureSize)), RenderPass::samplerNearest);
 		try {
-			createTextureDirect(reinterpret_cast<const byte*>(pm.pix.get()), pm.res.x * 4, 4, VK_FORMAT_A8B8G8R8_UNORM_PACK32, *tex);
+			if (fmtConv.initialized())
+				createTextureIndirect(reinterpret_cast<const byte*>(pm.pix.get()), pm.res.x, 1, *tex, FormatConverter::Pipeline::red, nullptr);
+			else {
+				uptr<uint32[]> pix = std::make_unique_for_overwrite<uint32[]>(tex->res.x * tex->res.y);
+				copyTextPixels(pix.get(), pm, tex->res);	// TODO: copy directly to the input buffer
+				createTextureDirect(reinterpret_cast<const byte*>(pix.get()), pm.res.x * 4, 4, VK_FORMAT_A8B8G8R8_UNORM_PACK32, *tex);
+			}
 			finalizeFreshTexture(*tex);
 			return tex;
 		} catch (const std::runtime_error& err) {
@@ -1361,12 +1394,18 @@ Texture* RendererVk::texFromText(const PixmapRgba& pm) noexcept {
 	return nullptr;
 }
 
-bool RendererVk::texFromText(Texture* tex, const PixmapRgba& pm) noexcept {
+bool RendererVk::texFromText(Texture* tex, const Pixmap& pm) noexcept {
 	if (pm.res.x) {
 		auto vtx = static_cast<TextureVk*>(tex);
 		TextureVk ntex(glm::min(pm.res, uvec2(maxTextureSize)), vtx->pool, vtx->set);
 		try {
-			createTextureDirect(reinterpret_cast<const byte*>(pm.pix.get()), pm.res.x * 4, 4, VK_FORMAT_A8B8G8R8_UNORM_PACK32, ntex);
+			if (fmtConv.initialized())
+				createTextureIndirect(reinterpret_cast<const byte*>(pm.pix.get()), pm.res.x, 1, ntex, FormatConverter::Pipeline::red, nullptr);
+			else {
+				uptr<uint32[]> pix = std::make_unique_for_overwrite<uint32[]>(ntex.res.x * ntex.res.y);
+				copyTextPixels(pix.get(), pm, ntex.res);
+				createTextureDirect(reinterpret_cast<const byte*>(pix.get()), pm.res.x * 4, 4, VK_FORMAT_A8B8G8R8_UNORM_PACK32, ntex);
+			}
 			finalizeExistingTexture(ntex);
 			replaceTexture(*vtx, ntex);
 			return true;
@@ -1421,17 +1460,17 @@ void RendererVk::createTextureDirect(const byte* pix, uint32 pitch, uint8 bpp, V
 	endSingleTimeCommands(tcmdBuffers[currentTransfer], tfences[currentTransfer], tqueue);
 }
 
-void RendererVk::createTextureIndirect(SDL_Surface* img, TextureVk& tex, FormatConverter::Pipeline pid) {
+void RendererVk::createTextureIndirect(const byte* pix, uint32 pitch, uint8 bpp, TextureVk& tex, FormatConverter::Pipeline pid, SDL_Surface* img) {
 	std::tie(tex.image, tex.memory) = createImage(tex.res, VK_IMAGE_TYPE_2D, VK_FORMAT_A8B8G8R8_UNORM_PACK32, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	tex.view = createImageView(tex.image, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_A8B8G8R8_UNORM_PACK32);
 	synchSingleTimeCommands(tcmdBuffers[currentTransfer], tfences[currentTransfer]);
-	uploadInputData(static_cast<byte*>(img->pixels), tex.res, img->pitch, surfaceBytesPpx(img));
+	uploadInputData(pix, tex.res, pitch, bpp);
 
 	auto [descriptorSet, layoutId] = fmtConv.getDescriptorSet(pid, currentTransfer);
 	fmtConv.updateDescriptorSet(this, descriptorSet, tex.view, inputBuffers[currentTransfer], rebindInputBuffer[currentTransfer][layoutId] ? inputSizesMax[currentTransfer] : 0);
 	rebindInputBuffer[currentTransfer][layoutId] = false;
 	if (pid == FormatConverter::Pipeline::index8)
-		copyPalette(fmtConv.getUniformBufferMapped(currentTransfer)->colors, img);
+		copyPalette(fmtConv.getUniformBufferMapped(currentTransfer)->colors, img);	// TODO: no need to pass img for text
 
 	beginSingleTimeCommands(tcmdBuffers[currentTransfer]);
 	transitionImageLayout(tcmdBuffers[currentTransfer], tex.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_NONE, VK_ACCESS_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
@@ -1461,17 +1500,6 @@ void RendererVk::uploadInputData(const byte* pix, u32vec2 res, uint32 pitch, uin
 		rebindInputBuffer[currentTransfer].fill(true);
 	}
 	copyPixels(inputsMapped[currentTransfer], pix, rowSize, pitch, rowSize, res.y);
-}
-
-void RendererVk::copyPalette(uint* dst, SDL_Surface* img) {
-#if SDL_VERSION_ATLEAST(3, 0, 0)
-	SDL_Palette* palette = SDL_GetSurfacePalette(img);
-	if (!palette)
-		throw std::runtime_error(SDL_GetError());
-	memcpy(dst, palette->colors, uint16(palette->ncolors) * sizeof(SDL_Color));
-#else
-	memcpy(dst, img->format->palette->colors, uint16(img->format->palette->ncolors) * sizeof(SDL_Color));
-#endif
 }
 
 void RendererVk::finalizeFreshTexture(TextureVk& tex) {

@@ -1,0 +1,33 @@
+#version 450
+
+layout(local_size_x = 32) in;
+
+layout(push_constant) uniform PushData {
+	uint offset;
+} psData;
+
+layout(set = 0, binding = 0) readonly buffer InputData {
+	uint pixels[];
+} inData;
+
+layout(set = 0, binding = 1, rgba8) writeonly uniform image2D img;
+
+#define storeColor(id, size, a) \
+	imageStore(img, ivec2((id) % size.x, (id) / size.x), vec4(1.0, 1.0, 1.0, float(a) / 255.0))
+
+void main() {
+	uint iid = (gl_WorkGroupID.x + psData.offset) * gl_WorkGroupSize.x + gl_LocalInvocationID.x;
+	uint oid = iid * 4;
+	uint px = inData.pixels[iid];
+	uvec2 size = imageSize(img);
+	uint len = size.x * size.y;
+
+	if (oid < len)
+		storeColor(oid, size, px & 0xFF);
+	if (oid + 1 < len)
+		storeColor(oid + 1, size, (px >> 8) & 0xFF);
+	if (oid + 2 < len)
+		storeColor(oid + 2, size, (px >> 16) & 0xFF);
+	if (oid + 3 < len)
+		storeColor(oid + 3, size, px >> 24);
+}

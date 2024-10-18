@@ -312,6 +312,13 @@ void RendererDx11::initConverter() {
 #include "shaders/dxBgrCs.dbg.h"
 #endif
 	};
+	static constexpr uint32 srcRed[] = {
+#ifdef NDEBUG
+#include "shaders/dxRedCs.rel.h"
+#else
+#include "shaders/dxRedCs.dbg.h"
+#endif
+	};
 	static constexpr uint32 srcIdx[] = {
 #ifdef NDEBUG
 #include "shaders/dxIdxCs.rel.h"
@@ -323,6 +330,8 @@ void RendererDx11::initConverter() {
 		throw std::runtime_error(std::format("Failed to create rgb24 compute shader: {}", hresultToStr(rs)));
 	if (HRESULT rs = dev->CreateComputeShader(srcBgr, sizeof(srcBgr), nullptr, &compConv[eint(FormatConv::bgr24)]); FAILED(rs))
 		throw std::runtime_error(std::format("Failed to create bgr24 compute shader: {}", hresultToStr(rs)));
+	if (HRESULT rs = dev->CreateComputeShader(srcRed, sizeof(srcRed), nullptr, &compConv[eint(FormatConv::red)]); FAILED(rs))
+		throw std::runtime_error(std::format("Failed to create red compute shader: {}", hresultToStr(rs)));
 	if (HRESULT rs = dev->CreateComputeShader(srcIdx, sizeof(srcIdx), nullptr, &compConv[eint(FormatConv::index8)]); FAILED(rs))
 		throw std::runtime_error(std::format("Failed to create index compute shader: {}", hresultToStr(rs)));
 
@@ -502,7 +511,10 @@ Texture* RendererDx11::texFromText(const PixmapRgba& pm) noexcept {
 	if (pm.res.x) {
 		try {
 			uvec2 res = glm::min(pm.res, uvec2(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION));
-			return new TextureDx(res, createTextureDirect(reinterpret_cast<const byte*>(pm.pix.get()), res, pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM));
+			// TODO: if (compConv[eint(FormatConv::red)])
+			uptr<uint32[]> pix = std::make_unique_for_overwrite<uint32[]>(res.x * res.y);	// TODO: use a compute shader to do this
+			copyTextPixels(pix.get(), pm, res);
+			return new TextureDx(res, createTextureDirect(reinterpret_cast<const byte*>(pix.get()), res, pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM));
 		} catch (const std::runtime_error&) {}
 	}
 	return nullptr;
@@ -512,7 +524,10 @@ bool RendererDx11::texFromText(Texture* tex, const PixmapRgba& pm) noexcept {
 	if (pm.res.x) {
 		try {
 			uvec2 res = glm::min(pm.res, uvec2(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION));
-			replaceTexture(static_cast<TextureDx*>(tex), createTextureDirect(reinterpret_cast<const byte*>(pm.pix.get()), res, pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM), res);
+			// TODO: if (compConv[eint(FormatConv::red)])
+			uptr<uint32[]> pix = std::make_unique_for_overwrite<uint32[]>(res.x * res.y);
+			copyTextPixels(pix.get(), pm, res);
+			replaceTexture(static_cast<TextureDx*>(tex), createTextureDirect(reinterpret_cast<const byte*>(pix.get()), res, pm.res.x * 4, DXGI_FORMAT_B8G8R8A8_UNORM), res);
 			return true;
 		} catch (const std::runtime_error&) {}
 	}

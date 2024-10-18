@@ -74,7 +74,7 @@ void FontSet::clearCache() {
 	bufSize = 0;
 }
 
-const PixmapRgba& FontSet::renderText(string_view text, uint size) {
+const Pixmap& FontSet::renderText(string_view text, uint size) {
 	if (pm.res = uvec2(measureText(text, size), size); pm.res.x) {
 		prepareBuffer();
 		prepareAdvance(text.begin(), text.length(), xofs);
@@ -131,7 +131,7 @@ uint FontSet::measureText(string_view text, uint size) {
 	return mfin;
 }
 
-const PixmapRgba& FontSet::renderText(string_view text, uint size, uint limit) {
+const Pixmap& FontSet::renderText(string_view text, uint size, uint limit) {
 	if (pm.res = measureText(text, size, limit); pm.res.x) {
 		ypos = uint(float(size) * baseScale);
 
@@ -216,7 +216,7 @@ uvec2 FontSet::measureText(string_view text, uint size, uint limit) {
 void FontSet::prepareBuffer() {
 	size_t size = size_t(pm.res.x) * size_t(pm.res.y);
 	if (size > bufSize) {
-		pm.pix = std::make_unique_for_overwrite<uint32[]>(size);
+		pm.pix = std::make_unique_for_overwrite<uint8[]>(size);
 		bufSize = size;
 	}
 	std::fill_n(pm.pix.get(), size, 0);
@@ -348,7 +348,7 @@ vector<FontSet::Font>::iterator FontSet::loadGlyph(char32_t ch, int32 flags) {
 }
 
 void FontSet::copyGlyph(const FT_Bitmap& bmp, int top, int left) noexcept {
-	uint32* dst = pm.pix.get() + xpos + left;
+	uint8* dst = pm.pix.get() + xpos + left;
 	uchar* src = bmp.buffer;
 	int offs = ypos - top;
 	if (offs >= 0)
@@ -360,8 +360,8 @@ void FontSet::copyGlyph(const FT_Bitmap& bmp, int top, int left) noexcept {
 
 	for (uint r = 0; r < rows; ++r, dst += pm.res.x, src += bmp.pitch)
 		for (uint c = 0; c < bmp.width; ++c)
-			if (reinterpret_cast<uchar*>(dst + c)[3] < src[c])
-				dst[c] = 0x00FFFFFF | (uint32(src[c]) << 24);
+			if (dst[c] < src[c])
+				dst[c] = src[c];
 }
 
 void FontSet::setMode(bool mono) noexcept {

@@ -114,6 +114,7 @@ protected:
 	bool hasBgra = true;
 	bool hasPackedPixels = true;
 	bool hasTextureCompression;
+	bool hasSwizzle = true;
 #ifdef _WIN32
 	ViewGl* cvw = nullptr;	// current context's view
 #else
@@ -135,8 +136,8 @@ public:
 	Texture* texFromIcon(SDL_Surface* img) noexcept override;
 	bool texFromIcon(Texture* tex, SDL_Surface* img) noexcept override;
 	Texture* texFromRpic(SDL_Surface* img) noexcept override;
-	Texture* texFromText(const PixmapRgba& pm) noexcept override;
-	bool texFromText(Texture* tex, const PixmapRgba& pm) noexcept override;
+	Texture* texFromText(const Pixmap& pm) noexcept override;
+	bool texFromText(Texture* tex, const Pixmap& pm) noexcept override;
 	void freeTexture(Texture* tex) noexcept override;
 
 protected:
@@ -152,7 +153,8 @@ protected:
 private:
 	GLuint initTexture(GLint filter) noexcept;
 	void uploadTexture(TextureGl* tex, SurfaceInfo& si) noexcept;
-	void uploadTexture(TextureGl* tex, const PixmapRgba& pm) noexcept;
+	void uploadTextureRgba(TextureGl* tex, const Pixmap& pm) noexcept;
+	void uploadTextureAlpha(TextureGl* tex, const Pixmap& pm) noexcept;
 	template <bool keep> SurfaceInfo pickPixFormat(SDL_Surface* img) const noexcept;
 #ifndef NDEBUG
 	static void APIENTRY debugMessage(GLenum source, GLenum type, uint id, GLenum severity, GLsizei length, const char* message, const void* userParam) noexcept;
