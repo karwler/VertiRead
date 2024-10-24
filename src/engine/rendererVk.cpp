@@ -780,23 +780,6 @@ RendererVk::TextureVk::TextureVk(uvec2 size, VkDescriptorPool descriptorPool, Vk
 	sid(samplerId)
 {}
 
-RendererVk::SurfaceInfo::SurfaceInfo(SDL_Surface* surface, VkFormat format, Swizzle swizzle) :
-	img(surface),
-	fmt(format),
-	use(VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-	cmap(swizzle),
-	direct(true)
-{}
-
-RendererVk::SurfaceInfo::SurfaceInfo(SDL_Surface* surface, FormatConverter::Pipeline conv) :
-	img(surface),
-	fmt(VK_FORMAT_A8B8G8R8_UNORM_PACK32),
-	use(VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT),
-	cmap{},
-	pid(conv),
-	direct(false)
-{}
-
 RendererVk::RendererVk(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, Settings* sets, const vec4& bgcolor) :
 	Renderer(windows.size(), 0),
 	bgColor{ { { bgcolor.r, bgcolor.g, bgcolor.b, bgcolor.a } } },
@@ -1370,7 +1353,8 @@ Texture* RendererVk::texFromText(const Pixmap& pm) noexcept {
 	if (pm.res.x) {
 		auto tex = new TextureVk(glm::min(pm.res, uvec2(maxTextureSize)), RenderPass::samplerNearest);
 		try {
-			createTexture(pm, *tex);
+			prepareTexture(*tex, pm.pix.get(), pm.res.x, 1, VK_FORMAT_R8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+			uploadTextureDirect(*tex);
 			finalizeFreshTexture(*tex);
 			return tex;
 		} catch (const std::runtime_error& err) {
@@ -1387,7 +1371,8 @@ bool RendererVk::texFromText(Texture* tex, const Pixmap& pm) noexcept {
 		auto vtx = static_cast<TextureVk*>(tex);
 		TextureVk ntex(glm::min(pm.res, uvec2(maxTextureSize)), vtx->pool, vtx->set);
 		try {
-			createTexture(pm, ntex);
+			prepareTexture(ntex, pm.pix.get(), pm.res.x, 1, VK_FORMAT_R8_UNORM);
+			uploadTextureDirect(ntex);
 			finalizeExistingTexture(ntex);
 			replaceTexture(*vtx, ntex);
 			return true;
@@ -1430,14 +1415,11 @@ void RendererVk::synchTransfer() noexcept {
 }
 
 void RendererVk::createTexture(const SurfaceInfo& si, TextureVk& tex) {
-	std::tie(tex.image, tex.memory) = createImage(tex.res, VK_IMAGE_TYPE_2D, si.fmt, si.use, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	tex.view = createImageView(tex.image, si.fmt, si.cmap);
-	synchSingleTimeCommands(tcmdBuffers[currentTransfer], tfences[currentTransfer]);
-	uint32 rowSize = prepareInputBuffer(tex.res, surfaceBytesPpx(si.img));
-	copyPixels(inputsMapped[currentTransfer], si.img->pixels, rowSize, si.img->pitch, rowSize, tex.res.y);
-	if (si.direct)
+	if (si.fmt) {
+		prepareTexture(tex, si.img->pixels, si.img->pitch, surfaceBytesPpx(si.img), si.fmt, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, si.cmap);
 		uploadTextureDirect(tex);
-	else {
+	} else {
+		prepareTexture(tex, si.img->pixels, si.img->pitch, surfaceBytesPpx(si.img), VK_FORMAT_A8B8G8R8_UNORM_PACK32, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
 		auto [descriptorSet, layoutId] = fmtConv.getDescriptorSet(si.pid, currentTransfer);
 		fmtConv.updateDescriptorSet(this, descriptorSet, tex.view, inputBuffers[currentTransfer], rebindInputBuffer[currentTransfer][layoutId] ? inputSizesMax[currentTransfer] : 0);
 		rebindInputBuffer[currentTransfer][layoutId] = false;
@@ -1447,18 +1429,13 @@ void RendererVk::createTexture(const SurfaceInfo& si, TextureVk& tex) {
 	}
 }
 
-void RendererVk::createTexture(const Pixmap& pm, TextureVk& tex) {
-	std::tie(tex.image, tex.memory) = createImage(tex.res, VK_IMAGE_TYPE_2D, VK_FORMAT_R8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	tex.view = createImageView(tex.image, VK_FORMAT_R8_UNORM, { .r = VK_COMPONENT_SWIZZLE_ONE, .g = VK_COMPONENT_SWIZZLE_ONE, .b = VK_COMPONENT_SWIZZLE_ONE, .a = VK_COMPONENT_SWIZZLE_R });
+void RendererVk::prepareTexture(TextureVk& tex, const void* pix, uint pitch, uint8 bpp, VkFormat format, VkImageUsageFlags usage, Swizzle swizzle) {
+	std::tie(tex.image, tex.memory) = createImage(tex.res, VK_IMAGE_TYPE_2D, format, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	tex.view = createImageView(tex.image, format, swizzle);
 	synchSingleTimeCommands(tcmdBuffers[currentTransfer], tfences[currentTransfer]);
-	uint32 rowSize = prepareInputBuffer(tex.res, 1);
-	copyPixels(inputsMapped[currentTransfer], pm.pix.get(), rowSize, pm.res.x, rowSize, tex.res.y);
-	uploadTextureDirect(tex);
-}
 
-uint32 RendererVk::prepareInputBuffer(u32vec2 size, uint8 bpp) {
-	uint32 rowSize = size.x * bpp;
-	if (VkDeviceSize inputSize = VkDeviceSize(rowSize) * VkDeviceSize(size.y); inputSize > inputSizesMax[currentTransfer]) {
+	uint32 rowSize = tex.res.x * bpp;
+	if (VkDeviceSize inputSize = VkDeviceSize(rowSize) * VkDeviceSize(tex.res.y); inputSize > inputSizesMax[currentTransfer]) {
 		inputSize = roundToMultiple(inputSize, transferAtomSize);
 		recreateBuffer(inputBuffers[currentTransfer], inputMemory[currentTransfer], inputSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		if (VkResult rs = vkMapMemory(ldev, inputMemory[currentTransfer], 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&inputsMapped[currentTransfer])); rs != VK_SUCCESS)
@@ -1466,7 +1443,7 @@ uint32 RendererVk::prepareInputBuffer(u32vec2 size, uint8 bpp) {
 		inputSizesMax[currentTransfer] = inputSize;
 		rebindInputBuffer[currentTransfer].fill(true);
 	}
-	return rowSize;
+	copyPixels(inputsMapped[currentTransfer], pix, rowSize, pitch, rowSize, tex.res.y);
 }
 
 void RendererVk::uploadTextureDirect(const TextureVk& tex) {

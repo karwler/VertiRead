@@ -335,14 +335,12 @@ private:
 	struct SurfaceInfo {
 		SDL_Surface* img = nullptr;
 		VkFormat fmt;
-		uint8 use;
 		Swizzle cmap;
 		FormatConverter::Pipeline pid;
-		bool direct;
 
 		SurfaceInfo() = default;
-		SurfaceInfo(SDL_Surface* surface, VkFormat format, Swizzle swizzle = {});
-		SurfaceInfo(SDL_Surface* surface, FormatConverter::Pipeline conv);
+		SurfaceInfo(SDL_Surface* surface, VkFormat format, Swizzle swizzle = {}) : img(surface), fmt(format), cmap(swizzle) {}
+		SurfaceInfo(SDL_Surface* surface, FormatConverter::Pipeline conv) : img(surface), fmt(VK_FORMAT_UNDEFINED), pid(conv) {}
 	};
 
 	static constexpr array<VkMemoryPropertyFlags, 2> deviceMemoryTypes = { VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT };
@@ -447,8 +445,7 @@ private:
 	VkPresentModeKHR chooseSwapPresentMode(VkSurfaceKHR surface) const;
 	static uint scoreDevice(const DeviceInfo& devi);
 	void createTexture(const SurfaceInfo& si, TextureVk& tex);
-	void createTexture(const Pixmap& pm, TextureVk& tex);
-	uint32 prepareInputBuffer(u32vec2 size, uint8 bpp);
+	void prepareTexture(TextureVk& tex, const void* pix, uint pitch, uint8 bpp, VkFormat format, VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, Swizzle swizzle = {});
 	void uploadTextureDirect(const TextureVk& tex);
 	void uploadTextureIndirect(const TextureVk& tex, VkDescriptorSet dset, FormatConverter::Pipeline pid);
 	void finalizeFreshTexture(TextureVk& tex);
