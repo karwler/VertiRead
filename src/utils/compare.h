@@ -17,13 +17,13 @@ private:
 public:
 #ifdef WITH_ICU
 	static void init();
-	static void free() { delete collator; }
+	static void free() noexcept { delete collator; }
 #endif
 
-	bool operator()(const Cstring& a, const Cstring& b) const { return less(a.data(), b.data()); }
+	bool operator()(const Cstring& a, const Cstring& b) const noexcept { return less(a.data(), b.data()); }
 
-	static bool less(const char* a, const char* b);
-	static bool less(string_view a, string_view b);
+	static bool less(const char* a, const char* b) noexcept;
+	static bool less(string_view a, string_view b) noexcept;
 
 #ifndef WITH_ICU
 private:
@@ -40,7 +40,7 @@ private:
 #endif
 };
 
-inline bool Strcomp::less(const char* a, const char* b) {
+inline bool Strcomp::less(const char* a, const char* b) noexcept {
 #ifdef WITH_ICU
 	UErrorCode status = U_ZERO_ERROR;
 	return collator->compareUTF8(a, b, status) == UCOL_LESS;
@@ -49,7 +49,7 @@ inline bool Strcomp::less(const char* a, const char* b) {
 #endif
 }
 
-inline bool Strcomp::less(string_view a, string_view b) {
+inline bool Strcomp::less(string_view a, string_view b) noexcept {
 #ifdef WITH_ICU
 	UErrorCode status = U_ZERO_ERROR;
 	return collator->compareUTF8(a, b, status) == UCOL_LESS;

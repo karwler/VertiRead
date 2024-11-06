@@ -1,7 +1,7 @@
 #pragma once
 
 #include "utils.h"
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 #include <SDL_gamepad.h>
 #else
 #include <SDL_gamecontroller.h>
@@ -13,14 +13,15 @@
 template <class... T> using uset = std::unordered_set<T...>;
 
 enum class Color : uint8 {
-	background,
 	normal,
 	dark,
 	light,
 	select,
 	tooltip,
 	text,
-	texture
+	texture,
+	dim,
+	background
 };
 
 enum class Alignment : uint8 {
@@ -37,8 +38,8 @@ enum Actions : uint8 {
 };
 
 template <IntEnum T, size_t N>
-T strToEnum(const array<const char*, N>& names, string_view str, T defaultValue = T(N)) {
-	typename array<const char*, N>::const_iterator p = rng::find_if(names, [str](const char* it) -> bool { return strciequal(it, str); });
+T strToEnum(const array<const char*, N>& names, string_view str, T defaultValue = T(N)) noexcept {
+	auto p = rng::find_if(names, [str](const char* it) -> bool { return strciequal(it, str); });
 	return p != names.end() ? T(p - names.begin()) : defaultValue;
 }
 
@@ -61,14 +62,14 @@ private:
 	Dir dir;
 
 public:
-	constexpr Direction(Dir direction) : dir(direction) {}
+	constexpr Direction(Dir direction) noexcept : dir(direction) {}
 
-	constexpr operator Dir() const { return dir; }
+	constexpr operator Dir() const noexcept { return dir; }
 
-	constexpr bool vertical() const { return dir <= down; }
-	constexpr bool horizontal() const { return dir >= left; }
-	constexpr bool positive() const { return dir & 1; }
-	constexpr bool negative() const { return !positive(); }
+	constexpr bool vertical() const noexcept { return dir <= down; }
+	constexpr bool horizontal() const noexcept { return dir >= left; }
+	constexpr bool positive() const noexcept { return dir & 1; }
+	constexpr bool negative() const noexcept { return !positive(); }
 };
 
 class Binding {
@@ -215,41 +216,41 @@ private:
 	};
 
 public:
-	void reset(Type newType);
+	void reset(Type newType) noexcept;
 
-	SDL_Scancode getKey() const { return key; }
-	bool keyAssigned() const { return asg & ASG_KEY; }
+	SDL_Scancode getKey() const noexcept { return key; }
+	bool keyAssigned() const noexcept { return asg & ASG_KEY; }
 	void clearAsgKey() noexcept;
 	void setKey(SDL_Scancode kkey) noexcept;
 
-	uint8 getJctID() const { return jctID; }
-	bool jctAssigned() const { return asg & (ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N); }
+	uint8 getJctID() const noexcept { return jctID; }
+	bool jctAssigned() const noexcept { return asg & (ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N); }
 	void clearAsgJct() noexcept;
 
-	bool jbuttonAssigned() const { return asg & ASG_JBUTTON; }
+	bool jbuttonAssigned() const noexcept { return asg & ASG_JBUTTON; }
 	void setJbutton(uint8 but) noexcept;
 
-	bool jaxisAssigned() const { return asg & (ASG_JAXIS_P | ASG_JAXIS_N); }
-	bool jposAxisAssigned() const { return asg & ASG_JAXIS_P; }
-	bool jnegAxisAssigned() const { return asg & ASG_JAXIS_N; }
+	bool jaxisAssigned() const noexcept { return asg & (ASG_JAXIS_P | ASG_JAXIS_N); }
+	bool jposAxisAssigned() const noexcept { return asg & ASG_JAXIS_P; }
+	bool jnegAxisAssigned() const noexcept { return asg & ASG_JAXIS_N; }
 	void setJaxis(uint8 axis, bool positive) noexcept;
 
-	uint8 getJhatVal() const { return jHatVal; }
-	bool jhatAssigned() const { return asg & ASG_JHAT; }
+	uint8 getJhatVal() const noexcept { return jHatVal; }
+	bool jhatAssigned() const noexcept { return asg & ASG_JHAT; }
 	void setJhat(uint8 hat, uint8 val) noexcept;
 
-	uint8 getGctID() const { return gctID; }
-	bool gctAssigned() const { return asg & (ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N); }
+	uint8 getGctID() const noexcept { return gctID; }
+	bool gctAssigned() const noexcept { return asg & (ASG_GBUTTON | ASG_GAXIS_P | ASG_GAXIS_N); }
 	void clearAsgGct() noexcept;
 
-	SDL_GameControllerButton getGbutton() const { return SDL_GameControllerButton(gctID); }
-	bool gbuttonAssigned() const { return asg & ASG_GBUTTON; }
+	SDL_GameControllerButton getGbutton() const noexcept { return SDL_GameControllerButton(gctID); }
+	bool gbuttonAssigned() const noexcept { return asg & ASG_GBUTTON; }
 	void setGbutton(SDL_GameControllerButton but) noexcept;
 
-	SDL_GameControllerAxis getGaxis() const { return SDL_GameControllerAxis(gctID); }
-	bool gaxisAssigned() const { return asg & (ASG_GAXIS_P | ASG_GAXIS_N); }
-	bool gposAxisAssigned() const { return asg & ASG_GAXIS_P; }
-	bool gnegAxisAssigned() const { return asg & ASG_GAXIS_N; }
+	SDL_GameControllerAxis getGaxis() const noexcept { return SDL_GameControllerAxis(gctID); }
+	bool gaxisAssigned() const noexcept { return asg & (ASG_GAXIS_P | ASG_GAXIS_N); }
+	bool gposAxisAssigned() const noexcept { return asg & ASG_GAXIS_P; }
+	bool gnegAxisAssigned() const noexcept { return asg & ASG_GAXIS_N; }
 	void setGaxis(SDL_GameControllerAxis axis, bool positive) noexcept;
 
 	static uint8 hatNameToValue(string_view name) noexcept;
@@ -286,16 +287,16 @@ struct PicLim {
 	uintptr_t size = 0; // if it statys 0 then it should be set to a recommended value by a renderer
 	Type type = Type::none;
 
-	void set(string_view str);
+	void set(string_view str) noexcept;
 
-	static pair<uint8, uint8> memSizeMag(uintptr_t num);
+	static pair<uint8, uint8> memSizeMag(uintptr_t num) noexcept;
 	static string memoryString(uintptr_t num, uint8 dmag, uint8 smag);
 	static string memoryString(uintptr_t num);
-	static uintptr_t toCount(string_view str);
-	static uintptr_t toSize(string_view str);
+	static uintptr_t toCount(string_view str) noexcept;
+	static uintptr_t toSize(string_view str) noexcept;
 };
 
-inline uintptr_t PicLim::toCount(string_view str) {
+inline uintptr_t PicLim::toCount(string_view str) noexcept {
 	return coalesce(toNum<uintptr_t>(str), defaultCount);
 }
 
@@ -309,9 +310,13 @@ public:
 	static constexpr char flagDirect3d11[] = "d11";
 #endif
 #ifdef WITH_OPENGL
+#if !defined(__arm__) && !defined(__aarch64__)
 	static constexpr char flagOpenGl1[] = "g1";
 	static constexpr char flagOpenGl3[] = "g3";
+#endif
+#ifndef _WIN32
 	static constexpr char flagOpenEs3[] = "e3";
+#endif
 #endif
 #ifdef WITH_VULKAN
 	static constexpr char flagVulkan[] = "vk";
@@ -319,24 +324,26 @@ public:
 	static constexpr char flagSoftware[] = "sf";
 
 	static constexpr array defaultColors = {
-		vec4(0.04f, 0.04f, 0.04f, 1.f),	// background
 		vec4(0.35f, 0.35f, 0.35f, 1.f),	// normal
 		vec4(0.24f, 0.24f, 0.24f, 1.f),	// dark
 		vec4(0.47f, 0.47f, 0.47f, 1.f),	// light
 		vec4(0.41f, 0.41f, 0.41f, 1.f),	// select
 		vec4(0.29f, 0.29f, 0.29f, 1.f),	// tooltip
 		vec4(0.82f, 0.82f, 0.82f, 1.f),	// text
-		vec4(0.82f, 0.82f, 0.82f, 1.f)	// texture
+		vec4(0.82f, 0.82f, 0.82f, 1.f),	// texture
+		vec4(0.f, 0.f, 0.f, 0.5f),		// dim
+		vec4(0.04f, 0.04f, 0.04f, 1.f)	// background (must be last so the rest can be addressed properly)
 	};
 	static constexpr array colorNames = {
-		"background",
 		"normal",
 		"dark",
 		"light",
 		"select",
 		"tooltip",
 		"text",
-		"texture"
+		"texture",
+		"dim",
+		"background"
 	};
 
 	enum class Screen : uint8 {
@@ -366,9 +373,13 @@ public:
 		direct3d11,
 #endif
 #ifdef WITH_OPENGL
+#if !defined(__arm__) && !defined(__aarch64__)
 		opengl1,
 		opengl3,
+#endif
+#ifndef _WIN32
 		opengles3,
+#endif
 #endif
 #ifdef WITH_VULKAN
 		vulkan,
@@ -380,14 +391,29 @@ public:
 		"Direct3D 11",
 #endif
 #ifdef WITH_OPENGL
-		"OpenGL 1.1",
+#if !defined(__arm__) && !defined(__aarch64__)
+		"OpenGL 1.2",
 		"OpenGL 3.0",
+#endif
+#ifndef _WIN32
 		"OpenGL ES 3.0",
+#endif
 #endif
 #ifdef WITH_VULKAN
 		"Vulkan 1.0",
 #endif
 		"Software"
+	};
+
+	enum class Gamma : uint8 {
+		none,
+		srgb,
+		value
+	};
+	static constexpr array gammaNames = {
+		"none",
+		"sRGB",
+		"value"
 	};
 
 	enum class Preview : uint8 {
@@ -403,13 +429,11 @@ public:
 
 	enum class Compression : uint8 {
 		none,
-		b8,
 		b16,
 		compress
 	};
 	static constexpr array compressionNames = {
 		"none",
-		"8 b",
 		"16 b",
 		"compress"
 	};
@@ -431,7 +455,7 @@ public:
 	static constexpr Direction::Dir defaultDirection = Direction::down;
 	static constexpr Zoom defaultZoomType = Zoom::value;
 #ifdef WITH_OPENGL
-#if !defined(_WIN32) && (defined(__arm__) || defined(__aarch64__))
+#if defined(__arm__) || defined(__aarch64__)
 	static constexpr Renderer defaultRenderer = Renderer::opengles3;
 #else
 	static constexpr Renderer defaultRenderer = Renderer::opengl1;
@@ -445,11 +469,12 @@ public:
 #endif
 	static constexpr char defaultFont[] = "BrisaSans";
 	static constexpr Preview defaultPreview = Preview::local;
+	static constexpr Gamma defaultGammaType = Gamma::srgb;
+	static constexpr uint8 minGamma = 1, maxGamma = 40;
 	static constexpr Compression defaultCompression = Compression::none;
-	static constexpr char defaultDirLib[] = "library";
 	static constexpr int8 zoomLimit = 113;
 	static constexpr double zoomBase = 1.2;
-	static constexpr uint maxPageElements = 3;
+	static constexpr uint maxPageElements = 4;
 
 #ifdef _WIN32
 	static inline wchar_t** argv;
@@ -467,7 +492,7 @@ public:
 	PicLim picLim;
 	u32vec2 device = u32vec2(0);
 	ivec2 resolution = ivec2(800, 600);
-	vec2 scrollSpeed = vec2(1600.f, 1600.f);
+	vec2 scrollSpeed = vec2(14.f, 16.f);
 	uint maxPicRes = UINT_MAX;
 private:
 	int deadzone = 256;
@@ -484,40 +509,56 @@ public:
 	Compression compression = defaultCompression;
 	bool vsync = true;
 	Renderer renderer = defaultRenderer;
+	Gamma gammaType = defaultGammaType;
+	uint8 gammaValue = 22;
 	bool monoFont = false;
 
-	Settings(const fs::path& dirSets, vector<string>&& themes);
+	Settings(vector<string>&& themes);
 
-	void setZoom(string_view str);
-	const string& getTheme() const { return theme; }
+	void setZoom(string_view str) noexcept;
+	const string& getTheme() const noexcept { return theme; }
 	const string& setTheme(string_view name, vector<string>&& themes);
 
 	static vector<Display> displayArrangement();
-	static double zoomValue(int step);
+	static double zoomValue(int step) noexcept;
 	void unionDisplays();
 	static Renderer getRenderer(string_view name);
-	void setRenderer();
-	string scrollSpeedString() const { return toStr(scrollSpeed); }
-	int getDeadzone() const { return deadzone; }
-	void setDeadzone(int val);
+	void setRenderer() noexcept;
+	void setGamma(string_view str) noexcept;
+	string scrollSpeedString() const noexcept { return toStr(scrollSpeed); }
+	int getDeadzone() const noexcept { return deadzone; }
+	void setDeadzone(int val) noexcept;
 
-	static string firstArg();
-	static bool hasFlag(const char* name);
-	static bool cmpFlag(const char* name, int id);
+	static string firstArg() noexcept;
+	static bool hasFlag(const char* name) noexcept;
+	static bool cmpFlag(const char* name, int id) noexcept;
+	static string homeDir();
 };
 
-inline double Settings::zoomValue(int step) {
+inline const string& Settings::setTheme(string_view name, vector<string>&& themes) {
+	return theme = rng::find(themes, name) != themes.end() ? name : !themes.empty() ? std::move(themes[0]) : string();
+}
+
+inline double Settings::zoomValue(int step) noexcept {
 	return std::pow(zoomBase, step);
 }
 
-inline void Settings::setDeadzone(int val) {
+inline void Settings::setDeadzone(int val) noexcept {
 	deadzone = std::clamp(val, 0, axisLimit);
 }
 
-inline bool Settings::cmpFlag(const char* name, int id) {
+inline bool Settings::cmpFlag(const char* name, int id) noexcept {
 #ifdef _WIN32
 	return argv[id][0] == '-' && strasymequal(name, argv[id] + 1 + (argv[id][1] == '-'));
 #else
 	return argv[id][0] == '-' && !strcmp(name, argv[id] + 1 + (argv[id][1] == '-'));
+#endif
+}
+
+inline string Settings::homeDir() {
+#ifdef _WIN32
+	return swtos(_wgetenv(L"UserProfile"));
+#else
+	return getenv("HOME");
 #endif
 }

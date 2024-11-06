@@ -57,6 +57,7 @@ nmake
 |vulkan|runtime|Rendering with Vulkan. (loaded dynamically at runtime)|
 
 ### Recompiling shaders
+If CMake can't find fxc or glslc, then the shader code will be put in the executable instead of separate files.  
 The shader code for Direct3D, OpenGL and Vulkan is stored in the header files in "src/engine/shaders".  
 These files can be recreated from the files in "rsc/shaders" with these python scripts as long as fxc or glslc are installed.  
 
@@ -85,7 +86,7 @@ Among the program's resource files is a "themes.ini" file which can be used to e
 |-c|Don't bypass the X11 compositor.|
 |-d11|Force to launch with Direct3D 11.|
 |-e3|Force to launch with OpenGL ES 3.0.|
-|-g1|Force to launch with OpenGL 1.1.|
+|-g1|Force to launch with OpenGL 1.2.|
 |-g3|Force to launch with OpenGL 3.0.|
 |-l|Don't write to a log file.|
 |-sf|Force to launch with a software renderer.|

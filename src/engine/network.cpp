@@ -9,7 +9,6 @@
 #include <netinet/tcp.h>
 #endif
 #include <SDL_log.h>
-#include <format>
 
 #ifndef _WIN32
 #define closesocket(s) close(s)
@@ -25,9 +24,9 @@ addrinfo* resolveAddress(const char* host, uint16 port, int family) {
 	addrinfo* addrv;
 	if (int rc = getaddrinfo(host, toStr(port).data(), &hints, &addrv))
 #ifdef _WIN32
-		throw std::runtime_error(std::format("Failed to resolve address: {}", swtos(gai_strerrorW(rc))));
+		throw std::runtime_error(fmt::format("Failed to resolve address: {}", swtos(gai_strerrorW(rc))));
 #else
-		throw std::runtime_error(std::format("Failed to resolve address: {}", gai_strerror(rc)));
+		throw std::runtime_error(fmt::format("Failed to resolve address: {}", gai_strerror(rc)));
 #endif
 	return addrv;
 }
@@ -40,11 +39,11 @@ NetConnection::NetConnection(const IpAddress& addr) {
 		throw std::runtime_error("Winsock 2.2 isn't initialized");
 #endif
 	if (sock = socket(addr.g.sa_family, SOCK_STREAM, IPPROTO_TCP); sock == INVALID_SOCKET)
-		throw std::runtime_error(std::format("Failed to create socket: {}", lastError()));
+		throw std::runtime_error(fmt::format("Failed to create socket: {}", lastError()));
 	if (connect(sock, &addr.g, addr.g.sa_family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6))) {
 		string err = lastError();
 		closesocket(sock);
-		throw std::runtime_error(std::format("Failed to connect: {}", err));
+		throw std::runtime_error(fmt::format("Failed to connect: {}", err));
 	}
 }
 
@@ -77,17 +76,17 @@ void NetConnection::startTls(TlsData& data) {
 	if (initedGnutls) {
 		gnutls_certificate_credentials_st* cred;
 		if (int rc = gnutlsCertificateAllocateCredentials(&cred))
-			throw std::runtime_error(std::format("Failed to allocate certificate credentials: {}", gnutlsStrerror(rc)));
+			throw std::runtime_error(fmt::format("Failed to allocate certificate credentials: {}", gnutlsStrerror(rc)));
 		try {
 			if (int rc = gnutlsInit(&sess, GNUTLS_CLIENT))
-				throw std::runtime_error(std::format("Failed to init TLS session: {}", gnutlsStrerror(rc)));
+				throw std::runtime_error(fmt::format("Failed to init TLS session: {}", gnutlsStrerror(rc)));
 			if (data.datum.data)
 				if (int rc = gnutlsSessionSetData(sess, data.datum.data, data.datum.size))
 					SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to set session data: %s", gnutlsStrerror(rc));
 			if (int rc = gnutlsCredentialsSet(sess, GNUTLS_CRD_CERTIFICATE, cred))
-				throw std::runtime_error(std::format("Failed to set credentials: {}", gnutlsStrerror(rc)));
+				throw std::runtime_error(fmt::format("Failed to set credentials: {}", gnutlsStrerror(rc)));
 			if (int rc = gnutlsSetDefaultPriority(sess))
-				throw std::runtime_error(std::format("Failed to set priority: {}", gnutlsStrerror(rc)));
+				throw std::runtime_error(fmt::format("Failed to set priority: {}", gnutlsStrerror(rc)));
 
 			gnutlsSessionSetPtr(sess, &data);
 			gnutlsTransportSetInt2(sess, sock, sock);
@@ -95,7 +94,7 @@ void NetConnection::startTls(TlsData& data) {
 			gnutlsHandshakeSetHookFunction(sess, GNUTLS_HANDSHAKE_NEW_SESSION_TICKET, GNUTLS_HOOK_POST, storeGnuSessionData);
 			for (int rc; (rc = gnutlsHandshake(sess));)
 				if (rc != GNUTLS_E_AGAIN)
-					throw std::runtime_error(std::format("Handshake failed: {}", gnutlsStrerror(rc)));
+					throw std::runtime_error(fmt::format("Handshake failed: {}", gnutlsStrerror(rc)));
 			gnutlsCertificateFreeCredentials(cred);
 		} catch (const std::runtime_error&) {
 			if (sess) {
@@ -114,15 +113,15 @@ void NetConnection::startTls(TlsData& data) {
 			throw std::runtime_error("Failed to create TLS session");
 		try {
 			if (int rc = sslSetExData(ssl, 0, &data); rc != 1)
-				throw std::runtime_error(std::format("Failed to set TLS data: {}", rc));
+				throw std::runtime_error(fmt::format("Failed to set TLS data: {}", rc));
 			if (data.sess)
 				if (int rc = sslSetSession(ssl, data.sess); rc != 1)
 					SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to set session data: %d", rc);
 			if (int rc = sslSetFd(ssl, sock); rc != 1)
-				throw std::runtime_error(std::format("Failed to set socket: {}", rc));
+				throw std::runtime_error(fmt::format("Failed to set socket: {}", rc));
 			setNetTimeout(handshakeTimeout);	// TODO: check if this works
 			if (int rc = sslConnect(ssl); rc != 1)
-				throw std::runtime_error(std::format("Handshake failed: {}", rc));
+				throw std::runtime_error(fmt::format("Handshake failed: {}", rc));
 		} catch (const std::runtime_error&) {
 			sslFree(ssl);
 			ssl = nullptr;
@@ -148,7 +147,7 @@ void NetConnection::setNetTimeout(uint timeout) noexcept {
 	if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char*>(&tv), sizeof(tv)))
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to set timeout: %s", lastError().data());
 #else
-	timeval tv = { .tv_sec = timeout };
+	timeval tv = { .tv_sec = time_t(timeout) };
 	if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char*>(&tv), sizeof(tv)))
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to set timeout: %s", lastError());
 #endif
@@ -160,17 +159,17 @@ nsint NetConnection::recv(void* buf, size_t len) {
 	if (sess) {
 		while ((ret = gnutlsRecordRecv(sess, buf, len)) < 0)
 			if (ret != GNUTLS_E_AGAIN && ret != GNUTLS_E_REHANDSHAKE)
-				throw std::runtime_error(std::format("Failed to receive data: {}", gnutlsStrerror(ret)));
+				throw std::runtime_error(fmt::format("Failed to receive data: {}", gnutlsStrerror(ret)));
 	} else
 #endif
 #ifdef CAN_OPENSSL
 	if (ssl) {
 		if (ret = sslRead(ssl, buf, len); ret < 0)
-			throw std::runtime_error(std::format("Failed to receive data: {}", sslGetError(ssl, ret)));
+			throw std::runtime_error(fmt::format("Failed to receive data: {}", sslGetError(ssl, ret)));
 	} else
 #endif
 	if (ret = ::recv(sock, static_cast<char*>(buf), len, 0); ret < 0)
-		throw std::runtime_error(std::format("Failed to receive data: {}", lastError()));
+		throw std::runtime_error(fmt::format("Failed to receive data: {}", lastError()));
 	return ret;
 }
 
@@ -178,17 +177,17 @@ void NetConnection::send(const void* buf, size_t len) {
 #ifdef CAN_GNUTLS
 	if (sess) {
 		if (nsint rc = gnutlsRecordSend(sess, buf, len); rc < 0 || size_t(rc) != len)
-			throw std::runtime_error(std::format("Failed to send data: {}", gnutlsStrerror(rc)));
+			throw std::runtime_error(fmt::format("Failed to send data: {}", gnutlsStrerror(rc)));
 	} else
 #endif
 #ifdef CAN_OPENSSL
 	if (ssl) {
 		if (int rc = sslWrite(ssl, buf, len); size_t(rc) != len)
-			throw std::runtime_error(std::format("Failed to send data: {}", sslGetError(ssl, rc)));
+			throw std::runtime_error(fmt::format("Failed to send data: {}", sslGetError(ssl, rc)));
 	} else
 #endif
 	if (nsint rc = ::send(sock, static_cast<const char*>(buf), len, 0); rc < 0 || size_t(rc) != len)
-		throw std::runtime_error(std::format("Failed to send data: {}", lastError()));
+		throw std::runtime_error(fmt::format("Failed to send data: {}", lastError()));
 }
 
 void NetConnection::disconnect() noexcept {
@@ -326,13 +325,13 @@ const char* NetConnection::lastError() {
 // FTP RECEIVER
 
 FtpReply FtpReceiver::sendCmd(NetConnection& conn, string_view cmd) {
-	string txt = std::format("{}\r\n", cmd);
+	string txt = fmt::format("{}\r\n", cmd);
 	conn.send(txt.data(), txt.length());
 	return getReply(conn);
 }
 
 FtpReply FtpReceiver::sendCmd(NetConnection& conn, string_view cmd, string_view arg) {
-	string txt = std::format("{} {}\r\n", cmd, arg);
+	string txt = fmt::format("{} {}\r\n", cmd, arg);
 	conn.send(txt.data(), txt.length());
 	return getReply(conn);
 }
@@ -345,8 +344,8 @@ FtpReply FtpReceiver::getReply(NetConnection& conn) {
 		throw std::runtime_error("Empty reply");
 
 	bool entry = line[0] == ' ';
-	string_view::iterator cmdPos = line.begin() + entry;
-	string_view::iterator cmdEnd = std::find_if(cmdPos, line.end(), [](char ch) -> bool { return ch == ' ' || ch == '-'; });
+	auto cmdPos = line.begin() + entry;
+	auto cmdEnd = std::find_if(cmdPos, line.end(), [](char ch) -> bool { return ch == ' ' || ch == '-'; });
 	ushort rcode;
 	std::from_chars_result crs = cmdEnd - cmdPos == 3 ? std::from_chars(std::to_address(cmdPos), std::to_address(cmdEnd), rcode, 10) : std::from_chars_result{ .ec = std::errc::invalid_argument };
 	FtpReply reply = {

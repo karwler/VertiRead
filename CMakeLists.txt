@@ -4,7 +4,9 @@ project(VertiRead VERSION 1.0.0 DESCRIPTION "Comic/Manga reader" HOMEPAGE_URL "h
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 
+option(FORCE_INLINE_SHADERS "Put shaders in the executable." OFF)
 option(OPENGL "Build with OpenGL 1.1, 3.0 and ES 3.0 support." ON)
 option(SDL3 "Build with SDL3" OFF)
 option(VULKAN "Build with Vulkan 1.0 support." ON)
@@ -22,13 +24,6 @@ endif()
 if(MSVC)
 	option(USE_ARCHIVE "Build with libarchive." OFF)
 	option(USE_ICU "Build with ICU." OFF)
-	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-		option(PREBUILT_ARCHIVE "Use the pre-built libarchive binaries." OFF)
-	endif()
-	set(SDL3_BIN "" CACHE STRING "SDL3 binary location.")
-	set(SDL3_INC "" CACHE STRING "SDL3 header location.")
-	set(IMG3_BIN "" CACHE STRING "SDL3_image binary location.")
-	set(IMG3_INC "" CACHE STRING "SDL3_image header location.")
 else()
 	option(NATIVE "Build for the current CPU." OFF)
 	option(USE_ARCHIVE "Build with libarchive." ON)
@@ -73,12 +68,17 @@ set(SRC_FILES
 	"src/utils/sdlCompat.h"
 	"src/utils/settings.cpp"
 	"src/utils/settings.h"
+	"src/utils/sthandle.h"
 	"src/utils/stvector.h"
 	"src/utils/utils.cpp"
 	"src/utils/utils.h"
 	"src/utils/widgets.cpp"
 	"src/utils/widgets.h")
 
+set(DX_SHADERS "dxGuiVs" "dxGuiPs" "dxFinVs" "dxFinPs" "dxRgbCs" "dxBgrCs" "dxRedCs" "dxIdxCs")
+set(GL_SHADERS "glGui.vert" "glGui.frag" "glFin.vert" "glFin.frag")
+set(VK_SHADERS "vkGui.vert" "vkGui.frag" "vkFin.vert" "vkFin.frag" "vkRgb.comp" "vkIdx.comp")
+set(SHADER_DIR "${CMAKE_BINARY_DIR}/shaders")
 if(DIRECT3D)
 	CHECK_INCLUDE_FILE_CXX("d3d11.h" FOUND_D3D11)
 	if(FOUND_D3D11)
@@ -86,37 +86,49 @@ if(DIRECT3D)
 			"src/engine/rendererDx.cpp"
 			"src/engine/rendererDx.h"
 			"src/engine/optional/d3d.cpp"
-			"src/engine/optional/d3d.h"
-			"src/engine/shaders/dxBgrCs.dbg.h"
-			"src/engine/shaders/dxBgrCs.rel.h"
-			"src/engine/shaders/dxGuiPs.dbg.h"
-			"src/engine/shaders/dxGuiPs.rel.h"
-			"src/engine/shaders/dxGuiVs.dbg.h"
-			"src/engine/shaders/dxGuiVs.rel.h"
-			"src/engine/shaders/dxIdxCs.dbg.h"
-			"src/engine/shaders/dxIdxCs.rel.h"
-			"src/engine/shaders/dxRedCs.dbg.h"
-			"src/engine/shaders/dxRedCs.rel.h"
-			"src/engine/shaders/dxRgbCs.dbg.h"
-			"src/engine/shaders/dxRgbCs.rel.h")
+			"src/engine/optional/d3d.h")
 		add_compile_definitions(WITH_DIRECT3D)
+
+		if(NOT FORCE_INLINE_SHADERS)
+			find_program(FXC_CMD "fxc")
+		endif()
+		if(FXC_CMD)
+			file(MAKE_DIRECTORY "${SHADER_DIR}")
+			foreach(DFILE IN LISTS DX_SHADERS)
+				string(LENGTH ${DFILE} DFILE_NUM)
+				math(EXPR DFILE_NUM "${DFILE_NUM} - 2")
+				string(SUBSTRING ${DFILE} ${DFILE_NUM} 2 DEXT)
+				string(TOLOWER ${DEXT} DEXT)
+				if(IS_MULTI_CONFIG OR CMAKE_BUILD_TYPE MATCHES "Debug" OR CMAKE_BUILD_TYPE MATCHES "RelWithDebInfo")
+					execute_process(COMMAND "${FXC_CMD}" /Ges /Gis /T "${DEXT}_5_0" /Od /Zi /Fo "${SHADER_DIR}/${DFILE}.dbg.fxc" "rsc/shaders/${DFILE}.hlsl" WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+				endif()
+				if(IS_MULTI_CONFIG OR NOT(CMAKE_BUILD_TYPE MATCHES "Debug" OR CMAKE_BUILD_TYPE MATCHES "RelWithDebInfo"))
+					execute_process(COMMAND "${FXC_CMD}" /Ges /Gis /T "${DEXT}_5_0" /O1 /Fo "${SHADER_DIR}/${DFILE}.rel.fxc" "rsc/shaders/${DFILE}.hlsl" WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+				endif()
+			endforeach()
+			add_compile_definitions(EXT_DIRECT3D_SHADERS)
+		else()
+			foreach(DFILE IN LISTS DX_SHADERS)
+				list(APPEND SRC_FILES
+					"src/engine/shaders/${DFILE}.dbg.h"
+					"src/engine/shaders/${DFILE}.rel.h")
+			endforeach()
+		endif()
 	endif()
 endif()
 if(OPENGL)
 	list(APPEND SRC_FILES
 		"src/engine/rendererGl.cpp"
 		"src/engine/rendererGl.h"
-		"src/engine/shaders/glDefs.h"
-		"src/engine/shaders/glGui.frag.dbg.h"
-		"src/engine/shaders/glGui.frag.rel.h"
-		"src/engine/shaders/glGui.vert.dbg.h"
-		"src/engine/shaders/glGui.vert.rel.h")
+		"src/engine/shaders/glDefs.h")
 	add_compile_definitions(WITH_OPENGL)
 
-	foreach(GLFILE "rsc/shaders/glGui.frag" "rsc/shaders/glGui.vert")
-		file(READ "${CMAKE_SOURCE_DIR}/${GLFILE}" GL_CODE)
-		get_filename_component(GLFILE_NAME ${GLFILE} NAME)
-		file(WRITE "${CMAKE_SOURCE_DIR}/src/engine/shaders/${GLFILE_NAME}.dbg.h" "R\"r(${GL_CODE})r\"")
+	foreach(GFILE IN LISTS GL_SHADERS)
+		file(READ "${CMAKE_SOURCE_DIR}/rsc/shaders/${GFILE}" GL_CODE)
+		file(WRITE "${CMAKE_SOURCE_DIR}/src/engine/shaders/${GFILE}.dbg.h" "R\"r(${GL_CODE})r\"")
+		list(APPEND SRC_FILES
+			"src/engine/shaders/${GFILE}.dbg.h"
+			"src/engine/shaders/${GFILE}.rel.h")
 	endforeach()
 endif()
 if(VULKAN)
@@ -124,23 +136,39 @@ if(VULKAN)
 	if(Vulkan_FOUND)
 		list(APPEND SRC_FILES
 			"src/engine/rendererVk.cpp"
-			"src/engine/rendererVk.h"
-			"src/engine/shaders/vkGui.frag.dbg.h"
-			"src/engine/shaders/vkGui.frag.rel.h"
-			"src/engine/shaders/vkGui.vert.dbg.h"
-			"src/engine/shaders/vkGui.vert.rel.h"
-			"src/engine/shaders/vkIdx.comp.dbg.h"
-			"src/engine/shaders/vkIdx.comp.rel.h"
-			"src/engine/shaders/vkRgb.comp.dbg.h"
-			"src/engine/shaders/vkRgb.comp.rel.h")
+			"src/engine/rendererVk.h")
 		add_compile_definitions(WITH_VULKAN)
 		include_directories(SYSTEM ${Vulkan_INCLUDE_DIRS})
+
+		if(NOT FORCE_INLINE_SHADERS)
+			find_program(GLSLC_CMD "glslc")
+		endif()
+		if(GLSLC_CMD)
+			file(MAKE_DIRECTORY "${SHADER_DIR}")
+			foreach(VFILE IN LISTS VK_SHADERS)
+				if(IS_MULTI_CONFIG OR CMAKE_BUILD_TYPE MATCHES "Debug" OR CMAKE_BUILD_TYPE MATCHES "RelWithDebInfo")
+					execute_process(COMMAND "${GLSLC_CMD}" --target-env=vulkan1.0 --target-spv=spv1.0 -g -o "${SHADER_DIR}/${VFILE}.dbg.spv" "rsc/shaders/${VFILE}" WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+				endif()
+				if(IS_MULTI_CONFIG OR NOT(CMAKE_BUILD_TYPE MATCHES "Debug" OR CMAKE_BUILD_TYPE MATCHES "RelWithDebInfo"))
+					execute_process(COMMAND "${GLSLC_CMD}" --target-env=vulkan1.0 --target-spv=spv1.0 -O -o "${SHADER_DIR}/${VFILE}.rel.spv" "rsc/shaders/${VFILE}" WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+				endif()
+			endforeach()
+			add_compile_definitions(EXT_VULKAN_SHADERS)
+		else()
+			foreach(VFILE IN LISTS VK_SHADERS)
+				list(APPEND SRC_FILES
+					"src/engine/shaders/${VFILE}.dbg.h"
+					"src/engine/shaders/${VFILE}.rel.h")
+			endforeach()
+		endif()
 	endif()
 endif()
 if(FTP)
 	list(APPEND SRC_FILES
 		"src/engine/network.cpp"
-		"src/engine/network.h")
+		"src/engine/network.h"
+		"src/prog/fileOpsFtp.cpp"
+		"src/prog/fileOpsFtp.h")
 	add_compile_definitions(WITH_FTP)
 endif()
 if(WIN32)
@@ -150,11 +178,17 @@ endif()
 include_directories("${CMAKE_SOURCE_DIR}/src")
 
 # dependencies
-set(VER_SDL "2.30.8")
-set(VER_IMG "2.8.2")
+if(SDL3)
+	set(VER_SDL "3.2.4")
+	set(VER_IMG "3.2.0")
+else()
+	set(VER_SDL "2.32.0")
+	set(VER_IMG "2.8.5")
+endif()
+string(SUBSTRING ${VER_SDL} 0 1 SDL_VER)
 set(VER_FT2 "2.13.3")
 set(VER_ARC "3.7.7")
-set(VER_ICU "75-1")
+set(VER_ICU "76-1")
 set(VER_GLM "1.0.1")
 set(DIR_LIB "${CMAKE_SOURCE_DIR}/lib")
 set(DIR_RSC "${CMAKE_SOURCE_DIR}/rsc")
@@ -177,11 +211,13 @@ else()
 	endif()
 endif()
 
-function(downloadLib URL LIBDIR ORIG_LIBDIR)
+function(download_lib URL LIBDIR ORIG_LIBDIR)
 	if(EXISTS "${LIBDIR}")
+		set(DOWNLOAD_LIB_FRESH FALSE PARENT_SCOPE)
 		message(STATUS "Found ${LIBDIR}")
 		return()
 	endif()
+	set(DOWNLOAD_LIB_FRESH TRUE PARENT_SCOPE)
 
 	get_filename_component(FILE "${URL}" NAME)
 	get_filename_component(DST "${LIBDIR}" DIRECTORY)
@@ -206,20 +242,10 @@ function(downloadLib URL LIBDIR ORIG_LIBDIR)
 	endif()
 endfunction()
 
-function(compileLib URL LIBDIR CMDV WDIR ORIG_LIBDIR)
-	if(EXISTS "${LIBDIR}")
-		message(STATUS "Found ${LIBDIR}")
-	else()
-		downloadLib("${URL}" "${LIBDIR}" "${ORIG_LIBDIR}")
-		if(NOT EXISTS "${WDIR}")
-			file(MAKE_DIRECTORY "${WDIR}")
-		endif()
-		foreach(CMD IN LISTS CMDV)
-			execute_process(COMMAND ${CMD} WORKING_DIRECTORY "${WDIR}")
-		endforeach()
-	endif()
-endfunction()
-
+CHECK_INCLUDE_FILE_CXX("format" FOUND_FORMAT)
+if(NOT FOUND_FORMAT)
+	add_compile_definitions(WITH_LIBFMT)
+endif()
 if(USE_FONTCONFIG)
 	CHECK_INCLUDE_FILE_CXX("fontconfig/fontconfig.h" FOUND_FONTCONFIG)
 	if(FOUND_FONTCONFIG)
@@ -284,13 +310,17 @@ if(PKGCONFIG_ARGS)
 		if(PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION)
 			list(APPEND SRC_FILES
 				"src/engine/optional/smbclient.cpp"
-				"src/engine/optional/smbclient.h")
+				"src/engine/optional/smbclient.h"
+				"src/prog/fileOpsSmb.cpp"
+				"src/prog/fileOpsSmb.h")
 			add_compile_definitions(CAN_SMB)
 		endif()
 		if(PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION)
 			list(APPEND SRC_FILES
 				"src/engine/optional/ssh2.cpp"
-				"src/engine/optional/ssh2.h")
+				"src/engine/optional/ssh2.h"
+				"src/prog/fileOpsSftp.cpp"
+				"src/prog/fileOpsSftp.h")
 			add_compile_definitions(CAN_SFTP)
 		endif()
 		if(PKGCONFS_poppler-glib_FOUND OR PKGCONFS_poppler-glib_VERSION)
@@ -311,93 +341,88 @@ endif()
 CHECK_INCLUDE_FILE_CXX("glm/glm.hpp" FOUND_GLM)
 if(NOT FOUND_GLM)
 	file(MAKE_DIRECTORY "${DIR_LIB}")
-	downloadLib("https://github.com/g-truc/glm/releases/download/${VER_GLM}/glm-${VER_GLM}-light.zip" "${DIR_LIB}/glm" "")
+	download_lib("https://github.com/g-truc/glm/releases/download/${VER_GLM}/glm-${VER_GLM}-light.zip" "${DIR_LIB}/glm" "")
 	include_directories(SYSTEM "${DIR_LIB}")
 endif()
 
-if(WIN32)
-	set(PBOUT_DIR "${CMAKE_BINARY_DIR}/${PROJECT_NAME}")
-	set(TBIN_DIR "${PBOUT_DIR}")
-	set(DATA_DIR "${PBOUT_DIR}")
-	if(MSVC)
+if(WIN32 AND NOT IS_MULTI_CONFIG)
+	set(TBIN_DIR "${CMAKE_BINARY_DIR}/${PROJECT_NAME}")
+endif()
+if(MSVC)
+	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+		set(VMACHINE "x64")
+	else()
+		set(VMACHINE "x86")
+	endif()
+	set(DIR_ARC "${DIR_LIB}/libarchive-${VER_ARC}-${VMACHINE}-msvc")
+	set(DIR_SDL "${DIR_LIB}/SDL${SDL_VER}-${VER_SDL}-msvc")
+	set(DIR_IMG "${DIR_LIB}/SDL${SDL_VER}_image-${VER_IMG}-msvc")
+	set(DIR_FT2 "${DIR_LIB}/freetype-${VER_FT2}-${VMACHINE}-msvc")
+	set(DIR_ICU "${DIR_LIB}/icu-${VER_ICU}-${VMACHINE}-msvc")
+	set(BIN_ARC "${DIR_ARC}/build/bin")
+	set(BIN_SDL "${DIR_SDL}/lib/${VMACHINE}")
+	set(BIN_IMG "${DIR_IMG}/lib/${VMACHINE}")
+	set(BIN_FT2 "${DIR_FT2}/build")
+
+	file(MAKE_DIRECTORY "${DIR_LIB}")
+	download_lib("https://download.savannah.gnu.org/releases/freetype/freetype-${VER_FT2}.tar.gz" "${DIR_FT2}" "${DIR_LIB}/freetype-${VER_FT2}")
+	if(DOWNLOAD_LIB_FRESH)
+		file(MAKE_DIRECTORY "${BIN_FT2}")
+		execute_process(COMMAND "${CMAKE_COMMAND}" ".." -G "NMake Makefiles" "-DCMAKE_BUILD_TYPE=Release" "-DFT_ENABLE_ERROR_STRINGS=ON" "-DFT_DISABLE_ZLIB=ON -DFT_DISABLE_BZIP2=ON" "-DFT_DISABLE_PNG=ON" "-DFT_DISABLE_HARFBUZZ=ON" "-DFT_DISABLE_BROTLI=ON" WORKING_DIRECTORY "${BIN_FT2}")
+		execute_process(COMMAND "${MAKE_CMD}" WORKING_DIRECTORY "${BIN_FT2}")
+	endif()
+	link_directories("${BIN_FT2}")
+	include_directories(SYSTEM "${DIR_FT2}/include")
+
+	download_lib("https://github.com/libsdl-org/SDL/releases/download/release-${VER_SDL}/SDL${SDL_VER}-devel-${VER_SDL}-VC.zip" "${DIR_SDL}" "${DIR_LIB}/SDL${SDL_VER}-${VER_SDL}")
+	download_lib("https://github.com/libsdl-org/SDL_image/releases/download/release-${VER_IMG}/SDL${SDL_VER}_image-devel-${VER_IMG}-VC.zip" "${DIR_IMG}" "${DIR_LIB}/SDL${SDL_VER}_image-${VER_IMG}")
+	if(SDL3)
+		include_directories(SYSTEM "${DIR_SDL}/include/SDL3" "${DIR_IMG}/include/SDL3_image")
+	endif()
+	link_directories("${BIN_SDL}" "${BIN_IMG}")
+	include_directories(SYSTEM "${DIR_SDL}/include" "${DIR_IMG}/include")
+
+	if(USE_ARCHIVE)
+		download_lib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-${VER_ARC}.zip" "${DIR_ARC}" "${DIR_LIB}/libarchive-${VER_ARC}")
+		if(DOWNLOAD_LIB_FRESH)
+			file(MAKE_DIRECTORY "${DIR_ARC}/build")
+			execute_process(COMMAND "${CMAKE_COMMAND}" ".." -G "NMake Makefiles" "-DCMAKE_BUILD_TYPE=Release" "-DENABLE_WERROR=OFF" "-DENABLE_MBEDTLS=OFF" "-DENABLE_NETTLE=OFF" "-DENABLE_OPENSSL=OFF" "-DENABLE_LIBB2=OFF" "-DENABLE_LZ4=OFF" "-DENABLE_LZO=OFF" "-DENABLE_LZMA=OFF" "-DENABLE_ZSTD=OFF" "-DENABLE_ZLIB=OFF" "-DENABLE_BZip2=OFF" "-DENABLE_LIBXML2=OFF" "-DENABLE_EXPAT=OFF" "-DENABLE_PCREPOSIX=OFF" "-DENABLE_CNG=OFF" "-DENABLE_XATTR=OFF" "-DENABLE_ACL=OFF" "-DENABLE_ICONV=OFF" "-DENABLE_TEST=OFF" "-DENABLE_COVERAGE=OFF" "-DENABLE_INSTALL=OFF" WORKING_DIRECTORY "${DIR_ARC}/build")
+			execute_process(COMMAND "${MAKE_CMD}" "archive" WORKING_DIRECTORY "${DIR_ARC}/build")
+		endif()
+		link_directories("${DIR_ARC}/build/libarchive")
+		include_directories(SYSTEM "${DIR_ARC}/libarchive")
+		add_compile_definitions(WITH_ARCHIVE)
+	endif()
+
+	if(USE_ICU)
+		string(REGEX REPLACE "-[0-9]+" "" ICU_VER_MAJ ${VER_ICU})
+		string(REPLACE "-" "_" VER_ICU_UDS ${VER_ICU})
+		file(MAKE_DIRECTORY "${DIR_ICU}")
 		if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-			set(VMACHINE "x64")
+			set(BIN_ICU "${DIR_ICU}/bin64")
+			download_lib("https://github.com/unicode-org/icu/releases/download/release-${VER_ICU}/icu4c-${VER_ICU_UDS}-Win64-MSVC2022.zip" "${BIN_ICU}" "")
+			link_directories("${DIR_ICU}/lib64")
 		else()
-			set(VMACHINE "x86")
+			set(BIN_ICU "${DIR_ICU}/bin")
+			download_lib("https://github.com/unicode-org/icu/releases/download/release-${VER_ICU}/icu4c-${VER_ICU_UDS}-Win32-MSVC2022.zip" "${BIN_ICU}" "")
+			link_directories("${DIR_ICU}/lib")
 		endif()
-		set(DIR_ARC "${DIR_LIB}/libarchive-${VER_ARC}-${VMACHINE}-msvc")
-		set(DIR_SDL "${DIR_LIB}/SDL2-${VER_SDL}-msvc")
-		set(DIR_IMG "${DIR_LIB}/SDL2_image-${VER_IMG}-msvc")
-		set(DIR_FT2 "${DIR_LIB}/freetype-${VER_FT2}-${VMACHINE}-msvc")
-		set(DIR_ICU "${DIR_LIB}/icu-${VER_ICU}-${VMACHINE}-msvc")
-		set(BIN_SDL "${DIR_SDL}/lib/${VMACHINE}")
-		set(BIN_IMG "${DIR_IMG}/lib/${VMACHINE}")
-		set(BIN_FT2 "${DIR_FT2}/build")
-
-		file(MAKE_DIRECTORY "${DIR_LIB}")
-		compileLib("https://download.savannah.gnu.org/releases/freetype/freetype-${VER_FT2}.tar.gz" "${DIR_FT2}" "${CMAKE_COMMAND}\;..\;-G\;NMake Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DFT_ENABLE_ERROR_STRINGS=1\;-DFT_DISABLE_ZLIB=1\;-DFT_DISABLE_BZIP2=1\;-DFT_DISABLE_PNG=1\;-DFT_DISABLE_HARFBUZZ=1\;-DFT_DISABLE_BROTLI=1;${MAKE_CMD}" "${BIN_FT2}" "${DIR_LIB}/freetype-${VER_FT2}")
-		link_directories("${BIN_FT2}")
-		include_directories(SYSTEM "${DIR_FT2}/include")
-
-		if(SDL3)
-			link_directories("${SDL3_BIN}" "${IMG3_BIN}")
-			include_directories(SYSTEM "${SDL3_INC}" "${SDL3_INC}/SDL3" "${IMG3_INC}" "${IMG3_INC}/SDL3_image")
-		else()
-			downloadLib("https://github.com/libsdl-org/SDL/releases/download/release-${VER_SDL}/SDL2-devel-${VER_SDL}-VC.zip" "${DIR_SDL}" "${DIR_LIB}/SDL2-${VER_SDL}")
-			downloadLib("https://github.com/libsdl-org/SDL_image/releases/download/release-${VER_IMG}/SDL2_image-devel-${VER_IMG}-VC.zip" "${DIR_IMG}" "${DIR_LIB}/SDL2_image-${VER_IMG}")
-			link_directories("${BIN_SDL}" "${BIN_IMG}")
-			include_directories(SYSTEM "${DIR_SDL}/include" "${DIR_IMG}/include")
-		endif()
-
-		if(USE_ARCHIVE)
-			if(PREBUILT_ARCHIVE)
-				set(BIN_ARC "${DIR_ARC}/bin")
-				downloadLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-v${VER_ARC}-amd64.zip" "${DIR_ARC}" "${DIR_LIB}/libarchive")
-				link_directories("${DIR_ARC}/lib")
-				include_directories(SYSTEM "${DIR_ARC}/include")
-			else()
-				set(BIN_ARC "${DIR_ARC}/build/bin")
-				compileLib("https://github.com/libarchive/libarchive/releases/download/v${VER_ARC}/libarchive-${VER_ARC}.zip" "${DIR_ARC}" "${CMAKE_COMMAND}\;..\;-G\;NMake Makefiles\;-DCMAKE_BUILD_TYPE=Release\;-DENABLE_WERROR=0\;-DENABLE_MBEDTLS=0\;-DENABLE_NETTLE=0\;-DENABLE_OPENSSL=0\;-DENABLE_LIBB2=0\;-DENABLE_LZ4=0\;-DENABLE_LZO=0\;-DENABLE_LZMA=0\;-DENABLE_ZSTD=0\;-DENABLE_ZLIB=0\;-DENABLE_BZip2=0\;-DENABLE_LIBXML2=0\;-DENABLE_EXPAT=0\;-DENABLE_PCREPOSIX=0\;-DENABLE_CNG=0\;-DENABLE_XATTR=0\;-DENABLE_ACL=0\;-DENABLE_ICONV=0\;-DENABLE_TEST=0\;-DENABLE_COVERAGE=0\;-DENABLE_INSTALL=0;${MAKE_CMD}\;archive" "${DIR_ARC}/build" "${DIR_LIB}/libarchive-${VER_ARC}")
-				link_directories("${DIR_ARC}/build/libarchive")
-				include_directories(SYSTEM "${DIR_ARC}/libarchive")
-			endif()
-			add_compile_definitions(WITH_ARCHIVE)
-		endif()
-
-		if(USE_ICU)
-			string(REGEX REPLACE "-[0-9]+" "" ICU_VER_MAJ ${VER_ICU})
-			string(REPLACE "-" "_" VER_ICU_UDS ${VER_ICU})
-			file(MAKE_DIRECTORY "${DIR_ICU}")
-			if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-				set(BIN_ICU "${DIR_ICU}/bin64")
-				downloadLib("https://github.com/unicode-org/icu/releases/download/release-${VER_ICU}/icu4c-${VER_ICU_UDS}-Win64-MSVC2022.zip" "${BIN_ICU}" "")
-				link_directories("${DIR_ICU}/lib64")
-			else()
-				set(BIN_ICU "${DIR_ICU}/bin")
-				downloadLib("https://github.com/unicode-org/icu/releases/download/release-${VER_ICU}/icu4c-${VER_ICU_UDS}-Win32-MSVC2022.zip" "${BIN_ICU}" "")
-				link_directories("${DIR_ICU}/lib")
-			endif()
-			include_directories(SYSTEM "${DIR_ICU}/include")
-			add_compile_definitions(WITH_ICU)
-		endif()
+		include_directories(SYSTEM "${DIR_ICU}/include")
+		add_compile_definitions(WITH_ICU)
 	endif()
 else()
-	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-		set(VMARCH "x86_64")
-	else()
-		set(VMARCH "i386")
+	if(UNIX)
+		if(APPIMAGE)
+			set(TBIN_DIR "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.AppDir/usr/bin")
+			set(BASE_SUF "/../..")
+			set(DATA_SUF "${BASE_SUF}/usr/share/${PROJECT_NAME_LOWER}")
+		else()
+			set(TBIN_DIR "${CMAKE_BINARY_DIR}/${PROJECT_NAME_LOWER}/bin")
+			set(BASE_SUF "/..")
+			set(DATA_SUF "${BASE_SUF}/share/${PROJECT_NAME_LOWER}")
+		endif()
 	endif()
-	if(APPIMAGE)
-		set(PBOUT_DIR "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.AppDir")
-		set(TBIN_DIR "${PBOUT_DIR}/usr/bin")
-		set(DATA_DIR "${PBOUT_DIR}/usr/share/${PROJECT_NAME_LOWER}")
-	else()
-		set(PBOUT_DIR "${CMAKE_BINARY_DIR}/${PROJECT_NAME_LOWER}")
-		set(TBIN_DIR "${PBOUT_DIR}/bin")
-		set(DATA_DIR "${PBOUT_DIR}/share/${PROJECT_NAME_LOWER}")
-	endif()
-endif()
-if(NOT MSVC)
+
 	if(SDL3)
 		find_package(SDL3 REQUIRED COMPONENTS SDL3)
 		find_package(SDL3_image REQUIRED)
@@ -431,8 +456,9 @@ if(NOT MSVC)
 		endif()
 	endif()
 endif()
-set(ICONS_DIR "${DATA_DIR}/icons")
-set(LICN_DIR "${DATA_DIR}/licenses")
+set(ICONS_SUF "${DATA_SUF}/icons")
+set(LICN_SUF "${DATA_SUF}/licenses")
+set(DVSHD_SUF "${DATA_SUF}/shaders")
 
 # compiler flags
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "Intel")
@@ -440,8 +466,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang" 
 		-Wno-implicit-fallthrough -Wno-missing-field-initializers -Wno-switch)
 	if(NATIVE)
 		add_compile_options(-march=native)
-	elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
-		add_compile_options(-march=x86-64)
 	endif()
 	if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 		add_compile_options(-Wcast-align=strict -Wduplicated-cond -Wlogical-op -Wuseless-cast
@@ -474,18 +498,21 @@ else()
 		${FREETYPE_LIBRARIES}
 		"$<$<BOOL:${LibArchive_FOUND}>:${LibArchive_LIBRARIES}>"
 		"$<$<BOOL:${ICU_FOUND}>:ICU::uc;$<IF:$<BOOL:${WIN32}>,ICU::in,ICU::i18n>>"
-		"$<$<BOOL:${UNIX}>:pthread;dl>")
+		"$<$<BOOL:${UNIX}>:pthread;dl>"
+		$<$<NOT:$<BOOL:${FOUND_FORMAT}>>:fmt>)
 endif()
 if(NOT CMAKE_EXPORT_COMPILE_COMMANDS)	# because it fucks with ALE
 	target_precompile_headers(${PROJECT_NAME} PUBLIC "src/utils/widgets.h")
 endif()
 
-set_target_properties(${PROJECT_NAME} PROPERTIES
-	RUNTIME_OUTPUT_DIRECTORY "${TBIN_DIR}"
-	RUNTIME_OUTPUT_DIRECTORY_DEBUG "${TBIN_DIR}"
-	RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TBIN_DIR}"
-	RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${TBIN_DIR}"
-	RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${TBIN_DIR}")
+if(TBIN_DIR)
+	set_target_properties(${PROJECT_NAME} PROPERTIES
+		RUNTIME_OUTPUT_DIRECTORY "${TBIN_DIR}"
+		RUNTIME_OUTPUT_DIRECTORY_DEBUG "${TBIN_DIR}"
+		RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TBIN_DIR}"
+		RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${TBIN_DIR}"
+		RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${TBIN_DIR}")
+endif()
 if(WIN32)
 	set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DPI_AWARE "PerMonitor")
 	set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
@@ -495,25 +522,32 @@ endif()
 
 # build commands
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-	COMMAND "${CMAKE_COMMAND}" -E make_directory "${ICONS_DIR}"
-	COMMAND "${CMAKE_COMMAND}" -E copy_directory "${DIR_RSC}/licenses" "${LICN_DIR}"
-	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/BrisaSans.otf" "${DIR_RSC}/themes.ini" "${DATA_DIR}"
-	COMMAND "$<$<NOT:$<BOOL:${FOUND_GLM}>>:${CMAKE_COMMAND};-E;copy_if_different;${DIR_LIB}/glm/copying.txt;${LICN_DIR}/COPYING.glm.txt>"
-	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.svg" "${DIR_ICN}/center.svg" "${DIR_ICN}/cross.svg" "${DIR_ICN}/file.svg" "${DIR_ICN}/fit.svg" "${DIR_ICN}/folder.svg" "${DIR_ICN}/left.svg" "${DIR_ICN}/minus.svg" "${DIR_ICN}/plus.svg" "${DIR_ICN}/reset.svg" "${DIR_ICN}/right.svg" "${DIR_ICN}/search.svg" "${ICONS_DIR}"
+	COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${PROJECT_NAME}>${ICONS_SUF}"
+	COMMAND "${CMAKE_COMMAND}" -E copy_directory "${DIR_RSC}/licenses" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}"
+	COMMAND "$<$<OR:$<BOOL:${FXC_CMD}>,$<BOOL:${GLSLC_CMD}>>:${CMAKE_COMMAND};-E;make_directory;$<TARGET_FILE_DIR:${PROJECT_NAME}>${DVSHD_SUF}>"
+	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/BrisaSans.otf" "${DIR_RSC}/themes.ini" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${DATA_SUF}"
+	COMMAND "$<$<NOT:$<BOOL:${FOUND_GLM}>>:${CMAKE_COMMAND};-E;copy_if_different;${DIR_LIB}/glm/copying.txt;$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}/COPYING.glm.txt>"
+	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.svg" "${DIR_ICN}/center.svg" "${DIR_ICN}/cross.svg" "${DIR_ICN}/file.svg" "${DIR_ICN}/fit.svg" "${DIR_ICN}/folder.svg" "${DIR_ICN}/left.svg" "${DIR_ICN}/minus.svg" "${DIR_ICN}/plus.svg" "${DIR_ICN}/reset.svg" "${DIR_ICN}/right.svg" "${DIR_ICN}/search.svg" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${ICONS_SUF}"
 	COMMAND_EXPAND_LISTS)
+if(FXC_CMD)
+	foreach(DFILE IN LISTS DX_SHADERS)
+		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${SHADER_DIR}/${DFILE}.$<IF:$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>,dbg,rel>.fxc" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${DVSHD_SUF}/${DFILE}.fxc")
+	endforeach()
+endif()
+if(GLSLC_CMD)
+	foreach(VFILE IN LISTS VK_SHADERS)
+		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${SHADER_DIR}/${VFILE}.$<IF:$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>,dbg,rel>.spv" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${DVSHD_SUF}/${VFILE}.spv")
+	endforeach()
+endif()
 if(MSVC)
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_FT2}/LICENSE.txt" "${LICN_DIR}/LICENSE.freetype.txt")
-	if(SDL3)
-		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${SDL3_BIN}/SDL3.dll" "${IMG3_BIN}/SDL3_image.dll" "${IMG3_BIN}/libavif-16.dll" "${IMG3_BIN}/libtiff-6.dll" "${IMG3_BIN}/libwebp-7.dll" "${IMG3_BIN}/libwebpdemux-2.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>")
-	else()
-		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_SDL}/SDL2.dll" "${BIN_IMG}/SDL2_image.dll" "${BIN_IMG}/optional/libavif-16.dll" "${BIN_IMG}/optional/libtiff-5.dll" "${BIN_IMG}/optional/libwebp-7.dll" "${BIN_IMG}/optional/libwebpdemux-2.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_IMG}/optional/LICENSE.avif.txt" "${BIN_IMG}/optional/LICENSE.dav1d.txt" "${BIN_IMG}/optional/LICENSE.tiff.txt" "${BIN_IMG}/optional/LICENSE.webp.txt" "${LICN_DIR}"
-			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_SDL}/COPYING.txt" "${LICN_DIR}/COPYING.SDL.txt"
-			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_IMG}/LICENSE.txt" "${LICN_DIR}/LICENSE.SDL_image.txt")
-	endif()
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_SDL}/SDL${SDL_VER}.dll" "${BIN_IMG}/SDL${SDL_VER}_image.dll" "${BIN_IMG}/optional/libavif-16.dll" "${BIN_IMG}/optional/libtiff-$<IF:$<BOOL:${SDL3}>,6,5>.dll" "${BIN_IMG}/optional/libwebp-7.dll" "${BIN_IMG}/optional/libwebpdemux-2.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_IMG}/optional/LICENSE.avif.txt" "${BIN_IMG}/optional/LICENSE.dav1d.txt" "${BIN_IMG}/optional/LICENSE.tiff.txt" "${BIN_IMG}/optional/LICENSE.webp.txt" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}"
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_SDL}/LICENSE.txt" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}/LICENSE.SDL.txt"
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_IMG}/LICENSE.txt" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}/LICENSE.SDL_image.txt"
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_FT2}/LICENSE.txt" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}/LICENSE.freetype.txt")
 	if(USE_ARCHIVE)
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ARC}/archive.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>")
@@ -521,7 +555,7 @@ if(MSVC)
 	if(USE_ICU)
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ICU}/icudt${ICU_VER_MAJ}.dll" "${BIN_ICU}/icuin${ICU_VER_MAJ}.dll" "${BIN_ICU}/icuuc${ICU_VER_MAJ}.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_ICU}/LICENSE" "${LICN_DIR}/LICENSE.icu.txt")
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_ICU}/LICENSE" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}/LICENSE.icu.txt")
 	endif()
 elseif(MINGW)
 	find_program(CMD_BASH "bash")
@@ -536,7 +570,7 @@ elseif(MINGW)
 	endif()
 else()
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.desktop" "${PBOUT_DIR}")
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.desktop" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${BASE_SUF}")
 
 	if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 		find_program(STRIPPER "strip")
@@ -552,7 +586,7 @@ else()
 		find_program(CMD_BASH "bash")
 		find_program(LINUXDEPLOY "linuxdeploy")
 		if(NOT LINUXDEPLOY)
-			set(LDPEXE_NAME "linuxdeploy-${VMARCH}.AppImage")
+			set(LDPEXE_NAME "linuxdeploy-${CMAKE_SYSTEM_PROCESSOR}.AppImage")
 			set(LINUXDEPLOY "${DIR_LIB}/${LDPEXE_NAME}")
 			if(EXISTS "${LINUXDEPLOY}")
 				message(STATUS "Found ${LINUXDEPLOY}")
@@ -563,9 +597,9 @@ else()
 			endif()
 		endif()
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-			COMMAND "${CMAKE_COMMAND}" -E create_symlink "usr/bin/${PROJECT_NAME_LOWER}" "${PBOUT_DIR}/AppRun"
-			COMMAND "${CMAKE_COMMAND}" -E create_symlink "usr/share/${PROJECT_NAME_LOWER}/icons/${PROJECT_NAME_LOWER}.svg" "${PBOUT_DIR}/${PROJECT_NAME_LOWER}.svg"
-			COMMAND "${CMD_BASH}" -c "VERSION='${PROJECT_VERSION}' '${LINUXDEPLOY}' --appdir '${PBOUT_DIR}' --output appimage")
+			COMMAND "${CMAKE_COMMAND}" -E create_symlink "usr/bin/${PROJECT_NAME_LOWER}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${BASE_SUF}/AppRun"
+			COMMAND "${CMAKE_COMMAND}" -E create_symlink "usr/share/${PROJECT_NAME_LOWER}/icons/${PROJECT_NAME_LOWER}.svg" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${BASE_SUF}/${PROJECT_NAME_LOWER}.svg"
+			COMMAND "${CMD_BASH}" -c "VERSION='${PROJECT_VERSION}' '${LINUXDEPLOY}' --appdir '$<TARGET_FILE_DIR:${PROJECT_NAME}>${BASE_SUF}' --output appimage")
 	endif()
 endif()
 
@@ -573,18 +607,20 @@ endif()
 if(WIN32)
 	set(DST_DIR "${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}")
 	install(TARGETS ${PROJECT_NAME} DESTINATION "${DST_DIR}")
-	install(DIRECTORY "${DATA_DIR}" DESTINATION "${CMAKE_INSTALL_PREFIX}" FILES_MATCHING PATTERN "*.dll")
-	install(FILES "${DATA_DIR}/BrisaSans.otf" "${DATA_DIR}/themes.ini" DESTINATION "${DST_DIR}")
-	install(DIRECTORY "${ICONS_DIR}" DESTINATION "${DST_DIR}")
-	install(DIRECTORY "${LICN_DIR}" DESTINATION "${DST_DIR}")
+	install(DIRECTORY "$<TARGET_FILE_DIR:${PROJECT_NAME}>${DATA_SUF}" DESTINATION "${CMAKE_INSTALL_PREFIX}" FILES_MATCHING PATTERN "*.dll")
 elseif(APPIMAGE)
-	install(FILES "${CMAKE_BINARY_DIR}/${PROJECT_NAME}-${VMARCH}.AppImage" DESTINATION "${CMAKE_INSTALL_PREFIX}")
+	install(FILES "${CMAKE_BINARY_DIR}/${PROJECT_NAME}-${CMAKE_SYSTEM_PROCESSOR}.AppImage" DESTINATION "${CMAKE_INSTALL_PREFIX}")
 else()
 	set(DST_DIR "${CMAKE_INSTALL_PREFIX}/share/${PROJECT_NAME_LOWER}")
 	install(TARGETS ${PROJECT_NAME} DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")
-	install(FILES "${DATA_DIR}/BrisaSans.otf" "${DATA_DIR}/themes.ini" DESTINATION "${DST_DIR}")
-	install(DIRECTORY "${ICONS_DIR}" DESTINATION "${DST_DIR}")
-	install(DIRECTORY "${LICN_DIR}" DESTINATION "${DST_DIR}")
+endif()
+if(NOT APPIMAGE)
+	install(FILES "$<TARGET_FILE_DIR:${PROJECT_NAME}>${DATA_SUF}/BrisaSans.otf" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${DATA_SUF}/themes.ini" DESTINATION "${DST_DIR}")
+	install(DIRECTORY "$<TARGET_FILE_DIR:${PROJECT_NAME}>${ICONS_SUF}" DESTINATION "${DST_DIR}")
+	install(DIRECTORY "$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}" DESTINATION "${DST_DIR}")
+	if(FXC_CMD OR GLSLC_CMD)
+		install(DIRECTORY "$<TARGET_FILE_DIR:${PROJECT_NAME}>${DVSHD_SUF}" DESTINATION "${DST_DIR}")
+	endif()
 endif()
 
 # group files

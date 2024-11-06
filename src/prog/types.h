@@ -94,6 +94,9 @@ enum class ProgSettingsEvent : int32 {
 	setScreenMode,
 	setRenderer,
 	setDevice,
+	setGammaType,
+	setGammaStepSl,
+	setGammaStepLe,
 	setCompression,
 	setVsync,
 	setMultiFullscreen,
@@ -129,37 +132,34 @@ struct EventId {
 	UserEvent type;
 	int32 code;	// should not exceed 16 bits for widget events because of the packing in Button
 
-	constexpr EventId(UserEvent t, int32 c) : type(t), code(c) {}
-	constexpr EventId(GeneralEvent e) : type(SDL_USEREVENT_GENERAL), code(eint(e)) {}
-	constexpr EventId(ProgBooksEvent e) : type(SDL_USEREVENT_PROG_BOOKS), code(eint(e)) {}
-	constexpr EventId(ProgFileExplorerEvent e) : type(SDL_USEREVENT_PROG_FILE_EXPLORER), code(eint(e)) {}
-	constexpr EventId(ProgPageBrowserEvent e) : type(SDL_USEREVENT_PROG_PAGE_BROWSER), code(eint(e)) {}
-	constexpr EventId(ProgReaderEvent e) : type(SDL_USEREVENT_PROG_READER), code(eint(e)) {}
-	constexpr EventId(ProgSettingsEvent e) : type(SDL_USEREVENT_PROG_SETTINGS), code(eint(e)) {}
-	constexpr EventId(ProgSearchDirEvent e) : type(SDL_USEREVENT_PROG_SEARCH_DIR), code(eint(e)) {}
+	constexpr EventId(UserEvent t, int32 c) noexcept : type(t), code(c) {}
+	constexpr EventId(GeneralEvent e) noexcept : type(SDL_USEREVENT_GENERAL), code(eint(e)) {}
+	constexpr EventId(ProgBooksEvent e) noexcept : type(SDL_USEREVENT_PROG_BOOKS), code(eint(e)) {}
+	constexpr EventId(ProgFileExplorerEvent e) noexcept : type(SDL_USEREVENT_PROG_FILE_EXPLORER), code(eint(e)) {}
+	constexpr EventId(ProgPageBrowserEvent e) noexcept : type(SDL_USEREVENT_PROG_PAGE_BROWSER), code(eint(e)) {}
+	constexpr EventId(ProgReaderEvent e) noexcept : type(SDL_USEREVENT_PROG_READER), code(eint(e)) {}
+	constexpr EventId(ProgSettingsEvent e) noexcept : type(SDL_USEREVENT_PROG_SETTINGS), code(eint(e)) {}
+	constexpr EventId(ProgSearchDirEvent e) noexcept : type(SDL_USEREVENT_PROG_SEARCH_DIR), code(eint(e)) {}
 
-	constexpr operator bool() const { return bool(type); }
+	constexpr operator bool() const noexcept { return bool(type); }
 };
 
 inline constexpr EventId nullEvent = EventId(UserEvent(0), 0);
 
-void pushEvent(EventId id, void* data1 = nullptr, void* data2 = nullptr);
-void pushEvent(UserEvent type, int32 code, void* data1 = nullptr, void* data2 = nullptr);
+bool pushEvent(UserEvent type, int32 code, void* data1 = nullptr, void* data2 = nullptr) noexcept;
+void cleanupEvents(UserEvent first, UserEvent last) noexcept;
 
-template <Enumeration T>
-void pushEvent(UserEvent type, T code, void* data1 = nullptr, void* data2 = nullptr) {
-	pushEvent(type, eint(code), data1, data2);
+inline bool pushEvent(EventId id, void* data1 = nullptr, void* data2 = nullptr) noexcept {	// data1 and data2 can't be newly allocated memory if id is invalid
+	return !id || pushEvent(id.type, id.code, data1, data2);
 }
 
-template <Invocable<SDL_UserEvent&> F>
-void cleanupEvent(UserEvent type, F dealloc) {
-	array<SDL_Event, 16> events;
-	while (int num = SDL_PeepEvents(events.data(), events.size(), SDL_GETEVENT, type, type)) {
-		if (num < 0)
-			throw std::runtime_error(SDL_GetError());
-		for (int i = 0; i < num; ++i)
-			dealloc(events[i].user);
-	}
+template <Enumeration T>
+bool pushEvent(UserEvent type, T code, void* data1 = nullptr, void* data2 = nullptr) noexcept {
+	return pushEvent(type, eint(code), data1, data2);
+}
+
+inline void cleanupEvent(UserEvent type) noexcept {
+	cleanupEvents(type, type);
 }
 
 enum class Protocol : uint8 {
@@ -230,19 +230,18 @@ struct FileChange {
 	Cstring name;
 	Type type;
 
-	FileChange(Cstring&& entry, Type change) : name(std::move(entry)), type(change) {}
+	FileChange(Cstring&& entry, Type change) noexcept : name(std::move(entry)), type(change) {}
 };
 
 #ifdef WITH_ARCHIVE
 // archive file with image size
 struct ArchiveFile {
 	Cstring name;
-	bool isPdf : 1 = false;
-	uint64 size : 63 = 0;
+	bool isPic = false;
+	bool isPdf = false;
 
 	ArchiveFile() = default;
-	ArchiveFile(Cstring&& filename, uint64 mem) : name(std::move(filename)), size(mem) {}
-	ArchiveFile(Cstring&& pdfName) : name(std::move(pdfName)), isPdf(true) {}
+	ArchiveFile(Cstring&& filename, bool pic, bool pdf) noexcept : name(std::move(filename)), isPic(pic), isPdf(pdf) {}
 };
 
 // archive directory node
@@ -253,12 +252,12 @@ public:
 	std::forward_list<ArchiveFile> files;
 
 	ArchiveDir() = default;
-	ArchiveDir(Cstring&& dirname) : name(std::move(dirname)) {}
+	ArchiveDir(Cstring&& dirname) noexcept : name(std::move(dirname)) {}
 
 	vector<ArchiveDir*> listDirs();
 	vector<ArchiveFile*> listFiles();
 	void finalize() noexcept;
-	pair<ArchiveDir*, ArchiveFile*> find(string_view path);
+	pair<ArchiveDir*, ArchiveFile*> find(string_view path) noexcept;
 	ArchiveDir* findDir(string_view dname) noexcept;
 	ArchiveFile* findFile(string_view fname) noexcept;
 	void copySlicedDentsFrom(const ArchiveDir& src, bool copyHidden);
@@ -283,21 +282,21 @@ struct ArchiveData : public ArchiveDir {
 	PassCode pc = PassCode::none;
 
 	ArchiveData() = default;
-	ArchiveData(Cstring&& file, PassCode pass = PassCode::none) : ArchiveDir(std::move(file)), pc(pass) {}
+	ArchiveData(Cstring&& file, PassCode pass = PassCode::none) noexcept : ArchiveDir(std::move(file)), pc(pass) {}
 
-	operator bool() const;
+	operator bool() const noexcept;
 	ArchiveData copyLight() const;
 };
 
-inline ArchiveData::operator bool() const {
+inline ArchiveData::operator bool() const noexcept {
 	return name.filled();
 }
 
 #else
 class ArchiveData {
 public:
-	operator bool() const { return false; }
-	ArchiveData copyLight() const { return ArchiveData(); }
+	operator bool() const noexcept { return false; }
+	ArchiveData copyLight() const noexcept { return ArchiveData(); }
 };
 #endif
 
@@ -318,7 +317,7 @@ private:
 public:
 	PdfFile() = default;
 	PdfFile(PdfFile&& pdf) noexcept;
-	PdfFile(SDL_RWops* ops, Cstring* error);
+	PdfFile(uptr<SDL_RWops>&& ops, bool force);
 	~PdfFile() { freeDoc(); }
 
 	PdfFile& operator=(PdfFile&& pdf) noexcept;
@@ -327,7 +326,7 @@ public:
 	SDL_Surface* renderPage(int pid, double dpi) noexcept;
 	PdfFile copyLight() const noexcept;
 
-	static bool canOpen(SDL_RWops* ops) noexcept;	// closes ops if it's not a nullptr
+	static bool canOpen(uptr<SDL_RWops>&& ops) noexcept;	// closes ops if it's not a nullptr
 
 private:
 	void freeDoc() noexcept;
@@ -340,8 +339,8 @@ inline PdfFile::operator bool() const noexcept {
 #else
 class PdfFile {
 public:
-	constexpr operator bool() const { return false; }
-	constexpr PdfFile copyLight() const { return PdfFile(); }
+	constexpr operator bool() const noexcept { return false; }
+	constexpr PdfFile copyLight() const noexcept { return PdfFile(); }
 };
 #endif
 
@@ -369,10 +368,6 @@ enum BrowserResultState : uint8 {
 // files and directories info
 struct BrowserResultList {
 	vector<Cstring> files, dirs;
-	Cstring error;
-
-	BrowserResultList() = default;
-	BrowserResultList(vector<Cstring>&& fent, vector<Cstring>&& dent) noexcept;
 };
 
 #ifdef WITH_ARCHIVE
@@ -382,7 +377,6 @@ struct BrowserResultArchive {
 	string opath;	// path to the file or directory to open
 	string page;	// for PDF only
 	ArchiveData arch;
-	Cstring error;
 	const bool hasRootDir;
 	ResultCode rc = ResultCode::ok;
 
@@ -398,7 +392,6 @@ struct BrowserResultPicture {
 	ArchiveData arch;
 	PdfFile pdf;
 	std::forward_list<pair<Cstring, Texture*>> pics;
-	Cstring error;
 	uint cnt = 0;
 	const bool hasRootDir;
 	const bool newCurDir;
@@ -415,7 +408,7 @@ struct BrowserPictureProgress {
 	Texture*& tex;
 	Cstring text;
 
-	BrowserPictureProgress(SDL_Surface* pic, Texture*& ref, Cstring&& msg) noexcept;
+	BrowserPictureProgress(uptr<SDL_Surface>& pic, Texture*& ref, Cstring&& msg) noexcept;
 };
 
 // list of font families, files and which to select
@@ -423,9 +416,8 @@ struct FontListResult {
 	vector<Cstring> families;
 	uptr<Cstring[]> files;
 	size_t select;
-	string error;
 
-	FontListResult(vector<Cstring>&& fa, uptr<Cstring[]>&& fl, size_t id, string&& msg) noexcept;
+	FontListResult(size_t cnt);
 };
 
 // check a stop token every n iterations
@@ -435,7 +427,14 @@ private:
 	uint lim;
 
 public:
-	CountedStopReq(uint steps) : lim(steps) {}
+	CountedStopReq(uint steps) noexcept : lim(steps) {}
 
 	bool stopReq(std::stop_token stoken) noexcept;
 };
+
+template <class T>
+size_t countListElements(const std::forward_list<T>& list) noexcept {
+	size_t i = 0;
+	for (auto it = list.begin(); it != list.end(); ++it, ++i);
+	return i;
+}

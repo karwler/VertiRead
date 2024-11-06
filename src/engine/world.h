@@ -8,11 +8,11 @@ private:
 	static inline WindowSys windowSys;	// the thing on which everything runs;
 
 public:
-	static DrawSys* drawSys() { return windowSys.getDrawSys(); }
-	static FileSys* fileSys() { return windowSys.getFileSys(); }
-	static InputSys* inputSys() { return windowSys.getInputSys(); }
-	static Program* program() { return windowSys.getProgram(); }
-	static Scene* scene() { return windowSys.getScene(); }
-	static Settings* sets() { return windowSys.getSets(); }
-	static WindowSys* winSys() { return &windowSys; }
+	static DrawSys* drawSys() noexcept { return windowSys.getDrawSys(); }
+	static FileSys* fileSys() noexcept { return windowSys.getFileSys(); }
+	static InputSys* inputSys() noexcept { return windowSys.getInputSys(); }
+	static Program* program() noexcept { return windowSys.getProgram(); }
+	static Scene* scene() noexcept { return windowSys.getScene(); }
+	static Settings* sets() noexcept { return windowSys.getSets(); }
+	static WindowSys* winSys() noexcept { return &windowSys; }
 };

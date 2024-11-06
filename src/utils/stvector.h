@@ -28,14 +28,14 @@ public:
 	}
 
 	template <size_t C>
-	stvector(stvector<T, C>&& sv) :
+	stvector(stvector<T, C>&& sv) noexcept :
 		cnt(sv.cnt)
 	{
 		assert(cnt <= N);
 		std::move(sv.vec, sv.vec + sv.cnt, vec);
 	}
 
-	explicit stvector(size_t c) :
+	explicit stvector(size_t c) noexcept :
 		cnt(c)
 	{
 		assert(cnt <= N);
@@ -72,7 +72,7 @@ public:
 	}
 
 	template <size_t C>
-	stvector& operator=(stvector<T, C>&& st) {
+	stvector& operator=(stvector<T, C>&& st) noexcept {
 		assert(st.cnt <= N);
 		cnt = st.cnt;
 		std::move(st.vec, st.vec + st.cnt, vec);
@@ -101,57 +101,57 @@ public:
 
 	void assign(std::initializer_list<T> il) { assign(il.begin(), il.end()); }
 
-	T& operator[](size_t i) {
+	T& operator[](size_t i) noexcept {
 		assert(i < cnt);
 		return vec[i];
 	}
 
-	const T& operator[](size_t i) const {
+	const T& operator[](size_t i) const noexcept {
 		assert(i < cnt);
 		return vec[i];
 	}
 
-	T& front() {
+	T& front() noexcept {
 		assert(cnt);
 		return vec[0];
 	}
 
-	const T& front() const {
+	const T& front() const noexcept {
 		assert(cnt);
 		return vec[0];
 	}
 
-	T& back() {
+	T& back() noexcept {
 		assert(cnt);
 		return vec[cnt - 1];
 	}
 
-	const T& back() const {
+	const T& back() const noexcept {
 		assert(cnt);
 		return vec[cnt - 1];
 	}
 
-	T* data() { return vec; }
-	const T* data() const { return vec; }
+	T* data() noexcept { return vec; }
+	const T* data() const noexcept { return vec; }
 
-	T* begin() { return vec; }
-	const T* begin() const { return vec; }
-	const T* cbegin() const { return vec; }
-	T* end() { return vec + cnt; }
-	const T* end() const { return vec + cnt; }
-	const T* cend() const { return vec + cnt; }
+	T* begin() noexcept { return vec; }
+	const T* begin() const noexcept { return vec; }
+	const T* cbegin() const noexcept { return vec; }
+	T* end() noexcept { return vec + cnt; }
+	const T* end() const noexcept { return vec + cnt; }
+	const T* cend() const noexcept { return vec + cnt; }
 
-	std::reverse_iterator<T*> rbegin() { return std::make_reverse_iterator(vec + cnt); }
-	std::reverse_iterator<const T*> rbegin() const { return std::make_reverse_iterator(vec + cnt); }
-	std::reverse_iterator<const T*> crbegin() const { return std::make_reverse_iterator(vec + cnt); }
-	std::reverse_iterator<T*> rend() { return std::make_reverse_iterator(vec); }
-	std::reverse_iterator<const T*> rend() const { return std::make_reverse_iterator(vec); }
-	std::reverse_iterator<const T*> crend() const { return std::make_reverse_iterator(vec); }
+	std::reverse_iterator<T*> rbegin() noexcept { return std::make_reverse_iterator(vec + cnt); }
+	std::reverse_iterator<const T*> rbegin() const noexcept { return std::make_reverse_iterator(vec + cnt); }
+	std::reverse_iterator<const T*> crbegin() const noexcept { return std::make_reverse_iterator(vec + cnt); }
+	std::reverse_iterator<T*> rend() noexcept { return std::make_reverse_iterator(vec); }
+	std::reverse_iterator<const T*> rend() const noexcept { return std::make_reverse_iterator(vec); }
+	std::reverse_iterator<const T*> crend() const noexcept { return std::make_reverse_iterator(vec); }
 
-	bool empty() const { return !cnt; }
-	size_t size() const { return cnt; }
-	constexpr size_t max_size() const { return N; }
-	void clear() { cnt = 0; }
+	bool empty() const noexcept { return !cnt; }
+	size_t size() const noexcept { return cnt; }
+	constexpr size_t max_size() const noexcept { return N; }
+	void clear() noexcept { cnt = 0; }
 
 	T* insert(const T* pos, const T& v) {
 		assert(cnt + 1 <= N && pos >= vec && pos <= vec + cnt);
@@ -162,7 +162,7 @@ public:
 		return it;
 	}
 
-	T* insert(const T* pos, T&& v) {
+	T* insert(const T* pos, T&& v) noexcept {
 		assert(cnt + 1 <= N && pos >= vec && pos <= vec + cnt);
 		T* it = const_cast<T*>(pos);
 		std::move_backward(it, vec + cnt, vec + cnt + 1);
@@ -203,7 +203,7 @@ public:
 		return it;
 	}
 
-	T* erase(const T* pos) {
+	T* erase(const T* pos) noexcept {
 		assert(cnt);
 		T* it = const_cast<T*>(pos);
 		std::move(it + 1, vec + cnt, it);
@@ -211,7 +211,7 @@ public:
 		return it;
 	}
 
-	T* erase(const T* beg, const T* end) {
+	T* erase(const T* beg, const T* end) noexcept {
 		assert(beg >= vec && beg <= vec + cnt && end >= vec && end <= vec + cnt && beg <= end);
 		size_t c = end - beg;
 		T* ib = const_cast<T*>(beg);
@@ -226,7 +226,7 @@ public:
 		vec[cnt++] = v;
 	}
 
-	void push_back(T&& v) {
+	void push_back(T&& v) noexcept {
 		assert(cnt + 1 <= N);
 		vec[cnt++] = std::move(v);
 	}
@@ -237,12 +237,12 @@ public:
 		return vec[cnt++] = T(std::forward<A>(args)...);
 	}
 
-	void pop_back() {
+	void pop_back() noexcept {
 		assert(cnt);
 		--cnt;
 	}
 
-	void resize(size_t c) {
+	void resize(size_t c) noexcept {
 		assert(c <= N);
 		cnt = c;
 	}
@@ -255,7 +255,7 @@ public:
 	}
 
 	template <size_t C>
-	void swap(stvector<T, C>& sv) {
+	void swap(stvector<T, C>& sv) noexcept {
 		assert(sv.cnt <= N && cnt <= C);
 		T tv[N < C ? N : C];
 		size_t tc = cnt;

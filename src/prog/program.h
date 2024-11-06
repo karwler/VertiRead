@@ -39,9 +39,9 @@ public:
 
 	void start();
 	void tick();
-	ProgState* getState() { return state; }
-	Browser* getBrowser() { return &browser; }
-	bool canStoreCredentials();
+	ProgState* getState() noexcept { return state; }
+	Browser* getBrowser() noexcept { return &browser; }
+	bool canStoreCredentials() noexcept;
 
 	void handleGeneralEvent(const SDL_UserEvent& event);
 	void handleProgBooksEvent(const SDL_UserEvent& event);
@@ -71,7 +71,7 @@ public:
 	void eventPrevDir();
 	void eventExitReader();
 	void setLibraryDir(string_view path, bool byText = false);
-	void setFont(const fs::path& font);
+	void setFont(const string& font);
 	void setPopupProgress(Cstring&& msg = "Loading...");
 	void eventExit();
 
@@ -109,12 +109,15 @@ private:
 	void eventOpenLibDirBrowser();
 	void eventMoveBooks();
 	void eventMoveCancelled();
-	void eventMoveFinished(uptr<string> errors);
+	void eventMoveFinished(ResultCode rc);
 	void eventSetZoomType(PushButton* but);
 	void eventSetZoom(Slider* sl);
 	void eventSetScreenMode(PushButton* but);
 	void eventSetRenderer(PushButton* but);
 	void eventSetDevice(PushButton* but);
+	void eventSetGammaType(PushButton* but);
+	void eventSetGammaStep(Slider* sl);
+	void eventSetGammaStep(LabelEdit* le);
 	void eventSetCompression(PushButton* but);
 	void eventSetVsync(CheckBox* cb);
 	void eventSetMultiFullscreen(WindowArranger* wa);
@@ -146,13 +149,15 @@ private:
 	void restartBrowserList();
 	void startBrowserPreview();
 	static uint finishComboBox(PushButton* but);
+	template <IntEnum T, size_t N> static pair<T, ComboBox*> finishComboBox(PushButton* but, const array<const char*, N>& names, T defaultValue);
+	void setIncoherenComboBox(ComboBox* cmb, string_view name);
 	template <Derived<ProgState> T, class... A> void setState(A&&... args);
 #ifdef CAN_SECRET
-	bool lazyInitCredentials();
+	bool lazyInitCredentials() noexcept;
 #endif
 };
 
-inline bool Program::canStoreCredentials() {
+inline bool Program::canStoreCredentials() noexcept {
 #ifdef CAN_SECRET
 	return lazyInitCredentials();
 #else

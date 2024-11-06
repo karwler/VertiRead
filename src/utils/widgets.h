@@ -4,7 +4,7 @@
 #include "prog/types.h"
 
 template <Number T>
-glm::vec<2, T, glm::defaultp> vswap(T x, T y, bool swap) {
+glm::vec<2, T, glm::defaultp> vswap(T x, T y, bool swap) noexcept {
 	glm::vec<2, T, glm::defaultp> v;
 	v[swap] = x;
 	v[!swap] = y;
@@ -21,14 +21,14 @@ protected:
 	Texture* textTex = nullptr;
 
 public:
-	TextDsp(T&& str) : text(std::move(str)) {}
+	TextDsp(T&& str) noexcept : text(std::move(str)) {}
 	~TextDsp();
 
-	const T& getText() const { return text; }
-	const Texture* getTextTex() const { return textTex; }
+	const T& getText() const noexcept { return text; }
+	const Texture* getTextTex() const noexcept { return textTex; }
 protected:
-	void recreateTextTex(string_view str, uint height);
-	void recreateTextTex(string_view str, uint height, uint limit);
+	void recreateTextTex(string_view str, uint height) noexcept;
+	void recreateTextTex(string_view str, uint height, uint limit) noexcept;
 	Recti dspTextFrame(const Recti& rect, const Recti& frame) const noexcept;
 	ivec2 alignedTextPos(ivec2 pos, int sizx, Alignment align) const noexcept;
 };
@@ -43,7 +43,7 @@ class Scrollable {
 public:
 	static constexpr int barSizeVal = 10;
 
-	ivec2 listPos = ivec2(0);
+	vec2 listPos = vec2(0.f);
 	vec2 motion = vec2(0.f);	// how much the list scrolls over time
 private:
 	ivec2 listSize;
@@ -53,21 +53,22 @@ private:
 	int diffSliderMouse = 0;	// space between slider and mouse position
 	bool draggingSlider = false;
 
-	static constexpr float throttle = 10.f;
+	static constexpr float initialThrottle = 0.0012f;
+	static constexpr float throttle = 6.f;
 
 public:
-	bool tick(float dSec);	// returns whether the list has moved
+	bool tick(float dSec) noexcept;	// returns whether the list has moved
 	bool hold(ivec2 mPos, uint8 mBut, Widget* wgt, ivec2 pos, ivec2 size, bool vert) noexcept;	// returns whether the list has moved
 	void drag(ivec2 mPos, ivec2 mMov, ivec2 pos, bool vert) noexcept;
 	void undrag(ivec2 mPos, uint8 mBut, bool vert) noexcept;
-	void scroll(ivec2 wMov, bool vert) noexcept;
+	void scroll(vec2 wMov) noexcept;
 
-	bool getDraggingSlider() const { return draggingSlider; }
+	bool getDraggingSlider() const noexcept { return draggingSlider; }
 	void setLimits(ivec2 lsize, ivec2 wsize, bool vert) noexcept;
-	ivec2 getListSize() const { return listSize; }
-	ivec2 getListMax() const { return listMax; }
-	void setListPos(ivec2 pos) noexcept;
-	void moveListPos(ivec2 mov) noexcept;
+	ivec2 getListSize() const noexcept { return listSize; }
+	ivec2 getListMax() const noexcept { return listMax; }
+	void setListPos(vec2 pos) noexcept;
+	void moveListPos(vec2 mov) noexcept;
 	int barSize(ivec2 wsize, bool vert) const noexcept;	// returns 0 if slider isn't needed
 	Recti barRect(ivec2 pos, ivec2 size, bool vert) const noexcept;
 	Recti sliderRect(ivec2 pos, ivec2 size, bool vert) const noexcept;
@@ -77,11 +78,11 @@ private:
 	static void throttleMotion(float& mov, float dSec) noexcept;
 };
 
-inline void Scrollable::setListPos(ivec2 pos) noexcept {
-	listPos = glm::clamp(pos, ivec2(0), listMax);
+inline void Scrollable::setListPos(vec2 pos) noexcept {
+	listPos = glm::clamp(pos, vec2(0.f), vec2(listMax));
 }
 
-inline void Scrollable::moveListPos(ivec2 mov) noexcept {
+inline void Scrollable::moveListPos(vec2 mov) noexcept {
 	setListPos(listPos + mov);
 }
 
@@ -90,7 +91,7 @@ inline int Scrollable::barSize(ivec2 wsize, bool vert) const noexcept {
 }
 
 inline int Scrollable::sliderPos(ivec2 pos, ivec2 wsize, bool vert) const noexcept {
-	return listSize[vert] > wsize[vert] ? pos[vert] + listPos[vert] * sliderMax / listMax[vert] : 0;
+	return listSize[vert] > wsize[vert] ? pos[vert] + int(listPos[vert]) * sliderMax / listMax[vert] : 0;
 }
 
 // can be used as spacer
@@ -100,23 +101,23 @@ protected:
 	Size relSize;				// size relative to parent's parameters
 
 public:
-	Widget(const Size& size = Size()) : relSize(size) {}
+	Widget(const Size& size = Size()) noexcept : relSize(size) {}
 	virtual ~Widget() = default;
 
-	virtual void drawSelf(const Recti&) {}	// calls appropriate drawing function(s) in DrawSys
-	virtual void drawTop(const Recti&) const {}
+	virtual void drawSelf(const Recti&) noexcept {}	// calls appropriate drawing function(s) in DrawSys
+	virtual void drawTop(const Recti&) const noexcept {}
 	virtual void onResize() {}	// for updating values when window size changed
-	virtual void tick(float) {}
+	virtual void tick(float) noexcept {}
 	virtual void postInit() {}	// gets called after parent is set and all set up
 	virtual void onClick(ivec2, uint8) {}
 	virtual void onDoubleClick(ivec2, uint8) {}
 	virtual void onMouseMove(ivec2, ivec2) {}
-	virtual void onHover() {}
-	virtual void onUnhover() {}
+	virtual void onHover() noexcept {}
+	virtual void onUnhover() noexcept {}
 	virtual void onHold(ivec2, uint8) {}
 	virtual void onDrag(ivec2, ivec2) {}	// mouse move while left button down
 	virtual void onUndrag(ivec2, uint8) {}	// gets called on mouse button up if instance is Scene's capture
-	virtual void onScroll(ivec2) {}	// on mouse wheel y movement
+	virtual void onScroll(vec2) {}	// on mouse wheel y movement
 	virtual void onKeypress(SDL_Scancode, SDL_Keymod) {}
 	virtual void onJButton(uint8) {}
 	virtual void onJHat(uint8, uint8) {}
@@ -126,28 +127,28 @@ public:
 	virtual void onCompose(string_view, uint) {}
 	virtual void onText(string_view, uint) {}
 	virtual void onDisplayChange() {}
-	virtual void onNavSelect(Direction dir);
+	virtual void onNavSelect(Direction dir) noexcept;
 	virtual bool navSelectable() const noexcept;
 	virtual bool hasDoubleclick() const noexcept;
 
-	Layout* getParent() const { return parent; }
+	Layout* getParent() const noexcept { return parent; }
 	void setParent(Layout* pnt, uint id) noexcept;
-	uint getIndex() const { return relSize.id; }
-	const Size& getRelSize() const { return relSize; }
-	virtual ivec2 position() const;
-	virtual ivec2 size() const;
-	ivec2 center() const;
-	Recti rect() const;				// the rectangle that is the widget
-	virtual Recti frame() const;	// the rectangle to restrain a widget's visibility (in Widget it returns the parent's frame and if in Layout, it returns a frame for it's children)
+	uint getIndex() const noexcept { return relSize.id; }
+	const Size& getRelSize() const noexcept { return relSize; }
+	virtual ivec2 position() const noexcept;
+	virtual ivec2 size() const noexcept;
+	ivec2 center() const noexcept;
+	Recti rect() const noexcept;			// the rectangle that is the widget
+	virtual Recti frame() const noexcept;	// the rectangle to restrain a widget's visibility (in Widget it returns the parent's frame and if in Layout, it returns a frame for it's children)
 	virtual void setSize(const Size& size);
-	int sizeToPixAbs(const Size& siz, int res) const;
+	int sizeToPixAbs(const Size& siz, int res) const noexcept;
 };
 
-inline ivec2 Widget::center() const {
+inline ivec2 Widget::center() const noexcept {
 	return position() + size() / 2;
 }
 
-inline Recti Widget::rect() const {
+inline Recti Widget::rect() const noexcept {
 	return Recti(position(), size());
 }
 
@@ -160,9 +161,9 @@ public:
 	Picture(const Size& size, Texture* texture) noexcept;
 	~Picture() override;
 
-	void drawSelf(const Recti& view) override;
+	void drawSelf(const Recti& view) noexcept override;
 
-	const Texture* getTex() const { return tex; }
+	const Texture* getTex() const noexcept { return tex; }
 };
 
 // it's a little ass backwards but labels (aka a line of text) are buttons
@@ -174,21 +175,20 @@ public:
 public:
 	Label(const Size& size, Cstring&& line, Alignment alignment = Alignment::left, bool bg = true) noexcept;
 
-	void drawSelf(const Recti& view) override;
+	void drawSelf(const Recti& view) noexcept override;
 	void onResize() override;
 	void postInit() override;
 
 	virtual void setText(const Cstring& str);
-	virtual void setText(Cstring&& str);
-	Recti textRect() const;
-	Recti textFrame() const;
+	virtual void setText(Cstring&& str) noexcept;
+	Recti textRect() const noexcept;
+	Recti textFrame() const noexcept;
 protected:
-	virtual ivec2 textPos() const;
-	virtual void updateTextTex();
-	void updateTextTexNow();
+	virtual ivec2 textPos() const noexcept;
+	virtual void updateTextTex() noexcept;
 };
 
-inline Recti Label::textFrame() const {
+inline Recti Label::textFrame() const noexcept {
 	return dspTextFrame(rect(), frame());
 }
 
@@ -200,19 +200,19 @@ private:
 public:
 	TextBox(const Size& size, uint lineH, Cstring&& lines, bool bg = true) noexcept;
 
-	void tick(float dSec) override;
+	void tick(float dSec) noexcept override;
 	void onResize() override;
 	void onHold(ivec2 mPos, uint8 mBut) override;
 	void onDrag(ivec2 mPos, ivec2 mMov) override;
 	void onUndrag(ivec2 mPos, uint8 but) override;
-	void onScroll(ivec2 wMov) override;
+	void onScroll(vec2 wMov) override;
 	bool navSelectable() const noexcept override;
 
 	void setText(const Cstring& str) override;
-	void setText(Cstring&& str) override;
+	void setText(Cstring&& str) noexcept override;
 protected:
-	ivec2 textPos() const override;
-	void updateTextTex() override;
+	ivec2 textPos() const noexcept override;
+	void updateTextTex() noexcept override;
 };
 
 // clickable widget with an event
@@ -229,19 +229,19 @@ public:
 
 	void onClick(ivec2 mPos, uint8 mBut) override;
 	void onDoubleClick(ivec2 mPos, uint8 mBut) override;
-	void onHover() override;
-	void onUnhover() override;
+	void onHover() noexcept override;
+	void onUnhover() noexcept override;
 	bool navSelectable() const noexcept override;
 	bool hasDoubleclick() const noexcept override;
 
-	virtual const char* getTooltip() const;
-	EventId getEvent() const;
+	virtual const char* getTooltip() const noexcept;
+	EventId getEvent() const noexcept;
 	void setEvent(EventId eid, Actions amask) noexcept;
-	Color getBgColor() const { return bgColor; }
+	Color getBgColor() const noexcept { return bgColor; }
 	bool toggleHighlighted() noexcept;
 };
 
-inline EventId Button::getEvent() const {
+inline EventId Button::getEvent() const noexcept {
 	return EventId(etype, ecode);
 }
 
@@ -252,19 +252,19 @@ public:
 
 	CheckBox(const Size& size, bool checked, EventId eid, Cstring&& tip = Cstring()) noexcept;
 
-	void drawSelf(const Recti& view) override;
+	void drawSelf(const Recti& view) noexcept override;
 	void onClick(ivec2 mPos, uint8 mBut) override;
 
-	Recti boxRect() const;
-	Color boxColor() const;
-	bool toggle();
+	Recti boxRect() const noexcept;
+	Color boxColor() const noexcept;
+	bool toggle() noexcept;
 };
 
-inline Color CheckBox::boxColor() const {
+inline Color CheckBox::boxColor() const noexcept {
 	return on ? Color::light : Color::dark;
 }
 
-inline bool CheckBox::toggle() {
+inline bool CheckBox::toggle() noexcept {
 	return on = !on;
 }
 
@@ -277,30 +277,30 @@ private:
 public:
 	Slider(const Size& size, int value, int minimum, int maximum, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring()) noexcept;
 
-	void drawSelf(const Recti& view) override;
+	void drawSelf(const Recti& view) noexcept override;
 	void onClick(ivec2 mPos, uint8 mBut) override;
 	void onHold(ivec2 mPos, uint8 mBut) override;
 	void onDrag(ivec2 mPos, ivec2 mMov) override;
 	void onUndrag(ivec2 mPos, uint8 mBut) override;
 	void onKeypress(SDL_Scancode key, SDL_Keymod mod) override;
 
-	int getVal() const { return val; }
-	void setVal(int value);
+	int getVal() const noexcept { return val; }
+	void setVal(int value) noexcept;
 
-	Recti barRect() const;
-	Recti sliderRect() const;
+	Recti barRect() const noexcept;
+	Recti sliderRect() const noexcept;
 
 private:
-	void setSlider(int xpos);
-	int sliderPos() const;
-	int sliderLim() const;
+	void setSlider(int xpos) noexcept;
+	int sliderPos() const noexcept;
+	int sliderLim() const noexcept;
 };
 
-inline void Slider::setVal(int value) {
+inline void Slider::setVal(int value) noexcept {
 	val = std::clamp(value, vmin, vmax);
 }
 
-inline int Slider::sliderPos() const {
+inline int Slider::sliderPos() const noexcept {
 	return position().x + size().y / 4 + (val - vmin) * sliderLim() / (vmax - vmin);
 }
 
@@ -312,21 +312,20 @@ private:
 public:
 	PushButton(const Size& size, Cstring&& line, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring(), Alignment alignment = Alignment::left) noexcept;
 
-	void drawSelf(const Recti& view) override;
+	void drawSelf(const Recti& view) noexcept override;
 	void onResize() override;
 	void postInit() override;
 
-	virtual void setText(const Cstring& str);
-	virtual void setText(Cstring&& str);
-	Recti textRect() const;
-	Recti textFrame() const;
+	void setText(const Cstring& str);
+	void setText(Cstring&& str) noexcept;
+	Recti textRect() const noexcept;
+	Recti textFrame() const noexcept;
 protected:
-	virtual ivec2 textPos() const;
-	virtual void updateTextTex();
-	void updateTextTexNow();
+	virtual ivec2 textPos() const noexcept;
+	void updateTextTex() noexcept;
 };
 
-inline Recti PushButton::textFrame() const {
+inline Recti PushButton::textFrame() const noexcept {
 	return dspTextFrame(rect(), frame());
 }
 
@@ -341,10 +340,10 @@ private:
 public:
 	IconButton(const Size& size, const Texture* texture, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring()) noexcept;
 
-	void drawSelf(const Recti& view) override;
+	void drawSelf(const Recti& view) noexcept override;
 
-	const Texture* getTex() const { return tex; }
-	Recti texRect() const;
+	const Texture* getTex() const noexcept { return tex; }
+	Recti texRect() const noexcept;
 };
 
 // button with text and an icon on the left
@@ -358,17 +357,17 @@ public:
 	IconPushButton(const Size& size, Cstring&& line, Texture* texture, EventId eid, Actions amask = ACT_LEFT, Cstring&& tip = Cstring()) noexcept;	// gains ownership of texture
 	~IconPushButton() override;
 
-	void drawSelf(const Recti& view) override;
+	void drawSelf(const Recti& view) noexcept override;
 
-	const Texture* getTextTex() const { return textTex; }
-	const Texture* getIconTex() const { return iconTex; }
-	void setIcon(const Texture* tex);
-	void setIcon(Texture* tex);	// gains ownership of texture
-	Recti textRect() const;
-	Recti textFrame() const;
-	Recti iconRect() const;
+	const Texture* getTextTex() const noexcept { return textTex; }
+	const Texture* getIconTex() const noexcept { return iconTex; }
+	void setIcon(const Texture* tex) noexcept;
+	void setIcon(Texture* tex) noexcept;	// gains ownership of texture
+	Recti textRect() const noexcept;
+	Recti textFrame() const noexcept;
+	Recti iconRect() const noexcept;
 private:
-	ivec2 textPos() const override;
+	ivec2 textPos() const noexcept override;
 };
 
 // for switching between multiple options
@@ -384,27 +383,23 @@ public:
 
 	void onClick(ivec2 mPos, uint8 mBut) override;
 
-	const vector<Cstring>& getOptions() const { return options; }
+	const vector<Cstring>& getOptions() const noexcept { return options; }
 	void setOptions(uint curOption, vector<Cstring>&& opt, uptr<Cstring[]> tips);
-	const Cstring* getTooltips() const { return tooltips.get(); }
-	uint getCurOpt() const { return curOpt; }
+	const Cstring* getTooltips() const noexcept { return tooltips.get(); }
+	uint getCurOpt() const noexcept { return curOpt; }
 	void setCurOpt(uint id);
 };
 
 // for editing a line of text (ignores Label's align), (calls Button's lcall on text confirm rather than on click)
 class LabelEdit final : public Button, public TextDsp<string> {
 public:
-	enum class TextType : uint8 {
-		any,
-		password,
-		sInt,
-		sIntSpaced,
-		uInt,
-		uIntSpaced,
-		sFloat,
-		sFloatSpaced,
-		uFloat,
-		uFloatSpaced
+	enum TextType : uint8 {
+		TT_ANY = 0x0,
+		TT_PWD = 0x1,
+		TT_INT = 0x2,
+		TT_FLT = 0x4,
+		TT_UNS = 0x8,
+		TT_VEC = 0x10
 	};
 
 	static constexpr int caretWidth = 4;
@@ -419,56 +414,49 @@ private:
 public:
 	const bool unfocusConfirm;
 
-	LabelEdit(const Size& size, string&& line, EventId eid, EventId cid = nullEvent, Actions amask = ACT_LEFT, Cstring&& tip = Cstring(), TextType type = TextType::any, bool focusLossConfirm = true) noexcept;
+	LabelEdit(const Size& size, string&& line, EventId eid, EventId cid = nullEvent, Actions amask = ACT_LEFT, Cstring&& tip = Cstring(), TextType type = TT_ANY, bool focusLossConfirm = true) noexcept;
 
-	void drawSelf(const Recti& view) override;
-	void drawTop(const Recti& view) const override;
+	void drawSelf(const Recti& view) noexcept override;
+	void drawTop(const Recti& view) const noexcept override;
 	void onResize() override;
 	void postInit() override;
 	void onClick(ivec2 mPos, uint8 mBut) override;
 	void onKeypress(SDL_Scancode key, SDL_Keymod mod) override;
 	void onCompose(string_view str, uint olen) override;
 	void onText(string_view str, uint olen) override;
-	void confirm();
-	void cancel();
+	void confirm() noexcept;
+	void cancel() noexcept;
 
-	const string& getOldText() const { return oldText; }
+	const string& getOldText() const noexcept { return oldText; }
 	void setText(const string& str);
 	void setText(string&& str);
-	Recti textRect() const;
-	Recti textFrame() const;
+	Recti textRect() const noexcept;
+	Recti textFrame() const noexcept;
 
 private:
-	void updateTextTex();
-	void updateTextTexNow();
+	void updateTextTex() noexcept;
 	void onTextReset();
-	int caretPos() const;	// caret's relative x position
-	void setCPos(uint cp);
+	int caretPos() const noexcept;
+	void setCPos(uint cp) noexcept;
 
-	static bool kmodCtrl(uint16 mod);
-	static bool kmodAlt(uint16 mod);
+	static bool kmodCtrl(uint16 mod) noexcept;
+	static bool kmodAlt(uint16 mod) noexcept;
 	uint jumpCharB(uint i) const noexcept;
 	uint jumpCharF(uint i) const noexcept;
 	uint findWordStart() const noexcept;	// returns index of first character of word before cpos
 	uint findWordEnd() const noexcept;		// returns index of character after last character of word after cpos
 	void cleanText();
-	void cleanSIntSpacedText();
-	void cleanUIntSpacedText();
-	void cleanSFloatText();
-	void cleanSFloatSpacedText();
-	void cleanUFloatText();
-	void cleanUFloatSpacedText();
 };
 
-inline Recti LabelEdit::textFrame() const {
+inline Recti LabelEdit::textFrame() const noexcept {
 	return dspTextFrame(rect(), frame());
 }
 
-inline bool LabelEdit::kmodCtrl(uint16 mod) {
+inline bool LabelEdit::kmodCtrl(uint16 mod) noexcept {
 	return mod & KMOD_CTRL && !(mod & (KMOD_SHIFT | KMOD_ALT));
 }
 
-inline bool LabelEdit::kmodAlt(uint16 mod) {
+inline bool LabelEdit::kmodAlt(uint16 mod) noexcept {
 	return mod & KMOD_ALT && !(mod & (KMOD_SHIFT | KMOD_CTRL));
 }
 
@@ -548,8 +536,8 @@ public:
 	WindowArranger(const Size& size, float baseScale, bool vertExp, EventId eid, Actions amask, Cstring&& tip = Cstring()) noexcept;
 	~WindowArranger() override;
 
-	void drawSelf(const Recti& view) override;
-	void drawTop(const Recti& view) const override;
+	void drawSelf(const Recti& view) noexcept override;
+	void drawTop(const Recti& view) const noexcept override;
 	void onResize() override;
 	void postInit() override;
 	void onClick(ivec2 mPos, uint8 mBut) override;
@@ -560,28 +548,28 @@ public:
 	void onDisplayChange() override;
 	bool navSelectable() const noexcept override;
 
-	const char* getTooltip() const override;
+	const char* getTooltip() const noexcept override;
 	bool draggingDisp(int id) const noexcept;
-	const umap<int, Dsp>& getDisps() const { return disps; }
+	const umap<int, Dsp>& getDisps() const noexcept { return disps; }
 	vector<Settings::Display> getActiveDisps() const;
-	Recti offsetDisp(const Recti& rect, ivec2 pos) const;
-	int precalcSizeExpand(int fsiz) const;
-	DspDisp dispRect(int id, const Dsp& dsp) const;
+	Recti offsetDisp(const Recti& rect, ivec2 pos) const noexcept;
+	int precalcSizeExpand(int fsiz) const noexcept;
+	DspDisp dispRect(int id, const Dsp& dsp) const noexcept;
 private:
-	int dispUnderPos(ivec2 pnt) const;
+	int dispUnderPos(ivec2 pnt) const noexcept;
 	void calcDisplays();
-	void buildEntries();
+	void buildEntries() noexcept;
 	float entryScale(int fsiz) const noexcept;
-	void freeTextures();
-	ivec2 snapDrag() const;
+	void freeTextures() noexcept;
+	ivec2 snapDrag() const noexcept;
 	static array<ivec2, 8> getSnapPoints(const Recti& rect) noexcept;
-	template <size_t S> static void scanClosestSnapPoint(const array<pair<uint, uint>, S>& relations, const Recti& rect, const array<ivec2, 8>& snaps, uint& snapId, ivec2& snapPnt, float& minDist);
+	template <size_t S> static void scanClosestSnapPoint(const array<pair<uint, uint>, S>& relations, const Recti& rect, const array<ivec2, 8>& snaps, uint& snapId, ivec2& snapPnt, float& minDist) noexcept;
 };
 
-inline Recti WindowArranger::offsetDisp(const Recti& rect, ivec2 pos) const {
+inline Recti WindowArranger::offsetDisp(const Recti& rect, ivec2 pos) const noexcept {
 	return rect.translate(pos + winMargin);
 }
 
-inline int WindowArranger::precalcSizeExpand(int fsiz) const {
+inline int WindowArranger::precalcSizeExpand(int fsiz) const noexcept {
 	return int(float(totalDim[vertical]) * entryScale(fsiz)) + winMargin * 2;
 }

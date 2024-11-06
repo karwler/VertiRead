@@ -1,3 +1,4 @@
+#include "widgets.h"
 #include "layouts.h"
 #include "engine/drawSys.h"
 #include "engine/scene.h"
@@ -7,7 +8,6 @@
 #include "prog/progs.h"
 #include <SDL_clipboard.h>
 #include <cfloat>
-#include <format>
 
 template <Class T>
 TextDsp<T>::~TextDsp() {
@@ -15,8 +15,9 @@ TextDsp<T>::~TextDsp() {
 }
 
 template <Class T>
-void TextDsp<T>::recreateTextTex(string_view str, uint height) {
+void TextDsp<T>::recreateTextTex(string_view str, uint height) noexcept {
 	if (textTex) {
+		World::drawSys()->getRenderer()->waitIdle();
 		if (!World::drawSys()->renderText(textTex, str, height)) {
 			World::drawSys()->getRenderer()->freeTexture(textTex);
 			textTex = nullptr;
@@ -26,8 +27,9 @@ void TextDsp<T>::recreateTextTex(string_view str, uint height) {
 }
 
 template <Class T>
-void TextDsp<T>::recreateTextTex(string_view str, uint height, uint limit) {
+void TextDsp<T>::recreateTextTex(string_view str, uint height, uint limit) noexcept {
 	if (textTex) {
+		World::drawSys()->getRenderer()->waitIdle();
 		if (!World::drawSys()->renderText(textTex, str, height, limit)) {
 			World::drawSys()->getRenderer()->freeTexture(textTex);
 			textTex = nullptr;
@@ -43,16 +45,16 @@ ivec2 TextDsp<T>::alignedTextPos(ivec2 pos, int sizx, Alignment align) const noe
 	case left:
 		return ivec2(pos.x + textMargin, pos.y);
 	case center:
-		return ivec2(pos.x + (sizx - textTex->getRes().x) / 2, pos.y);
+		return ivec2(pos.x + (sizx - int(textTex->getRes().x)) / 2, pos.y);
 	case right:
-		return ivec2(pos.x + sizx - textTex->getRes().x - textMargin, pos.y);
+		return ivec2(pos.x + sizx - int(textTex->getRes().x) - textMargin, pos.y);
 	}
 	return pos;
 }
 
 // SCROLLABLE
 
-bool Scrollable::tick(float dSec) {
+bool Scrollable::tick(float dSec) noexcept {
 	if (motion != vec2(0.f)) {
 		moveListPos(motion);
 		throttleMotion(motion.x, dSec);
@@ -70,9 +72,9 @@ bool Scrollable::hold(ivec2 mPos, uint8 mBut, Widget* wgt, ivec2 pos, ivec2 size
 		World::scene()->setCapture(wgt);
 		SDL_CaptureMouse(SDL_TRUE);
 		if ((draggingSlider = barRect(pos, size, vert).contains(mPos))) {
-			int sp = sliderPos(pos, size, vert), ss = sliderSize;
-			if (moved = outRange(mPos[vert], sp, sp + ss); moved)	// if mouse outside of slider but inside bar
-				setSlider(mPos[vert] - ss / 2, pos, vert);
+			int sp = sliderPos(pos, size, vert);
+			if (moved = outRange(mPos[vert], sp, sp + sliderSize); moved)	// if mouse outside of slider but inside bar
+				setSlider(mPos[vert] - sliderSize / 2, pos, vert);
 			diffSliderMouse = mPos.y - sliderPos(pos, size, vert);	// get difference between mouse y and slider y
 		}
 	}
@@ -89,21 +91,21 @@ void Scrollable::drag(ivec2 mPos, ivec2 mMov, ivec2 pos, bool vert) noexcept {
 void Scrollable::undrag(ivec2 mPos, uint8 mBut, bool vert) noexcept {
 	if (mBut == SDL_BUTTON_LEFT) {
 		if (!World::scene()->cursorInClickRange(mPos, mBut) && !draggingSlider)
-			motion = World::inputSys()->getMouseMove() * vswap(0, -1, !vert);
+			motion = World::inputSys()->getMouseMove() * vswap(0.f, -World::drawSys()->getWinDpi() * initialThrottle, !vert);
 		SDL_CaptureMouse(SDL_FALSE);
 		World::scene()->setCapture(nullptr);	// should call cancelDrag through the captured widget
 	}
 }
 
-void Scrollable::scroll(ivec2 wMov, bool vert) noexcept {
-	moveListPos(vswap(wMov.x, wMov.y, !vert));
+void Scrollable::scroll(vec2 wMov) noexcept {
+	moveListPos(wMov);
 	motion = vec2(0.f);
 }
 
 void Scrollable::setLimits(ivec2 lsize, ivec2 wsize, bool vert) noexcept {
 	listSize = lsize;
 	listMax = ivec2(wsize.x < lsize.x ? lsize.x - wsize.x : 0, wsize.y < listSize.y ? lsize.y - wsize.y : 0);
-	sliderSize = wsize[vert] < lsize[vert] ? wsize[vert] * wsize[vert] / lsize[vert] : wsize[vert];
+	sliderSize = wsize[vert] < lsize[vert] ? std::max(wsize[vert] * wsize[vert] / lsize[vert], 1) : wsize[vert];
 	sliderMax = wsize[vert] - sliderSize;
 }
 
@@ -146,29 +148,28 @@ void Widget::setParent(Layout* pnt, uint id) noexcept {
 	relSize.id = id;
 }
 
-ivec2 Widget::position() const {
+ivec2 Widget::position() const noexcept {
 	return parent->wgtPosition(relSize.id);
 }
 
-ivec2 Widget::size() const {
+ivec2 Widget::size() const noexcept {
 	return parent->wgtSize(relSize.id);
 }
 
-Recti Widget::frame() const {
+Recti Widget::frame() const noexcept {
 	return parent->frame();
 }
 
 void Widget::setSize(const Size& size) {
 	relSize = size;
 	parent->onResize();
-	World::drawSys()->getRenderer()->synchTransfer();
 }
 
-void Widget::onNavSelect(Direction dir) {
+void Widget::onNavSelect(Direction dir) noexcept {
 	parent->navSelectNext(relSize.id, dir.vertical() ? center().x : center().y, dir);
 }
 
-int Widget::sizeToPixAbs(const Size& siz, int res) const {
+int Widget::sizeToPixAbs(const Size& siz, int res) const noexcept {
 	switch (siz.mod) {
 	using enum Size::Mode;
 	case rela:
@@ -192,7 +193,7 @@ Picture::~Picture() {
 	World::drawSys()->getRenderer()->freeTexture(tex);
 }
 
-void Picture::drawSelf(const Recti& view) {
+void Picture::drawSelf(const Recti& view) noexcept {
 	World::drawSys()->drawPicture(this, view);
 }
 
@@ -205,7 +206,7 @@ Label::Label(const Size& size, Cstring&& line, Alignment alignment, bool bg) noe
 	align(alignment)
 {}
 
-void Label::drawSelf(const Recti& view) {
+void Label::drawSelf(const Recti& view) noexcept {
 	World::drawSys()->drawLabel(this, view);
 }
 
@@ -219,29 +220,24 @@ void Label::postInit() {
 
 void Label::setText(const Cstring& str) {
 	text = str;
-	updateTextTexNow();
+	updateTextTex();
 }
 
-void Label::setText(Cstring&& str) {
+void Label::setText(Cstring&& str) noexcept {
 	text = std::move(str);
-	updateTextTexNow();
+	updateTextTex();
 }
 
-Recti Label::textRect() const {
+Recti Label::textRect() const noexcept {
 	return Recti(textPos(), textTex->getRes());
 }
 
-ivec2 Label::textPos() const {
+ivec2 Label::textPos() const noexcept {
 	return alignedTextPos(position(), size().x, align);
 }
 
-void Label::updateTextTex() {
+void Label::updateTextTex() noexcept {
 	recreateTextTex(text.data(), size().y);
-}
-
-void Label::updateTextTexNow() {
-	updateTextTex();
-	World::drawSys()->getRenderer()->synchTransfer();
 }
 
 // TEXT BOX
@@ -251,7 +247,7 @@ TextBox::TextBox(const Size& size, uint lineH, Cstring&& lines, bool bg) noexcep
 	lineSize(lineH)
 {}
 
-void TextBox::tick(float dSec) {
+void TextBox::tick(float dSec) noexcept {
 	Scrollable::tick(dSec);
 }
 
@@ -272,29 +268,29 @@ void TextBox::onUndrag(ivec2 mPos, uint8 mBut) {
 	undrag(mPos, mBut, true);
 }
 
-void TextBox::onScroll(ivec2 wMov) {
-	scroll(wMov, true);
+void TextBox::onScroll(vec2 wMov) {
+	scroll(wMov);
 }
 
 bool TextBox::navSelectable() const noexcept {
 	return true;
 }
 
-ivec2 TextBox::textPos() const {
-	return Label::textPos() - listPos;
+ivec2 TextBox::textPos() const noexcept {
+	return Label::textPos() - ivec2(listPos);
 }
 
 void TextBox::setText(const Cstring& str) {
 	Label::setText(str);
-	listPos = ivec2(0);
+	listPos = vec2(0.f);
 }
 
-void TextBox::setText(Cstring&& str) {
+void TextBox::setText(Cstring&& str) noexcept {
 	Label::setText(std::move(str));
-	listPos = ivec2(0);
+	listPos = vec2(0.f);
 }
 
-void TextBox::updateTextTex() {
+void TextBox::updateTextTex() noexcept {
 	recreateTextTex(text.data(), lineSize, size().x);
 	setLimits(textTex ? textTex->getRes() : uvec2(0), size(), true);
 }
@@ -321,12 +317,12 @@ void Button::onDoubleClick(ivec2, uint8 mBut) {
 		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_DOUBLE)));
 }
 
-void Button::onHover() {
+void Button::onHover() noexcept {
 	if (bgColor == Color::normal)
 		bgColor = Color::select;
 }
 
-void Button::onUnhover() {
+void Button::onUnhover() noexcept {
 	if (bgColor == Color::select)
 		bgColor = Color::normal;
 }
@@ -345,7 +341,7 @@ bool Button::hasDoubleclick() const noexcept {
 	return actions & ACT_DOUBLE;
 }
 
-const char* Button::getTooltip() const {
+const char* Button::getTooltip() const noexcept {
 	return tooltip.filled() ? tooltip.data() : nullptr;
 }
 
@@ -362,7 +358,7 @@ CheckBox::CheckBox(const Size& size, bool checked, EventId eid, Cstring&& tip) n
 	on(checked)
 {}
 
-void CheckBox::drawSelf(const Recti& view) {
+void CheckBox::drawSelf(const Recti& view) noexcept {
 	World::drawSys()->drawCheckBox(this, view);
 }
 
@@ -372,7 +368,7 @@ void CheckBox::onClick(ivec2 mPos, uint8 mBut) {
 	Button::onClick(mPos, mBut);
 }
 
-Recti CheckBox::boxRect() const {
+Recti CheckBox::boxRect() const noexcept {
 	ivec2 siz = size();
 	int margin = (siz.x > siz.y ? siz.y : siz.x) / 4;
 	return Recti(position() + margin, siz - margin * 2);
@@ -387,7 +383,7 @@ Slider::Slider(const Size& size, int value, int minimum, int maximum, EventId ei
 	vmax(maximum)
 {}
 
-void Slider::drawSelf(const Recti& view) {
+void Slider::drawSelf(const Recti& view) noexcept {
 	World::drawSys()->drawSlider(this, view);
 }
 
@@ -452,24 +448,24 @@ void Slider::onKeypress(SDL_Scancode key, SDL_Keymod) {
 	}
 }
 
-void Slider::setSlider(int xpos) {
+void Slider::setSlider(int xpos) noexcept {
 	setVal((xpos - position().x - size().y / 4) * (vmax - vmin) / sliderLim() + vmin);
 	if (actions & ACT_LEFT)
 		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
 }
 
-Recti Slider::barRect() const {
+Recti Slider::barRect() const noexcept {
 	ivec2 siz = size();
 	int height = siz.y / 2;
 	return Recti(position() + siz.y / 4, ivec2(siz.x - height, height));
 }
 
-Recti Slider::sliderRect() const {
+Recti Slider::sliderRect() const noexcept {
 	ivec2 pos = position(), siz = size();
 	return Recti(sliderPos(), pos.y, Scrollable::barSizeVal, siz.y);
 }
 
-int Slider::sliderLim() const {
+int Slider::sliderLim() const noexcept {
 	ivec2 siz = size();
 	return siz.x - siz.y / 2 - Scrollable::barSizeVal;
 }
@@ -482,7 +478,7 @@ PushButton::PushButton(const Size& size, Cstring&& line, EventId eid, Actions am
 	align(alignment)
 {}
 
-void PushButton::drawSelf(const Recti& view) {
+void PushButton::drawSelf(const Recti& view) noexcept {
 	World::drawSys()->drawPushButton(this, view);
 }
 
@@ -496,29 +492,24 @@ void PushButton::postInit() {
 
 void PushButton::setText(const Cstring& str) {
 	text = str;
-	updateTextTexNow();
+	updateTextTex();
 }
 
-void PushButton::setText(Cstring&& str) {
+void PushButton::setText(Cstring&& str) noexcept {
 	text = std::move(str);
-	updateTextTexNow();
+	updateTextTex();
 }
 
-Recti PushButton::textRect() const {
+Recti PushButton::textRect() const noexcept {
 	return Recti(textPos(), textTex->getRes());
 }
 
-ivec2 PushButton::textPos() const {
+ivec2 PushButton::textPos() const noexcept {
 	return alignedTextPos(position(), size().x, align);
 }
 
-void PushButton::updateTextTex() {
+void PushButton::updateTextTex() noexcept {
 	recreateTextTex(text.data(), size().y);
-}
-
-void PushButton::updateTextTexNow() {
-	updateTextTex();
-	World::drawSys()->getRenderer()->synchTransfer();
 }
 
 // ICON BUTTON
@@ -528,11 +519,11 @@ IconButton::IconButton(const Size& size, const Texture* texture, EventId eid, Ac
 	tex(texture)
 {}
 
-void IconButton::drawSelf(const Recti& view) {
+void IconButton::drawSelf(const Recti& view) noexcept {
 	World::drawSys()->drawIconButton(this, view);
 }
 
-Recti IconButton::texRect() const {
+Recti IconButton::texRect() const noexcept {
 	Recti rct = rect();
 	return Recti(rct.pos() + margin, rct.size() - margin * 2);
 }
@@ -556,41 +547,41 @@ IconPushButton::~IconPushButton() {
 		World::drawSys()->getRenderer()->freeTexture(iconTex);
 }
 
-void IconPushButton::drawSelf(const Recti& view) {
+void IconPushButton::drawSelf(const Recti& view) noexcept {
 	World::drawSys()->drawIconPushButton(this, view);
 }
 
-Recti IconPushButton::textRect() const {
+Recti IconPushButton::textRect() const noexcept {
 	return Recti(textPos(), textTex->getRes());
 }
 
-Recti IconPushButton::textFrame() const {
+Recti IconPushButton::textFrame() const noexcept {
 	Recti rct = rect();
 	int ofs = iconTex ? rct.h : 0;
 	return Recti(rct.x + ofs + textMargin, rct.y, rct.w - ofs - textMargin * 2, rct.h).intersect(frame());
 }
 
-ivec2 IconPushButton::textPos() const {
+ivec2 IconPushButton::textPos() const noexcept {
 	ivec2 pos = position();
 	int ofs = iconTex ? size().y : 0;
 	return ivec2(pos.x + ofs + textMargin, pos.y);
 }
 
-Recti IconPushButton::iconRect() const {
+Recti IconPushButton::iconRect() const noexcept {
 	Recti rct = rect();
 	vec2 res = iconTex->getRes();
 	ivec2 siz = res * float(rct.h - IconButton::margin * 2) / std::max(res.x, res.y);
 	return Recti(rct.pos() + (rct.h - siz) / 2, siz);
 }
 
-void IconPushButton::setIcon(const Texture* tex) {
+void IconPushButton::setIcon(const Texture* tex) noexcept {
 	if (freeIcon)
 		World::drawSys()->getRenderer()->freeTexture(iconTex);
 	iconTex = const_cast<Texture*>(tex);
 	freeIcon = false;
 }
 
-void IconPushButton::setIcon(Texture* tex) {
+void IconPushButton::setIcon(Texture* tex) noexcept {
 	if (freeIcon)
 		World::drawSys()->getRenderer()->freeTexture(iconTex);
 	iconTex = tex;
@@ -644,11 +635,11 @@ LabelEdit::LabelEdit(const Size& size, string&& line, EventId eid, EventId cid, 
 	cleanText();
 }
 
-void LabelEdit::drawSelf(const Recti& view) {
+void LabelEdit::drawSelf(const Recti& view) noexcept {
 	World::drawSys()->drawLabelEdit(this, view);
 }
 
-void LabelEdit::drawTop(const Recti& view) const {
+void LabelEdit::drawTop(const Recti& view) const noexcept {
 	ivec2 ps = position();
 	World::drawSys()->drawCaret(Recti(caretPos() + ps.x + textMargin, ps.y, caretWidth, size().y), frame(), view);
 }
@@ -664,7 +655,7 @@ void LabelEdit::postInit() {
 void LabelEdit::onClick(ivec2, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		World::scene()->setCapture(this);
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 		SDL_StartTextInput(World::scene()->getCaptureWindow());
 #else
 		Recti rct = rect();
@@ -698,29 +689,29 @@ void LabelEdit::onKeypress(SDL_Scancode key, SDL_Keymod mod) {
 		if (kmodAlt(mod)) {	// if holding alt delete left word
 			uint id = findWordStart();
 			text.erase(id, cpos - id);
-			updateTextTexNow();
+			updateTextTex();
 			setCPos(id);
 		} else if (kmodCtrl(mod)) {	// if holding ctrl delete line to left
 			text.erase(0, cpos);
-			updateTextTexNow();
+			updateTextTex();
 			setCPos(0);
 		} else if (cpos > 0) {	// otherwise delete left character
 			uint id = jumpCharB(cpos);
 			text.erase(id, cpos - id);
-			updateTextTexNow();
+			updateTextTex();
 			setCPos(id);
 		}
 		break;
 	case SDL_SCANCODE_DELETE:	// delete right character
 		if (kmodAlt(mod)) {	// if holding alt delete right word
 			text.erase(cpos, findWordEnd() - cpos);
-			updateTextTexNow();
+			updateTextTex();
 		} else if (kmodCtrl(mod)) {	// if holding ctrl delete line to right
 			text.erase(cpos, text.length() - cpos);
-			updateTextTexNow();
+			updateTextTex();
 		} else if (cpos < text.length()) {	// otherwise delete right character
 			text.erase(cpos, jumpCharF(cpos) - cpos);
-			updateTextTexNow();
+			updateTextTex();
 		}
 		break;
 	case SDL_SCANCODE_HOME:	// move caret to beginning
@@ -731,10 +722,9 @@ void LabelEdit::onKeypress(SDL_Scancode key, SDL_Keymod mod) {
 		break;
 	case SDL_SCANCODE_V:	// paste text
 		if (kmodCtrl(mod))
-			if (char* ctxt = SDL_GetClipboardText()) {
+			if (uptr<char[], SdlFreePtr> ctxt(SDL_GetClipboardText()); ctxt) {
 				uint garbagio = 0;
-				onText(ctxt, garbagio);
-				SDL_free(ctxt);
+				onText(ctxt.get(), garbagio);
 			}
 		break;
 	case SDL_SCANCODE_C:	// copy text
@@ -762,14 +752,14 @@ void LabelEdit::onKeypress(SDL_Scancode key, SDL_Keymod mod) {
 void LabelEdit::onCompose(string_view str, uint olen) {
 	text.erase(cpos, olen);
 	text.insert(cpos, str);
-	updateTextTexNow();
+	updateTextTex();
 }
 
 void LabelEdit::onText(string_view str, uint olen) {
 	text.erase(cpos, olen);
 	text.insert(cpos, str.data(), str.length());
 	cleanText();
-	updateTextTexNow();
+	updateTextTex();
 	setCPos(cpos + str.length());
 }
 
@@ -787,12 +777,12 @@ void LabelEdit::setText(string&& str) {
 
 void LabelEdit::onTextReset() {
 	cleanText();
-	updateTextTexNow();
+	updateTextTex();
 	setCPos(text.length());
 }
 
-void LabelEdit::updateTextTex() {
-	if (textType != TextType::password)
+void LabelEdit::updateTextTex() noexcept {
+	if (!(textType & TT_PWD))
 		recreateTextTex(text, size().y);
 	else {
 		uint cnt = 0;
@@ -801,19 +791,14 @@ void LabelEdit::updateTextTex() {
 	}
 }
 
-void LabelEdit::updateTextTexNow() {
-	updateTextTex();
-	World::drawSys()->getRenderer()->synchTransfer();
-}
-
-Recti LabelEdit::textRect() const {
+Recti LabelEdit::textRect() const noexcept {
 	ivec2 pos = position();
 	return Recti(pos.x + textOfs + textMargin, pos.y, textTex->getRes());
 }
 
-void LabelEdit::setCPos(uint cp) {
+void LabelEdit::setCPos(uint cp) noexcept {
 	cpos = cp;
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 	int cl = caretPos();
 	if (cl < 0) {
 		textOfs -= cl;
@@ -833,18 +818,18 @@ void LabelEdit::setCPos(uint cp) {
 #endif
 }
 
-int LabelEdit::caretPos() const {
-	if (textType != TextType::password)
-		return World::drawSys()->textLength(string_view(text.data(), cpos), size().y) + textOfs;
+int LabelEdit::caretPos() const noexcept {
+	if (!(textType & TT_PWD))
+		return World::drawSys()->textOffset(string_view(text.data(), cpos), size().y) + textOfs;
 
 	uint cnt = 0;
 	for (uint i = 0; i < cpos; i = jumpCharF(i), ++cnt);
-	return World::drawSys()->textLength(string(cnt, '*'), size().y) + textOfs;
+	return World::drawSys()->textOffset(string(cnt, '*'), size().y) + textOfs;
 }
 
-void LabelEdit::confirm() {
+void LabelEdit::confirm() noexcept {
 	textOfs = 0;
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 	SDL_StopTextInput(World::scene()->getCaptureWindow());
 #else
 	SDL_StopTextInput();
@@ -854,12 +839,12 @@ void LabelEdit::confirm() {
 		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
 }
 
-void LabelEdit::cancel() {
+void LabelEdit::cancel() noexcept {
 	textOfs = 0;
 	text = oldText;
-	updateTextTexNow();
+	updateTextTex();
 
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 	SDL_StopTextInput(World::scene()->getCaptureWindow());
 #else
 	SDL_StopTextInput();
@@ -899,134 +884,29 @@ uint LabelEdit::findWordEnd() const noexcept {
 }
 
 void LabelEdit::cleanText() {
-	switch (textType) {
-	using enum TextType;
-	case sInt:
-		text.erase(std::remove_if(text.begin() + ptrdiff_t(text[0] == '-'), text.end(), [](char c) -> bool { return !isdigit(c); }), text.end());
-		break;
-	case sIntSpaced:
-		cleanSIntSpacedText();
-		break;
-	case uInt:
-		text.erase(std::remove_if(text.begin(), text.end(), [](char c) -> bool { return !isdigit(c); }), text.end());
-		break;
-	case uIntSpaced:
-		cleanUIntSpacedText();
-		break;
-	case sFloat:
-		cleanSFloatText();
-		break;
-	case sFloatSpaced:
-		cleanSFloatSpacedText();
-		break;
-	case uFloat:
-		cleanUFloatText();
-		break;
-	case uFloatSpaced:
-		cleanUFloatSpacedText();
-	}
-}
-
-void LabelEdit::cleanSIntSpacedText() {
-	text.erase(text.begin(), rng::find_if(text, notSpace));
-	for (string::iterator it = text.begin() + ptrdiff_t(text[0] == '-'); it != text.end();) {
-		if (isdigit(*it))
-			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
-		else if (*it == ' ') {
-			if (it = std::find_if(it + 1, text.end(), [](char c) -> bool { return c != ' '; }); it != text.end() && *it == '-')
+	static constexpr bool (* const testValid[2][2])(char) = {
+		{ [](char c) -> bool { return isdigit(c) || c == '.'; }, [](char c) -> bool { return isdigit(c); } },
+		{ [](char c) -> bool { return isdigit(c) || c == ' ' || c == '.'; }, [](char c) -> bool { return isdigit(c) || c == ' '; } }
+	};
+	if (textType >= TT_INT) {
+		bool integer = textType & TT_INT, signd = textType & TT_UNS, spaced = textType & TT_VEC;
+		bool dot = integer;
+		text.erase(text.begin(), rng::find_if(text, notSpace));
+		for (auto it = text.begin() + (signd && !text.empty() && text[0] == '-'); it != text.end();) {
+			if (isdigit(*it))
+				it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
+			else if (spaced && *it == ' ') {
+				if (it = std::find_if(it + 1, text.end(), [](char c) -> bool { return c != ' '; }); signd && it != text.end() && *it == '-')
+					++it;
+				dot = integer;
+			} else if (!dot && *it == '.') {
+				dot = true;
 				++it;
-		} else {
-			ptrdiff_t ofs = it - text.begin();
-			text.erase(it, std::find_if(it + 1, text.end(), [](char c) -> bool { return isdigit(c) || c == ' '; }));
-			it = text.begin() + ofs;
-		}
-	}
-}
-
-void LabelEdit::cleanUIntSpacedText() {
-	text.erase(text.begin(), rng::find_if(text, notSpace));
-	for (string::iterator it = text.begin(); it != text.end();) {
-		if (isdigit(*it))
-			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
-		else if (*it == ' ')
-			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return c != ' '; });
-		else {
-			ptrdiff_t ofs = it - text.begin();
-			text.erase(it, std::find_if(it + 1, text.end(), [](char c) -> bool { return isdigit(c) || c == ' '; }));
-			it = text.begin() + ofs;
-		}
-	}
-}
-
-void LabelEdit::cleanSFloatText() {
-	text.erase(text.begin(), rng::find_if(text, notSpace));
-	bool dot = false;
-	for (string::iterator it = text.begin() + ptrdiff_t(text[0] == '-'); it != text.end();) {
-		if (isdigit(*it))
-			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
-		else if (*it == '.' && !dot) {
-			dot = true;
-			++it;
-		} else {
-			ptrdiff_t ofs = it - text.begin();
-			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isdigit(c) || (c == '.' && !dot); }));
-			it = text.begin() + ofs;
-		}
-	}
-}
-
-void LabelEdit::cleanSFloatSpacedText() {
-	text.erase(text.begin(), rng::find_if(text, notSpace));
-	bool dot = false;
-	for (string::iterator it = text.begin() + ptrdiff_t(text[0] == '-'); it != text.end();) {
-		if (isdigit(*it))
-			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
-		else if (*it == ' ') {
-			if (it = std::find_if(it + 1, text.end(), [](char c) -> bool { return c != ' '; }); it != text.end() && *it == '-')
-				++it;
-		} else if (*it == '.' && !dot) {
-			dot = true;
-			++it;
-		} else {
-			ptrdiff_t ofs = it - text.begin();
-			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isdigit(c) || c == ' ' || (c == '.' && !dot); }));
-			it = text.begin() + ofs;
-		}
-	}
-}
-
-void LabelEdit::cleanUFloatText() {
-	text.erase(text.begin(), rng::find_if(text, notSpace));
-	bool dot = false;
-	for (string::iterator it = text.begin(); it != text.end();) {
-		if (isdigit(*it))
-			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
-		else if (*it == '.' && !dot) {
-			dot = true;
-			++it;
-		} else {
-			ptrdiff_t ofs = it - text.begin();
-			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isdigit(c) || (c == '.' && !dot); }));
-			it = text.begin() + ofs;
-		}
-	}
-}
-
-void LabelEdit::cleanUFloatSpacedText() {
-	text.erase(text.begin(), rng::find_if(text, notSpace));
-	bool dot = false;
-	for (string::iterator it = text.begin(); it != text.end();) {
-		if (isdigit(*it))
-			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return !isdigit(c); });
-		else if (*it == ' ')
-			it = std::find_if(it + 1, text.end(), [](char c) -> bool { return c != ' '; });
-		else if (*it == '.' && !dot) {
-			dot = true;
-			++it;
-		} else {
-			ptrdiff_t ofs = it - text.begin();
-			text.erase(it, std::find_if(it + 1, text.end(), [dot](char c) -> bool { return isdigit(c) || c == ' ' || (c == '.' && !dot); }));
-			it = text.begin() + ofs;
+			} else {
+				size_t ofs = it - text.begin();
+				text.erase(it, std::find_if(it + 1, text.end(), testValid[spaced][dot]));
+				it = text.begin() + ofs;
+			}
 		}
 	}
 }
@@ -1060,7 +940,7 @@ void KeyGetter::onKeypress(SDL_Scancode key, SDL_Keymod) {
 void KeyGetter::onJButton(uint8 jbutton) {
 	if (acceptType == AcceptType::joystick) {
 		World::inputSys()->getBinding(bindingType).setJbutton(jbutton);
-		setText(std::format(fmtButton, jbutton));
+		setText(fmt::format(fmtButton, jbutton));
 	}
 	World::scene()->setCapture(nullptr);
 }
@@ -1074,7 +954,7 @@ void KeyGetter::onJHat(uint8 jhat, uint8 value) {
 				value = SDL_HAT_LEFT;
 		}
 		World::inputSys()->getBinding(bindingType).setJhat(jhat, value);
-		setText(std::format(fmtHat, jhat, Binding::hatValueToName(value)));
+		setText(fmt::format(fmtHat, jhat, Binding::hatValueToName(value)));
 	}
 	World::scene()->setCapture(nullptr);
 }
@@ -1082,7 +962,7 @@ void KeyGetter::onJHat(uint8 jhat, uint8 value) {
 void KeyGetter::onJAxis(uint8 jaxis, bool positive) {
 	if (acceptType == AcceptType::joystick) {
 		World::inputSys()->getBinding(bindingType).setJaxis(jaxis, positive);
-		setText(std::format(fmtAxis, positive ? prefAxisPos : prefAxisNeg, jaxis));
+		setText(fmt::format(fmtAxis, positive ? prefAxisPos : prefAxisNeg, jaxis));
 	}
 	World::scene()->setCapture(nullptr);
 }
@@ -1098,7 +978,7 @@ void KeyGetter::onGButton(SDL_GameControllerButton gbutton) {
 void KeyGetter::onGAxis(SDL_GameControllerAxis gaxis, bool positive) {
 	if (acceptType == AcceptType::gamepad) {
 		World::inputSys()->getBinding(bindingType).setGaxis(gaxis, positive);
-		setText(std::format("{}{}", positive ? prefAxisPos : prefAxisNeg, Binding::gaxisNames[eint(gaxis)]));
+		setText(fmt::format("{}{}", positive ? prefAxisPos : prefAxisNeg, Binding::gaxisNames[eint(gaxis)]));
 	}
 	World::scene()->setCapture(nullptr);
 }
@@ -1131,17 +1011,17 @@ string KeyGetter::bindingText(Binding::Type binding, KeyGetter::AcceptType accep
 		break;
 	case joystick:
 		if (bind.jbuttonAssigned())
-			return std::format(fmtButton, bind.getJctID());
+			return fmt::format(fmtButton, bind.getJctID());
 		else if (bind.jhatAssigned())
-			return std::format(fmtHat, bind.getJctID(), Binding::hatValueToName(bind.getJhatVal()));
+			return fmt::format(fmtHat, bind.getJctID(), Binding::hatValueToName(bind.getJhatVal()));
 		else if (bind.jaxisAssigned())
-			return std::format(fmtAxis, bind.jposAxisAssigned() ? prefAxisPos : prefAxisNeg, bind.getJctID());
+			return fmt::format(fmtAxis, bind.jposAxisAssigned() ? prefAxisPos : prefAxisNeg, bind.getJctID());
 		break;
 	case gamepad:
 		if (bind.gbuttonAssigned())
 			return Binding::gbuttonNames[eint(bind.getGbutton())];
 		else if (bind.gaxisAssigned())
-			return std::format("{}{}", bind.gposAxisAssigned() ? prefAxisPos : prefAxisNeg, Binding::gaxisNames[eint(bind.getGaxis())]);
+			return fmt::format("{}{}", bind.gposAxisAssigned() ? prefAxisPos : prefAxisNeg, Binding::gaxisNames[eint(bind.getGaxis())]);
 	}
 	return string();
 }
@@ -1165,7 +1045,7 @@ WindowArranger::~WindowArranger() {
 	freeTextures();
 }
 
-void WindowArranger::freeTextures() {
+void WindowArranger::freeTextures() noexcept {
 	for (auto& [id, dsp] : disps)
 		World::drawSys()->getRenderer()->freeTexture(dsp.txt);
 }
@@ -1191,7 +1071,7 @@ void WindowArranger::calcDisplays() {
 	}
 }
 
-void WindowArranger::buildEntries() {
+void WindowArranger::buildEntries() noexcept {
 	float scale = entryScale(size()[!vertical]);
 	for (auto& [id, dsp] : disps) {
 		dsp.rect = Recti(vec2(dsp.full.pos()) * scale, vec2(dsp.full.size()) * scale);
@@ -1199,11 +1079,11 @@ void WindowArranger::buildEntries() {
 	}
 }
 
-void WindowArranger::drawSelf(const Recti& view) {
+void WindowArranger::drawSelf(const Recti& view) noexcept {
 	World::drawSys()->drawWindowArranger(this, view);
 }
 
-void WindowArranger::drawTop(const Recti& view) const {
+void WindowArranger::drawTop(const Recti& view) const noexcept {
 	const Dsp& dsp = disps.at(dragging);
 	World::drawSys()->drawWaDisp(dragr, Color::light, dsp.txt ? Recti(dragr.pos() + (dragr.size() - ivec2(dsp.txt->getRes())) / 2, dsp.txt->getRes()) : Recti(0), dsp.txt, frame(), view);
 }
@@ -1220,7 +1100,7 @@ void WindowArranger::postInit() {
 void WindowArranger::onClick(ivec2 mPos, uint8 mBut) {
 	if (((mBut == SDL_BUTTON_LEFT && (actions & ACT_LEFT)) || (mBut == SDL_BUTTON_RIGHT && (actions & ACT_RIGHT))) && disps.size() > 1) {
 		selected = dispUnderPos(mPos);
-		if (umap<int, Dsp>::iterator it = disps.find(selected); it != disps.end()) {
+		if (auto it = disps.find(selected); it != disps.end()) {
 			it->second.active = !it->second.active;
 			pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(mBut == SDL_BUTTON_LEFT ? ACT_LEFT : ACT_RIGHT)));
 		}
@@ -1234,7 +1114,7 @@ void WindowArranger::onMouseMove(ivec2 mPos, ivec2) {
 void WindowArranger::onHold(ivec2 mPos, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT && disps.size() > 1) {
 		dragging = dispUnderPos(mPos);
-		if (umap<int, Dsp>::iterator it = disps.find(dragging); it != disps.end()) {
+		if (auto it = disps.find(dragging); it != disps.end()) {
 			World::scene()->setCapture(this);
 			SDL_CaptureMouse(SDL_TRUE);
 			dragr = it->second.rect.translate(position() + winMargin);
@@ -1264,7 +1144,7 @@ void WindowArranger::onUndrag(ivec2, uint8 mBut) {
 	}
 }
 
-ivec2 WindowArranger::snapDrag() const {
+ivec2 WindowArranger::snapDrag() const noexcept {
 	static constexpr array<pair<uint, uint>, 24> snapRelationsOuter = {
 		pair(0, 2), pair(0, 5), pair(0, 7),	// top left to top right, bottom left, bottom right
 		pair(1, 5), pair(1, 6), pair(1, 7),	// top center to bottom left, bottom center, bottom right
@@ -1289,12 +1169,12 @@ ivec2 WindowArranger::snapDrag() const {
 		[](ivec2 siz, ivec2 pnt) -> ivec2 { return pnt - siz; }
 	};
 
-	umap<int, Dsp>::const_iterator snapFrom = disps.find(dragging);
+	auto snapFrom = disps.find(dragging);
 	array<ivec2, 8> snaps = getSnapPoints(Recti(vec2(dragr.pos() - position() - winMargin) / entryScale(size()[!vertical]), snapFrom->second.full.size()));
 	uint snapId;
 	ivec2 snapPnt;
 	float minDist = FLT_MAX;
-	for (umap<int, Dsp>::const_iterator it = disps.begin(); it != disps.end(); ++it)
+	for (auto it = disps.begin(); it != disps.end(); ++it)
 		if (it->first != dragging)
 			scanClosestSnapPoint(snapRelationsOuter, it->second.full, snaps, snapId, snapPnt, minDist);
 	scanClosestSnapPoint(snapRelationsInner, Recti(ivec2(0), totalDim), snaps, snapId, snapPnt, minDist);
@@ -1317,7 +1197,7 @@ array<ivec2, 8> WindowArranger::getSnapPoints(const Recti& rect) noexcept {
 }
 
 template <size_t S>
-void WindowArranger::scanClosestSnapPoint(const array<pair<uint, uint>, S>& relations, const Recti& rect, const array<ivec2, 8>& snaps, uint& snapId, ivec2& snapPnt, float& minDist) {
+void WindowArranger::scanClosestSnapPoint(const array<pair<uint, uint>, S>& relations, const Recti& rect, const array<ivec2, 8>& snaps, uint& snapId, ivec2& snapPnt, float& minDist) noexcept {
 	array<ivec2, 8> rpnts = getSnapPoints(rect);
 	for (auto [from, to] : relations)
 		if (float dist = glm::length(vec2(rpnts[to] - snaps[from])); dist < minDist) {
@@ -1338,7 +1218,7 @@ bool WindowArranger::navSelectable() const noexcept {
 	return true;
 }
 
-const char* WindowArranger::getTooltip() const {
+const char* WindowArranger::getTooltip() const noexcept {
 	return tooltip.filled() && disps.contains(selected) ? tooltip.data() : nullptr;
 }
 
@@ -1346,7 +1226,7 @@ bool WindowArranger::draggingDisp(int id) const noexcept {
 	return id == dragging && World::scene()->getCapture() == this;
 }
 
-int WindowArranger::dispUnderPos(ivec2 pnt) const {
+int WindowArranger::dispUnderPos(ivec2 pnt) const noexcept {
 	ivec2 pos = position();
 	for (const auto& [id, dsp] : disps)
 		if (offsetDisp(dsp.rect, pos).contains(pnt))
@@ -1359,7 +1239,7 @@ float WindowArranger::entryScale(int fsiz) const noexcept {
 	return int(float(totalDim[!vertical]) * bscale) <= fsiz ? bscale : float(totalDim[!vertical]) / float(fsiz);
 }
 
-WindowArranger::DspDisp WindowArranger::dispRect(int id, const Dsp& dsp) const {
+WindowArranger::DspDisp WindowArranger::dispRect(int id, const Dsp& dsp) const noexcept {
 	ivec2 offs = position() + winMargin;
 	Recti rct = dsp.rect.translate(offs);
 	return {

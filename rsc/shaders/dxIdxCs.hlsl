@@ -2,7 +2,7 @@ cbuffer Offset : register(b0) {
 	uint offset;
 };
 
-cbuffer Colors : register(b1) {
+cbuffer Palette : register(b1) {
 	uint4 colors[256 / 4];
 };
 

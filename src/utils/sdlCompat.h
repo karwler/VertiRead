@@ -1,18 +1,17 @@
 #pragma once
 
+#include "sthandle.h"
+#include <SDL_surface.h>
 #include <SDL_version.h>
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#include <memory>
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 #define SDL_ENABLE_OLD_NAMES
 #include <SDL_oldnames.h>
 
-#undef SDL_CONTROLLER_AXIS_MAX
-#undef SDL_CONTROLLER_BUTTON_MAX
 #undef SDL_ConvertSurfaceFormat
 #undef SDL_RWread
 #undef SDL_RWwrite
 
-#define SDL_CONTROLLER_AXIS_MAX SDL_GAMEPAD_AXIS_COUNT
-#define SDL_CONTROLLER_BUTTON_MAX SDL_GAMEPAD_BUTTON_COUNT
 #define SDL_ConvertSurfaceFormat(s, t, f) SDL_ConvertSurface(s, t)
 #define SDL_GL_GetDrawableSize SDL_GetWindowSizeInPixels
 #define SDL_PixelFormatEnum SDL_PixelFormat
@@ -28,6 +27,7 @@
 
 #define mpvec2 vec2
 #define sdlFailed(r) !(r)
+#define sdlSucceeded(r) r
 #define surfaceBytesPpx(s) SDL_BYTESPERPIXEL((s)->format)
 #define surfaceFormat(s) (s)->format
 #define surfacePalette(s) SDL_GetSurfacePalette(s)
@@ -38,16 +38,43 @@
 #define SDL_MAIN_HANDLED
 
 #define SDL_CreateSurface(w, h, t) SDL_CreateRGBSurfaceWithFormat(0, w, h, SDL_BITSPERPIXEL(t), t)
+#define SDL_CreateSurfaceFrom(w, h, t, x, p) SDL_CreateRGBSurfaceWithFormatFrom(x, w, h, SDL_BITSPERPIXEL(t), p, t)
 #define SDL_DisplayID int
 #define SDL_IOWhence int
 #define SDL_MapSurfaceRGBA(s, r, g, b, a) SDL_MapRGBA((s)->format, r, g, b, a)
 
 #define mpvec2 ivec2
 #define sdlFailed(r) r
+#define sdlSucceeded(r) !(r)
 #define surfaceBytesPpx(s) (s)->format->BytesPerPixel
 #define surfaceFormat(s) SDL_PixelFormatEnum((s)->format->format)
 #define surfacePalette(s) (s)->format->palette
 #define surfaceScaleNearest(si, sr, di, dr) SDL_BlitScaled(si, sr, di, dr)
 #define surfaceScaleLinear(si, sr, di, dr) SDL_BlitScaled(si, sr, di, dr)
 #define tick_t uint32
+#endif
+
+namespace std {
+
+template <>
+struct default_delete<SDL_Surface> {
+	void operator()(SDL_Surface* ptr) const noexcept { SDL_FreeSurface(ptr); }
+};
+
+template <>
+struct default_delete<SDL_RWops> {
+	void operator()(SDL_RWops* ptr) const noexcept { SDL_RWclose(ptr); }
+};
+
+}
+
+struct SdlFreePtr {
+	void operator()(void* ptr) const noexcept { SDL_free(ptr); }
+};
+
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+template <>
+struct DefaultHandleClose<SDL_PropertiesID> {
+	void operator()(SDL_PropertiesID hnd) const noexcept { SDL_DestroyProperties(hnd); }
+};
 #endif

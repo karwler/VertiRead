@@ -17,8 +17,8 @@ struct Children {
 	Children& operator=(const Children&) = delete;
 	Children& operator=(Children&&) = default;
 
-	Widget*& operator[](uint id) { return wgts[id]; }
-	Widget* const& operator[](uint id) const { return wgts[id]; }
+	Widget*& operator[](uint id) noexcept { return wgts[id]; }
+	Widget* const& operator[](uint id) const noexcept { return wgts[id]; }
 };
 
 template <Class T>
@@ -47,28 +47,28 @@ public:
 	Layout(const Size& size, Children&& children, Direction dir = defaultDirection, ushort space = defaultItemSpacing, bool pad = false);
 	~Layout() override;
 
-	void drawSelf(const Recti& view) override;
+	void drawSelf(const Recti& view) noexcept override;
 	void onResize() override;
-	void tick(float dSec) override;
+	void tick(float dSec) noexcept override;
 	void postInit() override;
 	void onMouseMove(ivec2 mPos, ivec2 mMov) override;
 	void onDisplayChange() override;
-	void onNavSelect(Direction) override {}
+	void onNavSelect(Direction) noexcept override {}
 	bool navSelectable() const noexcept override;
 
-	virtual void navSelectNext(uint id, int mid, Direction dir);
-	virtual void navSelectFrom(int mid, Direction dir);
+	virtual void navSelectNext(uint id, int mid, Direction dir) noexcept;
+	virtual void navSelectFrom(int mid, Direction dir) noexcept;
 
-	template <Class T = Widget> T* getWidget(uint id) const { return static_cast<T*>(widgets[id]); }
-	std::span<Widget*> getWidgets() const { return std::span(widgets.get(), numWgts); }
+	template <Class T = Widget> T* getWidget(uint id) const noexcept { return static_cast<T*>(widgets[id]); }
+	std::span<Widget*> getWidgets() const noexcept { return std::span(widgets.get(), numWgts); }
 	virtual void setWidgets(Children&& children);	// not suitable for using on a ReaderBox, use setPictures
 	void insertWidget(uint id, Widget* wgt);
 	void replaceWidget(uint id, Widget* widget);
 	void deleteWidget(uint id);
-	virtual ivec2 wgtPosition(uint id) const;
-	virtual ivec2 wgtSize(uint id) const;
-	int getSpacing() const { return spacing; }
-	bool isVertical() const { return direction.vertical(); }
+	virtual ivec2 wgtPosition(uint id) const noexcept;
+	virtual ivec2 wgtSize(uint id) const noexcept;
+	int getSpacing() const noexcept { return spacing; }
+	bool isVertical() const noexcept { return direction.vertical(); }
 	bool isParentOf(const Widget* wgt) const noexcept;
 
 protected:
@@ -77,12 +77,12 @@ protected:
 	virtual void calculateWidgetPositions();
 	virtual void postWidgetsChange();
 
-	void navSelectWidget(uint id, int mid, Direction dir);
+	void navSelectWidget(uint id, int mid, Direction dir) noexcept;
 	void deselectWidgets() const;
 private:
 	void deselectWidget(const Widget* wgt) const;
-	void scanSequential(uint id, int mid, Direction dir);
-	void scanPerpendicular(int mid, Direction dir);
+	void scanSequential(uint id, int mid, Direction dir) noexcept;
+	void scanPerpendicular(int mid, Direction dir) noexcept;
 };
 
 // top level layout
@@ -90,9 +90,9 @@ class RootLayout : public Layout {
 public:
 	using Layout::Layout;
 
-	ivec2 position() const override;
-	ivec2 size() const override;
-	Recti frame() const override;
+	ivec2 position() const noexcept override;
+	ivec2 size() const noexcept override;
+	Recti frame() const noexcept override;
 	void setSize(const Size& size) override;
 };
 
@@ -109,10 +109,10 @@ protected:
 public:
 	Popup(const svec2& size, Children&& children, EventId cancelCall = nullEvent, EventId confirmCall = nullEvent, Widget* first = nullptr, Color background = Color::normal, Direction dir = defaultDirection, ushort space = defaultItemSpacing, bool pad = true);
 
-	void drawSelf(const Recti& view) override;
+	void drawSelf(const Recti& view) noexcept override;
 
-	ivec2 position() const override;
-	ivec2 size() const override;
+	ivec2 position() const noexcept override;
+	ivec2 size() const noexcept override;
 };
 
 // popup that can be enabled or disabled
@@ -126,8 +126,8 @@ private:
 public:
 	Overlay(const svec2& position, const svec2& size, const svec2& activationPos, const svec2& activationSize, Children&& children, Color background = Color::normal, Direction dir = defaultDirection, ushort space = defaultItemSpacing, bool pad = false);
 
-	ivec2 position() const override;
-	Recti actRect() const;
+	ivec2 position() const noexcept override;
+	Recti actRect() const noexcept;
 };
 
 // mix between popup and overlay for context menus
@@ -140,9 +140,9 @@ public:
 	Context(const svec2& position, const svec2& size, Children&& children, Widget* first = nullptr, Widget* owner = nullptr, Color background = Color::dark, EventId resize = nullEvent, Direction dir = defaultDirection, ushort space = defaultItemSpacing, bool pad = true);
 
 	void onResize() override;
-	ivec2 position() const override;
+	ivec2 position() const noexcept override;
 
-	template <Class T = Widget> T* owner() const { return reinterpret_cast<T*>(parent); }
+	template <Class T = Widget> T* owner() const noexcept { return reinterpret_cast<T*>(parent); }
 	void setRect(const Recti& rct) noexcept;
 };
 
@@ -151,42 +151,42 @@ class ScrollArea : public Layout, protected Scrollable {
 public:
 	using Layout::Layout;
 
-	void drawSelf(const Recti& view) override;
+	void drawSelf(const Recti& view) noexcept override;
 	void onResize() override;
-	void tick(float dSec) override;
+	void tick(float dSec) noexcept override;
 	void onHold(ivec2 mPos, uint8 mBut) override;
 	void onDrag(ivec2 mPos, ivec2 mMov) override;
 	void onUndrag(ivec2 mPos, uint8 mBut) override;
-	void onScroll(ivec2 wMov) override;
+	void onScroll(vec2 wMov) override;
 
-	void navSelectNext(uint id, int mid, Direction dir) override;
-	void navSelectFrom(int mid, Direction dir) override;
-	void scrollToWidgetPos(uint id);	// set listPos.y to the widget's position
-	void scrollToWidgetEnd(uint id);
-	bool scrollToNext();				// scroll to next widget (returns false if at scroll limit)
-	bool scrollToPrevious();			// scroll to previous widget (returns false if at scroll limit)
-	void scrollToLimit(bool start);		// scroll to start or end of the list relative to it's direction
+	void navSelectNext(uint id, int mid, Direction dir) noexcept override;
+	void navSelectFrom(int mid, Direction dir) noexcept override;
+	void scrollToWidgetPos(uint id) noexcept;	// set listPos.y to the widget's position
+	void scrollToWidgetEnd(uint id) noexcept;
+	bool scrollToNext() noexcept;				// scroll to next widget (returns false if at scroll limit)
+	bool scrollToPrevious() noexcept;			// scroll to previous widget (returns false if at scroll limit)
+	void scrollToLimit(bool start) noexcept;		// scroll to start or end of the list relative to it's direction
 	float getScrollLocation() const;
 	void setScrollLocation(float loc);
 
 	void setWidgets(Children&& children) override;
-	Recti frame() const override;
-	ivec2 wgtPosition(uint id) const override;
-	ivec2 wgtSize(uint id) const override;
-	uvec2 visibleWidgets() const;
+	Recti frame() const noexcept override;
+	ivec2 wgtPosition(uint id) const noexcept override;
+	ivec2 wgtSize(uint id) const noexcept override;
+	uvec2 visibleWidgets() const noexcept;
 	Recti barRect() const;
 	Recti sliderRect() const;
 
 protected:
-	void scrollToSelected();
+	void scrollToSelected() noexcept;
 	void calculateWidgetPositions() override;
 	void postWidgetsChange() override;
-	virtual int wgtRPos(uint id) const;
-	virtual int wgtREnd(uint id) const;
-	uint firstWidgetAt(int rpos) const;
+	int wgtRPos(uint id) const noexcept;
+	virtual int wgtREnd(uint id) const noexcept;
+	uint firstWidgetAt(int rpos) const noexcept;
 
 private:
-	void scrollToFollowing(uint id, bool prev);
+	void scrollToFollowing(uint id, bool prev) noexcept;
 };
 
 inline Recti ScrollArea::barRect() const {
@@ -208,21 +208,21 @@ private:
 public:
 	TileBox(const Size& size, Children&& children, int childHeight = defaultItemHeight, Direction dir = defaultDirection, ushort space = defaultItemSpacing, bool pad = false);
 
-	void navSelectNext(uint id, int mid, Direction dir) override;
-	void navSelectFrom(int mid, Direction dir) override;
+	void navSelectNext(uint id, int mid, Direction dir) noexcept override;
+	void navSelectFrom(int mid, Direction dir) noexcept override;
 
-	ivec2 wgtSize(uint id) const override;
+	ivec2 wgtSize(uint id) const noexcept override;
 protected:
 	void calculateWidgetPositions() override;
 
 private:
-	void scanVertically(uint id, int mid, Direction dir);
-	void scanHorizontally(uint id, int mid, Direction dir);
-	void scanFromStart(int mid, Direction dir);
-	void scanFromEnd(int mid, Direction dir);
-	void navSelectIfInRange(uint id, int mid, Direction dir);
+	void scanVertically(uint id, int mid, Direction dir) noexcept;
+	void scanHorizontally(uint id, int mid, Direction dir) noexcept;
+	void scanFromStart(int mid, Direction dir) noexcept;
+	void scanFromEnd(int mid, Direction dir) noexcept;
+	void navSelectIfInRange(uint id, int mid, Direction dir) noexcept;
 
-	int wgtREnd(uint id) const override;
+	int wgtREnd(uint id) const noexcept override;
 };
 
 // for scrolling through pictures
@@ -239,9 +239,10 @@ private:
 public:
 	ReaderBox(const Size& size, Direction dir, int8 zstep, ushort space, bool pad = false);
 
-	void drawSelf(const Recti& view) override;
-	void tick(float dSec) override;
+	void drawSelf(const Recti& view) noexcept override;
+	void tick(float dSec) noexcept override;
 	void onMouseMove(ivec2 mPos, ivec2 mMov) override;
+	void scrollDirect(vec2 wMov);
 
 	void setPictures(std::forward_list<pair<Cstring, Texture*>>& imgs, uint cnt, string_view startPic, bool fwd);
 	bool showBar() const noexcept;
@@ -249,24 +250,24 @@ public:
 	void addZoom(int8 step);
 	int8 zoomStepToFit(uint res) const noexcept;
 	void centerList() noexcept;		// set listPos.x so that the view will be in the center
-	const char* firstPage() const;
-	const char* lastPage() const;
-	const char* curPage() const;
-	ivec2 wgtSize(uint id) const override;
+	const char* firstPage() const noexcept;
+	const char* lastPage() const noexcept;
+	const char* curPage() const noexcept;
+	ivec2 wgtSize(uint id) const noexcept override;
 
 private:
 	void calculateWidgetPositions() override;
 	template <Invocable<int8> F> void setZoom(F zset, int8 step);
 };
 
-inline const char* ReaderBox::firstPage() const {
+inline const char* ReaderBox::firstPage() const noexcept {
 	return numWgts ? picNames[0].data() : &Cstring::nullch;
 }
 
-inline const char* ReaderBox::lastPage() const {
+inline const char* ReaderBox::lastPage() const noexcept {
 	return numWgts ? picNames[numWgts - 1].data() : &Cstring::nullch;
 }
 
-inline const char* ReaderBox::curPage() const {
+inline const char* ReaderBox::curPage() const noexcept {
 	return numWgts ? picNames[direction.positive() ? firstWidgetAt(listPos[direction.vertical()]) : visibleWidgets().y - 1].data() : &Cstring::nullch;
 }

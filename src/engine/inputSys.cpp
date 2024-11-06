@@ -10,16 +10,15 @@
 InputSys::InputSys() :
 	bindings(World::fileSys()->loadBindings())
 {
-#if SDL_VERSION_ATLEAST(3, 0, 0)
-	if (int cnt; SDL_JoystickID* jids = SDL_GetJoysticks(&cnt)) {
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+	int cnt;
+	if (uptr<SDL_JoystickID[], SdlFreePtr> jids(SDL_GetJoysticks(&cnt)); jids)
 		for (int i = 0; i < cnt; ++i) {
 			if (SDL_IsGameController(jids[i]))
 				addGamepad(jids[i]);
 			else
 				addJoystick(jids[i]);
 		}
-		SDL_free(jids);
-	}
 #else
 	for (int i = 0, e = SDL_NumJoysticks(); i < e; ++i) {
 		if (SDL_IsGameController(i))
@@ -41,7 +40,7 @@ void InputSys::cleanup() noexcept {
 
 void InputSys::eventMouseMotion(const SDL_MouseMotionEvent& motion) {
 	mouseWin = motion.type == SDL_MOUSEMOTION ? optional(motion.windowID) : std::nullopt;
-	mouseMove = ivec2(motion.xrel, motion.yrel);
+	mouseMove = vec2(motion.xrel, motion.yrel);
 	moveTime = motion.timestamp;
 	World::scene()->onMouseMove(ivec2(motion.x, motion.y) + World::winSys()->winViewOffset(motion.windowID), mouseMove);
 }
@@ -68,11 +67,11 @@ void InputSys::eventMouseButtonUp(const SDL_MouseButtonEvent& button) {
 
 void InputSys::eventMouseWheel(const SDL_MouseWheelEvent& wheel) {
 	mouseWin = wheel.windowID;
-	World::scene()->onMouseWheel(ivec2(wheel.x, -wheel.y));
+	World::scene()->onMouseWheel(vec2(wheel.x, -wheel.y));
 }
 
 void InputSys::eventKeypress(const SDL_KeyboardEvent& key) const {
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 	if (World::scene()->getCapture())	// different behavior when capturing or not
 		World::scene()->getCapture()->onKeypress(key.scancode, key.mod);
 	else
@@ -142,7 +141,7 @@ void InputSys::eventFingerMove(const SDL_TouchFingerEvent& fin) {
 		.windowID = fin.windowID,
 		.which = SDL_TOUCH_MOUSEID,
 		.state = SDL_BUTTON_LMASK,
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 		.x = fin.x * size.x,
 		.y = fin.y * size.y,
 		.xrel = fin.dx * size.x,
@@ -172,13 +171,13 @@ SDL_MouseButtonEvent InputSys::toMouseEvent(const SDL_TouchFingerEvent& fin, boo
 		.windowID = fin.windowID,
 		.which = SDL_TOUCH_MOUSEID,
 		.button = SDL_BUTTON_LEFT,
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 		.down = down,
 #else
 		.state = uint8(down ? SDL_PRESSED : SDL_RELEASED),
 #endif
 		.clicks = 1,
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 		.x = fin.x * winSize.x,
 		.y = fin.y * winSize.y
 #else
@@ -231,7 +230,7 @@ void InputSys::checkBindingsX(SDL_GameControllerAxis gaxis, bool positive) const
 			World::program()->getState()->exec(bindings[i].bcall);
 }
 
-bool InputSys::isPressed(const Binding& abind, float& amt) const {
+bool InputSys::isPressed(const Binding& abind, float& amt) const noexcept {
 	if (abind.keyAssigned() && SDL_GetKeyboardState(nullptr)[abind.getKey()])	// check keyboard keys
 		return true;
 
@@ -255,7 +254,7 @@ bool InputSys::isPressed(const Binding& abind, float& amt) const {
 	return false;
 }
 
-bool InputSys::isPressedH(uint8 jhat, uint8 val) const {
+bool InputSys::isPressedH(uint8 jhat, uint8 val) const noexcept {
 	for (const Controller& it : controllers)
 		if (!it.gamepad)
 			for (int i = 0; i < SDL_JoystickNumHats(it.joystick); ++i)
@@ -264,7 +263,7 @@ bool InputSys::isPressedH(uint8 jhat, uint8 val) const {
 	return false;
 }
 
-int InputSys::getAxisJ(uint8 jaxis) const {
+int InputSys::getAxisJ(uint8 jaxis) const noexcept {
 	for (const Controller& it : controllers)	// get first axis that isn't 0
 		if (!it.gamepad)
 			if (int val = checkAxisValue(SDL_JoystickGetAxis(it.joystick, jaxis)); val)
@@ -272,7 +271,7 @@ int InputSys::getAxisJ(uint8 jaxis) const {
 	return 0;
 }
 
-int InputSys::getAxisG(SDL_GameControllerAxis gaxis) const {
+int InputSys::getAxisG(SDL_GameControllerAxis gaxis) const noexcept {
 	for (const Controller& it : controllers)	// get first axis that isn't 0
 		if (it.gamepad)
 			if (int val = checkAxisValue(SDL_GameControllerGetAxis(it.gamepad, gaxis)); val)
@@ -287,17 +286,17 @@ string InputSys::getBoundName(Binding::Type type) const {
 	if (bind.jbuttonAssigned())
 		return toStr(bind.getJctID());
 	if (bind.jhatAssigned())
-		return std::format("{:d} {}", bind.getJctID(), Binding::hatValueToName(bind.getJhatVal()));
+		return fmt::format("{:d} {}", bind.getJctID(), Binding::hatValueToName(bind.getJhatVal()));
 	if (bind.jaxisAssigned())
-		return std::format("{}{:d}", bind.jposAxisAssigned() ? '+' : '-', bind.getJctID());
+		return fmt::format("{}{:d}", bind.jposAxisAssigned() ? '+' : '-', bind.getJctID());
 	if (bind.gbuttonAssigned())
 		return Binding::gbuttonNames[eint(bind.getGbutton())];
 	if (bind.gaxisAssigned())
-		return std::format("{}{}", bind.gposAxisAssigned() ? '+' : '-', Binding::gaxisNames[eint(bind.getGaxis())]);
+		return fmt::format("{}{}", bind.gposAxisAssigned() ? '+' : '-', Binding::gaxisNames[eint(bind.getGaxis())]);
 	return string();
 }
 
-void InputSys::resetBindings() {
+void InputSys::resetBindings() noexcept {
 	for (size_t i = 0; i < bindings.size(); ++i)
 		bindings[i].reset(Binding::Type(i));
 }
@@ -313,10 +312,10 @@ void InputSys::addGamepad(SDL_JoystickID jid) {
 }
 
 void InputSys::delJoystick(SDL_JoystickID jid) {
-#if SDL_VERSION_ATLEAST(3, 0, 0)
-	if (vector<Controller>::iterator cit = rng::find_if(controllers, [jid](const Controller& it) -> bool { return !it.gamepad && SDL_GetJoystickID(it.joystick) == jid; }); cit != controllers.end()) {
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+	if (auto cit = rng::find_if(controllers, [jid](const Controller& it) -> bool { return !it.gamepad && SDL_GetJoystickID(it.joystick) == jid; }); cit != controllers.end()) {
 #else
-	if (vector<Controller>::iterator cit = rng::find_if(controllers, [jid](const Controller& it) -> bool { return !it.gamepad && SDL_JoystickInstanceID(it.joystick) == jid; }); cit != controllers.end()) {
+	if (auto cit = rng::find_if(controllers, [jid](const Controller& it) -> bool { return !it.gamepad && SDL_JoystickInstanceID(it.joystick) == jid; }); cit != controllers.end()) {
 #endif
 		SDL_JoystickClose(cit->joystick);
 		controllers.erase(cit);
@@ -324,17 +323,17 @@ void InputSys::delJoystick(SDL_JoystickID jid) {
 }
 
 void InputSys::delGamepad(SDL_JoystickID jid) {
-#if SDL_VERSION_ATLEAST(3, 0, 0)
-	if (vector<Controller>::iterator cit = rng::find_if(controllers, [jid](const Controller& it) -> bool { return it.gamepad && SDL_GetGamepadID(it.gamepad) == jid; }); cit != controllers.end()) {
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+	if (auto cit = rng::find_if(controllers, [jid](const Controller& it) -> bool { return it.gamepad && SDL_GetGamepadID(it.gamepad) == jid; }); cit != controllers.end()) {
 #else
-	if (vector<Controller>::iterator cit = rng::find_if(controllers, [jid](const Controller& it) -> bool { return it.gamepad && it.joystick && SDL_JoystickInstanceID(it.joystick) == jid; }); cit != controllers.end()) {
+	if (auto cit = rng::find_if(controllers, [jid](const Controller& it) -> bool { return it.gamepad && it.joystick && SDL_JoystickInstanceID(it.joystick) == jid; }); cit != controllers.end()) {
 #endif
 		SDL_GameControllerClose(cit->gamepad);
 		controllers.erase(cit);
 	}
 }
 
-int InputSys::checkAxisValue(int value) const {
+int InputSys::checkAxisValue(int value) const noexcept {
 	return std::abs(value) > World::sets()->getDeadzone() ? value : 0;
 }
 

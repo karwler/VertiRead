@@ -35,14 +35,7 @@ def compile_source(glslc: str, name: str, src_dir: str, dst_dir: str):
 			spv_file = os.path.join(dst_dir, f'{name}.{ext}.spv')
 			cpp_file = os.path.join(dst_dir, f'{name}.{ext}.h')
 
-			ret = subprocess.run([glslc, '--target-env=vulkan1.0', '--target-spv=spv1.0', opt, '-o', spv_file, src_file])
-			if ret.stdout:
-				print(f'stdout: {ret.stdout}')
-			if ret.stderr:
-				print(f'stderr: {ret.stderr}')
-			if ret.returncode != 0:
-				print(f'returned: {ret.returncode}')
-
+			subprocess.run([glslc, '--target-env=vulkan1.0', '--target-spv=spv1.0', opt, '-o', spv_file, src_file]).check_returncode()
 			bytes_to_text(spv_file, cpp_file, 4)
 			os.remove(spv_file)
 		except Exception as e:
@@ -56,5 +49,10 @@ if __name__ == '__main__':
 
 	srcd = os.path.join(os.path.dirname(__file__), 'shaders')
 	dstd = os.path.join(os.path.dirname(__file__), os.pardir, 'src', 'engine', 'shaders')
-	for it in ['vkGui.vert', 'vkGui.frag', 'vkRgb.comp', 'vkIdx.comp']:
+	shaders = [
+		'vkGui.vert', 'vkGui.frag',
+		'vkFin.vert', 'vkFin.frag',
+		'vkRgb.comp', 'vkIdx.comp'
+	]
+	for it in shaders:
 		compile_source(comp, it, srcd, dstd)

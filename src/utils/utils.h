@@ -1,22 +1,25 @@
 #pragma once
 
 #include "sdlCompat.h"
-#include <SDL_rect.h>
 #include <algorithm>
 #include <array>
 #include <charconv>
 #include <cstring>
-#include <filesystem>
+#ifdef WITH_LIBFMT
+#include <fmt/format.h>
+#else
+#include <format>
+#endif
 #include <glm/common.hpp>
 #include <glm/fwd.hpp>
-#include <memory>
 #include <optional>
-#include <string>
 #include <unordered_map>
 #include <vector>
 using namespace std::string_literals;
 using namespace std::string_view_literals;
-namespace fs = std::filesystem;
+#ifndef WITH_LIBFMT
+namespace fmt = std;
+#endif
 namespace rng = std::ranges;
 
 // to make life easier
@@ -38,6 +41,13 @@ using std::vector;
 using std::wstring;
 using std::wstring_view;
 
+#ifdef _WIN32
+using nchar = wchar_t;
+using nstring = wstring;
+#else
+using nchar = char;
+using nstring = string;
+#endif
 template <class... T> using umap = std::unordered_map<T...>;
 template <class... T> using uptr = std::unique_ptr<T...>;
 
@@ -112,6 +122,8 @@ template <class T> concept Iterator = requires(T t) { ++t; *t; };
 template <class T> concept MemberFunction = std::is_member_function_pointer_v<T>;
 template <class T, class... A> concept Invocable = std::is_invocable_v<T, A...>;
 template <class T, class R, class... A> concept InvocableR = std::is_invocable_r_v<R, T, A...>;
+template <class T, class... A> concept InvocableNothrow = std::is_nothrow_invocable_v<T, A...>;
+template <class T, class R, class... A> concept InvocableNothrowR = std::is_nothrow_invocable_r_v<R, T, A...>;
 
 #ifdef _WIN32
 #define LINEND "\r\n"
@@ -121,53 +133,62 @@ inline constexpr char directorySeparator = '\\';
 inline constexpr char directorySeparator = '/';
 #endif
 
+constexpr int8 operator""_i8(ullong n) { return n; }
+constexpr uint8 operator""_u8(ullong n) { return n; }
+constexpr int16 operator""_i16(ullong n) { return n; }
+constexpr uint16 operator""_u16(ullong n) { return n; }
+constexpr int32 operator""_i32(ullong n) { return n; }
+constexpr uint32 operator""_u32(ullong n) { return n; }
+constexpr int64 operator""_i64(ullong n) { return n; }
+constexpr uint64 operator""_u64(ullong n) { return n; }
+
 template <Enumeration T>
-constexpr T operator~(T a) {
+constexpr T operator~(T a) noexcept {
 	return T(~std::underlying_type_t<T>(a));
 }
 
 template <Enumeration T>
-constexpr T operator&(T a, T b) {
+constexpr T operator&(T a, T b) noexcept {
 	return T(std::underlying_type_t<T>(a) & std::underlying_type_t<T>(b));
 }
 
 template <Enumeration T>
-constexpr T operator&=(T& a, T b) {
+constexpr T operator&=(T& a, T b) noexcept {
 	return a = T(std::underlying_type_t<T>(a) & std::underlying_type_t<T>(b));
 }
 
 template <Enumeration T>
-constexpr T operator|(T a, T b) {
+constexpr T operator|(T a, T b) noexcept {
 	return T(std::underlying_type_t<T>(a) | std::underlying_type_t<T>(b));
 }
 
 template <Enumeration T>
-constexpr T operator|=(T& a, T b) {
+constexpr T operator|=(T& a, T b) noexcept {
 	return a = T(std::underlying_type_t<T>(a) | std::underlying_type_t<T>(b));
 }
 
 template <Enumeration T>
-constexpr T operator^(T a, T b) {
+constexpr T operator^(T a, T b) noexcept {
 	return T(std::underlying_type_t<T>(a) ^ std::underlying_type_t<T>(b));
 }
 
 template <Enumeration T>
-constexpr T operator^=(T& a, T b) {
+constexpr T operator^=(T& a, T b) noexcept {
 	return a = T(std::underlying_type_t<T>(a) ^ std::underlying_type_t<T>(b));
 }
 
 template <Enumeration T>
-constexpr std::underlying_type_t<T> eint(T e) {
+constexpr std::underlying_type_t<T> eint(T e) noexcept {
 	return std::underlying_type_t<T>(e);
 }
 
 template <Number T>
-constexpr bool outRange(T val, T min, T max) {
+constexpr bool outRange(T val, T min, T max) noexcept {
 	return val < min || val > max;
 }
 
 template <IntegerPointer T>
-T coalesce(T val, T alt) {
+T coalesce(T val, T alt) noexcept {
 	return val ? val : alt;
 }
 
@@ -177,7 +198,7 @@ T valcp(const T& v) {
 }
 
 #ifndef NDEBUG
-inline void dbgPass() { /* for setting break points in awkward places */ }
+inline void dbgPass() noexcept { /* for setting break points in awkward places */ }
 #endif
 
 // SDL_Rect equivalent (must be reinterpretable)
@@ -189,37 +210,39 @@ struct Rect {
 	T x, y, w, h;
 
 	Rect() = default;
-	template <Number U> constexpr Rect(const Rect<U>& r) : x(T(r.x)), y(T(r.y)), w(T(r.w)), h(T(r.h)) {}
-	constexpr Rect(T n) : x(n), y(n), w(n), h(n) {}
-	constexpr Rect(T px, T py, T sw, T sh) : x(px), y(py), w(sw), h(sh) {}
-	constexpr Rect(T px, T py, const tvec2& sv) : x(px), y(py), w(sv.x), h(sv.y) {}
-	constexpr Rect(const tvec2& pv, T sw, T sh) : x(pv.x), y(pv.y), w(sw), h(sh) {}
-	constexpr Rect(const tvec2& pv, const tvec2& sv) : x(pv.x), y(pv.y), w(sv.x), h(sv.y) {}
-	constexpr Rect(const tvec4& rv) : x(rv.x), y(rv.y), w(rv.z), h(rv.w) {}
+	template <Number U> constexpr Rect(const Rect<U>& r) noexcept : x(T(r.x)), y(T(r.y)), w(T(r.w)), h(T(r.h)) {}
+	constexpr Rect(T n) noexcept : x(n), y(n), w(n), h(n) {}
+	constexpr Rect(T px, T py, T sw, T sh) noexcept : x(px), y(py), w(sw), h(sh) {}
+	constexpr Rect(T px, T py, const tvec2& sv) noexcept : x(px), y(py), w(sv.x), h(sv.y) {}
+	constexpr Rect(const tvec2& pv, T sw, T sh) noexcept : x(pv.x), y(pv.y), w(sw), h(sh) {}
+	constexpr Rect(const tvec2& pv, const tvec2& sv) noexcept : x(pv.x), y(pv.y), w(sv.x), h(sv.y) {}
+	constexpr Rect(const tvec4& rv) noexcept : x(rv.x), y(rv.y), w(rv.z), h(rv.w) {}
 
-	tvec2& pos() { return *reinterpret_cast<tvec2*>(this); }
-	constexpr tvec2 pos() const { return tvec2(x, y); }
-	tvec2& size() { return reinterpret_cast<tvec2*>(this)[1]; }
-	constexpr tvec2 size() const { return tvec2(w, h); }
-	constexpr tvec2 end() const { return pos() + size(); }
-	tvec4& asVec() { return *reinterpret_cast<tvec4*>(this); }
-	const tvec4& asVec() const { return *reinterpret_cast<const tvec4*>(this); }
-	SDL_Rect& asRect() { return *reinterpret_cast<SDL_Rect*>(this); }
-	const SDL_Rect& asRect() const { return *reinterpret_cast<const SDL_Rect*>(this); }
+	tvec2& pos() noexcept { return *reinterpret_cast<tvec2*>(this); }
+	constexpr tvec2 pos() const noexcept { return tvec2(x, y); }
+	tvec2& size() noexcept { return reinterpret_cast<tvec2*>(this)[1]; }
+	constexpr tvec2 size() const noexcept { return tvec2(w, h); }
+	constexpr tvec2 end() const noexcept { return pos() + size(); }
+	tvec4& asVec() noexcept { return *reinterpret_cast<tvec4*>(this); }
+	const tvec4& asVec() const noexcept { return *reinterpret_cast<const tvec4*>(this); }
+	SDL_Rect& asRect() noexcept { return *reinterpret_cast<SDL_Rect*>(this); }
+	const SDL_Rect& asRect() const noexcept { return *reinterpret_cast<const SDL_Rect*>(this); }
+	SDL_FRect& asFRect() noexcept { return *reinterpret_cast<SDL_FRect*>(this); }
+	const SDL_FRect& asFRect() const noexcept { return *reinterpret_cast<const SDL_FRect*>(this); }
 
-	constexpr bool operator==(const Rect& rect) const {
+	constexpr bool operator==(const Rect& rect) const noexcept {
 		return x == rect.x && y == rect.y && w == rect.w && h == rect.h;
 	}
 
-	constexpr bool empty() const {
+	constexpr bool empty() const noexcept {
 		return w <= T(0) || h <= T(0);
 	}
 
-	constexpr bool contains(const tvec2& point) const {
+	constexpr bool contains(const tvec2& point) const noexcept {
 		return point.x >= x && point.x < x + w && point.y >= y && point.y < y + h;
 	}
 
-	constexpr bool overlaps(const Rect& rect) const {
+	constexpr bool overlaps(const Rect& rect) const noexcept {
 		if (!empty() && !rect.empty()) {
 			tvec2 dpos = glm::max(pos(), rect.pos());
 			tvec2 dend = glm::min(end(), rect.end());
@@ -228,7 +251,7 @@ struct Rect {
 		return false;
 	}
 
-	constexpr Rect intersect(const Rect& rect) const {
+	constexpr Rect intersect(const Rect& rect) const noexcept {
 		if (!empty() && !rect.empty()) {
 			tvec2 dpos = glm::max(pos(), rect.pos());
 			tvec2 dend = glm::min(end(), rect.end());
@@ -237,7 +260,7 @@ struct Rect {
 		return Rect(T(0));
 	}
 
-	constexpr Rect translate(const tvec2& mov) const {
+	constexpr Rect translate(const tvec2& mov) const noexcept {
 		return Rect(pos() + mov, size());
 	}
 };
@@ -257,16 +280,16 @@ struct Size {
 	union {
 		float prc;
 		int pix;
-		int (*cfn)(const Widget*);
+		int (*cfn)(const Widget*) noexcept;
 	};
 	uint id = UINT_MAX;	// a widget's id in its parent's widget list
 	Mode mod;
 
-	template <Floating T = float> constexpr Size(T percent = T(1)) : prc(percent), mod(rela) {}
-	template <Integer T> constexpr Size(T pixels) : pix(pixels), mod(pixv) {}
-	constexpr Size(int (*calcul)(const Widget*)) : cfn(calcul), mod(calc) {}
+	template <Floating T = float> constexpr Size(T percent = T(1)) noexcept : prc(percent), mod(rela) {}
+	template <Integer T> constexpr Size(T pixels) noexcept : pix(pixels), mod(pixv) {}
+	constexpr Size(int (*calcul)(const Widget*) noexcept) noexcept : cfn(calcul), mod(calc) {}
 
-	int operator()(const Widget* wgt) const { return cfn(wgt); }
+	int operator()(const Widget* wgt) const noexcept { return cfn(wgt); }
 };
 
 using svec2 = glm::vec<2, Size, glm::defaultp>;
@@ -280,11 +303,11 @@ protected:
 public:
 	Data() = default;
 	Data(size_t siz) : ptr(std::make_unique_for_overwrite<uint8[]>(siz)), len(siz) {}
-	Data(uptr<uint8[]>&& p, size_t l) : ptr(std::move(p)), len(l) {}
+	Data(uptr<uint8[]>&& p, size_t l) noexcept : ptr(std::move(p)), len(l) {}
 
-	uint8* data() { return ptr.get(); }
-	const uint8* data() const { return ptr.get(); }
-	size_t size() const { return len; }
+	uint8* data() noexcept { return ptr.get(); }
+	const uint8* data() const noexcept { return ptr.get(); }
+	size_t size() const noexcept { return len; }
 	void resize(size_t siz);
 	void clear() noexcept;
 };
@@ -309,7 +332,6 @@ public:
 	Cstring(const wchar_t* s) { set(s); }
 	Cstring(wstring_view s) { set(s); }
 #endif
-	Cstring(const fs::path& s) { set(s); }
 	Cstring(string_view s) { set(s); }
 	Cstring(std::initializer_list<char> s) { set(s); }
 	~Cstring();
@@ -322,22 +344,21 @@ public:
 	Cstring& operator=(const wchar_t* s);
 	Cstring& operator=(wstring_view s);
 #endif
-	Cstring& operator=(const fs::path& s);
 	Cstring& operator=(string_view s);
 	Cstring& operator=(std::initializer_list<char> s);
 
-	bool operator==(const Cstring& s) const { return !strcmp(ptr, s.ptr); }
-	bool operator==(const char* s) const { return !strcmp(ptr, s); }
-	bool operator==(const string& s) const { return !strcmp(ptr, s.data()); }
-	bool operator==(string_view s) const { return !strncmp(ptr, s.data(), s.length()) && !ptr[s.length()]; }
+	bool operator==(const Cstring& s) const noexcept { return !strcmp(ptr, s.ptr); }
+	bool operator==(const char* s) const noexcept { return !strcmp(ptr, s); }
+	bool operator==(const string& s) const noexcept { return !strcmp(ptr, s.data()); }
+	bool operator==(string_view s) const noexcept { return !strncmp(ptr, s.data(), s.length()) && !ptr[s.length()]; }
 
-	char& operator[](size_t i) { return ptr[i]; }
-	char operator[](size_t i) const { return ptr[i]; }
-	char* data() { return ptr; }
-	const char* data() const { return ptr; }
-	size_t length() const { return strlen(ptr); }
-	bool filled() const { return *ptr; }
-	bool empty() const { return !*ptr; }
+	char& operator[](size_t i) noexcept { return ptr[i]; }
+	char operator[](size_t i) const noexcept { return ptr[i]; }
+	char* data() noexcept { return ptr; }
+	const char* data() const noexcept { return ptr; }
+	size_t length() const noexcept { return strlen(ptr); }
+	bool filled() const noexcept { return *ptr; }
+	bool empty() const noexcept { return !*ptr; }
 	void clear() noexcept;
 
 private:
@@ -350,7 +371,6 @@ private:
 	void set(const wchar_t* s);
 	void set(wstring_view s);
 #endif
-	void set(const fs::path& s);
 	void set(string_view s) { set(s.data(), s.length()); }
 	void set(std::initializer_list<char> s);
 };
@@ -366,6 +386,9 @@ const char* readQuoteString(const char* text, string& field);
 bool pathCompare(string_view::iterator& ai, string_view::iterator ae, string_view::iterator& bi, string_view::iterator be) noexcept;
 bool pathCompare(const char*& ai, const char*& bi) noexcept;
 string_view parentPath(string_view path) noexcept;
+#ifdef _WIN32
+wstring_view parentPath(wstring_view path) noexcept;
+#endif
 bool pathEqual(string_view a, string_view b) noexcept;
 bool pathEqual(const char* a, const char* b) noexcept;
 string_view relativePath(string_view path, string_view base) noexcept;
@@ -375,7 +398,7 @@ bool isAbsolute(string_view path) noexcept;
 #endif
 
 template <Integer T>
-bool strfilled(const T* str) {
+bool strfilled(const T* str) noexcept {
 	return str && str[0];
 }
 
@@ -385,15 +408,15 @@ void strtransform(T* str, F func) {
 		*str = func(ch);
 }
 
-inline bool isSpace(int c) {
+inline bool isSpace(int c) noexcept {
 	return (c > '\0' && c <= ' ') || c == 0x7F;
 }
 
-inline bool notSpace(int c) {
+inline bool notSpace(int c) noexcept {
 	return uint(c) > ' ' && c != 0x7F;
 }
 
-inline bool isDsep(int c) {
+inline bool isDsep(int c) noexcept {
 #ifdef _WIN32
 	return c == directorySeparator || c == '/';
 #else
@@ -401,7 +424,7 @@ inline bool isDsep(int c) {
 #endif
 }
 
-inline bool notDsep(int c) {
+inline bool notDsep(int c) noexcept {
 #ifdef _WIN32
 	return c != directorySeparator && c != '/';
 #else
@@ -410,86 +433,86 @@ inline bool notDsep(int c) {
 }
 
 #ifdef _WIN32
-inline bool isDriveLetter(string_view path) {
+inline bool isDriveLetter(string_view path) noexcept {
 	return path.length() >= 2 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':' && std::all_of(path.begin() + 2, path.end(), isDsep);
 }
 #else
-inline bool isAbsolute(string_view path) {
+inline bool isAbsolute(string_view path) noexcept {
 	return !path.empty() && path[0] == '/';
 }
 #endif
 
 template <Integer T>
-std::basic_string_view<T> filename(std::basic_string_view<T> path) {
-	typename std::basic_string_view<T>::reverse_iterator end = std::find_if(path.rbegin(), path.rend(), notDsep);
+std::basic_string_view<T> filename(std::basic_string_view<T> path) noexcept {
+	auto end = std::find_if(path.rbegin(), path.rend(), notDsep);
 	return std::basic_string_view<T>(std::find_if(end, path.rend(), isDsep).base(), end.base());
 }
 
 template <Integer T>
-std::basic_string_view<T> filename(const std::basic_string<T>& path) {
+std::basic_string_view<T> filename(const std::basic_string<T>& path) noexcept {
 	return filename(std::basic_string_view<T>(path));
 }
 
 template <Integer T>
-std::basic_string_view<T> filename(const T* path) {
+std::basic_string_view<T> filename(const T* path) noexcept {
 	return filename(std::basic_string_view<T>(path));
 }
 
 template <Integer T>
-const T* filenamePtr(std::basic_string_view<T> path) {
+const T* filenamePtr(std::basic_string_view<T> path) noexcept {
 	return std::to_address(std::find_if(path.rbegin(), path.rend(), isDsep).base());
 }
 
 template <Integer T>
-const T* filenamePtr(const std::basic_string<T>& path) {
+const T* filenamePtr(const std::basic_string<T>& path) noexcept {
 	return filenamePtr(std::basic_string_view<T>(path));
 }
 
 template <Integer T>
-std::basic_string_view<T> fileExtension(std::basic_string_view<T> path) {
-	typename std::basic_string_view<T>::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
+std::basic_string_view<T> fileExtension(std::basic_string_view<T> path) noexcept {
+	auto it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
 	return it != path.rend() && *it == '.' && it + 1 != path.rend() && notDsep(it[1]) ? std::basic_string_view<T>(it.base(), path.end()) : std::basic_string_view<T>();
 }
 
 template <Integer T>
-std::basic_string_view<T> fileExtension(const std::basic_string<T>& path) {
+std::basic_string_view<T> fileExtension(const std::basic_string<T>& path) noexcept {
 	return fileExtension(std::basic_string_view<T>(path));
 }
 
 template <Integer T>
-std::basic_string_view<T> fileExtension(const T* path) {
+std::basic_string_view<T> fileExtension(const T* path) noexcept {
 	return fileExtension(std::basic_string_view<T>(path));
 }
 
 template <Integer T>
-std::basic_string_view<T> delExtension(std::basic_string_view<T> path) {
-	typename std::basic_string_view<T>::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
+std::basic_string_view<T> delExtension(std::basic_string_view<T> path) noexcept {
+	auto it = std::find_if(path.rbegin(), path.rend(), [](char c) -> bool { return c == '.' || isDsep(c); });
 	return it != path.rend() ? *it == '.' && it + 1 != path.rend() && notDsep(it[1]) ? std::basic_string_view<T>(path.begin(), it.base() - 1) : path : std::basic_string_view<T>();
 }
 
 template <Integer T>
-std::basic_string_view<T> delExtension(const std::basic_string<T>& path) {
+std::basic_string_view<T> delExtension(const std::basic_string<T>& path) noexcept {
 	return delExtension(std::basic_string_view<T>(path));
 }
 
 template <Integer T>
-std::basic_string_view<T> delExtension(const T* path) {
+std::basic_string_view<T> delExtension(const T* path) noexcept {
 	return delExtension(std::basic_string_view<T>(path));
 }
 
 template <Integer T>
-std::basic_string_view<T> trim(std::basic_string_view<T> str) {
-	typename std::basic_string_view<T>::iterator pos = rng::find_if(str, notSpace);
+std::basic_string_view<T> trim(std::basic_string_view<T> str) noexcept {
+	auto pos = rng::find_if(str, notSpace);
 	return std::basic_string_view<T>(pos, std::find_if(str.rbegin(), std::make_reverse_iterator(pos), notSpace).base());
 }
 
 template <Integer T>
-std::basic_string_view<T> trim(const std::basic_string<T>& str) {
+std::basic_string_view<T> trim(const std::basic_string<T>& str) noexcept {
 	return trim(std::basic_string_view<T>(str));
 }
 
 template <Integer T>
-std::basic_string_view<T> trim(const T* str) {
+std::basic_string_view<T> trim(const T* str) noexcept {
 	return trim(std::basic_string_view<T>(str));
 }
 
@@ -532,29 +555,12 @@ std::basic_string<T> operator/(const T* a, const std::basic_string<T>& b) {
 
 // conversions
 #ifdef _WIN32
-string swtos(wstring_view wstr);
-wstring sstow(string_view str);
-string winErrorMessage(uint32 msgId);
+string swtos(wstring_view wstr) noexcept;
+wstring sstow(string_view str) noexcept;
+string winErrorMessage(uint32 msgId) noexcept;
 #endif
 
-inline fs::path toPath(string_view path) {
-#ifdef _WIN32
-	return fs::path(sstow(path));
-#else
-	return fs::path(path);
-#endif
-}
-
-#ifdef _WIN32
-inline string fromPath(const fs::path& path) {
-	return swtos(path.native());
-#else
-inline const string& fromPath(const fs::path& path) {
-	return path.native();
-#endif
-}
-
-inline const char* toStr(bool b) {
+inline const char* toStr(bool b) noexcept {
 	return b ? "true" : "false";
 }
 
@@ -598,7 +604,7 @@ string toStr(const glm::vec<L, T, Q>& v, const char* sep = " ") {
 }
 
 template <Number T, class... A>
-T toNum(string_view str, A... args) {
+T toNum(string_view str, A... args) noexcept {
 	T val;
 	size_t i = 0;
 	for (; i < str.length() && isSpace(str[i]); ++i);
@@ -606,7 +612,7 @@ T toNum(string_view str, A... args) {
 }
 
 template <VecNumber T, class... A>
-T toVec(string_view str, typename T::value_type fill = typename T::value_type(0), A... args) {
+T toVec(string_view str, typename T::value_type fill = typename T::value_type(0), A... args) noexcept {
 	T vec(fill);
 	size_t p = 0;
 	for (glm::length_t i = 0; p < str.length() && i < vec.length(); ++i) {
@@ -626,12 +632,12 @@ tm currentDateTime() noexcept;
 void copyPixels(void* dst, const void* src, uint dpitch, uint spitch, uint bwidth, uint height) noexcept;
 
 template <Number T>
-T btom(bool b) {
+T btom(bool b) noexcept {
 	return T(b) * T(2) - T(1);	// b needs to be 0 or 1
 }
 
 template <Integer T>
-T roundToMultiple(T val, T mul) {
+T roundToMultiple(T val, T mul) noexcept {
 	T rem = val % mul;
 	return rem ? val + mul - rem : val;
 }

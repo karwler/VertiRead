@@ -2,6 +2,7 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <SDL_log.h>
 #endif
 #include <cwctype>
 
@@ -66,10 +67,6 @@ Cstring& Cstring::operator=(wstring_view s) {
 }
 #endif
 
-Cstring& Cstring::operator=(const fs::path& s) {
-	return assign(s);
-}
-
 Cstring& Cstring::operator=(string_view s) {
 	return assign(s);
 }
@@ -126,20 +123,6 @@ void Cstring::set(wstring_view s) {
 }
 #endif
 
-void Cstring::set(const fs::path& s) {
-	if (size_t slen = s.native().length()) {
-#ifdef _WIN32
-		if (int len = WideCharToMultiByte(CP_UTF8, 0, s.c_str(), ++slen, nullptr, 0, nullptr, nullptr); len > 1) {
-			ptr = new char[len];
-			WideCharToMultiByte(CP_UTF8, 0, s.c_str(), slen, ptr, len, nullptr, nullptr);
-		}
-#else
-		ptr = new char[++slen];
-		std::copy_n(s.c_str(), slen, ptr);
-#endif
-	}
-}
-
 void Cstring::set(std::initializer_list<char> s) {
 	if (size_t len = s.size()) {
 		ptr = new char[len + 1];
@@ -158,7 +141,7 @@ void Cstring::clear() noexcept {
 // FUNCTIONS
 
 template <Integer C>
-bool tstrciequal(std::basic_string_view<C> a, std::basic_string_view<C> b) {
+bool tstrciequal(std::basic_string_view<C> a, std::basic_string_view<C> b) noexcept {
 	if (a.length() != b.length())
 		return false;
 	for (size_t i = 0; i < a.length(); ++i) {
@@ -204,19 +187,36 @@ const char* readQuoteString(const char* text, string& field) {
 	return text + elen;
 }
 
-string_view parentPath(string_view path) noexcept {
-	string_view::reverse_iterator it = std::find_if(path.rbegin(), path.rend(), notDsep);
+template <Integer C>
+std::basic_string_view<C> tparentPath(std::basic_string_view<C> path) noexcept {
+	auto it = std::find_if(path.rbegin(), path.rend(), notDsep);
 	it = std::find_if(it, path.rend(), isDsep);
 	it = std::find_if(it, path.rend(), notDsep);
 	size_t len = it.base() - path.begin();
-	return len || path.empty() || notDsep(path[0]) ? string_view(path.data(), len) : "/";
+	if (!len && !path.empty() && isDsep(path[0])) {
+		if constexpr (sizeof(C) == sizeof(char))
+			return "/";
+		else
+			return L"/";
+	}
+	return std::basic_string_view<C>(path.data(), len);
 }
+
+string_view parentPath(string_view path) noexcept {
+	return tparentPath(path);
+}
+
+#ifdef _WIN32
+wstring_view parentPath(wstring_view path) noexcept {
+	return tparentPath(path);
+}
+#endif
 
 bool pathCompare(string_view::iterator& ai, string_view::iterator ae, string_view::iterator& bi, string_view::iterator be) noexcept {
 	while (ai != ae && bi != be) {
 		// comparee names of next entry
-		string_view::iterator an = std::find_if(ai, ae, isDsep);
-		string_view::iterator bn = std::find_if(bi, be, isDsep);
+		auto an = std::find_if(ai, ae, isDsep);
+		auto bn = std::find_if(bi, be, isDsep);
 		if (!std::equal(ai, an, bi, bn))
 			return false;
 
@@ -245,7 +245,7 @@ bool pathCompare(const char*& ai, const char*& bi) noexcept {
 }
 
 bool pathEqual(string_view a, string_view b) noexcept {
-	string_view::iterator ai = a.begin(), bi = b.begin();	// check if both paths have reached their ends simultaneously
+	auto ai = a.begin(), bi = b.begin();	// check if both paths have reached their ends simultaneously
 	return pathCompare(ai, a.end(), bi, b.end()) && ai == a.end() && bi == b.end();
 }
 
@@ -254,12 +254,12 @@ bool pathEqual(const char* a, const char* b) noexcept {
 }
 
 string_view relativePath(string_view path, string_view base) noexcept {
-	string_view::iterator ai = path.begin(), bi = base.begin();
+	auto ai = path.begin(), bi = base.begin();
 	return pathCompare(ai, path.end(), bi, base.end()) && bi == base.end() ? string_view(ai, path.end()) : string_view();
 }
 
 bool isSubpath(string_view path, string_view base) noexcept {
-	string_view::iterator ai = path.begin(), bi = base.begin();	// parent has to have reached its end while path was still matching
+	auto ai = path.begin(), bi = base.begin();	// parent has to have reached its end while path was still matching
 	return pathCompare(ai, path.end(), bi, base.end()) && bi == base.end();
 }
 
@@ -298,27 +298,40 @@ bool isAbsolute(string_view path) noexcept {
 	return path.length() >= 3 && ((hasDriveLetter(path.data()) && isDsep(path[2])) || isUnc(path.data()));
 }
 
-string swtos(wstring_view src) {
+string swtos(wstring_view src) noexcept {
 	string dst;
-	if (int len = WideCharToMultiByte(CP_UTF8, 0, src.data(), src.length(), nullptr, 0, nullptr, nullptr); len > 0) {
-		dst.resize(len);
-		WideCharToMultiByte(CP_UTF8, 0, src.data(), src.length(), dst.data(), len, nullptr, nullptr);
+	try {
+		if (int len = WideCharToMultiByte(CP_UTF8, 0, src.data(), src.length(), nullptr, 0, nullptr, nullptr); len > 0) {
+			dst.resize(len);
+			WideCharToMultiByte(CP_UTF8, 0, src.data(), src.length(), dst.data(), len, nullptr, nullptr);
+		}
+	} catch (const std::exception& err) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
 	}
 	return dst;
 }
 
-wstring sstow(string_view src) {
+wstring sstow(string_view src) noexcept {
 	wstring dst;
-	if (int len = MultiByteToWideChar(CP_UTF8, 0, src.data(), src.length(), nullptr, 0); len > 0) {
-		dst.resize(len);
-		MultiByteToWideChar(CP_UTF8, 0, src.data(), src.length(), dst.data(), len);
+	try {
+		if (int len = MultiByteToWideChar(CP_UTF8, 0, src.data(), src.length(), nullptr, 0); len > 0) {
+			dst.resize(len);
+			MultiByteToWideChar(CP_UTF8, 0, src.data(), src.length(), dst.data(), len);
+		}
+	} catch (const std::exception& err) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
 	}
 	return dst;
 }
 
-string winErrorMessage(uint32 msgId) {
+string winErrorMessage(uint32 msgId) noexcept {
 	wchar_t* buff = nullptr;
-	string msg = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, nullptr, msgId, 0, reinterpret_cast<LPWSTR>(&buff), 0, nullptr) ? swtos(trim(buff)) : string();
+	string msg;
+	try {
+		msg = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, nullptr, msgId, 0, reinterpret_cast<LPWSTR>(&buff), 0, nullptr) ? swtos(trim(buff)) : string();
+	} catch (const std::exception& err) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
+	}
 	if (buff)
 		LocalFree(buff);
 	return msg;

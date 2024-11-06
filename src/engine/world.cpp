@@ -8,11 +8,17 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+#include <SDL.h>
+#else
 #include <SDL_image.h>
+#endif
+#include <clocale>
+#include <stdexcept>
 
 static constexpr SDL_EventType unusedEvents[] = {
 	SDL_LOCALECHANGED,
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 	SDL_EVENT_SYSTEM_THEME_CHANGED,
 	SDL_EVENT_WINDOW_SHOWN,
 	SDL_EVENT_WINDOW_HIDDEN,
@@ -38,7 +44,7 @@ static constexpr SDL_EventType unusedEvents[] = {
 #endif
 	SDL_KEYUP,
 	SDL_KEYMAPCHANGED,
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 	SDL_EVENT_KEYBOARD_ADDED,
 	SDL_EVENT_KEYBOARD_REMOVED,
 	SDL_EVENT_TEXT_EDITING_CANDIDATES,
@@ -48,7 +54,7 @@ static constexpr SDL_EventType unusedEvents[] = {
 	SDL_JOYBALLMOTION,
 	SDL_JOYBUTTONUP,
 	SDL_JOYBATTERYUPDATED,
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 	SDL_EVENT_JOYSTICK_UPDATE_COMPLETE,
 #endif
 	SDL_CONTROLLERBUTTONUP,
@@ -57,11 +63,15 @@ static constexpr SDL_EventType unusedEvents[] = {
 	SDL_CONTROLLERTOUCHPADMOTION,
 	SDL_CONTROLLERTOUCHPADUP,
 	SDL_CONTROLLERSENSORUPDATE,
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 	SDL_EVENT_GAMEPAD_UPDATE_COMPLETE,
 #endif
+#if SDL_VERSION_ATLEAST(2, 30, 0)
 	SDL_CONTROLLERSTEAMHANDLEUPDATED,
-#if !SDL_VERSION_ATLEAST(3, 0, 0)
+#endif
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+	SDL_EVENT_FINGER_CANCELED,
+#else
 	SDL_DOLLARGESTURE,
 	SDL_DOLLARRECORD,
 	SDL_MULTIGESTURE,
@@ -69,29 +79,24 @@ static constexpr SDL_EventType unusedEvents[] = {
 	SDL_CLIPBOARDUPDATE,
 	SDL_DROPBEGIN,
 	SDL_DROPCOMPLETE,
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 	SDL_EVENT_DROP_POSITION,
-#endif
-	SDL_AUDIODEVICEADDED,
-	SDL_AUDIODEVICEREMOVED,
-#if SDL_VERSION_ATLEAST(3, 0, 0)
-	SDL_EVENT_AUDIO_DEVICE_FORMAT_CHANGED,
-#endif
-	SDL_SENSORUPDATE,
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+	// no SDL_EVENT_AUDIO_DEVICE_ADDED, SDL_EVENT_AUDIO_DEVICE_REMOVED, SDL_EVENT_AUDIO_DEVICE_FORMAT_CHANGED
+	// no SDL_EVENT_SENSOR_UPDATE,
+	SDL_EVENT_PEN_PROXIMITY_IN,
+	SDL_EVENT_PEN_PROXIMITY_OUT,
 	SDL_EVENT_PEN_DOWN,
 	SDL_EVENT_PEN_UP,
-	SDL_EVENT_PEN_MOTION,
 	SDL_EVENT_PEN_BUTTON_DOWN,
 	SDL_EVENT_PEN_BUTTON_UP,
-	SDL_EVENT_CAMERA_DEVICE_ADDED,
-	SDL_EVENT_CAMERA_DEVICE_REMOVED,
-	SDL_EVENT_CAMERA_DEVICE_APPROVED,
-	SDL_EVENT_CAMERA_DEVICE_DENIED,
+	SDL_EVENT_PEN_MOTION,
+	SDL_EVENT_PEN_AXIS,
+	// no SDL_EVENT_CAMERA_DEVICE_ADDED, SDL_EVENT_CAMERA_DEVICE_REMOVED, SDL_EVENT_CAMERA_DEVICE_APPROVED, SDL_EVENT_CAMERA_DEVICE_DENIED,
 #endif
 	SDL_RENDER_TARGETS_RESET,
 	SDL_RENDER_DEVICE_RESET,
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+	SDL_EVENT_RENDER_DEVICE_LOST,
 	SDL_EVENT_POLL_SENTINEL
 #endif
 };
@@ -125,7 +130,7 @@ int main(int argc, char** argv) {
 #if defined(_WIN32) && defined(WITH_FTP)
 		NetConnection::initWsa();
 #endif
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 		SDL_SetAppMetadata(WindowSys::title, "1.0.0", "org.kk.vertiread");
 		SDL_SetHint(SDL_HINT_IME_IMPLEMENTED_UI, "composition");
 #else
@@ -152,18 +157,20 @@ int main(int argc, char** argv) {
 #endif
 		if (sdlFailed(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER)))
 			throw std::runtime_error(SDL_GetError());
+#if !SDL_VERSION_ATLEAST(3, 2, 0)
 		if (IMG_InitFlags imgFlags = IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_TIF | IMG_INIT_WEBP; IMG_Init(imgFlags) != imgFlags) {
 			const char* err = SDL_GetError();
 			SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "%s", strfilled(err) ? err : "Failed to initialize all image formats");
 		}
+#endif
 		for (SDL_EventType it : unusedEvents)
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 			SDL_SetEventEnabled(it, SDL_FALSE);
 #else
 			SDL_EventState(it, SDL_DISABLE);
 #endif
 		SDL_RegisterEvents(SDL_EventType(SDL_USEREVENT_MAX) - SDL_USEREVENT);
-#if !SDL_VERSION_ATLEAST(3, 0, 0)
+#if !SDL_VERSION_ATLEAST(3, 2, 0)
 		SDL_StopTextInput();
 #endif
 		World::winSys()->init();
@@ -178,7 +185,9 @@ int main(int argc, char** argv) {
 #endif
 	}
 	World::winSys()->cleanup();
+#if !SDL_VERSION_ATLEAST(3, 2, 0)
 	IMG_Quit();
+#endif
 	SDL_Quit();
 #if defined(_WIN32) && defined(WITH_FTP)
 	NetConnection::cleanupWsa();

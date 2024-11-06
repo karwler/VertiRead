@@ -19,7 +19,7 @@ using LibType = void*;
 #endif
 
 template <bool global = false>
-LibType libOpen(const char* name) {
+LibType libOpen(const char* name) noexcept {
 	LibType lib;
 #ifdef _WIN32
 	if (lib = LoadLibraryA(name); !lib)
@@ -35,7 +35,7 @@ LibType libOpen(const char* name) {
 	return lib;
 }
 
-inline void libClose(LibType& lib) {
+inline void libClose(LibType& lib) noexcept {
 	if (lib) {
 #ifdef _WIN32
 		FreeLibrary(lib);
@@ -47,14 +47,14 @@ inline void libClose(LibType& lib) {
 }
 
 template <Pointer T>
-T libSym(LibType lib, const char* name) {
+T libSym(LibType lib, const char* name) noexcept {
 	T func;
 #ifdef _WIN32
 	if (func = reinterpret_cast<T>(GetProcAddress(lib, name)); !func)
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to find %s: %s", name, winErrorMessage(GetLastError()).data());
 #else
 	if (func = reinterpret_cast<T>(dlsym(lib, name)); !func)
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to find  %s: %s", name, coalesce(const_cast<const char*>(dlerror()), ""));
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to find %s: %s", name, coalesce(const_cast<const char*>(dlerror()), ""));
 #endif
 	return func;
 }

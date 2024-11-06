@@ -1,15 +1,15 @@
-#version 450
+#version 460
 
 layout(push_constant) uniform PushData {
 	ivec4 rect;
 	ivec4 frame;
-	vec4 color;
+	uint color;
 	uint sid;
 } pc;
 
-layout(set = 0, binding = 0) uniform UniformData {
+layout(set = 1, binding = 0) uniform ViewData {
 	vec4 pview;
-} u1;
+} vd;
 
 layout(location = 0) in vec2 vpos;
 
@@ -26,7 +26,7 @@ void main() {
 		vec4 uvrc = vec4(dst.xy - vec2(pc.rect.xy), dst.zw) / vec4(pc.rect.zwzw);
 		fragUV = vpos * uvrc.zw + uvrc.xy;
 		vec2 loc = vpos * dst.zw + dst.xy;
-		gl_Position = vec4((loc - u1.pview.xy) / u1.pview.zw - 1.0, 0.0, 1.0);
+		gl_Position = vec4((loc - vd.pview.xy) / vd.pview.zw - 1.0, 0.0, 1.0);
 	} else {
 		fragUV = vec2(0.0);
 		gl_Position = vec4(-2.0, -2.0, 0.0, 1.0);

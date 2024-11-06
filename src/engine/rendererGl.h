@@ -8,8 +8,6 @@
 struct FunctionsGl {
 	decltype(glBindTexture)* bindTexture;
 	decltype(glBlendFunc)* blendFunc;
-	decltype(glClear)* clear;
-	decltype(glClearColor)* clearColor;
 	decltype(glDeleteTextures)* deleteTextures;
 	decltype(glDisable)* disable;
 	decltype(glDrawArrays)* drawArrays;
@@ -25,7 +23,10 @@ struct FunctionsGl {
 	void initFunctions();
 };
 
+#if !defined(__arm__) && !defined(__aarch64__)
 struct FunctionsGl1 {
+	decltype(glClear)* clear;
+	decltype(glClearColor)* clearColor;
 	decltype(glColor4fv)* color4fv;
 	decltype(glEnableClientState)* enableClientState;
 	decltype(glLoadMatrixf)* loadMatrixf;
@@ -35,22 +36,29 @@ struct FunctionsGl1 {
 
 	void initFunctions();
 };
+#endif
 
 struct FunctionsGl3 {
 	PFNGLATTACHSHADERPROC attachShader;
 	PFNGLBINDBUFFERPROC bindBuffer;
+	PFNGLBINDFRAMEBUFFERPROC bindFramebuffer;
 	PFNGLBINDVERTEXARRAYPROC bindVertexArray;
 	PFNGLBUFFERDATAPROC bufferData;
+	PFNGLCHECKFRAMEBUFFERSTATUSPROC checkFramebufferStatus;
+	PFNGLCLEARBUFFERFVPROC clearBufferfv;
 	PFNGLCOMPILESHADERPROC compileShader;
 	PFNGLCREATEPROGRAMPROC createProgram;
 	PFNGLCREATESHADERPROC createShader;
 	PFNGLDELETEBUFFERSPROC deleteBuffers;
+	PFNGLDELETEFRAMEBUFFERSPROC deleteFramebuffers;
 	PFNGLDELETESHADERPROC deleteShader;
 	PFNGLDELETEPROGRAMPROC deleteProgram;
 	PFNGLDELETEVERTEXARRAYSPROC deleteVertexArrays;
 	PFNGLDETACHSHADERPROC detachShader;
 	PFNGLENABLEVERTEXATTRIBARRAYPROC enableVertexAttribArray;
+	PFNGLFRAMEBUFFERTEXTURE2DPROC framebufferTexture2D;
 	PFNGLGENBUFFERSPROC genBuffers;
+	PFNGLGENFRAMEBUFFERSPROC genFramebuffers;
 	PFNGLGENVERTEXARRAYSPROC genVertexArrays;
 	PFNGLGETATTRIBLOCATIONPROC getAttribLocation;
 	PFNGLGETPROGRAMINFOLOGPROC getProgramInfoLog;
@@ -59,8 +67,11 @@ struct FunctionsGl3 {
 	PFNGLGETSHADERIVPROC getShaderiv;
 	PFNGLGETUNIFORMLOCATIONPROC getUniformLocation;
 	PFNGLLINKPROGRAMPROC linkProgram;
+	decltype(glReadBuffer)* readBuffer;
 	PFNGLSHADERSOURCEPROC shaderSource;
+	PFNGLUNIFORM1FPROC uniform1f;
 	PFNGLUNIFORM1IPROC uniform1i;
+	PFNGLUNIFORM1UIPROC uniform1ui;
 	PFNGLUNIFORM4FPROC uniform4f;
 	PFNGLUNIFORM4FVPROC uniform4fv;
 	PFNGLUNIFORM4IVPROC uniform4iv;
@@ -68,16 +79,16 @@ struct FunctionsGl3 {
 	PFNGLVERTEXATTRIBPOINTERPROC vertexAttribPointer = nullptr;
 
 	void initFunctions();
-	bool functionsInitialized() const { return vertexAttribPointer; }
+	bool functionsInitialized() const noexcept { return vertexAttribPointer; }
 };
 
 class RendererGl : public Renderer {
 protected:
 	class TextureGl : public Texture {
 	private:
-		GLuint id = 0;
+		GLuint id;
 
-		TextureGl(uvec2 size, GLuint tex) : Texture(size), id(tex) {}
+		using Texture::Texture;
 
 		friend class RendererGl;
 		friend class RendererGl1;
@@ -94,48 +105,42 @@ protected:
 	};
 
 private:
+	struct Swizzle {
+		uint16 r, g, b, a;
+	};
+
 	struct SurfaceInfo {
-		SDL_Surface* img = nullptr;
+		uptr<SDL_Surface> img;
+		Swizzle swizzle;
 		uint16 ifmt;
 		uint16 pfmt;
 		uint16 type;
 		uint8 align;
 
 		SurfaceInfo() = default;
-		SurfaceInfo(SDL_Surface* surface, uint16 internal, uint16 format, uint16 texel) noexcept;
+		SurfaceInfo(SDL_Surface* surface, uint16 internal, uint16 format, uint16 texel, Swizzle components = {}) noexcept;
 	};
 
-	GLint iformRgba8, iformRgb8;
-	GLint iformRgba10;
-	GLint iformRgba5, iformRgb5, iformRgba4;
 protected:
+	uint16 iformRgba8, iformRgb8, iformRgba10;
 	uint16 texType = GL_TEXTURE_2D;
 	bool core;
-	bool hasBgra = true;
-	bool hasPackedPixels = true;
-	bool hasTextureCompression;
-	bool hasSwizzle = true;
+	bool canBgra = true;
+	bool canTextureCompression;
+	bool canSwizzle;
+	bool usesSrgb = false;	// whether sRGB is currently being used
 #ifdef _WIN32
 	ViewGl* cvw = nullptr;	// current context's view
 #else
 	FunctionsGl gl;
 #endif
+	PixmapColor textBuffer;
 
-	RendererGl(size_t numViews);
+	RendererGl(size_t numViews, bool modern);
 
 public:
-	void setClearColor(const vec4& color) override;
-	void setVsync(bool vsync) override;
-	void setCompression(Settings::Compression cmpr) noexcept override;
-	SDL_Surface* prepareImage(SDL_Surface* img, bool rpic) const noexcept override;
-	Info getInfo() const noexcept override;
-
-	void finishDraw(View* view) override;
-
-	Texture* texFromEmpty() override;
-	Texture* texFromIcon(SDL_Surface* img) noexcept override;
-	bool texFromIcon(Texture* tex, SDL_Surface* img) noexcept override;
-	Texture* texFromRpic(SDL_Surface* img) noexcept override;
+	Texture* texFromSurface(SDL_Surface* img, bool rpic, bool linear) noexcept override;
+	bool texFromSurface(Texture* tex, SDL_Surface* img, bool rpic) noexcept override;
 	Texture* texFromText(const Pixmap& pm) noexcept override;
 	bool texFromText(Texture* tex, const Pixmap& pm) noexcept override;
 	void freeTexture(Texture* tex) noexcept override;
@@ -143,23 +148,34 @@ public:
 protected:
 #ifdef _WIN32
 	void setContext(View* view);
+	bool trySetContext(View* view) noexcept;
 #else
 	static void setContext(View* view);
+	static bool trySetContext(View* view) noexcept;
 #endif
 	template <Class T, class F> void initContexts(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, F initGl);
-	void initGlCommon(ViewGl* view, bool vsync, const vec4& bgcolor, uintptr_t& availableMemory) noexcept;
-	void finalizeConstruction(Settings* sets, uintptr_t availableMemory) noexcept;
+	void initGlCommon(ViewGl* view, bool vsync, uintptr_t& availableMemory) noexcept;
+	template <class F> void finalizeConstruction(Settings* sets, Texture*& tooltip, uintptr_t availableMemory, F finGl);
 	static void setSwapInterval(bool vsync) noexcept;
+	void setCompression(Settings* sets) noexcept;
+	pair<SDL_PixelFormatEnum, uint8> prepareImageFormat(SDL_Surface* img) const noexcept override;
 private:
 	GLuint initTexture(GLint filter) noexcept;
+	void setSwizzle(GLint red, GLint green, GLint blue, GLint alpha) noexcept;
 	void uploadTexture(TextureGl* tex, SurfaceInfo& si) noexcept;
 	void uploadTexture(TextureGl* tex, const Pixmap& pm) noexcept;
-	template <bool keep> SurfaceInfo pickPixFormat(SDL_Surface* img) const noexcept;
+	SurfaceInfo pickPixFormat(SDL_Surface* img, bool rpic) const noexcept;
+	uint8 internalBytesPpx() const noexcept;
 #ifndef NDEBUG
 	static void APIENTRY debugMessage(GLenum source, GLenum type, uint id, GLenum severity, GLsizei length, const char* message, const void* userParam) noexcept;
 #endif
 };
 
+inline uint8 RendererGl::internalBytesPpx() const noexcept {
+	return compression == Settings::Compression::b16 ? 2 : 4;
+}
+
+#if !defined(__arm__) && !defined(__aarch64__)
 class RendererGl1 final : public RendererGl {
 private:
 	struct ViewGl1 : ViewGl {
@@ -176,21 +192,27 @@ private:
 #endif
 	mat4 model = mat4(1.f);
 	mat4 mtex = mat4(1.f);
+	array<vec4, Settings::defaultColors.size() - 1> rectColors;
 
 public:
-	RendererGl1(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, Settings* sets, const vec4& bgcolor);
+	RendererGl1(InitParams& initParams, Settings* sets);
 	~RendererGl1() override;
 
+	void setColors(array<vec4, Settings::defaultColors.size()>& colors) override;
+	bool setSettings(Settings* sets) override;
 	void updateView(ivec2& viewRes) override;
+	Info getInfo() const noexcept override;
 
-	void startDraw(View* view) override;
-	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) override;
+	Action startDraw(View* view) noexcept override;
+	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, Color color) noexcept override;
+	Action finishDraw(View* view) noexcept override;
 
 private:
-	void initGl(ViewGl1* view, bool vsync, const vec4& bgcolor, bool& canTexRect, uintptr_t& availableMemory);
+	void initGl(ViewGl1* view, bool vsync, bool& canTexRect, uintptr_t& availableMemory);
 	void cleanup() noexcept;
-	template <Number T> static void setPosScale(mat4& matrix, const Rect<T>& rect);
+	template <Number T> static void setPosScale(mat4& matrix, const Rect<T>& rect) noexcept;
 };
+#endif
 
 class RendererGl3 final : public RendererGl {
 private:
@@ -198,32 +220,58 @@ private:
 #ifdef _WIN32
 		FunctionsGl3 gl3;
 #endif
-		GLuint vao = 0;
+		GLuint vaoGui = 0, vaoFin = 0;
+		GLuint fbo = 0, tex = 0;
 
 		using ViewGl::ViewGl;
+	};
+
+	static constexpr array scrVertices = {
+		ScreenVertex(vec2(-1.f, 1.f), vec2(0.f, 1.f)),
+		ScreenVertex(vec2(1.f, 1.f), vec2(1.f, 1.f)),
+		ScreenVertex(vec2(-1.f, -1.f), vec2(0.f, 0.f)),
+		ScreenVertex(vec2(1.f, -1.f), vec2(1.f, 0.f))
 	};
 
 #ifndef _WIN32
 	FunctionsGl3 gl3;
 #endif
-	GLint uniPviewGui, uniRectGui, uniFrameGui, uniColorGui;
-	GLuint progGui = 0;
-	GLuint vbo = 0;
+	GLint uniPviewGui, uniRectGui, uniFrameGui;
+	GLint uniColorsGui, uniColorIdGui;
+	GLint uniGammaFin;
+	GLuint progGui = 0, progFin = 0;
+	GLuint vboGui = 0, vboFin = 0;
+	vec4 bgColor;
+	bool canSrgb = true;	// whether the GL is capable of sRGB
+	bool hasSrgb = true;	// whether the current framebuffers support sRGB
 
 public:
-	RendererGl3(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, Settings* sets, const vec4& bgcolor);
+	RendererGl3(InitParams& initParams, Settings* sets);
 	~RendererGl3() override;
 
+	void setColors(array<vec4, Settings::defaultColors.size()>& colors) override;
+	bool setSettings(Settings* sets) override;
+	void setGammaValue(int gamma) override;
 	void updateView(ivec2& viewRes) override;
+	Info getInfo() const noexcept override;
 
-	void startDraw(View* view) override;
-	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) override;
+	Action startDraw(View* view) noexcept override;
+	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, Color color) noexcept override;
+	Action finishDraw(View* view) noexcept override;
 
 private:
-	void initGl(ViewGl3* view, bool vsync, const vec4& bgcolor, uintptr_t& availableMemory);
-	void initShader();
+	void initGl(ViewGl3* view, bool vsync, uintptr_t& availableMemory);
 	void cleanup() noexcept;
-	GLuint createShader(const char* vertSrc, const char* fragSrc, const char* name) const;
-	static void checkStatus(GLuint id, GLenum stat, PFNGLGETSHADERIVPROC check, PFNGLGETSHADERINFOLOGPROC info, const string& name);
+	void initShaders(Settings* sets);
+	pair<GLint, GLint> createFinShader(Settings* sets) noexcept;
+	bool createFinData(ViewGl3* view, GLint attrVpos, GLint attrVtuv) noexcept;
+	void initFinFramebuffer(ViewGl3* view);
+	void freeFinShader() noexcept;
+	void rollbackFinData(Settings::Gamma& gamma) noexcept;
+	void freeFinData(ViewGl3* view) noexcept;
+	GLuint createShader(const char* vertSrc, const char* fragSrc) const;
+	static void checkStatus(GLuint id, GLenum stat, PFNGLGETSHADERIVPROC check, PFNGLGETSHADERINFOLOGPROC info, const char* name);
+	void checkFramebufferStatus();
+	void setUsesSrgb(Settings* sets) noexcept;
 };
 #endif

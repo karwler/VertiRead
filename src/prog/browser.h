@@ -10,7 +10,7 @@ class Browser {
 public:
 	static constexpr char dotStr[] = ".";
 private:
-	static constexpr uint previewSpeedyStopCheckInterval = 32;
+	static constexpr uint stopCheckInterval = 32;
 
 	enum class ThreadType : uint8 {
 		none,
@@ -35,7 +35,7 @@ private:
 		ArchiveDir slice;
 		BrowserListOption opts;
 
-		ListArchData(BrowserListOption options) : opts(options) {}
+		ListArchData(BrowserListOption options) noexcept : opts(options) {}
 	};
 #endif
 
@@ -72,20 +72,19 @@ private:
 		FileOps* fsop;
 		uptr<BrowserResultPicture> rp;
 		PicLim picLim;
-		uint8 compress;
 		bool showHidden;
 
-		LoadPicturesDirData(FileOps* fs, uptr<BrowserResultPicture>&& res, const PicLim& plim, uint8 cprs, bool hidden) noexcept;
+		LoadPicturesDirData(FileOps* fs, uptr<BrowserResultPicture>&& res, const PicLim& plim, bool hidden) noexcept;
 	};
 
 #ifdef WITH_ARCHIVE
 	struct LoadPicturesArchData {
 		FileOps* fsop;
 		uptr<BrowserResultPicture> rp;
-		umap<string, uintptr_t> files;
+		ArchiveDir slice;
 		PicLim picLim;
 
-		LoadPicturesArchData(FileOps* fs, uptr<BrowserResultPicture>&& res, umap<string, uintptr_t>&& fmap, const PicLim& plim) noexcept;
+		LoadPicturesArchData(FileOps* fs, uptr<BrowserResultPicture>&& res, const PicLim& plim) noexcept;
 	};
 #endif
 
@@ -95,26 +94,26 @@ private:
 		uptr<BrowserResultPicture> rp;
 		PicLim picLim;
 		float dpi;
-		uint8 compress;
 
-		LoadPicturesPdfData(FileOps* fs, uptr<BrowserResultPicture>&& res, const PicLim& plim, float ddpi, uint8 cprs) noexcept;
+		LoadPicturesPdfData(FileOps* fs, uptr<BrowserResultPicture>&& res, const PicLim& plim, float ddpi) noexcept;
 	};
 #endif
 
 	class LoadProgress {
 	private:
 		string suffix;		// text with the total number
-		size_t lim = 0;		// entry count limit
+		size_t lim;			// entry count limit
 		uintptr_t m = 0;	// memory progress
-		uintptr_t mem = 0;	// memory limit
-		uint8 dmag = 0;		// memory unit display x1000
-		uint8 smag = 0;		// memory unit display x1024
-
+		uintptr_t mem;		// memory limit
+		uint8 dmag;			// memory unit display x1000
+		uint8 smag;			// memory unit display x1024
 	public:
+		uint8 cbpp;			// last recorded image bytes per pixel
+
 		LoadProgress(const PicLim& picLim, size_t max);
 
-		bool ok(const BrowserResultPicture* rp) const { return rp->cnt < lim && m < mem; }
-		void pushImage(BrowserResultPicture* rp, Cstring&& name, SDL_Surface* img, const PicLim& picLim, uintptr_t imgSize);
+		bool ok(const BrowserResultPicture* rp) const noexcept { return rp->cnt < lim && m < mem; }
+		void pushImage(BrowserResultPicture* rp, Cstring&& name, uptr<SDL_Surface>& img, const PicLim& picLim);
 	private:
 		string numStr(const PicLim& picLim, size_t ci, uintptr_t mi) const;
 	};
@@ -147,16 +146,16 @@ public:
 	void startGoNext(string&& picname, bool fwd);
 	void exitFile();
 
-	const string& getCurDir() const { return curDir; }
+	const string& getCurDir() const noexcept { return curDir; }
 	string locationForDisplay() const;
 	stvector<string, Settings::maxPageElements> locationForStore(string_view pname) const;
-	bool isLocal() const;
+	bool isLocal() const noexcept;
 	void startListCurDir(bool files = true);
 	void startListDir(string&& path, bool files = true);
 	bool startDeleteEntry(string_view ename);
 	bool renameEntry(string_view oldName, string_view newName);
-	void setDirectoryWatch();
-	bool directoryUpdate(vector<FileChange>& files);
+	void setDirectoryWatch() noexcept;
+	bool directoryUpdate(vector<FileChange>& files) noexcept;
 
 #ifdef WITH_ARCHIVE
 	bool finishArchive(BrowserResultArchive&& ra);
@@ -165,41 +164,41 @@ public:
 	void startLoadPictures(uptr<BrowserResultPicture>&& rp);
 	void startReloadPictures(string&& first);
 	void finishLoadPictures(BrowserResultPicture& rp);
-	void stopThread();
-	void requestStop();
+	void stopThread() noexcept;
+	void requestStop() noexcept;
 
 private:
 	template <Invocable<FileOps*, const RemoteLocation&> F> auto beginRemoteOps(const RemoteLocation& location, vector<string>&& passwords, F func);
 	template <class T, class F> vector<T>::iterator foreachAround(vector<T>& vec, vector<T>::iterator start, bool found, bool fwd, F check);
 
-	static void listDirFsThread(std::stop_token stoken, uptr<ListDirData> ld);
+	static void listDirFsThread(std::stop_token stoken, uptr<ListDirData> ld) noexcept;
 #ifdef WITH_ARCHIVE
-	static void listDirArchThread(std::stop_token stoken, uptr<ListArchData> ld);
+	static void listDirArchThread(std::stop_token stoken, uptr<ListArchData> ld) noexcept;
 #endif
-	void goNextThread(std::stop_token stoken, uptr<GoNextData> gd);
+	template <InvocableR<uptr<BrowserResultList>> F> static void listDirThread(const std::stop_token& stoken, F func) noexcept;
+	void goNextThread(std::stop_token stoken, uptr<GoNextData> gd) noexcept;
 #ifdef WITH_ARCHIVE
 	void startArchive(uptr<BrowserResultArchive>&& ra);
 #endif
 
-	static void previewDirThread(std::stop_token stoken, uptr<PreviewDirData> pd);
+	static void previewDirThread(std::stop_token stoken, uptr<PreviewDirData> pd) noexcept;
 #ifdef WITH_ARCHIVE
-	static void previewArchThread(std::stop_token stoken, uptr<PreviewArchData> pd);
+	static void previewArchThread(std::stop_token stoken, uptr<PreviewArchData> pd) noexcept;
+	static SDL_Surface* findArchiveDirectoryThumbnail(const std::stop_token stoken, FileOps* fsop, ArchiveData& ad, vector<Cstring>& entries, CountedStopReq& csr);
 #endif
 #if defined(CAN_MUPDF) || defined(CAN_POPPLER)
-	static void previewPdf(std::stop_token stoken, PdfFile& pdfFile, int maxHeight, string_view fname);
+	static void previewPdf(const std::stop_token& stoken, PdfFile& pdfFile, int maxHeight, string_view fname);
 #endif
 	static SDL_Surface* combineIcons(SDL_Surface* dir, SDL_Surface* img) noexcept;
 	static SDL_Surface* scaleDown(SDL_Surface* img, int maxHeight) noexcept;
-	static char* allocatePreviewName(string_view name, bool file);
+	static void pushPreviewPicture(uptr<SDL_Surface>& img, string_view name, bool file);
 
-	static void loadPicturesDirThread(std::stop_token stoken, uptr<LoadPicturesDirData> ld);
+	static void loadPicturesDirThread(std::stop_token stoken, uptr<LoadPicturesDirData> ld) noexcept;
 #ifdef WITH_ARCHIVE
-	umap<string, uintptr_t> prepareArchiveDirPicLoad(BrowserResultPicture* rp, const PicLim& picLim, uint8 compress, bool showHidden);
-	static bool canAddArchEntryToPicLoad(const ArchiveFile* file, bool showHidden);
-	static void loadPicturesArchThread(std::stop_token stoken, uptr<LoadPicturesArchData> ld);
+	static void loadPicturesArchThread(std::stop_token stoken, uptr<LoadPicturesArchData> ld) noexcept;
 #endif
 #if defined(CAN_MUPDF) || defined(CAN_POPPLER)
-	static void loadPicturesPdfThread(std::stop_token stoken, uptr<LoadPicturesPdfData> ld);
+	static void loadPicturesPdfThread(std::stop_token stoken, uptr<LoadPicturesPdfData> ld) noexcept;
 #endif
 };
 
@@ -207,16 +206,6 @@ inline void Browser::startReloadPictures(string&& first) {
 	startLoadPictures(std::make_unique<BrowserResultPicture>(BRS_FWD, std::nullopt, valcp(curDir), std::move(first), arch.copyLight(), pdf.copyLight()));
 }
 
-inline void Browser::requestStop() {
+inline void Browser::requestStop() noexcept {
 	thread.request_stop();
 }
-
-#ifdef WITH_ARCHIVE
-inline bool Browser::canAddArchEntryToPicLoad(const ArchiveFile* file, bool showHidden) {
-#ifdef _WIN32
-	return file->size;
-#else
-	return file->size && (showHidden || file->name[0] != '.');
-#endif
-}
-#endif

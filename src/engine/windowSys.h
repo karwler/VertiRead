@@ -10,7 +10,6 @@ public:
 private:
 	static constexpr ivec2 windowMinSize = ivec2(500, 300);
 	static constexpr uint32 eventCheckTimeout = 50;
-	static constexpr float ticksPerSec = 1000.f;
 
 	FileSys* fileSys = nullptr;
 	DrawSys* drawSys = nullptr;
@@ -26,9 +25,9 @@ public:
 	void init();
 	void cleanup() noexcept;
 	void exec();
-	void close();
+	void close() noexcept;
 
-	float getDSec() const { return dSec; }
+	float getDSec() const noexcept { return dSec; }
 	ivec2 mousePos() const noexcept;
 	ivec2 winViewOffset(uint32 wid) const noexcept;
 	ivec2 displayResolution() const noexcept;
@@ -38,24 +37,28 @@ public:
 	void resetSettings();
 	void recreateWindows();
 
-	FileSys* getFileSys() { return fileSys; }
-	DrawSys* getDrawSys() { return drawSys; }
-	InputSys* getInputSys() { return inputSys; }
-	Program* getProgram() { return program; }
-	Scene* getScene() { return scene; }
-	Settings* getSets() { return sets.get(); }
+	FileSys* getFileSys() noexcept { return fileSys; }
+	DrawSys* getDrawSys() noexcept { return drawSys; }
+	InputSys* getInputSys() noexcept { return inputSys; }
+	Program* getProgram() noexcept { return program; }
+	Scene* getScene() noexcept { return scene; }
+	Settings* getSets() noexcept { return sets.get(); }
 
 private:
 	void createWindow();
-	uint32 initWindow(bool shared);
-	void createSingleWindow(uint32 flags, SDL_Surface* icon);
-	void createMultiWindow(uint32 flags, SDL_Surface* icon);
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+	SDL_PropertiesID initWindow(size_t numWindows);
+#else
+	uint32 initWindow(size_t numWindows);
+#endif
+	void createSingleWindow(SDL_Surface* icon);
+	void createMultiWindow(SDL_Surface* icon);
 	void destroyWindows() noexcept;
 	void handleEvent(const SDL_Event& event);	// pass events to their specific handlers
 	void eventWindow(const SDL_WindowEvent& winEvent);
 	void eventDisplay();
 };
 
-inline void WindowSys::close() {
+inline void WindowSys::close() noexcept {
 	run = false;
 }

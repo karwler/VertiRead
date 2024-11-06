@@ -2,6 +2,7 @@
 #include <SDL_cpuinfo.h>
 #include <SDL_log.h>
 #include <SDL_timer.h>
+#include <stdexcept>
 
 // RENDERER
 
@@ -10,6 +11,23 @@ Renderer::Info::Device::Device(u32vec2 vendev, Cstring&& devname, uintptr_t memo
 	name(std::move(devname)),
 	dmem(memory)
 {}
+
+uint32* Renderer::PixmapColor::fromText(const Pixmap& pm, uvec2 res) {
+	if (size_t size = res.x * res.y; size > len) {
+		pix = std::make_unique_for_overwrite<uint32[]>(size);
+		len = size;
+	}
+	uint32* dp = pix.get();
+	const uint8* sp = pm.pix.get();
+	for (uint r = 0; r < res.y; ++r, sp += pm.res.x)
+		for (uint c = 0; c < res.x; ++c)
+			*dp++ = (uint32(sp[c]) << 24) | 0x00FFFFFF;
+	return pix.get();
+}
+
+Renderer::Action Renderer::finishRender() noexcept {
+	return Action::yes;
+}
 
 Renderer::View* Renderer::findView(SDL_Window* win) noexcept {
 	for (View* it : views)
@@ -30,6 +48,17 @@ void Renderer::setMaxPicRes(uint& size) noexcept {
 	maxPictureSize = size;
 }
 
+SDL_Surface* Renderer::prepareImage(SDL_Surface* img, uint8* rpbpp) const noexcept {
+	if (img = limitSize(img, rpbpp ? maxPictureSize : maxTextureSize); img) {
+		auto [fmt, bpp] = prepareImageFormat(img);
+		if (fmt != surfaceFormat(img))
+			img = convertReplace(img, fmt);
+		if (rpbpp)
+			*rpbpp = bpp;
+	}
+	return img;
+}
+
 SDL_Surface* Renderer::convertReplace(SDL_Surface* img, SDL_PixelFormatEnum format) noexcept {
 	SDL_Surface* dst = SDL_ConvertSurfaceFormat(img, format, 0);
 	SDL_FreeSurface(img);
@@ -40,13 +69,32 @@ SDL_Surface* Renderer::limitSize(SDL_Surface* img, uint limit) noexcept {
 	if (img && (uint(img->w) > limit || uint(img->h) > limit)) {
 		float scale = float(limit) / float(img->w > img->h ? img->w : img->h);
 		SDL_Surface* dst = SDL_CreateSurface(float(img->w) * scale, float(img->h) * scale, surfaceFormat(img));
-		if (dst)
-			surfaceScaleLinear(img, nullptr, dst, nullptr);
+		if (dst) {
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+			copyPalette(dst, img);
+#endif
+			if (sdlFailed(surfaceScaleLinear(img, nullptr, dst, nullptr))) {
+				SDL_FreeSurface(dst);
+				dst = nullptr;
+			}
+		}
 		SDL_FreeSurface(img);
 		img = dst;
 	}
 	return img;
 }
+
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+void Renderer::copyPalette(SDL_Surface* dst, SDL_Surface* src) noexcept {
+	if (SDL_ISPIXELFORMAT_INDEXED(dst->format))
+		if (SDL_Palette* splt = SDL_GetSurfacePalette(src))
+			if (SDL_Palette* dplt = SDL_CreatePalette(splt->ncolors)) {
+				SDL_SetPaletteColors(dplt, splt->colors, 0, splt->ncolors);
+				SDL_SetSurfacePalette(dst, dplt);
+				SDL_DestroyPalette(dplt);
+			}
+}
+#endif
 
 bool Renderer::isIndexedGrayscale(SDL_Surface* img) noexcept {
 	SDL_Palette* palette = surfacePalette(img);
@@ -60,17 +108,7 @@ bool Renderer::isIndexedGrayscale(SDL_Surface* img) noexcept {
 
 Rectf Renderer::cropTexRect(const Recti& isct, const Recti& rect, uvec2 texRes) noexcept {
 	vec2 fac = vec2(texRes) / vec2(rect.size());
-	return Rectf(vec2(isct.pos() - rect.pos()) * fac, glm::ceil(vec2(isct.size()) * fac));
-}
-
-void Renderer::copyTextPixels(void* dst, const Pixmap& pm, uvec2 res, uint dpitch) noexcept {
-	auto dp = static_cast<uint8*>(dst);
-	const uint8* sp = pm.pix.get();
-	for (uint r = 0; r < res.y; ++r, dp += dpitch, sp += pm.res.x)
-		for (uint c = 0, o = 0; c < res.x; ++c, o += 4) {
-			dp[o] = dp[o + 1] = dp[o + 2] = 0xFF;
-			dp[o + 3] = sp[c];
-		}
+	return Rectf(glm::floor(vec2(isct.pos() - rect.pos()) * fac), glm::ceil(vec2(isct.size()) * fac));
 }
 
 void Renderer::copyPalette(uint* dst, const SDL_Palette* palette) noexcept {
@@ -85,34 +123,79 @@ void Renderer::recommendPicRamLimit(uintptr_t& mem) noexcept {
 		mem = uintptr_t(SDL_GetSystemRAM() / 2) * 1024 * 1024;
 }
 
+void Renderer::convertColors(vec4* vecv, size_t num, bool srgb, bool gamma22) noexcept {
+	if (srgb) {
+		for (size_t i = 0; i < num; ++i)
+			for (uint c = 0; c < 3; ++c)
+				vecv[i][c] = srgb2linear(vecv[i][c]);
+	} else if (gamma22)
+		for (size_t i = 0; i < num; ++i)
+			for (uint c = 0; c < 3; ++c)
+				vecv[i][c] = std::pow(double(vecv[i][c]), 2.2);
+}
+
+double Renderer::srgb2linear(double x) noexcept {
+	if (x <= 0.0)
+		return 0.0;
+	if (x >= 1.0)
+		return 1.0;
+	return x < 0.04045 ? x / 12.92 : std::pow((x + 0.055) / 1.055, 2.4);
+}
+
 // RENDERER SF
 
-RendererSf::RendererSf(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, Settings* sets, const vec4& bgcolor) :
-	Renderer(windows.size(), std::sqrt(INT_MAX / 4)),
-	bgColor(colorToBytes(bgcolor))
+RendererSf::RendererSf(InitParams& initParams, Settings* sets) :
+	Renderer(initParams.windows.size(), std::sqrt(INT_MAX / 4))
 {
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+	sthandle<SDL_PropertiesID> rendererProps = SDL_CreateProperties();
+	if (!rendererProps)
+		throw std::runtime_error(SDL_GetError());
+	SDL_SetStringProperty(rendererProps, SDL_PROP_RENDERER_NAME_STRING, SDL_SOFTWARE_RENDERER);
+	SDL_SetNumberProperty(rendererProps, SDL_PROP_RENDERER_CREATE_PRESENT_VSYNC_NUMBER, sets->vsync);
+#else
+	SDL_RendererFlags rendererFlags = SDL_RENDERER_SOFTWARE;
+	if (sets->vsync)
+		rendererFlags |= SDL_RENDERER_PRESENTVSYNC;
+#endif
 	try {
-		if (!vofs) {
-			SDL_Surface* srf = SDL_GetWindowSurface(windows[0]);
-			if (!srf)
-				throw std::runtime_error(SDL_GetError());
-			viewRes = ivec2(srf->w, srf->h);
-			views[0] = new View(windows[0], Recti(ivec2(0), viewRes));
+		if (!initParams.vofs) {
+#if SDL_VERSION_ATLEAST(2, 26, 0)
+			SDL_GetWindowSizeInPixels(initParams.windows[0], &initParams.viewRes.x, &initParams.viewRes.y);
+#else
+			SDL_GetWindowSize(initParams.windows[0], &initParams.viewRes.x, &initParams.viewRes.y);
+#endif
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+			createRenderer(static_cast<ViewSf*>(views[0] = new ViewSf(initParams.windows[0], Recti(ivec2(0), initParams.viewRes))), rendererProps);
+#else
+			createRenderer(static_cast<ViewSf*>(views[0] = new ViewSf(initParams.windows[0], Recti(ivec2(0), initParams.viewRes))), rendererFlags);
+#endif
 		} else
 			for (size_t i = 0; i < views.size(); ++i) {
-				SDL_Surface* srf = SDL_GetWindowSurface(windows[i]);
-				if (!srf)
-					throw std::runtime_error(SDL_GetError());
-				Recti wrect(vofs[i] - vofs[views.size()], srf->w, srf->h);
-				viewRes = glm::max(viewRes, wrect.end());
-				views[i] = new View(windows[i], wrect);
+				Recti wrect;
+				wrect.pos() = initParams.vofs[i] - initParams.vofs[views.size()];
+#if SDL_VERSION_ATLEAST(2, 26, 0)
+				SDL_GetWindowSizeInPixels(initParams.windows[i], &wrect.w, &wrect.h);
+#else
+				SDL_GetWindowSize(initParams.windows[i], &wrect.w, &wrect.h);
+#endif
+				initParams.viewRes = glm::max(initParams.viewRes, wrect.end());
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+				createRenderer(static_cast<ViewSf*>(views[i] = new ViewSf(initParams.windows[i], wrect)), rendererProps);
+#else
+				createRenderer(static_cast<ViewSf*>(views[i] = new ViewSf(initParams.windows[i], wrect)), rendererFlags);
+#endif
 			}
-		setVsync(sets->vsync);
-		setCompression(sets->compression);
+		if (!textureFormats.contains(defaultFormat) && textureFormats.contains(SDL_PIXELFORMAT_ARGB8888))
+			defaultFormat = SDL_PIXELFORMAT_ARGB8888;
+
+		initParams.tooltipTexture = new TextureSf(uvec2(0), nullptr);
+		setColors(initParams.colors);
+		setCompression(sets);
 		setMaxPicRes(sets->maxPicRes);
 		recommendPicRamLimit(sets->picLim.size);
-		lastDraw = SDL_GetPerformanceCounter();
-	} catch (...) {
+	} catch (const std::exception&) {
+		freeTexture(initParams.tooltipTexture);
 		cleanup();
 		throw;
 	}
@@ -123,171 +206,236 @@ RendererSf::~RendererSf() {
 }
 
 void RendererSf::cleanup() noexcept {
-	for (View* it : views)
-		delete it;
+	for (View* it : views) {
+		auto svw = static_cast<ViewSf*>(it);
+		SDL_DestroyRenderer(svw->renderer);
+		delete svw;
+	}
 }
 
-void RendererSf::setClearColor(const vec4& color) {
-	bgColor = colorToBytes(color);
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+void RendererSf::createRenderer(ViewSf* view, SDL_PropertiesID props) {
+	SDL_SetPointerProperty(props, SDL_PROP_RENDERER_CREATE_WINDOW_POINTER, view->win);
+	if (view->renderer = SDL_CreateRendererWithProperties(props); !view->renderer)
+		throw std::runtime_error(SDL_GetError());
+	if (SDL_PropertiesID rprop = SDL_GetRendererProperties(view->renderer)) {
+		if (int64 maxSize = SDL_GetNumberProperty(rprop, SDL_PROP_RENDERER_MAX_TEXTURE_SIZE_NUMBER, 0); maxSize > 0 && maxSize < maxTextureSize)
+			maxTextureSize = maxSize;
+		if (textureFormats.empty())
+			if (auto formats = static_cast<SDL_PixelFormat*>(SDL_GetPointerProperty(rprop, SDL_PROP_RENDERER_TEXTURE_FORMATS_POINTER, nullptr)))
+				for (SDL_PixelFormat* it = formats; *it != SDL_PIXELFORMAT_UNKNOWN; ++it)
+					textureFormats.insert(*it);
+	} else
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", SDL_GetError());
 }
-
-void RendererSf::setVsync(bool vsync) {
-	drawDelay = 0;
-	if (vsync) {
-		uint64 freq = SDL_GetPerformanceFrequency();
-#if SDL_VERSION_ATLEAST(3, 0, 0)
-		float maxHz = 0.f;
-		if (int cnt; SDL_DisplayID* dids = SDL_GetDisplays(&cnt)) {
-			for (int i = 0; i < cnt; ++i)
-				if (const SDL_DisplayMode* mode = SDL_GetDesktopDisplayMode(dids[i]); mode && mode->refresh_rate > maxHz)
-					maxHz = mode->refresh_rate;
-			SDL_free(dids);
-		}
-		if (maxHz > 0.f)
-			drawDelay = float(freq) / maxHz;
 #else
-		int maxHz = 0;
-		SDL_DisplayMode mode;
-		for (int i = 0, e = SDL_GetNumVideoDisplays(); i < e; ++i)
-			if (!SDL_GetDesktopDisplayMode(i, &mode) && mode.refresh_rate > maxHz)
-				maxHz = mode.refresh_rate;
-		if (maxHz)
-			drawDelay = freq / uint(maxHz);
+void RendererSf::createRenderer(ViewSf* view, SDL_RendererFlags flags) {
+	if (view->renderer = SDL_CreateRenderer(view->win, -1, flags); !view->renderer)
+		throw std::runtime_error(SDL_GetError());
+	if (SDL_RendererInfo info; !SDL_GetRendererInfo(view->renderer, &info)) {
+		if (int maxSize = std::min(info.max_texture_width, info.max_texture_height); maxSize > 0 && uint(maxSize) < maxTextureSize)
+			maxTextureSize = maxSize;
+		if (textureFormats.empty())
+			for (uint32 i = 0; i < info.num_texture_formats; ++i)
+				textureFormats.insert(SDL_PixelFormatEnum(info.texture_formats[i]));
+	} else
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", SDL_GetError());
+}
+#endif
+
+void RendererSf::setColors(array<vec4, Settings::defaultColors.size()>& colors) {
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+	for (View* it : views) {
+		const vec4& bgclr = colors[eint(Color::background)];
+		SDL_SetRenderDrawColorFloat(static_cast<ViewSf*>(it)->renderer, bgclr.r, bgclr.g, bgclr.b, bgclr.a);
+	}
+	std::copy(colors.begin(), colors.end() - 1, rectColors.begin());
+#else
+	for (View* it : views) {
+		u8vec4 bgclr = colorToBytes(colors[eint(Color::background)]);
+		SDL_SetRenderDrawColor(static_cast<ViewSf*>(it)->renderer, bgclr.r, bgclr.g, bgclr.b, bgclr.a);
+	}
+	std::transform(colors.begin(), colors.end() - 1, rectColors.begin(), colorToBytes);
+#endif
+}
+
+bool RendererSf::setSettings(Settings* sets) {
+	for (View* it : views)
+		SDL_RenderSetVSync(static_cast<ViewSf*>(it)->renderer, sets->vsync);
+	setCompression(sets);
+	return false;
+}
+
+void RendererSf::setCompression(Settings* sets) noexcept {
+	if (sets->compression != Settings::Compression::none && !(sets->compression == Settings::Compression::b16 && canTexturesB16()))
+		sets->compression = Settings::Compression::none;
+	compression = sets->compression;
+}
+
+void RendererSf::updateView(ivec2& viewRes) {
+	if (views.size() == 1)
+#if SDL_VERSION_ATLEAST(2, 26, 0)
+		SDL_GetWindowSizeInPixels(views[0]->win, &viewRes.x, &viewRes.y);
+#else
+		SDL_GetWindowSize(views[0]->win, &viewRes.x, &viewRes.y);
+#endif
+}
+
+Renderer::Action RendererSf::startDraw(View* view) noexcept {
+	curView = static_cast<ViewSf*>(view);
+	SDL_RenderClear(curView->renderer);
+	return Action::yes;
+}
+
+void RendererSf::drawRect(const Texture* tex, const Recti& rect, const Recti& frame, Color color) noexcept {
+	if (Recti isct; SDL_IntersectRect(&rect.asRect(), &frame.asRect(), &isct.asRect())) {
+		isct.pos() -= curView->rect.pos();
+		auto stx = static_cast<const TextureSf*>(tex)->tex;
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+		const vec4& bclr = rectColors[eint(color)];
+		SDL_SetTextureColorModFloat(stx, bclr.r, bclr.g, bclr.b);
+		SDL_SetTextureAlphaModFloat(stx, bclr.a);
+		SDL_RenderTexture(curView->renderer, stx, &cropTexRect(isct, rect, tex->getRes()).asFRect(), &Rectf(isct).asFRect());
+#else
+		const u8vec4& bclr = rectColors[eint(color)];
+		SDL_SetTextureColorMod(stx, bclr.r, bclr.g, bclr.b);
+		SDL_SetTextureAlphaMod(stx, bclr.a);
+		SDL_RenderCopy(curView->renderer, stx, &Recti(cropTexRect(isct, rect, tex->getRes())).asRect(), &isct.asRect());
 #endif
 	}
 }
 
-void RendererSf::updateView(ivec2& viewRes) {
-	if (views.size() == 1) {
-		SDL_Surface* srf = SDL_GetWindowSurface(views[0]->win);
-		if (!srf)
-			throw std::runtime_error(SDL_GetError());
-		viewRes = ivec2(srf->w, srf->h);
-	}
+Renderer::Action RendererSf::finishDraw(View* view) noexcept {
+	SDL_RenderPresent(static_cast<ViewSf*>(view)->renderer);
+	return Action::yes;
 }
 
-void RendererSf::startDraw(View* view) {
-	if (curViewSrf = SDL_GetWindowSurface(view->win); !curViewSrf)
-		throw std::runtime_error(SDL_GetError());
-	curViewPos = view->rect.pos();
-	SDL_FillRect(curViewSrf, nullptr, SDL_MapSurfaceRGBA(curViewSrf, bgColor.r, bgColor.g, bgColor.b, bgColor.a));
-}
-
-void RendererSf::drawRect(const Texture* tex, const Recti& rect, const Recti& frame, const vec4& color) {
-	if (Recti isct; SDL_IntersectRect(&rect.asRect(), &frame.asRect(), &isct.asRect())) {
-		Recti crop = cropTexRect(isct, rect, tex->getRes());
-		isct.pos() -= curViewPos;
-		u8vec4 bclr = colorToBytes(color);
-		SDL_Surface* img = static_cast<const TextureSf*>(tex)->srf;
-		SDL_SetSurfaceColorMod(img, bclr.r, bclr.g, bclr.b);
-		SDL_SetSurfaceAlphaMod(img, bclr.a);
-		surfaceScaleLinear(img, &crop.asRect(), curViewSrf, &isct.asRect());
-	}
-}
-
-void RendererSf::finishDraw(View* view) {
-	uint64 now = SDL_GetPerformanceCounter();
-	if (uint64 timeout = lastDraw + drawDelay; !SDL_TICKS_PASSED(now, timeout))
-		SDL_Delay((timeout - now) * 1000 / SDL_GetPerformanceFrequency());
-	SDL_UpdateWindowSurface(view->win);
-	lastDraw = now;
-}
-
-Texture* RendererSf::texFromEmpty() {
-	return new TextureSf(uvec2(0), nullptr);
-}
-
-Texture* RendererSf::texFromIcon(SDL_Surface* img) noexcept {
-	if (img = limitSize(img, maxTextureSize); img) {
-		SDL_SetSurfaceRLE(img, SDL_TRUE);
-		return new TextureSf(uvec2(img->w, img->h), img);
+Texture* RendererSf::texFromSurface(SDL_Surface* img, bool, bool linear) noexcept {
+	if (auto [tex, res] = createTexture(limitSize(img, maxTextureSize), linear); tex) {
+		if (auto stx = new (std::nothrow) TextureSf(res, tex))
+			return stx;
+		SDL_DestroyTexture(tex);
 	}
 	return nullptr;
 }
 
-bool RendererSf::texFromIcon(Texture* tex, SDL_Surface* img) noexcept {
-	if (img = limitSize(img, maxTextureSize); img) {
-		SDL_SetSurfaceRLE(img, SDL_TRUE);
-
-		auto stx = static_cast<TextureSf*>(tex);
-		SDL_FreeSurface(stx->srf);
-		stx->res = uvec2(img->w, img->h);
-		stx->srf = img;
+bool RendererSf::texFromSurface(Texture* tex, SDL_Surface* img, bool) noexcept {
+	SDL_ScaleMode scale;
+	auto stx = static_cast<TextureSf*>(tex);
+	if (auto [tmp, res] = createTexture(limitSize(img, maxTextureSize), sdlFailed(SDL_GetTextureScaleMode(stx->tex, &scale)) || scale != SDL_ScaleModeNearest); tmp) {
+		replaceTexture(stx, tmp, uvec2(img->w, img->h));
 		return true;
 	}
 	return false;
 }
 
-Texture* RendererSf::texFromRpic(SDL_Surface* img) noexcept {
-	if (img) {
-		SDL_SetSurfaceBlendMode(img, SDL_BLENDMODE_NONE);
-		return new TextureSf(uvec2(img->w, img->h), img);
-	}
-	return nullptr;
-}
-
 Texture* RendererSf::texFromText(const Pixmap& pm) noexcept {
-	if (pm.res.x)
-		if (SDL_Surface* img = SDL_CreateSurface(std::min(pm.res.x, maxTextureSize), std::min(pm.res.y, maxTextureSize), SDL_PIXELFORMAT_ABGR4444)) {
-			copyTextPixels(img, pm);
-			SDL_SetSurfaceRLE(img, SDL_TRUE);
-			return new TextureSf(uvec2(img->w, img->h), img);
-		}
+	if (auto [tex, res] = createTextureText(pm); tex) {
+		if (auto stx = new (std::nothrow) TextureSf(res, tex))
+			return stx;
+		SDL_DestroyTexture(tex);
+	}
 	return nullptr;
 }
 
 bool RendererSf::texFromText(Texture* tex, const Pixmap& pm) noexcept {
-	if (pm.res.x)
-		if (SDL_Surface* img = SDL_CreateSurface(std::min(pm.res.x, maxTextureSize), std::min(pm.res.y, maxTextureSize), SDL_PIXELFORMAT_ABGR4444)) {
-			copyTextPixels(img, pm);
-			SDL_SetSurfaceRLE(img, SDL_TRUE);
-
-			auto stx = static_cast<TextureSf*>(tex);
-			SDL_FreeSurface(stx->srf);
-			stx->res = uvec2(img->w, img->h);
-			stx->srf = img;
-			return true;
-		}
+	if (auto [tmp, res] = createTextureText(pm); tmp) {
+		replaceTexture(static_cast<TextureSf*>(tex), tmp, res);
+		return true;
+	}
 	return false;
-}
-
-void RendererSf::copyTextPixels(SDL_Surface* img, const Pixmap& pm) noexcept {
-	auto dp = static_cast<uint8*>(img->pixels);
-	const uint8* sp = pm.pix.get();
-	for (int r = 0; r < img->h; ++r, dp += img->pitch, sp += pm.res.x)
-		for (int c = 0, o = 0; c < img->w; ++c, o += 2) {
-			dp[o] = 0xFF;
-			dp[o + 1] = (sp[c] << 4) | 0x0F;
-		}
 }
 
 void RendererSf::freeTexture(Texture* tex) noexcept {
 	if (auto stx = static_cast<TextureSf*>(tex)) {
-		SDL_FreeSurface(stx->srf);
+		SDL_DestroyTexture(stx->tex);
 		delete stx;
 	}
 }
 
-void RendererSf::setCompression(Settings::Compression cmpr) noexcept {
-	compression = cmpr;
+void RendererSf::replaceTexture(TextureSf* tex, SDL_Texture* ntex, uvec2 res) noexcept {
+	tex->res = res;
+	SDL_DestroyTexture(tex->tex);
+	tex->tex = ntex;
 }
 
-SDL_Surface* RendererSf::prepareImage(SDL_Surface* img, bool rpic) const noexcept {
-	if (img = limitSize(img, rpic ? maxPictureSize : maxTextureSize); img)
-		switch (compression) {
-		using enum Settings::Compression;
-		case b8:
-			return convertReplace(img, SDL_PIXELFORMAT_RGB332);
-		case b16:
-			return convertReplace(img, SDL_ISPIXELFORMAT_ALPHA(surfaceFormat(img)) ? SDL_PIXELFORMAT_ABGR1555 : SDL_PIXELFORMAT_BGR565);
-		}
-	return img;
+pair<SDL_Texture*, uvec2> RendererSf::createTexture(SDL_Surface* img, bool linear) noexcept {
+	uvec2 res;
+	SDL_Texture* tex = nullptr;
+	if (img) {
+		if (tex = SDL_CreateTextureFromSurface(static_cast<ViewSf*>(views[0])->renderer, img); tex) {
+			res = uvec2(img->w, img->h);
+			SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+			SDL_SetTextureScaleMode(tex, SDL_ScaleMode(linear));
+		} else
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", SDL_GetError());
+		SDL_FreeSurface(img);
+	}
+	return pair(tex, res);
+}
+
+pair<SDL_Texture*, uvec2> RendererSf::createTextureText(const Pixmap& pm) noexcept {
+	if (!pm.res.x)
+		return pair(nullptr, uvec2());
+	uvec2 res = uvec2(std::min(pm.res.x, maxTextureSize), std::min(pm.res.y, maxTextureSize));
+	return createTexture(SDL_CreateSurfaceFrom(res.x, res.y, defaultFormat, textBuffer.fromText(pm, res), res.x * 4), false);
+}
+
+pair<SDL_PixelFormatEnum, uint8> RendererSf::prepareImageFormat(SDL_Surface* img) const noexcept {
+	SDL_PixelFormatEnum fmt = surfaceFormat(img);
+	if (compression == Settings::Compression::b16 && SDL_BYTESPERPIXEL(fmt) > 2)
+		fmt = SDL_ISPIXELFORMAT_ALPHA(fmt) ? SDL_PIXELFORMAT_ABGR1555 : SDL_PIXELFORMAT_BGR565;
+
+	switch (fmt) {
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+	case SDL_PIXELFORMAT_ABGR2101010:
+		return pickImageFormat({ SDL_PIXELFORMAT_ABGR2101010, SDL_PIXELFORMAT_ARGB2101010, SDL_PIXELFORMAT_XBGR2101010, SDL_PIXELFORMAT_XRGB2101010 }, fmt);
+	case SDL_PIXELFORMAT_ARGB2101010:
+		return pickImageFormat({ SDL_PIXELFORMAT_ARGB2101010, SDL_PIXELFORMAT_ABGR2101010, SDL_PIXELFORMAT_XRGB2101010, SDL_PIXELFORMAT_XBGR2101010 }, fmt);
+	case SDL_PIXELFORMAT_XBGR2101010:
+		return pickImageFormat({ SDL_PIXELFORMAT_XBGR2101010, SDL_PIXELFORMAT_XRGB2101010, SDL_PIXELFORMAT_ABGR2101010, SDL_PIXELFORMAT_ARGB2101010 }, fmt);
+	case SDL_PIXELFORMAT_XRGB2101010:
+		return pickImageFormat({ SDL_PIXELFORMAT_XRGB2101010, SDL_PIXELFORMAT_XBGR2101010, SDL_PIXELFORMAT_ARGB2101010, SDL_PIXELFORMAT_ABGR2101010 }, fmt);
+#endif
+	case SDL_PIXELFORMAT_BGR565:
+		return pickImageFormat({ SDL_PIXELFORMAT_BGR565, SDL_PIXELFORMAT_RGB565, SDL_PIXELFORMAT_XBGR1555, SDL_PIXELFORMAT_XRGB1555, SDL_PIXELFORMAT_ABGR1555, SDL_PIXELFORMAT_ARGB1555, SDL_PIXELFORMAT_BGRA5551, SDL_PIXELFORMAT_RGBA5551 }, fmt);
+	case SDL_PIXELFORMAT_RGB565: case SDL_PIXELFORMAT_RGB332:
+		return pickImageFormat({ SDL_PIXELFORMAT_RGB565, SDL_PIXELFORMAT_BGR565, SDL_PIXELFORMAT_XRGB1555, SDL_PIXELFORMAT_XBGR1555, SDL_PIXELFORMAT_ARGB1555, SDL_PIXELFORMAT_ABGR1555, SDL_PIXELFORMAT_RGBA5551, SDL_PIXELFORMAT_BGRA5551 }, fmt);
+	case SDL_PIXELFORMAT_ABGR1555: case SDL_PIXELFORMAT_ABGR4444:
+		return pickImageFormat({ SDL_PIXELFORMAT_ABGR1555, SDL_PIXELFORMAT_ARGB1555, SDL_PIXELFORMAT_BGRA5551, SDL_PIXELFORMAT_RGBA5551, SDL_PIXELFORMAT_XBGR1555, SDL_PIXELFORMAT_XRGB1555, SDL_PIXELFORMAT_BGR565, SDL_PIXELFORMAT_RGB565 }, fmt);
+	case SDL_PIXELFORMAT_ARGB1555: case SDL_PIXELFORMAT_ARGB4444:
+		return pickImageFormat({ SDL_PIXELFORMAT_ARGB1555, SDL_PIXELFORMAT_ABGR1555, SDL_PIXELFORMAT_RGBA5551, SDL_PIXELFORMAT_BGRA5551, SDL_PIXELFORMAT_XRGB1555, SDL_PIXELFORMAT_XBGR1555, SDL_PIXELFORMAT_RGB565, SDL_PIXELFORMAT_BGR565 }, fmt);
+	case SDL_PIXELFORMAT_BGRA5551: case SDL_PIXELFORMAT_BGRA4444:
+		return pickImageFormat({ SDL_PIXELFORMAT_BGRA5551, SDL_PIXELFORMAT_RGBA5551, SDL_PIXELFORMAT_ABGR1555, SDL_PIXELFORMAT_ARGB1555, SDL_PIXELFORMAT_XBGR1555, SDL_PIXELFORMAT_XRGB1555, SDL_PIXELFORMAT_BGR565, SDL_PIXELFORMAT_RGB565 }, fmt);
+	case SDL_PIXELFORMAT_RGBA5551: case SDL_PIXELFORMAT_RGBA4444:
+		return pickImageFormat({ SDL_PIXELFORMAT_RGBA5551, SDL_PIXELFORMAT_BGRA5551, SDL_PIXELFORMAT_ARGB1555, SDL_PIXELFORMAT_ABGR1555, SDL_PIXELFORMAT_XRGB1555, SDL_PIXELFORMAT_XBGR1555, SDL_PIXELFORMAT_RGB565, SDL_PIXELFORMAT_BGR565 }, fmt);
+	case SDL_PIXELFORMAT_XBGR1555: case SDL_PIXELFORMAT_XBGR4444:
+		return pickImageFormat({ SDL_PIXELFORMAT_XBGR1555, SDL_PIXELFORMAT_XRGB1555, SDL_PIXELFORMAT_ABGR1555, SDL_PIXELFORMAT_ARGB1555, SDL_PIXELFORMAT_BGRA5551, SDL_PIXELFORMAT_RGBA5551, SDL_PIXELFORMAT_BGR565, SDL_PIXELFORMAT_RGB565 }, fmt);
+	case SDL_PIXELFORMAT_XRGB1555: case SDL_PIXELFORMAT_XRGB4444:
+		return pickImageFormat({ SDL_PIXELFORMAT_XRGB1555, SDL_PIXELFORMAT_XBGR1555, SDL_PIXELFORMAT_ARGB1555, SDL_PIXELFORMAT_ABGR1555, SDL_PIXELFORMAT_RGBA5551, SDL_PIXELFORMAT_BGRA5551, SDL_PIXELFORMAT_RGB565, SDL_PIXELFORMAT_BGR565 }, fmt);
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+	default:
+		if (SDL_BYTESPERPIXEL(fmt) > 4)
+			return pickImageFormat({ SDL_PIXELFORMAT_ABGR2101010, SDL_PIXELFORMAT_ARGB2101010, SDL_PIXELFORMAT_XBGR2101010, SDL_PIXELFORMAT_XRGB2101010 }, defaultFormat);
+#endif
+	}
+	return pair(fmt, 4);
+}
+
+pair<SDL_PixelFormatEnum, uint8> RendererSf::pickImageFormat(std::initializer_list<SDL_PixelFormatEnum> fmtv, SDL_PixelFormatEnum orig) const noexcept {
+	for (SDL_PixelFormatEnum it : fmtv)
+		if (textureFormats.contains(it))
+			return pair(it, SDL_BYTESPERPIXEL(it));
+	return pair(orig, 4);
 }
 
 Renderer::Info RendererSf::getInfo() const noexcept {
-	return Info{
-		.compressions = { Settings::Compression::none, Settings::Compression::b8, Settings::Compression::b16 },
+	Info info = {
+		.compressions = { Settings::Compression::none },
 		.texSize = maxTextureSize,
 		.curCompression = compression
 	};
+	if (canTexturesB16())
+		info.compressions.push_back(Settings::Compression::b16);
+	return info;
 }

@@ -3,11 +3,11 @@ struct VertOut {
 	float2 tuv : TEXCOORD0;
 };
 
-cbuffer Pview : register(b0) {
+cbuffer ViewPview : register(b0) {
 	float4 pview;
 };
 
-cbuffer Instance : register(b1) {
+cbuffer InstanceRect : register(b1) {
 	int4 rect;
 	int4 frame;
 };

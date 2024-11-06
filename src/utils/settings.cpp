@@ -1,10 +1,10 @@
+#include "settings.h"
 #include "prog/progs.h"
-#include <format>
 #include <regex>
 
 // BINDING
 
-void Binding::reset(Type newType) {
+void Binding::reset(Type newType) noexcept {
 	switch (asg = ASG_NONE; type = newType) {
 	using enum Type;
 	case enter:
@@ -180,7 +180,10 @@ void Binding::reset(Type newType) {
 		setGbutton(SDL_CONTROLLER_BUTTON_X);
 		break;
 	default:
-		throw std::runtime_error(std::format("Invalid binding type: {}", uint(type)));
+		bcall = nullptr;
+		clearAsgKey();
+		clearAsgJct();
+		clearAsgGct();
 	}
 }
 
@@ -241,7 +244,7 @@ const char* Binding::hatValueToName(uint8 val) noexcept {
 
 // PICTURE LIMIT
 
-void PicLim::set(string_view str) {
+void PicLim::set(string_view str) noexcept {
 	size_t p, e;
 	for (p = 0; p < str.length() && isSpace(str[p]); ++p);
 	for (e = p; e < str.length() && notSpace(str[e]); ++e);
@@ -252,7 +255,7 @@ void PicLim::set(string_view str) {
 	size = toSize(str.substr(e));
 }
 
-uintptr_t PicLim::toSize(string_view str) {
+uintptr_t PicLim::toSize(string_view str) noexcept {
 	uintptr_t num;
 	const char* end = str.data() + str.length();
 	std::from_chars_result res = std::from_chars(std::find_if(str.data(), end, [](char ch) -> bool { return notSpace(ch); }), end, num);
@@ -270,7 +273,7 @@ uintptr_t PicLim::toSize(string_view str) {
 	return num;
 }
 
-pair<uint8, uint8> PicLim::memSizeMag(uintptr_t num) {
+pair<uint8, uint8> PicLim::memSizeMag(uintptr_t num) noexcept {
 	if (!num)
 		return pair(0, 0);
 
@@ -284,10 +287,10 @@ pair<uint8, uint8> PicLim::memSizeMag(uintptr_t num) {
 
 string PicLim::memoryString(uintptr_t num, uint8 dmag, uint8 smag) {
 	if (!(dmag || smag))
-		return std::format("{} B", num);
+		return fmt::format("{} B", num);
 	return dmag
-		? std::format("{} {}", num / uintptr_t(std::pow(1000u, dmag)), array{ "KB", "MB", "GB" }[dmag - 1])
-		: std::format("{} {}", num / uintptr_t(std::pow(1024u, smag)), array{ "KiB", "MiB", "GiB" }[smag - 1]);
+		? fmt::format("{} {}", num / uintptr_t(std::pow(1000u, dmag)), array{ "KB", "MB", "GB" }[dmag - 1])
+		: fmt::format("{} {}", num / uintptr_t(std::pow(1024u, smag)), array{ "KiB", "MiB", "GiB" }[smag - 1]);
 }
 
 string PicLim::memoryString(uintptr_t num) {
@@ -297,13 +300,13 @@ string PicLim::memoryString(uintptr_t num) {
 
 // SETTINGS
 
-Settings::Settings(const fs::path& dirSets, vector<string>&& themes) :
-	dirLib(fromPath(dirSets / defaultDirLib))
+Settings::Settings(vector<string>&& themes) :
+	dirLib(homeDir())
 {
 	setTheme(string_view(), std::move(themes));
 }
 
-void Settings::setZoom(string_view str) {
+void Settings::setZoom(string_view str) noexcept {
 	size_t p, e;
 	for (p = 0; p < str.length() && isSpace(str[p]); ++p);
 	for (e = p; e < str.length() && notSpace(str[e]); ++e);
@@ -311,25 +314,18 @@ void Settings::setZoom(string_view str) {
 	zoom = std::clamp(toNum<int8>(str.substr(e)), int8(-Settings::zoomLimit), Settings::zoomLimit);
 }
 
-const string& Settings::setTheme(string_view name, vector<string>&& themes) {
-	if (vector<string>::const_iterator it = rng::find(themes, name); it != themes.end())
-		return theme = name;
-	return theme = themes.empty() ? string() : std::move(themes[0]);
-}
-
 vector<Settings::Display> Settings::displayArrangement() {
 	ivec2 origin(INT_MAX);
 	vector<Display> dsps;
 	Recti rect;
-#if SDL_VERSION_ATLEAST(3, 0, 0)
-	if (int cnt; SDL_DisplayID* dids = SDL_GetDisplays(&cnt)) {
+#if SDL_VERSION_ATLEAST(3, 2, 0)
+	int cnt;
+	if (uptr<SDL_DisplayID[], SdlFreePtr> dids(SDL_GetDisplays(&cnt)); dids)
 		for (int i = 0; i < cnt; ++i)
 			if (SDL_GetDisplayBounds(dids[i], &rect.asRect())) {
 				dsps.emplace_back(rect, dids[i]);
 				origin = glm::min(origin, rect.pos());
 			}
-		SDL_free(dids);
-	}
 #else
 	for (int i = 0, e = SDL_GetNumVideoDisplays(); i < e; ++i)
 		if (!SDL_GetDisplayBounds(i, &rect.asRect())) {
@@ -345,7 +341,7 @@ vector<Settings::Display> Settings::displayArrangement() {
 void Settings::unionDisplays() {
 	vector<Display> dsps = displayArrangement();
 	for (size_t i = 0; i < displays.size(); ++i) {
-		if (vector<Display>::iterator it = rng::find_if(dsps, [this, i](const Display& d) -> bool { return d.rect == displays[i].rect; }); it == dsps.end())
+		if (auto it = rng::find_if(dsps, [this, i](const Display& d) -> bool { return d.rect == displays[i].rect; }); it == dsps.end())
 			displays[i].did = it->did;
 		else
 			displays.erase(displays.begin() + i--);
@@ -364,8 +360,10 @@ Settings::Renderer Settings::getRenderer(string_view name) {
 #ifdef WITH_OPENGL
 	std::match_results<string_view::iterator> mr;
 	if (std::regex_match(name.begin(), name.end(), mr, std::regex(R"r(\s*(open)?gl[^a-z]*?(es[^a-z]*?)?(\d).*)r", std::regex::icase))) {
+#ifndef _WIN32
 		if (mr.length(2))
 			return Renderer::opengles3;
+#endif
 		return name[mr.position(3)] >= '3' ? Renderer::opengl3 : Renderer::opengl1;
 	}
 #endif
@@ -376,7 +374,7 @@ Settings::Renderer Settings::getRenderer(string_view name) {
 	return Renderer::software;
 }
 
-void Settings::setRenderer() {
+void Settings::setRenderer() noexcept {
 	for (int i = 1; i < argc; ++i) {
 #ifdef WITH_DIRECT3D
 		if (cmpFlag(flagDirect3d11, i))
@@ -384,13 +382,18 @@ void Settings::setRenderer() {
 		else
 #endif
 #ifdef WITH_OPENGL
+#if !defined(__arm__) && !defined(__aarch64__)
 		if (cmpFlag(flagOpenGl1, i))
 			renderer = Renderer::opengl1;
 		else if (cmpFlag(flagOpenGl3, i))
 			renderer = Renderer::opengl3;
-		else if (cmpFlag(flagOpenEs3, i))
+		else
+#endif
+#ifndef _WIN32
+		if (cmpFlag(flagOpenEs3, i))
 			renderer = Renderer::opengles3;
 		else
+#endif
 #endif
 #ifdef WITH_VULKAN
 		if (cmpFlag(flagVulkan, i))
@@ -405,7 +408,15 @@ void Settings::setRenderer() {
 	}
 }
 
-string Settings::firstArg() {
+void Settings::setGamma(string_view str) noexcept {
+	size_t p, e;
+	for (p = 0; p < str.length() && isSpace(str[p]); ++p);
+	for (e = p; e < str.length() && notSpace(str[e]); ++e);
+	gammaType = strToEnum(gammaNames, str.substr(p, e - p), Gamma::none);
+	gammaValue = std::clamp(toNum<uint8>(str.substr(e)), minGamma, maxGamma);
+}
+
+string Settings::firstArg() noexcept {
 	for (int i = 1; i < argc; ++i)
 		if (argv[i][0] != '-')
 #ifdef _WIN32
@@ -416,7 +427,7 @@ string Settings::firstArg() {
 	return string();
 }
 
-bool Settings::hasFlag(const char* name) {
+bool Settings::hasFlag(const char* name) noexcept {
 	for (int i = 1; i < argc; ++i)
 		if (cmpFlag(name, i))
 			return true;

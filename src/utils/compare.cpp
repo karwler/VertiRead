@@ -1,4 +1,5 @@
 #include "compare.h"
+#include <stdexcept>
 
 char32_t mbstowc(string_view::iterator& pos, size_t& len) noexcept {
 	if (!len)
@@ -83,7 +84,7 @@ void Strcomp::init() {
 #else
 
 std::strong_ordering Strcomp::cmp(string_view sa, string_view sb) noexcept {
-	string_view::iterator a = sa.begin(), b = sb.begin();
+	auto a = sa.begin(), b = sb.begin();
 	size_t alen = sa.length(), blen = sb.length();
 	while (alen && blen) {
 		char32_t ca = skipSpaces(a, alen), cb = skipSpaces(b, blen);

@@ -20,10 +20,10 @@ private:
 		FT_FaceRec_* face = nullptr;
 		Data data;
 
-		Font(Data&& font) : data(std::move(font)) {}
+		Font(Data&& font) noexcept : data(std::move(font)) {}
 	};
 
-	FT_LibraryRec_* lib;
+	FT_LibraryRec_* lib = nullptr;
 	vector<Font> fonts;
 	umap<uint, array<FT_BitmapGlyphRec_*, cacheSize>> asciiCache;
 	float heightScale;
@@ -48,22 +48,23 @@ public:
 	FontSet();
 	~FontSet();
 
-	void init(const fs::path& path, bool mono);
-	void clearCache();
+	void init(const nstring& path, bool mono);
+	void clearCache() noexcept;
 	void setMode(bool mono) noexcept;
-	uint measureText(string_view text, uint size);
-	uvec2 measureText(string_view text, uint size, uint limit);
-	const Pixmap& renderText(string_view text, uint size);
-	const Pixmap& renderText(string_view text, uint size, uint limit);
-	FT_LibraryRec_* getLib() const { return lib; }
+	uint measureText(string_view text, uint size) noexcept;
+	uvec2 measureText(string_view text, uint size, uint limit) noexcept;
+	const Pixmap& renderText(string_view text, uint size) noexcept;
+	const Pixmap& renderText(string_view text, uint size, uint limit) noexcept;
+	FT_LibraryRec_* getLib() const noexcept { return lib; }
+	uint getXpos() const noexcept { return xpos; }
 
 private:
-	Font openFont(const fs::path& path, uint size) const;
+	Font openFont(const nstring& path, uint size) const;
 	void prepareBuffer();
 	void prepareAdvance(string_view::iterator begin, size_t length, uint xstart) noexcept;
 	void advanceTab(array<FT_BitmapGlyphRec_*, cacheSize>& glyphs);
-	template <bool cached> void advanceChar(FT_FaceRec_* face, char32_t ch, char32_t prev, long advance);
-	template <bool cached> void advanceChar(FT_FaceRec_* face, char32_t ch, char32_t prev, long advance, int left, uint width);
+	template <bool cached> void advanceChar(FT_FaceRec_* face, char32_t ch, char32_t prev, long advance) noexcept;
+	template <bool cached> void advanceChar(FT_FaceRec_* face, char32_t ch, char32_t prev, long advance, int left, uint width) noexcept;
 	void checkXofs(int left) noexcept;
 	bool checkSpace(uint limit, int left, uint width);
 	void advanceLine(string_view::iterator pos);
@@ -98,7 +99,6 @@ private:
 	static constexpr float assumedCursorHeight = 20.f;	// 16 p probably + some spacing
 	static constexpr float assumedIconSize = 128.f;
 	static constexpr ivec2 tooltipMargin = ivec2(4, 1);
-	static constexpr vec4 colorPopupDim = vec4(0.f, 0.f, 0.f, 0.5f);
 	static constexpr uint fileTexBegin = eint(Tex::center);
 	static constexpr char iconExt[] = ".svg";
 
@@ -119,92 +119,97 @@ private:
 
 	Renderer* renderer;
 	ivec2 viewRes = ivec2(0);
-	array<vec4, Settings::defaultColors.size()> colors;
 	FontSet fonts;
 	array<Texture*, eint(Tex::vertiread)> texes{};
 	const char* curTooltip = nullptr;	// reference to text of the currently rendered tooltip texture
 	float winDpi;
 	int cursorHeight;
+	Renderer::Action drawState = Renderer::Action::yes;
 
 public:
 	DrawSys(const vector<SDL_Window*>& windows, const ivec2* vofs = nullptr);
 	~DrawSys() { cleanup(); }
 
-	Renderer* getRenderer() { return renderer; }
-	ivec2 getViewRes() const { return viewRes; }
+	Renderer* getRenderer() noexcept { return renderer; }
+	ivec2 getViewRes() const noexcept { return viewRes; }
 	void updateView();
-	float getWinDpi() const { return winDpi; }
+	float getWinDpi() const noexcept { return winDpi; }
 	bool updateDpi();
 	void setTheme(string_view name);
-	void setFont(const fs::path& font);
-	void setMonoFont(bool on);
-	SDL_Surface* loadIcon(const string& path, int size);
+	void setFont(const string& font);
+	void setMonoFont(bool on) noexcept;
+	static SDL_Surface* loadIcon(const char* path, int size) noexcept;
 	static string iconName(Tex name);
-	const Texture* texture(Tex name) const;
-	void resetTooltip();
+	const Texture* texture(Tex name) const noexcept;
+	void resetTooltip() noexcept;
 
-	void drawWidgets(bool mouseLast);
-	void drawPicture(const Picture* wgt, const Recti& view);
-	void drawCheckBox(const CheckBox* wgt, const Recti& view);
-	void drawSlider(const Slider* wgt, const Recti& view);
-	void drawLabel(const Label* wgt, const Recti& view);
-	void drawPushButton(const PushButton* wgt, const Recti& view);
-	void drawIconButton(const IconButton* wgt, const Recti& view);
-	void drawIconPushButton(const IconPushButton* wgt, const Recti& view);
-	void drawLabelEdit(const LabelEdit* wgt, const Recti& view);
-	void drawCaret(const Recti& rect, const Recti& frame, const Recti& view);
-	void drawWindowArranger(const WindowArranger* wgt, const Recti& view);
-	void drawWaDisp(const Recti& rect, Color color, const Recti& text, const Texture* tex, const Recti& frame, const Recti& view);
-	void drawScrollArea(const ScrollArea* box, const Recti& view);
-	void drawReaderBox(const ReaderBox* box, const Recti& view);
-	void drawPopup(const Popup* box, const Recti& view);
-	void drawTooltip(optional<bool>& syncTooltip, const Recti& view);
+	void drawWidgets(bool mouseLast) noexcept;
+	void drawPicture(const Picture* wgt, const Recti& view) noexcept;
+	void drawCheckBox(const CheckBox* wgt, const Recti& view) noexcept;
+	void drawSlider(const Slider* wgt, const Recti& view) noexcept;
+	void drawLabel(const Label* wgt, const Recti& view) noexcept;
+	void drawPushButton(const PushButton* wgt, const Recti& view) noexcept;
+	void drawIconButton(const IconButton* wgt, const Recti& view) noexcept;
+	void drawIconPushButton(const IconPushButton* wgt, const Recti& view) noexcept;
+	void drawLabelEdit(const LabelEdit* wgt, const Recti& view) noexcept;
+	void drawCaret(const Recti& rect, const Recti& frame, const Recti& view) noexcept;
+	void drawWindowArranger(const WindowArranger* wgt, const Recti& view) noexcept;
+	void drawWaDisp(const Recti& rect, Color color, const Recti& text, const Texture* tex, const Recti& frame, const Recti& view) noexcept;
+	void drawScrollArea(const ScrollArea* box, const Recti& view) noexcept;
+	void drawReaderBox(const ReaderBox* box, const Recti& view) noexcept;
+	void drawPopup(const Popup* box, const Recti& view) noexcept;
+	void drawTooltip(const Recti& view) noexcept;
 
-	uint textLength(string_view text, uint height);
-	Texture* renderText(string_view text, uint height);
-	Texture* renderText(string_view text, uint height, uint length);
-	bool renderText(Texture* tex, string_view text, uint height);
-	bool renderText(Texture* tex, string_view text, uint height, uint length);
-	FT_LibraryRec_* ftLib() const { return fonts.getLib(); }
+	uint textLength(string_view text, uint height) noexcept;
+	uint textOffset(string_view text, uint height) noexcept;
+	Texture* renderText(string_view text, uint height) noexcept;
+	Texture* renderText(string_view text, uint height, uint length) noexcept;
+	bool renderText(Texture* tex, string_view text, uint height) noexcept;
+	bool renderText(Texture* tex, string_view text, uint height, uint length) noexcept;
+	FT_LibraryRec_* ftLib() const noexcept { return fonts.getLib(); }
 
 private:
-	void cleanup();
-	optional<bool> prepareTooltip();	// returns if a new texture has been created or nullopt to not display a tooltip
-	float maxDpi() const;
+	void cleanup() noexcept;
+	bool prepareTooltip() noexcept;	// returns if to draw a tooltip and if a new texture has been created
+	float maxDpi() const noexcept;
 };
 
 inline string DrawSys::iconName(Tex name) {
 	return string(iconStems[eint(name) - fileTexBegin]) + iconExt;
 }
 
-inline const Texture* DrawSys::texture(Tex name) const {
+inline const Texture* DrawSys::texture(Tex name) const noexcept {
 	return coalesce(texes[eint(name)], texes[eint(Tex::blank)]);
 }
 
-inline uint DrawSys::textLength(string_view text, uint height) {
+inline uint DrawSys::textLength(string_view text, uint height) noexcept {
 	return fonts.measureText(text, height);
 }
 
-inline Texture* DrawSys::renderText(string_view text, uint height) {
+inline uint DrawSys::textOffset(string_view text, uint height) noexcept {
+	return fonts.measureText(text, height) ? fonts.getXpos() : 0;
+}
+
+inline Texture* DrawSys::renderText(string_view text, uint height) noexcept {
 	return renderer->texFromText(fonts.renderText(text, height));
 }
 
-inline Texture* DrawSys::renderText(string_view text, uint height, uint length) {
+inline Texture* DrawSys::renderText(string_view text, uint height, uint length) noexcept {
 	return renderer->texFromText(fonts.renderText(text, height, length));
 }
 
-inline bool DrawSys::renderText(Texture* tex, string_view text, uint height) {
+inline bool DrawSys::renderText(Texture* tex, string_view text, uint height) noexcept {
 	return renderer->texFromText(tex, fonts.renderText(text, height));
 }
 
-inline bool DrawSys::renderText(Texture* tex, string_view text, uint height, uint length) {
+inline bool DrawSys::renderText(Texture* tex, string_view text, uint height, uint length) noexcept {
 	return renderer->texFromText(tex, fonts.renderText(text, height, length));
 }
 
-inline void DrawSys::setMonoFont(bool on) {
+inline void DrawSys::setMonoFont(bool on) noexcept {
 	fonts.setMode(on);
 }
 
-inline void DrawSys::resetTooltip() {
+inline void DrawSys::resetTooltip() noexcept {
 	curTooltip = nullptr;
 }

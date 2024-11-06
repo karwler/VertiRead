@@ -440,6 +440,10 @@ class Process:
 
 if __name__ == '__main__':
 	proc = Process()
-	for (vt, ft) in [('glGui.vert', 'glGui.frag')]:
+	shaders = [
+		('glGui.vert', 'glGui.frag'),
+		('glFin.vert', 'glFin.frag')
+	]
+	for (vt, ft) in shaders:
 		proc.process(vt, ft)
 	proc.write_macros()

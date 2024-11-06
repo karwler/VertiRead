@@ -232,6 +232,15 @@ void Program::handleProgSettingsEvent(const SDL_UserEvent& event) {
 	case setDevice:
 		eventSetDevice(static_cast<PushButton*>(event.data1));
 		break;
+	case setGammaType:
+		eventSetGammaType(static_cast<PushButton*>(event.data1));
+		break;
+	case setGammaStepSl:
+		eventSetGammaStep(static_cast<Slider*>(event.data1));
+		break;
+	case setGammaStepLe:
+		eventSetGammaStep(static_cast<LabelEdit*>(event.data1));
+		break;
 	case setCompression:
 		eventSetCompression(static_cast<PushButton*>(event.data1));
 		break;
@@ -257,7 +266,7 @@ void Program::handleProgSettingsEvent(const SDL_UserEvent& event) {
 		eventSetFont(static_cast<PushButton*>(event.data1));
 		break;
 	case setFontLe:
-		setFont(toPath(static_cast<LabelEdit*>(event.data1)->getText()));
+		setFont(static_cast<LabelEdit*>(event.data1)->getText());
 		break;
 	case setMonoFont:
 		eventSetMonoFont(static_cast<CheckBox*>(event.data1));
@@ -295,10 +304,10 @@ void Program::handleThreadMoveEvent(const SDL_UserEvent& event) {
 	switch (ThreadEvent(event.code)) {
 	using enum ThreadEvent;
 	case progress:
-		state->updatePopupMessage(std::format("Moving {}/{}", uintptr_t(event.data1), uintptr_t(event.data2)));
+		state->updatePopupMessage(fmt::format("Moving {}/{}", uintptr_t(event.data1), uintptr_t(event.data2)));
 		break;
 	case finished:
-		eventMoveFinished(uptr<string>(static_cast<string*>(event.data1)));
+		eventMoveFinished(ResultCode(uintptr_t(event.data1)));
 	}
 }
 
@@ -377,7 +386,7 @@ void Program::eventListFinished(const SDL_UserEvent& event) {
 		break;
 	case error:
 		pe->fillFileList(vector<Cstring>(), vector<Cstring>());
-		state->showPopupMessage(std::move(rl->error));
+		state->showPopupMessage("Failed to list directory");
 	}
 }
 
@@ -420,7 +429,7 @@ void Program::eventOpenLastPageGeneral() {
 void Program::eventAskDeleteBook() {
 	auto pb = static_cast<ProgBooks*>(state);
 	pb->contextBook = World::scene()->getContext()->owner<PushButton>();
-	state->showPopupChoice(std::format("Are you sure you want to delete '{}'?", pb->contextBook->getText().data()), ProgBooksEvent::deleteBook);
+	state->showPopupChoice(fmt::format("Are you sure you want to delete '{}'?", pb->contextBook->getText().data()), ProgBooksEvent::deleteBook);
 }
 
 void Program::eventDeleteBook() {
@@ -515,7 +524,7 @@ void Program::eventArchiveFinished(const SDL_UserEvent& event) {
 		break;
 	case error:
 		startBrowserPreview();
-		state->showPopupMessage(ra->error.filled() ? std::move(ra->error) : "Failed to load archive");
+		state->showPopupMessage("Failed to load archive");
 	}
 #endif
 }
@@ -615,20 +624,14 @@ void Program::eventBrowserOpenLogin() {
 }
 
 void Program::eventPreviewProgress(uptr<char[]> ndata, SDL_Surface* icon) {
-	Renderer* renderer = World::drawSys()->getRenderer();
-	if (Texture* tex = renderer->texFromIcon(icon)) {
-		auto pe = static_cast<ProgFileExplorer*>(state);
-		std::span<Widget*> wgts = pe->fileList->getWidgets();
-		auto [pos, end] = ndata[0] ? pair(wgts.begin() + pe->dirEnd, wgts.begin() + pe->fileEnd) : pair(wgts.begin(), wgts.begin() + pe->dirEnd);
-		char* name = ndata.get() + 1;
-		if (std::span<Widget*>::iterator it = std::lower_bound(pos, end, name, [](const Widget* a, const char* b) -> bool { return Strcomp::less(static_cast<const PushButton*>(a)->getText().data(), b); }); it != end && static_cast<PushButton*>(*it)->getText() == name) {
-			static_cast<IconPushButton*>(*it)->setIcon(tex);
-			renderer->synchTransfer();
-		} else {
-			renderer->synchTransfer();
-			renderer->freeTexture(tex);
-		}
-	}
+	auto pe = static_cast<ProgFileExplorer*>(state);
+	std::span<Widget*> wgts = pe->fileList->getWidgets();
+	auto [pos, end] = ndata[0] ? pair(wgts.begin() + pe->dirEnd, wgts.begin() + pe->fileEnd) : pair(wgts.begin(), wgts.begin() + pe->dirEnd);
+	char* name = ndata.get() + 1;
+	if (auto it = std::lower_bound(pos, end, name, [](const Widget* a, const char* b) -> bool { return Strcomp::less(static_cast<const PushButton*>(a)->getText().data(), b); }); it != end && static_cast<PushButton*>(*it)->getText() == name)
+		static_cast<IconPushButton*>(*it)->setIcon(World::drawSys()->getRenderer()->texFromSurface(icon, false, true));
+	else
+		SDL_FreeSurface(icon);
 }
 
 void Program::eventExitBrowser() {
@@ -638,7 +641,7 @@ void Program::eventExitBrowser() {
 // READER
 
 void Program::eventReaderProgress(uptr<BrowserPictureProgress> pp) {
-	pp->tex = World::drawSys()->getRenderer()->texFromRpic(pp->img);
+	pp->tex = World::drawSys()->getRenderer()->texFromSurface(pp->img, true, true);
 	state->updatePopupMessage(std::move(pp->text));
 }
 
@@ -657,7 +660,7 @@ void Program::eventReaderFinished(ResultCode rc, uptr<BrowserResultPicture> rp) 
 		break;
 	case error:
 		startBrowserPreview();
-		state->showPopupMessage(rp->error.filled() ? std::move(rp->error) : "Failed to load pictures");
+		state->showPopupMessage("Failed to load pictures");
 	}
 }
 
@@ -731,7 +734,7 @@ void Program::eventSetLibraryDirBw() {
 void Program::setLibraryDir(string_view path, bool byText) {
 	auto ps = dynamic_cast<ProgSettings*>(state);
 	bool dstLocal = RemoteLocation::getProtocol(path) == Protocol::none;
-	if (std::error_code ec; dstLocal && (!fs::is_directory(toPath(path), ec) || ec)) {	// TODO: establish a new browser connection if remote and check if it's a valid directory
+	if (dstLocal && !FileSys::isDirectory(string(path))) {	// TODO: establish a new browser connection if remote and check if it's a valid directory
 		if (byText)
 			ps->libraryDir->setText(World::sets()->dirLib);
 		state->showPopupMessage("Invalid directory");
@@ -753,14 +756,9 @@ void Program::setLibraryDir(string_view path, bool byText) {
 }
 
 void Program::eventOpenLibDirBrowser() {
-#ifdef _WIN32
-	const char* home = "UserProfile";
-#else
-	const char* home = "HOME";
-#endif
 	try {
 		browser.prepareFileOps(string_view());
-		browser.beginFs(string(), SDL_getenv(home));
+		browser.beginFs(string(), Settings::homeDir());
 		browser.exCall = &Program::eventOpenSettings;
 		setState<ProgSearchDir>();
 		browser.startListDir(valcp(browser.getCurDir()), false);
@@ -779,24 +777,19 @@ void Program::eventMoveCancelled() {
 	World::scene()->setPopup(nullptr);
 }
 
-void Program::eventMoveFinished(uptr<string> errors) {
+void Program::eventMoveFinished(ResultCode rc) {
 	static_cast<ProgSettings*>(state)->stopMove();
-	if (errors->empty())
+	if (rc != ResultCode::error)
 		World::scene()->setPopup(nullptr);
-	else {
-		ProgSettings::logMoveErrors(errors.get());
-		state->showPopupMultiline(*errors);
-	}
+	else
+		state->showPopupMessage("Failed to move files");
 }
 
 void Program::eventFontsFinished(const SDL_UserEvent& event) {
-	uptr<FontListResult> flr(static_cast<FontListResult*>(event.data1));
 	auto ps = static_cast<ProgSettings*>(state);
 	ps->stopFonts();
-	if (flr->error.empty())
+	if (uptr<FontListResult> flr(static_cast<FontListResult*>(event.data1)); flr)
 		ps->setFontField(std::move(flr->families), std::move(flr->files), flr->select);
-	else
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", flr->error.data());
 }
 
 void Program::eventSetZoomType(PushButton* but) {
@@ -833,21 +826,52 @@ void Program::eventSetDevice(PushButton* but) {
 	}
 }
 
-void Program::eventSetCompression(PushButton* but) {
-	ComboBox* cmb = World::scene()->getContext()->owner<ComboBox>();
-	Settings::Compression compression = strToEnum(Settings::compressionNames, cmb->getOptions()[but->getIndex()].data(), World::sets()->compression);
-	cmb->setCurOpt(but->getIndex());
-	World::scene()->setContext(nullptr);
+void Program::eventSetGammaType(PushButton* but) {
+	if (auto [gamma, cmb] = finishComboBox(but, Settings::gammaNames, World::sets()->gammaType); World::sets()->gammaType != gamma) {
+		auto ps = static_cast<ProgSettings*>(state);
+		bool recreateWindow = ps->getSrgbNeedsWindowRecreate() && (World::sets()->gammaType == Settings::Gamma::srgb) != (gamma == Settings::Gamma::srgb);
+		World::sets()->gammaType = gamma;
+		if (recreateWindow)
+			World::winSys()->recreateWindows();
+		else {
+			if (World::drawSys()->getRenderer()->setSettings(World::sets()))
+				World::drawSys()->setTheme(World::sets()->getTheme());
+			if (World::sets()->gammaType != gamma)
+				setIncoherenComboBox(cmb, Settings::gammaNames[eint(World::sets()->gammaType)]);
+			ps->gammaLine->replaceWidget(ps->gammaLine->getWidgets().size() - 1, ps->createGammaEdit());
+		}
+	}
+}
 
-	if (World::sets()->compression != compression) {
+void Program::eventSetGammaStep(Slider* sl) {
+	if (World::sets()->gammaValue != sl->getVal()) {
+		World::sets()->gammaValue = sl->getVal();
+		sl->getParent()->getWidget<LabelEdit>(sl->getIndex() + 1)->setText(toStr(float(World::sets()->gammaValue) / 10.f));
+		World::drawSys()->getRenderer()->setGammaValue(World::sets()->gammaValue);
+	}
+}
+
+void Program::eventSetGammaStep(LabelEdit* le) {
+	if (uint8 gstep = std::clamp(std::round(toNum<float>(le->getText()) * 10.f), float(Settings::minGamma), float(Settings::maxGamma)); World::sets()->gammaValue != gstep) {
+		World::sets()->gammaValue = gstep;
+		le->getParent()->getWidget<Slider>(le->getIndex() - 1)->setVal(gstep);
+		World::drawSys()->getRenderer()->setGammaValue(World::sets()->gammaValue);
+	}
+	le->setText(toStr(float(World::sets()->gammaValue) / 10.f));
+}
+
+void Program::eventSetCompression(PushButton* but) {
+	if (auto [compression, cmb] = finishComboBox(but, Settings::compressionNames, World::sets()->compression); World::sets()->compression != compression) {
 		World::sets()->compression = compression;
-		World::drawSys()->getRenderer()->setCompression(compression);
+		World::drawSys()->getRenderer()->setSettings(World::sets());
+		if (World::sets()->compression != compression)
+			setIncoherenComboBox(cmb, Settings::compressionNames[eint(World::sets()->compression)]);
 	}
 }
 
 void Program::eventSetVsync(CheckBox* cb) {
 	World::sets()->vsync = cb->on;
-	World::drawSys()->getRenderer()->setVsync(World::sets()->vsync);
+	World::drawSys()->getRenderer()->setSettings(World::sets());
 }
 
 void Program::eventSetMultiFullscreen(WindowArranger* wa) {
@@ -867,11 +891,11 @@ void Program::eventSetTheme(PushButton* lbl) {
 }
 
 void Program::eventSetFont(PushButton* but) {
-	if (fs::path file = toPath(World::scene()->getContext()->owner<ComboBox>()->getTooltips()[finishComboBox(but)].data()); !file.empty())
+	if (string file = World::scene()->getContext()->owner<ComboBox>()->getTooltips()[finishComboBox(but)].data(); !file.empty())
 		setFont(file);
 }
 
-void Program::setFont(const fs::path& font) {
+void Program::setFont(const string& font) {
 	try {
 		World::drawSys()->setFont(font);
 		state->eventRefresh();
@@ -947,6 +971,21 @@ uint Program::finishComboBox(PushButton* but) {
 	return val;
 }
 
+template <IntEnum T, size_t N>
+pair<T, ComboBox*> Program::finishComboBox(PushButton* but, const array<const char*, N>& names, T defaultValue) {
+	ComboBox* cmb = World::scene()->getContext()->owner<ComboBox>();
+	T val = strToEnum(names, cmb->getOptions()[but->getIndex()].data(), defaultValue);
+	cmb->setCurOpt(but->getIndex());
+	World::scene()->setContext(nullptr);
+	return pair(val, cmb);
+}
+
+void Program::setIncoherenComboBox(ComboBox* cmb, string_view name) {
+	const vector<Cstring>& opts = cmb->getOptions();
+	if (auto oit = rng::find_if(opts, [name](const Cstring& it) -> bool { return strciequal(it.data(), name); }); oit != opts.end())
+		cmb->setCurOpt(oit - opts.begin());
+}
+
 void Program::eventResizeComboContext(Context* ctx) {
 	ctx->setRect(ProgState::calcTextContextRect(ctx->getWidget<ScrollArea>(0)->getWidgets(), ctx->owner()->position(), ctx->owner()->size(), ctx->getSpacing()));
 }
@@ -997,19 +1036,20 @@ void Program::setPopupProgress(Cstring&& msg) {
 
 template <Derived<ProgState> T, class... A>
 void Program::setState(A&&... args) {
-	SDL_FlushEvents(SDL_USEREVENT_GENERAL, SDL_USEREVENT_PROG_MAX);
+	SDL_FlushEvents(SDL_USEREVENT_GENERAL, SDL_USEREVENT_PROG_MAX);	// the state's desctructor should stop any threads and clean up their events
 	delete state;
+	state = nullptr;
 	state = new T(std::forward<A>(args)...);
 	World::scene()->resetLayouts();
 }
 
 #ifdef CAN_SECRET
-bool Program::lazyInitCredentials() {
+bool Program::lazyInitCredentials() noexcept {
 	if (credentialState == InitState::none) {
 		try {
 			credential = new CredentialManager;
 			credentialState = InitState::done;
-		} catch (const std::runtime_error& err) {
+		} catch (const std::exception& err) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
 			credentialState = InitState::error;
 		}

@@ -343,7 +343,7 @@ $RECYCLE.BIN/
 *.lnk
 
 # Custom
+src/engine/shaders/glFin.frag.dbg.h
+src/engine/shaders/glFin.vert.dbg.h
 src/engine/shaders/glGui.frag.dbg.h
 src/engine/shaders/glGui.vert.dbg.h
-src/engine/shaders/glSel.frag.dbg.h
-src/engine/shaders/glSel.vert.dbg.h

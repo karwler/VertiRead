@@ -35,16 +35,13 @@ def compile_source(fxc: str, name: str, src_dir: str, dst_dir: str, model: str):
 		try:
 			opt = ['/Od', '/Zi'] if dbg else ['/O1']
 			ext = 'dbg' if dbg else 'rel'
-			fxc_file = os.path.join(dst_dir, f'{stem}.{ext}.cso')
+			fxc_file = os.path.join(dst_dir, f'{stem}.{ext}.fxc')
 			cpp_file = os.path.join(dst_dir, f'{stem}.{ext}.h')
 
-			ret = subprocess.run([fxc, '/Ges', '/Gis', '/T', version, '/Fo', fxc_file, src_file] + opt)
-			if ret.stdout:
-				print(f'stdout: {ret.stdout}')
+			ret = subprocess.run([fxc, '/Ges', '/Gis', '/T', version, '/Fo', fxc_file, src_file] + opt, capture_output=True)
 			if ret.stderr:
-				print(f'stderr: {ret.stderr}')
-			if ret.returncode != 0:
-				print(f'returned: {ret.returncode}')
+				print(ret.stderr.decode("utf-8"))
+			ret.check_returncode()
 
 			bytes_to_text(fxc_file, cpp_file, 4)
 			os.remove(fxc_file)
@@ -59,5 +56,10 @@ if __name__ == '__main__':
 
 	srcd = os.path.join(os.path.dirname(__file__), 'shaders')
 	dstd = os.path.join(os.path.dirname(__file__), os.pardir, 'src', 'engine', 'shaders')
-	for it in ['dxGuiVs.hlsl', 'dxGuiPs.hlsl', 'dxRgbCs.hlsl', 'dxBgrCs.hlsl', 'dxRedCs.hlsl', 'dxIdxCs.hlsl']:
+	shaders = [
+		'dxGuiVs.hlsl', 'dxGuiPs.hlsl',
+		'dxFinVs.hlsl', 'dxFinPs.hlsl',
+		'dxRgbCs.hlsl', 'dxBgrCs.hlsl', 'dxRedCs.hlsl', 'dxIdxCs.hlsl'
+	]
+	for it in shaders:
 		compile_source(comp, it, srcd, dstd, '5_0')

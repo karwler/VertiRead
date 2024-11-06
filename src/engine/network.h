@@ -79,8 +79,8 @@ public:
 	static void initWsa() noexcept;
 	static void cleanupWsa() noexcept;
 #endif
-	operator bool() const { return sock != INVALID_SOCKET; }
-	bool tls() const;
+	operator bool() const noexcept { return sock != INVALID_SOCKET; }
+	bool tls() const noexcept;
 	void startTls(TlsData& data);
 	void setTimeout(uint timeout) noexcept;
 	nsint recv(void* buf, size_t len);
@@ -102,7 +102,7 @@ private:
 #endif
 };
 
-inline bool NetConnection::tls() const {
+inline bool NetConnection::tls() const noexcept {
 #if defined(CAN_GNUTLS) && defined(CAN_OPENSSL)
 	return sess || ssl;
 #elif defined(CAN_GNUTLS)
@@ -121,15 +121,15 @@ struct FtpReply {
 	bool cont;
 	bool entry;
 
-	bool operator==(ushort rc) const;
-	bool isCont(ushort rc) const;
+	bool operator==(ushort rc) const noexcept;
+	bool isCont(ushort rc) const noexcept;
 };
 
-inline bool FtpReply::operator==(ushort rc) const {
+inline bool FtpReply::operator==(ushort rc) const noexcept {
 	return code == rc && !cont && !entry;
 }
 
-inline bool FtpReply::isCont(ushort rc) const {
+inline bool FtpReply::isCont(ushort rc) const noexcept {
 	return code == rc && cont && !entry;
 }
 
@@ -148,7 +148,7 @@ public:
 	FtpReply sendCmd(NetConnection& conn, string_view cmd, string_view arg);
 	FtpReply getReply(NetConnection& conn);
 	bool getLine(NetConnection& conn, string_view& line);
-	void advanceLine(size_t length);
+	void advanceLine(size_t length) noexcept;
 	static Data getData(NetConnection& conn, size_t initRsv);
 
 private:
@@ -156,7 +156,7 @@ private:
 	template <IntEnum T> static void expandBuffer(uptr<T[]>& buf, size_t& rsv, size_t len, size_t step);
 };
 
-inline void FtpReceiver::advanceLine(size_t length) {
+inline void FtpReceiver::advanceLine(size_t length) noexcept {
 	pos += length + 2;
 }
 #endif

@@ -80,7 +80,7 @@ void ProgState::eventRefresh() {
 	World::scene()->resetLayouts();
 }
 
-void ProgState::onResize() {
+void ProgState::onResize() noexcept {
 	popupLineHeight = 40.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi();
 	tooltipHeight = 16.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi();
 	lineHeight = 30.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi();
@@ -120,34 +120,6 @@ void ProgState::updatePopupMessage(Cstring&& msg) {
 	}
 }
 
-void ProgState::showPopupMultiline(Cstring&& msg, EventId ccal, Cstring&& ctxt) {
-	uint oklen = measureText(ctxt.data(), popupLineHeight);
-	uvec2 viewRes = World::drawSys()->getViewRes();
-	uint width = oklen, lines = 0;
-	for (char* pos = msg.data();;) {
-		++lines;
-		char* end = strchr(pos, '\n');
-		if (uint siz = World::drawSys()->textLength(string_view(pos, end ? end : pos + strlen(pos)), lineHeight) + (TextDsp<Cstring>::textMargin + Layout::defaultItemSpacing) * 2; siz > width)
-			if (width = std::min(siz, viewRes.x); width == viewRes.x)
-				break;
-		if (!end)
-			break;
-		pos = end + 1;
-	}
-
-	Widget* first;
-	Children bot = {
-		new Widget,
-		first = new PushButton(oklen, std::move(ctxt), ccal, ACT_LEFT, Cstring(), Alignment::center),
-		new Widget
-	};
-	Children con = {
-		new TextBox(1.f, lineHeight, std::move(msg)),
-		new Layout(popupLineHeight, std::move(bot), Direction::right, 0)
-	};
-	World::scene()->setPopup(new Popup(svec2(width, std::min(lineHeight * lines + popupLineHeight + Layout::defaultItemSpacing * 3, viewRes.y)), std::move(con), ccal, ccal, first));
-}
-
 void ProgState::showPopupChoice(Cstring&& msg, EventId kcal, EventId ccal, Alignment malign) {
 	uint mglen = measureText(msg.data(), popupLineHeight);
 	uint yeslen = measureText("Yes", popupLineHeight);
@@ -172,13 +144,13 @@ void ProgState::showPopupInput(Cstring&& msg, string&& text, EventId kcal, Event
 	};
 	Children con = {
 		new Label(1.f, std::move(msg), malign),
-		first = new LabelEdit(1.f, std::move(text), kcal, ccal, ACT_LEFT, Cstring(), visible ? LabelEdit::TextType::any : LabelEdit::TextType::password, false),
+		first = new LabelEdit(1.f, std::move(text), kcal, ccal, ACT_LEFT, Cstring(), visible ? LabelEdit::TT_ANY : LabelEdit::TT_PWD, false),
 		new Layout(1.f, std::move(bot), Direction::right, 0)
 	};
 	World::scene()->setPopup(new Popup(svec2(0.75f, popupLineHeight * 3 + Layout::defaultItemSpacing * 4), std::move(con), ccal, kcal, first), first);
 }
 
-const string& ProgState::inputFromPopup() {
+const string& ProgState::inputFromPopup() noexcept {
 	return World::scene()->getPopup()->getWidget<LabelEdit>(1)->getText();
 }
 
@@ -206,7 +178,7 @@ void ProgState::showPopupLogin(RemoteLocation&& rl, EventId kcal, EventId ccal, 
 		"TLS",
 		"Save"
 	};
-	std::initializer_list<const char*>::iterator itxs = txs.begin();
+	auto itxs = txs.begin();
 	uint descLength = findMaxLength(txs.begin(), txs.end(), popupLineHeight);
 
 	vector<Cstring> protoNames = {
@@ -235,7 +207,7 @@ void ProgState::showPopupLogin(RemoteLocation&& rl, EventId kcal, EventId ccal, 
 	};
 	Children password = {
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, std::move(rl.password), nullEvent, nullEvent, ACT_NONE, "Password", LabelEdit::TextType::password)
+		new LabelEdit(1.f, std::move(rl.password), nullEvent, nullEvent, ACT_NONE, "Password", LabelEdit::TT_PWD)
 	};
 	Children server = {
 		new Label(descLength, *itxs++),
@@ -247,7 +219,7 @@ void ProgState::showPopupLogin(RemoteLocation&& rl, EventId kcal, EventId ccal, 
 	};
 	Children port = {
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, toStr(rl.port), nullEvent, nullEvent, ACT_NONE, "Port", rl.protocol == Protocol::smb ? LabelEdit::TextType::uInt : LabelEdit::TextType::any)
+		new LabelEdit(1.f, toStr(rl.port), nullEvent, nullEvent, ACT_NONE, "Port", rl.protocol == Protocol::smb ? LabelEdit::TT_INT | LabelEdit::TT_UNS : LabelEdit::TT_ANY)
 	};
 	Children bot = {
 		new PushButton(1.f, "Log In", kcal, ACT_LEFT, Cstring(), Alignment::center),
@@ -354,7 +326,7 @@ void ProgState::showComboContext(ComboBox* parent, EventId kcal) {
 	World::scene()->setContext(new Context(rect.pos(), rect.size(), Children{ new ScrollArea(1.f, std::move(wgts), Layout::defaultDirection, 0) }, first, parent, Color::dark, GeneralEvent::resizeComboContext, Layout::defaultDirection, contextMargin));
 }
 
-Recti ProgState::calcTextContextRect(const Children& items, ivec2 pos, ivec2 size, int margin) {
+Recti ProgState::calcTextContextRect(const Children& items, ivec2 pos, ivec2 size, int margin) noexcept {
 	for (uint i = 0; i < items.num; ++i)
 		if (auto lbl = dynamic_cast<PushButton*>(items[i]))
 			if (int w = World::drawSys()->textLength(lbl->getText().data(), size.y) + TextDsp<Cstring>::textMargin * 2 + Scrollable::barSizeVal + margin * 2; w > size.x)
@@ -367,7 +339,7 @@ Recti ProgState::calcTextContextRect(const Children& items, ivec2 pos, ivec2 siz
 	return Recti(pos, size);
 }
 
-void ProgState::calcContextPos(int& pos, int& siz, int limit) {
+void ProgState::calcContextPos(int& pos, int& siz, int limit) noexcept {
 	if (siz < limit)
 		pos = pos + siz <= limit ? pos : limit - siz;
 	else {
@@ -377,7 +349,7 @@ void ProgState::calcContextPos(int& pos, int& siz, int limit) {
 }
 
 template <Iterator T>
-uint ProgState::findMaxLength(T pos, T end, uint height) {
+uint ProgState::findMaxLength(T pos, T end, uint height) noexcept {
 	uint width = 0;
 	for (; pos != end; ++pos)
 		if (uint len = measureText(*pos, height); len > width)
@@ -385,7 +357,7 @@ uint ProgState::findMaxLength(T pos, T end, uint height) {
 	return width;
 }
 
-uint ProgState::measureText(string_view str, uint height) {
+uint ProgState::measureText(string_view str, uint height) noexcept {
 	return World::drawSys()->textLength(str, height) + TextDsp<Cstring>::textMargin * 2;
 }
 
@@ -415,11 +387,11 @@ void ProgFileExplorer::processFileChanges() {
 	std::span<Widget*> wgts = fileList->getWidgets();
 	for (FileChange& fc : fileChanges) {
 		if (fc.type == FileChange::deleteEntry) {
-			std::span<Widget*>::iterator sp = wgts.begin() + dirEnd;
-			std::span<Widget*>::iterator it = std::lower_bound(wgts.begin(), sp, fc.name, compare);
+			auto sp = wgts.begin() + dirEnd;
+			auto it = std::lower_bound(wgts.begin(), sp, fc.name, compare);
 			bool directory = it != sp && static_cast<const PushButton*>(*it)->getText() == fc.name;
 			if (!directory) {
-				std::span<Widget*>::iterator ef = wgts.begin() + fileEnd;
+				auto ef = wgts.begin() + fileEnd;
 				if (it = std::lower_bound(sp, ef, fc.name, compare); it == ef || static_cast<const PushButton*>(*it)->getText() != fc.name)
 					continue;
 			}
@@ -452,7 +424,7 @@ PushButton* ProgFileExplorer::makeFileEntry(const Size&, Cstring&&) {
 	return nullptr;
 }
 
-Size ProgFileExplorer::fileEntrySize(string_view) {
+Size ProgFileExplorer::fileEntrySize(string_view) noexcept {
 	return lineHeight;
 }
 
@@ -500,7 +472,7 @@ PushButton* ProgBooks::makeDirectoryEntry(const Size& size, Cstring&& name) {
 	return new PushButton(size, std::move(name), ProgBooksEvent::openPageBrowser, ACT_LEFT | ACT_RIGHT);
 }
 
-Size ProgBooks::fileEntrySize(string_view name) {
+Size ProgBooks::fileEntrySize(string_view name) noexcept {
 	return measureText(name, TileBox::defaultItemHeight);
 }
 
@@ -518,7 +490,7 @@ void ProgPageBrowser::eventFileDrop(const char* file) {
 	World::program()->openFile(file);
 }
 
-void ProgPageBrowser::resetFileIcons() {
+void ProgPageBrowser::resetFileIcons() noexcept {
 	const Texture* dtex = World::drawSys()->texture(DrawSys::Tex::folder);
 	const Texture* ftex = World::drawSys()->texture(DrawSys::Tex::file);
 	std::span<Widget*> wgts = fileList->getWidgets();
@@ -536,7 +508,7 @@ RootLayout* ProgPageBrowser::createLayout() {
 		"Up",
 		"Net"
 	};
-	std::initializer_list<const char*>::iterator itxs = txs.begin();
+	auto itxs = txs.begin();
 	uint txsWidth = findMaxLength(txs.begin(), txs.end(), lineHeight);
 	Children bar = {
 		new PushButton(lineHeight, *itxs++, ProgFileExplorerEvent::exit),
@@ -582,36 +554,20 @@ void ProgReader::eventSpecEscape() {
 	World::program()->eventExitReader();
 }
 
-void ProgReader::eventUp() {
-	eventScrollUp(1.f);
-}
-
-void ProgReader::eventDown() {
-	eventScrollDown(1.f);
-}
-
-void ProgReader::eventLeft() {
-	eventScrollLeft(1.f);
-}
-
-void ProgReader::eventRight() {
-	eventScrollRight(1.f);
-}
-
 void ProgReader::eventScrollUp(float amt) {
-	reader->onScroll(ivec2(0, -modifySpeed(amt * World::sets()->scrollSpeed.y)));
+	reader->scrollDirect(vec2(0.f, -modifySpeed(amt, reader->direction.vertical())));
 }
 
 void ProgReader::eventScrollDown(float amt) {
-	reader->onScroll(ivec2(0, modifySpeed(amt * World::sets()->scrollSpeed.y)));
-}
-
-void ProgReader::eventScrollRight(float amt) {
-	reader->onScroll(ivec2(modifySpeed(amt * World::sets()->scrollSpeed.x), 0));
+	reader->scrollDirect(vec2(0.f, modifySpeed(amt, reader->direction.vertical())));
 }
 
 void ProgReader::eventScrollLeft(float amt) {
-	reader->onScroll(ivec2(-modifySpeed(amt * World::sets()->scrollSpeed.x), 0));
+	reader->scrollDirect(vec2(-modifySpeed(amt, reader->direction.horizontal()), 0.f));
+}
+
+void ProgReader::eventScrollRight(float amt) {
+	reader->scrollDirect(vec2(modifySpeed(amt, reader->direction.horizontal()), 0.f));
 }
 
 void ProgReader::eventNextPage() {
@@ -675,7 +631,7 @@ void ProgReader::eventRefresh() {
 
 void ProgReader::eventClosing() {
 	World::fileSys()->saveLastPage(World::program()->getBrowser()->locationForStore(reader->curPage()));
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 	SDL_ShowCursor();
 #else
 	SDL_ShowCursor(SDL_ENABLE);
@@ -704,26 +660,23 @@ Overlay* ProgReader::createOverlay() {
 
 Cstring ProgReader::makeTooltipWithKey(const char* text, Binding::Type type) {
 	string btext = World::inputSys()->getBoundName(type);
-	return !btext.empty() ? std::format("{} ({})", text, btext) : text;
+	return !btext.empty() ? fmt::format("{} ({})", text, btext) : text;
 }
 
-int ProgReader::modifySpeed(float value) {
+float ProgReader::modifySpeed(float amt, bool primary) noexcept {
+	amt *= World::drawSys()->getWinDpi() * World::sets()->scrollSpeed[primary];
 	if (float factor = 1.f; World::inputSys()->isPressed(Binding::Type::scrollFast, factor))
-		value *= scrollFactor * factor;
+		amt *= scrollFactor * factor;
 	else if (World::inputSys()->isPressed(Binding::Type::scrollSlow, factor))
-		value /= scrollFactor * factor;
-	return value * World::winSys()->getDSec();
+		amt /= scrollFactor * factor;
+	return amt * World::winSys()->getDSec();
 }
 
 // PROG SETTINGS
 
 ProgSettings::~ProgSettings() {
-	try {
-		stopFonts();
-		stopMove();
-	} catch (const std::runtime_error& err) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
-	}
+	stopFonts();
+	stopMove();
 }
 
 void ProgSettings::eventSpecEscape() {
@@ -753,10 +706,10 @@ void ProgSettings::eventRefresh() {
 }
 
 void ProgSettings::eventFileDrop(const char* file) {
-	if (fs::path path = toPath(file); FileSys::isFont(path))
+	if (string path = file; FileSys::isFont(path))
 		World::program()->setFont(path);
-	else if (fs::is_directory(toPath(file)))
-		World::program()->setLibraryDir(file);
+	else if (FileSys::isDirectory(path))
+		World::program()->setLibraryDir(path);
 }
 
 RootLayout* ProgSettings::createLayout() {
@@ -777,6 +730,7 @@ RootLayout* ProgSettings::createLayout() {
 		"Screen",
 		"Renderer",
 		"Device",
+		"Gamma correction",
 		"Image compression",
 		"VSync",
 		"Show hidden",
@@ -787,9 +741,10 @@ RootLayout* ProgSettings::createLayout() {
 		"Scroll speed",
 		"Deadzone"
 	};
-	std::initializer_list<const char*>::iterator itxs = txs.begin();
+	auto itxs = txs.begin();
 
 	Renderer::Info rinf = World::drawSys()->getRenderer()->getInfo();
+	srgbNeedsWindowRecreate = rinf.srgbNeedsWindowRecreate;
 	devices.resize(rinf.devices.size());
 	vector<Cstring> dnames(rinf.devices.size());
 	uptr<Cstring[]> dtips = std::make_unique<Cstring[]>(rinf.devices.size());
@@ -797,7 +752,7 @@ RootLayout* ProgSettings::createLayout() {
 	for (size_t i = 0; i < rinf.devices.size(); ++i) {
 		string tipstr;
 		if (rinf.devices[i].id != u32vec2(0))
-			tipstr = std::format("ID: {:04X}:{:04X}", rinf.devices[i].id.x, rinf.devices[i].id.y);
+			tipstr = fmt::format("ID: {:04X}:{:04X}", rinf.devices[i].id.x, rinf.devices[i].id.y);
 		if (rinf.devices[i].dmem)
 			tipstr += (tipstr.empty() ? "" : " ") + "Memory: "s + PicLim::memoryString(rinf.devices[i].dmem);
 		dtips[i] = tipstr;
@@ -806,10 +761,26 @@ RootLayout* ProgSettings::createLayout() {
 		if (rinf.devices[i].id == World::sets()->device)
 			curDev = i;
 	}
+	static constexpr array gammaTipLines = {
+		"No gamma correction",
+		"sRGB colorspace",
+		"Gamma exponent value"
+	};
+	vector<Cstring> gammaNames(rinf.gamma.size());
+	uptr<Cstring[]> gammaTips = std::make_unique<Cstring[]>(rinf.gamma.size());
+	uint curGamma = 0;
+	for (uint i = 0; Settings::Gamma it : rinf.gamma) {
+		gammaNames[i] = Settings::gammaNames[eint(it)];
+		gammaTips[i] = gammaTipLines[eint(it)];
+		if (it == rinf.curGamma)
+			curGamma = i;
+		++i;
+	}
 	static constexpr array compressionTipLines = {
 		"Load textures uncompressed",
 		"Squash texels to 8 bits",
 		"Squash texels to 16 bits",
+		"Squash texels to 32 bits",
 		"Use compressed textures"
 	};
 	vector<Cstring> compressionNames(rinf.compressions.size());
@@ -853,7 +824,7 @@ RootLayout* ProgSettings::createLayout() {
 	static constexpr char tipDeadzone[] = "Controller axis deadzone";
 	static constexpr char tipMaxPicRes[] = "Maximum picture resolution";
 
-	Size monitorSize([](const Widget* wgt) -> int {
+	Size monitorSize([](const Widget* wgt) noexcept -> int {
 		auto box = static_cast<const Layout*>(wgt);
 		return box->getWidget<WindowArranger>(1)->precalcSizeExpand(box->getParent()->size().x - box->getWidget(0)->getRelSize().pix - box->getSpacing() - Scrollable::barSizeVal);
 	});
@@ -880,7 +851,7 @@ RootLayout* ProgSettings::createLayout() {
 	});
 	lx.emplace_back(lineHeight, Children{
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, toStr(World::sets()->spacing), ProgSettingsEvent::setSpacing, nullEvent, ACT_LEFT, "Picture spacing in reader", LabelEdit::TextType::uInt)
+		new LabelEdit(1.f, toStr(World::sets()->spacing), ProgSettingsEvent::setSpacing, nullEvent, ACT_LEFT, "Picture spacing in reader", LabelEdit::TT_INT | LabelEdit::TT_UNS)
 	});
 	lx.emplace_back(lineHeight, Children{
 		new Label(descLength, *itxs++),
@@ -912,6 +883,14 @@ RootLayout* ProgSettings::createLayout() {
 		lx.emplace_back(lineHeight, Children{
 			new Label(descLength, *itxs),
 			new ComboBox(1.f, curDev, std::move(dnames), ProgSettingsEvent::setDevice, "Rendering devices", std::move(dtips))
+		});
+	}
+	++itxs;
+	if (gammaNames.size() > 1) {
+		lx.emplace_back(lineHeight, Children{
+			new Label(descLength, *itxs),
+			new ComboBox(findMaxLength(Settings::gammaNames.begin(), Settings::gammaNames.end(), lineHeight), curGamma, std::move(gammaNames), ProgSettingsEvent::setGammaType, "Gamma correction type", std::move(gammaTips)),
+			createGammaEdit()
 		});
 	}
 	++itxs;
@@ -951,12 +930,12 @@ RootLayout* ProgSettings::createLayout() {
 	});
 	lx.emplace_back(lineHeight, Children{
 		new Label(descLength, *itxs++),
-		new LabelEdit(1.f, World::sets()->scrollSpeedString(), ProgSettingsEvent::setScrollSpeed, nullEvent, ACT_LEFT, "Scroll speed for button presses or axes", LabelEdit::TextType::sFloatSpaced)
+		new LabelEdit(1.f, World::sets()->scrollSpeedString(), ProgSettingsEvent::setScrollSpeed, nullEvent, ACT_LEFT, "Scroll speed for button presses or axes", LabelEdit::TT_FLT | LabelEdit::TT_VEC)
 	});
 	lx.emplace_back(lineHeight, Children{
 		new Label(descLength, *itxs++),
 		new Slider(1.f, World::sets()->getDeadzone(), 0, Settings::axisLimit, ProgSettingsEvent::setDeadzoneSl, ACT_LEFT, tipDeadzone),
-		new LabelEdit(unumLen, toStr(World::sets()->getDeadzone()), ProgSettingsEvent::setDeadzoneLe, nullEvent, ACT_LEFT, tipDeadzone, LabelEdit::TextType::uInt)
+		new LabelEdit(unumLen, toStr(World::sets()->getDeadzone()), ProgSettingsEvent::setDeadzoneLe, nullEvent, ACT_LEFT, tipDeadzone, LabelEdit::TT_INT | LabelEdit::TT_UNS)
 	});
 
 	uint lcnt = lx.size();
@@ -967,15 +946,16 @@ RootLayout* ProgSettings::createLayout() {
 	lns[lcnt + 1] = new Layout(lineHeight, { new Widget(descLength), new Label(1.f, "Keyboard", Alignment::center, false), new Label(1.f, "DirectInput", Alignment::center, false), new Label(1.f, "XInput", Alignment::center, false) }, Direction::right);
 	zoomLine = static_cast<Layout*>(lns[2]);
 	limitLine = static_cast<Layout*>(lns[4]);
+	gammaLine = static_cast<Layout*>(lns[8 + (Settings::rendererNames.size() > 1) + (devices.size() > 1)]);
 
 	// shortcut entries
 	for (size_t i = 0; i < std::size(bnames); ++i) {
 		auto lbl = new Label(descLength, std::move(bnames[i]));
 		Children lin = {
 			lbl,
-			new KeyGetter(1.f, KeyGetter::AcceptType::keyboard, Binding::Type(i), std::format("{} keyboard binding", lbl->getText().data())),
-			new KeyGetter(1.f, KeyGetter::AcceptType::joystick, Binding::Type(i), std::format("{} joystick binding", lbl->getText().data())),
-			new KeyGetter(1.f, KeyGetter::AcceptType::gamepad, Binding::Type(i), std::format("{} gamepad binding", lbl->getText().data()))
+			new KeyGetter(1.f, KeyGetter::AcceptType::keyboard, Binding::Type(i), fmt::format("{} keyboard binding", lbl->getText().data())),
+			new KeyGetter(1.f, KeyGetter::AcceptType::joystick, Binding::Type(i), fmt::format("{} joystick binding", lbl->getText().data())),
+			new KeyGetter(1.f, KeyGetter::AcceptType::gamepad, Binding::Type(i), fmt::format("{} gamepad binding", lbl->getText().data()))
 		};
 		lns[lcnt + 2 + i] = new Layout(lineHeight, std::move(lin), Direction::right);
 	}
@@ -1021,9 +1001,20 @@ Widget* ProgSettings::createLimitEdit() {
 	switch (World::sets()->picLim.type) {
 	using enum PicLim::Type;
 	case count:
-		return new LabelEdit(1.f, toStr(World::sets()->picLim.count), ProgSettingsEvent::setPicLimitCount, nullEvent, ACT_LEFT, "Number of pictures per batch", LabelEdit::TextType::uInt);
+		return new LabelEdit(1.f, toStr(World::sets()->picLim.count), ProgSettingsEvent::setPicLimitCount, nullEvent, ACT_LEFT, "Number of pictures per batch", LabelEdit::TT_INT | LabelEdit::TT_UNS);
 	case size:
 		return new LabelEdit(1.f, PicLim::memoryString(World::sets()->picLim.size), ProgSettingsEvent::setPicLimitSize, nullEvent, ACT_LEFT, "Total size of pictures per batch");
+	}
+	return new Widget;
+}
+
+Widget* ProgSettings::createGammaEdit() {
+	if (World::sets()->gammaType == Settings::Gamma::value) {
+		Children line = {
+			new Slider(1.f, World::sets()->gammaValue, Settings::minGamma, Settings::maxGamma, ProgSettingsEvent::setGammaStepSl, ACT_LEFT, "Gamma exponent"),
+			new LabelEdit(getSettingsNumberDisplayLength(), toStr(World::sets()->gammaValue / 10.f), ProgSettingsEvent::setGammaStepLe, nullEvent, ACT_LEFT, "Gamma exponent", LabelEdit::TT_FLT | LabelEdit::TT_UNS)
+		};
+		return new Layout(1.f, std::move(line), Direction::right);
 	}
 	return new Widget;
 }
@@ -1037,10 +1028,10 @@ void ProgSettings::startFonts() {
 	fontThread = std::jthread(&FileSys::listFontFamiliesThread, std::make_unique<FileSys::ListFontFamiliesData>(valcp(World::fileSys()->getDirConfs()), valcp(World::sets()->font), ' ', '~'));
 }
 
-void ProgSettings::stopFonts() {
+void ProgSettings::stopFonts() noexcept {
 	if (fontThread.joinable()) {
 		fontThread = std::jthread();
-		cleanupEvent(SDL_USEREVENT_THREAD_FONTS_FINISHED, [](SDL_UserEvent& user) { delete static_cast<FontListResult*>(user.data1); });
+		cleanupEvent(SDL_USEREVENT_THREAD_FONTS_FINISHED);
 	}
 }
 
@@ -1054,24 +1045,13 @@ void ProgSettings::setFontField(vector<Cstring>&& families, uptr<Cstring[]>&& fi
 
 void ProgSettings::startMove() {
 	stopMove();
-	moveThread = std::jthread(&FileSys::moveContentThread, std::make_unique<FileSys::MoveContentData>(toPath(oldPathBuffer), toPath(World::sets()->dirLib)));
+	moveThread = std::jthread(&FileSys::moveContentThread, std::make_unique<FileSys::MoveContentData>(valcp(oldPathBuffer), valcp(World::sets()->dirLib)));
 }
 
-void ProgSettings::stopMove() {
+void ProgSettings::stopMove() noexcept {
 	if (moveThread.joinable()) {
 		moveThread = std::jthread();
-		cleanupEvent(SDL_USEREVENT_THREAD_MOVE, [](SDL_UserEvent& event) {
-			if (ThreadEvent(event.code) == ThreadEvent::finished)
-				logMoveErrors(uptr<string>(static_cast<string*>(event.data1)).get());
-		});
-	}
-}
-
-void ProgSettings::logMoveErrors(const string* errors) {
-	for (string::const_iterator pos = errors->begin(); pos != errors->end();) {
-		string::const_iterator next = std::find(pos, errors->end(), '\n');
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%.*s", int(next - pos), std::to_address(pos));
-		pos = std::find_if(next, errors->end(), [](char c) -> bool { return c != '\n'; });
+		cleanupEvent(SDL_USEREVENT_THREAD_MOVE);
 	}
 }
 
@@ -1096,7 +1076,7 @@ RootLayout* ProgSearchDir::createLayout() {
 		"Up",
 		"Set"
 	};
-	std::initializer_list<const char*>::iterator itxs = txs.begin();
+	auto itxs = txs.begin();
 	uint txsWidth = findMaxLength(txs.begin(), txs.end(), lineHeight);
 	Children bar = {
 		new PushButton(lineHeight, *itxs++, ProgFileExplorerEvent::exit),

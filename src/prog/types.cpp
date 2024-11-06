@@ -1,19 +1,59 @@
 #include "types.h"
+#include "engine/drawSys.h"
+#include "engine/world.h"
 #include "engine/optional/glib.h"
 #include "engine/optional/mupdf.h"
 #include "engine/optional/poppler.h"
+#include "prog/progs.h"
 #include "utils/compare.h"
+#include <SDL_log.h>
 #include <SDL_timer.h>
+#include <iterator>
 
-void pushEvent(EventId id, void* data1, void* data2) {
-	if (id)
-		pushEvent(id.type, id.code, data1, data2);
+static void deallocEvent(SDL_UserEvent& event) {
+	switch (event.type) {
+	case SDL_USEREVENT_THREAD_LIST_FINISHED:
+		delete static_cast<BrowserResultList*>(event.data2);
+		break;
+#ifdef WITH_ARCHIVE
+	case SDL_USEREVENT_THREAD_ARCHIVE_FINISHED:
+		delete static_cast<BrowserResultArchive*>(event.data1);
+		break;
+#endif
+	case SDL_USEREVENT_THREAD_PREVIEW:
+		if (ThreadEvent(event.code) == ThreadEvent::progress) {
+			delete[] static_cast<char*>(event.data1);
+			SDL_FreeSurface(static_cast<SDL_Surface*>(event.data2));
+		}
+		break;
+	case SDL_USEREVENT_THREAD_READER:
+		switch (ThreadEvent(event.code)) {
+		using enum ThreadEvent;
+		case progress: {
+			auto pp = static_cast<BrowserPictureProgress*>(event.data1);
+			SDL_FreeSurface(pp->img);
+			delete pp;
+			break; }
+		case finished: {
+			auto rp = static_cast<BrowserResultPicture*>(event.data2);
+			World::drawSys()->getRenderer()->waitIdle();
+			for (auto& [name, tex] : rp->pics)
+				World::drawSys()->getRenderer()->freeTexture(tex);
+			delete rp;
+		} }
+		break;
+	case SDL_USEREVENT_THREAD_GO_NEXT_FINISHED:
+		delete static_cast<BrowserResultPicture*>(event.data2);
+		break;
+	case SDL_USEREVENT_THREAD_FONTS_FINISHED:
+		delete static_cast<FontListResult*>(event.data1);
+	}
 }
 
-void pushEvent(UserEvent type, int32 code, void* data1, void* data2) {
+bool pushEvent(UserEvent type, int32 code, void* data1, void* data2) noexcept {
 	SDL_Event event = { .user = {
 		.type = type,
-#if SDL_VERSION_ATLEAST(3, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 2, 0)
 		.timestamp = SDL_GetTicksNS(),
 #else
 		.timestamp = SDL_GetTicks(),
@@ -22,8 +62,24 @@ void pushEvent(UserEvent type, int32 code, void* data1, void* data2) {
 		.data1 = data1,
 		.data2 = data2
 	} };
-	if (int rc = SDL_PushEvent(&event); rc <= 0)
-		throw std::runtime_error(rc ? SDL_GetError() : "Event queue full");
+	if (int rc = SDL_PushEvent(&event); rc <= 0) {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", rc ? SDL_GetError() : "Event queue full");
+		deallocEvent(event.user);
+		return false;
+	}
+	return true;
+}
+
+void cleanupEvents(UserEvent first, UserEvent last) noexcept {
+	array<SDL_Event, 16> events;
+	while (int num = SDL_PeepEvents(events.data(), events.size(), SDL_GETEVENT, first, last)) {
+		if (num < 0) {
+			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", SDL_GetError());
+			break;
+		}
+		for (int i = 0; i < num; ++i)
+			deallocEvent(events[i].user);
+	}
 }
 
 // REMOTE LOCATION
@@ -111,7 +167,7 @@ void ArchiveDir::finalize() noexcept {
 	files.sort([](const ArchiveFile& a, const ArchiveFile& b) -> bool { return strcmp(a.name.data(), b.name.data()) < 0; });
 }
 
-pair<ArchiveDir*, ArchiveFile*> ArchiveDir::find(string_view path) {
+pair<ArchiveDir*, ArchiveFile*> ArchiveDir::find(string_view path) noexcept {
 	ArchiveDir* node = this;
 	size_t p = path.find_first_not_of('/');
 	for (size_t e; (e = path.find('/', p)) != string::npos; p = path.find_first_not_of('/', e))
@@ -128,12 +184,12 @@ pair<ArchiveDir*, ArchiveFile*> ArchiveDir::find(string_view path) {
 }
 
 ArchiveDir* ArchiveDir::findDir(string_view dname) noexcept {
-	std::forward_list<ArchiveDir>::iterator dit = std::lower_bound(dirs.begin(), dirs.end(), dname, [](const ArchiveDir& a, string_view b) -> bool { return strncmp(a.name.data(), b.data(), b.length()) < 0; });
+	auto dit = std::lower_bound(dirs.begin(), dirs.end(), dname, [](const ArchiveDir& a, string_view b) -> bool { return strncmp(a.name.data(), b.data(), b.length()) < 0; });
 	return dit != dirs.end() && dit->name == dname ? std::to_address(dit) : nullptr;
 }
 
 ArchiveFile* ArchiveDir::findFile(string_view fname) noexcept {
-	std::forward_list<ArchiveFile>::iterator fit = std::lower_bound(files.begin(), files.end(), fname, [](const ArchiveFile& a, string_view b) -> bool { return strncmp(a.name.data(), b.data(), b.length()) < 0; });
+	auto fit = std::lower_bound(files.begin(), files.end(), fname, [](const ArchiveFile& a, string_view b) -> bool { return strncmp(a.name.data(), b.data(), b.length()) < 0; });
 	return fit != files.end() && fit->name == fname ? std::to_address(fit) : nullptr;
 }
 
@@ -168,7 +224,7 @@ vector<Cstring> ArchiveDir::copySortedDents(const std::forward_list<T>& dents, b
 	vector<Cstring> names;
 	if (copyHidden) {
 		size_t cnt = 0;
-		for (typename std::forward_list<T>::const_iterator it = dents.begin(); it != dents.end(); ++it, ++cnt);
+		for (auto it = dents.begin(); it != dents.end(); ++it, ++cnt);
 		names.resize(cnt);
 		rng::transform(dents, names.begin(), [](const T& it) -> Cstring { return it.name; });
 	} else
@@ -202,54 +258,59 @@ PdfFile::PdfFile(PdfFile&& pdf) noexcept :
 	pdf.owner = false;
 }
 
-PdfFile::PdfFile(SDL_RWops* ops, Cstring* error) {
-	if (ops) {
-		if (int64 esiz = SDL_RWsize(ops); esiz > signatureLen) {
+PdfFile::PdfFile(uptr<SDL_RWops>&& ops, bool force) {
+	if (ops)
+		if (int64 esiz = SDL_RWsize(ops.get()); esiz > signatureLen) {
 			uint8 sig[signatureLen];
-			if (size_t blen = SDL_RWread(ops, sig, 1, sizeof(sig)); blen == sizeof(sig) && !memcmp(signature, sig, sizeof(sig))) {
-				resize(esiz);
-				rng::copy(sig, ptr.get());
-				size_t toRead = esiz - signatureLen;
-				if (blen = SDL_RWread(ops, ptr.get() + signatureLen, sizeof(uint8), toRead); blen) {
-					if (blen < toRead)
-						resize(signatureLen + blen);
+			if (size_t blen = SDL_RWread(ops.get(), sig, 1, sizeof(sig)); blen != sizeof(sig) || memcmp(signature, sig, sizeof(sig))) {
+				if (force)
+					throw std::runtime_error("Missing PDF signature");
+				return;
+			}
+
+			resize(esiz);
+			rng::copy(sig, ptr.get());
+			size_t toRead = esiz - signatureLen;
+			if (size_t blen = SDL_RWread(ops.get(), ptr.get() + signatureLen, sizeof(uint8), toRead); blen) {
+				if (blen < toRead)
+					resize(signatureLen + blen);
 #ifdef CAN_MUPDF
-					if (symMupdf() && (mctx = fzNewContextImp(nullptr, nullptr, FZ_STORE_UNLIMITED, FZ_VERSION))) {
-						fz_buffer* bytes = nullptr;
-						fzVar(bytes);
-						fzTry(mctx) {
-							fzRegisterDocumentHandlers(mctx);
-							bytes = fzNewBufferFromSharedData(mctx, ptr.get(), len);
-							mdoc = fzOpenDocumentWithBuffer(mctx, signature, bytes);
-						} fzAlways(mctx) {
-							fzDropBuffer(mctx, bytes);
-						} fzCatch(mctx) {
-							fzDropContext(mctx);
-						}
+				if (symMupdf() && (mctx = fzNewContextImp(nullptr, nullptr, FZ_STORE_UNLIMITED, FZ_VERSION))) {
+					fz_buffer* bytes = nullptr;
+					fzVar(bytes);
+					fzTry(mctx) {
+						fzRegisterDocumentHandlers(mctx);
+						bytes = fzNewBufferFromSharedData(mctx, ptr.get(), len);
+						mdoc = fzOpenDocumentWithBuffer(mctx, signature, bytes);
+					} fzAlways(mctx) {
+						fzDropBuffer(mctx, bytes);
+					} fzCatch(mctx) {
+						fzDropContext(mctx);
 					}
+				}
 #endif
 #ifdef CAN_POPPLER
-					if (!mdoc && symPoppler()) {
-						GError* gerr = nullptr;
-						GBytes* bytes = gBytesNewStatic(ptr.get(), len);
-						if (pdoc = popplerDocumentNewFromBytes(bytes, nullptr, &gerr); !pdoc) {
-							if (error)
-								*error = gerr->message;
+				if (!mdoc && symPoppler()) {
+					GError* gerr = nullptr;
+					GBytes* bytes = gBytesNewStatic(ptr.get(), len);
+					if (pdoc = popplerDocumentNewFromBytes(bytes, nullptr, &gerr); !pdoc) {
+						if (force) {
+							string msg = gerr->message;
 							gErrorFree(gerr);
+							gBytesUnref(bytes);
+							throw std::runtime_error(msg);
 						}
-						gBytesUnref(bytes);
+						gErrorFree(gerr);
 					}
-#endif
+					gBytesUnref(bytes);
 				}
-			} else if (error)
-				*error = "Missing PDF signature";
+#endif
+			}
 		}
-		SDL_RWclose(ops);
-	}
 	if (owner = mdoc || pdoc; !owner) {
 		clear();
-		if (error && error->empty())
-			*error = "Failed to read PDF data";
+		if (force)
+			throw std::runtime_error("Failed to read PDF data");
 	}
 }
 
@@ -345,11 +406,10 @@ SDL_Surface* PdfFile::renderPage(int pid, double dpi) noexcept {
 	return pic;
 }
 
-bool PdfFile::canOpen(SDL_RWops* ops) noexcept {
+bool PdfFile::canOpen(uptr<SDL_RWops>&& ops) noexcept {
 	if (ops) {
 		uint8 sig[signatureLen];
-		bool ok = SDL_RWread(ops, sig, 1, sizeof(sig)) == sizeof(sig) && !memcmp(signature, sig, sizeof(sig));
-		SDL_RWclose(ops);
+		bool ok = SDL_RWread(ops.get(), sig, 1, sizeof(sig)) == sizeof(sig) && !memcmp(signature, sig, sizeof(sig));
 #if defined(CAN_MUPDF) && defined(CAN_POPPLER)
 		return ok && (symMupdf() || symPoppler());
 #elif defined(CAN_MUPDF)
@@ -371,11 +431,6 @@ PdfFile PdfFile::copyLight() const noexcept {
 #endif
 
 // RESULT ASYNC
-
-BrowserResultList::BrowserResultList(vector<Cstring>&& fent, vector<Cstring>&& dent) noexcept :
-	files(std::move(fent)),
-	dirs(std::move(dent))
-{}
 
 #ifdef WITH_ARCHIVE
 BrowserResultArchive::BrowserResultArchive(optional<string>&& root, ArchiveData&& aroot, string&& fpath, string&& ppage) noexcept :
@@ -400,17 +455,15 @@ BrowserResultPicture::BrowserResultPicture(BrowserResultState brs, optional<stri
 	fwd(brs & BRS_FWD)
 {}
 
-BrowserPictureProgress::BrowserPictureProgress(SDL_Surface* pic, Texture*& ref, Cstring&& msg) noexcept :
-	img(pic),
+BrowserPictureProgress::BrowserPictureProgress(uptr<SDL_Surface>& pic, Texture*& ref, Cstring&& msg) noexcept :
+	img(pic.release()),
 	tex(ref),
 	text(std::move(msg))
 {}
 
-FontListResult::FontListResult(vector<Cstring>&& fa, uptr<Cstring[]>&& fl, size_t id, string&& msg) noexcept :
-	families(std::move(fa)),
-	files(std::move(fl)),
-	select(id),
-	error(std::move(msg))
+FontListResult::FontListResult(size_t cnt) :
+	families(cnt),
+	files(std::make_unique<Cstring[]>(cnt))
 {}
 
 // COUNTED STOP REQ

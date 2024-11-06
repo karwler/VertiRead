@@ -1,4 +1,4 @@
-#version 450
+#version 460
 
 layout(local_size_x = 32) in;
 
@@ -10,37 +10,23 @@ layout(set = 0, binding = 0) readonly buffer InputData {
 	uint pixels[];
 } inData;
 
-layout(set = 0, binding = 1, rgba8) writeonly uniform image2D img;
+layout(set = 0, binding = 1) writeonly buffer OutputData {
+	uint pixels[];
+} outData;
 
 layout(set = 0, binding = 2) uniform UniformData {
 	uvec4 colors[256 / 4];
 } ud;
 
-#define storeColor(id, size, pid) \
-	uint clr = ud.colors[(pid) / 4][(pid) % 4]; \
-	imageStore(img, ivec2((id) % size.x, (id) / size.x), vec4(clr & 0xFF, (clr >> 8) & 0xFF, (clr >> 16) & 0xFF, clr >> 24) / 255.0)
+#define getColor(pid) ud.colors[(pid) / 4][(pid) % 4]
 
 void main() {
 	uint iid = (gl_WorkGroupID.x + psData.offset) * gl_WorkGroupSize.x + gl_LocalInvocationID.x;
 	uint oid = iid * 4;
 	uint px = inData.pixels[iid];
-	uvec2 size = imageSize(img);
-	uint len = size.x * size.y;
 
-	if (oid < len) {
-		uint pid = px & 0xFF;
-		storeColor(oid, size, pid);
-	}
-	if (oid + 1 < len) {
-		uint pid = (px >> 8) & 0xFF;
-		storeColor(oid + 1, size, pid);
-	}
-	if (oid + 2 < len) {
-		uint pid = (px >> 16) & 0xFF;
-		storeColor(oid + 2, size, pid);
-	}
-	if (oid + 3 < len) {
-		uint pid = px >> 24;
-		storeColor(oid + 3, size, pid);
-	}
+	outData.pixels[oid] = getColor(px & 0xFF);
+	outData.pixels[oid + 1] = getColor((px >> 8) & 0xFF);
+	outData.pixels[oid + 2] = getColor((px >> 16) & 0xFF);
+	outData.pixels[oid + 3] = getColor(px >> 24);
 }
