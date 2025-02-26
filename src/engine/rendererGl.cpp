@@ -1,7 +1,11 @@
 #ifdef WITH_OPENGL
 #include "rendererGl.h"
 #include "shaders/glDefs.h"
+#ifdef WITH_SDL3
+#include <SDL3/SDL_log.h>
+#else
 #include <SDL_log.h>
+#endif
 #include <glm/gtc/type_ptr.hpp>
 #include <regex>
 
@@ -306,6 +310,19 @@ void RendererGl::setSwapInterval(bool vsync) noexcept {
 		SDL_GL_SetSwapInterval(0);
 }
 
+bool RendererGl::updateViewCommon(ivec2& viewRes) noexcept {
+	ivec2 wres;
+	SDL_GL_GetDrawableSize(views[0]->win, &wres.x, &wres.y);
+	if (wres != viewRes) {
+		viewRes = wres;
+		views[0]->rect.size() = wres;
+		gfget
+		gl.viewport(0, 0, wres.x, wres.y);
+		return true;
+	}
+	return false;
+}
+
 Texture* RendererGl::texFromSurface(SDL_Surface* img, bool rpic, bool linear) noexcept {
 	if (SurfaceInfo si = pickPixFormat(limitSize(img, maxTextureSize), rpic); si.img) {
 		gfget
@@ -453,7 +470,7 @@ RendererGl::SurfaceInfo RendererGl::pickPixFormat(SDL_Surface* img, bool rpic) c
 		return canBgra
 			? SurfaceInfo(img, rpic ? iformRgb8 : GL_RGB8, GL_BGR, GL_UNSIGNED_BYTE)
 			: SurfaceInfo(img, rpic ? iformRgb8 : GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE, { GL_BLUE, GL_GREEN, GL_RED, GL_ONE });
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	case SDL_PIXELFORMAT_ABGR2101010:
 		return SurfaceInfo(img, rpic ? iformRgba10 : GL_RGB10_A2, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV);
 #endif
@@ -461,7 +478,7 @@ RendererGl::SurfaceInfo RendererGl::pickPixFormat(SDL_Surface* img, bool rpic) c
 		return core	// if we're not in core GL then swizzle willl always be available (GL_BGRA doesn't work with GL_UNSIGNED_INT_2_10_10_10_REV in ES)
 			? SurfaceInfo(img, rpic ? iformRgba10 : GL_RGB10_A2, GL_BGRA, GL_UNSIGNED_INT_2_10_10_10_REV)
 			: SurfaceInfo(img, rpic ? iformRgba10 : GL_RGB10_A2, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, { GL_BLUE, GL_GREEN, GL_RED, GL_ALPHA });
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	case SDL_PIXELFORMAT_XBGR2101010:
 		if (canSwizzle)
 			return SurfaceInfo(img, rpic ? iformRgba10 : GL_RGB10_A2, GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV, { GL_RED, GL_GREEN, GL_BLUE, GL_ONE });
@@ -535,7 +552,7 @@ RendererGl::SurfaceInfo RendererGl::pickPixFormat(SDL_Surface* img, bool rpic) c
 pair<SDL_PixelFormatEnum, uint8> RendererGl::prepareImageFormat(SDL_Surface* img) const noexcept {
 	SDL_PixelFormatEnum fmt = surfaceFormat(img);
 	switch (fmt) {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	case SDL_PIXELFORMAT_XBGR2101010: case SDL_PIXELFORMAT_XRGB2101010:
 		return pair(canSwizzle ? fmt : SDL_PIXELFORMAT_ABGR2101010, internalBytesPpx());
 #endif
@@ -551,7 +568,7 @@ pair<SDL_PixelFormatEnum, uint8> RendererGl::prepareImageFormat(SDL_Surface* img
 		return pair(core ? SDL_PIXELFORMAT_RGB332 : SDL_PIXELFORMAT_RGB565, 2);
 	case SDL_PIXELFORMAT_INDEX8:
 		return pair(SDL_PIXELFORMAT_INDEX8, canSwizzle && !usesSrgb && isIndexedGrayscale(img) ? 1 : internalBytesPpx());
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	default:
 		if (SDL_BYTESPERPIXEL(fmt) > 4)
 			return pair(SDL_PIXELFORMAT_ABGR2101010, internalBytesPpx());
@@ -671,15 +688,12 @@ bool RendererGl1::setSettings(Settings* sets) {
 	return false;
 }
 
-void RendererGl1::updateView(ivec2& viewRes) {
-	if (views.size() == 1) {
-		auto vw = static_cast<ViewGl1*>(views[0]);
-		gfget
-		SDL_GL_GetDrawableSize(vw->win, &viewRes.x, &viewRes.y);
-		vw->rect.size() = viewRes;
-		vw->proj = glm::ortho(0.f, float(viewRes.x), float(viewRes.y), 0.f);
-		gl.viewport(0, 0, viewRes.x, viewRes.y);
+bool RendererGl1::updateView(ivec2& viewRes) {
+	if (views.size() == 1 && updateViewCommon(viewRes)) {
+		static_cast<ViewGl1*>(views[0])->proj = glm::ortho(0.f, float(viewRes.x), float(viewRes.y), 0.f);
+		return true;
 	}
+	return false;
 }
 
 Renderer::Action RendererGl1::startDraw(View* view) noexcept {
@@ -1094,15 +1108,13 @@ void RendererGl3::setGammaValue(int gamma) {
 	gl3.uniform1f(uniGammaFin, 10.f / float(gamma));
 }
 
-void RendererGl3::updateView(ivec2& viewRes) {
-	if (views.size() == 1) {
-		gfget
-		SDL_GL_GetDrawableSize(views[0]->win, &viewRes.x, &viewRes.y);
-		views[0]->rect.size() = viewRes;
-		gl.viewport(0, 0, viewRes.x, viewRes.y);
+bool RendererGl3::updateView(ivec2& viewRes) {
+	if (views.size() == 1 && updateViewCommon(viewRes)) {
 		if (progFin)
 			initFinFramebuffer(static_cast<ViewGl3*>(views[0]));
+		return true;
 	}
+	return false;
 }
 
 Renderer::Action RendererGl3::startDraw(View* view) noexcept {

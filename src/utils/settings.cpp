@@ -9,141 +9,141 @@ void Binding::reset(Type newType) noexcept {
 	using enum Type;
 	case enter:
 		bcall = &ProgState::eventEnter;
-		setKey(SDL_SCANCODE_RETURN);
+		setKey(keyFromScancode(SDL_SCANCODE_RETURN));
 		setJbutton(2);
 		setGbutton(SDL_CONTROLLER_BUTTON_A);
 		break;
 	case escape:
 		bcall = &ProgState::eventEscape;
-		setKey(SDL_SCANCODE_ESCAPE);
+		setKey(keyFromScancode(SDL_SCANCODE_ESCAPE));
 		setJbutton(1);
 		setGbutton(SDL_CONTROLLER_BUTTON_B);
 		break;
 	case up:
 		bcall = &ProgState::eventUp;
-		setKey(SDL_SCANCODE_UP);
+		setKey(keyFromScancode(SDL_SCANCODE_UP));
 		setJhat(0, SDL_HAT_UP);
 		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_UP);
 		break;
 	case down:
 		bcall = &ProgState::eventDown;
-		setKey(SDL_SCANCODE_DOWN);
+		setKey(keyFromScancode(SDL_SCANCODE_DOWN));
 		setJhat(0, SDL_HAT_DOWN);
 		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_DOWN);
 		break;
 	case left:
 		bcall = &ProgState::eventLeft;
-		setKey(SDL_SCANCODE_LEFT);
+		setKey(keyFromScancode(SDL_SCANCODE_LEFT));
 		setJhat(0, SDL_HAT_LEFT);
 		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_LEFT);
 		break;
 	case right:
 		bcall = &ProgState::eventRight;
-		setKey(SDL_SCANCODE_RIGHT);
+		setKey(keyFromScancode(SDL_SCANCODE_RIGHT));
 		setJhat(0, SDL_HAT_RIGHT);
 		setGbutton(SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
 		break;
 	case centerView:
 		bcall = &ProgState::eventCenterView;
-		setKey(SDL_SCANCODE_C);
+		setKey(keyFromScancode(SDL_SCANCODE_C));
 		setJbutton(10);
 		setGbutton(SDL_CONTROLLER_BUTTON_LEFTSTICK);
 		break;
 	case nextPage:
 		bcall = &ProgState::eventNextPage;
-		setKey(SDL_SCANCODE_PAGEDOWN);
+		setKey(keyFromScancode(SDL_SCANCODE_PAGEDOWN));
 		break;
 	case prevPage:
 		bcall = &ProgState::eventPrevPage;
-		setKey(SDL_SCANCODE_PAGEUP);
+		setKey(keyFromScancode(SDL_SCANCODE_PAGEUP));
 		break;
 	case zoomIn:
 		bcall = &ProgState::eventZoomIn;
-		setKey(SDL_SCANCODE_W);
+		setKey(keyFromScancode(SDL_SCANCODE_W));
 		setJbutton(5);
 		setGbutton(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
 		break;
 	case zoomOut:
 		bcall = &ProgState::eventZoomOut;
-		setKey(SDL_SCANCODE_S);
+		setKey(keyFromScancode(SDL_SCANCODE_S));
 		setJbutton(4);
 		setGbutton(SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
 		break;
 	case zoomReset:
 		bcall = &ProgState::eventZoomReset;
-		setKey(SDL_SCANCODE_R);
+		setKey(keyFromScancode(SDL_SCANCODE_R));
 		setJbutton(11);
 		setGbutton(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
 		break;
 	case zoomFit:
 		bcall = &ProgState::eventZoomFit;
-		setKey(SDL_SCANCODE_T);
+		setKey(keyFromScancode(SDL_SCANCODE_T));
 		break;
 	case toStart:
 		bcall = &ProgState::eventToStart;
-		setKey(SDL_SCANCODE_HOME);
+		setKey(keyFromScancode(SDL_SCANCODE_HOME));
 		break;
 	case toEnd:
 		bcall = &ProgState::eventToEnd;
-		setKey(SDL_SCANCODE_END);
+		setKey(keyFromScancode(SDL_SCANCODE_END));
 		break;
 	case nextDir:
 		bcall = &ProgState::eventNextDir;
-		setKey(SDL_SCANCODE_D);
+		setKey(keyFromScancode(SDL_SCANCODE_D));
 		setJbutton(7);
 		setGaxis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT, true);
 		break;
 	case prevDir:
 		bcall = &ProgState::eventPrevDir;
-		setKey(SDL_SCANCODE_A);
+		setKey(keyFromScancode(SDL_SCANCODE_A));
 		setJbutton(6);
 		setGaxis(SDL_CONTROLLER_AXIS_TRIGGERLEFT, true);
 		break;
 	case fullscreen:
 		bcall = &ProgState::eventFullscreen;
-		setKey(SDL_SCANCODE_F);
+		setKey(keyFromScancode(SDL_SCANCODE_F));
 		setJbutton(8);
 		setGbutton(SDL_CONTROLLER_BUTTON_BACK);
 		break;
 	case multiFullscreen:
 		bcall = &ProgState::eventMultiFullscreen;
-		setKey(SDL_SCANCODE_G);
+		setKey(keyFromScancode(SDL_SCANCODE_G));
 		setJbutton(9);
 		setGbutton(SDL_CONTROLLER_BUTTON_START);
 		break;
 	case hide:
 		bcall = &ProgState::eventHide;
-		setKey(SDL_SCANCODE_H);
+		setKey(keyFromScancode(SDL_SCANCODE_H));
 		break;
 	case boss:
 		bcall = &ProgState::eventBoss;
-		setKey(SDL_SCANCODE_B);
+		setKey(keyFromScancode(SDL_SCANCODE_B));
 		break;
 	case refresh:
 		bcall = &ProgState::eventRefresh;
-		setKey(SDL_SCANCODE_F5);
+		setKey(keyFromScancode(SDL_SCANCODE_F5));
 		break;
 	case scrollUp:
 		acall = &ProgState::eventScrollUp;
-		setKey(SDL_SCANCODE_UP);
+		setKey(keyFromScancode(SDL_SCANCODE_UP));
 		setJaxis(1, false);
 		setGaxis(SDL_CONTROLLER_AXIS_LEFTY, false);
 		break;
 	case scrollDown:
 		acall = &ProgState::eventScrollDown;
-		setKey(SDL_SCANCODE_DOWN);
+		setKey(keyFromScancode(SDL_SCANCODE_DOWN));
 		setJaxis(1, true);
 		setGaxis(SDL_CONTROLLER_AXIS_LEFTY, true);
 		break;
 	case scrollLeft:
 		acall = &ProgState::eventScrollLeft;
-		setKey(SDL_SCANCODE_LEFT);
+		setKey(keyFromScancode(SDL_SCANCODE_LEFT));
 		setJaxis(0, false);
 		setGaxis(SDL_CONTROLLER_AXIS_LEFTX, false);
 		break;
 	case scrollRight:
 		acall = &ProgState::eventScrollRight;
-		setKey(SDL_SCANCODE_RIGHT);
+		setKey(keyFromScancode(SDL_SCANCODE_RIGHT));
 		setJaxis(0, true);
 		setGaxis(SDL_CONTROLLER_AXIS_LEFTX, true);
 		break;
@@ -169,13 +169,13 @@ void Binding::reset(Type newType) noexcept {
 		break;
 	case scrollFast:
 		acall = nullptr;
-		setKey(SDL_SCANCODE_X);
+		setKey(keyFromScancode(SDL_SCANCODE_X));
 		setJbutton(0);
 		setGbutton(SDL_CONTROLLER_BUTTON_Y);
 		break;
 	case scrollSlow:
 		acall = nullptr;
-		setKey(SDL_SCANCODE_Z);
+		setKey(keyFromScancode(SDL_SCANCODE_Z));
 		setJbutton(3);
 		setGbutton(SDL_CONTROLLER_BUTTON_X);
 		break;
@@ -187,7 +187,7 @@ void Binding::reset(Type newType) noexcept {
 	}
 }
 
-void Binding::setKey(SDL_Scancode kkey) noexcept {
+void Binding::setKey(SDL_Keycode kkey) noexcept {
 	key = kkey;
 	asg |= ASG_KEY;
 }
@@ -318,7 +318,7 @@ vector<Settings::Display> Settings::displayArrangement() {
 	ivec2 origin(INT_MAX);
 	vector<Display> dsps;
 	Recti rect;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	int cnt;
 	if (uptr<SDL_DisplayID[], SdlFreePtr> dids(SDL_GetDisplays(&cnt)); dids)
 		for (int i = 0; i < cnt; ++i)

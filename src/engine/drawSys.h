@@ -132,7 +132,7 @@ public:
 
 	Renderer* getRenderer() noexcept { return renderer; }
 	ivec2 getViewRes() const noexcept { return viewRes; }
-	void updateView();
+	bool updateView();	// returns whether a resize happened
 	float getWinDpi() const noexcept { return winDpi; }
 	bool updateDpi();
 	void setTheme(string_view name);

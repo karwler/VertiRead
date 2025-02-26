@@ -1,7 +1,11 @@
 #pragma once
 
 #include "utils/settings.h"
+#ifdef WITH_SDL3
+#include <SDL3/SDL_events.h>
+#else
 #include <SDL_events.h>
+#endif
 
 // handles window events and contains video settings
 class WindowSys {
@@ -20,6 +24,7 @@ private:
 	vector<SDL_Window*> windows;
 	float dSec;			// delta seconds, aka the time between each iteration of the above mentioned loop
 	bool run = true;	// whether the loop in which the program runs should continue
+	bool active = true;	// TODO: restrict also when focus lost
 
 public:
 	void init();
@@ -46,7 +51,7 @@ public:
 
 private:
 	void createWindow();
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	SDL_PropertiesID initWindow(size_t numWindows);
 #else
 	uint32 initWindow(size_t numWindows);

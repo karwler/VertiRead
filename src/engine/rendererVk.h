@@ -350,7 +350,7 @@ private:
 		pair(SDL_PIXELFORMAT_ARGB4444, VK_FORMAT_A4R4G4B4_UNORM_PACK16_EXT),
 		pair(SDL_PIXELFORMAT_BGRA4444, VK_FORMAT_B4G4R4A4_UNORM_PACK16),
 		pair(SDL_PIXELFORMAT_RGBA4444, VK_FORMAT_R4G4B4A4_UNORM_PACK16),
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		pair(SDL_PIXELFORMAT_ABGR2101010, VK_FORMAT_A2B10G10R10_UNORM_PACK32),
 #else
 		pair(SDL_PIXELFORMAT_UNKNOWN, VK_FORMAT_A2B10G10R10_UNORM_PACK32),
@@ -374,7 +374,7 @@ private:
 	};
 
 	struct InstanceInfo {
-#if !SDL_VERSION_ATLEAST(3, 2, 0)
+#ifndef WITH_SDL3
 		SDL_Window* window;
 #endif
 		bool khrGetPhysicalDeviceProperties2 = false;
@@ -466,7 +466,7 @@ public:
 	void setColors(array<vec4, Settings::defaultColors.size()>& colors) override;
 	bool setSettings(Settings* sets) override;
 	void setGammaValue(int gamma) override;
-	void updateView(ivec2& viewRes) override;
+	bool updateView(ivec2& viewRes) override;
 	Info getInfo() const noexcept override;
 
 	Action startDraw(View* view) noexcept override;

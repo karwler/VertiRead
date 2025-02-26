@@ -6,8 +6,13 @@
 #include "engine/optional/poppler.h"
 #include "prog/progs.h"
 #include "utils/compare.h"
+#ifdef WITH_SDL3
+#include <SDL3/SDL_log.h>
+#include <SDL3/SDL_timer.h>
+#else
 #include <SDL_log.h>
 #include <SDL_timer.h>
+#endif
 #include <iterator>
 
 static void deallocEvent(SDL_UserEvent& event) {
@@ -53,7 +58,7 @@ static void deallocEvent(SDL_UserEvent& event) {
 bool pushEvent(UserEvent type, int32 code, void* data1, void* data2) noexcept {
 	SDL_Event event = { .user = {
 		.type = type,
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		.timestamp = SDL_GetTicksNS(),
 #else
 		.timestamp = SDL_GetTicks(),

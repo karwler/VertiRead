@@ -631,7 +631,7 @@ void ProgReader::eventRefresh() {
 
 void ProgReader::eventClosing() {
 	World::fileSys()->saveLastPage(World::program()->getBrowser()->locationForStore(reader->curPage()));
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	SDL_ShowCursor();
 #else
 	SDL_ShowCursor(SDL_ENABLE);
@@ -953,9 +953,9 @@ RootLayout* ProgSettings::createLayout() {
 		auto lbl = new Label(descLength, std::move(bnames[i]));
 		Children lin = {
 			lbl,
-			new KeyGetter(1.f, KeyGetter::AcceptType::keyboard, Binding::Type(i), fmt::format("{} keyboard binding", lbl->getText().data())),
-			new KeyGetter(1.f, KeyGetter::AcceptType::joystick, Binding::Type(i), fmt::format("{} joystick binding", lbl->getText().data())),
-			new KeyGetter(1.f, KeyGetter::AcceptType::gamepad, Binding::Type(i), fmt::format("{} gamepad binding", lbl->getText().data()))
+			new KeyGetter(1.f, Binding::Device::keyboard, Binding::Type(i), fmt::format("{} keyboard binding", lbl->getText().data())),
+			new KeyGetter(1.f, Binding::Device::joystick, Binding::Type(i), fmt::format("{} joystick binding", lbl->getText().data())),
+			new KeyGetter(1.f, Binding::Device::gamepad, Binding::Type(i), fmt::format("{} gamepad binding", lbl->getText().data()))
 		};
 		lns[lcnt + 2 + i] = new Layout(lineHeight, std::move(lin), Direction::right);
 	}

@@ -1,7 +1,11 @@
 #pragma once
 
 #include "utils/utils.h"
+#ifdef WITH_SDL3
+#include <SDL3/SDL_events.h>
+#else
 #include <SDL_events.h>
+#endif
 #include <forward_list>
 #include <stop_token>
 

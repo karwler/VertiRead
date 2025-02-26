@@ -1,7 +1,15 @@
 #include "renderer.h"
+#ifdef WITH_SDL3
+#include <SDL3/SDL_cpuinfo.h>
+#include <SDL3/SDL_log.h>
+#include <SDL3/SDL_timer.h>
+#include <SDL3/SDL_version.h>
+#else
 #include <SDL_cpuinfo.h>
 #include <SDL_log.h>
 #include <SDL_timer.h>
+#include <SDL_version.h>
+#endif
 #include <stdexcept>
 
 // RENDERER
@@ -70,7 +78,7 @@ SDL_Surface* Renderer::limitSize(SDL_Surface* img, uint limit) noexcept {
 		float scale = float(limit) / float(img->w > img->h ? img->w : img->h);
 		SDL_Surface* dst = SDL_CreateSurface(float(img->w) * scale, float(img->h) * scale, surfaceFormat(img));
 		if (dst) {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 			copyPalette(dst, img);
 #endif
 			if (sdlFailed(surfaceScaleLinear(img, nullptr, dst, nullptr))) {
@@ -84,7 +92,7 @@ SDL_Surface* Renderer::limitSize(SDL_Surface* img, uint limit) noexcept {
 	return img;
 }
 
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 void Renderer::copyPalette(SDL_Surface* dst, SDL_Surface* src) noexcept {
 	if (SDL_ISPIXELFORMAT_INDEXED(dst->format))
 		if (SDL_Palette* splt = SDL_GetSurfacePalette(src))
@@ -147,7 +155,7 @@ double Renderer::srgb2linear(double x) noexcept {
 RendererSf::RendererSf(InitParams& initParams, Settings* sets) :
 	Renderer(initParams.windows.size(), std::sqrt(INT_MAX / 4))
 {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	sthandle<SDL_PropertiesID> rendererProps = SDL_CreateProperties();
 	if (!rendererProps)
 		throw std::runtime_error(SDL_GetError());
@@ -165,7 +173,7 @@ RendererSf::RendererSf(InitParams& initParams, Settings* sets) :
 #else
 			SDL_GetWindowSize(initParams.windows[0], &initParams.viewRes.x, &initParams.viewRes.y);
 #endif
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 			createRenderer(static_cast<ViewSf*>(views[0] = new ViewSf(initParams.windows[0], Recti(ivec2(0), initParams.viewRes))), rendererProps);
 #else
 			createRenderer(static_cast<ViewSf*>(views[0] = new ViewSf(initParams.windows[0], Recti(ivec2(0), initParams.viewRes))), rendererFlags);
@@ -180,7 +188,7 @@ RendererSf::RendererSf(InitParams& initParams, Settings* sets) :
 				SDL_GetWindowSize(initParams.windows[i], &wrect.w, &wrect.h);
 #endif
 				initParams.viewRes = glm::max(initParams.viewRes, wrect.end());
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 				createRenderer(static_cast<ViewSf*>(views[i] = new ViewSf(initParams.windows[i], wrect)), rendererProps);
 #else
 				createRenderer(static_cast<ViewSf*>(views[i] = new ViewSf(initParams.windows[i], wrect)), rendererFlags);
@@ -213,7 +221,7 @@ void RendererSf::cleanup() noexcept {
 	}
 }
 
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 void RendererSf::createRenderer(ViewSf* view, SDL_PropertiesID props) {
 	SDL_SetPointerProperty(props, SDL_PROP_RENDERER_CREATE_WINDOW_POINTER, view->win);
 	if (view->renderer = SDL_CreateRendererWithProperties(props); !view->renderer)
@@ -244,7 +252,7 @@ void RendererSf::createRenderer(ViewSf* view, SDL_RendererFlags flags) {
 #endif
 
 void RendererSf::setColors(array<vec4, Settings::defaultColors.size()>& colors) {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	for (View* it : views) {
 		const vec4& bgclr = colors[eint(Color::background)];
 		SDL_SetRenderDrawColorFloat(static_cast<ViewSf*>(it)->renderer, bgclr.r, bgclr.g, bgclr.b, bgclr.a);
@@ -272,13 +280,20 @@ void RendererSf::setCompression(Settings* sets) noexcept {
 	compression = sets->compression;
 }
 
-void RendererSf::updateView(ivec2& viewRes) {
-	if (views.size() == 1)
+bool RendererSf::updateView(ivec2& viewRes) {
+	if (views.size() == 1) {
+		ivec2 wres;
 #if SDL_VERSION_ATLEAST(2, 26, 0)
-		SDL_GetWindowSizeInPixels(views[0]->win, &viewRes.x, &viewRes.y);
+		SDL_GetWindowSizeInPixels(views[0]->win, &wres.x, &wres.y);
 #else
-		SDL_GetWindowSize(views[0]->win, &viewRes.x, &viewRes.y);
+		SDL_GetWindowSize(views[0]->win, &wres.x, &wres.y);
 #endif
+		if (wres != viewRes) {
+			viewRes = wres;
+			return true;
+		}
+	}
+	return false;
 }
 
 Renderer::Action RendererSf::startDraw(View* view) noexcept {
@@ -291,7 +306,7 @@ void RendererSf::drawRect(const Texture* tex, const Recti& rect, const Recti& fr
 	if (Recti isct; SDL_IntersectRect(&rect.asRect(), &frame.asRect(), &isct.asRect())) {
 		isct.pos() -= curView->rect.pos();
 		auto stx = static_cast<const TextureSf*>(tex)->tex;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		const vec4& bclr = rectColors[eint(color)];
 		SDL_SetTextureColorModFloat(stx, bclr.r, bclr.g, bclr.b);
 		SDL_SetTextureAlphaModFloat(stx, bclr.a);
@@ -387,7 +402,7 @@ pair<SDL_PixelFormatEnum, uint8> RendererSf::prepareImageFormat(SDL_Surface* img
 		fmt = SDL_ISPIXELFORMAT_ALPHA(fmt) ? SDL_PIXELFORMAT_ABGR1555 : SDL_PIXELFORMAT_BGR565;
 
 	switch (fmt) {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	case SDL_PIXELFORMAT_ABGR2101010:
 		return pickImageFormat({ SDL_PIXELFORMAT_ABGR2101010, SDL_PIXELFORMAT_ARGB2101010, SDL_PIXELFORMAT_XBGR2101010, SDL_PIXELFORMAT_XRGB2101010 }, fmt);
 	case SDL_PIXELFORMAT_ARGB2101010:
@@ -413,7 +428,7 @@ pair<SDL_PixelFormatEnum, uint8> RendererSf::prepareImageFormat(SDL_Surface* img
 		return pickImageFormat({ SDL_PIXELFORMAT_XBGR1555, SDL_PIXELFORMAT_XRGB1555, SDL_PIXELFORMAT_ABGR1555, SDL_PIXELFORMAT_ARGB1555, SDL_PIXELFORMAT_BGRA5551, SDL_PIXELFORMAT_RGBA5551, SDL_PIXELFORMAT_BGR565, SDL_PIXELFORMAT_RGB565 }, fmt);
 	case SDL_PIXELFORMAT_XRGB1555: case SDL_PIXELFORMAT_XRGB4444:
 		return pickImageFormat({ SDL_PIXELFORMAT_XRGB1555, SDL_PIXELFORMAT_XBGR1555, SDL_PIXELFORMAT_ARGB1555, SDL_PIXELFORMAT_ABGR1555, SDL_PIXELFORMAT_RGBA5551, SDL_PIXELFORMAT_BGRA5551, SDL_PIXELFORMAT_RGB565, SDL_PIXELFORMAT_BGR565 }, fmt);
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	default:
 		if (SDL_BYTESPERPIXEL(fmt) > 4)
 			return pickImageFormat({ SDL_PIXELFORMAT_ABGR2101010, SDL_PIXELFORMAT_ARGB2101010, SDL_PIXELFORMAT_XBGR2101010, SDL_PIXELFORMAT_XRGB2101010 }, defaultFormat);

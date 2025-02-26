@@ -1,13 +1,15 @@
 #pragma once
 
 #include "utils.h"
-#if SDL_VERSION_ATLEAST(3, 2, 0)
-#include <SDL_gamepad.h>
+#ifdef WITH_SDL3
+#include <SDL3/SDL_gamepad.h>
+#include <SDL3/SDL_keycode.h>
+#include <SDL3/SDL_video.h>
 #else
 #include <SDL_gamecontroller.h>
-#endif
-#include <SDL_scancode.h>
+#include <SDL_keycode.h>
 #include <SDL_video.h>
+#endif
 #include <unordered_set>
 
 template <class... T> using uset = std::unordered_set<T...>;
@@ -143,6 +145,12 @@ public:
 		"scroll_slow"
 	};
 
+	enum class Device : uint8 {
+		keyboard,
+		joystick,
+		gamepad
+	};
+
 	enum Assignment : uint8 {
 		ASG_NONE	= 0x00,
 		ASG_KEY		= 0x01,
@@ -171,7 +179,20 @@ public:
 		"Up",
 		"Down",
 		"Left",
-		"Right"
+		"Right",
+#ifdef WITH_SDL3
+		"Misc1",
+		"RP1",
+		"LP",
+		"RP2",
+		"LP2",
+		"Touchpad",
+		"Misc2",
+		"Misc3",
+		"Misc4",
+		"Misc5",
+		"Misc6"
+#endif
 	};
 	static constexpr array gaxisNames = {
 		"LX",
@@ -187,7 +208,7 @@ public:
 		void (ProgState::*acall)(float);
 	};
 private:
-	SDL_Scancode key;			// keyboard key
+	SDL_Keycode key;			// keyboard key
 	uint8 jctID;				// joystick control id
 	uint8 jHatVal;				// joystick hat value
 	uint8 gctID;				// gamepad control id
@@ -218,10 +239,10 @@ private:
 public:
 	void reset(Type newType) noexcept;
 
-	SDL_Scancode getKey() const noexcept { return key; }
+	SDL_Keycode getKey() const noexcept { return key; }
 	bool keyAssigned() const noexcept { return asg & ASG_KEY; }
 	void clearAsgKey() noexcept;
-	void setKey(SDL_Scancode kkey) noexcept;
+	void setKey(SDL_Keycode kkey) noexcept;
 
 	uint8 getJctID() const noexcept { return jctID; }
 	bool jctAssigned() const noexcept { return asg & (ASG_JBUTTON | ASG_JHAT | ASG_JAXIS_P | ASG_JAXIS_N); }
@@ -450,7 +471,7 @@ public:
 
 	static constexpr ushort defaultSpacing = 10;
 	static constexpr uint minPicRes = 1;
-	static constexpr int axisLimit = SHRT_MAX + 1;
+	static constexpr uint16 axisLimit = SDL_JOYSTICK_AXIS_MAX + 1;
 	static constexpr Screen defaultScreenMode = Screen::windowed;
 	static constexpr Direction::Dir defaultDirection = Direction::down;
 	static constexpr Zoom defaultZoomType = Zoom::value;
@@ -495,7 +516,7 @@ public:
 	vec2 scrollSpeed = vec2(14.f, 16.f);
 	uint maxPicRes = UINT_MAX;
 private:
-	int deadzone = 256;
+	uint16 deadzone = 256;
 public:
 	ushort spacing = defaultSpacing;
 	bool maximized = false;
@@ -526,8 +547,8 @@ public:
 	void setRenderer() noexcept;
 	void setGamma(string_view str) noexcept;
 	string scrollSpeedString() const noexcept { return toStr(scrollSpeed); }
-	int getDeadzone() const noexcept { return deadzone; }
-	void setDeadzone(int val) noexcept;
+	uint16 getDeadzone() const noexcept { return deadzone; }
+	void setDeadzone(uint16 val) noexcept;
 
 	static string firstArg() noexcept;
 	static bool hasFlag(const char* name) noexcept;
@@ -543,8 +564,8 @@ inline double Settings::zoomValue(int step) noexcept {
 	return std::pow(zoomBase, step);
 }
 
-inline void Settings::setDeadzone(int val) noexcept {
-	deadzone = std::clamp(val, 0, axisLimit);
+inline void Settings::setDeadzone(uint16 val) noexcept {
+	deadzone = std::clamp(val, 0_u16, axisLimit);
 }
 
 inline bool Settings::cmpFlag(const char* name, int id) noexcept {

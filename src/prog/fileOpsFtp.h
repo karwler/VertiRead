@@ -60,7 +60,7 @@ private:
 	static string replyError(string_view msg, const FtpReply& reply);
 	void handleAuthWarning(const RemoteLocation& rl, const char* msg);
 
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	static Sint64 SDLCALL sdlSize(void* userdata) noexcept;
 	static Sint64 SDLCALL sdlSeek(void* userdata, Sint64 offset, SDL_IOWhence whence) noexcept;
 	static size_t SDLCALL sdlRead(void* userdata, void* ptr, size_t size, SDL_IOStatus* status) noexcept;

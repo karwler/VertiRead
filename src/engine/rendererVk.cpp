@@ -4,8 +4,13 @@
 #include "fileSys.h"
 #include "world.h"
 #endif
+#ifdef WITH_SDL3
+#include <SDL3/SDL_log.h>
+#include <SDL3/SDL_vulkan.h>
+#else
 #include <SDL_log.h>
 #include <SDL_vulkan.h>
+#endif
 #include <vulkan/vk_enum_string_helper.h>
 #include <list>
 #include <numeric>
@@ -1178,7 +1183,7 @@ RendererVk::RendererVk(InitParams& initParams, Settings* sets) :
 	immediatePresent(!sets->vsync)
 {
 	InstanceInfo instInfo;
-#if !SDL_VERSION_ATLEAST(3, 2, 0)
+#ifndef WITH_SDL3
 	instInfo.window = initParams.windows[0];	// using just one window to get extensions should be fine
 #endif
 	try {
@@ -1186,7 +1191,7 @@ RendererVk::RendererVk(InitParams& initParams, Settings* sets) :
 		if (!initParams.vofs) {
 			SDL_Vulkan_GetDrawableSize(initParams.windows[0], &initParams.viewRes.x, &initParams.viewRes.y);
 			auto vw = static_cast<ViewVk*>(views[0] = new ViewVk(initParams.windows[0], Recti(ivec2(0), initParams.viewRes)));
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 			if (!SDL_Vulkan_CreateSurface(initParams.windows[0], instance, nullptr, &vw->surface))
 #else
 			if (!SDL_Vulkan_CreateSurface(initParams.windows[0], instance, &vw->surface))
@@ -1199,7 +1204,7 @@ RendererVk::RendererVk(InitParams& initParams, Settings* sets) :
 				SDL_Vulkan_GetDrawableSize(initParams.windows[i], &wrect.w, &wrect.h);
 				initParams.viewRes = glm::max(initParams.viewRes, wrect.end());
 				auto vw = static_cast<ViewVk*>(views[i] = new ViewVk(initParams.windows[i], wrect));
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 				if (!SDL_Vulkan_CreateSurface(initParams.windows[i], instance, nullptr, &vw->surface))
 #else
 				if (!SDL_Vulkan_CreateSurface(initParams.windows[i], instance, &vw->surface))
@@ -1637,12 +1642,17 @@ void RendererVk::setGammaValue(int gamma) {
 	uploadBuffer(renderPass.getGlobBuffer(), &gval, offsetof(RenderPass::GlobalData, gamma), sizeof(gval), VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 }
 
-void RendererVk::updateView(ivec2& viewRes) {
+bool RendererVk::updateView(ivec2& viewRes) {
 	if (views.size() == 1) {
-		SDL_Vulkan_GetDrawableSize(views[0]->win, &viewRes.x, &viewRes.y);
-		views[0]->rect.size() = viewRes;
-		refreshFramebuffers = true;
+		ivec2 wres;
+		SDL_Vulkan_GetDrawableSize(views[0]->win, &wres.x, &wres.y);
+		if (wres != viewRes) {
+			viewRes = wres;
+			views[0]->rect.size() = wres;
+			return refreshFramebuffers = true;
+		}
 	}
+	return false;
 }
 
 void RendererVk::uploadBuffer(VkBuffer buffer, const void* data, VkDeviceSize dstOffs, VkDeviceSize size, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage) {
@@ -2116,7 +2126,7 @@ RendererVk::SurfaceInfo RendererVk::pickPixFormat(SDL_Surface* img, bool srgb) c
 		if (fmtConv.initialized())
 			return SurfaceInfo(img, FormatConverter::Pipeline::bgr24);
 		break;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	case SDL_PIXELFORMAT_ABGR2101010: case SDL_PIXELFORMAT_XBGR2101010:
 		if (auto [fmt, swizzle] = pickPixFormat(sfmt, { OptTexFmt::A2B10G10R10, OptTexFmt::A2R10G10B10 }); fmt != VK_FORMAT_UNDEFINED)
 			return SurfaceInfo(img, fmt, swizzle);
@@ -2239,7 +2249,7 @@ pair<SDL_PixelFormatEnum, uint8> RendererVk::prepareImageFormat(SDL_Surface* img
 		return pickImageFormat({ OptTexFmt::A1R5G5B5, OptTexFmt::B5G5R5A1, OptTexFmt::R5G5B5A1, OptTexFmt::B5G6R5, OptTexFmt::R5G6B5 }, fmt);
 	case SDL_PACKEDLAYOUT_332:
 		return pickImageFormat({ OptTexFmt::R5G6B5, OptTexFmt::B5G6R5, OptTexFmt::A1R5G5B5, OptTexFmt::B5G5R5A1, OptTexFmt::R5G5B5A1 }, fmt);
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	default:
 		if (SDL_BYTESPERPIXEL(fmt) > 4)
 			return pickImageFormat({ OptTexFmt::A2B10G10R10, OptTexFmt::A2R10G10B10 }, fmt);
@@ -2262,7 +2272,7 @@ void RendererVk::setCompression(Settings* sets) noexcept {
 }
 
 vector<const char*> RendererVk::getRequiredInstanceExtensions(const InstanceInfo& instInfo) const {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	uint32 count;
 	const char* const* iexts = SDL_Vulkan_GetInstanceExtensions(&count);
 	if (!iexts)

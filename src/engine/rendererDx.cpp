@@ -5,11 +5,21 @@
 #include "fileSys.h"
 #include "world.h"
 #endif
+#ifdef WITH_SDL3
+#include <SDL3/SDL_log.h>
+#include <SDL3/SDL_version.h>
+#else
 #include <SDL_log.h>
-#if !SDL_VERSION_ATLEAST(3, 2, 0)
 #include <SDL_syswm.h>
+#include <SDL_version.h>
 #endif
 #include <glm/gtc/type_ptr.hpp>
+
+void RendererDx11::ViewDx::reset() {
+	for (ComPtr<ID3D11RenderTargetView>& it : tgts)
+		it.Reset();
+	view.Reset();
+}
 
 RendererDx11::RendererDx11(InitParams& initParams, Settings* sets) :
 	Renderer(initParams.windows.size(), D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION),
@@ -158,9 +168,9 @@ void RendererDx11::initGuiShader() {
 	constexpr size_t vertSize = sizeof(vertSrc);
 	constexpr size_t pixlSize = sizeof(pixlSrc);
 #endif
-	if (HRESULT rs = dev->CreateVertexShader(vertSrc, vertSize, nullptr, vertGui.ReleaseAndGetAddressOf()); FAILED(rs))
+	if (HRESULT rs = dev->CreateVertexShader(vertSrc, vertSize, nullptr, &vertGui); FAILED(rs))
 		throw std::runtime_error(fmt::format("Failed to create vertex shader: {}", hresultToStr(rs)));
-	if (HRESULT rs = dev->CreatePixelShader(pixlSrc, pixlSize, nullptr, pixlGui.ReleaseAndGetAddressOf()); FAILED(rs))
+	if (HRESULT rs = dev->CreatePixelShader(pixlSrc, pixlSize, nullptr, &pixlGui); FAILED(rs))
 		throw std::runtime_error(fmt::format("Failed to create pixel shader: {}", hresultToStr(rs)));
 
 	pviewBuf = createConstantBuffer(sizeof(ViewPview));
@@ -179,7 +189,7 @@ void RendererDx11::initGuiShader() {
 		.AlignedByteOffset = 0,
 		.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA
 	};
-	if (HRESULT rs = dev->CreateInputLayout(&vertexElementDesc, 1, vertSrc, vertSize, vertexLayoutGui.ReleaseAndGetAddressOf()); FAILED(rs))
+	if (HRESULT rs = dev->CreateInputLayout(&vertexElementDesc, 1, vertSrc, vertSize, &vertexLayoutGui); FAILED(rs))
 		throw std::runtime_error(fmt::format("Failed to create input layout: {}", hresultToStr(rs)));
 
 	D3D11_BUFFER_DESC vertexBufferDesc = {
@@ -188,7 +198,7 @@ void RendererDx11::initGuiShader() {
 		.BindFlags = D3D11_BIND_VERTEX_BUFFER
 	};
 	D3D11_SUBRESOURCE_DATA vertexSubrsc = { .pSysMem = vertices.data() };
-	if (HRESULT rs = dev->CreateBuffer(&vertexBufferDesc, &vertexSubrsc, vertexBufGui.ReleaseAndGetAddressOf()); FAILED(rs))
+	if (HRESULT rs = dev->CreateBuffer(&vertexBufferDesc, &vertexSubrsc, &vertexBufGui); FAILED(rs))
 		throw std::runtime_error(fmt::format("Failed to create vertex buffer: {}", hresultToStr(rs)));
 }
 
@@ -217,9 +227,9 @@ void RendererDx11::initFinShader(Settings* sets) noexcept {
 		constexpr size_t vertSize = sizeof(vertSrc);
 		constexpr size_t pixlSize = sizeof(pixlSrc);
 #endif
-		if (HRESULT rs = dev->CreateVertexShader(vertSrc, vertSize, nullptr, vertFin.ReleaseAndGetAddressOf()); FAILED(rs))
+		if (HRESULT rs = dev->CreateVertexShader(vertSrc, vertSize, nullptr, &vertFin); FAILED(rs))
 			throw std::runtime_error(fmt::format("Failed to create vertex shader: {}", hresultToStr(rs)));
-		if (HRESULT rs = dev->CreatePixelShader(pixlSrc, pixlSize, nullptr, pixlFin.ReleaseAndGetAddressOf()); FAILED(rs))
+		if (HRESULT rs = dev->CreatePixelShader(pixlSrc, pixlSize, nullptr, &pixlFin); FAILED(rs))
 			throw std::runtime_error(fmt::format("Failed to create pixel shader: {}", hresultToStr(rs)));
 
 		finBuf = createConstantBuffer(sizeof(FinalData));
@@ -238,7 +248,7 @@ void RendererDx11::initFinShader(Settings* sets) noexcept {
 			.AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT,
 			.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA
 		} };
-		if (HRESULT rs = dev->CreateInputLayout(vertexElementDescs, std::size(vertexElementDescs), vertSrc, vertSize, vertexLayoutFin.ReleaseAndGetAddressOf()); FAILED(rs))
+		if (HRESULT rs = dev->CreateInputLayout(vertexElementDescs, std::size(vertexElementDescs), vertSrc, vertSize, &vertexLayoutFin); FAILED(rs))
 			throw std::runtime_error(fmt::format("Failed to create input layout: {}", hresultToStr(rs)));
 
 		D3D11_BUFFER_DESC vertexBufferDesc = {
@@ -247,7 +257,7 @@ void RendererDx11::initFinShader(Settings* sets) noexcept {
 			.BindFlags = D3D11_BIND_VERTEX_BUFFER
 		};
 		D3D11_SUBRESOURCE_DATA vertexSubrsc = { .pSysMem = scrVertices.data() };
-		if (HRESULT rs = dev->CreateBuffer(&vertexBufferDesc, &vertexSubrsc, vertexBufFin.ReleaseAndGetAddressOf()); FAILED(rs))
+		if (HRESULT rs = dev->CreateBuffer(&vertexBufferDesc, &vertexSubrsc, &vertexBufFin); FAILED(rs))
 			throw std::runtime_error(fmt::format("Failed to create vertex buffer: {}", hresultToStr(rs)));
 	} catch (const std::runtime_error& err) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
@@ -312,13 +322,13 @@ void RendererDx11::initConverter() noexcept {
 		constexpr size_t sizeRed = sizeof(srcRed);
 		constexpr size_t sizeIdx = sizeof(srcIdx);
 #endif
-		if (HRESULT rs = dev->CreateComputeShader(srcRgb, sizeRgb, nullptr, compConv[eint(FormatConv::rgb24)].ReleaseAndGetAddressOf()); FAILED(rs))
+		if (HRESULT rs = dev->CreateComputeShader(srcRgb, sizeRgb, nullptr, &compConv[eint(FormatConv::rgb24)]); FAILED(rs))
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create compute shader: %s", hresultToStr(rs).data());
-		if (HRESULT rs = dev->CreateComputeShader(srcBgr, sizeBgr, nullptr, compConv[eint(FormatConv::bgr24)].ReleaseAndGetAddressOf()); FAILED(rs))
+		if (HRESULT rs = dev->CreateComputeShader(srcBgr, sizeBgr, nullptr, &compConv[eint(FormatConv::bgr24)]); FAILED(rs))
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create compute shader: %s", hresultToStr(rs).data());
-		if (HRESULT rs = dev->CreateComputeShader(srcRed, sizeRed, nullptr, compConv[eint(FormatConv::red)].ReleaseAndGetAddressOf()); FAILED(rs))
+		if (HRESULT rs = dev->CreateComputeShader(srcRed, sizeRed, nullptr, &compConv[eint(FormatConv::red)]); FAILED(rs))
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create compute shader: %s", hresultToStr(rs).data());
-		if (HRESULT rs = dev->CreateComputeShader(srcIdx, sizeIdx, nullptr, compConv[eint(FormatConv::index8)].ReleaseAndGetAddressOf()); FAILED(rs))
+		if (HRESULT rs = dev->CreateComputeShader(srcIdx, sizeIdx, nullptr, &compConv[eint(FormatConv::index8)]); FAILED(rs))
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create compute shader: %s", hresultToStr(rs).data());
 
 		if (rng::any_of(compConv, [](const ComPtr<ID3D11ComputeShader>& it) -> bool { return it; })) {
@@ -344,11 +354,7 @@ void RendererDx11::cleanupConverter() noexcept {
 }
 
 void RendererDx11::createSwapchain(IDXGIFactory1* factory, ViewDx* view) {
-	for (ComPtr<ID3D11RenderTargetView>& it : view->tgts)
-		it.Reset();
-	view->view.Reset();
-
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	SDL_PropertiesID props = SDL_GetWindowProperties(view->win);
 	if (!props)
 		throw std::runtime_error(SDL_GetError());
@@ -376,8 +382,12 @@ void RendererDx11::createSwapchain(IDXGIFactory1* factory, ViewDx* view) {
 		.Windowed = TRUE,
 		.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL
 	};
-	if (HRESULT rs = factory->CreateSwapChain(dev.Get(), &schainDesc, view->sc.ReleaseAndGetAddressOf()); FAILED(rs))
+	if (HRESULT rs = factory->CreateSwapChain(dev.Get(), &schainDesc, &view->sc); FAILED(rs))
 		throw std::runtime_error(fmt::format("Failed to create swapchain: {}", hresultToStr(rs)));
+	createRenderTargets(view);
+}
+
+void RendererDx11::createRenderTargets(ViewDx* view) {
 	ComPtr<ID3D11Texture2D> backBuffer;
 	if (HRESULT rs = view->sc->GetBuffer(0, IID_PPV_ARGS(backBuffer.GetAddressOf())); FAILED(rs))
 		throw std::runtime_error(fmt::format("Failed get swapchain buffer: {}", hresultToStr(rs)));
@@ -387,18 +397,18 @@ void RendererDx11::createSwapchain(IDXGIFactory1* factory, ViewDx* view) {
 			.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
 			.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D
 		};
-		if (HRESULT rs = dev->CreateRenderTargetView(backBuffer.Get(), &tgtViewDesc, view->tgts[0].GetAddressOf()); FAILED(rs)) {
+		if (HRESULT rs = dev->CreateRenderTargetView(backBuffer.Get(), &tgtViewDesc, &view->tgts[0]); FAILED(rs)) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create sRGB render target: %s", hresultToStr(rs).data());
 			usesSrgb = false;
 		}
 	}
 	if (!usesSrgb) {
-		if (HRESULT rs = dev->CreateRenderTargetView(backBuffer.Get(), nullptr, view->tgts[bool(vertFin)].GetAddressOf()); FAILED(rs))
+		if (HRESULT rs = dev->CreateRenderTargetView(backBuffer.Get(), nullptr, &view->tgts[bool(vertFin)]); FAILED(rs))
 			throw std::runtime_error(fmt::format("Failed to create render target: {}", hresultToStr(rs)));
 		if (vertFin) {
 			ComPtr<ID3D11Texture2D> finTex = createTexture(view->rect.size(), DXGI_FORMAT_R8G8B8A8_UNORM, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET);
 			view->view = createTextureView(finTex.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
-			if (HRESULT rs = dev->CreateRenderTargetView(finTex.Get(), nullptr, view->tgts[0].GetAddressOf()); FAILED(rs))
+			if (HRESULT rs = dev->CreateRenderTargetView(finTex.Get(), nullptr, &view->tgts[0]); FAILED(rs))
 				throw std::runtime_error(fmt::format("Failed to create render target: {}", hresultToStr(rs)));
 		}
 	}
@@ -422,12 +432,12 @@ bool RendererDx11::setSettings(Settings* sets) {
 		else
 			cleanupFinShader();
 	}
-
-	if (reload) {
-		ComPtr<IDXGIFactory1> factory = createFactory();
-		for (View* it : views)
-			createSwapchain(factory.Get(), static_cast<ViewDx*>(it));
-	}
+	if (reload)
+		for (View* it : views) {
+			auto vw = static_cast<ViewDx*>(it);
+			vw->reset();
+			createRenderTargets(vw);
+		}
 	syncInterval = sets->vsync;
 	setCompression(sets);
 	return reload;
@@ -438,16 +448,30 @@ void RendererDx11::setGammaValue(int gamma) {
 	ctx->Unmap(finBuf.Get(), 0);
 }
 
-void RendererDx11::updateView(ivec2& viewRes) {
+bool RendererDx11::updateView(ivec2& viewRes) {
 	if (views.size() == 1) {
+		auto vw = static_cast<ViewDx*>(views[0]);
+		ivec2 wres;
 #if SDL_VERSION_ATLEAST(2, 26, 0)
-		SDL_GetWindowSizeInPixels(views[0]->win, &viewRes.x, &viewRes.y);
+		SDL_GetWindowSizeInPixels(vw->win, &wres.x, &wres.y);
 #else
-		SDL_GetWindowSize(views[0]->win, &viewRes.x, &viewRes.y);
+		SDL_GetWindowSize(vw->win, &wres.x, &wres.y);
 #endif
-		views[0]->rect.size() = viewRes;
-		refreshFramebuffers = true;
+		if (wres != viewRes) {
+			viewRes = wres;
+			vw->rect.size() = wres;
+			vw->reset();
+
+			DXGI_SWAP_CHAIN_DESC desc;
+			if (HRESULT rs = vw->sc->GetDesc(&desc); FAILED(rs))
+				throw std::runtime_error(fmt::format("Failed to get swapchain desc: {}", hresultToStr(rs)));
+			if (HRESULT rs = vw->sc->ResizeBuffers(desc.BufferCount, wres.x, wres.y, desc.BufferDesc.Format, desc.Flags); FAILED(rs))
+				throw std::runtime_error(fmt::format("Failed to resize buffers: {}", hresultToStr(rs)));
+			createRenderTargets(vw);
+			return true;
+		}
 	}
+	return false;
 }
 
 Renderer::Action RendererDx11::startDraw(View* view) noexcept {
@@ -516,21 +540,6 @@ Renderer::Action RendererDx11::finishDraw(View* view) noexcept {
 		ctx->OMSetBlendState(blendState.Get(), nullptr, 0xFFFFFFFF);
 	}
 	vw->sc->Present(syncInterval, 0);
-	return Action::yes;
-}
-
-Renderer::Action RendererDx11::finishRender() noexcept {
-	if (refreshFramebuffers) {
-		try {
-			ComPtr<IDXGIFactory1> factory = createFactory();
-			for (View* it : views)
-				createSwapchain(factory.Get(), static_cast<ViewDx*>(it));
-			refreshFramebuffers = false;
-		} catch (const std::runtime_error& err) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
-			return Action::no;
-		}
-	}
 	return Action::yes;
 }
 
@@ -699,7 +708,7 @@ RendererDx11::SurfaceInfo RendererDx11::pickPixFormat(SDL_Surface* img, bool srg
 		if (compConv[eint(FormatConv::bgr24)])
 			return SurfaceInfo(img, FormatConv::bgr24);
 		break;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	case SDL_PIXELFORMAT_ABGR2101010:
 		return SurfaceInfo(img, DXGI_FORMAT_R10G10B10A2_UNORM);
 #endif
@@ -734,7 +743,7 @@ pair<SDL_PixelFormatEnum, uint8> RendererDx11::prepareImageFormat(SDL_Surface* i
 		return pickImageFormat({ OptTexFmt::A1R5G5B5, OptTexFmt::R5G6B5 }, fmt);
 	case SDL_PIXELFORMAT_ABGR4444: case SDL_PIXELFORMAT_ARGB4444: case SDL_PIXELFORMAT_BGRA4444: case SDL_PIXELFORMAT_RGBA4444: case SDL_PIXELFORMAT_XBGR4444: case SDL_PIXELFORMAT_XRGB4444:
 		return pickImageFormat({ OptTexFmt::A4R4G4B4, SDL_ISPIXELFORMAT_ALPHA(fmt) ? OptTexFmt::A1R5G5B5 : OptTexFmt::R5G6B5, SDL_ISPIXELFORMAT_ALPHA(fmt) ? OptTexFmt::R5G6B5 : OptTexFmt::A1R5G5B5 }, fmt);
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	default:
 		if (SDL_ISPIXELFORMAT_10BIT(fmt) || SDL_BYTESPERPIXEL(fmt) > 4)
 			return pair(SDL_PIXELFORMAT_ABGR2101010, 4);
@@ -818,7 +827,7 @@ tuple<ComPtr<IDXGIAdapter1>, size_t, D3D_DRIVER_TYPE> RendererDx11::pickAdapter(
 	ComPtr<IDXGIAdapter1> adapter;
 	DXGI_ADAPTER_DESC1 desc;
 	if (preferred != u32vec2(0))
-		for (uint i = 0; SUCCEEDED(factory->EnumAdapters1(i, adapter.ReleaseAndGetAddressOf())); ++i)
+		for (uint i = 0; SUCCEEDED(factory->EnumAdapters1(i, &adapter)); ++i)
 			if (SUCCEEDED(adapter->GetDesc1(&desc)) && desc.VendorId == preferred.x && desc.DeviceId == preferred.y) {
 				if (HRESULT rs = d3d11CreateDevice(adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, deviceFlags, featureLevels.data(), featureLevels.size(), D3D11_SDK_VERSION, nullptr, nullptr, nullptr); FAILED(rs)) {
 					SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unable to create the specified device %04X:%04X: %s", preferred.x, preferred.y, hresultToStr(rs).data());
@@ -832,7 +841,7 @@ tuple<ComPtr<IDXGIAdapter1>, size_t, D3D_DRIVER_TYPE> RendererDx11::pickAdapter(
 	uint score;
 	ComPtr<IDXGIAdapter1> nxtAdp;
 	D3D_FEATURE_LEVEL nxtLevel;
-	for (uint i = 0; SUCCEEDED(factory->EnumAdapters1(i, nxtAdp.ReleaseAndGetAddressOf())); ++i)
+	for (uint i = 0; SUCCEEDED(factory->EnumAdapters1(i, &nxtAdp)); ++i)
 		if (SUCCEEDED(d3d11CreateDevice(nxtAdp.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, deviceFlags, featureLevels.data(), featureLevels.size(), D3D11_SDK_VERSION, nullptr, &nxtLevel, nullptr))) {
 			size_t nxtMemest = SUCCEEDED(nxtAdp->GetDesc1(&desc)) ? desc.DedicatedVideoMemory : 0;
 			uint nxtScore = (featureLevels.size() - (rng::find(featureLevels, nxtLevel) - featureLevels.begin())) * 4;
@@ -866,7 +875,7 @@ Renderer::Info RendererDx11::getInfo() const noexcept {
 	try {
 		ComPtr<IDXGIFactory1> factory = createFactory();
 		ComPtr<IDXGIAdapter1> adapter;
-		for (uint i = 0; SUCCEEDED(factory->EnumAdapters1(i, adapter.ReleaseAndGetAddressOf())); ++i)
+		for (uint i = 0; SUCCEEDED(factory->EnumAdapters1(i, &adapter)); ++i)
 			if (DXGI_ADAPTER_DESC1 desc; SUCCEEDED(adapter->GetDesc1(&desc)))
 				info.devices.emplace_back(u32vec2(desc.VendorId, desc.DeviceId), swtos(desc.Description), desc.DedicatedVideoMemory);
 	} catch (const std::runtime_error& err) {

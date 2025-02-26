@@ -37,6 +37,8 @@ private:
 		ComPtr<ID3D11ShaderResourceView> view;	// for when doing post-processing
 
 		using View::View;
+
+		void reset();
 	};
 
 	struct ViewPview {
@@ -131,7 +133,6 @@ private:
 
 	vec4 bgColor;
 	uint syncInterval;
-	bool refreshFramebuffers = false;
 	array<bool, optTexFmtsSdl.size()> optionalFormats;
 	bool usesSrgb;
 
@@ -142,13 +143,12 @@ public:
 	void setColors(array<vec4, Settings::defaultColors.size()>& colors) override;
 	bool setSettings(Settings* sets) override;
 	void setGammaValue(int gamma) override;
-	void updateView(ivec2& viewRes) override;
+	bool updateView(ivec2& viewRes) override;
 	Info getInfo() const noexcept override;
 
 	Action startDraw(View* view) noexcept override;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, Color color) noexcept override;
 	Action finishDraw(View* view) noexcept override;
-	Action finishRender() noexcept override;
 
 	Texture* texFromSurface(SDL_Surface* img, bool rpic, bool linear) noexcept override;
 	bool texFromSurface(Texture* tex, SDL_Surface* img, bool rpic) noexcept override;
@@ -168,6 +168,7 @@ private:
 	void initConverter() noexcept;
 	void cleanupConverter() noexcept;
 	void createSwapchain(IDXGIFactory1* factory, ViewDx* view);
+	void createRenderTargets(ViewDx* view);
 	void setCompression(Settings* sets) noexcept;
 
 	D3D11_MAPPED_SUBRESOURCE mapResource(ID3D11Resource* rsc);

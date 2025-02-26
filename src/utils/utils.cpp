@@ -2,7 +2,11 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#ifdef WITH_SDL3
+#include <SDL3/SDL_log.h>
+#else
 #include <SDL_log.h>
+#endif
 #endif
 #include <cwctype>
 

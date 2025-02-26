@@ -118,7 +118,7 @@ public:
 	virtual void onDrag(ivec2, ivec2) {}	// mouse move while left button down
 	virtual void onUndrag(ivec2, uint8) {}	// gets called on mouse button up if instance is Scene's capture
 	virtual void onScroll(vec2) {}	// on mouse wheel y movement
-	virtual void onKeypress(SDL_Scancode, SDL_Keymod) {}
+	virtual void onKeypress(SDL_Keycode, SDL_Keymod) {}
 	virtual void onJButton(uint8) {}
 	virtual void onJHat(uint8, uint8) {}
 	virtual void onJAxis(uint8, bool) {}
@@ -282,7 +282,7 @@ public:
 	void onHold(ivec2 mPos, uint8 mBut) override;
 	void onDrag(ivec2 mPos, ivec2 mMov) override;
 	void onUndrag(ivec2 mPos, uint8 mBut) override;
-	void onKeypress(SDL_Scancode key, SDL_Keymod mod) override;
+	void onKeypress(SDL_Keycode key, SDL_Keymod mod) override;
 
 	int getVal() const noexcept { return val; }
 	void setVal(int value) noexcept;
@@ -421,7 +421,7 @@ public:
 	void onResize() override;
 	void postInit() override;
 	void onClick(ivec2 mPos, uint8 mBut) override;
-	void onKeypress(SDL_Scancode key, SDL_Keymod mod) override;
+	void onKeypress(SDL_Keycode key, SDL_Keymod mod) override;
 	void onCompose(string_view str, uint olen) override;
 	void onText(string_view str, uint olen) override;
 	void confirm() noexcept;
@@ -453,22 +453,16 @@ inline Recti LabelEdit::textFrame() const noexcept {
 }
 
 inline bool LabelEdit::kmodCtrl(uint16 mod) noexcept {
-	return mod & KMOD_CTRL && !(mod & (KMOD_SHIFT | KMOD_ALT));
+	return (mod & KMOD_CTRL) && !(mod & (KMOD_SHIFT | KMOD_ALT | KMOD_GUI));
 }
 
 inline bool LabelEdit::kmodAlt(uint16 mod) noexcept {
-	return mod & KMOD_ALT && !(mod & (KMOD_SHIFT | KMOD_CTRL));
+	return (mod & KMOD_ALT) && !(mod & (KMOD_SHIFT | KMOD_CTRL | KMOD_GUI));
 }
 
 // for getting a key/button/axis
 class KeyGetter final : public PushButton {
 public:
-	enum class AcceptType : uint8 {
-		keyboard,
-		joystick,
-		gamepad
-	};
-
 	static constexpr char ellipsisStr[] = "...";
 private:
 	static constexpr char fmtButton[] = "B {:d}";
@@ -477,14 +471,14 @@ private:
 	static constexpr char prefAxisPos = '+';
 	static constexpr char prefAxisNeg = '-';
 
-	const AcceptType acceptType;		// what kind of binding is being accepted
+	const Binding::Device acceptType;	// what kind of binding is being accepted
 	const Binding::Type bindingType;	// index of what is currently being edited
 
 public:
-	KeyGetter(const Size& size, AcceptType type, Binding::Type binding, Cstring&& tip = Cstring()) noexcept;
+	KeyGetter(const Size& size, Binding::Device type, Binding::Type binding, Cstring&& tip = Cstring()) noexcept;
 
 	void onClick(ivec2 mPos, uint8 mBut) override;
-	void onKeypress(SDL_Scancode key, SDL_Keymod mod) override;
+	void onKeypress(SDL_Keycode key, SDL_Keymod mod) override;
 	void onJButton(uint8 jbutton) override;
 	void onJHat(uint8 jhat, uint8 value) override;
 	void onJAxis(uint8 jaxis, bool positive) override;
@@ -495,7 +489,7 @@ public:
 	void restoreText();
 	void clearBinding();
 private:
-	static string bindingText(Binding::Type binding, AcceptType accept);
+	static string bindingText(Binding::Type binding, Binding::Device accept);
 };
 
 inline void KeyGetter::restoreText() {

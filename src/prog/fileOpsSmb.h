@@ -63,7 +63,7 @@ private:
 	void cleanup() noexcept;
 	bool hasModeFlags(const char* path, mode_t mdes) noexcept;
 	static void logMsg(void* data, int level, const char* msg) noexcept;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	static Sint64 SDLCALL sdlSize(void* userdata) noexcept;
 	static Sint64 SDLCALL sdlSeek(void* userdata, Sint64 offset, SDL_IOWhence whence) noexcept;
 	static size_t SDLCALL sdlRead(void* userdata, void* ptr, size_t size, SDL_IOStatus* status) noexcept;

@@ -1,12 +1,17 @@
 #pragma once
 
 #include "sthandle.h"
-#include <SDL_surface.h>
-#include <SDL_version.h>
-#include <memory>
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 #define SDL_ENABLE_OLD_NAMES
-#include <SDL_oldnames.h>
+#include <SDL3/SDL_oldnames.h>
+#include <SDL3/SDL_surface.h>
+#else
+#define SDL_MAIN_HANDLED
+#include <SDL_surface.h>
+#endif
+#include <memory>
+
+#ifdef WITH_SDL3
 
 #undef SDL_ConvertSurfaceFormat
 #undef SDL_RWread
@@ -26,16 +31,18 @@
 #define IMG_LoadTGA_RW IMG_LoadTGA_IO
 
 #define mpvec2 vec2
+#define keyFromScancode(k) SDL_GetKeyFromScancode(k, SDL_KMOD_NONE, true)
+#define scancodeFromKey(k) SDL_GetScancodeFromKey(k, nullptr)
 #define sdlFailed(r) !(r)
-#define sdlSucceeded(r) r
+#define sdlSucceeded(r) (r)
 #define surfaceBytesPpx(s) SDL_BYTESPERPIXEL((s)->format)
 #define surfaceFormat(s) (s)->format
 #define surfacePalette(s) SDL_GetSurfacePalette(s)
 #define surfaceScaleNearest(si, sr, di, dr) SDL_BlitSurfaceScaled(si, sr, di, dr, SDL_SCALEMODE_NEAREST)
 #define surfaceScaleLinear(si, sr, di, dr) SDL_BlitSurfaceScaled(si, sr, di, dr, SDL_SCALEMODE_LINEAR)
 #define tick_t uint64
+
 #else
-#define SDL_MAIN_HANDLED
 
 #define SDL_CreateSurface(w, h, t) SDL_CreateRGBSurfaceWithFormat(0, w, h, SDL_BITSPERPIXEL(t), t)
 #define SDL_CreateSurfaceFrom(w, h, t, x, p) SDL_CreateRGBSurfaceWithFormatFrom(x, w, h, SDL_BITSPERPIXEL(t), p, t)
@@ -44,6 +51,8 @@
 #define SDL_MapSurfaceRGBA(s, r, g, b, a) SDL_MapRGBA((s)->format, r, g, b, a)
 
 #define mpvec2 ivec2
+#define keyFromScancode(k) SDL_GetKeyFromScancode(k)
+#define scancodeFromKey(k) SDL_GetScancodeFromKey(k)
 #define sdlFailed(r) r
 #define sdlSucceeded(r) !(r)
 #define surfaceBytesPpx(s) (s)->format->BytesPerPixel
@@ -72,7 +81,7 @@ struct SdlFreePtr {
 	void operator()(void* ptr) const noexcept { SDL_free(ptr); }
 };
 
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 template <>
 struct DefaultHandleClose<SDL_PropertiesID> {
 	void operator()(SDL_PropertiesID hnd) const noexcept { SDL_DestroyProperties(hnd); }

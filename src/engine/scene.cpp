@@ -169,7 +169,7 @@ void Scene::setLayouts() {
 
 void Scene::setCapture(Widget* inter) noexcept {
 	capture = inter;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	Renderer::View* view = inter ? World::drawSys()->getRenderer()->findView(inter->position()) : nullptr;
 	captureWindow = view ? view->win : nullptr;
 #endif

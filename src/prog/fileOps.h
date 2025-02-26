@@ -9,7 +9,11 @@
 #include <windows.h>
 #undef WIN32_LEAN_AND_MEAN
 #endif
+#ifdef WITH_SDL3
+#include <SDL3_image/SDL_image.h>
+#else
 #include <SDL_image.h>
+#endif
 #include <mutex>
 
 struct _SecretService;
@@ -117,7 +121,7 @@ protected:
 #endif
 	static tuple<bool, bool, bool> unpackListOptions(BrowserListOption opts) noexcept;
 	template <Integer C> static bool notDotName(const C* name) noexcept;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	static bool SDLCALL sdlFlush(void* userdata, SDL_IOStatus* status) noexcept;
 #endif
 #ifdef WITH_ARCHIVE
@@ -125,7 +129,7 @@ protected:
 private:
 	static const char* requestArchivePassphrase(archive* arch, void* data) noexcept;
 	static SDL_RWops* makeArchiveEntryRWops(archive* arch, archive_entry* entry) noexcept;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	static Sint64 SDLCALL sdlArchiveEntrySize(void* userdata) noexcept;
 	static Sint64 SDLCALL sdlArchiveEntrySeek(void* userdata, Sint64 offset, SDL_IOWhence whence) noexcept;
 	static size_t SDLCALL sdlArchiveEntryRead(void* userdata, void* ptr, size_t size, SDL_IOStatus* status) noexcept;
@@ -242,7 +246,7 @@ public:
 #endif
 
 protected:
-#if SDL_VERSION_ATLEAST(3, 2, 0) && (defined(CAN_SMB) || defined(CAN_SFTP))
+#if defined(WITH_SDL3) && (defined(CAN_SMB) || defined(CAN_SFTP))
 	static size_t sdlReadFinish(ssize_t len, SDL_IOStatus* status) noexcept;
 	static size_t sdlWriteFinish(ssize_t len, SDL_IOStatus* status) noexcept;
 #endif

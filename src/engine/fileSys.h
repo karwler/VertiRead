@@ -7,7 +7,11 @@
 #include <windows.h>
 #undef WIN32_LEAN_AND_MEAN
 #endif
+#ifdef WITH_SDL3
+#include <SDL3/SDL_log.h>
+#else
 #include <SDL_log.h>
+#endif
 #include <stop_token>
 
 struct FT_FaceRec_;

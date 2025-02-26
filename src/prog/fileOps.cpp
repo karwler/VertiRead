@@ -186,7 +186,7 @@ FileOps::FileType FileOps::modeToType(mode_t mode) noexcept {
 #endif
 
 bool FileOps::isPicture(const string& path) noexcept {
-#if SDL_IMAGE_VERSION_ATLEAST(3, 0, 0)
+#ifdef WITH_SDL3
 	static constexpr bool (SDLCALL* const magics[])(SDL_RWops*) = {
 #else
 	static constexpr int (SDLCALL* const magics[])(SDL_RWops*) = {
@@ -217,7 +217,7 @@ bool FileOps::isPicture(const string& path) noexcept {
 		return true;
 #endif
 	if (uptr<SDL_RWops> ifh(makeRWops(path)); ifh) {
-#if SDL_IMAGE_VERSION_ATLEAST(3, 0, 0)
+#ifdef WITH_SDL3
 		for (bool (SDLCALL* const test)(SDL_RWops*) : magics)
 #else
 		for (int (SDLCALL* const test)(SDL_RWops*) : magics)
@@ -348,7 +348,7 @@ const char* FileOps::requestArchivePassphrase(archive* arch, void* data) noexcep
 }
 
 SDL_RWops* FileOps::makeArchiveEntryRWops(archive* arch, archive_entry* entry) noexcept {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	SDL_IOStreamInterface iface = {
 		.version = sizeof(iface),
 		.size = sdlArchiveEntrySize,
@@ -378,7 +378,7 @@ SDL_RWops* FileOps::makeArchiveEntryRWops(archive* arch, archive_entry* entry) n
 	return nullptr;
 }
 
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 Sint64 SDLCALL FileOps::sdlArchiveEntrySize(void* userdata) noexcept {
 	return archive_entry_size(static_cast<pair<archive*, archive_entry*>*>(userdata)->second);
 }
@@ -429,7 +429,7 @@ int SDLCALL FileOps::sdlArchiveEntryClose(SDL_RWops* context) noexcept {
 #endif
 #endif
 
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 bool SDLCALL FileOps::sdlFlush(void*, SDL_IOStatus*) noexcept {
 	return true;
 }
@@ -830,7 +830,7 @@ archive* FileOpsRemote::openArchive(ArchiveData& ad, bool force) {
 }
 #endif
 
-#if SDL_VERSION_ATLEAST(3, 2, 0) && (defined(CAN_SMB) || defined(CAN_SFTP))
+#if defined(WITH_SDL3) && (defined(CAN_SMB) || defined(CAN_SFTP))
 size_t FileOpsRemote::sdlReadFinish(ssize_t len, SDL_IOStatus* status) noexcept {
 	if (len <= 0) {
 		*status = !len ? SDL_IO_STATUS_EOF : SDL_IO_STATUS_ERROR;

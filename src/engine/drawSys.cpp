@@ -12,7 +12,11 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
+#ifdef WITH_SDL3
+#include <SDL3_image/SDL_image.h>
+#else
 #include <SDL_image.h>
+#endif
 #include <cwctype>
 
 // FONT SET
@@ -475,9 +479,11 @@ void DrawSys::cleanup() noexcept {
 	delete renderer;
 }
 
-void DrawSys::updateView() {
-	renderer->updateView(viewRes);
-	fonts.clearCache();
+bool DrawSys::updateView() {
+	bool ret = renderer->updateView(viewRes);
+	if (ret)
+		fonts.clearCache();
+	return ret;
 }
 
 bool DrawSys::updateDpi() {
@@ -498,7 +504,7 @@ bool DrawSys::updateDpi() {
 
 float DrawSys::maxDpi() const noexcept {
 	float mdpi = 0.f;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	for (Renderer::View* it : renderer->getViews())
 		if (float scl = SDL_GetWindowDisplayScale(it->win); scl > mdpi)
 			mdpi = scl;

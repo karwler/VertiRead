@@ -6,8 +6,13 @@
 #include "optional/d3d.h"
 #include "prog/program.h"
 #include "prog/progs.h"
+#ifdef WITH_SDL3
+#include <SDL3/SDL_vulkan.h>
+#include <SDL3_image/SDL_image.h>
+#else
 #include <SDL_image.h>
 #include <SDL_vulkan.h>
+#endif
 
 void WindowSys::init() {
 	try {
@@ -40,8 +45,10 @@ void WindowSys::exec() {
 		dSec = double(newTime - oldTime) / perfHz;
 		oldTime = newTime;
 
-		drawSys->drawWidgets(inputSys->mouseWin.has_value());
-		inputSys->tick();
+		if (active) {
+			drawSys->drawWidgets(inputSys->mouseWin.has_value());
+			inputSys->tick();
+		}
 		scene->tick(dSec);
 		program->tick();
 
@@ -186,7 +193,7 @@ void WindowSys::createWindow() {
 		throw std::runtime_error("Failed to initialize a working renderer");
 }
 
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 SDL_PropertiesID WindowSys::initWindow(size_t numWindows) {
 	const char* graphicsProp = nullptr;
 #else
@@ -201,7 +208,7 @@ uint32 WindowSys::initWindow(size_t numWindows) {
 	case direct3d11:
 		if (!symD3d11())
 			throw std::runtime_error("Failed to load D3D11 libraries");
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		graphicsProp = SDL_PROP_WINDOW_CREATE_EXTERNAL_GRAPHICS_CONTEXT_BOOLEAN;
 #endif
 		break;
@@ -240,7 +247,7 @@ uint32 WindowSys::initWindow(size_t numWindows) {
 		SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, numWindows > 1);
 		if (sdlFailed(SDL_GL_LoadLibrary(nullptr)))
 			throw std::runtime_error(SDL_GetError());
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		graphicsProp = SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN;
 #else
 		windowFlags |= SDL_WINDOW_OPENGL;
@@ -251,20 +258,20 @@ uint32 WindowSys::initWindow(size_t numWindows) {
 	case vulkan:
 		if (sdlFailed(SDL_Vulkan_LoadLibrary(nullptr)))
 			throw std::runtime_error(SDL_GetError());
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		graphicsProp = SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN;
 #else
 		windowFlags |= SDL_WINDOW_VULKAN;
 #endif
 #endif
 	}
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	SDL_PropertiesID windowProps = SDL_CreateProperties();
 	if (!windowProps)
 		throw std::runtime_error(SDL_GetError());
 	if (graphicsProp)
 		SDL_SetBooleanProperty(windowProps, graphicsProp, true);
-	SDL_SetBooleanProperty(windowProps, SDL_PROP_WINDOW_CREATE_MAXIMIZED_BOOLEAN, sets->maximized);
+	SDL_SetBooleanProperty(windowProps, SDL_PROP_WINDOW_CREATE_MAXIMIZED_BOOLEAN, sets->maximized);	// TODO: does this work or do we need the workaround?
 	SDL_SetBooleanProperty(windowProps, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, sets->screen <= Settings::Screen::fullscreen);
 	SDL_SetBooleanProperty(windowProps, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, sets->screen >= Settings::Screen::fullscreen);
 	SDL_SetBooleanProperty(windowProps, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
@@ -287,7 +294,7 @@ uint32 WindowSys::initWindow(size_t numWindows) {
 
 void WindowSys::createSingleWindow(SDL_Surface* icon) {
 	sets->resolution = glm::clamp(sets->resolution, windowMinSize, displayResolution());
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	sthandle<SDL_PropertiesID> props = initWindow(1);
 	SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
 	SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, sets->resolution.x);
@@ -308,13 +315,13 @@ void WindowSys::createSingleWindow(SDL_Surface* icon) {
 void WindowSys::createMultiWindow(SDL_Surface* icon) {
 	uptr<ivec2[]> vofs = std::make_unique_for_overwrite<ivec2[]>(windows.size() + 1);
 	vofs[windows.size()] = ivec2(INT_MAX);
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	sthandle<SDL_PropertiesID> props = initWindow(sets->displays.size());
 #else
 	uint32 flags = initWindow(sets->displays.size());
 #endif
 	for (size_t i = 0; i < windows.size(); ++i) {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		string name = fmt::format("{} {}", title, i);
 		SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, name.data());
 		SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER, SDL_WINDOWPOS_CENTERED_DISPLAY(sets->displays[i].did));
@@ -380,7 +387,7 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 	case SDL_QUIT:
 		program->eventExit();
 		break;
-#if !SDL_VERSION_ATLEAST(3, 2, 0)
+#ifndef WITH_SDL3
 	case SDL_DISPLAYEVENT:
 		eventDisplay();
 		break;
@@ -397,7 +404,7 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 	case SDL_TEXTINPUT:
 		scene->onText(event.text.text);
 		break;
-#if SDL_VERSION_ATLEAST(2, 0, 22) && !SDL_VERSION_ATLEAST(3, 2, 0)
+#if SDL_VERSION_ATLEAST(2, 0, 22) && !defined(WITH_SDL3)
 	case SDL_TEXTEDITING_EXT:
 		scene->onCompose(uptr<char[], SdlFreePtr>(event.editExt.text).get());
 		break;
@@ -430,28 +437,28 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 		inputSys->delJoystick(event.jdevice.which);
 		break;
 	case SDL_CONTROLLERAXISMOTION:
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		inputSys->eventGamepadAxis(event.gaxis);
 #else
 		inputSys->eventGamepadAxis(event.caxis);
 #endif
 		break;
 	case SDL_CONTROLLERBUTTONDOWN:
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		inputSys->eventGamepadButton(event.gbutton);
 #else
 		inputSys->eventGamepadButton(event.cbutton);
 #endif
 		break;
 	case SDL_CONTROLLERDEVICEADDED:
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		inputSys->addGamepad(event.gdevice.which);
 #else
 		inputSys->addGamepad(event.cdevice.which);
 #endif
 		break;
 	case SDL_CONTROLLERDEVICEREMOVED:
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		inputSys->delGamepad(event.gdevice.which);
 #else
 		inputSys->delGamepad(event.cdevice.which);
@@ -467,14 +474,14 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 		inputSys->eventFingerMove(event.tfinger);
 		break;
 	case SDL_DROPFILE:
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		program->getState()->eventFileDrop(event.drop.data);
 #else
 		program->getState()->eventFileDrop(uptr<char[], SdlFreePtr>(event.drop.file).get());
 #endif
 		break;
 	case SDL_DROPTEXT:
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		scene->onText(event.drop.data);
 #else
 		scene->onText(uptr<char[], SdlFreePtr>(event.drop.file).get());
@@ -525,7 +532,7 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 	case SDL_USEREVENT_THREAD_FONTS_FINISHED:
 		program->eventFontsFinished(event.user);
 		break;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	default:
 		if (event.type >= SDL_EVENT_WINDOW_FIRST && event.type <= SDL_EVENT_WINDOW_LAST)
 			eventWindow(event.window);
@@ -536,52 +543,59 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 }
 
 void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	switch (winEvent.type) {
 #else
 	switch (winEvent.event) {
 #endif
+	case SDL_WINDOWEVENT_EXPOSED:
+		active = true;
+		break;
 	case SDL_WINDOWEVENT_RESIZED:
-		if (windows.size() == 1)
-			if (uint32 flags = SDL_GetWindowFlags(windows[0]); !(flags & SDL_WINDOW_FULLSCREEN_DESKTOP))
-				if (sets->maximized = flags & SDL_WINDOW_MAXIMIZED; !sets->maximized)
-					sets->resolution = ivec2(winEvent.data1, winEvent.data2);
+		if (!sets->maximized)	// should only happen when single window
+			sets->resolution = ivec2(winEvent.data1, winEvent.data2);
+		break;
 	case SDL_WINDOWEVENT_SIZE_CHANGED:
-		drawSys->updateView();
-		scene->onResize();
+		if (drawSys->updateView())
+			scene->onResize();
+		break;
+	case SDL_WINDOWEVENT_MINIMIZED:
+		active = false;
+		break;
+	case SDL_WINDOWEVENT_MAXIMIZED:
+		sets->maximized = true;
+		break;
+	case SDL_WINDOWEVENT_RESTORED:
+		sets->maximized = false;	// TODO: test if maximized and resolution get saved properly
 		break;
 	case SDL_WINDOWEVENT_LEAVE:
 		scene->onMouseLeave();
 		break;
-	case SDL_WINDOWEVENT_FOCUS_GAINED:
-		if (sets->screen == Settings::Screen::multiFullscreen && rng::any_of(windows, [](SDL_Window* it) -> bool { return SDL_GetWindowFlags(it) & SDL_WINDOW_MINIMIZED; })) {
+	case SDL_WINDOWEVENT_FOCUS_GAINED:	// TODO: maybe just set modal windows?
+		if (sets->screen == Settings::Screen::multiFullscreen && !active) {
 			for (SDL_Window* it : windows)
-				SDL_MaximizeWindow(it);
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+				if (SDL_WindowID wid = SDL_GetWindowID(it); wid != winEvent.windowID)
+					SDL_RaiseWindow(it);	// TODO: what does SDL_RestoreWindow do on fullscreen?
+#ifdef WITH_SDL3
 			SDL_FlushEvents(SDL_EVENT_WINDOW_FOCUS_GAINED, SDL_EVENT_WINDOW_FOCUS_LOST);
 #else
 			SDL_FlushEvent(SDL_WINDOWEVENT);
 #endif
+			active = true;
 		}
 		break;
-	case SDL_WINDOWEVENT_FOCUS_LOST:
-		if (sets->screen == Settings::Screen::multiFullscreen && rng::none_of(windows, [](SDL_Window* it) -> bool { return SDL_GetWindowFlags(it) & SDL_WINDOW_INPUT_FOCUS; })) {
-			for (SDL_Window* it : windows)
-				SDL_MinimizeWindow(it);
-#if SDL_VERSION_ATLEAST(3, 2, 0)
-			SDL_FlushEvents(SDL_EVENT_WINDOW_FOCUS_GAINED, SDL_EVENT_WINDOW_FOCUS_LOST);
-#else
-			SDL_FlushEvent(SDL_WINDOWEVENT);
-#endif
-		}
+	case SDL_WINDOWEVENT_FOCUS_LOST:	// TODO: maybe just set modal windows?
+		if (sets->screen == Settings::Screen::multiFullscreen && rng::none_of(windows, [](SDL_Window* it) -> bool { return SDL_GetWindowFlags(it) & SDL_WINDOW_INPUT_FOCUS; }))
+			active = false;
 		break;
 #if SDL_VERSION_ATLEAST(2, 0, 18)
 	case SDL_WINDOWEVENT_DISPLAY_CHANGED:
-#else
-	case SDL_WINDOWEVENT_MOVED:
+#ifdef WITH_SDL3
+	case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:	// TODO: check if SDL_EVENT_WINDOW_DISPLAY_CHANGED is still needed in this case and handle for multi window
 #endif
 		if (windows.size() == 1 && drawSys->updateDpi())
 			scene->onResize();
+#endif
 	}
 }
 
@@ -606,7 +620,7 @@ ivec2 WindowSys::mousePos() const noexcept {
 	SDL_GetMouseState(&mp.x, &mp.y);
 	if (SDL_Window* win = SDL_GetMouseFocus())
 		if (Renderer::View* view = drawSys->getRenderer()->findView(win))
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 			return ivec2(mp) + view->rect.pos();
 #else
 			return mp + view->rect.pos();
@@ -627,7 +641,7 @@ void WindowSys::moveCursor(ivec2 mov) noexcept {
 
 void WindowSys::toggleOpacity() noexcept {
 	for (SDL_Window* it : windows) {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		SDL_SetWindowOpacity(it, SDL_GetWindowOpacity(it) < 1.f ? 1.f : 0.f);
 #else
 		if (float val; !SDL_GetWindowOpacity(it, &val))
@@ -648,7 +662,7 @@ void WindowSys::setScreenMode(Settings::Screen sm) {
 }
 
 ivec2 WindowSys::displayResolution() const noexcept {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	if (!windows.empty())
 		if (const SDL_DisplayMode* mode = SDL_GetDesktopDisplayMode(SDL_GetWindowDisplayIndex(windows[0])))
 			return ivec2(mode->w, mode->h);
@@ -659,7 +673,7 @@ ivec2 WindowSys::displayResolution() const noexcept {
 #endif
 
 	ivec2 res(0);
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	int cnt;
 	if (uptr<SDL_DisplayID[], SdlFreePtr> dids(SDL_GetDisplays(&cnt)); dids)
 		for (int i = 0; i < cnt; ++i)

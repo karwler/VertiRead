@@ -2,7 +2,11 @@
 
 #ifdef WITH_OPENGL
 #include "renderer.h"
+#ifdef WITH_SDL3
+#include <SDL3/SDL_opengl.h>
+#else
 #include <SDL_opengl.h>
+#endif
 #include <glm/mat4x4.hpp>
 
 struct FunctionsGl {
@@ -158,6 +162,7 @@ protected:
 	template <class F> void finalizeConstruction(Settings* sets, Texture*& tooltip, uintptr_t availableMemory, F finGl);
 	static void setSwapInterval(bool vsync) noexcept;
 	void setCompression(Settings* sets) noexcept;
+	bool updateViewCommon(ivec2& viewRes) noexcept;
 	pair<SDL_PixelFormatEnum, uint8> prepareImageFormat(SDL_Surface* img) const noexcept override;
 private:
 	GLuint initTexture(GLint filter) noexcept;
@@ -200,7 +205,7 @@ public:
 
 	void setColors(array<vec4, Settings::defaultColors.size()>& colors) override;
 	bool setSettings(Settings* sets) override;
-	void updateView(ivec2& viewRes) override;
+	bool updateView(ivec2& viewRes) override;
 	Info getInfo() const noexcept override;
 
 	Action startDraw(View* view) noexcept override;
@@ -252,7 +257,7 @@ public:
 	void setColors(array<vec4, Settings::defaultColors.size()>& colors) override;
 	bool setSettings(Settings* sets) override;
 	void setGammaValue(int gamma) override;
-	void updateView(ivec2& viewRes) override;
+	bool updateView(ivec2& viewRes) override;
 	Info getInfo() const noexcept override;
 
 	Action startDraw(View* view) noexcept override;

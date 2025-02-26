@@ -2,7 +2,11 @@
 
 #include "utils/settings.h"
 #include "utils/stvector.h"
+#ifdef WITH_SDL3
+#include <SDL3/SDL_render.h>
+#else
 #include <SDL_render.h>
+#endif
 #include <set>
 
 struct Pixmap {
@@ -96,7 +100,7 @@ public:
 	virtual void setColors(array<vec4, Settings::defaultColors.size()>& colors) = 0;
 	virtual bool setSettings(Settings* sets) = 0;	// returns whether the color palette needs to be reloaded
 	virtual void setGammaValue(int) {}
-	virtual void updateView(ivec2& viewRes) = 0;
+	virtual bool updateView(ivec2& viewRes) = 0;	// returns whether a resize happened
 	virtual Info getInfo() const noexcept = 0;
 	virtual Action startDraw(View* view) noexcept = 0;
 	virtual void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, Color color) noexcept = 0;
@@ -113,7 +117,7 @@ public:
 	View* findView(SDL_Window* win) noexcept;
 	View* findView(ivec2 point) noexcept;
 	void setMaxPicRes(uint& size) noexcept;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	static void copyPalette(SDL_Surface* dst, SDL_Surface* src) noexcept;	// SDL3 can't blit indexed surfaces anymore without manually setting the palette first (dst and src should both be indexed)
 #endif
 
@@ -150,7 +154,7 @@ private:
 	};
 
 	ViewSf* curView;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	array<vec4, Settings::defaultColors.size() - 1> rectColors;
 #else
 	array<u8vec4, Settings::defaultColors.size() - 1> rectColors;
@@ -165,7 +169,7 @@ public:
 
 	void setColors(array<vec4, Settings::defaultColors.size()>& colors) override;
 	bool setSettings(Settings* sets) override;
-	void updateView(ivec2& viewRes) override;
+	bool updateView(ivec2& viewRes) override;
 	Info getInfo() const noexcept override;
 
 	Action startDraw(View* view) noexcept override;
@@ -183,7 +187,7 @@ protected:
 
 private:
 	void cleanup() noexcept;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	void createRenderer(ViewSf* view, SDL_PropertiesID props);
 #else
 	void createRenderer(ViewSf* view, SDL_RendererFlags flags);
@@ -194,7 +198,7 @@ private:
 	pair<SDL_Texture*, uvec2> createTextureText(const Pixmap& pm) noexcept;
 	pair<SDL_PixelFormatEnum, uint8> pickImageFormat(std::initializer_list<SDL_PixelFormatEnum> fmtv, SDL_PixelFormatEnum orig) const noexcept;
 	bool canTexturesB16() const noexcept;
-#if !SDL_VERSION_ATLEAST(3, 2, 0)
+#ifndef WITH_SDL3
 	static u8vec4 colorToBytes(const vec4& color) noexcept;
 #endif
 };
@@ -203,7 +207,7 @@ inline bool RendererSf::canTexturesB16() const noexcept {
 	return rng::any_of(textureFormats, [](SDL_PixelFormatEnum it) -> bool { return it == SDL_PIXELFORMAT_BGR565 || it == SDL_PIXELFORMAT_RGB565 || it == SDL_PIXELFORMAT_ABGR1555 || it == SDL_PIXELFORMAT_ARGB1555 || it == SDL_PIXELFORMAT_BGRA5551 || it == SDL_PIXELFORMAT_RGBA5551 || it == SDL_PIXELFORMAT_XBGR1555 || it == SDL_PIXELFORMAT_XRGB1555; });
 }
 
-#if !SDL_VERSION_ATLEAST(3, 2, 0)
+#ifndef WITH_SDL3
 inline u8vec4 RendererSf::colorToBytes(const vec4& color) noexcept {
 	return glm::round(color * 255.f);
 }

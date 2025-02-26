@@ -219,7 +219,7 @@ Cstring FileOpsSftp::lastError() const {
 SDL_RWops* FileOpsSftp::makeRWops(const string& path) noexcept {
 	std::lock_guard lockg(mlock);
 	if (LIBSSH2_SFTP_HANDLE* fh = sftpOpenEx(sftp, path.data(), path.length(), LIBSSH2_FXF_READ, 0, LIBSSH2_SFTP_OPENFILE)) {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		SDL_IOStreamInterface iface = {
 			.version = sizeof(iface),
 			.size = sdlSize,
@@ -250,7 +250,7 @@ SDL_RWops* FileOpsSftp::makeRWops(const string& path) noexcept {
 	return nullptr;
 }
 
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 Sint64 SDLCALL FileOpsSftp::sdlSize(void* userdata) noexcept {
 	auto [self, fh] = *static_cast<pair<FileOpsSftp*, LIBSSH2_SFTP_HANDLE*>*>(userdata);
 	std::lock_guard lockg(self->mlock);

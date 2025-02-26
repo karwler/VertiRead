@@ -702,7 +702,7 @@ SDL_Surface* Browser::combineIcons(SDL_Surface* dir, SDL_Surface* img) noexcept 
 	ivec2 size = img->h - asiz.y >= img->w - asiz.x ? ivec2(float(img->w * asiz.y) / float(img->h), asiz.y) : ivec2(asiz.x, float(img->h * asiz.x) / float(img->w));
 	SDL_Surface* dst = SDL_CreateSurface(dir->w, dir->h, surfaceFormat(dir));
 	if (dst) {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		Renderer::copyPalette(dst, img);
 #endif
 		SDL_Rect rect = { dir->w - size.x, dir->h - size.y, size.x, size.y };
@@ -721,7 +721,7 @@ SDL_Surface* Browser::combineIcons(SDL_Surface* dir, SDL_Surface* img) noexcept 
 SDL_Surface* Browser::scaleDown(SDL_Surface* img, int maxHeight) noexcept {
 	if (img && img->h > maxHeight)
 		if (SDL_Surface* dst = SDL_CreateSurface(float(img->w * maxHeight) / float(img->h), maxHeight, surfaceFormat(img))) {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 			Renderer::copyPalette(dst, img);
 #endif
 			if (sdlFailed(surfaceScaleNearest(img, nullptr, dst, nullptr))) {

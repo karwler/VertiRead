@@ -198,7 +198,7 @@ bool FileOpsSmb::hasModeFlags(const char* path, mode_t mdes) noexcept {
 SDL_RWops* FileOpsSmb::makeRWops(const string& path) noexcept {
 	std::lock_guard lockg(mlock);
 	if (SMBCFILE* fh = sopen(ctx, path.data(), O_RDONLY, 0)) {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		SDL_IOStreamInterface iface = {
 			.version = sizeof(iface),
 			.size = sdlSize,
@@ -229,7 +229,7 @@ SDL_RWops* FileOpsSmb::makeRWops(const string& path) noexcept {
 	return nullptr;
 }
 
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 Sint64 SDLCALL FileOpsSmb::sdlSize(void* userdata) noexcept {
 	auto [self, fh] = *static_cast<pair<FileOpsSmb*, SMBCFILE*>*>(userdata);
 	std::lock_guard lockg(self->mlock);

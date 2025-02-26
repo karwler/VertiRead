@@ -393,7 +393,7 @@ string FileOpsFtp::replyError(string_view msg, const FtpReply& reply) {
 }
 
 SDL_RWops* FileOpsFtp::makeRWops(const string& path) noexcept {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	SDL_IOStreamInterface iface = {
 		.version = sizeof(iface),
 		.size = sdlSize,
@@ -422,7 +422,7 @@ SDL_RWops* FileOpsFtp::makeRWops(const string& path) noexcept {
 	return nullptr;
 }
 
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 Sint64 SDLCALL FileOpsFtp::sdlSize(void* userdata) noexcept {
 	FileCache& fc = static_cast<pair<FileOpsFtp*, FileCache>*>(userdata)->second;
 	return fc.done ? fc.data.size() : -1;

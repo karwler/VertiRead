@@ -8,7 +8,11 @@
 #include <netdb.h>
 #include <netinet/tcp.h>
 #endif
+#ifdef WITH_SDL3
+#include <SDL3/SDL_log.h>
+#else
 #include <SDL_log.h>
+#endif
 
 #ifndef _WIN32
 #define closesocket(s) close(s)

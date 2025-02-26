@@ -1,7 +1,11 @@
 #pragma once
 
 #include "utils/utils.h"
+#ifdef WITH_SDL3
+#include <SDL3/SDL_video.h>
+#else
 #include <SDL_video.h>
+#endif
 #include <glm/geometric.hpp>
 
 // saves what widget is being clicked on with what button at what position
@@ -18,7 +22,7 @@ class Scene {
 private:
 	Widget* select = nullptr;	// currently selected widget
 	Widget* capture = nullptr;	// either pointer to widget currently hogging all keyboard input or ScrollArea which's slider is currently being dragged. nullptr if nothing is being captured or dragged
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	SDL_Window* captureWindow;	// window associated with currently captured widget
 #endif
 	RootLayout* layout = nullptr;
@@ -48,7 +52,7 @@ public:
 
 	Widget* getSelect() const noexcept { return select; }
 	Widget* getCapture() const noexcept { return capture; }
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	SDL_Window* getCaptureWindow() const noexcept { return captureWindow; }
 #endif
 	void setCapture(Widget* inter) noexcept;

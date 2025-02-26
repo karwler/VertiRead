@@ -3,14 +3,18 @@
 #include "prog/types.h"
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#ifdef WITH_SDL3
+#include <SDL3/SDL_filesystem.h>
+#else
 #include <SDL_filesystem.h>
+#endif
 #ifndef _WIN32
 #include <fcntl.h>
 #include <sys/stat.h>
 #endif
 #include <filesystem>
 #include <map>
-#if !SDL_VERSION_ATLEAST(3, 2, 0)
+#ifndef WITH_SDL3
 #include <mutex>
 #endif
 #include <regex>
@@ -27,7 +31,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-#if !SDL_VERSION_ATLEAST(3, 2, 0)
+#ifndef WITH_SDL3
 std::mutex logLock;
 #endif
 
@@ -303,7 +307,7 @@ FileSys::MoveContentData::MoveContentData(string&& sdir, string&& ddir) noexcept
 FileSys::FileSys() {
 	// set up file/directory path constants
 	string dirBase;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	if (const char* path = SDL_GetBasePath())
 #ifdef _WIN32
 		dirBase = path;
@@ -456,7 +460,7 @@ void FileSys::saveLastPage(const stvector<string, Settings::maxPageElements>& pa
 uptr<Settings> FileSys::loadSettings() const {
 	std::map<string_view, void (*)(const FileSys*, Settings*, string_view), QasciiViewCiLess> assignPrpVal = {
 		{ iniKeywordCompression, [](const FileSys*, Settings* s, string_view v) { s->compression = strToEnum(Settings::compressionNames, trim(v), Settings::defaultCompression); } },
-		{ iniKeywordDeadzone, [](const FileSys*, Settings* s, string_view v) { s->setDeadzone(toNum<uint>(v)); } },
+		{ iniKeywordDeadzone, [](const FileSys*, Settings* s, string_view v) { s->setDeadzone(toNum<uint16>(v)); } },
 		{ iniKeywordDevice, [](const FileSys*, Settings* s, string_view v) { s->device = toVec<u32vec2>(v, 0, 0x10); } },
 		{ iniKeywordDirection, [](const FileSys*, Settings* s, string_view v) { s->direction = strToEnum(Direction::names, trim(v), Settings::defaultDirection); } },
 		{ iniKeywordFont, [](const FileSys* f, Settings* s, string_view v) { s->font = isFont(f->findFont(string(v)).data()) ? v : Settings::defaultFont; } },	// will get sanitized in DrawSys if necessary
@@ -548,7 +552,7 @@ array<Binding, Binding::names.size()> FileSys::loadBindings() const {
 
 		switch (toupper(bdsc[0])) {
 		case 'K':	// keyboard key
-			bindings[bid].setKey(SDL_GetScancodeFromName(string(bdsc).data() + 2));
+			bindings[bid].setKey(SDL_GetKeyFromName(string(bdsc).data() + 2));
 			break;
 		case 'B':	// joystick button
 			bindings[bid].setJbutton(toNum<uint8>(bdsc.substr(2)));
@@ -580,7 +584,7 @@ void FileSys::saveBindings(const array<Binding, Binding::names.size()>& bindings
 	if (uptr<SDL_RWops> ofh(SDL_RWFromFile(file.data(), "wb")); ofh) {
 		for (size_t i = 0; i < bindings.size(); ++i) {
 			if (bindings[i].keyAssigned())
-				IniLine::writeVal(ofh.get(), Binding::names[i], fmt::format("K_{}", SDL_GetScancodeName(bindings[i].getKey())));
+				IniLine::writeVal(ofh.get(), Binding::names[i], fmt::format("K_{}", SDL_GetKeyName(bindings[i].getKey())));
 
 			if (bindings[i].jbuttonAssigned())
 				IniLine::writeVal(ofh.get(), Binding::names[i], fmt::format("B_{}", uint(bindings[i].getJctID())));
@@ -1006,7 +1010,7 @@ void SDLCALL FileSys::logWrite(void* userdata, int, SDL_LogPriority priority, co
 	}
 	tm tim = currentDateTime();
 	string line = fmt::format("{:02}:{:02}:{:02} {}: {}" LINEND, tim.tm_hour, tim.tm_min, tim.tm_sec, sprio, message);
-#if !SDL_VERSION_ATLEAST(3, 2, 0)
+#ifndef WITH_SDL3
 	std::lock_guard lockg(logLock);
 #endif
 	SDL_RWwrite(fh, line.data(), sizeof(char), line.length());

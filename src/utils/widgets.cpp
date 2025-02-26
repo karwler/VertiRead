@@ -6,7 +6,11 @@
 #include "engine/world.h"
 #include "prog/program.h"
 #include "prog/progs.h"
+#ifdef WITH_SDL3
+#include <SDL3/SDL_clipboard.h>
+#else
 #include <SDL_clipboard.h>
+#endif
 #include <cfloat>
 
 template <Class T>
@@ -413,37 +417,37 @@ void Slider::onUndrag(ivec2, uint8 mBut) {
 	}
 }
 
-void Slider::onKeypress(SDL_Scancode key, SDL_Keymod) {
+void Slider::onKeypress(SDL_Keycode key, SDL_Keymod) {
 	switch (key) {
-	case SDL_SCANCODE_RIGHT:
+	case SDLK_RIGHT:
 		if (val < vmax) {
 			setVal(val + 1);
 			if (actions & ACT_LEFT)
 				pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
 		}
 		break;
-	case SDL_SCANCODE_LEFT:
+	case SDLK_LEFT:
 		if (val > vmin) {
 			setVal(val - 1);
 			if (actions & ACT_LEFT)
 				pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
 		}
 		break;
-	case SDL_SCANCODE_DOWN: case SDL_SCANCODE_END:
+	case SDLK_DOWN: case SDLK_END:
 		if (val != vmax) {
 			val = vmax;
 			if (actions & ACT_LEFT)
 				pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
 		}
 		break;
-	case SDL_SCANCODE_UP: case SDL_SCANCODE_HOME:
+	case SDLK_UP: case SDLK_HOME:
 		if (val != vmin) {
 			val = vmin;
 			if (actions & ACT_LEFT)
 				pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_LEFT)));
 		}
 		break;
-	case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER: case SDL_SCANCODE_ESCAPE:
+	case SDLK_RETURN: case SDLK_KP_ENTER: case SDLK_ESCAPE:
 		onUndrag(ivec2(), SDL_BUTTON_LEFT);
 	}
 }
@@ -655,7 +659,7 @@ void LabelEdit::postInit() {
 void LabelEdit::onClick(ivec2, uint8 mBut) {
 	if (mBut == SDL_BUTTON_LEFT) {
 		World::scene()->setCapture(this);
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		SDL_StartTextInput(World::scene()->getCaptureWindow());
 #else
 		Recti rct = rect();
@@ -667,9 +671,9 @@ void LabelEdit::onClick(ivec2, uint8 mBut) {
 		pushEvent(EventId(etype, ecode), this, std::bit_cast<void*>(uintptr_t(ACT_RIGHT)));
 }
 
-void LabelEdit::onKeypress(SDL_Scancode key, SDL_Keymod mod) {
+void LabelEdit::onKeypress(SDL_Keycode key, SDL_Keymod mod) {
 	switch (key) {
-	case SDL_SCANCODE_LEFT:	// move caret left
+	case SDLK_LEFT:	// move caret left
 		if (kmodAlt(mod))	// if holding alt skip word
 			setCPos(findWordStart());
 		else if (kmodCtrl(mod))	// if holding ctrl move to beginning
@@ -677,7 +681,7 @@ void LabelEdit::onKeypress(SDL_Scancode key, SDL_Keymod mod) {
 		else if (cpos > 0)	// otherwise go left by one
 			setCPos(jumpCharB(cpos));
 		break;
-	case SDL_SCANCODE_RIGHT:	// move caret right
+	case SDLK_RIGHT:	// move caret right
 		if (kmodAlt(mod))	// if holding alt skip word
 			setCPos(findWordEnd());
 		else if (kmodCtrl(mod))	// if holding ctrl go to end
@@ -685,7 +689,7 @@ void LabelEdit::onKeypress(SDL_Scancode key, SDL_Keymod mod) {
 		else if (cpos < text.length())	// otherwise go right by one
 			setCPos(jumpCharF(cpos));
 		break;
-	case SDL_SCANCODE_BACKSPACE:	// delete left
+	case SDLK_BACKSPACE:	// delete left
 		if (kmodAlt(mod)) {	// if holding alt delete left word
 			uint id = findWordStart();
 			text.erase(id, cpos - id);
@@ -702,7 +706,7 @@ void LabelEdit::onKeypress(SDL_Scancode key, SDL_Keymod mod) {
 			setCPos(id);
 		}
 		break;
-	case SDL_SCANCODE_DELETE:	// delete right character
+	case SDLK_DELETE:	// delete right character
 		if (kmodAlt(mod)) {	// if holding alt delete right word
 			text.erase(cpos, findWordEnd() - cpos);
 			updateTextTex();
@@ -714,37 +718,37 @@ void LabelEdit::onKeypress(SDL_Scancode key, SDL_Keymod mod) {
 			updateTextTex();
 		}
 		break;
-	case SDL_SCANCODE_HOME:	// move caret to beginning
+	case SDLK_HOME:	// move caret to beginning
 		setCPos(0);
 		break;
-	case SDL_SCANCODE_END:	// move caret to end
+	case SDLK_END:	// move caret to end
 		setCPos(text.length());
 		break;
-	case SDL_SCANCODE_V:	// paste text
+	case SDLK_v:	// paste text
 		if (kmodCtrl(mod))
 			if (uptr<char[], SdlFreePtr> ctxt(SDL_GetClipboardText()); ctxt) {
 				uint garbagio = 0;
 				onText(ctxt.get(), garbagio);
 			}
 		break;
-	case SDL_SCANCODE_C:	// copy text
+	case SDLK_c:	// copy text
 		if (kmodCtrl(mod))
 			SDL_SetClipboardText(text.data());
 		break;
-	case SDL_SCANCODE_X:	// cut text
+	case SDLK_x:	// cut text
 		if (kmodCtrl(mod)) {
 			SDL_SetClipboardText(text.data());
 			setText(string());
 		}
 		break;
-	case SDL_SCANCODE_Z:	// set text to old text
+	case SDLK_z:	// set text to old text
 		if (kmodCtrl(mod))
 			setText(std::move(oldText));
 		break;
-	case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER:
+	case SDLK_RETURN: case SDLK_KP_ENTER:
 		confirm();
 		break;
-	case SDL_SCANCODE_ESCAPE:
+	case SDLK_ESCAPE:
 		cancel();
 	}
 }
@@ -798,7 +802,7 @@ Recti LabelEdit::textRect() const noexcept {
 
 void LabelEdit::setCPos(uint cp) noexcept {
 	cpos = cp;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	int cl = caretPos();
 	if (cl < 0) {
 		textOfs -= cl;
@@ -829,7 +833,7 @@ int LabelEdit::caretPos() const noexcept {
 
 void LabelEdit::confirm() noexcept {
 	textOfs = 0;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	SDL_StopTextInput(World::scene()->getCaptureWindow());
 #else
 	SDL_StopTextInput();
@@ -844,7 +848,7 @@ void LabelEdit::cancel() noexcept {
 	text = oldText;
 	updateTextTex();
 
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 	SDL_StopTextInput(World::scene()->getCaptureWindow());
 #else
 	SDL_StopTextInput();
@@ -913,7 +917,7 @@ void LabelEdit::cleanText() {
 
 // KEY GETTER
 
-KeyGetter::KeyGetter(const Size& size, AcceptType type, Binding::Type binding, Cstring&& tip) noexcept :
+KeyGetter::KeyGetter(const Size& size, Binding::Device type, Binding::Type binding, Cstring&& tip) noexcept :
 	PushButton(size, bindingText(binding, type), nullEvent, ACT_NONE, std::move(tip), Alignment::center),
 	acceptType(type),
 	bindingType(binding)
@@ -929,16 +933,16 @@ void KeyGetter::onClick(ivec2, uint8 mBut) {
 	}
 }
 
-void KeyGetter::onKeypress(SDL_Scancode key, SDL_Keymod) {
-	if (acceptType == AcceptType::keyboard) {
+void KeyGetter::onKeypress(SDL_Keycode key, SDL_Keymod) {
+	if (acceptType == Binding::Device::keyboard) {
 		World::inputSys()->getBinding(bindingType).setKey(key);
-		setText(SDL_GetScancodeName(key));
+		setText(SDL_GetKeyName(key));
 	}
 	World::scene()->setCapture(nullptr);
 }
 
 void KeyGetter::onJButton(uint8 jbutton) {
-	if (acceptType == AcceptType::joystick) {
+	if (acceptType == Binding::Device::joystick) {
 		World::inputSys()->getBinding(bindingType).setJbutton(jbutton);
 		setText(fmt::format(fmtButton, jbutton));
 	}
@@ -946,7 +950,7 @@ void KeyGetter::onJButton(uint8 jbutton) {
 }
 
 void KeyGetter::onJHat(uint8 jhat, uint8 value) {
-	if (acceptType == AcceptType::joystick) {
+	if (acceptType == Binding::Device::joystick) {
 		if (value != SDL_HAT_UP && value != SDL_HAT_RIGHT && value != SDL_HAT_DOWN && value != SDL_HAT_LEFT) {
 			if (value & SDL_HAT_RIGHT)
 				value = SDL_HAT_RIGHT;
@@ -960,7 +964,7 @@ void KeyGetter::onJHat(uint8 jhat, uint8 value) {
 }
 
 void KeyGetter::onJAxis(uint8 jaxis, bool positive) {
-	if (acceptType == AcceptType::joystick) {
+	if (acceptType == Binding::Device::joystick) {
 		World::inputSys()->getBinding(bindingType).setJaxis(jaxis, positive);
 		setText(fmt::format(fmtAxis, positive ? prefAxisPos : prefAxisNeg, jaxis));
 	}
@@ -968,7 +972,7 @@ void KeyGetter::onJAxis(uint8 jaxis, bool positive) {
 }
 
 void KeyGetter::onGButton(SDL_GameControllerButton gbutton) {
-	if (acceptType == AcceptType::gamepad) {
+	if (acceptType == Binding::Device::gamepad) {
 		World::inputSys()->getBinding(bindingType).setGbutton(gbutton);
 		setText(Binding::gbuttonNames[eint(gbutton)]);
 	}
@@ -976,7 +980,7 @@ void KeyGetter::onGButton(SDL_GameControllerButton gbutton) {
 }
 
 void KeyGetter::onGAxis(SDL_GameControllerAxis gaxis, bool positive) {
-	if (acceptType == AcceptType::gamepad) {
+	if (acceptType == Binding::Device::gamepad) {
 		World::inputSys()->getBinding(bindingType).setGaxis(gaxis, positive);
 		setText(fmt::format("{}{}", positive ? prefAxisPos : prefAxisNeg, Binding::gaxisNames[eint(gaxis)]));
 	}
@@ -989,7 +993,7 @@ bool KeyGetter::navSelectable() const noexcept {
 
 void KeyGetter::clearBinding() {
 	switch (acceptType) {
-	using enum AcceptType;
+	using enum Binding::Device;
 	case keyboard:
 		World::inputSys()->getBinding(bindingType).clearAsgKey();
 		break;
@@ -1002,12 +1006,12 @@ void KeyGetter::clearBinding() {
 	setText(string());
 }
 
-string KeyGetter::bindingText(Binding::Type binding, KeyGetter::AcceptType accept) {
+string KeyGetter::bindingText(Binding::Type binding, Binding::Device accept) {
 	switch (const Binding& bind = World::inputSys()->getBinding(binding); accept) {
-	using enum AcceptType;
+	using enum Binding::Device;
 	case keyboard:
 		if (bind.keyAssigned())
-			return SDL_GetScancodeName(bind.getKey());
+			return SDL_GetKeyName(bind.getKey());
 		break;
 	case joystick:
 		if (bind.jbuttonAssigned())

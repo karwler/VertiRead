@@ -630,7 +630,7 @@ void ReaderBox::tick(float dSec) noexcept {
 	if (countDown) {
 		cursorTimer -= dSec;
 		if (cursorTimer <= 0.f) {
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 			SDL_HideCursor();
 #else
 			SDL_ShowCursor(SDL_DISABLE);
@@ -668,7 +668,7 @@ void ReaderBox::onMouseMove(ivec2 mPos, ivec2 mMov) {
 	countDown = World::scene()->getSelectedScrollArea() == this && !showBar() && World::scene()->getCapture() != this && cursorTimer > 0.f;
 	if (cursorTimer < menuHideTimeout) {
 		cursorTimer = menuHideTimeout;
-#if SDL_VERSION_ATLEAST(3, 2, 0)
+#ifdef WITH_SDL3
 		SDL_ShowCursor();
 #else
 		SDL_ShowCursor(SDL_ENABLE);
