@@ -322,21 +322,21 @@ void WindowSys::createMultiWindow(SDL_Surface* icon) {
 #endif
 	for (size_t i = 0; i < windows.size(); ++i) {
 #ifdef WITH_SDL3
-		string name = fmt::format("{} {}", title, i);
+		string name = i ? fmt::format("{} {}", title, i) : title;
 		SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, name.data());
 		SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER, SDL_WINDOWPOS_CENTERED_DISPLAY(sets->displays[i].did));
 		SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_Y_NUMBER, SDL_WINDOWPOS_CENTERED_DISPLAY(sets->displays[i].did));
 		SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, sets->displays[i].rect.w);
 		SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, sets->displays[i].rect.h);
-		SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_UTILITY_BOOLEAN, i);
-		windows[i] = SDL_CreateWindowWithProperties(props);
+		if (windows[i] = SDL_CreateWindowWithProperties(props); !windows[i])
+			throw std::runtime_error(SDL_GetError());
+		if (!i)
+			SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_PARENT_POINTER, windows[0]);
 #else
-		windows[i] = SDL_CreateWindow(fmt::format("{} {}", title, i).data(), SDL_WINDOWPOS_CENTERED_DISPLAY(sets->displays[i].did), SDL_WINDOWPOS_CENTERED_DISPLAY(sets->displays[i].did), sets->displays[i].rect.w, sets->displays[i].rect.h, flags);
+		if (windows[i] = SDL_CreateWindow(i ? fmt::format("{} {}", title, i).data() : title, SDL_WINDOWPOS_CENTERED_DISPLAY(sets->displays[i].did), SDL_WINDOWPOS_CENTERED_DISPLAY(sets->displays[i].did), sets->displays[i].rect.w, sets->displays[i].rect.h, flags); !windows[i])
+			throw std::runtime_error(SDL_GetError());
 		flags |= SDL_WINDOW_SKIP_TASKBAR;
 #endif
-		if (!windows[i])
-			throw std::runtime_error(SDL_GetError());
-
 		SDL_SetWindowIcon(windows[i], icon);
 		vofs[i] = sets->displays[i].rect.pos();
 		vofs[windows.size()] = glm::min(vofs[windows.size()], vofs[i]);
@@ -347,9 +347,16 @@ void WindowSys::createMultiWindow(SDL_Surface* icon) {
 void WindowSys::destroyWindows() noexcept {
 	delete drawSys;
 	drawSys = nullptr;
+#ifdef WITH_SDL3
+	if (!windows.empty()) {
+		SDL_DestroyWindow(windows[0]);
+		windows.clear();
+	}
+#else
 	for (SDL_Window* it : windows)
 		SDL_DestroyWindow(it);
 	windows.clear();
+#endif
 
 	switch (sets->renderer) {
 	using enum Settings::Renderer;
@@ -571,23 +578,21 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 	case SDL_WINDOWEVENT_LEAVE:
 		scene->onMouseLeave();
 		break;
-	case SDL_WINDOWEVENT_FOCUS_GAINED:	// TODO: maybe just set modal windows?
+#ifndef WITH_SDL3
+	case SDL_WINDOWEVENT_FOCUS_GAINED:
 		if (sets->screen == Settings::Screen::multiFullscreen && !active) {
 			for (SDL_Window* it : windows)
 				if (SDL_WindowID wid = SDL_GetWindowID(it); wid != winEvent.windowID)
 					SDL_RaiseWindow(it);	// TODO: what does SDL_RestoreWindow do on fullscreen?
-#ifdef WITH_SDL3
-			SDL_FlushEvents(SDL_EVENT_WINDOW_FOCUS_GAINED, SDL_EVENT_WINDOW_FOCUS_LOST);
-#else
 			SDL_FlushEvent(SDL_WINDOWEVENT);
-#endif
 			active = true;
 		}
 		break;
-	case SDL_WINDOWEVENT_FOCUS_LOST:	// TODO: maybe just set modal windows?
+	case SDL_WINDOWEVENT_FOCUS_LOST:
 		if (sets->screen == Settings::Screen::multiFullscreen && rng::none_of(windows, [](SDL_Window* it) -> bool { return SDL_GetWindowFlags(it) & SDL_WINDOW_INPUT_FOCUS; }))
 			active = false;
 		break;
+#endif
 #if SDL_VERSION_ATLEAST(2, 0, 18)
 	case SDL_WINDOWEVENT_DISPLAY_CHANGED:
 #ifdef WITH_SDL3

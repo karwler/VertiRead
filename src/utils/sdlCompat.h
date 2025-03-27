@@ -49,6 +49,7 @@
 #define SDL_DisplayID int
 #define SDL_IOWhence int
 #define SDL_MapSurfaceRGBA(s, r, g, b, a) SDL_MapRGBA((s)->format, r, g, b, a)
+#define SDL_WindowID uint32
 
 #define mpvec2 ivec2
 #define keyFromScancode(k) SDL_GetKeyFromScancode(k)
