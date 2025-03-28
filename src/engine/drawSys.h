@@ -127,7 +127,7 @@ private:
 	Renderer::Action drawState = Renderer::Action::yes;
 
 public:
-	DrawSys(const vector<SDL_Window*>& windows, const ivec2* vofs = nullptr);
+	DrawSys(const vector<SDL_Window*>& windows, const array<vec4, Settings::defaultColors.size()>& colors, const ivec2* vofs = nullptr);
 	~DrawSys() { cleanup(); }
 
 	Renderer* getRenderer() noexcept { return renderer; }
@@ -135,7 +135,6 @@ public:
 	bool updateView();	// returns whether a resize happened
 	float getWinDpi() const noexcept { return winDpi; }
 	bool updateDpi();
-	void setTheme(string_view name);
 	void setFont(const string& font);
 	void setMonoFont(bool on) noexcept;
 	static SDL_Surface* loadIcon(const char* path, int size) noexcept;

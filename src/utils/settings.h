@@ -546,6 +546,7 @@ public:
 	static Renderer getRenderer(string_view name);
 	void setRenderer() noexcept;
 	void setGamma(string_view str) noexcept;
+	bool needsTransparentWindow(const array<vec4, defaultColors.size()>& colors) const noexcept;
 	string scrollSpeedString() const noexcept { return toStr(scrollSpeed); }
 	uint16 getDeadzone() const noexcept { return deadzone; }
 	void setDeadzone(uint16 val) noexcept;
@@ -562,6 +563,16 @@ inline const string& Settings::setTheme(string_view name, vector<string>&& theme
 
 inline double Settings::zoomValue(int step) noexcept {
 	return std::pow(zoomBase, step);
+}
+
+inline bool Settings::needsTransparentWindow(const array<vec4, defaultColors.size()>& colors) const noexcept {
+#ifndef WITH_SDL3
+	return false;
+#elif defined(WITH_DIRECT3D)
+	return colors[eint(Color::background)].a < 1.f && renderer != Renderer::direct3d11;
+#else
+	return colors[eint(Color::background)].a < 1.f;
+#endif
 }
 
 inline void Settings::setDeadzone(uint16 val) noexcept {

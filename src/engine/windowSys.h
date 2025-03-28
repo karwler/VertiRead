@@ -36,6 +36,8 @@ public:
 	ivec2 mousePos() const noexcept;
 	ivec2 winViewOffset(uint32 wid) const noexcept;
 	ivec2 displayResolution() const noexcept;
+	bool hasTransparentWindow() const noexcept;
+	array<vec4, Settings::defaultColors.size()> loadColors(string_view name);
 	void moveCursor(ivec2 mov) noexcept;
 	void toggleOpacity() noexcept;
 	void setScreenMode(Settings::Screen sm);
@@ -52,12 +54,12 @@ public:
 private:
 	void createWindow();
 #ifdef WITH_SDL3
-	SDL_PropertiesID initWindow(size_t numWindows);
+	SDL_PropertiesID initWindow(size_t numWindows, const array<vec4, Settings::defaultColors.size()>& colors);
 #else
 	uint32 initWindow(size_t numWindows);
 #endif
-	void createSingleWindow(SDL_Surface* icon);
-	void createMultiWindow(SDL_Surface* icon);
+	void createSingleWindow(SDL_Surface* icon, const array<vec4, Settings::defaultColors.size()>& colors);
+	void createMultiWindow(SDL_Surface* icon, const array<vec4, Settings::defaultColors.size()>& colors);
 	void destroyWindows() noexcept;
 	void handleEvent(const SDL_Event& event);	// pass events to their specific handlers
 	void eventWindow(const SDL_WindowEvent& winEvent);
@@ -66,4 +68,12 @@ private:
 
 inline void WindowSys::close() noexcept {
 	run = false;
+}
+
+inline bool WindowSys::hasTransparentWindow() const noexcept {
+#ifdef WITH_SDL3
+	return SDL_GetWindowFlags(windows[0]) & SDL_WINDOW_TRANSPARENT;
+#else
+	return false;
+#endif
 }

@@ -69,6 +69,7 @@ void WindowSys::createWindow() {
 		sets->screen = Settings::Screen::fullscreen;
 
 	uptr<SDL_Surface> icon(IMG_Load((fileSys->dirIcons() / DrawSys::iconName(DrawSys::Tex::vertiread)).data()));
+	array<vec4, Settings::defaultColors.size()> colors = loadColors(sets->getTheme());
 	stvector<Settings::Renderer, Settings::rendererNames.size()> renderers;
 	switch (sets->renderer) {
 	using enum Settings::Renderer;
@@ -179,9 +180,9 @@ void WindowSys::createWindow() {
 		try {
 			sets->renderer = rnd;
 			if (sets->screen != Settings::Screen::multiFullscreen)
-				createSingleWindow(icon.get());
+				createSingleWindow(icon.get(), colors);
 			else
-				createMultiWindow(icon.get());
+				createMultiWindow(icon.get(), colors);
 			break;
 		} catch (const std::runtime_error& err) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
@@ -194,7 +195,7 @@ void WindowSys::createWindow() {
 }
 
 #ifdef WITH_SDL3
-SDL_PropertiesID WindowSys::initWindow(size_t numWindows) {
+SDL_PropertiesID WindowSys::initWindow(size_t numWindows, const array<vec4, Settings::defaultColors.size()>& colors) {
 	const char* graphicsProp = nullptr;
 #else
 uint32 WindowSys::initWindow(size_t numWindows) {
@@ -275,6 +276,7 @@ uint32 WindowSys::initWindow(size_t numWindows) {
 	SDL_SetBooleanProperty(windowProps, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, sets->screen <= Settings::Screen::fullscreen);
 	SDL_SetBooleanProperty(windowProps, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, sets->screen >= Settings::Screen::fullscreen);
 	SDL_SetBooleanProperty(windowProps, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
+	SDL_SetBooleanProperty(windowProps, SDL_PROP_WINDOW_CREATE_TRANSPARENT_BOOLEAN, sets->needsTransparentWindow(colors));
 	return windowProps;
 #else
 	switch (sets->screen) {
@@ -292,10 +294,10 @@ uint32 WindowSys::initWindow(size_t numWindows) {
 #endif
 }
 
-void WindowSys::createSingleWindow(SDL_Surface* icon) {
+void WindowSys::createSingleWindow(SDL_Surface* icon, const array<vec4, Settings::defaultColors.size()>& colors) {
 	sets->resolution = glm::clamp(sets->resolution, windowMinSize, displayResolution());
 #ifdef WITH_SDL3
-	sthandle<SDL_PropertiesID> props = initWindow(1);
+	sthandle<SDL_PropertiesID> props = initWindow(1, colors);
 	SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
 	SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, sets->resolution.x);
 	SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, sets->resolution.y);
@@ -309,14 +311,14 @@ void WindowSys::createSingleWindow(SDL_Surface* icon) {
 #endif
 	SDL_SetWindowIcon(windows[0], icon);
 	SDL_SetWindowMinimumSize(windows[0], windowMinSize.x, windowMinSize.y);
-	drawSys = new DrawSys(windows);
+	drawSys = new DrawSys(windows, colors);
 }
 
-void WindowSys::createMultiWindow(SDL_Surface* icon) {
+void WindowSys::createMultiWindow(SDL_Surface* icon, const array<vec4, Settings::defaultColors.size()>& colors) {
 	uptr<ivec2[]> vofs = std::make_unique_for_overwrite<ivec2[]>(windows.size() + 1);
 	vofs[windows.size()] = ivec2(INT_MAX);
 #ifdef WITH_SDL3
-	sthandle<SDL_PropertiesID> props = initWindow(sets->displays.size());
+	sthandle<SDL_PropertiesID> props = initWindow(sets->displays.size(), colors);
 #else
 	uint32 flags = initWindow(sets->displays.size());
 #endif
@@ -341,7 +343,7 @@ void WindowSys::createMultiWindow(SDL_Surface* icon) {
 		vofs[i] = sets->displays[i].rect.pos();
 		vofs[windows.size()] = glm::min(vofs[windows.size()], vofs[i]);
 	}
-	drawSys = new DrawSys(windows, vofs.get());
+	drawSys = new DrawSys(windows, colors, vofs.get());
 }
 
 void WindowSys::destroyWindows() noexcept {
@@ -690,6 +692,10 @@ ivec2 WindowSys::displayResolution() const noexcept {
 			res = glm::max(res, ivec2(mode.w, mode.h));
 #endif
 	return res;
+}
+
+array<vec4, Settings::defaultColors.size()> WindowSys::loadColors(string_view name) {
+	return fileSys->loadColors(sets->setTheme(name, fileSys->getAvailableThemes()));
 }
 
 void WindowSys::resetSettings() {

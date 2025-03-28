@@ -1234,6 +1234,7 @@ RendererVk::RendererVk(InitParams& initParams, Settings* sets) :
 		gcmdPool = createCommandPool(deviceInfo->gfam);
 		renderPass.init(this);
 		renderPass.createPass(this, surfaceFormats[usesSrgb].format, sets->gammaType);
+		initGlobalData(sets, initParams.colors);
 		for (View* it : views)
 			initView(static_cast<ViewVk*>(it));
 		renderPass.createDescriptorPoolAndSets(this, views);
@@ -1241,7 +1242,6 @@ RendererVk::RendererVk(InitParams& initParams, Settings* sets) :
 		TextureVk* tooltipTex = static_cast<TextureVk*>(initParams.tooltipTexture = new TextureVk(uvec2(0), RenderPass::samplerNearest));
 		std::tie(tooltipTex->pool, tooltipTex->set) = renderPass.getDescriptorSetTex(this);
 
-		initGlobalData(sets, initParams.colors);
 		setCompression(sets);
 		setMaxPicRes(sets->maxPicRes);
 		if (!sets->picLim.size) {
@@ -1488,7 +1488,11 @@ void RendererVk::createSwapchain(ViewVk* view, VkSwapchainKHR oldSwapchain) {
 		.imageArrayLayers = 1,
 		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 		.preTransform = capabilities.currentTransform,
+#ifdef WITH_SDL3
+		.compositeAlpha = bgColor.color.float32[3] >= 1.f || !(capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR) ? VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR : VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+#else
 		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+#endif
 		.presentMode = presentMode,
 		.clipped = VK_TRUE,
 		.oldSwapchain = oldSwapchain

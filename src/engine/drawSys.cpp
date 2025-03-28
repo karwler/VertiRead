@@ -396,13 +396,13 @@ void FontSet::setMode(bool mono) noexcept {
 
 // DRAW SYS
 
-DrawSys::DrawSys(const vector<SDL_Window*>& windows, const ivec2* vofs) {
+DrawSys::DrawSys(const vector<SDL_Window*>& windows, const array<vec4, Settings::defaultColors.size()>& colors, const ivec2* vofs) {
 	Renderer::InitParams initParams = {
 		.windows = windows,
 		.vofs = vofs,
 		.viewRes = viewRes,
 		.tooltipTexture = texes[eint(Tex::tooltip)],
-		.colors = World::fileSys()->loadColors(World::sets()->setTheme(World::sets()->getTheme(), World::fileSys()->getAvailableThemes()))
+		.colors = colors
 	};
 	switch (World::sets()->renderer) {
 	using enum Settings::Renderer;
@@ -515,11 +515,6 @@ float DrawSys::maxDpi() const noexcept {
 			mdpi = vdpi;
 	return mdpi > 0.f ? mdpi : fallbackDpi;
 #endif
-}
-
-void DrawSys::setTheme(string_view name) {
-	array<vec4, Settings::defaultColors.size()> colors = World::fileSys()->loadColors(World::sets()->setTheme(name, World::fileSys()->getAvailableThemes()));
-	renderer->setColors(colors);
 }
 
 void DrawSys::setFont(const string& font) {

@@ -150,7 +150,7 @@ private:
 	void startBrowserPreview();
 	static uint finishComboBox(PushButton* but);
 	template <IntEnum T, size_t N> static pair<T, ComboBox*> finishComboBox(PushButton* but, const array<const char*, N>& names, T defaultValue);
-	void setIncoherenComboBox(ComboBox* cmb, string_view name);
+	void setIncoherentComboBox(ComboBox* cmb, string_view name);
 	template <Derived<ProgState> T, class... A> void setState(A&&... args);
 #ifdef CAN_SECRET
 	bool lazyInitCredentials() noexcept;

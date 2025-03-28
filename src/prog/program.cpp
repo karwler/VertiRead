@@ -834,10 +834,12 @@ void Program::eventSetGammaType(PushButton* but) {
 		if (recreateWindow)
 			World::winSys()->recreateWindows();
 		else {
-			if (World::drawSys()->getRenderer()->setSettings(World::sets()))
-				World::drawSys()->setTheme(World::sets()->getTheme());
+			if (World::drawSys()->getRenderer()->setSettings(World::sets())) {
+				array<vec4, Settings::defaultColors.size()> colors = World::fileSys()->loadColors(World::sets()->getTheme());
+				World::drawSys()->getRenderer()->setColors(colors);
+			}
 			if (World::sets()->gammaType != gamma)
-				setIncoherenComboBox(cmb, Settings::gammaNames[eint(World::sets()->gammaType)]);
+				setIncoherentComboBox(cmb, Settings::gammaNames[eint(World::sets()->gammaType)]);
 			ps->gammaLine->replaceWidget(ps->gammaLine->getWidgets().size() - 1, ps->createGammaEdit());
 		}
 	}
@@ -865,7 +867,7 @@ void Program::eventSetCompression(PushButton* but) {
 		World::sets()->compression = compression;
 		World::drawSys()->getRenderer()->setSettings(World::sets());
 		if (World::sets()->compression != compression)
-			setIncoherenComboBox(cmb, Settings::compressionNames[eint(World::sets()->compression)]);
+			setIncoherentComboBox(cmb, Settings::compressionNames[eint(World::sets()->compression)]);
 	}
 }
 
@@ -884,9 +886,14 @@ void Program::eventSetMultiFullscreen(WindowArranger* wa) {
 
 void Program::eventSetTheme(PushButton* lbl) {
 	ComboBox* cmb = World::scene()->getContext()->owner<ComboBox>();
-	World::drawSys()->setTheme(lbl->getText().data());
-	if (World::sets()->getTheme() != cmb->getText())
+	if (World::sets()->getTheme() != cmb->getText()) {
 		cmb->setText(World::sets()->getTheme());
+		array<vec4, Settings::defaultColors.size()> colors = World::winSys()->loadColors(cmb->getText().data());
+		if (World::sets()->needsTransparentWindow(colors) == World::winSys()->hasTransparentWindow())
+			World::drawSys()->getRenderer()->setColors(colors);
+		else
+			World::winSys()->recreateWindows();
+	}
 	World::scene()->setContext(nullptr);
 }
 
@@ -980,7 +987,7 @@ pair<T, ComboBox*> Program::finishComboBox(PushButton* but, const array<const ch
 	return pair(val, cmb);
 }
 
-void Program::setIncoherenComboBox(ComboBox* cmb, string_view name) {
+void Program::setIncoherentComboBox(ComboBox* cmb, string_view name) {
 	const vector<Cstring>& opts = cmb->getOptions();
 	if (auto oit = rng::find_if(opts, [name](const Cstring& it) -> bool { return strciequal(it.data(), name); }); oit != opts.end())
 		cmb->setCurOpt(oit - opts.begin());
