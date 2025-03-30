@@ -33,9 +33,9 @@ InputSys::InputSys() :
 {
 #ifdef WITH_SDL3
 	int cnt;
-	if (uptr<SDL_JoystickID[], SdlFreePtr> jids(SDL_GetJoysticks(&cnt)); jids)	// TODO: is this necessary or will events be generated
+	if (uptr<SDL_JoystickID[], SdlFreePtr> jids(SDL_GetJoysticks(&cnt)); jids)
 		for (int i = 0; i < cnt; ++i) {
-			if (SDL_IsGameController(jids[i]))
+			if (SDL_IsGamepad(jids[i]))
 				addGamepad(jids[i]);
 			else
 				addJoystick(jids[i]);
@@ -344,11 +344,12 @@ void InputSys::resetBindings() noexcept {
 }
 
 void InputSys::addJoystick(SDL_JoystickID jid) {
-	if (Joystick joy(jid); joy.getCtr())
-		if (auto [it, ok] = joysticks.emplace(jid, joy); !ok) {
-			SDL_JoystickClose(it->second.getCtr());
-			it->second = joy;
-		}
+	if (!SDL_IsGameController(jid))
+		if (Joystick joy(jid); joy.getCtr())
+			if (auto [it, ok] = joysticks.emplace(jid, joy); !ok) {
+				SDL_JoystickClose(it->second.getCtr());
+				it->second = joy;
+			}
 }
 
 void InputSys::addGamepad(SDL_JoystickID jid) {
@@ -360,10 +361,11 @@ void InputSys::addGamepad(SDL_JoystickID jid) {
 }
 
 void InputSys::delJoystick(SDL_JoystickID jid) {
-	if (auto it = joysticks.find(jid); it != joysticks.end()) {
-		SDL_JoystickClose(it->second.getCtr());
-		joysticks.erase(it);
-	}
+	if (!SDL_IsGameController(jid))
+		if (auto it = joysticks.find(jid); it != joysticks.end()) {
+			SDL_JoystickClose(it->second.getCtr());
+			joysticks.erase(it);
+		}
 }
 
 void InputSys::delGamepad(SDL_JoystickID jid) {

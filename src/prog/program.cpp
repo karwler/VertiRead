@@ -200,7 +200,7 @@ void Program::handleProgSettingsEvent(const SDL_UserEvent& event) {
 	switch (ProgSettingsEvent(event.code)) {
 	using enum ProgSettingsEvent;
 	case setDirection:
-		World::sets()->direction = Direction::Dir(finishComboBox(static_cast<PushButton*>(event.data1)));
+		World::sets()->direction = Direction::Dir(finishComboBox(static_cast<PushButton*>(event.data1)).first);
 		break;
 	case setZoomType:
 		eventSetZoomType(static_cast<PushButton*>(event.data1));
@@ -251,7 +251,7 @@ void Program::handleProgSettingsEvent(const SDL_UserEvent& event) {
 		eventSetMultiFullscreen(static_cast<WindowArranger*>(event.data1));
 		break;
 	case setPreview:
-		World::sets()->preview = Settings::Preview(finishComboBox(static_cast<PushButton*>(event.data1)));
+		World::sets()->preview = Settings::Preview(finishComboBox(static_cast<PushButton*>(event.data1)).first);
 		break;
 	case setHide:
 		World::sets()->showHidden = static_cast<CheckBox*>(event.data1)->on;
@@ -793,7 +793,7 @@ void Program::eventFontsFinished(const SDL_UserEvent& event) {
 }
 
 void Program::eventSetZoomType(PushButton* but) {
-	if (auto type = Settings::Zoom(finishComboBox(but)); type != World::sets()->zoomType) {
+	if (auto type = Settings::Zoom(finishComboBox(but).first); type != World::sets()->zoomType) {
 		auto ps = static_cast<ProgSettings*>(state);
 		World::sets()->zoomType = type;
 		ps->zoomLine->replaceWidget(ps->zoomLine->getWidgets().size() - 1, ps->createZoomEdit());
@@ -808,19 +808,19 @@ void Program::eventSetZoom(Slider* sl) {
 }
 
 void Program::eventSetScreenMode(PushButton* but) {
-	if (auto screen = Settings::Screen(finishComboBox(but)); World::sets()->screen != screen)
+	if (auto screen = Settings::Screen(finishComboBox(but).first); World::sets()->screen != screen)
 		World::winSys()->setScreenMode(screen);
 }
 
 void Program::eventSetRenderer(PushButton* but) {
-	if (auto renderer = Settings::Renderer(finishComboBox(but)); World::sets()->renderer != renderer) {
+	if (auto renderer = Settings::Renderer(finishComboBox(but).first); World::sets()->renderer != renderer) {
 		World::sets()->renderer = renderer;
 		World::winSys()->recreateWindows();
 	}
 }
 
 void Program::eventSetDevice(PushButton* but) {
-	if (u32vec2 device = static_cast<ProgSettings*>(state)->getDevice(finishComboBox(but)); World::sets()->device != device) {
+	if (u32vec2 device = static_cast<ProgSettings*>(state)->getDevice(finishComboBox(but).first); World::sets()->device != device) {
 		World::sets()->device = device;
 		World::winSys()->recreateWindows();
 	}
@@ -838,8 +838,7 @@ void Program::eventSetGammaType(PushButton* but) {
 				array<vec4, Settings::defaultColors.size()> colors = World::fileSys()->loadColors(World::sets()->getTheme());
 				World::drawSys()->getRenderer()->setColors(colors);
 			}
-			if (World::sets()->gammaType != gamma)
-				setIncoherentComboBox(cmb, Settings::gammaNames[eint(World::sets()->gammaType)]);
+			setIncoherentComboBox(cmb, Settings::gammaNames[eint(World::sets()->gammaType)]);
 			ps->gammaLine->replaceWidget(ps->gammaLine->getWidgets().size() - 1, ps->createGammaEdit());
 		}
 	}
@@ -866,8 +865,7 @@ void Program::eventSetCompression(PushButton* but) {
 	if (auto [compression, cmb] = finishComboBox(but, Settings::compressionNames, World::sets()->compression); World::sets()->compression != compression) {
 		World::sets()->compression = compression;
 		World::drawSys()->getRenderer()->setSettings(World::sets());
-		if (World::sets()->compression != compression)
-			setIncoherentComboBox(cmb, Settings::compressionNames[eint(World::sets()->compression)]);
+		setIncoherentComboBox(cmb, Settings::compressionNames[eint(World::sets()->compression)]);
 	}
 }
 
@@ -884,22 +882,21 @@ void Program::eventSetMultiFullscreen(WindowArranger* wa) {
 	}
 }
 
-void Program::eventSetTheme(PushButton* lbl) {
-	ComboBox* cmb = World::scene()->getContext()->owner<ComboBox>();
-	if (World::sets()->getTheme() != cmb->getText()) {
-		cmb->setText(World::sets()->getTheme());
-		array<vec4, Settings::defaultColors.size()> colors = World::winSys()->loadColors(cmb->getText().data());
+void Program::eventSetTheme(PushButton* but) {
+	auto [tid, cmb] = finishComboBox(but);
+	if (const Cstring& theme = cmb->getOptions()[tid]; theme != World::sets()->getTheme()) {
+		array<vec4, Settings::defaultColors.size()> colors = World::winSys()->loadColors(theme.data());
 		if (World::sets()->needsTransparentWindow(colors) == World::winSys()->hasTransparentWindow())
 			World::drawSys()->getRenderer()->setColors(colors);
 		else
 			World::winSys()->recreateWindows();
 	}
-	World::scene()->setContext(nullptr);
 }
 
 void Program::eventSetFont(PushButton* but) {
-	if (string file = World::scene()->getContext()->owner<ComboBox>()->getTooltips()[finishComboBox(but)].data(); !file.empty())
-		setFont(file);
+	auto [fid, cmb] = finishComboBox(but);
+	if (const Cstring& file = cmb->getTooltips()[fid]; file.filled())
+		setFont(file.data());
 }
 
 void Program::setFont(const string& font) {
@@ -929,7 +926,7 @@ void Program::eventSetDeadzone(LabelEdit* le) {
 }
 
 void Program::eventSetPicLimType(PushButton* but) {
-	if (auto plim = PicLim::Type(finishComboBox(but)); plim != World::sets()->picLim.type) {
+	if (auto plim = PicLim::Type(finishComboBox(but).first); plim != World::sets()->picLim.type) {
 		auto ps = static_cast<ProgSettings*>(state);
 		World::sets()->picLim.type = plim;
 		ps->limitLine->replaceWidget(ps->limitLine->getWidgets().size() - 1, ps->createLimitEdit());
@@ -971,11 +968,12 @@ void Program::eventConfirmComboBox(PushButton* cbut) {
 	World::scene()->setContext(nullptr);
 }
 
-uint Program::finishComboBox(PushButton* but) {
+pair<uint, ComboBox*> Program::finishComboBox(PushButton* but) {
+	ComboBox* cmb = World::scene()->getContext()->owner<ComboBox>();
 	uint val = but->getIndex();
-	World::scene()->getContext()->owner<ComboBox>()->setCurOpt(val);
+	cmb->setCurOpt(val);
 	World::scene()->setContext(nullptr);
-	return val;
+	return pair(val, cmb);
 }
 
 template <IntEnum T, size_t N>

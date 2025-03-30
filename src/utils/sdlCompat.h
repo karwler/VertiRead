@@ -41,6 +41,7 @@
 #define surfaceScaleNearest(si, sr, di, dr) SDL_BlitSurfaceScaled(si, sr, di, dr, SDL_SCALEMODE_NEAREST)
 #define surfaceScaleLinear(si, sr, di, dr) SDL_BlitSurfaceScaled(si, sr, di, dr, SDL_SCALEMODE_LINEAR)
 #define tick_t uint64
+#define stick_t int64
 
 #else
 
@@ -62,6 +63,7 @@
 #define surfaceScaleNearest(si, sr, di, dr) SDL_BlitScaled(si, sr, di, dr)
 #define surfaceScaleLinear(si, sr, di, dr) SDL_BlitScaled(si, sr, di, dr)
 #define tick_t uint32
+#define stick_t int32
 #endif
 
 namespace std {

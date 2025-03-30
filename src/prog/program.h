@@ -121,7 +121,7 @@ private:
 	void eventSetCompression(PushButton* but);
 	void eventSetVsync(CheckBox* cb);
 	void eventSetMultiFullscreen(WindowArranger* wa);
-	void eventSetTheme(PushButton* lbl);
+	void eventSetTheme(PushButton* but);
 	void eventSetFont(PushButton* but);
 	void eventSetMonoFont(CheckBox* cb);
 	void eventSetDeadzone(Slider* sl);
@@ -148,7 +148,7 @@ private:
 	template <Invocable<const RemoteLocation&> F> void browserLoginManual(F func);
 	void restartBrowserList();
 	void startBrowserPreview();
-	static uint finishComboBox(PushButton* but);
+	static pair<uint, ComboBox*> finishComboBox(PushButton* but);
 	template <IntEnum T, size_t N> static pair<T, ComboBox*> finishComboBox(PushButton* but, const array<const char*, N>& names, T defaultValue);
 	void setIncoherentComboBox(ComboBox* cmb, string_view name);
 	template <Derived<ProgState> T, class... A> void setState(A&&... args);

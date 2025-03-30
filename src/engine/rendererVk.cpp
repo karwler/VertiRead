@@ -2376,7 +2376,6 @@ bool RendererVk::findQueueFamilies(DeviceInfo& deviceInfo) const {
 
 bool RendererVk::chooseSurfaceFormat(DeviceInfo& deviceInfo) const {
 	std::vector<VkSurfaceFormatKHR> commonFormats;
-	auto cfend = commonFormats.end();
 	for (View* it : views) {
 		VkSurfaceKHR surface = static_cast<ViewVk*>(it)->surface;
 		uint32 count;
@@ -2388,15 +2387,13 @@ bool RendererVk::chooseSurfaceFormat(DeviceInfo& deviceInfo) const {
 		if (commonFormats.empty())
 			commonFormats.assign(formats.get(), formats.get() + count);
 		else {
-			cfend = std::remove_if(commonFormats.begin(), cfend, [&formats, count](const VkSurfaceFormatKHR& cf) -> bool {
-				return std::none_of(formats.get(), formats.get() + count, [&cf](const VkSurfaceFormatKHR& lf) -> bool { return lf.format == cf.format && lf.colorSpace == cf.colorSpace; });
-			});
-			if (cfend == commonFormats.begin())
+			commonFormats.erase(std::remove_if(commonFormats.begin(), commonFormats.end(), [&formats, count](const VkSurfaceFormatKHR& cf) -> bool { return std::none_of(formats.get(), formats.get() + count, [&cf](const VkSurfaceFormatKHR& lf) -> bool { return lf.format == cf.format && lf.colorSpace == cf.colorSpace; }); }), commonFormats.end());
+			if (commonFormats.empty())
 				return false;
 		}
 	}
 
-	uint sfset = 0;
+	uint8 sfset = 0;
 	for (auto it = commonFormats.begin(); it != commonFormats.end() && sfset < 3; ++it)
 		if (it->colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
 			if (rng::none_of(srgbSurfaceFormats, [it](VkFormat fi) -> bool { return fi == it->format; })) {

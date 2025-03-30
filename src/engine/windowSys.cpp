@@ -39,6 +39,7 @@ void WindowSys::cleanup() noexcept {
 }
 
 void WindowSys::exec() {
+	SDL_Event event;
 	double perfHz = SDL_GetPerformanceFrequency();
 	for (uint64 oldTime = SDL_GetPerformanceCounter(); run;) {
 		uint64 newTime = SDL_GetPerformanceCounter();
@@ -52,11 +53,14 @@ void WindowSys::exec() {
 		scene->tick(dSec);
 		program->tick();
 
-		SDL_Event event;
-		tick_t timeout = SDL_GetTicks() + eventCheckTimeout;
+		tick_t timeout = SDL_GetTicks() + (active ? eventCheckTimeout : eventCheckTimeout * 2);
 		do {
-			if (!SDL_PollEvent(&event))
+			if (!SDL_PollEvent(&event)) {
+				if (!active)
+					if (stick_t rest = timeout - SDL_GetTicks(); rest > 0)
+						SDL_Delay(rest);
 				break;
+			}
 			handleEvent(event);
 		} while (!SDL_TICKS_PASSED(SDL_GetTicks(), timeout));
 	}
@@ -315,13 +319,14 @@ void WindowSys::createSingleWindow(SDL_Surface* icon, const array<vec4, Settings
 }
 
 void WindowSys::createMultiWindow(SDL_Surface* icon, const array<vec4, Settings::defaultColors.size()>& colors) {
-	uptr<ivec2[]> vofs = std::make_unique_for_overwrite<ivec2[]>(windows.size() + 1);
-	vofs[windows.size()] = ivec2(INT_MAX);
 #ifdef WITH_SDL3
 	sthandle<SDL_PropertiesID> props = initWindow(sets->displays.size(), colors);
 #else
 	uint32 flags = initWindow(sets->displays.size());
 #endif
+	uptr<ivec2[]> vofs = std::make_unique_for_overwrite<ivec2[]>(windows.size() + 1);
+	vofs[windows.size()] = ivec2(INT_MAX);
+
 	for (size_t i = 0; i < windows.size(); ++i) {
 #ifdef WITH_SDL3
 		string name = i ? fmt::format("{} {}", title, i) : title;
@@ -560,9 +565,14 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 	case SDL_WINDOWEVENT_EXPOSED:
 		active = true;
 		break;
-	case SDL_WINDOWEVENT_RESIZED:
-		if (!sets->maximized)	// should only happen when single window
-			sets->resolution = ivec2(winEvent.data1, winEvent.data2);
+	case SDL_WINDOWEVENT_RESIZED:	// should only happen when single window
+#ifdef WITH_SDL3
+		if (SDL_WindowFlags flags = SDL_GetWindowFlags(windows[0]); !(flags & SDL_WINDOW_FULLSCREEN))	// TODO: is this check necessary?
+#else
+		if (uint32 flags = SDL_GetWindowFlags(windows[0]); !(flags & SDL_WINDOW_FULLSCREEN_DESKTOP))
+#endif
+			if (sets->maximized = flags & SDL_WINDOW_MAXIMIZED; !sets->maximized)
+				sets->resolution = ivec2(winEvent.data1, winEvent.data2);
 		break;
 	case SDL_WINDOWEVENT_SIZE_CHANGED:
 		if (drawSys->updateView())
@@ -570,12 +580,6 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 		break;
 	case SDL_WINDOWEVENT_MINIMIZED:
 		active = false;
-		break;
-	case SDL_WINDOWEVENT_MAXIMIZED:
-		sets->maximized = true;
-		break;
-	case SDL_WINDOWEVENT_RESTORED:
-		sets->maximized = false;	// TODO: test if maximized and resolution get saved properly
 		break;
 	case SDL_WINDOWEVENT_LEAVE:
 		scene->onMouseLeave();
@@ -591,8 +595,12 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 		}
 		break;
 	case SDL_WINDOWEVENT_FOCUS_LOST:
-		if (sets->screen == Settings::Screen::multiFullscreen && rng::none_of(windows, [](SDL_Window* it) -> bool { return SDL_GetWindowFlags(it) & SDL_WINDOW_INPUT_FOCUS; }))
+		if (sets->screen == Settings::Screen::multiFullscreen && rng::none_of(windows, [](SDL_Window* it) -> bool { return SDL_GetWindowFlags(it) & SDL_WINDOW_INPUT_FOCUS; })) {
+			for (SDL_Window* it : windows)
+				SDL_MinimizeWindow(it);	// TODO: does this work?
+			SDL_FlushEvent(SDL_WINDOWEVENT);
 			active = false;
+		}
 		break;
 #endif
 #if SDL_VERSION_ATLEAST(2, 0, 18)
@@ -663,7 +671,7 @@ void WindowSys::setScreenMode(Settings::Screen sm) {
 	bool changeFlag = sets->screen != Settings::Screen::multiFullscreen && sm != Settings::Screen::multiFullscreen;
 	sets->screen = sm;
 	if (changeFlag)
-		SDL_SetWindowFullscreen(windows[0], sm == Settings::Screen::fullscreen ? SDL_GetWindowFlags(windows[0]) | SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_GetWindowFlags(windows[0]) & ~SDL_WINDOW_FULLSCREEN_DESKTOP);
+		SDL_SetWindowFullscreen(windows[0], sm == Settings::Screen::fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
 	else
 		recreateWindows();
 }
