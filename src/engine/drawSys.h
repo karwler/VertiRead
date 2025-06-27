@@ -127,7 +127,7 @@ private:
 	Renderer::Action drawState = Renderer::Action::yes;
 
 public:
-	DrawSys(const vector<SDL_Window*>& windows, const array<vec4, Settings::defaultColors.size()>& colors, const ivec2* vofs = nullptr);
+	DrawSys(const vector<SDL_Window*>& windows, const array<vec4, Settings::defaultColors.size()>& colors, const ivec2* vofs);
 	~DrawSys() { cleanup(); }
 
 	Renderer* getRenderer() noexcept { return renderer; }

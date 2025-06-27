@@ -250,8 +250,6 @@ uint32 WindowSys::initWindow(size_t numWindows) {
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, core ? SDL_GL_CONTEXT_PROFILE_CORE : SDL_GL_CONTEXT_PROFILE_ES);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, flags);
 		SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, numWindows > 1);
-		if (sdlFailed(SDL_GL_LoadLibrary(nullptr)))
-			throw std::runtime_error(SDL_GetError());
 #ifdef WITH_SDL3
 		graphicsProp = SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN;
 #else
@@ -261,8 +259,6 @@ uint32 WindowSys::initWindow(size_t numWindows) {
 #endif
 #ifdef WITH_VULKAN
 	case vulkan:
-		if (sdlFailed(SDL_Vulkan_LoadLibrary(nullptr)))
-			throw std::runtime_error(SDL_GetError());
 #ifdef WITH_SDL3
 		graphicsProp = SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN;
 #else
@@ -300,6 +296,7 @@ uint32 WindowSys::initWindow(size_t numWindows) {
 
 void WindowSys::createSingleWindow(SDL_Surface* icon, const array<vec4, Settings::defaultColors.size()>& colors) {
 	sets->resolution = glm::clamp(sets->resolution, windowMinSize, displayResolution());
+	ivec2 vofs[2] = { ivec2(0), ivec2(0) };
 #ifdef WITH_SDL3
 	sthandle<SDL_PropertiesID> props = initWindow(1, colors);
 	SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, title);
@@ -315,7 +312,7 @@ void WindowSys::createSingleWindow(SDL_Surface* icon, const array<vec4, Settings
 #endif
 	SDL_SetWindowIcon(windows[0], icon);
 	SDL_SetWindowMinimumSize(windows[0], windowMinSize.x, windowMinSize.y);
-	drawSys = new DrawSys(windows, colors);
+	drawSys = new DrawSys(windows, colors, vofs);
 }
 
 void WindowSys::createMultiWindow(SDL_Surface* icon, const array<vec4, Settings::defaultColors.size()>& colors) {
@@ -364,29 +361,10 @@ void WindowSys::destroyWindows() noexcept {
 		SDL_DestroyWindow(it);
 	windows.clear();
 #endif
-
-	switch (sets->renderer) {
-	using enum Settings::Renderer;
 #ifdef WITH_DIRECT3D
-	case direct3d11:
+	if (sets->renderer == Settings::Renderer::direct3d11)
 		closeD3d11();
-		break;
 #endif
-#ifdef WITH_OPENGL
-#if !defined(__arm__) && !defined(__aarch64__)
-	case opengl1: case opengl3:
-#endif
-#ifndef _WIN32
-	case opengles3:
-#endif
-		SDL_GL_UnloadLibrary();
-		break;
-#endif
-#ifdef WITH_VULKAN
-	case vulkan:
-		SDL_Vulkan_UnloadLibrary();
-#endif
-	}
 }
 
 void WindowSys::recreateWindows() {

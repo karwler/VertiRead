@@ -279,7 +279,7 @@ tm currentDateTime() noexcept {
 }
 
 void copyPixels(void* dst, const void* src, uint dpitch, uint spitch, uint bwidth, uint height) noexcept {
-	if (dpitch == spitch)
+	if (dpitch == spitch)	// TODO: This doesn't work if bwidth differs. Can we get rid of bwidth and use dpitch instead?
 		memcpy(dst, src, size_t(dpitch) * size_t(height));
 	else {
 		auto dp = static_cast<uint8*>(dst);

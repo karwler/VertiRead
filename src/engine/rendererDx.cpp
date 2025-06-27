@@ -39,27 +39,18 @@ RendererDx11::RendererDx11(InitParams& initParams, Settings* sets) :
 			initConverter();
 		ctx->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
-		if (!initParams.vofs) {
+		for (size_t i = 0; i < views.size(); ++i) {
+			Recti wrect;
+			wrect.pos() = initParams.vofs[i] - initParams.vofs[views.size()];
 #if SDL_VERSION_ATLEAST(2, 26, 0)
-			SDL_GetWindowSizeInPixels(initParams.windows[0], &initParams.viewRes.x, &initParams.viewRes.y);
+			SDL_GetWindowSizeInPixels(initParams.windows[i], &wrect.w, &wrect.h);
 #else
-			SDL_GetWindowSize(initParams.windows[0], &initParams.viewRes.x, &initParams.viewRes.y);
+			SDL_GetWindowSize(initParams.windows[i], &wrect.w, &wrect.h);
 #endif
-			auto vw = static_cast<ViewDx*>(views[0] = new ViewDx(initParams.windows[0], Recti(ivec2(0), initParams.viewRes)));
+			initParams.viewRes = glm::max(initParams.viewRes, wrect.end());
+			auto vw = static_cast<ViewDx*>(views[i] = new ViewDx(initParams.windows[i], wrect));
 			createSwapchain(factory.Get(), vw);
-		} else
-			for (size_t i = 0; i < views.size(); ++i) {
-				Recti wrect;
-				wrect.pos() = initParams.vofs[i] - initParams.vofs[views.size()];
-#if SDL_VERSION_ATLEAST(2, 26, 0)
-				SDL_GetWindowSizeInPixels(initParams.windows[i], &wrect.w, &wrect.h);
-#else
-				SDL_GetWindowSize(initParams.windows[i], &wrect.w, &wrect.h);
-#endif
-				initParams.viewRes = glm::max(initParams.viewRes, wrect.end());
-				auto vw = static_cast<ViewDx*>(views[i] = new ViewDx(initParams.windows[i], wrect));
-				createSwapchain(factory.Get(), vw);
-			}
+		}
 
 		D3D11_BLEND_DESC blendDesc = {
 			.RenderTarget = { {

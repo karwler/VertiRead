@@ -167,33 +167,21 @@ RendererSf::RendererSf(InitParams& initParams, Settings* sets) :
 		rendererFlags |= SDL_RENDERER_PRESENTVSYNC;
 #endif
 	try {
-		if (!initParams.vofs) {
+		for (size_t i = 0; i < views.size(); ++i) {
+			Recti wrect;
+			wrect.pos() = initParams.vofs[i] - initParams.vofs[views.size()];
 #if SDL_VERSION_ATLEAST(2, 26, 0)
-			SDL_GetWindowSizeInPixels(initParams.windows[0], &initParams.viewRes.x, &initParams.viewRes.y);
+			SDL_GetWindowSizeInPixels(initParams.windows[i], &wrect.w, &wrect.h);
 #else
-			SDL_GetWindowSize(initParams.windows[0], &initParams.viewRes.x, &initParams.viewRes.y);
+			SDL_GetWindowSize(initParams.windows[i], &wrect.w, &wrect.h);
 #endif
+			initParams.viewRes = glm::max(initParams.viewRes, wrect.end());
 #ifdef WITH_SDL3
-			createRenderer(static_cast<ViewSf*>(views[0] = new ViewSf(initParams.windows[0], Recti(ivec2(0), initParams.viewRes))), rendererProps);
+			createRenderer(static_cast<ViewSf*>(views[i] = new ViewSf(initParams.windows[i], wrect)), rendererProps);
 #else
-			createRenderer(static_cast<ViewSf*>(views[0] = new ViewSf(initParams.windows[0], Recti(ivec2(0), initParams.viewRes))), rendererFlags);
+			createRenderer(static_cast<ViewSf*>(views[i] = new ViewSf(initParams.windows[i], wrect)), rendererFlags);
 #endif
-		} else
-			for (size_t i = 0; i < views.size(); ++i) {
-				Recti wrect;
-				wrect.pos() = initParams.vofs[i] - initParams.vofs[views.size()];
-#if SDL_VERSION_ATLEAST(2, 26, 0)
-				SDL_GetWindowSizeInPixels(initParams.windows[i], &wrect.w, &wrect.h);
-#else
-				SDL_GetWindowSize(initParams.windows[i], &wrect.w, &wrect.h);
-#endif
-				initParams.viewRes = glm::max(initParams.viewRes, wrect.end());
-#ifdef WITH_SDL3
-				createRenderer(static_cast<ViewSf*>(views[i] = new ViewSf(initParams.windows[i], wrect)), rendererProps);
-#else
-				createRenderer(static_cast<ViewSf*>(views[i] = new ViewSf(initParams.windows[i], wrect)), rendererFlags);
-#endif
-			}
+		}
 		if (!textureFormats.contains(defaultFormat) && textureFormats.contains(SDL_PIXELFORMAT_ARGB8888))
 			defaultFormat = SDL_PIXELFORMAT_ARGB8888;
 

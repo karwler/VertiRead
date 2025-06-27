@@ -137,25 +137,17 @@ bool RendererGl::trySetContext(View* view) noexcept {
 
 template <Class T, class F>
 void RendererGl::initContexts(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, F initGl) {
-	if (!vofs) {
-		SDL_GL_GetDrawableSize(windows[0], &viewRes.x, &viewRes.y);
-		auto vw = static_cast<T*>(views[0] = new T(windows[0], Recti(ivec2(0), viewRes)));
-		if (vw->ctx = SDL_GL_CreateContext(windows[0]); !vw->ctx)
+	for (size_t i = 0; i < views.size(); ++i) {
+		Recti wrect;
+		wrect.pos() = vofs[i] - vofs[views.size()];
+		SDL_GL_GetDrawableSize(windows[i], &wrect.w, &wrect.h);
+		viewRes = glm::max(viewRes, wrect.end());
+		auto vw = static_cast<T*>(views[i] = new T(windows[i], wrect));
+		if (vw->ctx = SDL_GL_CreateContext(windows[i]); !vw->ctx)
 			throw std::runtime_error(SDL_GetError());
 		setContext(vw);
 		initGl(vw);
-	} else
-		for (size_t i = 0; i < views.size(); ++i) {
-			Recti wrect;
-			wrect.pos() = vofs[i] - vofs[views.size()];
-			SDL_GL_GetDrawableSize(windows[i], &wrect.w, &wrect.h);
-			viewRes = glm::max(viewRes, wrect.end());
-			auto vw = static_cast<T*>(views[i] = new T(windows[i], wrect));
-			if (vw->ctx = SDL_GL_CreateContext(windows[i]); !vw->ctx)
-				throw std::runtime_error(SDL_GetError());
-			setContext(vw);
-			initGl(vw);
-		}
+	}
 }
 
 void RendererGl::initGlCommon(ViewGl* view, bool vsync, uintptr_t& availableMemory) noexcept {
