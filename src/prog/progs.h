@@ -19,7 +19,7 @@ private:
 	float cursorMoveFactor;
 
 public:
-	ProgState() noexcept { onResize(); }
+	ProgState() noexcept;
 	virtual ~ProgState() = default;
 
 	template <MemberFunction F, class... A> void exec(F func, A&&... args);
@@ -56,7 +56,6 @@ public:
 	virtual void eventRefresh();
 	virtual void eventFileDrop(const char*) {}
 	virtual void eventClosing() {}
-	void onResize() noexcept;
 
 	virtual RootLayout* createLayout() = 0;
 	virtual Overlay* createOverlay();

@@ -1,12 +1,7 @@
-cbuffer Offset : register(b0) {
-	uint offset;
-};
-
-ByteAddressBuffer pixels : register(t0);
-RWTexture2D<float4> img : register(u0);
+#include "common/converter.hlsl"
 
 #define storeColor(id, w, a) \
-	img[uint2((id) % (w), (id) / (w))] = float4(1.f, 1.f, 1.f, float(a) / 255.f);
+	img[uint2((id) % (w), (id) / (w))] = float4((float3)(float(a) / 255.0), 1.0)
 
 [numthreads(32, 1, 1)]
 void main(uint3 groupId : SV_GroupID, uint3 threadId : SV_GroupThreadID) {

@@ -95,7 +95,7 @@ void Scrollable::drag(ivec2 mPos, ivec2 mMov, ivec2 pos, bool vert) noexcept {
 void Scrollable::undrag(ivec2 mPos, uint8 mBut, bool vert) noexcept {
 	if (mBut == SDL_BUTTON_LEFT) {
 		if (!World::scene()->cursorInClickRange(mPos, mBut) && !draggingSlider)
-			motion = World::inputSys()->getMouseMove() * vswap(0.f, -World::drawSys()->getWinDpi() * initialThrottle, !vert);
+			motion = World::inputSys()->getMouseMove() * vswap(0.f, -initialThrottle, !vert);
 		SDL_CaptureMouse(SDL_FALSE);
 		World::scene()->setCapture(nullptr);	// should call cancelDrag through the captured widget
 	}
@@ -115,9 +115,9 @@ void Scrollable::setLimits(ivec2 lsize, ivec2 wsize, bool vert) noexcept {
 
 void Scrollable::throttleMotion(float& mov, float dSec) noexcept {
 	if (mov > 0.f) {
-		if (mov -= throttle * dSec; mov < 0.f)
+		if (mov = std::fma(throttle, dSec, -mov); mov < 0.f)
 			mov = 0.f;
-	} else if (mov += throttle * dSec; mov > 0.f)
+	} else if (mov = std::fma(throttle, dSec, mov); mov > 0.f)
 		mov = 0.f;
 }
 

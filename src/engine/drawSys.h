@@ -94,7 +94,7 @@ public:
 		vertiread
 	};
 
-	static constexpr float fallbackDpi = 96.f;
+	static constexpr float defaultDpi = 96.f;
 private:
 	static constexpr float assumedCursorHeight = 20.f;	// 16 p probably + some spacing
 	static constexpr float assumedIconSize = 128.f;
@@ -122,19 +122,19 @@ private:
 	FontSet fonts;
 	array<Texture*, eint(Tex::vertiread)> texes{};
 	const char* curTooltip = nullptr;	// reference to text of the currently rendered tooltip texture
-	float winDpi;
+	float uiScale;
 	int cursorHeight;
 	Renderer::Action drawState = Renderer::Action::yes;
 
 public:
-	DrawSys(const vector<SDL_Window*>& windows, const array<vec4, Settings::defaultColors.size()>& colors, const ivec2* vofs);
+	DrawSys(SDL_Window* const* windows, uint8 numWindows, const array<vec4, Settings::defaultColors.size()>& colors, const ivec2* vofs);
 	~DrawSys() { cleanup(); }
 
 	Renderer* getRenderer() noexcept { return renderer; }
 	ivec2 getViewRes() const noexcept { return viewRes; }
 	bool updateView();	// returns whether a resize happened
-	float getWinDpi() const noexcept { return winDpi; }
-	bool updateDpi();
+	float getUiScale() const noexcept { return uiScale; }
+	void updateUiScale();
 	void setFont(const string& font);
 	void setMonoFont(bool on) noexcept;
 	static SDL_Surface* loadIcon(const char* path, int size) noexcept;
@@ -170,7 +170,7 @@ public:
 private:
 	void cleanup() noexcept;
 	bool prepareTooltip() noexcept;	// returns if to draw a tooltip and if a new texture has been created
-	float maxDpi() const noexcept;
+	float maxDisplayScale() const noexcept;
 };
 
 inline string DrawSys::iconName(Tex name) {

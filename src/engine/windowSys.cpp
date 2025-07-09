@@ -16,6 +16,9 @@
 
 void WindowSys::init() {
 	try {
+#if defined(WITH_SDL3) && defined( __linux__)
+		isWayland = !SDL_strcasecmp(coalesce(SDL_getenv("XDG_SESSION_TYPE"), ""), "wayland");
+#endif
 		fileSys = new FileSys();
 		sets = fileSys->loadSettings();
 		createWindow();
@@ -39,30 +42,33 @@ void WindowSys::cleanup() noexcept {
 }
 
 void WindowSys::exec() {
+	tick_t eventTimeout, loopTimeout;
 	SDL_Event event;
 	double perfHz = SDL_GetPerformanceFrequency();
 	for (uint64 oldTime = SDL_GetPerformanceCounter(); run;) {
 		uint64 newTime = SDL_GetPerformanceCounter();
 		dSec = double(newTime - oldTime) / perfHz;
 		oldTime = newTime;
+		tick_t tickBase = SDL_GetTicks();
 
 		if (active) {
 			drawSys->drawWidgets(inputSys->mouseWin.has_value());
 			inputSys->tick();
-		}
+
+			eventTimeout = tickBase + eventCheckTimeout;
+			loopTimeout = tickBase + refreshMs;
+		} else
+			loopTimeout = eventTimeout = tickBase + eventCheckTimeout * 4;
 		scene->tick(dSec);
 		program->tick();
 
-		tick_t timeout = SDL_GetTicks() + (active ? eventCheckTimeout : eventCheckTimeout * 2);
-		do {
-			if (!SDL_PollEvent(&event)) {
-				if (!active)
-					if (stick_t rest = timeout - SDL_GetTicks(); rest > 0)
-						SDL_Delay(rest);
-				break;
-			}
+		while (SDL_PollEvent(&event)) {
 			handleEvent(event);
-		} while (!SDL_TICKS_PASSED(SDL_GetTicks(), timeout));
+			if (SDL_TICKS_PASSED(SDL_GetTicks(), eventTimeout))
+				break;
+		}
+		if (stick_t rest = loopTimeout - SDL_GetTicks(); rest > 0)
+			SDL_Delay(rest);
 	}
 	fileSys->saveSettings(sets.get());
 	fileSys->saveBindings(inputSys->getBindings());
@@ -194,18 +200,20 @@ void WindowSys::createWindow() {
 			destroyWindows();
 		}
 	}
-	if (windows.empty())
+	if (!numWindows)
 		throw std::runtime_error("Failed to initialize a working renderer");
+	setRefreshTime();
 }
 
 #ifdef WITH_SDL3
-SDL_PropertiesID WindowSys::initWindow(size_t numWindows, const array<vec4, Settings::defaultColors.size()>& colors) {
+SDL_PropertiesID WindowSys::initWindow(uint8 wincnt, const array<vec4, Settings::defaultColors.size()>& colors) {
 	const char* graphicsProp = nullptr;
 #else
-uint32 WindowSys::initWindow(size_t numWindows) {
+uint32 WindowSys::initWindow(uint8 wincnt) {
 	uint32 windowFlags = SDL_WINDOW_ALLOW_HIGHDPI;
 #endif
-	windows.resize(numWindows);
+	windows = std::make_unique<SDL_Window*[]>(wincnt);
+	numWindows = wincnt;
 
 	switch (sets->renderer) {
 	using enum Settings::Renderer;
@@ -272,7 +280,7 @@ uint32 WindowSys::initWindow(size_t numWindows) {
 		throw std::runtime_error(SDL_GetError());
 	if (graphicsProp)
 		SDL_SetBooleanProperty(windowProps, graphicsProp, true);
-	SDL_SetBooleanProperty(windowProps, SDL_PROP_WINDOW_CREATE_MAXIMIZED_BOOLEAN, sets->maximized);	// TODO: does this work or do we need the workaround?
+	SDL_SetBooleanProperty(windowProps, SDL_PROP_WINDOW_CREATE_MAXIMIZED_BOOLEAN, sets->maximized);
 	SDL_SetBooleanProperty(windowProps, SDL_PROP_WINDOW_CREATE_RESIZABLE_BOOLEAN, sets->screen <= Settings::Screen::fullscreen);
 	SDL_SetBooleanProperty(windowProps, SDL_PROP_WINDOW_CREATE_FULLSCREEN_BOOLEAN, sets->screen >= Settings::Screen::fullscreen);
 	SDL_SetBooleanProperty(windowProps, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
@@ -295,7 +303,6 @@ uint32 WindowSys::initWindow(size_t numWindows) {
 }
 
 void WindowSys::createSingleWindow(SDL_Surface* icon, const array<vec4, Settings::defaultColors.size()>& colors) {
-	sets->resolution = glm::clamp(sets->resolution, windowMinSize, displayResolution());
 	ivec2 vofs[2] = { ivec2(0), ivec2(0) };
 #ifdef WITH_SDL3
 	sthandle<SDL_PropertiesID> props = initWindow(1, colors);
@@ -312,7 +319,7 @@ void WindowSys::createSingleWindow(SDL_Surface* icon, const array<vec4, Settings
 #endif
 	SDL_SetWindowIcon(windows[0], icon);
 	SDL_SetWindowMinimumSize(windows[0], windowMinSize.x, windowMinSize.y);
-	drawSys = new DrawSys(windows, colors, vofs);
+	drawSys = new DrawSys(windows.get(), numWindows, colors, vofs);
 }
 
 void WindowSys::createMultiWindow(SDL_Surface* icon, const array<vec4, Settings::defaultColors.size()>& colors) {
@@ -321,10 +328,10 @@ void WindowSys::createMultiWindow(SDL_Surface* icon, const array<vec4, Settings:
 #else
 	uint32 flags = initWindow(sets->displays.size());
 #endif
-	uptr<ivec2[]> vofs = std::make_unique_for_overwrite<ivec2[]>(windows.size() + 1);
-	vofs[windows.size()] = ivec2(INT_MAX);
+	uptr<ivec2[]> vofs = std::make_unique_for_overwrite<ivec2[]>(numWindows + 1);
+	vofs[numWindows] = ivec2(INT_MAX);
 
-	for (size_t i = 0; i < windows.size(); ++i) {
+	for (uint8 i = 0; i < numWindows; ++i) {
 #ifdef WITH_SDL3
 		string name = i ? fmt::format("{} {}", title, i) : title;
 		SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING, name.data());
@@ -343,24 +350,23 @@ void WindowSys::createMultiWindow(SDL_Surface* icon, const array<vec4, Settings:
 #endif
 		SDL_SetWindowIcon(windows[i], icon);
 		vofs[i] = sets->displays[i].rect.pos();
-		vofs[windows.size()] = glm::min(vofs[windows.size()], vofs[i]);
+		vofs[numWindows] = glm::min(vofs[numWindows], vofs[i]);
 	}
-	drawSys = new DrawSys(windows, colors, vofs.get());
+	drawSys = new DrawSys(windows.get(), numWindows, colors, vofs.get());
 }
 
 void WindowSys::destroyWindows() noexcept {
 	delete drawSys;
 	drawSys = nullptr;
 #ifdef WITH_SDL3
-	if (!windows.empty()) {
+	if (numWindows)
 		SDL_DestroyWindow(windows[0]);
-		windows.clear();
-	}
 #else
-	for (SDL_Window* it : windows)
-		SDL_DestroyWindow(it);
-	windows.clear();
+	for (uint8 i = 0; i < numWindows; ++i)
+		SDL_DestroyWindow(windows[i]);
 #endif
+	windows.reset();
+	numWindows = 0;
 #ifdef WITH_DIRECT3D
 	if (sets->renderer == Settings::Renderer::direct3d11)
 		closeD3d11();
@@ -374,14 +380,14 @@ void WindowSys::recreateWindows() {
 	scene->setLayouts();
 }
 
-void WindowSys::handleEvent(const SDL_Event& event) {
+void WindowSys::handleEvent(SDL_Event& event) {
 	switch (event.type) {
 	case SDL_QUIT:
 		program->eventExit();
 		break;
 #ifndef WITH_SDL3
 	case SDL_DISPLAYEVENT:
-		eventDisplay();
+		eventDisplay(event.display);
 		break;
 	case SDL_WINDOWEVENT:
 		eventWindow(event.window);
@@ -402,15 +408,45 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 		break;
 #endif
 	case SDL_MOUSEMOTION:
+#if defined(WITH_SDL3) && defined( __linux__)
+		if (isWayland)
+			if (float scale = SDL_GetWindowDisplayScale(SDL_GetWindowFromID(event.motion.windowID)); scale > 0.f) {
+				event.motion.x *= scale;
+				event.motion.y *= scale;
+				event.motion.xrel *= scale;
+				event.motion.yrel *= scale;
+			}
+#endif
 		inputSys->eventMouseMotion(event.motion);
 		break;
 	case SDL_MOUSEBUTTONDOWN:
+#if defined(WITH_SDL3) && defined( __linux__)
+		if (isWayland)
+			if (float scale = SDL_GetWindowDisplayScale(SDL_GetWindowFromID(event.motion.windowID)); scale > 0.f) {
+				event.button.x *= scale;
+				event.button.y *= scale;
+			}
+#endif
 		inputSys->eventMouseButtonDown(event.button);
 		break;
 	case SDL_MOUSEBUTTONUP:
+#if defined(WITH_SDL3) && defined( __linux__)
+		if (isWayland)
+			if (float scale = SDL_GetWindowDisplayScale(SDL_GetWindowFromID(event.motion.windowID)); scale > 0.f) {
+				event.button.x *= scale;
+				event.button.y *= scale;
+			}
+#endif
 		inputSys->eventMouseButtonUp(event.button);
 		break;
 	case SDL_MOUSEWHEEL:
+#if defined(WITH_SDL3) && defined( __linux__)
+		if (isWayland)
+			if (float scale = SDL_GetWindowDisplayScale(SDL_GetWindowFromID(event.motion.windowID)); scale > 0.f) {
+				event.wheel.mouse_x *= scale;
+				event.wheel.mouse_y *= scale;
+			}
+#endif
 		inputSys->eventMouseWheel(event.wheel);
 		break;
 	case SDL_JOYAXISMOTION:
@@ -529,7 +565,7 @@ void WindowSys::handleEvent(const SDL_Event& event) {
 		if (event.type >= SDL_EVENT_WINDOW_FIRST && event.type <= SDL_EVENT_WINDOW_LAST)
 			eventWindow(event.window);
 		else if (event.type >= SDL_EVENT_DISPLAY_FIRST && event.type <= SDL_EVENT_DISPLAY_LAST)
-			eventDisplay();
+			eventDisplay(event.display);
 #endif
 	}
 }
@@ -545,7 +581,7 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 		break;
 	case SDL_WINDOWEVENT_RESIZED:	// should only happen when single window
 #ifdef WITH_SDL3
-		if (SDL_WindowFlags flags = SDL_GetWindowFlags(windows[0]); !(flags & SDL_WINDOW_FULLSCREEN))	// TODO: is this check necessary?
+		if (SDL_WindowFlags flags = SDL_GetWindowFlags(windows[0]); !(flags & SDL_WINDOW_FULLSCREEN))
 #else
 		if (uint32 flags = SDL_GetWindowFlags(windows[0]); !(flags & SDL_WINDOW_FULLSCREEN_DESKTOP))
 #endif
@@ -559,65 +595,94 @@ void WindowSys::eventWindow(const SDL_WindowEvent& winEvent) {
 	case SDL_WINDOWEVENT_MINIMIZED:
 		active = false;
 		break;
+	case SDL_WINDOWEVENT_ENTER:
+		active = true;
+		break;
 	case SDL_WINDOWEVENT_LEAVE:
 		scene->onMouseLeave();
+		if (numWindows == 1 && !(SDL_GetWindowFlags(windows[0]) & (SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_MOUSE_FOCUS)))
+			active = false;
 		break;
-#ifndef WITH_SDL3
 	case SDL_WINDOWEVENT_FOCUS_GAINED:
-		if (sets->screen == Settings::Screen::multiFullscreen && !active) {
-			for (SDL_Window* it : windows)
-				if (SDL_WindowID wid = SDL_GetWindowID(it); wid != winEvent.windowID)
-					SDL_RaiseWindow(it);	// TODO: what does SDL_RestoreWindow do on fullscreen?
+#ifndef WITH_SDL3
+		if (numWindows > 1 && !active) {
+			for (uint8 i = 0; i < numWindows; ++i)
+				if (SDL_WindowID wid = SDL_GetWindowID(windows[i]); wid != winEvent.windowID)
+					SDL_RaiseWindow(windows[i]);	// TODO: what does SDL_RestoreWindow do on fullscreen?
 			SDL_FlushEvent(SDL_WINDOWEVENT);
-			active = true;
 		}
+#endif
+		active = true;
 		break;
 	case SDL_WINDOWEVENT_FOCUS_LOST:
-		if (sets->screen == Settings::Screen::multiFullscreen && rng::none_of(windows, [](SDL_Window* it) -> bool { return SDL_GetWindowFlags(it) & SDL_WINDOW_INPUT_FOCUS; })) {
-			for (SDL_Window* it : windows)
-				SDL_MinimizeWindow(it);	// TODO: does this work?
+		if (numWindows == 1) {
+			if (!(SDL_GetWindowFlags(windows[0]) & (SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_MOUSE_FOCUS)))
+				active = false;
+		}
+#ifndef WITH_SDL3
+		else if (std::none_of(windows.get(), windows.get() + numWindows, [](SDL_Window* it) -> bool { return SDL_GetWindowFlags(it) & SDL_WINDOW_INPUT_FOCUS; })) {
+			for (uint8 i = 0; i < numWindows; ++i)
+				SDL_MinimizeWindow(windows[i]);	// TODO: does this work?
 			SDL_FlushEvent(SDL_WINDOWEVENT);
 			active = false;
 		}
-		break;
 #endif
+		break;
 #if SDL_VERSION_ATLEAST(2, 0, 18)
 	case SDL_WINDOWEVENT_DISPLAY_CHANGED:
-#ifdef WITH_SDL3
-	case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:	// TODO: check if SDL_EVENT_WINDOW_DISPLAY_CHANGED is still needed in this case and handle for multi window
-#endif
-		if (windows.size() == 1 && drawSys->updateDpi())
-			scene->onResize();
+		setRefreshTime();
+		drawSys->updateUiScale();
 #endif
 	}
 }
 
-void WindowSys::eventDisplay() {
-	sets->unionDisplays();
-	if (windows.size() == 1)
-		drawSys->updateDpi();
-	else
-		recreateWindows();
-	scene->onDisplayChange();
+void WindowSys::eventDisplay(const SDL_DisplayEvent& dspEvent) {
+#ifdef WITH_SDL3
+	bool affected = std::any_of(windows.get(), windows.get() + numWindows, [&dspEvent](SDL_Window* it) -> bool { return SDL_GetDisplayForWindow(it) == dspEvent.displayID; });
+	switch (dspEvent.type) {
+#else
+	bool affected = std::any_of(windows.get(), windows.get() + numWindows, [&dspEvent](SDL_Window* it) -> bool { return SDL_GetWindowDisplayIndex(it) == int(dspEvent.display); });
+	switch (dspEvent.event) {
+#endif
+	case SDL_DISPLAYEVENT_ORIENTATION: case SDL_DISPLAYEVENT_CONNECTED: case SDL_DISPLAYEVENT_DISCONNECTED: case SDL_DISPLAYEVENT_MOVED:
+		sets->unionDisplays();
+		if (numWindows == 1 || !affected)
+			scene->onDisplayChange();
+		else
+			recreateWindows();
+		break;
+#ifdef WITH_SDL3
+	case SDL_EVENT_DISPLAY_DESKTOP_MODE_CHANGED: case SDL_EVENT_DISPLAY_CURRENT_MODE_CHANGED:
+		if (affected)
+			setRefreshTime();
+	case SDL_EVENT_DISPLAY_CONTENT_SCALE_CHANGED:
+		if (affected)
+			drawSys->updateUiScale();
+#endif
+	}
 }
 
-ivec2 WindowSys::winViewOffset(uint32 wid) const noexcept {
+ivec2 WindowSys::winViewOffset(SDL_WindowID wid) const noexcept {
 	if (SDL_Window* win = SDL_GetWindowFromID(wid))
 		if (Renderer::View* view = drawSys->getRenderer()->findView(win))
 			return view->rect.pos();
-	return ivec2(INT_MIN);
+	return ivec2(0);
 }
 
 ivec2 WindowSys::mousePos() const noexcept {
 	mpvec2 mp;
 	SDL_GetMouseState(&mp.x, &mp.y);
 	if (SDL_Window* win = SDL_GetMouseFocus())
-		if (Renderer::View* view = drawSys->getRenderer()->findView(win))
-#ifdef WITH_SDL3
+		if (Renderer::View* view = drawSys->getRenderer()->findView(win)) {
+#if defined(WITH_SDL3) && defined( __linux__)
+			if (isWayland)
+				if (float scale = SDL_GetWindowDisplayScale(win); scale > 0.f)
+					mp *= scale;
 			return ivec2(mp) + view->rect.pos();
 #else
-			return mp + view->rect.pos();
+			return vec2(mp) + vec2(view->rect.pos());
 #endif
+		}
 	return mp;
 }
 
@@ -626,6 +691,11 @@ void WindowSys::moveCursor(ivec2 mov) noexcept {
 		if (Renderer::View* vsrc = drawSys->getRenderer()->findView(win)) {
 			mpvec2 wpos;
 			SDL_GetMouseState(&wpos.x, &wpos.y);
+#if defined(WITH_SDL3) && defined( __linux__)
+			if (isWayland)
+				if (float scale = SDL_GetWindowDisplayScale(win); scale > 0.f)
+					wpos *= scale;	// TODO: test this
+#endif
 			wpos += vsrc->rect.pos() + mov;
 			if (Renderer::View* vdst = drawSys->getRenderer()->findView(wpos))
 				SDL_WarpMouseInWindow(vdst->win, wpos.x - vdst->rect.x, wpos.y - vdst->rect.y);
@@ -633,14 +703,14 @@ void WindowSys::moveCursor(ivec2 mov) noexcept {
 }
 
 void WindowSys::toggleOpacity() noexcept {
-	for (SDL_Window* it : windows) {
+	for (uint8 i = 0; i < numWindows; ++i) {
 #ifdef WITH_SDL3
-		SDL_SetWindowOpacity(it, SDL_GetWindowOpacity(it) < 1.f ? 1.f : 0.f);
+		SDL_SetWindowOpacity(windows[i], SDL_GetWindowOpacity(windows[i]) < 1.f ? 1.f : 0.f);
 #else
-		if (float val; !SDL_GetWindowOpacity(it, &val))
-			SDL_SetWindowOpacity(it, val < 1.f ? 1.f : 0.f);
+		if (float val; !SDL_GetWindowOpacity(windows[i], &val))
+			SDL_SetWindowOpacity(windows[i], val < 1.f ? 1.f : 0.f);
 		else
-			SDL_MinimizeWindow(it);
+			SDL_MinimizeWindow(windows[i]);
 #endif
 	}
 }
@@ -654,30 +724,19 @@ void WindowSys::setScreenMode(Settings::Screen sm) {
 		recreateWindows();
 }
 
-ivec2 WindowSys::displayResolution() const noexcept {
+void WindowSys::setRefreshTime() noexcept {
+	int rate = 0;
 #ifdef WITH_SDL3
-	if (!windows.empty())
-		if (const SDL_DisplayMode* mode = SDL_GetDesktopDisplayMode(SDL_GetWindowDisplayIndex(windows[0])))
-			return ivec2(mode->w, mode->h);
+	for (uint8 i = 0; i < numWindows; ++i)
+		if (const SDL_DisplayMode* mode = SDL_GetDesktopDisplayMode(SDL_GetDisplayForWindow(windows[i])))
+			rate = std::max(rate, int(mode->refresh_rate));
 #else
 	SDL_DisplayMode mode{};
-	if (!windows.empty() && !SDL_GetDesktopDisplayMode(SDL_GetWindowDisplayIndex(windows[0]), &mode))
-		return ivec2(mode.w, mode.h);
+	for (uint8 i = 0; i < numWindows; ++i)
+		if (!SDL_GetDesktopDisplayMode(SDL_GetWindowDisplayIndex(windows[i]), &mode))
+			rate = std::max(rate, mode.refresh_rate);
 #endif
-
-	ivec2 res(0);
-#ifdef WITH_SDL3
-	int cnt;
-	if (uptr<SDL_DisplayID[], SdlFreePtr> dids(SDL_GetDisplays(&cnt)); dids)
-		for (int i = 0; i < cnt; ++i)
-			if (const SDL_DisplayMode* mode = SDL_GetDesktopDisplayMode(dids[i]))
-				res = glm::max(res, ivec2(mode->w, mode->h));
-#else
-	for (int i = 0, e = SDL_GetNumVideoDisplays(); i < e; ++i)
-		if (!SDL_GetDesktopDisplayMode(i, &mode))
-			res = glm::max(res, ivec2(mode.w, mode.h));
-#endif
-	return res;
+	refreshMs = rate ? 1000 / uint(rate) : 0;
 }
 
 array<vec4, Settings::defaultColors.size()> WindowSys::loadColors(string_view name) {

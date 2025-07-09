@@ -93,9 +93,9 @@ private:
 		FileOps* fsop;
 		uptr<BrowserResultPicture> rp;
 		PicLim picLim;
-		float dpi;
+		float scale;
 
-		LoadPicturesPdfData(FileOps* fs, uptr<BrowserResultPicture>&& res, const PicLim& plim, float ddpi) noexcept;
+		LoadPicturesPdfData(FileOps* fs, uptr<BrowserResultPicture>&& res, const PicLim& plim, float scl) noexcept;
 	};
 #endif
 

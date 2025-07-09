@@ -56,11 +56,11 @@ Browser::LoadPicturesArchData::LoadPicturesArchData(FileOps* fs, uptr<BrowserRes
 #endif
 
 #if defined(CAN_MUPDF) || defined(CAN_POPPLER)
-Browser::LoadPicturesPdfData::LoadPicturesPdfData(FileOps* fs, uptr<BrowserResultPicture>&& res, const PicLim& plim, float ddpi) noexcept :
+Browser::LoadPicturesPdfData::LoadPicturesPdfData(FileOps* fs, uptr<BrowserResultPicture>&& res, const PicLim& plim, float scl) noexcept :
 	fsop(fs),
 	rp(std::move(res)),
 	picLim(plim),
-	dpi(ddpi)
+	scale(scl)
 {}
 #endif
 
@@ -747,7 +747,7 @@ void Browser::startLoadPictures(uptr<BrowserResultPicture>&& rp) {
 	curThread = ThreadType::reader;
 #if defined(CAN_MUPDF) || defined(CAN_POPPLER)
 	if (rp->newPdf || rp->pdf)
-		thread = std::jthread(&Browser::loadPicturesPdfThread, std::make_unique<LoadPicturesPdfData>(fsop, std::move(rp), World::sets()->picLim, World::drawSys()->getWinDpi()));
+		thread = std::jthread(&Browser::loadPicturesPdfThread, std::make_unique<LoadPicturesPdfData>(fsop, std::move(rp), World::sets()->picLim, World::drawSys()->getUiScale()));
 	else
 #endif
 #ifdef WITH_ARCHIVE
@@ -896,7 +896,7 @@ void Browser::loadPicturesPdfThread(std::stop_token stoken, uptr<LoadPicturesPdf
 				rc = ResultCode::stop;
 				break;
 			}
-			if (uptr<SDL_Surface> pic(World::drawSys()->getRenderer()->prepareImage(ld->rp->pdf.renderPage(i, ld->dpi), &prg.cbpp)); pic)
+			if (uptr<SDL_Surface> pic(World::drawSys()->getRenderer()->prepareImage(ld->rp->pdf.renderPage(i, ld->scale), &prg.cbpp)); pic)
 				prg.pushImage(ld->rp.get(), toStr(i), pic, ld->picLim);
 		}
 	} catch (const std::exception& err) {

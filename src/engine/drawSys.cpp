@@ -396,13 +396,14 @@ void FontSet::setMode(bool mono) noexcept {
 
 // DRAW SYS
 
-DrawSys::DrawSys(const vector<SDL_Window*>& windows, const array<vec4, Settings::defaultColors.size()>& colors, const ivec2* vofs) {
+DrawSys::DrawSys(SDL_Window* const* windows, uint8 numWindows, const array<vec4, Settings::defaultColors.size()>& colors, const ivec2* vofs) {
 	Renderer::InitParams initParams = {
 		.windows = windows,
 		.vofs = vofs,
 		.viewRes = viewRes,
 		.tooltipTexture = texes[eint(Tex::tooltip)],
-		.colors = colors
+		.colors = colors,
+		.numWindows = numWindows
 	};
 	switch (World::sets()->renderer) {
 	using enum Settings::Renderer;
@@ -441,10 +442,10 @@ DrawSys::DrawSys(const vector<SDL_Window*>& windows, const array<vec4, Settings:
 		if (texes[eint(Tex::blank)] = renderer->texFromSurface(white, false, false); !texes[eint(Tex::blank)])
 			throw std::runtime_error("Failed to create blank texture");
 
-		winDpi = maxDpi();
-		cursorHeight = std::ceil(assumedCursorHeight * winDpi / fallbackDpi);
+		uiScale = maxDisplayScale();
+		cursorHeight = std::ceil(assumedCursorHeight * uiScale);
 
-		int iconSize = std::ceil(assumedIconSize * winDpi / fallbackDpi);
+		int iconSize = std::ceil(assumedIconSize * uiScale);
 		string dirIcons = World::fileSys()->dirIcons();
 		for (size_t i = 0; i < iconStems.size() - 1; ++i)
 			if (texes[i + fileTexBegin] = renderer->texFromSurface(loadIcon((dirIcons / iconStems[i] + iconExt).data(), iconSize), false, true); !texes[i + fileTexBegin])
@@ -486,34 +487,32 @@ bool DrawSys::updateView() {
 	return ret;
 }
 
-bool DrawSys::updateDpi() {
-	if (float vdpi = maxDpi(); vdpi != winDpi) {
-		winDpi = vdpi;
-		cursorHeight = std::ceil(assumedCursorHeight * winDpi / fallbackDpi);
+void DrawSys::updateUiScale() {
+	if (float scale = maxDisplayScale(); scale != uiScale) {
+		uiScale = scale;
+		cursorHeight = std::ceil(assumedCursorHeight * uiScale);
 
-		int iconSize = std::ceil(assumedIconSize * winDpi / fallbackDpi);
+		int iconSize = std::ceil(assumedIconSize * uiScale);
 		string dirIcons = World::fileSys()->dirIcons();
 		renderer->waitIdle();
 		for (size_t i = 0; i < iconStems.size() - 1; ++i)
 			if (!renderer->texFromSurface(texes[i + fileTexBegin], loadIcon((dirIcons / iconStems[i] + iconExt).data(), iconSize), false))
 				SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to reload texture '%s%s'", iconStems[i], iconExt);
-		return true;
 	}
-	return false;
 }
 
-float DrawSys::maxDpi() const noexcept {
-	float mdpi = 0.f;
+float DrawSys::maxDisplayScale() const noexcept {
+	float vmax = 0.f;
 #ifdef WITH_SDL3
-	for (Renderer::View* it : renderer->getViews())
-		if (float scl = SDL_GetWindowDisplayScale(it->win); scl > mdpi)
-			mdpi = scl;
-	return mdpi > 0.f ? mdpi * fallbackDpi : fallbackDpi;
+	for (Renderer::View* it : renderer->getViewRefs())
+		if (float scl = SDL_GetWindowDisplayScale(it->win); scl > vmax)
+			vmax = scl;
+	return vmax > 0.f ? vmax : 1.f;
 #else
-	for (Renderer::View* it : renderer->getViews())
-		if (float vdpi; !SDL_GetDisplayDPI(SDL_GetWindowDisplayIndex(it->win), nullptr, nullptr, &vdpi) && vdpi > mdpi)
-			mdpi = vdpi;
-	return mdpi > 0.f ? mdpi : fallbackDpi;
+	for (Renderer::View* it : renderer->getViewRefs())
+		if (float dpi; !SDL_GetDisplayDPI(SDL_GetWindowDisplayIndex(it->win), nullptr, nullptr, &dpi) && dpi > vmax)
+			vmax = dpi;
+	return vmax > 0.f ? vmax / defaultDpi : 1.f;
 #endif
 }
 
@@ -532,33 +531,38 @@ void DrawSys::setFont(const string& font) {
 }
 
 void DrawSys::drawWidgets(bool mouseLast) noexcept {
+	if (drawState == Renderer::Action::no)
+		return;
 	bool showTooltip = mouseLast && World::sets()->tooltips && prepareTooltip();
-	const vector<Renderer::View*>& views = renderer->getViews();
-	for (auto vw = views.begin(); vw != views.end() && drawState != Renderer::Action::no; ++vw) {
-		Renderer::View* view = *vw;
-		if (drawState = renderer->startDraw(view); drawState == Renderer::Action::yes) {
+	if (drawState = renderer->beginRender(); drawState == Renderer::Action::no)
+		return;
+
+	std::span<Renderer::View*> views = renderer->getViewRefs();
+	for (size_t i = 0; i < views.size() && drawState == Renderer::Action::yes; ++i) {
+		const Recti& vrect = views[i]->rect;
+		if (drawState = renderer->startDraw(i); drawState == Renderer::Action::yes) {
 			// draw main widgets and visible overlays
-			World::scene()->getLayout()->drawSelf(view->rect);
+			World::scene()->getLayout()->drawSelf(vrect);
 			if (World::scene()->getOverlay() && World::scene()->getOverlay()->on)
-				World::scene()->getOverlay()->drawSelf(view->rect);
+				World::scene()->getOverlay()->drawSelf(vrect);
 
 			// draw popup if exists and dim main widgets
 			if (World::scene()->getPopup()) {
-				renderer->drawRect(texes[eint(Tex::blank)], view->rect, view->rect, Color::dim);
-				World::scene()->getPopup()->drawSelf(view->rect);
+				renderer->drawRect(texes[eint(Tex::blank)], vrect, vrect, Color::dim);
+				World::scene()->getPopup()->drawSelf(vrect);
 			}
 
 			// draw context menu
 			if (World::scene()->getContext())
-				World::scene()->getContext()->drawSelf(view->rect);
+				World::scene()->getContext()->drawSelf(vrect);
 
 			// draw extra stuff on top
 			if (World::scene()->getCapture())
-				World::scene()->getCapture()->drawTop(view->rect);
+				World::scene()->getCapture()->drawTop(vrect);
 			if (showTooltip)
-				drawTooltip(view->rect);
+				drawTooltip(vrect);
 
-			drawState = renderer->finishDraw(view);
+			drawState = renderer->finishDraw(i);
 		}
 	}
 	if (drawState != Renderer::Action::no)

@@ -10,6 +10,7 @@
 #include <SDL_timer.h>
 #include <SDL_version.h>
 #endif
+#include <glm/gtc/color_space.hpp>
 #include <stdexcept>
 
 // RENDERER
@@ -21,16 +22,26 @@ Renderer::Info::Device::Device(u32vec2 vendev, Cstring&& devname, uintptr_t memo
 {}
 
 uint32* Renderer::PixmapColor::fromText(const Pixmap& pm, uvec2 res) {
-	if (size_t size = res.x * res.y; size > len) {
+	uint size = res.x * res.y;
+	if (size > len) {
 		pix = std::make_unique_for_overwrite<uint32[]>(size);
 		len = size;
 	}
 	uint32* dp = pix.get();
 	const uint8* sp = pm.pix.get();
-	for (uint r = 0; r < res.y; ++r, sp += pm.res.x)
-		for (uint c = 0; c < res.x; ++c)
-			*dp++ = (uint32(sp[c]) << 24) | 0x00FFFFFF;
+	for (uint i = 0; i < size; ++i)
+		dp[i] = (uint32(sp[i]) << 24) | 0x00FFFFFF;
 	return pix.get();
+}
+
+Renderer::Renderer(uint8 viewcnt, uint maxTexRes) noexcept :
+	viewRefs(std::make_unique_for_overwrite<View*[]>(viewcnt)),
+	maxTextureSize(maxTexRes),
+	numViews(viewcnt)
+{}
+
+Renderer::Action Renderer::beginRender() noexcept {
+	return Action::yes;
 }
 
 Renderer::Action Renderer::finishRender() noexcept {
@@ -38,16 +49,16 @@ Renderer::Action Renderer::finishRender() noexcept {
 }
 
 Renderer::View* Renderer::findView(SDL_Window* win) noexcept {
-	for (View* it : views)
-		if (it->win == win)
-			return it;
+	for (uint8 i = 0; i < numViews; ++i)
+		if (viewRefs[i]->win == win)
+			return viewRefs[i];
 	return nullptr;
 }
 
 Renderer::View* Renderer::findView(ivec2 point) noexcept {
-	for (Renderer::View* it : views)
-		if (it->rect.contains(point))
-			return it;
+	for (uint8 i = 0; i < numViews; ++i)
+		if (viewRefs[i]->rect.contains(point))
+			return viewRefs[i];
 	return nullptr;
 }
 
@@ -134,26 +145,18 @@ void Renderer::recommendPicRamLimit(uintptr_t& mem) noexcept {
 void Renderer::convertColors(vec4* vecv, size_t num, bool srgb, bool gamma22) noexcept {
 	if (srgb) {
 		for (size_t i = 0; i < num; ++i)
-			for (uint c = 0; c < 3; ++c)
-				vecv[i][c] = srgb2linear(vecv[i][c]);
+			vecv[i] = glm::convertSRGBToLinear(dvec4(vecv[i]));
 	} else if (gamma22)
 		for (size_t i = 0; i < num; ++i)
 			for (uint c = 0; c < 3; ++c)
 				vecv[i][c] = std::pow(double(vecv[i][c]), 2.2);
 }
 
-double Renderer::srgb2linear(double x) noexcept {
-	if (x <= 0.0)
-		return 0.0;
-	if (x >= 1.0)
-		return 1.0;
-	return x < 0.04045 ? x / 12.92 : std::pow((x + 0.055) / 1.055, 2.4);
-}
-
 // RENDERER SF
 
 RendererSf::RendererSf(InitParams& initParams, Settings* sets) :
-	Renderer(initParams.windows.size(), std::sqrt(INT_MAX / 4))
+	Renderer(initParams.numWindows, std::sqrt(INT_MAX / 4)),
+	views(std::make_unique<ViewSf[]>(initParams.numWindows))
 {
 #ifdef WITH_SDL3
 	sthandle<SDL_PropertiesID> rendererProps = SDL_CreateProperties();
@@ -167,19 +170,20 @@ RendererSf::RendererSf(InitParams& initParams, Settings* sets) :
 		rendererFlags |= SDL_RENDERER_PRESENTVSYNC;
 #endif
 	try {
-		for (size_t i = 0; i < views.size(); ++i) {
-			Recti wrect;
-			wrect.pos() = initParams.vofs[i] - initParams.vofs[views.size()];
+		for (uint8 i = 0; i < numViews; ++i) {
+			viewRefs[i] = &views[i];
+			views[i].win = initParams.windows[i];
+			views[i].rect.pos() = initParams.vofs[i] - initParams.vofs[numViews];
 #if SDL_VERSION_ATLEAST(2, 26, 0)
-			SDL_GetWindowSizeInPixels(initParams.windows[i], &wrect.w, &wrect.h);
+			SDL_GetWindowSizeInPixels(initParams.windows[i], &views[i].rect.w, &views[i].rect.h);
 #else
-			SDL_GetWindowSize(initParams.windows[i], &wrect.w, &wrect.h);
+			SDL_GetWindowSize(initParams.windows[i], &views[i].rect.w, &views[i].rect.h);
 #endif
-			initParams.viewRes = glm::max(initParams.viewRes, wrect.end());
+			initParams.viewRes = glm::max(initParams.viewRes, views[i].rect.end());
 #ifdef WITH_SDL3
-			createRenderer(static_cast<ViewSf*>(views[i] = new ViewSf(initParams.windows[i], wrect)), rendererProps);
+			createRenderer(views[i], rendererProps);
 #else
-			createRenderer(static_cast<ViewSf*>(views[i] = new ViewSf(initParams.windows[i], wrect)), rendererFlags);
+			createRenderer(views[i], rendererFlags);
 #endif
 		}
 		if (!textureFormats.contains(defaultFormat) && textureFormats.contains(SDL_PIXELFORMAT_ARGB8888))
@@ -202,19 +206,16 @@ RendererSf::~RendererSf() {
 }
 
 void RendererSf::cleanup() noexcept {
-	for (View* it : views) {
-		auto svw = static_cast<ViewSf*>(it);
-		SDL_DestroyRenderer(svw->renderer);
-		delete svw;
-	}
+	for (uint8 i = 0; i < numViews; ++i)
+		SDL_DestroyRenderer(views[i].renderer);
 }
 
 #ifdef WITH_SDL3
-void RendererSf::createRenderer(ViewSf* view, SDL_PropertiesID props) {
-	SDL_SetPointerProperty(props, SDL_PROP_RENDERER_CREATE_WINDOW_POINTER, view->win);
-	if (view->renderer = SDL_CreateRendererWithProperties(props); !view->renderer)
+void RendererSf::createRenderer(ViewSf& view, SDL_PropertiesID props) {
+	SDL_SetPointerProperty(props, SDL_PROP_RENDERER_CREATE_WINDOW_POINTER, view.win);
+	if (view.renderer = SDL_CreateRendererWithProperties(props); !view.renderer)
 		throw std::runtime_error(SDL_GetError());
-	if (SDL_PropertiesID rprop = SDL_GetRendererProperties(view->renderer)) {
+	if (SDL_PropertiesID rprop = SDL_GetRendererProperties(view.renderer)) {
 		if (int64 maxSize = SDL_GetNumberProperty(rprop, SDL_PROP_RENDERER_MAX_TEXTURE_SIZE_NUMBER, 0); maxSize > 0 && maxSize < maxTextureSize)
 			maxTextureSize = maxSize;
 		if (textureFormats.empty())
@@ -225,10 +226,10 @@ void RendererSf::createRenderer(ViewSf* view, SDL_PropertiesID props) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", SDL_GetError());
 }
 #else
-void RendererSf::createRenderer(ViewSf* view, SDL_RendererFlags flags) {
-	if (view->renderer = SDL_CreateRenderer(view->win, -1, flags); !view->renderer)
+void RendererSf::createRenderer(ViewSf& view, SDL_RendererFlags flags) {
+	if (view.renderer = SDL_CreateRenderer(view.win, -1, flags); !view.renderer)
 		throw std::runtime_error(SDL_GetError());
-	if (SDL_RendererInfo info; !SDL_GetRendererInfo(view->renderer, &info)) {
+	if (SDL_RendererInfo info; !SDL_GetRendererInfo(view.renderer, &info)) {
 		if (int maxSize = std::min(info.max_texture_width, info.max_texture_height); maxSize > 0 && uint(maxSize) < maxTextureSize)
 			maxTextureSize = maxSize;
 		if (textureFormats.empty())
@@ -241,23 +242,23 @@ void RendererSf::createRenderer(ViewSf* view, SDL_RendererFlags flags) {
 
 void RendererSf::setColors(array<vec4, Settings::defaultColors.size()>& colors) {
 #ifdef WITH_SDL3
-	for (View* it : views) {
+	for (uint8 i = 0; i < numViews; ++i) {
 		const vec4& bgclr = colors[eint(Color::background)];
-		SDL_SetRenderDrawColorFloat(static_cast<ViewSf*>(it)->renderer, bgclr.r, bgclr.g, bgclr.b, bgclr.a);
+		SDL_SetRenderDrawColorFloat(views[i].renderer, bgclr.r, bgclr.g, bgclr.b, bgclr.a);
 	}
 	std::copy(colors.begin(), colors.end() - 1, rectColors.begin());
 #else
-	for (View* it : views) {
+	for (uint8 i = 0; i < numViews; ++i) {
 		u8vec4 bgclr = colorToBytes(colors[eint(Color::background)]);
-		SDL_SetRenderDrawColor(static_cast<ViewSf*>(it)->renderer, bgclr.r, bgclr.g, bgclr.b, bgclr.a);
+		SDL_SetRenderDrawColor(views[i].renderer, bgclr.r, bgclr.g, bgclr.b, bgclr.a);
 	}
 	std::transform(colors.begin(), colors.end() - 1, rectColors.begin(), colorToBytes);
 #endif
 }
 
 bool RendererSf::setSettings(Settings* sets) {
-	for (View* it : views)
-		SDL_RenderSetVSync(static_cast<ViewSf*>(it)->renderer, sets->vsync);
+	for (uint8 i = 0; i < numViews; ++i)
+		SDL_RenderSetVSync(views[i].renderer, sets->vsync);
 	setCompression(sets);
 	return false;
 }
@@ -269,47 +270,46 @@ void RendererSf::setCompression(Settings* sets) noexcept {
 }
 
 bool RendererSf::updateView(ivec2& viewRes) {
-	if (views.size() == 1) {
-		ivec2 wres;
+	if (numViews == 1) {
 #if SDL_VERSION_ATLEAST(2, 26, 0)
-		SDL_GetWindowSizeInPixels(views[0]->win, &wres.x, &wres.y);
+		SDL_GetWindowSizeInPixels(views[0].win, &views[0].rect.w, &views[0].rect.h);
 #else
-		SDL_GetWindowSize(views[0]->win, &wres.x, &wres.y);
+		SDL_GetWindowSize(views[0].win, &views[0].rect.w, &views[0].rect.h);
 #endif
-		if (wres != viewRes) {
-			viewRes = wres;
+		if (views[0].rect.size() != viewRes) {
+			viewRes = views[0].rect.size();
 			return true;
 		}
 	}
 	return false;
 }
 
-Renderer::Action RendererSf::startDraw(View* view) noexcept {
-	curView = static_cast<ViewSf*>(view);
-	SDL_RenderClear(curView->renderer);
+Renderer::Action RendererSf::startDraw(uint vid) noexcept {
+	curView = vid;
+	SDL_RenderClear(views[vid].renderer);
 	return Action::yes;
 }
 
 void RendererSf::drawRect(const Texture* tex, const Recti& rect, const Recti& frame, Color color) noexcept {
 	if (Recti isct; SDL_IntersectRect(&rect.asRect(), &frame.asRect(), &isct.asRect())) {
-		isct.pos() -= curView->rect.pos();
+		isct.pos() -= views[curView].rect.pos();
 		auto stx = static_cast<const TextureSf*>(tex)->tex;
 #ifdef WITH_SDL3
 		const vec4& bclr = rectColors[eint(color)];
 		SDL_SetTextureColorModFloat(stx, bclr.r, bclr.g, bclr.b);
 		SDL_SetTextureAlphaModFloat(stx, bclr.a);
-		SDL_RenderTexture(curView->renderer, stx, &cropTexRect(isct, rect, tex->getRes()).asFRect(), &Rectf(isct).asFRect());
+		SDL_RenderTexture(views[curView].renderer, stx, &cropTexRect(isct, rect, tex->getRes()).asFRect(), &Rectf(isct).asFRect());
 #else
 		const u8vec4& bclr = rectColors[eint(color)];
 		SDL_SetTextureColorMod(stx, bclr.r, bclr.g, bclr.b);
 		SDL_SetTextureAlphaMod(stx, bclr.a);
-		SDL_RenderCopy(curView->renderer, stx, &Recti(cropTexRect(isct, rect, tex->getRes())).asRect(), &isct.asRect());
+		SDL_RenderCopy(views[curView].renderer, stx, &Recti(cropTexRect(isct, rect, tex->getRes())).asRect(), &isct.asRect());
 #endif
 	}
 }
 
-Renderer::Action RendererSf::finishDraw(View* view) noexcept {
-	SDL_RenderPresent(static_cast<ViewSf*>(view)->renderer);
+Renderer::Action RendererSf::finishDraw(uint vid) noexcept {
+	SDL_RenderPresent(views[vid].renderer);
 	return Action::yes;
 }
 
@@ -366,7 +366,7 @@ pair<SDL_Texture*, uvec2> RendererSf::createTexture(SDL_Surface* img, bool linea
 	uvec2 res;
 	SDL_Texture* tex = nullptr;
 	if (img) {
-		if (tex = SDL_CreateTextureFromSurface(static_cast<ViewSf*>(views[0])->renderer, img); tex) {
+		if (tex = SDL_CreateTextureFromSurface(views[0].renderer, img); tex) {
 			res = uvec2(img->w, img->h);
 			SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
 			SDL_SetTextureScaleMode(tex, SDL_ScaleMode(linear));
@@ -432,7 +432,7 @@ pair<SDL_PixelFormatEnum, uint8> RendererSf::pickImageFormat(std::initializer_li
 	return pair(orig, 4);
 }
 
-Renderer::Info RendererSf::getInfo() const noexcept {
+Renderer::Info RendererSf::getInfo() const {
 	Info info = {
 		.compressions = { Settings::Compression::none },
 		.texSize = maxTextureSize,

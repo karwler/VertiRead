@@ -33,10 +33,10 @@ enum class Alignment : uint8 {
 };
 
 enum Actions : uint8 {
-	ACT_NONE = 0x0,
-	ACT_LEFT = 0x1,
-	ACT_RIGHT = 0x2,
-	ACT_DOUBLE = 0x4
+	ACT_NONE	= 0x00,
+	ACT_LEFT	= 0x01,
+	ACT_RIGHT	= 0x02,
+	ACT_DOUBLE	= 0x04
 };
 
 template <IntEnum T, size_t N>
@@ -154,13 +154,13 @@ public:
 	enum Assignment : uint8 {
 		ASG_NONE	= 0x00,
 		ASG_KEY		= 0x01,
-		ASG_JBUTTON = 0x02,
+		ASG_JBUTTON	= 0x02,
 		ASG_JHAT	= 0x04,
-		ASG_JAXIS_P = 0x08,	// use only positive values
-		ASG_JAXIS_N = 0x10,	// use only negative values
-		ASG_GBUTTON = 0x20,
-		ASG_GAXIS_P = 0x40,
-		ASG_GAXIS_N = 0x80
+		ASG_JAXIS_P	= 0x08,	// use only positive values
+		ASG_JAXIS_N	= 0x10,	// use only negative values
+		ASG_GBUTTON	= 0x20,
+		ASG_GAXIS_P	= 0x40,
+		ASG_GAXIS_N	= 0x80
 	};
 	static constexpr Type holders = Type::scrollUp;
 

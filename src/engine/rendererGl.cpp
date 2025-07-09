@@ -10,10 +10,10 @@
 #include <regex>
 
 #ifdef _WIN32
-#define gfget FunctionsGl& gl = static_cast<ViewGl*>(cvw)->gl;
-#define gf1get FunctionsGl& gl = static_cast<ViewGl*>(cvw)->gl; FunctionsGl1& gl1 = static_cast<ViewGl1*>(cvw)->gl1;
-#define gf3get FunctionsGl& gl = static_cast<ViewGl*>(cvw)->gl; FunctionsGl3& gl3 = static_cast<ViewGl3*>(cvw)->gl3;
-#define gf3set gl = static_cast<ViewGl*>(cvw)->gl; gl3 = static_cast<ViewGl3*>(cvw)->gl3;
+#define gfget FunctionsGl& gl = cvw->gl;
+#define gf1get FunctionsGl& gl = cvw->gl; FunctionsGl1& gl1 = static_cast<ViewGl1*>(cvw)->gl1;
+#define gf3get FunctionsGl& gl = cvw->gl; FunctionsGl3& gl3 = static_cast<ViewGl3*>(cvw)->gl3;
+#define gf3set gl = cvw->gl; gl3 = static_cast<ViewGl3*>(cvw)->gl3;
 #else
 #define gfget
 #define gf1get
@@ -111,8 +111,8 @@ RendererGl::SurfaceInfo::SurfaceInfo(SDL_Surface* surface, uint16 internal, uint
 	for (align = 8; align > 1 && (uintptr_t(img->pixels) % align || uint(img->pitch) % align); align /= 2);
 }
 
-RendererGl::RendererGl(size_t numViews, bool modern) :
-	Renderer(numViews, UINT_MAX),
+RendererGl::RendererGl(uint8 viewcnt, bool modern) :
+	Renderer(viewcnt, UINT_MAX),
 	canSwizzle(modern)
 {
 	int profile;
@@ -122,35 +122,34 @@ RendererGl::RendererGl(size_t numViews, bool modern) :
 	canTextureCompression = core;
 }
 
-void RendererGl::setContext(View* view) {
+void RendererGl::setContext(ViewGl& view) {
 	if (!trySetContext(view))
 		throw std::runtime_error(SDL_GetError());
 }
 
-bool RendererGl::trySetContext(View* view) noexcept {
-	auto vw = static_cast<ViewGl*>(view);
+bool RendererGl::trySetContext(ViewGl& view) noexcept {
 #ifdef _WIN32
-	cvw = vw;
+	cvw = &view;
 #endif
-	return sdlSucceeded(SDL_GL_MakeCurrent(vw->win, vw->ctx));
+	return sdlSucceeded(SDL_GL_MakeCurrent(view.win, view.ctx));
 }
 
 template <Class T, class F>
-void RendererGl::initContexts(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, F initGl) {
-	for (size_t i = 0; i < views.size(); ++i) {
-		Recti wrect;
-		wrect.pos() = vofs[i] - vofs[views.size()];
-		SDL_GL_GetDrawableSize(windows[i], &wrect.w, &wrect.h);
-		viewRes = glm::max(viewRes, wrect.end());
-		auto vw = static_cast<T*>(views[i] = new T(windows[i], wrect));
-		if (vw->ctx = SDL_GL_CreateContext(windows[i]); !vw->ctx)
+void RendererGl::initContexts(T* views, InitParams& initParams, F initGl) {
+	for (uint8 i = 0; i < numViews; ++i) {
+		viewRefs[i] = &views[i];
+		views[i].win = initParams.windows[i];
+		views[i].rect.pos() = initParams.vofs[i] - initParams.vofs[numViews];
+		SDL_GL_GetDrawableSize(initParams.windows[i], &views[i].rect.w, &views[i].rect.h);
+		initParams.viewRes = glm::max(initParams.viewRes, views[i].rect.end());
+		if (views[i].ctx = SDL_GL_CreateContext(initParams.windows[i]); !views[i].ctx)
 			throw std::runtime_error(SDL_GetError());
-		setContext(vw);
-		initGl(vw);
+		setContext(views[i]);
+		initGl(views[i]);
 	}
 }
 
-void RendererGl::initGlCommon(ViewGl* view, bool vsync, uintptr_t& availableMemory) noexcept {
+void RendererGl::initGlCommon(ViewGl& view, bool vsync, uintptr_t& availableMemory) noexcept {
 	gfget
 	setSwapInterval(vsync);
 
@@ -181,20 +180,20 @@ void RendererGl::initGlCommon(ViewGl* view, bool vsync, uintptr_t& availableMemo
 			if (khr)
 				gl.enable(GL_DEBUG_OUTPUT);
 			gl.enable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-			debugMessageCallback(debugMessage, view);
+			debugMessageCallback(debugMessage, &view);
 			debugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
 		}
 	}
 #endif
-	gl.viewport(0, 0, view->rect.w, view->rect.h);
+	gl.viewport(0, 0, view.rect.w, view.rect.h);
 	gl.enable(GL_BLEND);
 	gl.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 template <class F>
 void RendererGl::finalizeConstruction(Settings* sets, Texture*& tooltip, uintptr_t availableMemory, F finGl) {
-	for (View* it : views) {
-		setContext(it);
+	for (uint8 i = 0; i < numViews; ++i) {
+		setContext(*static_cast<ViewGl*>(viewRefs[i]));
 		finGl();
 	}
 
@@ -303,14 +302,15 @@ void RendererGl::setSwapInterval(bool vsync) noexcept {
 }
 
 bool RendererGl::updateViewCommon(ivec2& viewRes) noexcept {
-	ivec2 wres;
-	SDL_GL_GetDrawableSize(views[0]->win, &wres.x, &wres.y);
-	if (wres != viewRes) {
-		viewRes = wres;
-		views[0]->rect.size() = wres;
-		gfget
-		gl.viewport(0, 0, wres.x, wres.y);
-		return true;
+	if (numViews == 1) {
+		auto vw = static_cast<ViewGl*>(viewRefs[0]);
+		SDL_GL_GetDrawableSize(vw->win, &vw->rect.w, &vw->rect.h);
+		if (vw->rect.size() != viewRes) {
+			viewRes = vw->rect.size();
+			gfget
+			gl.viewport(0, 0, vw->rect.w, vw->rect.h);
+			return true;
+		}
 	}
 	return false;
 }
@@ -595,13 +595,9 @@ void RendererGl::setCompression(Settings* sets) noexcept {
 // RENDERER GL 1
 
 #if !defined(__arm__) && !defined(__aarch64__)
-RendererGl1::ViewGl1::ViewGl1(SDL_Window* window, const Recti& area) noexcept :
-	ViewGl(window, area),
-	proj(glm::ortho(float(area.x), float(area.x + area.w), float(area.y + area.h), float(area.y)))
-{}
-
 RendererGl1::RendererGl1(InitParams& initParams, Settings* sets) :
-	RendererGl(initParams.windows.size(), false)
+	RendererGl(initParams.numWindows, false),
+	views(std::make_unique<ViewGl1[]>(initParams.numWindows))
 {
 #ifndef _WIN32
 	gl.initFunctions();
@@ -610,7 +606,7 @@ RendererGl1::RendererGl1(InitParams& initParams, Settings* sets) :
 	try {
 		bool canTexRect = true;
 		uintptr_t availableMemory = 0;
-		initContexts<ViewGl1>(initParams.windows, initParams.vofs, initParams.viewRes, [this, sets, &canTexRect, &availableMemory](ViewGl1* vw) { initGl(vw, sets->vsync, canTexRect, availableMemory); });
+		initContexts(views.get(), initParams, [this, sets, &canTexRect, &availableMemory](ViewGl1& vw) { initGl(vw, sets->vsync, canTexRect, availableMemory); });
 		std::copy(initParams.colors.begin(), initParams.colors.end() - 1, rectColors.begin());
 		finalizeConstruction(sets, initParams.tooltipTexture, availableMemory, [this, &initParams]() {
 			const vec4& bgclr = initParams.colors[eint(Color::background)];
@@ -629,7 +625,7 @@ RendererGl1::~RendererGl1() {
 	cleanup();
 }
 
-void RendererGl1::initGl(ViewGl1* view, bool vsync, bool& canTexRect, uintptr_t& availableMemory) {
+void RendererGl1::initGl(ViewGl1& view, bool vsync, bool& canTexRect, uintptr_t& availableMemory) {
 #ifdef _WIN32
 	gf1get
 	gl.initFunctions();
@@ -654,17 +650,14 @@ void RendererGl1::initGl(ViewGl1* view, bool vsync, bool& canTexRect, uintptr_t&
 }
 
 void RendererGl1::cleanup() noexcept {
-	for (View* it : views)
-		if (auto vw = static_cast<ViewGl1*>(it)) {
-			SDL_GL_DeleteContext(vw->ctx);
-			delete vw;
-		}
+	for (uint8 i = 0; i < numViews; ++i)
+		SDL_GL_DeleteContext(views[i].ctx);
 }
 
 void RendererGl1::setColors(array<vec4, Settings::defaultColors.size()>& colors) {
 	const vec4& bgclr = colors[eint(Color::background)];
-	for (View* it : views) {
-		setContext(it);
+	for (uint8 i = 0; i < numViews; ++i) {
+		setContext(views[i]);
 		gf1get
 		gl1.clearColor(bgclr.r, bgclr.g, bgclr.b, bgclr.a);
 	}
@@ -672,8 +665,8 @@ void RendererGl1::setColors(array<vec4, Settings::defaultColors.size()>& colors)
 }
 
 bool RendererGl1::setSettings(Settings* sets) {
-	for (View* it : views) {
-		setContext(it);
+	for (uint8 i = 0; i < numViews; ++i) {
+		setContext(views[i]);
 		setSwapInterval(sets->vsync);
 	}
 	setCompression(sets);
@@ -681,22 +674,22 @@ bool RendererGl1::setSettings(Settings* sets) {
 }
 
 bool RendererGl1::updateView(ivec2& viewRes) {
-	if (views.size() == 1 && updateViewCommon(viewRes)) {
-		static_cast<ViewGl1*>(views[0])->proj = glm::ortho(0.f, float(viewRes.x), float(viewRes.y), 0.f);
+	if (updateViewCommon(viewRes)) {
+		views[0].proj = glm::ortho(0.f, float(viewRes.x), float(viewRes.y), 0.f);
 		return true;
 	}
 	return false;
 }
 
-Renderer::Action RendererGl1::startDraw(View* view) noexcept {
-	if (!trySetContext(view)) {
+Renderer::Action RendererGl1::startDraw(uint vid) noexcept {
+	if (!trySetContext(views[vid])) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", SDL_GetError());
 		return Action::skip;
 	}
 	gf1get
 	gl1.clear(GL_COLOR_BUFFER_BIT);
 	gl1.matrixMode(GL_PROJECTION);
-	gl1.loadMatrixf(glm::value_ptr(static_cast<ViewGl1*>(view)->proj));
+	gl1.loadMatrixf(glm::value_ptr(views[vid].proj));
 	return Action::yes;
 }
 
@@ -728,12 +721,12 @@ void RendererGl1::setPosScale(mat4& matrix, const Rect<T>& rect) noexcept {
 	matrix[3][1] = rect.y;
 }
 
-Renderer::Action RendererGl1::finishDraw(View* view) noexcept {
-	SDL_GL_SwapWindow(static_cast<ViewGl*>(view)->win);
+Renderer::Action RendererGl1::finishDraw(uint vid) noexcept {
+	SDL_GL_SwapWindow(views[vid].win);
 	return Action::yes;
 }
 
-Renderer::Info RendererGl1::getInfo() const noexcept {
+Renderer::Info RendererGl1::getInfo() const {
 	Info info = {
 		.compressions = { Settings::Compression::none, Settings::Compression::b16 },
 		.texSize = maxTextureSize,
@@ -748,7 +741,8 @@ Renderer::Info RendererGl1::getInfo() const noexcept {
 // RENDERER GL 3
 
 RendererGl3::RendererGl3(InitParams& initParams, Settings* sets) :
-	RendererGl(initParams.windows.size(), true)
+	RendererGl(initParams.numWindows, true),
+	views(std::make_unique<ViewGl3[]>(initParams.numWindows))
 {
 #ifndef _WIN32
 	gl.initFunctions();
@@ -756,7 +750,7 @@ RendererGl3::RendererGl3(InitParams& initParams, Settings* sets) :
 #endif
 	try {
 		uintptr_t availableMemory = 0;
-		initContexts<ViewGl3>(initParams.windows, initParams.vofs, initParams.viewRes, [this, sets, &availableMemory](ViewGl3* vw) { initGl(vw, sets->vsync, availableMemory); });
+		initContexts(views.get(), initParams, [this, sets, &availableMemory](ViewGl3& vw) { initGl(vw, sets->vsync, availableMemory); });
 		setUsesSrgb(sets);
 		initShaders(sets);
 		setColors(initParams.colors);
@@ -776,7 +770,7 @@ RendererGl3::~RendererGl3() {
 	cleanup();
 }
 
-void RendererGl3::initGl(ViewGl3* view, bool vsync, uintptr_t& availableMemory) {
+void RendererGl3::initGl(ViewGl3& view, bool vsync, uintptr_t& availableMemory) {
 #ifdef _WIN32
 	gf3get
 	gl.initFunctions();
@@ -801,20 +795,18 @@ void RendererGl3::cleanup() noexcept {
 		gl3.deleteProgram(progGui);
 		gl3.deleteProgram(progFin);
 	}
-	for (View* it : views)
-		if (auto vw = static_cast<ViewGl3*>(it)) {
-			if (trySetContext(vw)) {
-				gf3set
-				if (gl3.functionsInitialized()) {
-					GLuint vaos[2] = { vw->vaoGui, vw->vaoFin };
-					gl3.deleteVertexArrays(std::size(vaos), vaos);
-					gl.deleteTextures(1, &vw->tex);
-					gl3.deleteFramebuffers(1, &vw->fbo);
-				}
+	for (uint8 i = 0; i < numViews; ++i) {
+		if (trySetContext(views[i])) {
+			gf3set
+			if (gl3.functionsInitialized()) {
+				GLuint vaos[2] = { views[i].vaoGui, views[i].vaoFin };
+				gl3.deleteVertexArrays(std::size(vaos), vaos);
+				gl.deleteTextures(1, &views[i].tex);
+				gl3.deleteFramebuffers(1, &views[i].fbo);
 			}
-			SDL_GL_DeleteContext(vw->ctx);
-			delete vw;
 		}
+		SDL_GL_DeleteContext(views[i].ctx);
+	}
 }
 
 void RendererGl3::initShaders(Settings* sets) {
@@ -851,19 +843,18 @@ void RendererGl3::initShaders(Settings* sets) {
 		std::tie(attrVposFin, attrVtuvFin) = createFinShader(sets);
 
 	bool rollbackPp = false;
-	for (View* it : views) {
-		auto vw = static_cast<ViewGl3*>(it);
-		setContext(vw);
+	for (uint8 i = 0; i < numViews; ++i) {
+		setContext(views[i]);
 		gf3set
 
-		gl3.genVertexArrays(1, &vw->vaoGui);
-		gl3.bindVertexArray(vw->vaoGui);
+		gl3.genVertexArrays(1, &views[i].vaoGui);
+		gl3.bindVertexArray(views[i].vaoGui);
 		gl3.bindBuffer(GL_ARRAY_BUFFER, vboGui);
 		gl3.enableVertexAttribArray(attrVposGui);
 		gl3.vertexAttribPointer(attrVposGui, vec2::length(), GL_FLOAT, GL_FALSE, 0, nullptr);
 
 		if (progFin)
-			rollbackPp = !createFinData(vw, attrVposFin, attrVtuvFin);
+			rollbackPp = !createFinData(views[i], attrVposFin, attrVtuvFin);
 	}
 	if (rollbackPp)
 		rollbackFinData(sets->gammaType);
@@ -903,19 +894,19 @@ pair<GLint, GLint> RendererGl3::createFinShader(Settings* sets) noexcept {
 	return pair(gl3.getAttribLocation(progFin, ATTR_FIN_VPOS), gl3.getAttribLocation(progFin, ATTR_FIN_VTUV));
 }
 
-bool RendererGl3::createFinData(ViewGl3* view, GLint attrVpos, GLint attrVtuv) noexcept {
+bool RendererGl3::createFinData(ViewGl3& view, GLint attrVpos, GLint attrVtuv) noexcept {
 	gf3get
 	try {
-		gl3.genVertexArrays(1, &view->vaoFin);
-		gl3.bindVertexArray(view->vaoFin);
+		gl3.genVertexArrays(1, &view.vaoFin);
+		gl3.bindVertexArray(view.vaoFin);
 		gl3.bindBuffer(GL_ARRAY_BUFFER, vboFin);
 		gl3.enableVertexAttribArray(attrVpos);
 		gl3.vertexAttribPointer(attrVpos, vec2::length(), GL_FLOAT, GL_FALSE, sizeof(ScreenVertex), std::bit_cast<void*>(offsetof(ScreenVertex, pos)));
 		gl3.enableVertexAttribArray(attrVtuv);
 		gl3.vertexAttribPointer(attrVtuv, vec2::length(), GL_FLOAT, GL_FALSE, sizeof(ScreenVertex), std::bit_cast<void*>(offsetof(ScreenVertex, tuv)));
 
-		gl3.genFramebuffers(1, &view->fbo);
-		gl.genTextures(1, &view->tex);
+		gl3.genFramebuffers(1, &view.fbo);
+		gl.genTextures(1, &view.tex);
 		initFinFramebuffer(view);
 	} catch (const std::runtime_error& err) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
@@ -925,13 +916,13 @@ bool RendererGl3::createFinData(ViewGl3* view, GLint attrVpos, GLint attrVtuv) n
 	return true;
 }
 
-void RendererGl3::initFinFramebuffer(ViewGl3* view) {
+void RendererGl3::initFinFramebuffer(ViewGl3& view) {
 	gf3get
-	gl3.bindFramebuffer(GL_FRAMEBUFFER, view->fbo);
-	gl.bindTexture(GL_TEXTURE_2D, view->tex);
+	gl3.bindFramebuffer(GL_FRAMEBUFFER, view.fbo);
+	gl.bindTexture(GL_TEXTURE_2D, view.tex);
 	gl.texParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-	gl.texImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, view->rect.w, view->rect.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-	gl3.framebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, view->tex, 0);
+	gl.texImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, view.rect.w, view.rect.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	gl3.framebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, view.tex, 0);
 	gl3.readBuffer(GL_NONE);
 	checkFramebufferStatus();
 }
@@ -944,61 +935,67 @@ void RendererGl3::freeFinShader() noexcept {
 }
 
 void RendererGl3::rollbackFinData(Settings::Gamma& gamma) noexcept {
-	for (View* it : views) {
-		auto vw = static_cast<ViewGl3*>(it);
-		if (trySetContext(vw))
-			freeFinData(vw);
-	}
+	for (uint8 i = 0; i < numViews; ++i)
+		if (trySetContext(views[i]))
+			freeFinData(views[i]);
 	gamma = Settings::Gamma::none;
 }
 
-void RendererGl3::freeFinData(ViewGl3* view) noexcept {
+void RendererGl3::freeFinData(ViewGl3& view) noexcept {
 	gf3get
-	gl3.deleteVertexArrays(1, &view->vaoFin);
-	gl.deleteTextures(1, &view->tex);
-	gl3.deleteFramebuffers(1, &view->fbo);
-	view->vaoFin = view->fbo = view->tex = 0;
+	gl3.deleteVertexArrays(1, &view.vaoFin);
+	gl.deleteTextures(1, &view.tex);
+	gl3.deleteFramebuffers(1, &view.fbo);
+	view.vaoFin = view.fbo = view.tex = 0;
 }
 
 GLuint RendererGl3::createShader(const char* vertSrc, const char* fragSrc) const {
 	gf3get
-	string vertTmp, fragTmp;
-	if (!core) {
-		pair<std::regex, const char*> replacers[2] = {
-			pair(std::regex(R"r(#version\s+\d+)r"), "#version 300 es\nprecision highp float;precision highp int;precision highp sampler2D;"),
-			pair(std::regex(R"r(noperspective\s+)r"), "")
-		};
-		vertTmp = vertSrc;
-		fragTmp = fragSrc;
-		for (const auto& [rgx, rpl] : replacers) {
-			vertTmp = std::regex_replace(vertTmp, rgx, rpl);
-			fragTmp = std::regex_replace(fragTmp, rgx, rpl);
+	GLuint vert = 0, frag = 0, prog = 0;
+	try {
+		string vertTmp, fragTmp;
+		if (!core) {
+			pair<std::regex, const char*> replacers[2] = {
+				pair(std::regex(R"r(#version\s+\d+)r"), "#version 300 es\nprecision highp float;precision highp int;precision highp sampler2D;"),
+				pair(std::regex(R"r(noperspective\s+)r"), "")
+			};
+			vertTmp = vertSrc;
+			fragTmp = fragSrc;
+			for (const auto& [rgx, rpl] : replacers) {
+				vertTmp = std::regex_replace(vertTmp, rgx, rpl);
+				fragTmp = std::regex_replace(fragTmp, rgx, rpl);
+			}
+			vertSrc = vertTmp.data();
+			fragSrc = fragTmp.data();
 		}
-		vertSrc = vertTmp.data();
-		fragSrc = fragTmp.data();
+
+		vert = gl3.createShader(GL_VERTEX_SHADER);
+		gl3.shaderSource(vert, 1, &vertSrc, nullptr);
+		gl3.compileShader(vert);
+		checkStatus(vert, GL_COMPILE_STATUS, gl3.getShaderiv, gl3.getShaderInfoLog, "vertex shader");
+
+		frag = gl3.createShader(GL_FRAGMENT_SHADER);
+		gl3.shaderSource(frag, 1, &fragSrc, nullptr);
+		gl3.compileShader(frag);
+		checkStatus(frag, GL_COMPILE_STATUS, gl3.getShaderiv, gl3.getShaderInfoLog, "fragment shader");
+
+		prog = gl3.createProgram();
+		gl3.attachShader(prog, vert);
+		gl3.attachShader(prog, frag);
+		gl3.linkProgram(prog);
+		gl3.detachShader(prog, vert);
+		gl3.detachShader(prog, frag);
+		checkStatus(prog, GL_LINK_STATUS, gl3.getProgramiv, gl3.getProgramInfoLog, "shader program");
+		gl3.deleteShader(vert);
+		gl3.deleteShader(frag);
+		gl3.useProgram(prog);
+	} catch (const std::runtime_error&) {
+		gl3.deleteProgram(prog);
+		gl3.deleteShader(vert);
+		gl3.deleteShader(frag);
+		throw;
 	}
-
-	GLuint vert = gl3.createShader(GL_VERTEX_SHADER);
-	gl3.shaderSource(vert, 1, &vertSrc, nullptr);
-	gl3.compileShader(vert);
-	checkStatus(vert, GL_COMPILE_STATUS, gl3.getShaderiv, gl3.getShaderInfoLog, "vertex shader");
-
-	GLuint frag = gl3.createShader(GL_FRAGMENT_SHADER);
-	gl3.shaderSource(frag, 1, &fragSrc, nullptr);
-	gl3.compileShader(frag);
-	checkStatus(frag, GL_COMPILE_STATUS, gl3.getShaderiv, gl3.getShaderInfoLog, "fragment shader");
-
-	GLuint sprog = gl3.createProgram();
-	gl3.attachShader(sprog, vert);
-	gl3.attachShader(sprog, frag);
-	gl3.linkProgram(sprog);
-	gl3.detachShader(sprog, vert);
-	gl3.detachShader(sprog, frag);
-	gl3.deleteShader(vert);
-	gl3.deleteShader(frag);
-	checkStatus(sprog, GL_LINK_STATUS, gl3.getProgramiv, gl3.getProgramInfoLog, "shader program");
-	gl3.useProgram(sprog);
-	return sprog;
+	return prog;
 }
 
 void RendererGl3::checkStatus(GLuint id, GLenum stat, PFNGLGETSHADERIVPROC check, PFNGLGETSHADERINFOLOGPROC info, const char* name) {
@@ -1063,9 +1060,8 @@ bool RendererGl3::setSettings(Settings* sets) {
 	}
 
 	bool rollbackPp = false;
-	for (View* it : views) {
-		auto vw = static_cast<ViewGl3*>(it);
-		setContext(it);
+	for (uint8 i = 0; i < numViews; ++i) {
+		setContext(views[i]);
 		setSwapInterval(sets->vsync);
 
 		gf3get
@@ -1077,9 +1073,9 @@ bool RendererGl3::setSettings(Settings* sets) {
 		}
 		if (reloadGamma) {
 			if (progFin)
-				rollbackPp = !createFinData(vw, attrVposFin, attrVtuvFin);
+				rollbackPp = !createFinData(views[i], attrVposFin, attrVtuvFin);
 			else
-				freeFinData(vw);
+				freeFinData(views[i]);
 		}
 	}
 	if (rollbackPp)
@@ -1101,25 +1097,24 @@ void RendererGl3::setGammaValue(int gamma) {
 }
 
 bool RendererGl3::updateView(ivec2& viewRes) {
-	if (views.size() == 1 && updateViewCommon(viewRes)) {
+	if (updateViewCommon(viewRes)) {
 		if (progFin)
-			initFinFramebuffer(static_cast<ViewGl3*>(views[0]));
+			initFinFramebuffer(views[0]);
 		return true;
 	}
 	return false;
 }
 
-Renderer::Action RendererGl3::startDraw(View* view) noexcept {
-	auto vw = static_cast<ViewGl3*>(view);
-	if (!trySetContext(vw)) {
+Renderer::Action RendererGl3::startDraw(uint vid) noexcept {
+	if (!trySetContext(views[vid])) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", SDL_GetError());
 		return Action::skip;
 	}
 	gf3get
-	gl3.bindVertexArray(vw->vaoGui);
-	gl3.bindFramebuffer(GL_FRAMEBUFFER, vw->fbo);
+	gl3.bindVertexArray(views[vid].vaoGui);
+	gl3.bindFramebuffer(GL_FRAMEBUFFER, views[vid].fbo);
 	gl3.useProgram(progGui);
-	gl3.uniform4f(uniPviewGui, float(vw->rect.x), float(vw->rect.y), float(vw->rect.w) / 2.f, float(vw->rect.h) / 2.f);
+	gl3.uniform4f(uniPviewGui, float(views[vid].rect.x), float(views[vid].rect.y), float(views[vid].rect.w) / 2.f, float(views[vid].rect.h) / 2.f);
 	gl3.clearBufferfv(GL_COLOR, 0, glm::value_ptr(bgColor));
 	return Action::yes;
 }
@@ -1133,25 +1128,24 @@ void RendererGl3::drawRect(const Texture* tex, const Recti& rect, const Recti& f
 	gl.drawArrays(GL_TRIANGLE_STRIP, 0, vertices.size());
 }
 
-Renderer::Action RendererGl3::finishDraw(View* view) noexcept {
-	auto vw = static_cast<ViewGl3*>(view);
+Renderer::Action RendererGl3::finishDraw(uint vid) noexcept {
 	if (progFin) {
 		vec4 clrClr(0.f, 0.f, 0.f, 1.f);
 		gf3get
-		gl3.bindVertexArray(vw->vaoFin);
+		gl3.bindVertexArray(views[vid].vaoFin);
 		gl3.bindFramebuffer(GL_FRAMEBUFFER, 0);
 		gl3.useProgram(progFin);
 		gl.disable(GL_BLEND);
 		gl3.clearBufferfv(GL_COLOR, 0, glm::value_ptr(clrClr));
-		gl.bindTexture(GL_TEXTURE_2D, vw->tex);
+		gl.bindTexture(GL_TEXTURE_2D, views[vid].tex);
 		gl.drawArrays(GL_TRIANGLE_STRIP, 0, scrVertices.size());
 		gl.enable(GL_BLEND);
 	}
-	SDL_GL_SwapWindow(vw->win);
+	SDL_GL_SwapWindow(views[vid].win);
 	return Action::yes;
 }
 
-Renderer::Info RendererGl3::getInfo() const noexcept {
+Renderer::Info RendererGl3::getInfo() const {
 	Info info = {
 		.gamma = { Settings::Gamma::none, Settings::Gamma::value },
 		.compressions = { Settings::Compression::none, Settings::Compression::b16 },

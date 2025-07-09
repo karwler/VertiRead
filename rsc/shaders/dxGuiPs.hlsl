@@ -9,6 +9,6 @@ cbuffer InstanceColor : register(b1) {
 	uint colorId;
 };
 
-float4 main(float4 pos : SV_POSITION, float2 tuv : TEXCOORD0) : SV_TARGET {
+float4 main(float2 tuv : TEXCOORD0) : SV_Target {
 	return textureView.Sample(sampleState, tuv) * colors[colorId];
 }

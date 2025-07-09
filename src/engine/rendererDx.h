@@ -36,8 +36,6 @@ private:
 		array<ComPtr<ID3D11RenderTargetView>, 2> tgts;
 		ComPtr<ID3D11ShaderResourceView> view;	// for when doing post-processing
 
-		using View::View;
-
 		void reset();
 	};
 
@@ -104,6 +102,7 @@ private:
 		ScreenVertex(vec2(1.f, -1.f), vec2(1.f, 1.f))
 	};
 
+	uptr<ViewDx[]> views;
 	ComPtr<ID3D11Device> dev;
 	ComPtr<ID3D11DeviceContext> ctx;
 	ComPtr<ID3D11BlendState> blendState;
@@ -138,17 +137,17 @@ private:
 
 public:
 	RendererDx11(InitParams& initParams, Settings* sets);
-	~RendererDx11() override;
+	~RendererDx11() override {}
 
 	void setColors(array<vec4, Settings::defaultColors.size()>& colors) override;
 	bool setSettings(Settings* sets) override;
 	void setGammaValue(int gamma) override;
 	bool updateView(ivec2& viewRes) override;
-	Info getInfo() const noexcept override;
+	Info getInfo() const override;
 
-	Action startDraw(View* view) noexcept override;
+	Action startDraw(uint vid) noexcept override;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, Color color) noexcept override;
-	Action finishDraw(View* view) noexcept override;
+	Action finishDraw(uint vid) noexcept override;
 
 	Texture* texFromSurface(SDL_Surface* img, bool rpic, bool linear) noexcept override;
 	bool texFromSurface(Texture* tex, SDL_Surface* img, bool rpic) noexcept override;
@@ -160,15 +159,14 @@ protected:
 	pair<SDL_PixelFormatEnum, uint8> prepareImageFormat(SDL_Surface* img) const noexcept override;
 
 private:
-	void cleanup() noexcept;
 	static ComPtr<IDXGIFactory1> createFactory();
 	void initGuiShader();
 	void initFinShader(Settings* sets) noexcept;
 	void cleanupFinShader() noexcept;
 	void initConverter() noexcept;
 	void cleanupConverter() noexcept;
-	void createSwapchain(IDXGIFactory1* factory, ViewDx* view);
-	void createRenderTargets(ViewDx* view);
+	void createSwapchain(IDXGIFactory1* factory, ViewDx& view);
+	void createRenderTargets(ViewDx& view);
 	void setCompression(Settings* sets) noexcept;
 
 	D3D11_MAPPED_SUBRESOURCE mapResource(ID3D11Resource* rsc);

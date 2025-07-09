@@ -12,7 +12,7 @@ class WindowSys {
 public:
 	static constexpr char title[] = "VertiRead";
 private:
-	static constexpr ivec2 windowMinSize = ivec2(500, 300);
+	static constexpr ivec2 windowMinSize = ivec2(100);
 	static constexpr uint32 eventCheckTimeout = 50;
 
 	FileSys* fileSys = nullptr;
@@ -21,10 +21,15 @@ private:
 	Program* program = nullptr;
 	Scene* scene = nullptr;
 	uptr<Settings> sets;
-	vector<SDL_Window*> windows;
-	float dSec;			// delta seconds, aka the time between each iteration of the above mentioned loop
-	bool run = true;	// whether the loop in which the program runs should continue
+	uptr<SDL_Window*[]> windows;
+	float dSec;
+	uint16 refreshMs;
+	bool run = true;
 	bool active = true;	// TODO: restrict also when focus lost
+	uint8 numWindows = 0;
+#if defined(WITH_SDL3) && defined( __linux__)
+	bool isWayland;
+#endif
 
 public:
 	void init();
@@ -34,8 +39,7 @@ public:
 
 	float getDSec() const noexcept { return dSec; }
 	ivec2 mousePos() const noexcept;
-	ivec2 winViewOffset(uint32 wid) const noexcept;
-	ivec2 displayResolution() const noexcept;
+	ivec2 winViewOffset(SDL_WindowID wid) const noexcept;
 	bool hasTransparentWindow() const noexcept;
 	array<vec4, Settings::defaultColors.size()> loadColors(string_view name);
 	void moveCursor(ivec2 mov) noexcept;
@@ -54,16 +58,17 @@ public:
 private:
 	void createWindow();
 #ifdef WITH_SDL3
-	SDL_PropertiesID initWindow(size_t numWindows, const array<vec4, Settings::defaultColors.size()>& colors);
+	SDL_PropertiesID initWindow(uint8 wincnt, const array<vec4, Settings::defaultColors.size()>& colors);
 #else
-	uint32 initWindow(size_t numWindows);
+	uint32 initWindow(uint8 wincnt);
 #endif
 	void createSingleWindow(SDL_Surface* icon, const array<vec4, Settings::defaultColors.size()>& colors);
 	void createMultiWindow(SDL_Surface* icon, const array<vec4, Settings::defaultColors.size()>& colors);
 	void destroyWindows() noexcept;
-	void handleEvent(const SDL_Event& event);	// pass events to their specific handlers
+	void handleEvent(SDL_Event& event);
 	void eventWindow(const SDL_WindowEvent& winEvent);
-	void eventDisplay();
+	void eventDisplay(const SDL_DisplayEvent& dspEvent);
+	void setRefreshTime() noexcept;
 };
 
 inline void WindowSys::close() noexcept {

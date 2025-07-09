@@ -79,7 +79,7 @@ void Scene::onMouseUp(ivec2 mPos, uint8 mBut, uint8 mCnt) {
 
 void Scene::onMouseWheel(vec2 wMov) {
 	if (auto box = dynamic_cast<TextBox*>(select) ? select : getSelectedScrollArea())
-		box->onScroll(wMov * World::drawSys()->getWinDpi());
+		box->onScroll(wMov * DrawSys::defaultDpi * World::drawSys()->getUiScale());
 }
 
 void Scene::onMouseLeave() noexcept {
@@ -121,7 +121,6 @@ void Scene::onCancel() {
 }
 
 void Scene::onResize() {
-	World::program()->getState()->onResize();
 	layout->onResize();
 	if (popup)
 		popup->onResize();

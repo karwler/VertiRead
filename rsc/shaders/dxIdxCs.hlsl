@@ -1,17 +1,12 @@
-cbuffer Offset : register(b0) {
-	uint offset;
-};
+#include "common/converter.hlsl"
 
 cbuffer Palette : register(b1) {
 	uint4 colors[256 / 4];
 };
 
-ByteAddressBuffer pixels : register(t0);
-RWTexture2D<float4> img : register(u0);
-
 #define storeColor(id, w, pid) \
 	uint clr = colors[(pid) / 4][(pid) % 4]; \
-	img[uint2((id) % (w), (id) / (w))] = float4(clr & 0xFF, (clr >> 8) & 0xFF, (clr >> 16) & 0xFF, clr >> 24) / 255.f
+	img[uint2((id) % (w), (id) / (w))] = float4(clr & 0xFF, (clr >> 8) & 0xFF, (clr >> 16) & 0xFF, clr >> 24) / 255.0
 
 [numthreads(32, 1, 1)]
 void main(uint3 groupId : SV_GroupID, uint3 threadId : SV_GroupThreadID) {

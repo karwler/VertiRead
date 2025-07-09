@@ -2,19 +2,46 @@
 
 #ifdef WITH_VULKAN
 #include "renderer.h"
+#define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
-#include <span>
 
 class InstanceVk {
 public:
+	struct Buffer {
+		VkBuffer buffer = VK_NULL_HANDLE;
+		VkDeviceMemory memory = VK_NULL_HANDLE;
+
+		operator VkBuffer() const noexcept { return buffer; }
+	};
+
 	struct Image {
 		VkImage image = VK_NULL_HANDLE;
 		VkDeviceMemory memory = VK_NULL_HANDLE;
 		VkImageView view = VK_NULL_HANDLE;
+
+		operator VkImage() const noexcept { return image; }
 	};
 
 	struct Swizzle {
 		uint8 r, g, b, a;
+	};
+
+	struct ViewFrame {
+		VkImageView view = VK_NULL_HANDLE;
+		VkFramebuffer framebuffer = VK_NULL_HANDLE;
+	};
+
+	struct ViewVk : Renderer::View {
+		static constexpr uint maxFrames = 2;
+
+		VkSurfaceKHR surface = VK_NULL_HANDLE;
+		VkExtent2D extent{};
+		uptr<ViewFrame[]> frames;
+		uint32 imageCount = 0;
+		Image pp;
+
+		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+		Buffer uniformBuf;
 	};
 
 	PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
@@ -124,8 +151,9 @@ protected:
 public:
 	VkDevice getLdev() const noexcept { return ldev; }
 
-	pair<VkBuffer, VkDeviceMemory> createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const;
-	void recreateBuffer(VkBuffer& buffer, VkDeviceMemory& memory, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const;
+	Buffer createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const;
+	void recreateBuffer(Buffer& vkb, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const;
+	void cleanupBuffer(Buffer& vkb) const noexcept;
 	Image createImage(u32vec2 size, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, Swizzle swizzle = {}) const;
 	void cleanupImage(Image& vki) const noexcept;
 	VkImageView createImageView(VkImage image, VkFormat format, Swizzle swizzle = {}) const;
@@ -133,17 +161,13 @@ public:
 	void allocateCommandBuffers(VkCommandPool commandPool, VkCommandBuffer* cmdBuffers, uint32 count) const;
 	VkSemaphore createSemaphore() const;
 	VkFence createFence(VkFenceCreateFlags flags = 0) const;
+	VkSampler createSampler(VkFilter filter) const;
+	VkShaderModule createShaderModule(std::span<const uint32> code) const;
 private:
 	uint32 findMemoryType(uint32 typeFilter, VkMemoryPropertyFlags properties) const;
 };
 
-class GenericPipeline {
-protected:
-	static VkSampler createSampler(const InstanceVk* vk, VkFilter filter);
-	static VkShaderModule createShaderModule(const InstanceVk* vk, std::span<const uint32> code);
-};
-
-class FormatConverter : public GenericPipeline {
+class FormatConverter {
 public:
 	static constexpr uint maxTransfers = 2;
 	static constexpr uint numLayouts = 2;
@@ -181,11 +205,9 @@ private:
 	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 	array<VkDescriptorSet, maxTransfers * numLayouts> descriptorSets{};
 
-	array<VkBuffer, maxTransfers> outputBuffers{};
-	array<VkDeviceMemory, maxTransfers> outputBufferMemory{};
+	array<InstanceVk::Buffer, maxTransfers> outputBufs;
 	array<VkDeviceSize, maxTransfers> outputBufferSizesMax{};
-	array<VkBuffer, maxTransfers> uniformBuffers{};
-	array<VkDeviceMemory, maxTransfers> uniformBufferMemory{};
+	array<InstanceVk::Buffer, maxTransfers> uniformBufs;	// TODO: fuse into one and mapped when needed
 	array<UniformData*, maxTransfers> uniformBufferMapped;
 
 public:
@@ -196,7 +218,7 @@ public:
 	bool initialized() const noexcept { return descriptorSets[0]; }	// cause it's the last thing to be initialized
 	VkPipeline getPipeline(Pipeline pid) const noexcept { return pipelines[eint(pid)]; }
 	tuple<VkPipelineLayout, VkDescriptorSet, uint> getPipelineInfo(Pipeline pid, uint id) const noexcept;
-	VkBuffer getOutputBuffer(uint id) const noexcept { return outputBuffers[id]; }
+	VkBuffer getOutputBuffer(uint id) const noexcept { return outputBufs[id]; }
 	UniformData* getUniformBufferMapped(uint id) const noexcept { return uniformBufferMapped[id]; }
 
 private:
@@ -210,7 +232,7 @@ inline tuple<VkPipelineLayout, VkDescriptorSet, uint> FormatConverter::getPipeli
 	return pid != Pipeline::index8 ? tuple(pipelineLayoutRgb, descriptorSets[id], 0) : tuple(pipelineLayoutIdx, descriptorSets[maxTransfers + id], 1);
 }
 
-class RenderPass : public GenericPipeline {
+class RenderPass {
 public:
 	struct PushData {
 		alignas(16) ivec4 rect;
@@ -284,13 +306,12 @@ private:
 	umap<VkDescriptorPool, DescriptorSetBlock> poolSetTex;
 	array<VkSampler, 2> samplers{};
 	VkDescriptorSet globDescriptorSet = VK_NULL_HANDLE;
-	VkBuffer globBuffer = VK_NULL_HANDLE;
-	VkDeviceMemory globBufferMemory = VK_NULL_HANDLE;
+	InstanceVk::Buffer globBuf;
 
 public:
 	void init(const InstanceVk* vk);
-	void createPass(const InstanceVk* vk, VkFormat format, Settings::Gamma& gamma);
-	void createDescriptorPoolAndSets(const InstanceVk* vk, vector<Renderer::View*>& views);
+	void createPass(const InstanceVk* vk, VkFormat format, Settings::Gamma& gamma, bool canSrgb);
+	void createDescriptorPoolAndSets(const InstanceVk* vk, InstanceVk::ViewVk* views, uint8 numViews);
 	void free(const InstanceVk* vk) noexcept;
 	void freePass(const InstanceVk* vk) noexcept;
 	void freeDescriptorPool(const InstanceVk* vk) noexcept;
@@ -301,52 +322,20 @@ public:
 	VkPipeline getFinPipeline() const noexcept { return finPipeline; }
 	VkPipelineLayout getFinPipelineLayout() const noexcept { return finPipelineLayout; }
 	VkDescriptorSet getGlobDescriptorSet() const noexcept { return globDescriptorSet; }
-	VkBuffer getGlobBuffer() const noexcept { return globBuffer; }
+	VkBuffer getGlobBuffer() const noexcept { return globBuf; }
 	pair<VkDescriptorPool, VkDescriptorSet> newDescriptorSetTex(const InstanceVk* vk, VkImageView imageView);
 	pair<VkDescriptorPool, VkDescriptorSet> getDescriptorSetTex(const InstanceVk* vk);
 	void freeDescriptorSetTex(const InstanceVk* vk, VkDescriptorPool pool, VkDescriptorSet dset);
 	static void updateDescriptorSetImg(const InstanceVk* vk, VkDescriptorSet descriptorSet, VkImageView imageView) noexcept;
 
 private:
-	void createDescriptorSetLayouts(const InstanceVk* vk);
 	void createRenderPass(const InstanceVk* vk, VkFormat format, bool postp);
+	void createDescriptorSetLayouts(const InstanceVk* vk, bool postp);
 	void createGuiPipeline(const InstanceVk* vk);
 	void createFinPipeline(const InstanceVk* vk);
 };
 
 class RendererVk final : public Renderer, public InstanceVk {
-public:
-	struct ViewFrame {
-		VkImageView view = VK_NULL_HANDLE;
-		VkFramebuffer framebuffer = VK_NULL_HANDLE;
-	};
-
-	class ViewVk : public View {
-	private:
-		static constexpr uint maxFrames = 2;
-
-		VkSurfaceKHR surface = VK_NULL_HANDLE;
-		VkSwapchainKHR swapchain = VK_NULL_HANDLE;
-		VkExtent2D extent{};
-		uptr<ViewFrame[]> frames;
-		uint32 imageCount = 0;
-		Image pp;
-
-		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
-		VkBuffer uniformBuffer = VK_NULL_HANDLE;
-		VkDeviceMemory uniformBufferMemory = VK_NULL_HANDLE;
-
-		array<VkCommandBuffer, maxFrames> commandBuffers{};
-		array<VkSemaphore, maxFrames> imageAvailableSemaphores{};
-		array<VkSemaphore, maxFrames> renderFinishedSemaphores{};
-		array<VkFence, maxFrames> frameFences{};
-
-		using View::View;
-
-		friend class RenderPass;
-		friend class RendererVk;
-	};
-
 private:
 	enum class OptTexFmt : uint8 {
 		B5G6R5,
@@ -408,7 +397,7 @@ private:
 		VkPhysicalDeviceMemoryProperties memp;
 		VkPhysicalDevice4444FormatsFeaturesEXT formatsFeatures = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_4444_FORMATS_FEATURES_EXT };
 		vector<string> extensions;
-		array<VkSurfaceFormatKHR, 2> surfaceFormats;
+		array<VkSurfaceFormatKHR, 2> surfaceFormats{};
 		pair<uint32, uint32> qfqcnts[maxQueues]{};						// family index, queue count
 		pair<uint32, uint32> graphicsQids, presentQids, transferQids;	// family index, queue index
 		uint score;
@@ -436,7 +425,6 @@ private:
 #ifndef NDEBUG
 	static inline const char* validationLayerName = "VK_LAYER_KHRONOS_validation";
 #endif
-	static constexpr array<VkFormat, 5> srgbSurfaceFormats = { VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_A8B8G8R8_SRGB_PACK32, VK_FORMAT_B8G8R8_SRGB, VK_FORMAT_R8G8B8_SRGB };
 	static constexpr Swizzle textSwizzle = { .r = VK_COMPONENT_SWIZZLE_ONE, .g = VK_COMPONENT_SWIZZLE_ONE, .b = VK_COMPONENT_SWIZZLE_ONE, .a = VK_COMPONENT_SWIZZLE_R };
 
 	static constexpr array scrVertices = {
@@ -446,6 +434,7 @@ private:
 		vec2(1.f, 1.f)
 	};
 
+	uptr<ViewVk[]> views;
 	VkQueue gqueue = VK_NULL_HANDLE;
 	VkQueue pqueue = VK_NULL_HANDLE;
 	VkQueue tqueue = VK_NULL_HANDLE;
@@ -457,20 +446,23 @@ private:
 	uint32 gfamilyIndex, pfamilyIndex, tfamilyIndex;
 	RenderPass renderPass;
 	FormatConverter fmtConv;
-	VkBuffer vertexBuffer = VK_NULL_HANDLE;
-	VkDeviceMemory vertexBufferMemory = VK_NULL_HANDLE;
+	uptr<VkSwapchainKHR[]> swapchains;	// numViews
+	array<VkCommandBuffer, ViewVk::maxFrames> commandBuffers{};
+	uptr<VkPipelineStageFlags[]> waitStages;		// numViews
+	uptr<VkSemaphore[]> imageAvailableSemaphores;	// numViews * maxFrames
+	array<VkSemaphore, ViewVk::maxFrames> renderFinishedSemaphores{};
+	array<VkFence, ViewVk::maxFrames> frameFences{};
+	uptr<uint32[]> imageIndices;	// numViews
+	Buffer vertexBuf;
 
 	array<VkCommandBuffer, FormatConverter::maxTransfers> tcmdBuffers{};
 	array<VkFence, FormatConverter::maxTransfers> tfences{};
-	array<VkBuffer, FormatConverter::maxTransfers> inputBuffers{};
-	array<VkDeviceMemory, FormatConverter::maxTransfers> inputBufferMemory{};
+	array<Buffer, FormatConverter::maxTransfers> inputBufs;
 	array<void*, FormatConverter::maxTransfers> inputsMapped;
 	array<VkDeviceSize, FormatConverter::maxTransfers> inputSizesMax{};
 	VkDeviceSize transferAtomSize;
 
-	ViewVk* currentView;
 	uint currentFrame = 0;
-	uint32 imageIndex;
 	VkClearValue bgColor;
 	array<VkSurfaceFormatKHR, 2> surfaceFormats;	// UNORM, SRGB
 	uint32 maxComputeWorkGroups;
@@ -490,11 +482,12 @@ public:
 	bool setSettings(Settings* sets) override;
 	void setGammaValue(int gamma) override;
 	bool updateView(ivec2& viewRes) override;
-	Info getInfo() const noexcept override;
+	Info getInfo() const override;
 
-	Action startDraw(View* view) noexcept override;
+	Action beginRender() noexcept override;
+	Action startDraw(uint vid) noexcept override;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, Color color) noexcept override;
-	Action finishDraw(View* view) noexcept override;
+	Action finishDraw(uint vid) noexcept override;
 	Action finishRender() noexcept override;
 
 	Texture* texFromSurface(SDL_Surface* img, bool rpic, bool linear) noexcept override;
@@ -513,11 +506,9 @@ private:
 	uptr<DeviceInfo> pickPhysicalDevice(const InstanceInfo& instInfo, u32vec2& preferred);
 	void createDevice(DeviceInfo& deviceInfo);
 	VkCommandPool createCommandPool(uint32 family) const;
-	void createSwapchain(ViewVk* view, VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE);
-	void recreateSwapchain(ViewVk* view);
-	void initView(ViewVk* view);
-	void freeView(ViewVk* view) noexcept;
-	void freeFramebuffers(ViewVk* view) noexcept;
+	void createSwapchain(uint vid, VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE);
+	void recreateSwapchain(uint vid);
+	void freeFramebuffers(ViewVk& view) noexcept;
 	void initGlobalData(const Settings* sets, array<vec4, Settings::defaultColors.size()>& colors);
 	void prepareColorData(array<vec4, Settings::defaultColors.size()>& colors) noexcept;
 	void setUsesSrgb(Settings* sets) noexcept;

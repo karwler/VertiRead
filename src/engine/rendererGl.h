@@ -104,8 +104,6 @@ protected:
 #ifdef _WIN32
 		FunctionsGl gl;
 #endif
-
-		using View::View;
 	};
 
 private:
@@ -140,7 +138,7 @@ protected:
 #endif
 	PixmapColor textBuffer;
 
-	RendererGl(size_t numViews, bool modern);
+	RendererGl(uint8 viewcnt, bool modern);
 
 public:
 	Texture* texFromSurface(SDL_Surface* img, bool rpic, bool linear) noexcept override;
@@ -151,14 +149,14 @@ public:
 
 protected:
 #ifdef _WIN32
-	void setContext(View* view);
-	bool trySetContext(View* view) noexcept;
+	void setContext(ViewGl& view);
+	bool trySetContext(ViewGl& view) noexcept;
 #else
-	static void setContext(View* view);
-	static bool trySetContext(View* view) noexcept;
+	static void setContext(ViewGl& view);
+	static bool trySetContext(ViewGl& view) noexcept;
 #endif
-	template <Class T, class F> void initContexts(const vector<SDL_Window*>& windows, const ivec2* vofs, ivec2& viewRes, F initGl);
-	void initGlCommon(ViewGl* view, bool vsync, uintptr_t& availableMemory) noexcept;
+	template <Class T, class F> void initContexts(T* views, InitParams& initParams, F initGl);
+	void initGlCommon(ViewGl& view, bool vsync, uintptr_t& availableMemory) noexcept;
 	template <class F> void finalizeConstruction(Settings* sets, Texture*& tooltip, uintptr_t availableMemory, F finGl);
 	static void setSwapInterval(bool vsync) noexcept;
 	void setCompression(Settings* sets) noexcept;
@@ -188,13 +186,12 @@ private:
 		FunctionsGl1 gl1;
 #endif
 		mat4 proj;
-
-		ViewGl1(SDL_Window* window, const Recti& area) noexcept;
 	};
 
 #ifndef _WIN32
 	FunctionsGl1 gl1;
 #endif
+	uptr<ViewGl1[]> views;
 	mat4 model = mat4(1.f);
 	mat4 mtex = mat4(1.f);
 	array<vec4, Settings::defaultColors.size() - 1> rectColors;
@@ -206,14 +203,14 @@ public:
 	void setColors(array<vec4, Settings::defaultColors.size()>& colors) override;
 	bool setSettings(Settings* sets) override;
 	bool updateView(ivec2& viewRes) override;
-	Info getInfo() const noexcept override;
+	Info getInfo() const override;
 
-	Action startDraw(View* view) noexcept override;
+	Action startDraw(uint vid) noexcept override;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, Color color) noexcept override;
-	Action finishDraw(View* view) noexcept override;
+	Action finishDraw(uint vid) noexcept override;
 
 private:
-	void initGl(ViewGl1* view, bool vsync, bool& canTexRect, uintptr_t& availableMemory);
+	void initGl(ViewGl1& view, bool vsync, bool& canTexRect, uintptr_t& availableMemory);
 	void cleanup() noexcept;
 	template <Number T> static void setPosScale(mat4& matrix, const Rect<T>& rect) noexcept;
 };
@@ -227,8 +224,6 @@ private:
 #endif
 		GLuint vaoGui = 0, vaoFin = 0;
 		GLuint fbo = 0, tex = 0;
-
-		using ViewGl::ViewGl;
 	};
 
 	static constexpr array scrVertices = {
@@ -241,6 +236,7 @@ private:
 #ifndef _WIN32
 	FunctionsGl3 gl3;
 #endif
+	uptr<ViewGl3[]> views;
 	GLint uniPviewGui, uniRectGui, uniFrameGui;
 	GLint uniColorsGui, uniColorIdGui;
 	GLint uniGammaFin;
@@ -258,22 +254,22 @@ public:
 	bool setSettings(Settings* sets) override;
 	void setGammaValue(int gamma) override;
 	bool updateView(ivec2& viewRes) override;
-	Info getInfo() const noexcept override;
+	Info getInfo() const override;
 
-	Action startDraw(View* view) noexcept override;
+	Action startDraw(uint vid) noexcept override;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, Color color) noexcept override;
-	Action finishDraw(View* view) noexcept override;
+	Action finishDraw(uint vid) noexcept override;
 
 private:
-	void initGl(ViewGl3* view, bool vsync, uintptr_t& availableMemory);
+	void initGl(ViewGl3& view, bool vsync, uintptr_t& availableMemory);
 	void cleanup() noexcept;
 	void initShaders(Settings* sets);
 	pair<GLint, GLint> createFinShader(Settings* sets) noexcept;
-	bool createFinData(ViewGl3* view, GLint attrVpos, GLint attrVtuv) noexcept;
-	void initFinFramebuffer(ViewGl3* view);
+	bool createFinData(ViewGl3& view, GLint attrVpos, GLint attrVtuv) noexcept;
+	void initFinFramebuffer(ViewGl3& view);
 	void freeFinShader() noexcept;
 	void rollbackFinData(Settings::Gamma& gamma) noexcept;
-	void freeFinData(ViewGl3* view) noexcept;
+	void freeFinData(ViewGl3& view) noexcept;
 	GLuint createShader(const char* vertSrc, const char* fragSrc) const;
 	static void checkStatus(GLuint id, GLenum stat, PFNGLGETSHADERIVPROC check, PFNGLGETSHADERINFOLOGPROC info, const char* name);
 	void checkFramebufferStatus();

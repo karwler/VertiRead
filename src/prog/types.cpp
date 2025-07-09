@@ -362,18 +362,17 @@ int PdfFile::numPages() const noexcept {
 	return pcnt;
 }
 
-SDL_Surface* PdfFile::renderPage(int pid, double dpi) noexcept {
+SDL_Surface* PdfFile::renderPage(int pid, double scale) noexcept {
 	SDL_Surface* pic = nullptr;
 #ifdef CAN_MUPDF
 	if (mdoc) {
-		float scale = dpi / defaultDpi;
 		fz_matrix ctm = fzScale(scale, scale);
 		fz_pixmap* pm;
 		fzTry(mctx) {
 			pm = fzNewPixmapFromPageNumber(mctx, mdoc, pid, ctm, fzDeviceRgb(mctx), 0);
 			if (pm->n == 3 + pm->alpha)
 				if (pic = SDL_CreateSurface(pm->w, pm->h, pm->alpha ? SDL_PIXELFORMAT_ABGR8888 : SDL_PIXELFORMAT_RGB24); pic)
-					copyPixels(pic->pixels, pm->samples, pic->pitch, pm->stride, pic->w * surfaceBytesPpx(pic), pic->h);
+					copyPixels(pic->pixels, pm->samples, pic->pitch, pm->stride, pic->h);
 			fzDropPixmap(mctx, pm);
 		} fzCatch(mctx) {}
 	}
@@ -381,7 +380,6 @@ SDL_Surface* PdfFile::renderPage(int pid, double dpi) noexcept {
 #ifdef CAN_POPPLER
 	if (pdoc)
 		if (PopplerPage* page = popplerDocumentGetPage(pdoc, pid)) {
-			double scale = dpi / defaultDpi;
 			dvec2 size;
 			popplerPageGetSize(page, &size.x, &size.y);
 			size = glm::floor(size * scale);
@@ -401,7 +399,7 @@ SDL_Surface* PdfFile::renderPage(int pid, double dpi) noexcept {
 				pic = SDL_CreateSurface(cairoImageSurfaceGetWidth(img), cairoImageSurfaceGetHeight(img), SDL_PIXELFORMAT_RGB565);
 			}
 			if (pic)
-				copyPixels(pic->pixels, cairoImageSurfaceGetData(img), pic->pitch, cairoImageSurfaceGetStride(img), pic->w * surfaceBytesPpx(pic), pic->h);
+				copyPixels(pic->pixels, cairoImageSurfaceGetData(img), pic->pitch, cairoImageSurfaceGetStride(img), pic->h);
 			cairoSurfaceUnmapImage(tgt, img);
 			cairoDestroy(ctx);
 			cairoSurfaceDestroy(tgt);

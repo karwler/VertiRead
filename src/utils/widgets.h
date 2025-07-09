@@ -394,11 +394,11 @@ public:
 class LabelEdit final : public Button, public TextDsp<string> {
 public:
 	enum TextType : uint8 {
-		TT_ANY = 0x0,
-		TT_PWD = 0x1,
-		TT_INT = 0x2,
-		TT_FLT = 0x4,
-		TT_UNS = 0x8,
+		TT_ANY = 0x00,
+		TT_PWD = 0x01,
+		TT_INT = 0x02,
+		TT_FLT = 0x04,
+		TT_UNS = 0x08,
 		TT_VEC = 0x10
 	};
 

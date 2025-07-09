@@ -327,7 +327,7 @@ public:
 	PdfFile& operator=(PdfFile&& pdf) noexcept;
 	operator bool() const noexcept;
 	int numPages() const noexcept;
-	SDL_Surface* renderPage(int pid, double dpi) noexcept;
+	SDL_Surface* renderPage(int pid, double scale) noexcept;
 	PdfFile copyLight() const noexcept;
 
 	static bool canOpen(uptr<SDL_RWops>&& ops) noexcept;	// closes ops if it's not a nullptr
@@ -355,18 +355,18 @@ enum class ResultCode : uint8 {
 };
 
 enum BrowserListOption : uint8 {
-	BLO_NONE = 0x0,
-	BLO_FILES = 0x1,
-	BLO_DIRS = 0x2,
-	BLO_HIDDEN = 0x4
+	BLO_NONE	= 0x00,
+	BLO_FILES	= 0x01,
+	BLO_DIRS	= 0x02,
+	BLO_HIDDEN	= 0x04
 };
 
 enum BrowserResultState : uint8 {
-	BRS_NONE = 0x0,
-	BRS_LOC = 0x1,
-	BRS_PDF = 0x2,
-	BRS_ARCH = 0x4,
-	BRS_FWD = 0x8
+	BRS_NONE	= 0x00,
+	BRS_LOC		= 0x01,
+	BRS_PDF		= 0x02,
+	BRS_ARCH	= 0x04,
+	BRS_FWD		= 0x08
 };
 
 // files and directories info

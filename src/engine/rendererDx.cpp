@@ -13,6 +13,7 @@
 #include <SDL_syswm.h>
 #include <SDL_version.h>
 #endif
+#include <glm/gtc/round.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 void RendererDx11::ViewDx::reset() {
@@ -22,7 +23,8 @@ void RendererDx11::ViewDx::reset() {
 }
 
 RendererDx11::RendererDx11(InitParams& initParams, Settings* sets) :
-	Renderer(initParams.windows.size(), D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION),
+	Renderer(initParams.numWindows, D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION),
+	views(std::make_unique<ViewDx[]>(initParams.numWindows)),
 	syncInterval(sets->vsync),
 	usesSrgb(sets->gammaType == Settings::Gamma::srgb)
 {
@@ -39,17 +41,17 @@ RendererDx11::RendererDx11(InitParams& initParams, Settings* sets) :
 			initConverter();
 		ctx->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
-		for (size_t i = 0; i < views.size(); ++i) {
-			Recti wrect;
-			wrect.pos() = initParams.vofs[i] - initParams.vofs[views.size()];
+		for (uint8 i = 0; i < numViews; ++i) {
+			viewRefs[i] = &views[i];
+			views[i].win = initParams.windows[i];
+			views[i].rect.pos() = initParams.vofs[i] - initParams.vofs[numViews];
 #if SDL_VERSION_ATLEAST(2, 26, 0)
-			SDL_GetWindowSizeInPixels(initParams.windows[i], &wrect.w, &wrect.h);
+			SDL_GetWindowSizeInPixels(initParams.windows[i], &views[i].rect.w, &views[i].rect.h);
 #else
-			SDL_GetWindowSize(initParams.windows[i], &wrect.w, &wrect.h);
+			SDL_GetWindowSize(initParams.windows[i], &views[i].rect.w, &views[i].rect.h);
 #endif
-			initParams.viewRes = glm::max(initParams.viewRes, wrect.end());
-			auto vw = static_cast<ViewDx*>(views[i] = new ViewDx(initParams.windows[i], wrect));
-			createSwapchain(factory.Get(), vw);
+			initParams.viewRes = glm::max(initParams.viewRes, views[i].rect.end());
+			createSwapchain(factory.Get(), views[i]);
 		}
 
 		D3D11_BLEND_DESC blendDesc = {
@@ -114,18 +116,8 @@ RendererDx11::RendererDx11(InitParams& initParams, Settings* sets) :
 		}
 	} catch (const std::exception&) {
 		freeTexture(initParams.tooltipTexture);
-		cleanup();
 		throw;
 	}
-}
-
-RendererDx11::~RendererDx11() {
-	cleanup();
-}
-
-void RendererDx11::cleanup() noexcept {
-	for (View* it : views)
-		delete static_cast<ViewDx*>(it);
 }
 
 ComPtr<IDXGIFactory1> RendererDx11::createFactory() {
@@ -175,7 +167,7 @@ void RendererDx11::initGuiShader() {
 	ctx->PSSetConstantBuffers(0, std::size(psBuffers), psBuffers);
 
 	D3D11_INPUT_ELEMENT_DESC vertexElementDesc = {
-		.SemanticName = "SV_POSITION",
+		.SemanticName = "POSITION0",
 		.Format = DXGI_FORMAT_R32G32_FLOAT,
 		.AlignedByteOffset = 0,
 		.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA
@@ -228,7 +220,7 @@ void RendererDx11::initFinShader(Settings* sets) noexcept {
 		ctx->PSSetConstantBuffers(finBufferSlot, 1, finBuf.GetAddressOf());
 
 		D3D11_INPUT_ELEMENT_DESC vertexElementDescs[2] = { {
-			.SemanticName = "SV_POSITION",
+			.SemanticName = "POSITION0",
 			.Format = DXGI_FORMAT_R32G32_FLOAT,
 			.AlignedByteOffset = 0,
 			.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA
@@ -344,16 +336,16 @@ void RendererDx11::cleanupConverter() noexcept {
 		it.Reset();
 }
 
-void RendererDx11::createSwapchain(IDXGIFactory1* factory, ViewDx* view) {
+void RendererDx11::createSwapchain(IDXGIFactory1* factory, ViewDx& view) {
 #ifdef WITH_SDL3
-	SDL_PropertiesID props = SDL_GetWindowProperties(view->win);
+	SDL_PropertiesID props = SDL_GetWindowProperties(view.win);
 	if (!props)
 		throw std::runtime_error(SDL_GetError());
 	auto hwnd = static_cast<HWND>(SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
 #else
 	SDL_SysWMinfo wmInfo;
 	SDL_VERSION(&wmInfo.version);
-	if (!SDL_GetWindowWMInfo(view->win, &wmInfo))
+	if (!SDL_GetWindowWMInfo(view.win, &wmInfo))
 		throw std::runtime_error(SDL_GetError());
 	HWND hwnd = wmInfo.info.win.window;
 #endif
@@ -362,8 +354,8 @@ void RendererDx11::createSwapchain(IDXGIFactory1* factory, ViewDx* view) {
 
 	DXGI_SWAP_CHAIN_DESC schainDesc = {
 		.BufferDesc = {
-			.Width = uint(view->rect.w),
-			.Height = uint(view->rect.h),
+			.Width = uint(view.rect.w),
+			.Height = uint(view.rect.h),
 			.Format = DXGI_FORMAT_R8G8B8A8_UNORM
 		},
 		.SampleDesc = { .Count = 1 },
@@ -373,14 +365,14 @@ void RendererDx11::createSwapchain(IDXGIFactory1* factory, ViewDx* view) {
 		.Windowed = TRUE,
 		.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL
 	};
-	if (HRESULT rs = factory->CreateSwapChain(dev.Get(), &schainDesc, &view->sc); FAILED(rs))
+	if (HRESULT rs = factory->CreateSwapChain(dev.Get(), &schainDesc, &view.sc); FAILED(rs))
 		throw std::runtime_error(fmt::format("Failed to create swapchain: {}", hresultToStr(rs)));
 	createRenderTargets(view);
 }
 
-void RendererDx11::createRenderTargets(ViewDx* view) {
+void RendererDx11::createRenderTargets(ViewDx& view) {
 	ComPtr<ID3D11Texture2D> backBuffer;
-	if (HRESULT rs = view->sc->GetBuffer(0, IID_PPV_ARGS(backBuffer.GetAddressOf())); FAILED(rs))
+	if (HRESULT rs = view.sc->GetBuffer(0, IID_PPV_ARGS(backBuffer.GetAddressOf())); FAILED(rs))
 		throw std::runtime_error(fmt::format("Failed get swapchain buffer: {}", hresultToStr(rs)));
 
 	if (usesSrgb) {
@@ -388,18 +380,18 @@ void RendererDx11::createRenderTargets(ViewDx* view) {
 			.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
 			.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D
 		};
-		if (HRESULT rs = dev->CreateRenderTargetView(backBuffer.Get(), &tgtViewDesc, &view->tgts[0]); FAILED(rs)) {
+		if (HRESULT rs = dev->CreateRenderTargetView(backBuffer.Get(), &tgtViewDesc, &view.tgts[0]); FAILED(rs)) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create sRGB render target: %s", hresultToStr(rs).data());
 			usesSrgb = false;
 		}
 	}
 	if (!usesSrgb) {
-		if (HRESULT rs = dev->CreateRenderTargetView(backBuffer.Get(), nullptr, &view->tgts[bool(vertFin)]); FAILED(rs))
+		if (HRESULT rs = dev->CreateRenderTargetView(backBuffer.Get(), nullptr, &view.tgts[bool(vertFin)]); FAILED(rs))
 			throw std::runtime_error(fmt::format("Failed to create render target: {}", hresultToStr(rs)));
 		if (vertFin) {
-			ComPtr<ID3D11Texture2D> finTex = createTexture(view->rect.size(), DXGI_FORMAT_R8G8B8A8_UNORM, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET);
-			view->view = createTextureView(finTex.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
-			if (HRESULT rs = dev->CreateRenderTargetView(finTex.Get(), nullptr, &view->tgts[0]); FAILED(rs))
+			ComPtr<ID3D11Texture2D> finTex = createTexture(view.rect.size(), DXGI_FORMAT_R8G8B8A8_UNORM, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET);
+			view.view = createTextureView(finTex.Get(), DXGI_FORMAT_R8G8B8A8_UNORM);
+			if (HRESULT rs = dev->CreateRenderTargetView(finTex.Get(), nullptr, &view.tgts[0]); FAILED(rs))
 				throw std::runtime_error(fmt::format("Failed to create render target: {}", hresultToStr(rs)));
 		}
 	}
@@ -424,10 +416,9 @@ bool RendererDx11::setSettings(Settings* sets) {
 			cleanupFinShader();
 	}
 	if (reload)
-		for (View* it : views) {
-			auto vw = static_cast<ViewDx*>(it);
-			vw->reset();
-			createRenderTargets(vw);
+		for (uint8 i = 0; i < numViews; ++i) {
+			views[i].reset();
+			createRenderTargets(views[i]);
 		}
 	syncInterval = sets->vsync;
 	setCompression(sets);
@@ -440,40 +431,36 @@ void RendererDx11::setGammaValue(int gamma) {
 }
 
 bool RendererDx11::updateView(ivec2& viewRes) {
-	if (views.size() == 1) {
-		auto vw = static_cast<ViewDx*>(views[0]);
-		ivec2 wres;
+	if (numViews == 1) {
 #if SDL_VERSION_ATLEAST(2, 26, 0)
-		SDL_GetWindowSizeInPixels(vw->win, &wres.x, &wres.y);
+		SDL_GetWindowSizeInPixels(views[0].win, &views[0].rect.w, &views[0].rect.h);
 #else
-		SDL_GetWindowSize(vw->win, &wres.x, &wres.y);
+		SDL_GetWindowSize(views[0].win, &views[0].rect.w, &views[0].rect.h);
 #endif
-		if (wres != viewRes) {
-			viewRes = wres;
-			vw->rect.size() = wres;
-			vw->reset();
+		if (views[0].rect.size() != viewRes) {
+			viewRes = views[0].rect.size();
+			views[0].reset();
 
 			DXGI_SWAP_CHAIN_DESC desc;
-			if (HRESULT rs = vw->sc->GetDesc(&desc); FAILED(rs))
+			if (HRESULT rs = views[0].sc->GetDesc(&desc); FAILED(rs))
 				throw std::runtime_error(fmt::format("Failed to get swapchain desc: {}", hresultToStr(rs)));
-			if (HRESULT rs = vw->sc->ResizeBuffers(desc.BufferCount, wres.x, wres.y, desc.BufferDesc.Format, desc.Flags); FAILED(rs))
+			if (HRESULT rs = views[0].sc->ResizeBuffers(desc.BufferCount, views[0].rect.w, views[0].rect.h, desc.BufferDesc.Format, desc.Flags); FAILED(rs))
 				throw std::runtime_error(fmt::format("Failed to resize buffers: {}", hresultToStr(rs)));
-			createRenderTargets(vw);
+			createRenderTargets(views[0]);
 			return true;
 		}
 	}
 	return false;
 }
 
-Renderer::Action RendererDx11::startDraw(View* view) noexcept {
-	auto vw = static_cast<ViewDx*>(view);
+Renderer::Action RendererDx11::startDraw(uint vid) noexcept {
 	D3D11_VIEWPORT viewport = {
-		.Width = float(vw->rect.w),
-		.Height = float(vw->rect.h)
+		.Width = float(views[vid].rect.w),
+		.Height = float(views[vid].rect.h)
 	};
 	ctx->RSSetViewports(1, &viewport);
-	ctx->OMSetRenderTargets(1, vw->tgts[0].GetAddressOf(), nullptr);
-	ctx->ClearRenderTargetView(vw->tgts[0].Get(), glm::value_ptr(bgColor));
+	ctx->OMSetRenderTargets(1, views[vid].tgts[0].GetAddressOf(), nullptr);
+	ctx->ClearRenderTargetView(views[vid].tgts[0].Get(), glm::value_ptr(bgColor));
 
 	uint vertexStride = sizeof(vec2);
 	uint vertexOffset = 0;
@@ -483,7 +470,7 @@ Renderer::Action RendererDx11::startDraw(View* view) noexcept {
 	ctx->IASetVertexBuffers(0, 1, vertexBufGui.GetAddressOf(), &vertexStride, &vertexOffset);
 
 	try {
-		mapBuffer<ViewPview>(pviewBuf.Get())->pview = vec4(vw->rect.pos(), vec2(vw->rect.size()) / 2.f);
+		mapBuffer<ViewPview>(pviewBuf.Get())->pview = vec4(views[vid].rect.pos(), vec2(views[vid].rect.size()) / 2.f);
 		ctx->Unmap(pviewBuf.Get(), 0);
 	} catch (const std::runtime_error& err) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
@@ -509,13 +496,12 @@ void RendererDx11::drawRect(const Texture* tex, const Recti& rect, const Recti& 
 	}
 }
 
-Renderer::Action RendererDx11::finishDraw(View* view) noexcept {
-	auto vw = static_cast<ViewDx*>(view);
+Renderer::Action RendererDx11::finishDraw(uint vid) noexcept {
 	if (vertFin) {
 		vec4 clearColor(0.f, 0.f, 0.f, 1.f);
 		ctx->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
-		ctx->OMSetRenderTargets(1, vw->tgts[1].GetAddressOf(), nullptr);
-		ctx->ClearRenderTargetView(vw->tgts[1].Get(), glm::value_ptr(clearColor));
+		ctx->OMSetRenderTargets(1, views[vid].tgts[1].GetAddressOf(), nullptr);
+		ctx->ClearRenderTargetView(views[vid].tgts[1].Get(), glm::value_ptr(clearColor));
 
 		uint vertexStride = sizeof(ScreenVertex);
 		uint vertexOffset = 0;
@@ -525,12 +511,12 @@ Renderer::Action RendererDx11::finishDraw(View* view) noexcept {
 		ctx->IASetVertexBuffers(0, 1, vertexBufFin.GetAddressOf(), &vertexStride, &vertexOffset);
 
 		ID3D11ShaderResourceView* nullView = nullptr;
-		ctx->PSSetShaderResources(0, 1, vw->view.GetAddressOf());
+		ctx->PSSetShaderResources(0, 1, views[vid].view.GetAddressOf());
 		ctx->Draw(scrVertices.size(), 0);
 		ctx->PSSetShaderResources(0, 1, &nullView);
 		ctx->OMSetBlendState(blendState.Get(), nullptr, 0xFFFFFFFF);
 	}
-	vw->sc->Present(syncInterval, 0);
+	views[vid].sc->Present(syncInterval, 0);
 	return Action::yes;
 }
 
@@ -633,8 +619,8 @@ ComPtr<ID3D11ShaderResourceView> RendererDx11::createTextureIndirect(const void*
 	uint rowSize = res.x * bpp;
 	uint texels = res.x * res.y;
 	if (uint isize = rowSize * res.y; isize > inputSize)
-		replaceInputBuffer(roundToMultiple(isize, uint(sizeof(uint))));
-	copyPixels(mapResource(inputBuf.Get()).pData, pix, rowSize, pitch, rowSize, res.y);
+		replaceInputBuffer(glm::ceilMultiple(isize, uint(sizeof(uint))));
+	copyPixels(mapResource(inputBuf.Get()).pData, pix, rowSize, pitch, res.y);
 	ctx->Unmap(inputBuf.Get(), 0);
 
 	D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc = {
@@ -758,7 +744,7 @@ void RendererDx11::setCompression(Settings* sets) noexcept {
 
 ComPtr<ID3D11Buffer> RendererDx11::createConstantBuffer(uint size) const {
 	D3D11_BUFFER_DESC bufferDesc = {
-		.ByteWidth = roundToMultiple(size, 16u),
+		.ByteWidth = glm::ceilMultiple(size, 16u),
 		.Usage = D3D11_USAGE_DYNAMIC,
 		.BindFlags = D3D11_BIND_CONSTANT_BUFFER,
 		.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE
@@ -851,7 +837,7 @@ tuple<ComPtr<IDXGIAdapter1>, size_t, D3D_DRIVER_TYPE> RendererDx11::pickAdapter(
 	return tuple(std::move(adapter), memest, D3D_DRIVER_TYPE_UNKNOWN);
 }
 
-Renderer::Info RendererDx11::getInfo() const noexcept {
+Renderer::Info RendererDx11::getInfo() const {
 	Info info = {
 		.devices = { Info::Device(u32vec2(0), "auto") },
 		.gamma = { Settings::Gamma::none, Settings::Gamma::srgb, Settings::Gamma::value },

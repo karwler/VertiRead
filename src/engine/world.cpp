@@ -26,7 +26,6 @@ static constexpr SDL_EventType unusedEvents[] = {
 	SDL_EVENT_WINDOW_METAL_VIEW_RESIZED,
 	SDL_EVENT_WINDOW_MAXIMIZED,
 	SDL_EVENT_WINDOW_RESTORED,
-	SDL_EVENT_WINDOW_MOUSE_ENTER,
 	SDL_EVENT_WINDOW_CLOSE_REQUESTED,
 	SDL_EVENT_WINDOW_HIT_TEST,
 	SDL_EVENT_WINDOW_ICCPROF_CHANGED,
@@ -171,8 +170,6 @@ int main(int argc, char** argv) {
 		SDL_StopTextInput();
 #endif
 		World::winSys()->init();
-		SDL_PumpEvents();
-		SDL_FlushEvents(SDL_FIRSTEVENT, SDL_USEREVENT - 1);
 		World::winSys()->exec();
 	} catch (const std::runtime_error& e) {
 		rc = printError(e.what());

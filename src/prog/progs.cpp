@@ -12,6 +12,18 @@
 
 // PROGRAM STATE
 
+ProgState::ProgState() noexcept :
+	popupLineHeight(40.f * World::drawSys()->getUiScale()),
+	tooltipHeight(16.f * World::drawSys()->getUiScale()),
+	lineHeight(30.f * World::drawSys()->getUiScale()),
+	topHeight(40.f * World::drawSys()->getUiScale()),
+	topSpacing(10.f * World::drawSys()->getUiScale()),
+	picSize(40.f * World::drawSys()->getUiScale()),
+	contextMargin(3.f * World::drawSys()->getUiScale()),
+	maxTooltipLength(World::drawSys()->getViewRes().x * 2 / 3),
+	cursorMoveFactor(10.f * World::drawSys()->getUiScale())
+{}
+
 void ProgState::eventEnter() {
 	World::scene()->onConfirm();
 }
@@ -78,18 +90,6 @@ void ProgState::eventBoss() {
 
 void ProgState::eventRefresh() {
 	World::scene()->resetLayouts();
-}
-
-void ProgState::onResize() noexcept {
-	popupLineHeight = 40.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi();
-	tooltipHeight = 16.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi();
-	lineHeight = 30.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi();
-	topHeight = 40.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi();
-	topSpacing = 10.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi();
-	picSize = 40.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi();
-	contextMargin = 3.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi();
-	maxTooltipLength = World::drawSys()->getViewRes().x * 2 / 3;
-	cursorMoveFactor = 10.f / DrawSys::fallbackDpi * World::drawSys()->getWinDpi();
 }
 
 Overlay* ProgState::createOverlay() {
@@ -664,7 +664,7 @@ Cstring ProgReader::makeTooltipWithKey(const char* text, Binding::Type type) {
 }
 
 float ProgReader::modifySpeed(float amt, bool primary) noexcept {
-	amt *= World::drawSys()->getWinDpi() * World::sets()->scrollSpeed[primary];
+	amt *= World::sets()->scrollSpeed[primary] * DrawSys::defaultDpi * World::drawSys()->getUiScale();
 	if (float factor = 1.f; World::inputSys()->isPressed(Binding::Type::scrollFast, factor))
 		amt *= scrollFactor * factor;
 	else if (World::inputSys()->isPressed(Binding::Type::scrollSlow, factor))

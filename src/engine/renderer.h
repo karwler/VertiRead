@@ -8,6 +8,7 @@
 #include <SDL_render.h>
 #endif
 #include <set>
+#include <span>
 
 struct Pixmap {
 	uptr<uint8[]> pix;
@@ -31,16 +32,15 @@ public:
 	struct View {
 		SDL_Window* win;
 		Recti rect;
-
-		View(SDL_Window* window, const Recti& area) noexcept : win(window), rect(area) {}
 	};
 
 	struct InitParams {
-		const vector<SDL_Window*>& windows;
+		SDL_Window* const* windows;
 		const ivec2* vofs;
 		ivec2& viewRes;
 		Texture*& tooltipTexture;
 		array<vec4, Settings::defaultColors.size()> colors;
+		uint8 numWindows;
 	};
 
 	struct Info {
@@ -76,7 +76,7 @@ protected:
 
 	struct PixmapColor {
 		uptr<uint32[]> pix;
-		size_t len = 0;
+		uint len = 0;
 
 		uint32* fromText(const Pixmap& pm, uvec2 res);
 	};
@@ -88,12 +88,13 @@ protected:
 		vec2(1.f, 1.f)
 	};
 
-	vector<View*> views;
+	uptr<View*[]> viewRefs;
 	uint maxTextureSize;
 	uint maxPictureSize;	// should only get accessed from one thread at a time
+	uint8 numViews;
 	Settings::Compression compression;
 
-	Renderer(size_t numViews, uint maxTexRes) noexcept : views(numViews), maxTextureSize(maxTexRes) {}
+	Renderer(uint8 viewcnt, uint maxTexRes) noexcept;
 public:
 	virtual ~Renderer() = default;
 
@@ -101,10 +102,11 @@ public:
 	virtual bool setSettings(Settings* sets) = 0;	// returns whether the color palette needs to be reloaded
 	virtual void setGammaValue(int) {}
 	virtual bool updateView(ivec2& viewRes) = 0;	// returns whether a resize happened
-	virtual Info getInfo() const noexcept = 0;
-	virtual Action startDraw(View* view) noexcept = 0;
+	virtual Info getInfo() const = 0;
+	virtual Action beginRender() noexcept;
+	virtual Action startDraw(uint vid) noexcept = 0;
 	virtual void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, Color color) noexcept = 0;
-	virtual Action finishDraw(View* view) noexcept = 0;
+	virtual Action finishDraw(uint vid) noexcept = 0;
 	virtual Action finishRender() noexcept;
 	virtual Texture* texFromSurface(SDL_Surface* img, bool rpic, bool linear) noexcept = 0;	// scales down image to largest possible size
 	virtual bool texFromSurface(Texture* tex, SDL_Surface* img, bool rpic) noexcept = 0;	// ^ but refills tex and returns true if successful
@@ -113,7 +115,7 @@ public:
 	virtual void freeTexture(Texture* tex) noexcept = 0;
 	virtual void waitIdle() noexcept {}
 
-	const vector<View*>& getViews() const noexcept { return views; }
+	std::span<View*> getViewRefs() const noexcept { return std::span(viewRefs.get(), numViews); }
 	View* findView(SDL_Window* win) noexcept;
 	View* findView(ivec2 point) noexcept;
 	void setMaxPicRes(uint& size) noexcept;
@@ -132,8 +134,6 @@ protected:
 	static void copyPalette(uint* dst, const SDL_Palette* palette) noexcept;
 	static void recommendPicRamLimit(uintptr_t& mem) noexcept;
 	static void convertColors(vec4* vecv, size_t num, bool srgb, bool gamma22) noexcept;
-private:
-	static double srgb2linear(double x) noexcept;
 };
 
 class RendererSf final : public Renderer {
@@ -149,11 +149,10 @@ private:
 
 	struct ViewSf : View {
 		SDL_Renderer* renderer = nullptr;
-
-		using View::View;
 	};
 
-	ViewSf* curView;
+	uptr<ViewSf[]> views;
+	uint curView;
 #ifdef WITH_SDL3
 	array<vec4, Settings::defaultColors.size() - 1> rectColors;
 #else
@@ -170,11 +169,11 @@ public:
 	void setColors(array<vec4, Settings::defaultColors.size()>& colors) override;
 	bool setSettings(Settings* sets) override;
 	bool updateView(ivec2& viewRes) override;
-	Info getInfo() const noexcept override;
+	Info getInfo() const override;
 
-	Action startDraw(View* view) noexcept override;
+	Action startDraw(uint vid) noexcept override;
 	void drawRect(const Texture* tex, const Recti& rect, const Recti& frame, Color color) noexcept override;
-	Action finishDraw(View* view) noexcept override;
+	Action finishDraw(uint vid) noexcept override;
 
 	Texture* texFromSurface(SDL_Surface* img, bool rpic, bool linear) noexcept override;
 	bool texFromSurface(Texture* tex, SDL_Surface* img, bool rpic) noexcept override;
@@ -188,9 +187,9 @@ protected:
 private:
 	void cleanup() noexcept;
 #ifdef WITH_SDL3
-	void createRenderer(ViewSf* view, SDL_PropertiesID props);
+	void createRenderer(ViewSf& view, SDL_PropertiesID props);
 #else
-	void createRenderer(ViewSf* view, SDL_RendererFlags flags);
+	void createRenderer(ViewSf& view, SDL_RendererFlags flags);
 #endif
 	void setCompression(Settings* sets) noexcept;
 	static void replaceTexture(TextureSf* tex, SDL_Texture* ntex, uvec2 res) noexcept;

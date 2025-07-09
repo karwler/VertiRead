@@ -278,12 +278,13 @@ tm currentDateTime() noexcept {
 	return tim;
 }
 
-void copyPixels(void* dst, const void* src, uint dpitch, uint spitch, uint bwidth, uint height) noexcept {
-	if (dpitch == spitch)	// TODO: This doesn't work if bwidth differs. Can we get rid of bwidth and use dpitch instead?
+void copyPixels(void* dst, const void* src, uint dpitch, uint spitch, uint height) noexcept {
+	if (dpitch == spitch)
 		memcpy(dst, src, size_t(dpitch) * size_t(height));
 	else {
 		auto dp = static_cast<uint8*>(dst);
 		auto sp = static_cast<const uint8*>(src);
+		uint bwidth = std::min(dpitch, spitch);
 		for (uint r = 0; r < height; ++r, dp += dpitch, sp += spitch)
 			memcpy(dp, sp, bwidth);
 	}

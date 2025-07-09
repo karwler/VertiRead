@@ -67,6 +67,7 @@ using glm::u32vec2;
 using glm::ivec2;
 using glm::vec3;
 using glm::vec4;
+using glm::dvec4;
 using glm::u8vec4;
 using glm::ivec4;
 
@@ -629,15 +630,9 @@ T toVec(string_view str, typename T::value_type fill = typename T::value_type(0)
 // other
 
 tm currentDateTime() noexcept;
-void copyPixels(void* dst, const void* src, uint dpitch, uint spitch, uint bwidth, uint height) noexcept;
+void copyPixels(void* dst, const void* src, uint dpitch, uint spitch, uint height) noexcept;
 
 template <Number T>
 T btom(bool b) noexcept {
 	return T(b) * T(2) - T(1);	// b needs to be 0 or 1
-}
-
-template <Integer T>
-T roundToMultiple(T val, T mul) noexcept {
-	T rem = val % mul;
-	return rem ? val + mul - rem : val;
 }
