@@ -166,7 +166,7 @@ void ProgState::showPopupLogin(RemoteLocation&& rl, EventId kcal, EventId ccal, 
 	if (rl.password.empty())
 		rl.password = "guest";
 #endif
-	static constexpr std::initializer_list<const char*> txs = {
+	static constexpr std::initializer_list txs = {
 		"Protocol",
 		"User",
 		"Password",
@@ -503,7 +503,7 @@ void ProgPageBrowser::resetFileIcons() noexcept {
 
 RootLayout* ProgPageBrowser::createLayout() {
 	// sidebar
-	static constexpr std::initializer_list<const char*> txs = {
+	static constexpr std::initializer_list txs = {
 		"Exit",
 		"Up",
 		"Net"
@@ -720,7 +720,7 @@ RootLayout* ProgSettings::createLayout() {
 	};
 
 	// setting buttons and labels
-	static constexpr std::initializer_list<const char*> txs = {
+	static constexpr std::initializer_list txs = {
 		"Library",
 		"Direction",
 		"Zoom",
@@ -805,18 +805,18 @@ RootLayout* ProgSettings::createLayout() {
 	uint ztypLength = findMaxLength(Settings::zoomNames.begin(), Settings::zoomNames.end(), lineHeight);
 	uint plimLength = findMaxLength(PicLim::names.begin(), PicLim::names.end(), lineHeight);
 	uint descLength = std::max(findMaxLength(txs.begin(), txs.end(), lineHeight), findMaxLength(Binding::names.begin(), Binding::names.end(), lineHeight));
-	static constexpr std::initializer_list<const char*> tipsDirection = {
+	static constexpr std::initializer_list tipsDirection = {
 		"Bottom to top",
 		"Top to bottom",
 		"Right to left",
 		"Left to right"
 	};
-	static constexpr std::initializer_list<const char*> tipsZoomType = {
+	static constexpr std::initializer_list tipsZoomType = {
 		"Use a default zoom value",
 		"Fit the first picture into the window",
 		"Fit the largest picture into the window"
 	};
-	static constexpr std::initializer_list<const char*> tipsPicLim = {
+	static constexpr std::initializer_list tipsPicLim = {
 		"All pictures in directory/archive",
 		"Number of pictures",
 		"Total size of pictures"
@@ -1071,7 +1071,7 @@ void ProgSearchDir::eventSpecEscape() {
 
 RootLayout* ProgSearchDir::createLayout() {
 	// sidebar
-	static constexpr std::initializer_list<const char*> txs = {
+	static constexpr std::initializer_list txs = {
 		"Exit",
 		"Up",
 		"Set"

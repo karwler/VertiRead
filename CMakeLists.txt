@@ -72,8 +72,8 @@ set(SRC_FILES
 	"src/utils/utils.cpp"
 	"src/utils/utils.h"
 	"src/utils/widgets.cpp"
-	"src/utils/widgets.h")
-
+	"src/utils/widgets.h"
+)
 set(DX_SHADERS "dxGuiVs" "dxGuiPs" "dxFinVs" "dxFinPs" "dxRgbCs" "dxBgrCs" "dxRedCs" "dxIdxCs")
 set(GL_SHADERS "glGui.vert" "glGui.frag" "glFin.vert" "glFin.frag")
 set(VK_SHADERS "vkGui.vert" "vkGui.frag" "vkFin.vert" "vkFin.frag" "vkRgb.comp" "vkIdx.comp")
@@ -85,7 +85,8 @@ if(DIRECT3D)
 			"src/engine/rendererDx.cpp"
 			"src/engine/rendererDx.h"
 			"src/engine/optional/d3d.cpp"
-			"src/engine/optional/d3d.h")
+			"src/engine/optional/d3d.h"
+		)
 		add_compile_definitions(WITH_DIRECT3D)
 
 		if(NOT FORCE_INLINE_SHADERS)
@@ -110,7 +111,8 @@ if(DIRECT3D)
 			foreach(DFILE IN LISTS DX_SHADERS)
 				list(APPEND SRC_FILES
 					"src/engine/shaders/${DFILE}.dbg.h"
-					"src/engine/shaders/${DFILE}.rel.h")
+					"src/engine/shaders/${DFILE}.rel.h"
+				)
 			endforeach()
 		endif()
 	endif()
@@ -119,7 +121,8 @@ if(OPENGL)
 	list(APPEND SRC_FILES
 		"src/engine/rendererGl.cpp"
 		"src/engine/rendererGl.h"
-		"src/engine/shaders/glDefs.h")
+		"src/engine/shaders/glDefs.h"
+	)
 	add_compile_definitions(WITH_OPENGL)
 
 	foreach(GFILE IN LISTS GL_SHADERS)
@@ -127,7 +130,8 @@ if(OPENGL)
 		file(WRITE "${CMAKE_SOURCE_DIR}/src/engine/shaders/${GFILE}.dbg.h" "R\"r(${GL_CODE})r\"")
 		list(APPEND SRC_FILES
 			"src/engine/shaders/${GFILE}.dbg.h"
-			"src/engine/shaders/${GFILE}.rel.h")
+			"src/engine/shaders/${GFILE}.rel.h"
+		)
 	endforeach()
 endif()
 if(VULKAN)
@@ -135,7 +139,8 @@ if(VULKAN)
 	if(Vulkan_FOUND)
 		list(APPEND SRC_FILES
 			"src/engine/rendererVk.cpp"
-			"src/engine/rendererVk.h")
+			"src/engine/rendererVk.h"
+		)
 		add_compile_definitions(WITH_VULKAN)
 		include_directories(SYSTEM ${Vulkan_INCLUDE_DIRS})
 
@@ -157,7 +162,8 @@ if(VULKAN)
 			foreach(VFILE IN LISTS VK_SHADERS)
 				list(APPEND SRC_FILES
 					"src/engine/shaders/${VFILE}.dbg.h"
-					"src/engine/shaders/${VFILE}.rel.h")
+					"src/engine/shaders/${VFILE}.rel.h"
+				)
 			endforeach()
 		endif()
 	endif()
@@ -167,7 +173,8 @@ if(FTP)
 		"src/engine/network.cpp"
 		"src/engine/network.h"
 		"src/prog/fileOpsFtp.cpp"
-		"src/prog/fileOpsFtp.h")
+		"src/prog/fileOpsFtp.h"
+	)
 	add_compile_definitions(WITH_FTP)
 endif()
 if(WIN32)
@@ -234,7 +241,8 @@ if(USE_FONTCONFIG)
 	if(FOUND_FONTCONFIG)
 		list(APPEND SRC_FILES
 			"src/engine/optional/fontconfig.cpp"
-			"src/engine/optional/fontconfig.h")
+			"src/engine/optional/fontconfig.h"
+		)
 		add_compile_definitions(CAN_FONTCFG)
 	endif()
 endif()
@@ -243,7 +251,8 @@ if(USE_MUPDF)
 	if(FOUND_MUPDF)
 		list(APPEND SRC_FILES
 			"src/engine/optional/mupdf.cpp"
-			"src/engine/optional/mupdf.h")
+			"src/engine/optional/mupdf.h"
+		)
 		add_compile_definitions(CAN_MUPDF)
 	endif()
 endif()
@@ -274,20 +283,23 @@ if(PKGCONFIG_ARGS)
 		if((PKGCONFS_libsecret-1_FOUND OR PKGCONFS_libsecret-1_VERSION) AND (FTP OR PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION OR PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION))
 			list(APPEND SRC_FILES
 				"src/engine/optional/secret.cpp"
-				"src/engine/optional/secret.h")
+				"src/engine/optional/secret.h"
+			)
 			add_compile_definitions(CAN_SECRET)
 			set(NEED_GLIB TRUE)
 		endif()
 		if(PKGCONFS_gnutls_FOUND OR PKGCONFS_gnutls_VERSION)
 			list(APPEND SRC_FILES
 				"src/engine/optional/gnutls.cpp"
-				"src/engine/optional/gnutls.h")
+				"src/engine/optional/gnutls.h"
+			)
 			add_compile_definitions(CAN_GNUTLS)
 		endif()
 		if(PKGCONFS_openssl_FOUND OR PKGCONFS_openssl_VERSION)
 			list(APPEND SRC_FILES
 				"src/engine/optional/openssl.cpp"
-				"src/engine/optional/openssl.h")
+				"src/engine/optional/openssl.h"
+			)
 			add_compile_definitions(CAN_OPENSSL)
 		endif()
 		if(PKGCONFS_smbclient_FOUND OR PKGCONFS_smbclient_VERSION)
@@ -295,7 +307,8 @@ if(PKGCONFIG_ARGS)
 				"src/engine/optional/smbclient.cpp"
 				"src/engine/optional/smbclient.h"
 				"src/prog/fileOpsSmb.cpp"
-				"src/prog/fileOpsSmb.h")
+				"src/prog/fileOpsSmb.h"
+			)
 			add_compile_definitions(CAN_SMB)
 		endif()
 		if(PKGCONFS_libssh2_FOUND OR PKGCONFS_libssh2_VERSION)
@@ -303,20 +316,23 @@ if(PKGCONFIG_ARGS)
 				"src/engine/optional/ssh2.cpp"
 				"src/engine/optional/ssh2.h"
 				"src/prog/fileOpsSftp.cpp"
-				"src/prog/fileOpsSftp.h")
+				"src/prog/fileOpsSftp.h"
+			)
 			add_compile_definitions(CAN_SFTP)
 		endif()
 		if(PKGCONFS_poppler-glib_FOUND OR PKGCONFS_poppler-glib_VERSION)
 			list(APPEND SRC_FILES
 				"src/engine/optional/poppler.cpp"
-				"src/engine/optional/poppler.h")
+				"src/engine/optional/poppler.h"
+			)
 			add_compile_definitions(CAN_POPPLER)
 			set(NEED_GLIB TRUE)
 		endif()
 		if(NEED_GLIB)
 			list(APPEND SRC_FILES
 				"src/engine/optional/glib.cpp"
-				"src/engine/optional/glib.h")
+				"src/engine/optional/glib.h"
+			)
 		endif()
 	endif()
 endif()
@@ -478,7 +494,8 @@ if(MSVC)
 		"$<IF:$<BOOL:${SDL3}>,SDL3;SDL3_image,SDL2;SDL2_image>"
 		freetype
 		$<$<BOOL:${USE_ARCHIVE}>:archive>
-		"$<$<BOOL:${USE_ICU}>:icuuc;icuin>")
+		"$<$<BOOL:${USE_ICU}>:icuuc;icuin>"
+	)
 else()
 	target_link_libraries(${PROJECT_NAME}
 		"$<IF:$<BOOL:${SDL3}>,SDL3::SDL3;SDL3_image::SDL3_image,SDL2::SDL2;SDL2_image::SDL2_image>"
@@ -486,7 +503,8 @@ else()
 		"$<$<BOOL:${LibArchive_FOUND}>:${LibArchive_LIBRARIES}>"
 		"$<$<BOOL:${ICU_FOUND}>:ICU::uc;$<IF:$<BOOL:${WIN32}>,ICU::in,ICU::i18n>>"
 		"$<$<BOOL:${UNIX}>:pthread;dl>"
-		$<$<NOT:$<BOOL:${FOUND_FORMAT}>>:fmt>)
+		$<$<NOT:$<BOOL:${FOUND_FORMAT}>>:fmt>
+	)
 endif()
 if(NOT CMAKE_EXPORT_COMPILE_COMMANDS)	# because it fucks with ALE
 	target_precompile_headers(${PROJECT_NAME} PUBLIC "src/utils/widgets.h")
@@ -498,7 +516,8 @@ if(TBIN_DIR)
 		RUNTIME_OUTPUT_DIRECTORY_DEBUG "${TBIN_DIR}"
 		RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TBIN_DIR}"
 		RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${TBIN_DIR}"
-		RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${TBIN_DIR}")
+		RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${TBIN_DIR}"
+	)
 endif()
 if(WIN32)
 	set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DPI_AWARE "PerMonitor")
@@ -515,7 +534,8 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/BrisaSans.otf" "${DIR_RSC}/themes.ini" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${DATA_SUF}"
 	COMMAND "$<$<NOT:$<BOOL:${FOUND_GLM}>>:${CMAKE_COMMAND};-E;copy_if_different;${DIR_LIB}/glm/copying.txt;$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}/COPYING.glm.txt>"
 	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.svg" "${DIR_ICN}/center.svg" "${DIR_ICN}/cross.svg" "${DIR_ICN}/file.svg" "${DIR_ICN}/fit.svg" "${DIR_ICN}/folder.svg" "${DIR_ICN}/left.svg" "${DIR_ICN}/minus.svg" "${DIR_ICN}/plus.svg" "${DIR_ICN}/reset.svg" "${DIR_ICN}/right.svg" "${DIR_ICN}/search.svg" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${ICONS_SUF}"
-	COMMAND_EXPAND_LISTS)
+	COMMAND_EXPAND_LISTS
+)
 if(FXC_CMD)
 	foreach(DFILE IN LISTS DX_SHADERS)
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
@@ -534,7 +554,8 @@ if(MSVC)
 		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_IMG}/optional/LICENSE.avif.txt" "${BIN_IMG}/optional/LICENSE.dav1d.txt" "${BIN_IMG}/optional/LICENSE.tiff.txt" "${BIN_IMG}/optional/LICENSE.webp.txt" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}"
 		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_SDL}/LICENSE.txt" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}/LICENSE.SDL.txt"
 		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_IMG}/LICENSE.txt" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}/LICENSE.SDL_image.txt"
-		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_FT2}/LICENSE.txt" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}/LICENSE.freetype.txt")
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_FT2}/LICENSE.txt" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}/LICENSE.freetype.txt"
+	)
 	if(USE_ARCHIVE)
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:archive>" "$<TARGET_FILE_DIR:${PROJECT_NAME}>")
@@ -542,7 +563,8 @@ if(MSVC)
 	if(USE_ICU)
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BIN_ICU}/icudt${ICU_VER_MAJ}.dll" "${BIN_ICU}/icuin${ICU_VER_MAJ}.dll" "${BIN_ICU}/icuuc${ICU_VER_MAJ}.dll" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_ICU}/LICENSE" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}/LICENSE.icu.txt")
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_ICU}/LICENSE" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${LICN_SUF}/LICENSE.icu.txt"
+		)
 	endif()
 elseif(MINGW)
 	find_program(CMD_BASH "bash")
@@ -558,13 +580,13 @@ elseif(MINGW)
 else()
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${DIR_RSC}/${PROJECT_NAME_LOWER}.desktop" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${BASE_SUF}")
-
 	if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 		find_program(STRIPPER "strip")
 		if(STRIPPER)
 			add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 				COMMAND "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:${STRIPPER};-s;$<TARGET_FILE:${PROJECT_NAME}>>"
-				COMMAND_EXPAND_LISTS)
+				COMMAND_EXPAND_LISTS
+			)
 		else()
 			message(WARNING "Can't strip the executable: Failed to find stip")
 		endif()
@@ -586,7 +608,8 @@ else()
 		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 			COMMAND "${CMAKE_COMMAND}" -E create_symlink "usr/bin/${PROJECT_NAME_LOWER}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${BASE_SUF}/AppRun"
 			COMMAND "${CMAKE_COMMAND}" -E create_symlink "usr/share/${PROJECT_NAME_LOWER}/icons/${PROJECT_NAME_LOWER}.svg" "$<TARGET_FILE_DIR:${PROJECT_NAME}>${BASE_SUF}/${PROJECT_NAME_LOWER}.svg"
-			COMMAND "${CMD_BASH}" -c "VERSION='${PROJECT_VERSION}' '${LINUXDEPLOY}' --appdir '$<TARGET_FILE_DIR:${PROJECT_NAME}>${BASE_SUF}' --output appimage")
+			COMMAND "${CMD_BASH}" -c "VERSION='${PROJECT_VERSION}' '${LINUXDEPLOY}' --appdir '$<TARGET_FILE_DIR:${PROJECT_NAME}>${BASE_SUF}' --output appimage"
+		)
 	endif()
 endif()
 

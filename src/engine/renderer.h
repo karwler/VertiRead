@@ -91,10 +91,10 @@ protected:
 	uptr<View*[]> viewRefs;
 	uint maxTextureSize;
 	uint maxPictureSize;	// should only get accessed from one thread at a time
-	uint8 numViews;
+	const uint8 numViews;
 	Settings::Compression compression;
 
-	Renderer(uint8 viewcnt, uint maxTexRes) noexcept;
+	Renderer(uint8 viewcnt, uint maxTexRes);
 public:
 	virtual ~Renderer() = default;
 

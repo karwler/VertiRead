@@ -34,7 +34,7 @@ uint32* Renderer::PixmapColor::fromText(const Pixmap& pm, uvec2 res) {
 	return pix.get();
 }
 
-Renderer::Renderer(uint8 viewcnt, uint maxTexRes) noexcept :
+Renderer::Renderer(uint8 viewcnt, uint maxTexRes) :
 	viewRefs(std::make_unique_for_overwrite<View*[]>(viewcnt)),
 	maxTextureSize(maxTexRes),
 	numViews(viewcnt)

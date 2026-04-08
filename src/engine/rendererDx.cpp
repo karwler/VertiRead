@@ -13,7 +13,6 @@
 #include <SDL_syswm.h>
 #include <SDL_version.h>
 #endif
-#include <glm/gtc/round.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 void RendererDx11::ViewDx::reset() {
@@ -619,7 +618,7 @@ ComPtr<ID3D11ShaderResourceView> RendererDx11::createTextureIndirect(const void*
 	uint rowSize = res.x * bpp;
 	uint texels = res.x * res.y;
 	if (uint isize = rowSize * res.y; isize > inputSize)
-		replaceInputBuffer(glm::ceilMultiple(isize, uint(sizeof(uint))));
+		replaceInputBuffer(ceilAlignment(isize, sizeof(uint)));
 	copyPixels(mapResource(inputBuf.Get()).pData, pix, rowSize, pitch, res.y);
 	ctx->Unmap(inputBuf.Get(), 0);
 
@@ -744,7 +743,7 @@ void RendererDx11::setCompression(Settings* sets) noexcept {
 
 ComPtr<ID3D11Buffer> RendererDx11::createConstantBuffer(uint size) const {
 	D3D11_BUFFER_DESC bufferDesc = {
-		.ByteWidth = glm::ceilMultiple(size, 16u),
+		.ByteWidth = uint(ceilAlignment(size, 16)),
 		.Usage = D3D11_USAGE_DYNAMIC,
 		.BindFlags = D3D11_BIND_CONSTANT_BUFFER,
 		.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE

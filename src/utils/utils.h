@@ -632,6 +632,10 @@ T toVec(string_view str, typename T::value_type fill = typename T::value_type(0)
 tm currentDateTime() noexcept;
 void copyPixels(void* dst, const void* src, uint dpitch, uint spitch, uint height) noexcept;
 
+inline size_t ceilAlignment(size_t offset, size_t alignment) {
+	return (offset + alignment - 1) & ~(alignment - 1);
+}
+
 template <Number T>
 T btom(bool b) noexcept {
 	return T(b) * T(2) - T(1);	// b needs to be 0 or 1

@@ -18,6 +18,15 @@
 
 // INSTANCE VK
 
+InstanceVk::ShaderModule::ShaderModule(const InstanceVk* vk, std::span<const uint32> code) :
+	inst(vk),
+	module(!code.empty() ? vk->createShaderModule(code) : nullptr)
+{}
+
+InstanceVk::ShaderModule::~ShaderModule() noexcept {
+	inst->vkDestroyShaderModule(inst->getLdev(), module, nullptr);
+}
+
 void InstanceVk::initGlobalFunctions() {
 	if (!((vkGetInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(SDL_Vulkan_GetVkGetInstanceProcAddr()))
 		&& (vkCreateInstance = reinterpret_cast<PFN_vkCreateInstance>(vkGetInstanceProcAddr(nullptr, "vkCreateInstance")))
@@ -145,19 +154,19 @@ InstanceVk::Buffer InstanceVk::createBuffer(VkDeviceSize size, VkBufferUsageFlag
 		if (VkResult rs = vkBindBufferMemory(ldev, vkb.buffer, vkb.memory, 0); rs != VK_SUCCESS)
 			throw std::runtime_error(fmt::format("Failed to bind memory: {}", string_VkResult(rs)));
 	} catch (const std::runtime_error&) {
-		cleanupBuffer(vkb);
+		freeBuffer(vkb);
 		throw;
 	}
 	return vkb;
 }
 
 void InstanceVk::recreateBuffer(Buffer& vkb, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const {
-	cleanupBuffer(vkb);
+	freeBuffer(vkb);
 	vkb = Buffer();
 	vkb = createBuffer(size, usage, properties);
 }
 
-void InstanceVk::cleanupBuffer(Buffer& vkb) const noexcept {
+void InstanceVk::freeBuffer(Buffer& vkb) const noexcept {
 	vkDestroyBuffer(ldev, vkb.buffer, nullptr);
 	vkFreeMemory(ldev, vkb.memory, nullptr);
 }
@@ -194,7 +203,7 @@ InstanceVk::Image InstanceVk::createImage(u32vec2 size, VkFormat format, VkImage
 			throw std::runtime_error(fmt::format("Failed to bind memory: {}", string_VkResult(rs)));
 		vki.view = createImageView(vki.image, format, swizzle);
 	} catch (const std::runtime_error&) {
-		cleanupImage(vki);
+		freeImage(vki);
 		throw;
 	}
 	return vki;
@@ -207,7 +216,7 @@ uint32 InstanceVk::findMemoryType(uint32 typeFilter, VkMemoryPropertyFlags prope
 	throw std::runtime_error(fmt::format("Failed to find memory type for properties {}", string_VkMemoryPropertyFlags(properties)));
 }
 
-void InstanceVk::cleanupImage(Image& vki) const noexcept {
+void InstanceVk::freeImage(Image& vki) const noexcept {
 	vkDestroyImageView(ldev, vki.view, nullptr);
 	vkDestroyImage(ldev, vki.image, nullptr);
 	vkFreeMemory(ldev, vki.memory, nullptr);
@@ -309,67 +318,329 @@ VkShaderModule InstanceVk::createShaderModule(std::span<const uint32> code) cons
 	return shaderModule;
 }
 
-// FORMAT CONVERTER
+// DESCRIPTORS
 
-void FormatConverter::init(const InstanceVk* vk) {
-	createDescriptorSetLayoutRgb(vk);
-	createDescriptorSetLayoutIdx(vk);
-	createPipelines(vk);
-	createDescriptorPoolAndSets(vk);
+Descriptors::DescriptorSetBlock::DescriptorSetBlock(const array<VkDescriptorSet, textureSetStep>& descriptorSets) :
+	used(descriptorSets.begin(), descriptorSets.begin() + 1),
+	free(descriptorSets.begin() + 1, descriptorSets.end())
+{}
+
+void Descriptors::init(const InstanceVk* vk, InstanceVk::ViewVk* views, uint8 numViews) {
+	samplers[samplerNearest] = vk->createSampler(VK_FILTER_NEAREST);
+	samplers[samplerLinear] = vk->createSampler(VK_FILTER_LINEAR);
+	globviewBuf = vk->createBuffer(viewsOffset(vk) + viewElementStride(vk) * numViews, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	colorsBuf = vk->createBuffer(colorsElementStride(vk) * maxTransfers, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	createDescriptorSetLayouts(vk);
+	createDescriptorPoolAndSets(vk, views, numViews);
 }
 
-void FormatConverter::createDescriptorSetLayoutRgb(const InstanceVk* vk) {
-	VkDescriptorSetLayoutBinding bindings[2] = { {
-		.binding = bindingInput,
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+void Descriptors::free(const InstanceVk* vk) noexcept {
+	vk->vkDestroyDescriptorPool(vk->getLdev(), descriptorPool, nullptr);
+	for (auto& [pool, block] : poolSetTex)
+		vk->vkDestroyDescriptorPool(vk->getLdev(), pool, nullptr);
+	for (VkDescriptorSetLayout it : dsetLayouts)
+		vk->vkDestroyDescriptorSetLayout(vk->getLdev(), it, nullptr);
+	vk->freeBuffer(globviewBuf);
+	vk->freeBuffer(colorsBuf);
+	for (VkSampler it : samplers)
+		vk->vkDestroySampler(vk->getLdev(), it, nullptr);
+}
+
+void Descriptors::createDescriptorSetLayouts(const InstanceVk* vk) {
+	VkDescriptorSetLayoutBinding globalLayoutBindings[] = { {
+		.binding = RenderPass::bindingGlobData,
+		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
 	}, {
-		.binding = bindingOutput,
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT
+		.binding = RenderPass::bindingGlobSamp,
+		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+		.descriptorCount = uint32(samplers.size()),
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = samplers.data()
 	} };
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = std::size(bindings),
-		.pBindings = bindings
+		.bindingCount = std::size(globalLayoutBindings),
+		.pBindings = globalLayoutBindings
 	};
-	if (VkResult rs = vk->vkCreateDescriptorSetLayout(vk->getLdev(), &layoutInfo, nullptr, &descriptorSetLayoutRgb); rs != VK_SUCCESS)
+	if (VkResult rs = vk->vkCreateDescriptorSetLayout(vk->getLdev(), &layoutInfo, nullptr, &dsetLayouts[eint(Layout::global)]); rs != VK_SUCCESS)
 		throw std::runtime_error(fmt::format("Failed to create descriptor set layout: {}", string_VkResult(rs)));
-}
 
-void FormatConverter::createDescriptorSetLayoutIdx(const InstanceVk* vk) {
-	VkDescriptorSetLayoutBinding bindings[3] = { {
-		.binding = bindingInput,
+	VkDescriptorSetLayoutBinding viewLayoutBindings[] = { {
+		.binding = RenderPass::bindingViewData,
+		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT
+	}, {
+		.binding = RenderPass::bindingViewIn,
+		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+	} };
+	layoutInfo.bindingCount = std::size(viewLayoutBindings);
+	layoutInfo.pBindings = viewLayoutBindings;
+	if (VkResult rs = vk->vkCreateDescriptorSetLayout(vk->getLdev(), &layoutInfo, nullptr, &dsetLayouts[eint(Layout::view)]); rs != VK_SUCCESS)
+		throw std::runtime_error(fmt::format("Failed to create descriptor set layout: {}", string_VkResult(rs)));
+
+	VkDescriptorSetLayoutBinding modelLayoutBinding = {
+		.binding = RenderPass::bindingModelTex,
+		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+	};
+	layoutInfo.bindingCount = 1;
+	layoutInfo.pBindings = &modelLayoutBinding;
+	if (VkResult rs = vk->vkCreateDescriptorSetLayout(vk->getLdev(), &layoutInfo, nullptr, &dsetLayouts[eint(Layout::model)]); rs != VK_SUCCESS)
+		throw std::runtime_error(fmt::format("Failed to create descriptor set layout: {}", string_VkResult(rs)));
+
+	VkDescriptorSetLayoutBinding fmtconvLayoutBindings[] = { {
+		.binding = FormatConverter::bindingInput,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT
 	}, {
-		.binding = bindingOutput,
+		.binding = FormatConverter::bindingOutput,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT
 	}, {
-		.binding = bindingUniform,
+		.binding = FormatConverter::bindingColors,
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT
 	} };
-	VkDescriptorSetLayoutCreateInfo layoutInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = std::size(bindings),
-		.pBindings = bindings
-	};
-	if (VkResult rs = vk->vkCreateDescriptorSetLayout(vk->getLdev(), &layoutInfo, nullptr, &descriptorSetLayoutIdx); rs != VK_SUCCESS)
+	layoutInfo.bindingCount = std::size(fmtconvLayoutBindings);
+	layoutInfo.pBindings = fmtconvLayoutBindings;
+	if (VkResult rs = vk->vkCreateDescriptorSetLayout(vk->getLdev(), &layoutInfo, nullptr, &dsetLayouts[eint(Layout::fmtconv)]); rs != VK_SUCCESS)
 		throw std::runtime_error(fmt::format("Failed to create descriptor set layout: {}", string_VkResult(rs)));
 }
 
-void FormatConverter::createPipelines(const InstanceVk* vk) {
+void Descriptors::createDescriptorPoolAndSets(const InstanceVk* vk, InstanceVk::ViewVk* views, uint8 numViews) {
+	VkDescriptorPoolSize poolSizes[] = { {
+		.type = VK_DESCRIPTOR_TYPE_SAMPLER,
+		.descriptorCount = uint32(samplers.size())
+	}, {
+		.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		.descriptorCount = 1 + numViews * InstanceVk::maxFrames + maxTransfers	// global + pview + fmtconv
+	}, {
+		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = maxTransfers * 2	// 2 for input + output
+	}, {
+		.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+		.descriptorCount = numViews * InstanceVk::maxFrames
+	} };
+	VkDescriptorPoolCreateInfo poolInfo = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.maxSets = 1 + numViews * InstanceVk::maxFrames + maxTransfers,	// global + view rect and input + fmtconv
+		.poolSizeCount = uint32(std::size(poolSizes)),
+		.pPoolSizes = poolSizes
+	};
+	if (VkResult rs = vk->vkCreateDescriptorPool(vk->getLdev(), &poolInfo, nullptr, &descriptorPool); rs != VK_SUCCESS)
+		throw std::runtime_error(fmt::format("Failed to create descriptor pool: {}", string_VkResult(rs)));
+
+	uint vi = 1;
+	uint fi = vi + numViews * InstanceVk::maxFrames;
+	uptr<VkDescriptorSetLayout[]> layouts = std::make_unique_for_overwrite<VkDescriptorSetLayout[]>(poolInfo.maxSets);
+	layouts[0] = dsetLayouts[eint(Layout::global)];
+	std::fill_n(layouts.get() + vi, numViews * InstanceVk::maxFrames, dsetLayouts[eint(Layout::view)]);
+	std::fill_n(layouts.get() + fi, maxTransfers, dsetLayouts[eint(Layout::fmtconv)]);
+	VkDescriptorSetAllocateInfo allocInfo = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = descriptorPool,
+		.descriptorSetCount = poolInfo.maxSets,
+		.pSetLayouts = layouts.get()
+	};
+	uptr<VkDescriptorSet[]> descriptorSets = std::make_unique_for_overwrite<VkDescriptorSet[]>(poolInfo.maxSets);
+	if (VkResult rs = vk->vkAllocateDescriptorSets(vk->getLdev(), &allocInfo, descriptorSets.get()); rs != VK_SUCCESS)
+		throw std::runtime_error(fmt::format("Failed to allocate descriptor sets: {}", string_VkResult(rs)));
+
+	uint wvbi = 1;
+	uint wfbi = wvbi + numViews * InstanceVk::maxFrames;
+	uint numWrites = wfbi + maxTransfers;
+	VkDescriptorBufferInfo globalBufferInfo = {
+		.buffer = globviewBuf,
+		.range = sizeof(GlobalData)
+	};
+	uptr<VkDescriptorBufferInfo[]> viewBufferInfos = std::make_unique<VkDescriptorBufferInfo[]>(numViews);
+	VkDescriptorBufferInfo colorBufferInfos[maxTransfers]{};
+	uptr<VkWriteDescriptorSet[]> descriptorWrites = std::make_unique<VkWriteDescriptorSet[]>(numWrites);
+
+	globalDescriptorSet = descriptorSets[0];
+	descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrites[0].dstSet = globalDescriptorSet;
+	descriptorWrites[0].dstBinding = RenderPass::bindingGlobData;
+	descriptorWrites[0].descriptorCount = 1;
+	descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	descriptorWrites[0].pBufferInfo = &globalBufferInfo;
+
+	uint viewOffs = viewsOffset(vk);
+	uint viewStride = viewElementStride(vk);
+	uint colorStride = colorsElementStride(vk);
+	uint c = 0;
+	for (uint8 i = 0; i < numViews; ++i) {
+		views[i].offset = viewOffs + i * viewStride;
+		viewBufferInfos[i].buffer = globviewBuf;
+		viewBufferInfos[i].offset = views[i].offset;
+		viewBufferInfos[i].range = sizeof(ViewData);
+
+		for (uint j = 0; j < InstanceVk::maxFrames; ++j, ++c) {
+			views[i].descriptorSets[j] = descriptorSets[vi + c];
+			descriptorWrites[wvbi + c].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[wvbi + c].dstSet = views[i].descriptorSets[j];
+			descriptorWrites[wvbi + c].dstBinding = RenderPass::bindingViewData;
+			descriptorWrites[wvbi + c].descriptorCount = 1;
+			descriptorWrites[wvbi + c].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptorWrites[wvbi + c].pBufferInfo = &viewBufferInfos[i];
+		}
+	}
+	for (uint i = 0; i < maxTransfers; ++i) {
+		fmtconvDescriptorSets[i] = descriptorSets[fi + i];
+		colorBufferInfos[i].buffer = colorsBuf;
+		colorBufferInfos[i].offset = i * colorStride;
+		colorBufferInfos[i].range = sizeof(ColorData);
+
+		descriptorWrites[wfbi + i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[wfbi + i].dstSet = fmtconvDescriptorSets[i];
+		descriptorWrites[wfbi + i].dstBinding = FormatConverter::bindingColors;
+		descriptorWrites[wfbi + i].descriptorCount = 1;
+		descriptorWrites[wfbi + i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrites[wfbi + i].pBufferInfo = &colorBufferInfos[i];
+	}
+	vk->vkUpdateDescriptorSets(vk->getLdev(), numWrites, descriptorWrites.get(), 0, nullptr);
+}
+
+void Descriptors::updateViewImages(const InstanceVk* vk, const InstanceVk::ViewVk* views, uint8 numViews) {
+	uptr<VkDescriptorImageInfo[]> viewImageInfos = std::make_unique<VkDescriptorImageInfo[]>(numViews * InstanceVk::maxFrames);
+	uptr<VkWriteDescriptorSet[]> descriptorWrites = std::make_unique<VkWriteDescriptorSet[]>(numViews * InstanceVk::maxFrames);
+	uint c = 0;
+	for (uint8 i = 0; i < numViews; ++i)
+		for (uint j = 0; j < InstanceVk::maxFrames; ++j, ++c) {
+			viewImageInfos[c].imageView = views[i].pps[j].view;
+			viewImageInfos[c].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+			descriptorWrites[c].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[c].dstSet = views[i].descriptorSets[j];
+			descriptorWrites[c].dstBinding = RenderPass::bindingViewIn;
+			descriptorWrites[c].descriptorCount = 1;
+			descriptorWrites[c].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+			descriptorWrites[c].pImageInfo = &viewImageInfos[c];
+		}
+	vk->vkUpdateDescriptorSets(vk->getLdev(), numViews * InstanceVk::maxFrames, descriptorWrites.get(), 0, nullptr);
+}
+
+uint Descriptors::viewsOffset(const InstanceVk* vk) noexcept {
+	return ceilAlignment(sizeof(GlobalData), vk->getUniformAlignment());
+}
+
+uint Descriptors::viewElementStride(const InstanceVk* vk) noexcept {
+	return ceilAlignment(sizeof(ViewData), vk->getUniformAlignment());
+}
+
+uint Descriptors::colorsElementStride(const InstanceVk* vk) noexcept {
+	return ceilAlignment(sizeof(ColorData), std::max(vk->getUniformAlignment(), vk->getAtomSize()));
+}
+
+pair<VkDescriptorPool, VkDescriptorSet> Descriptors::newDescriptorSetTex(const InstanceVk* vk, VkImageView imageView) {
+	pair<VkDescriptorPool, VkDescriptorSet> dpds = getDescriptorSetTex(vk);
+	updateDescriptorSetImg(vk, dpds.second, imageView);
+	return dpds;
+}
+
+pair<VkDescriptorPool, VkDescriptorSet> Descriptors::getDescriptorSetTex(const InstanceVk* vk) {
+	if (auto psit = rng::find_if(poolSetTex, [](const pair<const VkDescriptorPool, DescriptorSetBlock>& it) -> bool { return !it.second.free.empty(); }); psit != poolSetTex.end()) {
+		auto frit = psit->second.free.begin();
+		auto usit = psit->second.used.insert(*frit).first;
+		psit->second.free.erase(frit);
+		return pair(psit->first, *usit);
+	}
+
+	VkDescriptorPoolSize poolSize = {
+		.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+		.descriptorCount = textureSetStep
+	};
+	VkDescriptorPoolCreateInfo poolInfo = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.maxSets = textureSetStep,
+		.poolSizeCount = 1,
+		.pPoolSizes = &poolSize
+	};
+	VkDescriptorPool descPool;
+	if (VkResult rs = vk->vkCreateDescriptorPool(vk->getLdev(), &poolInfo, nullptr, &descPool); rs != VK_SUCCESS)
+		throw std::runtime_error(fmt::format("Failed to create descriptor pool: {}", string_VkResult(rs)));
+
+	VkDescriptorSetLayout layouts[textureSetStep];
+	rng::fill(layouts, dsetLayouts[eint(Layout::model)]);
+	VkDescriptorSetAllocateInfo allocInfo = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = descPool,
+		.descriptorSetCount = std::size(layouts),
+		.pSetLayouts = layouts
+	};
+	array<VkDescriptorSet, textureSetStep> descriptorSets;
+	if (VkResult rs = vk->vkAllocateDescriptorSets(vk->getLdev(), &allocInfo, descriptorSets.data()); rs != VK_SUCCESS) {
+		vk->vkDestroyDescriptorPool(vk->getLdev(), descPool, nullptr);
+		throw std::runtime_error(fmt::format("Failed to allocate descriptor sets: {}", string_VkResult(rs)));
+	}
+	return pair(descPool, *poolSetTex.emplace(descPool, descriptorSets).first->second.used.begin());
+}
+
+void Descriptors::freeDescriptorSetTex(const InstanceVk* vk, VkDescriptorPool pool, VkDescriptorSet dset) {
+	auto psit = poolSetTex.find(pool);
+	if (psit == poolSetTex.end())
+		return;
+	auto duit = psit->second.used.find(dset);
+	if (duit == psit->second.used.end())
+		return;
+
+	VkDescriptorSet descriptorSet = *duit;
+	if (psit->second.used.erase(duit); !psit->second.used.empty())
+		psit->second.free.insert(descriptorSet);
+	else {
+		vk->vkDestroyDescriptorPool(vk->getLdev(), pool, nullptr);
+		poolSetTex.erase(psit);
+	}
+}
+
+void Descriptors::updateDescriptorSetImg(const InstanceVk* vk, VkDescriptorSet descriptorSet, VkImageView imageView) noexcept {
+	VkDescriptorImageInfo imageInfo = {
+		.imageView = imageView,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	};
+	VkWriteDescriptorSet descriptorWrite = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = descriptorSet,
+		.dstBinding = RenderPass::bindingModelTex,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+		.pImageInfo = &imageInfo
+	};
+	vk->vkUpdateDescriptorSets(vk->getLdev(), 1, &descriptorWrite, 0, nullptr);
+}
+
+// FORMAT CONVERTER
+
+void FormatConverter::init(const InstanceVk* vk, const Descriptors& ds) {
+	VkPushConstantRange pushConstant = {
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.size = sizeof(PushData)
+	};
+	VkDescriptorSetLayout descriptorSetLayout = ds.getDsetLayout(Descriptors::Layout::fmtconv);
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.setLayoutCount = 1,
+		.pSetLayouts = &descriptorSetLayout,
+		.pushConstantRangeCount = 1,
+		.pPushConstantRanges = &pushConstant
+	};
+	if (VkResult rs = vk->vkCreatePipelineLayout(vk->getLdev(), &pipelineLayoutInfo, nullptr, &pipelineLayout); rs != VK_SUCCESS)
+		throw std::runtime_error(fmt::format("Failed to create pipeline layout: {}", string_VkResult(rs)));
+
 #ifdef EXT_VULKAN_SHADERS
 	auto [rgbCodeData, rgbCodeSize] = World::fileSys()->readShaderFile("vkRgb.comp.spv");
 	auto [idxCodeData, idxCodeSize] = World::fileSys()->readShaderFile("vkIdx.comp.spv");
-	std::span<const uint32> rgbCode(rgbCodeData.get(), rgbCodeSize), idxCode(idxCodeData.get(), idxCodeSize);
+	InstanceVk::ShaderModule rgbShaderModule(vk, std::span<const uint32>(rgbCodeData.get(), rgbCodeSize));
+	InstanceVk::ShaderModule idxShaderModule(vk, std::span<const uint32>(idxCodeData.get(), idxCodeSize));
 #else
 	static constexpr uint32 rgbCodeData[] = {
 #ifdef NDEBUG
@@ -385,124 +656,57 @@ void FormatConverter::createPipelines(const InstanceVk* vk) {
 #include "shaders/vkIdx.comp.dbg.h"
 #endif
 	};
-	std::span<const uint32> rgbCode = rgbCodeData, idxCode = idxCodeData;
+	InstanceVk::ShaderModule rgbShaderModule(vk, rgbCodeData);
+	InstanceVk::ShaderModule idxShaderModule(vk, idxCodeData);
 #endif
-	VkShaderModule rgbShaderModule = VK_NULL_HANDLE;
-	VkShaderModule idxShaderModule = VK_NULL_HANDLE;
-	try {
-		rgbShaderModule = vk->createShaderModule(rgbCode);
-		idxShaderModule = vk->createShaderModule(idxCode);
-
-		VkPushConstantRange pushConstant = {
-			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			.size = sizeof(PushData)
-		};
-		VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			.setLayoutCount = 1,
-			.pSetLayouts = &descriptorSetLayoutRgb,
-			.pushConstantRangeCount = 1,
-			.pPushConstantRanges = &pushConstant
-		};
-		if (VkResult rs = vk->vkCreatePipelineLayout(vk->getLdev(), &pipelineLayoutInfo, nullptr, &pipelineLayoutRgb); rs != VK_SUCCESS)
-			throw std::runtime_error(fmt::format("Failed to create pipeline layout: {}", string_VkResult(rs)));
-
-		pipelineLayoutInfo.pSetLayouts = &descriptorSetLayoutIdx;
-		if (VkResult rs = vk->vkCreatePipelineLayout(vk->getLdev(), &pipelineLayoutInfo, nullptr, &pipelineLayoutIdx); rs != VK_SUCCESS)
-			throw std::runtime_error(fmt::format("Failed to create pipeline layout: {}", string_VkResult(rs)));
-
-		constexpr uint li = eint(Pipeline::index8);
-		VkSpecializationMapEntry specializationEntry = {
-			.constantID = 0,
-			.offset = offsetof(SpecializationData, orderRgb),
-			.size = sizeof(SpecializationData::orderRgb)
-		};
-		SpecializationData specializationData[2] = { { .orderRgb = VK_TRUE }, { .orderRgb = VK_FALSE } };
-		VkSpecializationInfo specializationInfos[std::size(specializationData)]{};
-		VkComputePipelineCreateInfo pipelineInfos[li + 1]{};
-		for (uint i = 0; i < std::size(specializationData); ++i) {
-			specializationInfos[i].mapEntryCount = 1;
-			specializationInfos[i].pMapEntries = &specializationEntry;
-			specializationInfos[i].dataSize = sizeof(SpecializationData);
-			specializationInfos[i].pData = &specializationData[i];
-
-			pipelineInfos[i].sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-			pipelineInfos[i].stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-			pipelineInfos[i].stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-			pipelineInfos[i].stage.module = rgbShaderModule;
-			pipelineInfos[i].stage.pName = "main";
-			pipelineInfos[i].stage.pSpecializationInfo = &specializationInfos[i];
-			pipelineInfos[i].layout = pipelineLayoutRgb;
-		}
-		pipelineInfos[li].sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-		pipelineInfos[li].stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		pipelineInfos[li].stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-		pipelineInfos[li].stage.module = idxShaderModule;
-		pipelineInfos[li].stage.pName = "main";
-		pipelineInfos[li].layout = pipelineLayoutIdx;
-		if (VkResult rs = vk->vkCreateComputePipelines(vk->getLdev(), VK_NULL_HANDLE, pipelines.size(), pipelineInfos, nullptr, pipelines.data()); rs != VK_SUCCESS)
-			throw std::runtime_error(fmt::format("Failed to create pipelines: {}", string_VkResult(rs)));
-
-		vk->vkDestroyShaderModule(vk->getLdev(), rgbShaderModule, nullptr);
-		vk->vkDestroyShaderModule(vk->getLdev(), idxShaderModule, nullptr);
-	} catch (const std::runtime_error&) {
-		vk->vkDestroyShaderModule(vk->getLdev(), rgbShaderModule, nullptr);
-		vk->vkDestroyShaderModule(vk->getLdev(), idxShaderModule, nullptr);
-		throw;
+	constexpr uint li = eint(Pipeline::index8);
+	VkSpecializationMapEntry specializationEntry = {
+		.constantID = 0,
+		.offset = offsetof(SpecializationData, orderRgb),
+		.size = sizeof(SpecializationData::orderRgb)
+	};
+	SpecializationData specializationData[] = { { .orderRgb = VK_TRUE }, { .orderRgb = VK_FALSE } };
+	VkSpecializationInfo specializationInfos[std::size(specializationData)]{};
+	for (uint i = 0; i < std::size(specializationData); ++i) {
+		specializationInfos[i].mapEntryCount = 1;
+		specializationInfos[i].pMapEntries = &specializationEntry;
+		specializationInfos[i].dataSize = sizeof(SpecializationData);
+		specializationInfos[i].pData = &specializationData[i];
 	}
+
+	VkComputePipelineCreateInfo pipelineInfos[] = {
+		createPipelineInfo(rgbShaderModule, pipelineLayout, &specializationInfos[0]),
+		createPipelineInfo(rgbShaderModule, pipelineLayout, &specializationInfos[1]),
+		createPipelineInfo(idxShaderModule, pipelineLayout)
+	};
+	if (VkResult rs = vk->vkCreateComputePipelines(vk->getLdev(), VK_NULL_HANDLE, pipelines.size(), pipelineInfos, nullptr, pipelines.data()); rs != VK_SUCCESS)
+		throw std::runtime_error(fmt::format("Failed to create pipelines: {}", string_VkResult(rs)));
 }
 
-void FormatConverter::createDescriptorPoolAndSets(const InstanceVk* vk) {
-	VkDescriptorPoolSize poolSizes[2] = { {
-		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = maxTransfers * numLayouts * 2	// 2 for input + output
-	}, {
-		.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		.descriptorCount = maxTransfers
-	} };
-	VkDescriptorPoolCreateInfo poolInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.maxSets = maxTransfers * numLayouts,
-		.poolSizeCount = std::size(poolSizes),
-		.pPoolSizes = poolSizes
+void FormatConverter::free(const InstanceVk* vk) noexcept {
+	for (VkPipeline it : pipelines)
+		vk->vkDestroyPipeline(vk->getLdev(), it, nullptr);
+	vk->vkDestroyPipelineLayout(vk->getLdev(), pipelineLayout, nullptr);
+	for (size_t i = 0; i < outputBufs.size(); ++i)
+		vk->freeBuffer(outputBufs[i]);
+}
+
+VkComputePipelineCreateInfo FormatConverter::createPipelineInfo(VkShaderModule module, VkPipelineLayout layout, const VkSpecializationInfo* specialization) noexcept {
+	return {
+		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		.stage = {
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			.module = module,
+			.pName = "main",
+			.pSpecializationInfo = specialization
+		},
+		.layout = layout
 	};
-	if (VkResult rs = vk->vkCreateDescriptorPool(vk->getLdev(), &poolInfo, nullptr, &descriptorPool); rs != VK_SUCCESS)
-		throw std::runtime_error(fmt::format("Failed to create descriptor pool: {}", string_VkResult(rs)));
-
-	VkDescriptorSetLayout layouts[maxTransfers * numLayouts];
-	std::fill_n(layouts, maxTransfers, descriptorSetLayoutRgb);
-	std::fill_n(layouts + maxTransfers, maxTransfers, descriptorSetLayoutIdx);
-	VkDescriptorSetAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = descriptorPool,
-		.descriptorSetCount = std::size(layouts),
-		.pSetLayouts = layouts
-	};
-	if (VkResult rs = vk->vkAllocateDescriptorSets(vk->getLdev(), &allocInfo, descriptorSets.data()); rs != VK_SUCCESS)
-		throw std::runtime_error(fmt::format("Failed to allocate descriptor sets: {}", string_VkResult(rs)));
-
-	VkDescriptorBufferInfo uniformBufferInfos[maxTransfers]{};
-	VkWriteDescriptorSet descriptorWrites[maxTransfers]{};
-	for (uint i = 0; i < maxTransfers; ++i) {
-		uniformBufs[i] = vk->createBuffer(sizeof(UniformData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		if (VkResult rs = vk->vkMapMemory(vk->getLdev(), uniformBufs[i].memory, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&uniformBufferMapped[i])); rs != VK_SUCCESS)
-			throw std::runtime_error(fmt::format("Failed to map memory: {}", string_VkResult(rs)));
-
-		uniformBufferInfos[i].buffer = uniformBufs[i];
-		uniformBufferInfos[i].range = sizeof(UniformData);
-
-		descriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[i].dstSet = descriptorSets[maxTransfers + i];
-		descriptorWrites[i].dstBinding = bindingUniform;
-		descriptorWrites[i].descriptorCount = 1;
-		descriptorWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorWrites[i].pBufferInfo = &uniformBufferInfos[i];
-	}
-	vk->vkUpdateDescriptorSets(vk->getLdev(), std::size(descriptorWrites), descriptorWrites, 0, nullptr);
 }
 
 void FormatConverter::updateBufferSize(const InstanceVk* vk, VkDescriptorSet dset, uint id, VkBuffer inputBuffer, VkDeviceSize inputSize, bool& update) {
-	VkDeviceSize outputSize = glm::ceilMultiple(inputSize * 4, VkDeviceSize(convWgrpSize * 4) * sizeof(uint32));
+	VkDeviceSize outputSize = glm::ceilMultiple(inputSize * 4, convWgrpSize * 4 * sizeof(uint32));
 	if (outputSize > outputBufferSizesMax[id]) {
 		vk->recreateBuffer(outputBufs[id], outputSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		outputBufferSizesMax[id] = outputSize;
@@ -537,30 +741,18 @@ void FormatConverter::updateBufferSize(const InstanceVk* vk, VkDescriptorSet dse
 	}
 }
 
-void FormatConverter::free(const InstanceVk* vk) noexcept {
-	for (VkPipeline it : pipelines)
-		vk->vkDestroyPipeline(vk->getLdev(), it, nullptr);
-	vk->vkDestroyPipelineLayout(vk->getLdev(), pipelineLayoutRgb, nullptr);
-	vk->vkDestroyPipelineLayout(vk->getLdev(), pipelineLayoutIdx, nullptr);
-	for (size_t i = 0; i < outputBufs.size(); ++i)
-		vk->cleanupBuffer(outputBufs[i]);
-	for (size_t i = 0; i < uniformBufs.size(); ++i)
-		vk->cleanupBuffer(uniformBufs[i]);
-	vk->vkDestroyDescriptorPool(vk->getLdev(), descriptorPool, nullptr);
-	vk->vkDestroyDescriptorSetLayout(vk->getLdev(), descriptorSetLayoutRgb, nullptr);
-	vk->vkDestroyDescriptorSetLayout(vk->getLdev(), descriptorSetLayoutIdx, nullptr);
-}
-
 // RENDER PASS
 
-RenderPass::PipelineCreateHelper::PipelineCreateHelper(VkPipelineLayout layout, VkRenderPass renderPass, uint32_t subpass, bool blend) noexcept :
+RenderPass::PipelineCreateHelper::PipelineCreateHelper(VkShaderModule vert, VkShaderModule frag, bool blend) noexcept :
 	shaderStages{ {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		.stage = VK_SHADER_STAGE_VERTEX_BIT,
+		.module = vert,
 		.pName = "main"
 	}, {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.module = frag,
 		.pName = "main"
 	} },
 	bindingDescription{
@@ -611,22 +803,6 @@ RenderPass::PipelineCreateHelper::PipelineCreateHelper(VkPipelineLayout layout, 
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
 		.dynamicStateCount = uint32(std::size(dynamicStates)),
 		.pDynamicStates = dynamicStates
-	},
-	pipelineInfo{
-		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		.stageCount = uint32(std::size(shaderStages)),
-		.pStages = shaderStages,
-		.pVertexInputState = &vertexInputState,
-		.pInputAssemblyState = &inputAssemblyState,
-		.pViewportState = &viewportState,
-		.pRasterizationState = &rasterizationState,
-		.pMultisampleState = &multisampleState,
-		.pDepthStencilState = &depthStencilState,
-		.pColorBlendState = &colorBlendState,
-		.pDynamicState = &dynamicState,
-		.layout = layout,
-		.renderPass = renderPass,
-		.subpass = subpass
 	}
 {
 	if (blend) {
@@ -645,39 +821,45 @@ void RenderPass::PipelineCreateHelper::cleanup(const InstanceVk* vk) noexcept {
 		vk->vkDestroyShaderModule(vk->getLdev(), it.module, nullptr);
 }
 
-RenderPass::DescriptorSetBlock::DescriptorSetBlock(const array<VkDescriptorSet, textureSetStep>& descriptorSets) :
-	used(descriptorSets.begin(), descriptorSets.begin() + 1),
-	free(descriptorSets.begin() + 1, descriptorSets.end())
-{}
-
-void RenderPass::init(const InstanceVk* vk) {
-	samplers[samplerNearest] = vk->createSampler(VK_FILTER_NEAREST);
-	samplers[samplerLinear] = vk->createSampler(VK_FILTER_LINEAR);
-	globBuf = vk->createBuffer(sizeof(GlobalData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+VkGraphicsPipelineCreateInfo RenderPass::PipelineCreateHelper::createInfo(VkPipelineLayout layout, VkRenderPass renderPass, uint32 subpass) noexcept {
+	return {
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.stageCount = uint32(std::size(shaderStages)),
+		.pStages = shaderStages,
+		.pVertexInputState = &vertexInputState,
+		.pInputAssemblyState = &inputAssemblyState,
+		.pViewportState = &viewportState,
+		.pRasterizationState = &rasterizationState,
+		.pMultisampleState = &multisampleState,
+		.pDepthStencilState = &depthStencilState,
+		.pColorBlendState = &colorBlendState,
+		.pDynamicState = &dynamicState,
+		.layout = layout,
+		.renderPass = renderPass,
+		.subpass = subpass
+	};
 }
 
-void RenderPass::createPass(const InstanceVk* vk, VkFormat format, Settings::Gamma& gamma, bool canSrgb) {
-	if (gamma != Settings::Gamma::value) {
-		createRenderPass(vk, format, false);
-		createDescriptorSetLayouts(vk, false);
-		createGuiPipeline(vk);
-	} else {
-		try {
-			createRenderPass(vk, format, true);
-			createDescriptorSetLayouts(vk, true);
-			createGuiPipeline(vk);
-			createFinPipeline(vk);
-		} catch (const std::runtime_error& err) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
-			freePass(vk);
-			gamma = canSrgb ? Settings::Gamma::srgb : Settings::Gamma::none;
-			createPass(vk, format, gamma, canSrgb);
-		}
-	}
+void RenderPass::init(const InstanceVk* vk, const Descriptors& ds, VkFormat format, Settings::Gamma gamma, bool canSrgb) {
+	bool postp = gamma == Settings::Gamma::value;
+	createRenderPass(vk, format, postp);
+	createPipelines(vk, ds, postp);
+}
+
+void RenderPass::free(const InstanceVk* vk) noexcept {
+	for (VkPipeline it : pipelines)
+		vk->vkDestroyPipeline(vk->getLdev(), it, nullptr);
+	vk->vkDestroyPipelineLayout(vk->getLdev(), guiPipelineLayout, nullptr);
+	vk->vkDestroyPipelineLayout(vk->getLdev(), finPipelineLayout, nullptr);
+	vk->vkDestroyRenderPass(vk->getLdev(), handle, nullptr);
+	handle = VK_NULL_HANDLE;
+	pipelines.fill(VK_NULL_HANDLE);
+	guiPipelineLayout = VK_NULL_HANDLE;
+	finPipelineLayout = VK_NULL_HANDLE;
 }
 
 void RenderPass::createRenderPass(const InstanceVk* vk, VkFormat format, bool postp) {
-	VkAttachmentDescription colorAttachments[2] = { {
+	VkAttachmentDescription colorAttachments[] = { {
 		.format = subpassFormat,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -685,7 +867,7 @@ void RenderPass::createRenderPass(const InstanceVk* vk, VkFormat format, bool po
 		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-		.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+		.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 	}, {
 		.format = format,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
@@ -696,29 +878,30 @@ void RenderPass::createRenderPass(const InstanceVk* vk, VkFormat format, bool po
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 	} };
-	VkAttachmentReference colorAttachmentRefs[2] = { {
+	VkAttachmentReference colorAttachmentRef = {
 		.attachment = 0,
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-	}, {
+	};
+	VkAttachmentReference finalAttachmentRef = {
 		.attachment = 1,
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-	} };
+	};
 	VkAttachmentReference inputAttachmentRef = {
 		.attachment = 0,
 		.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 	};
-	VkSubpassDescription subpasses[2] = { {
+	VkSubpassDescription subpasses[] = { {
 		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
 		.colorAttachmentCount = 1,
-		.pColorAttachments = &colorAttachmentRefs[0]
+		.pColorAttachments = &colorAttachmentRef
 	}, {
 		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
 		.inputAttachmentCount = 1,
 		.pInputAttachments = &inputAttachmentRef,
 		.colorAttachmentCount = 1,
-		.pColorAttachments = &colorAttachmentRefs[1]
+		.pColorAttachments = &finalAttachmentRef
 	} };
-	VkSubpassDependency dependencies[2] = { {
+	VkSubpassDependency dependencies[] = { {
 		.srcSubpass = VK_SUBPASS_EXTERNAL,
 		.dstSubpass = subpassGui,
 		.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -731,7 +914,7 @@ void RenderPass::createRenderPass(const InstanceVk* vk, VkFormat format, bool po
 		.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
 		.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 		.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-		.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+		.dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
 		.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
 	} };
 	VkRenderPassCreateInfo renderPassInfo = {
@@ -747,337 +930,82 @@ void RenderPass::createRenderPass(const InstanceVk* vk, VkFormat format, bool po
 		throw std::runtime_error(fmt::format("Failed to create render pass: {}", string_VkResult(rs)));
 }
 
-void RenderPass::createDescriptorSetLayouts(const InstanceVk* vk, bool postp) {
-	VkDescriptorSetLayoutBinding layoutBindingsGlob[2] = { {
-		.binding = bindingGlobData,
-		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-	}, {
-		.binding = bindingGlobSamp,
-		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-		.descriptorCount = uint32(samplers.size()),
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-		.pImmutableSamplers = samplers.data()
-	} };
-	VkDescriptorSetLayoutCreateInfo layoutInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = std::size(layoutBindingsGlob),
-		.pBindings = layoutBindingsGlob
-	};
-	if (VkResult rs = vk->vkCreateDescriptorSetLayout(vk->getLdev(), &layoutInfo, nullptr, &descriptorSetLayoutGlob); rs != VK_SUCCESS)
-		throw std::runtime_error(fmt::format("Failed to create descriptor set layout: {}", string_VkResult(rs)));
-
-	VkDescriptorSetLayoutBinding layoutBindingsView[2] = { {
-		.binding = bindingViewData,
-		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT
-	}, {
-		.binding = bindingViewIn,
-		.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-	} };
-	layoutInfo.bindingCount = std::size(layoutBindingsView) - !postp;
-	layoutInfo.pBindings = layoutBindingsView;
-	if (VkResult rs = vk->vkCreateDescriptorSetLayout(vk->getLdev(), &layoutInfo, nullptr, &descriptorSetLayoutView); rs != VK_SUCCESS)
-		throw std::runtime_error(fmt::format("Failed to create descriptor set layout: {}", string_VkResult(rs)));
-
-	VkDescriptorSetLayoutBinding layoutBindingModel = {
-		.binding = bindingModelTex,
-		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-	};
-	layoutInfo.bindingCount = 1;
-	layoutInfo.pBindings = &layoutBindingModel;
-	if (VkResult rs = vk->vkCreateDescriptorSetLayout(vk->getLdev(), &layoutInfo, nullptr, &descriptorSetLayoutModel); rs != VK_SUCCESS)
-		throw std::runtime_error(fmt::format("Failed to create descriptor set layout: {}", string_VkResult(rs)));
-}
-
-void RenderPass::createGuiPipeline(const InstanceVk* vk) {
-	VkPushConstantRange pushConstant = {
+void RenderPass::createPipelines(const InstanceVk* vk, const Descriptors& ds, bool postp) {
+	VkPushConstantRange guiPushConstant = {
 		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 		.size = sizeof(PushData)
 	};
-	VkDescriptorSetLayout descriptorSetLayouts[3] = { descriptorSetLayoutGlob, descriptorSetLayoutView, descriptorSetLayoutModel };
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
+	VkDescriptorSetLayout guiDescriptorSetLayouts[] = { ds.getDsetLayout(Descriptors::Layout::global), ds.getDsetLayout(Descriptors::Layout::view), ds.getDsetLayout(Descriptors::Layout::model) };
+	VkPipelineLayoutCreateInfo guiPipelineLayoutInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = std::size(descriptorSetLayouts),
-		.pSetLayouts = descriptorSetLayouts,
+		.setLayoutCount = std::size(guiDescriptorSetLayouts),
+		.pSetLayouts = guiDescriptorSetLayouts,
 		.pushConstantRangeCount = 1,
-		.pPushConstantRanges = &pushConstant
+		.pPushConstantRanges = &guiPushConstant
 	};
-	if (VkResult rs = vk->vkCreatePipelineLayout(vk->getLdev(), &pipelineLayoutInfo, nullptr, &guiPipelineLayout); rs != VK_SUCCESS)
+	if (VkResult rs = vk->vkCreatePipelineLayout(vk->getLdev(), &guiPipelineLayoutInfo, nullptr, &guiPipelineLayout); rs != VK_SUCCESS)
+		throw std::runtime_error(fmt::format("Failed to create pipeline layout: {}", string_VkResult(rs)));
+
+	VkDescriptorSetLayout finDescriptorSetLayouts[] = { ds.getDsetLayout(Descriptors::Layout::global), ds.getDsetLayout(Descriptors::Layout::view) };
+	VkPipelineLayoutCreateInfo finPipelineLayoutInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.setLayoutCount = std::size(finDescriptorSetLayouts),
+		.pSetLayouts = finDescriptorSetLayouts,
+	};
+	if (VkResult rs = vk->vkCreatePipelineLayout(vk->getLdev(), &finPipelineLayoutInfo, nullptr, &finPipelineLayout); rs != VK_SUCCESS)
 		throw std::runtime_error(fmt::format("Failed to create pipeline layout: {}", string_VkResult(rs)));
 
 #ifdef EXT_VULKAN_SHADERS
-	auto [vertCodeData, vertCodeSize] = World::fileSys()->readShaderFile("vkGui.vert.spv");
-	auto [fragCodeData, fragCodeSize] = World::fileSys()->readShaderFile("vkGui.frag.spv");
-	std::span<const uint32> vertCode(vertCodeData.get(), vertCodeSize), fragCode(fragCodeData.get(), fragCodeSize);
+	auto [guiVertCodeData, guiVertCodeSize] = World::fileSys()->readShaderFile("vkGui.vert.spv");
+	auto [guiFragCodeData, guiFragCodeSize] = World::fileSys()->readShaderFile("vkGui.frag.spv");
+	auto [finVertCodeData, finVertCodeSize] = postp ? World::fileSys()->readShaderFile("vkFin.vert.spv") : pair(nullptr, 0);
+	auto [finFragCodeData, finFragCodeSize] = postp ? World::fileSys()->readShaderFile("vkFin.frag.spv") : pair(nullptr, 0);
+	InstanceVk::ShaderModule guiVertModule(vk, std::span<const uint32>(guiVertCodeData.get(), guiVertCodeSize)), guiFragModule(vk, std::span<const uint32>(guiFragCodeData.get(), guiFragCodeSize));
+	InstanceVk::ShaderModule finVertModule(vk, std::span<const uint32>(finVertCodeData.get(), finVertCodeSize)), finFragModule(vk, std::span<const uint32>(finFragCodeData.get(), finFragCodeSize));
 #else
-	static constexpr uint32 vertCodeData[] = {
+	static constexpr uint32 guiVertCodeData[] = {
 #ifdef NDEBUG
 #include "shaders/vkGui.vert.rel.h"
 #else
 #include "shaders/vkGui.vert.dbg.h"
 #endif
 	};
-	static constexpr uint32 fragCodeData[] = {
+	static constexpr uint32 guiFragCodeData[] = {
 #ifdef NDEBUG
 #include "shaders/vkGui.frag.rel.h"
 #else
 #include "shaders/vkGui.frag.dbg.h"
 #endif
 	};
-	std::span<const uint32> vertCode = vertCodeData, fragCode = fragCodeData;
-#endif
-	PipelineCreateHelper helper(guiPipelineLayout, handle, subpassGui, true);
-	try {
-		helper.shaderStages[0].module = vk->createShaderModule(vertCode);
-		helper.shaderStages[1].module = vk->createShaderModule(fragCode);
-		if (VkResult rs = vk->vkCreateGraphicsPipelines(vk->getLdev(), VK_NULL_HANDLE, 1, &helper.pipelineInfo, nullptr, &guiPipeline); rs != VK_SUCCESS)
-			throw std::runtime_error(fmt::format("Failed to create pipeline: {}", string_VkResult(rs)));
-		helper.cleanup(vk);
-	} catch (const std::runtime_error&) {
-		helper.cleanup(vk);
-		throw;
-	}
-}
-
-void RenderPass::createFinPipeline(const InstanceVk* vk) {
-	VkDescriptorSetLayout descriptorSetLayouts[2] = { descriptorSetLayoutGlob, descriptorSetLayoutView };
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = std::size(descriptorSetLayouts),
-		.pSetLayouts = descriptorSetLayouts,
-	};
-	if (VkResult rs = vk->vkCreatePipelineLayout(vk->getLdev(), &pipelineLayoutInfo, nullptr, &finPipelineLayout); rs != VK_SUCCESS)
-		throw std::runtime_error(fmt::format("Failed to create pipeline layout: {}", string_VkResult(rs)));
-
-#ifdef EXT_VULKAN_SHADERS
-	auto [vertCodeData, vertCodeSize] = World::fileSys()->readShaderFile("vkFin.vert.spv");
-	auto [fragCodeData, fragCodeSize] = World::fileSys()->readShaderFile("vkFin.frag.spv");
-	std::span<const uint32> vertCode(vertCodeData.get(), vertCodeSize), fragCode(fragCodeData.get(), fragCodeSize);
-#else
-	static constexpr uint32 vertCodeData[] = {
+	static constexpr uint32 finVertCodeData[] = {
 #ifdef NDEBUG
 #include "shaders/vkFin.vert.rel.h"
 #else
 #include "shaders/vkFin.vert.dbg.h"
 #endif
 	};
-	static constexpr uint32 fragCodeData[] = {
+	static constexpr uint32 finFragCodeData[] = {
 #ifdef NDEBUG
 #include "shaders/vkFin.frag.rel.h"
 #else
 #include "shaders/vkFin.frag.dbg.h"
 #endif
 	};
-	std::span<const uint32> vertCode = vertCodeData, fragCode = fragCodeData;
+	InstanceVk::ShaderModule guiVertModule(vk, guiVertCodeData), guiFragModule(vk, guiFragCodeData);
+	InstanceVk::ShaderModule finVertModule(vk, finVertCodeData), finFragModule(vk, finFragCodeData);
 #endif
-	PipelineCreateHelper helper(finPipelineLayout, handle, subpassFin, false);
-	try {
-		helper.shaderStages[0].module = vk->createShaderModule(vertCode);
-		helper.shaderStages[1].module = vk->createShaderModule(fragCode);
-		if (VkResult rs = vk->vkCreateGraphicsPipelines(vk->getLdev(), VK_NULL_HANDLE, 1, &helper.pipelineInfo, nullptr, &finPipeline); rs != VK_SUCCESS)
-			throw std::runtime_error(fmt::format("Failed to create pipeline: {}", string_VkResult(rs)));
-		helper.cleanup(vk);
-	} catch (const std::runtime_error&) {
-		helper.cleanup(vk);
-		throw;
-	}
-}
-
-void RenderPass::createDescriptorPoolAndSets(const InstanceVk* vk, InstanceVk::ViewVk* views, uint8 numViews) {
-	VkDescriptorPoolSize poolSizes[3] = { {
-		.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		.descriptorCount = uint32(numViews) + 1	// Pview + Global
-	}, {
-		.type = VK_DESCRIPTOR_TYPE_SAMPLER,
-		.descriptorCount = uint32(samplers.size())
-	}, {
-		.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-		.descriptorCount = uint32(numViews)
-	} };
-	VkDescriptorPoolCreateInfo poolInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.maxSets = uint32(numViews) + 1,	// view rect & input + global
-		.poolSizeCount = uint32(std::size(poolSizes)) - !finPipeline,
-		.pPoolSizes = poolSizes
+	PipelineCreateHelper helpers[] = {
+		PipelineCreateHelper(guiVertModule, guiFragModule, true),
+		PipelineCreateHelper(finVertModule, finFragModule, false)
 	};
-	if (VkResult rs = vk->vkCreateDescriptorPool(vk->getLdev(), &poolInfo, nullptr, &descriptorPool); rs != VK_SUCCESS)
-		throw std::runtime_error(fmt::format("Failed to create descriptor pool: {}", string_VkResult(rs)));
-
-	uptr<VkDescriptorSetLayout[]> layouts = std::make_unique_for_overwrite<VkDescriptorSetLayout[]>(poolInfo.maxSets);
-	std::fill_n(layouts.get(), numViews, descriptorSetLayoutView);
-	layouts[numViews] = descriptorSetLayoutGlob;
-	VkDescriptorSetAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = descriptorPool,
-		.descriptorSetCount = poolInfo.maxSets,
-		.pSetLayouts = layouts.get()
+	VkGraphicsPipelineCreateInfo pipelineInfos[] = {
+		helpers[eint(Pipeline::gui)].createInfo(guiPipelineLayout, handle, subpassGui),
+		helpers[eint(Pipeline::fin)].createInfo(finPipelineLayout, handle, subpassFin)
 	};
-	uptr<VkDescriptorSet[]> descriptorSets = std::make_unique_for_overwrite<VkDescriptorSet[]>(poolInfo.maxSets);
-	if (VkResult rs = vk->vkAllocateDescriptorSets(vk->getLdev(), &allocInfo, descriptorSets.get()); rs != VK_SUCCESS)
-		throw std::runtime_error(fmt::format("Failed to allocate descriptor sets: {}", string_VkResult(rs)));
-
-	uint32 ve = numViews;
-	uint32 pe = numViews + (finPipeline ? numViews : 0);
-	uptr<VkDescriptorBufferInfo[]> viewBufferInfos = std::make_unique<VkDescriptorBufferInfo[]>(numViews);
-	uptr<VkDescriptorImageInfo[]> viewImageInfos;
-	uptr<VkWriteDescriptorSet[]> descriptorWrites = std::make_unique<VkWriteDescriptorSet[]>(pe + 1);
-	for (uint8 i = 0; i < numViews; ++i) {
-		views[i].descriptorSet = descriptorSets[i];
-
-		viewBufferInfos[i].buffer = views[i].uniformBuf;
-		viewBufferInfos[i].range = sizeof(ViewData);
-
-		descriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[i].dstSet = views[i].descriptorSet;
-		descriptorWrites[i].dstBinding = bindingViewData;
-		descriptorWrites[i].descriptorCount = 1;
-		descriptorWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorWrites[i].pBufferInfo = &viewBufferInfos[i];
-	}
-	if (finPipeline) {
-		viewImageInfos = std::make_unique<VkDescriptorImageInfo[]>(numViews);
-		for (uint8 i = 0; i < numViews; ++i) {
-			viewImageInfos[i].imageView = views[i].pp.view;
-			viewImageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-			descriptorWrites[ve + i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[ve + i].dstSet = views[i].descriptorSet;
-			descriptorWrites[ve + i].dstBinding = bindingViewIn;
-			descriptorWrites[ve + i].descriptorCount = 1;
-			descriptorWrites[ve + i].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-			descriptorWrites[ve + i].pImageInfo = &viewImageInfos[i];
-		}
-	}
-	globDescriptorSet = descriptorSets[numViews];
-	VkDescriptorBufferInfo globBufferInfo = {
-		.buffer = globBuf,
-		.range = sizeof(GlobalData)
-	};
-	descriptorWrites[pe].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrites[pe].dstSet = globDescriptorSet;
-	descriptorWrites[pe].dstBinding = bindingGlobData;
-	descriptorWrites[pe].descriptorCount = 1;
-	descriptorWrites[pe].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	descriptorWrites[pe].pBufferInfo = &globBufferInfo;
-	vk->vkUpdateDescriptorSets(vk->getLdev(), pe + 1, descriptorWrites.get(), 0, nullptr);
-}
-
-pair<VkDescriptorPool, VkDescriptorSet> RenderPass::newDescriptorSetTex(const InstanceVk* vk, VkImageView imageView) {
-	pair<VkDescriptorPool, VkDescriptorSet> dpds = getDescriptorSetTex(vk);
-	updateDescriptorSetImg(vk, dpds.second, imageView);
-	return dpds;
-}
-
-pair<VkDescriptorPool, VkDescriptorSet> RenderPass::getDescriptorSetTex(const InstanceVk* vk) {
-	if (auto psit = rng::find_if(poolSetTex, [](const pair<const VkDescriptorPool, DescriptorSetBlock>& it) -> bool { return !it.second.free.empty(); }); psit != poolSetTex.end()) {
-		auto frit = psit->second.free.begin();
-		auto usit = psit->second.used.insert(*frit).first;
-		psit->second.free.erase(frit);
-		return pair(psit->first, *usit);
-	}
-
-	VkDescriptorPoolSize poolSize = {
-		.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-		.descriptorCount = textureSetStep
-	};
-	VkDescriptorPoolCreateInfo poolInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.maxSets = textureSetStep,
-		.poolSizeCount = 1,
-		.pPoolSizes = &poolSize
-	};
-	VkDescriptorPool descPool;
-	if (VkResult rs = vk->vkCreateDescriptorPool(vk->getLdev(), &poolInfo, nullptr, &descPool); rs != VK_SUCCESS)
-		throw std::runtime_error(fmt::format("Failed to create descriptor pool: {}", string_VkResult(rs)));
-
-	array<VkDescriptorSetLayout, textureSetStep> layouts;
-	layouts.fill(descriptorSetLayoutModel);
-	VkDescriptorSetAllocateInfo allocInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = descPool,
-		.descriptorSetCount = layouts.size(),
-		.pSetLayouts = layouts.data()
-	};
-	array<VkDescriptorSet, textureSetStep> descriptorSets;
-	if (VkResult rs = vk->vkAllocateDescriptorSets(vk->getLdev(), &allocInfo, descriptorSets.data()); rs != VK_SUCCESS) {
-		vk->vkDestroyDescriptorPool(vk->getLdev(), descPool, nullptr);
-		throw std::runtime_error(fmt::format("Failed to allocate descriptor sets: {}", string_VkResult(rs)));
-	}
-	return pair(descPool, *poolSetTex.emplace(descPool, descriptorSets).first->second.used.begin());
-}
-
-void RenderPass::freeDescriptorSetTex(const InstanceVk* vk, VkDescriptorPool pool, VkDescriptorSet dset) {
-	auto psit = poolSetTex.find(pool);
-	if (psit == poolSetTex.end())
-		return;
-	auto duit = psit->second.used.find(dset);
-	if (duit == psit->second.used.end())
-		return;
-
-	VkDescriptorSet descriptorSet = *duit;
-	if (psit->second.used.erase(duit); !psit->second.used.empty())
-		psit->second.free.insert(descriptorSet);
-	else {
-		vk->vkDestroyDescriptorPool(vk->getLdev(), pool, nullptr);
-		poolSetTex.erase(psit);
-	}
-}
-
-void RenderPass::updateDescriptorSetImg(const InstanceVk* vk, VkDescriptorSet descriptorSet, VkImageView imageView) noexcept {
-	VkDescriptorImageInfo imageInfo = {
-		.imageView = imageView,
-		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-	};
-	VkWriteDescriptorSet descriptorWrite = {
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstSet = descriptorSet,
-		.dstBinding = bindingModelTex,
-		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-		.pImageInfo = &imageInfo
-	};
-	vk->vkUpdateDescriptorSets(vk->getLdev(), 1, &descriptorWrite, 0, nullptr);
-}
-
-void RenderPass::free(const InstanceVk* vk) noexcept {
-	freePass(vk);
-	freeDescriptorPool(vk);
-	for (auto& [pool, block] : poolSetTex)
-		vk->vkDestroyDescriptorPool(vk->getLdev(), pool, nullptr);
-	vk->cleanupBuffer(globBuf);
-	for (VkSampler it : samplers)
-		vk->vkDestroySampler(vk->getLdev(), it, nullptr);
-}
-
-void RenderPass::freePass(const InstanceVk* vk) noexcept {
-	vk->vkDestroyPipeline(vk->getLdev(), guiPipeline, nullptr);
-	vk->vkDestroyPipeline(vk->getLdev(), finPipeline, nullptr);
-	vk->vkDestroyPipelineLayout(vk->getLdev(), guiPipelineLayout, nullptr);
-	vk->vkDestroyPipelineLayout(vk->getLdev(), finPipelineLayout, nullptr);
-	vk->vkDestroyDescriptorSetLayout(vk->getLdev(), descriptorSetLayoutGlob, nullptr);
-	vk->vkDestroyDescriptorSetLayout(vk->getLdev(), descriptorSetLayoutView, nullptr);
-	vk->vkDestroyDescriptorSetLayout(vk->getLdev(), descriptorSetLayoutModel, nullptr);
-	vk->vkDestroyRenderPass(vk->getLdev(), handle, nullptr);
-	handle = VK_NULL_HANDLE;
-	guiPipeline = VK_NULL_HANDLE;
-	guiPipelineLayout = VK_NULL_HANDLE;
-	finPipeline = VK_NULL_HANDLE;
-	finPipelineLayout = VK_NULL_HANDLE;
-	descriptorSetLayoutGlob = VK_NULL_HANDLE;
-	descriptorSetLayoutView = VK_NULL_HANDLE;
-	descriptorSetLayoutModel = VK_NULL_HANDLE;
-}
-
-void RenderPass::freeDescriptorPool(const InstanceVk* vk) noexcept {
-	vk->vkDestroyDescriptorPool(vk->getLdev(), descriptorPool, nullptr);
-	descriptorPool = VK_NULL_HANDLE;
+	if (VkResult rs = vk->vkCreateGraphicsPipelines(vk->getLdev(), VK_NULL_HANDLE, std::size(pipelineInfos) - !postp, pipelineInfos, nullptr, pipelines.data()); rs != VK_SUCCESS)
+		throw std::runtime_error(fmt::format("Failed to create pipeline: {}", string_VkResult(rs)));
+	if (!postp)
+		pipelines[eint(Pipeline::fin)] = VK_NULL_HANDLE;
 }
 
 // RENDERER VK
@@ -1099,7 +1027,7 @@ RendererVk::RendererVk(InitParams& initParams, Settings* sets) :
 	views(std::make_unique<ViewVk[]>(initParams.numWindows)),
 	swapchains(std::make_unique<VkSwapchainKHR[]>(initParams.numWindows)),
 	waitStages(std::make_unique_for_overwrite<VkPipelineStageFlags[]>(initParams.numWindows)),
-	imageAvailableSemaphores(std::make_unique<VkSemaphore[]>(initParams.numWindows * ViewVk::maxFrames)),
+	imageAvailableSemaphores(std::make_unique<VkSemaphore[]>(initParams.numWindows * maxFrames)),
 	imageIndices(std::make_unique_for_overwrite<uint32[]>(initParams.numWindows)),
 	immediatePresent(!sets->vsync)
 {
@@ -1126,15 +1054,20 @@ RendererVk::RendererVk(InitParams& initParams, Settings* sets) :
 		createDevice(*deviceInfo);
 		setUsesSrgb(sets);
 
-		tcmdPool = createCommandPool(tfamilyIndex);
-		allocateCommandBuffers(tcmdPool, tcmdBuffers.data(), tcmdBuffers.size());
+		gcmdPool = createCommandPool(gfamilyIndex);
+		VkCommandBuffer gcmdBuffers[maxFrames + Descriptors::maxTransfers];
+		allocateCommandBuffers(gcmdPool, gcmdBuffers, std::size(gcmdBuffers));
+		std::copy_n(gcmdBuffers, commandBuffers.size(), commandBuffers.begin());
+		std::copy_n(gcmdBuffers + commandBuffers.size(), tcmdBuffers.size(), tcmdBuffers.begin());
 		for (size_t i = 0; i < tfences.size(); ++i)
 			tfences[i] = createFence();
 
+		descs.init(this, views.get(), numViews);
+		initGlobalData(sets, initParams.colors);
 		if (deviceInfo->canCompute) {
 			try {
-				fmtConv.init(this);
-				transferAtomSize = glm::ceilMultiple(VkDeviceSize(FormatConverter::convWgrpSize * 3) * sizeof(uint32), transferAtomSize);
+				fmtConv.init(this, descs);
+				transferAtomSize = glm::ceilMultiple(uint(FormatConverter::convWgrpSize * 3 * sizeof(uint32)), transferAtomSize);
 			} catch (const std::runtime_error& err) {
 				SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
 				fmtConv.free(this);
@@ -1142,30 +1075,22 @@ RendererVk::RendererVk(InitParams& initParams, Settings* sets) :
 			}
 		}
 
-		gcmdPool = createCommandPool(gfamilyIndex);
-		allocateCommandBuffers(gcmdPool, commandBuffers.data(), commandBuffers.size());
 		std::fill_n(waitStages.get(), numViews, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-		for (uint i = 0; i < numViews * ViewVk::maxFrames; ++i)
+		for (uint i = 0; i < numViews * maxFrames; ++i)
 			imageAvailableSemaphores[i] = createSemaphore();
-		for (uint i = 0; i < ViewVk::maxFrames; ++i) {
+		for (uint i = 0; i < maxFrames; ++i) {
 			renderFinishedSemaphores[i] = createSemaphore();
 			frameFences[i] = createFence(VK_FENCE_CREATE_SIGNALED_BIT);
 		}
 
-		renderPass.init(this);
-		renderPass.createPass(this, surfaceFormats[usesSrgb].format, sets->gammaType, canSrgb);
-		initGlobalData(sets, initParams.colors);
-		for (uint8 i = 0; i < numViews; ++i) {
+		renderPass.init(this, descs, surfaceFormats[usesSrgb].format, sets->gammaType, canSrgb);
+		for (uint8 i = 0; i < numViews; ++i)
 			createSwapchain(i);
+		if (renderPass.getPipeline(RenderPass::Pipeline::fin))
+			descs.updateViewImages(this, views.get(), numViews);
 
-			vec4 pview(views[i].rect.pos(), vec2(views[i].rect.size()) / 2.f);
-			views[i].uniformBuf = createBuffer(sizeof(RenderPass::ViewData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-			uploadBuffer(views[i].uniformBuf, &pview, 0, sizeof(pview), VK_PIPELINE_STAGE_NONE, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT);
-		}
-		renderPass.createDescriptorPoolAndSets(this, views.get(), numViews);
-
-		TextureVk* tooltipTex = static_cast<TextureVk*>(initParams.tooltipTexture = new TextureVk(uvec2(0), RenderPass::samplerNearest));
-		std::tie(tooltipTex->pool, tooltipTex->set) = renderPass.getDescriptorSetTex(this);
+		TextureVk* tooltipTex = static_cast<TextureVk*>(initParams.tooltipTexture = new TextureVk(uvec2(0), Descriptors::samplerNearest));
+		std::tie(tooltipTex->pool, tooltipTex->set) = descs.getDescriptorSetTex(this);
 
 		setCompression(sets);
 		setMaxPicRes(sets->maxPicRes);
@@ -1194,28 +1119,27 @@ void RendererVk::cleanup() noexcept {
 	if (ldev) {
 		vkDeviceWaitIdle(ldev);
 
-		cleanupBuffer(vertexBuf);
+		freeBuffer(vertexBuf);
 		for (uint8 i = 0; i < numViews; ++i) {
 			freeFramebuffers(views[i]);
 			vkDestroySwapchainKHR(ldev, swapchains[i], nullptr);
-			cleanupBuffer(views[i].uniformBuf);
 		}
 		renderPass.free(this);
-		for (uint i = 0; i < ViewVk::maxFrames; ++i) {
+		for (uint i = 0; i < maxFrames; ++i) {
 			vkDestroyFence(ldev, frameFences[i], nullptr);
 			vkDestroySemaphore(ldev, renderFinishedSemaphores[i], nullptr);
 		}
-		for (uint i = 0; i < numViews * ViewVk::maxFrames; ++i)
+		for (uint i = 0; i < numViews * maxFrames; ++i)
 			vkDestroySemaphore(ldev, imageAvailableSemaphores[i], nullptr);
 		vkDestroyCommandPool(ldev, gcmdPool, nullptr);
 
 		fmtConv.free(this);
 		for (size_t i = 0; i < inputBufs.size(); ++i)
-			cleanupBuffer(inputBufs[i]);
+			freeBuffer(inputBufs[i]);
+		descs.free(this);
 
 		for (VkFence it : tfences)
 			vkDestroyFence(ldev, it, nullptr);
-		vkDestroyCommandPool(ldev, tcmdPool, nullptr);
 
 		vkDestroyDevice(ldev, nullptr);
 	}
@@ -1321,21 +1245,22 @@ uptr<RendererVk::DeviceInfo> RendererVk::pickPhysicalDevice(const InstanceInfo& 
 }
 
 void RendererVk::createDevice(DeviceInfo& deviceInfo) {
-	float queuePriorities[DeviceInfo::maxQueues];
+	float queuePriorities[3];
 	rng::fill(queuePriorities, 1.f);
-	VkDeviceQueueCreateInfo queueCreateInfos[DeviceInfo::maxQueues]{};
-	for (uint8 i = 0; i < deviceInfo.numQfams; ++i) {
+	VkDeviceQueueCreateInfo queueCreateInfos[2]{};
+	for (uint i = 0; auto [fi, qcnt] : deviceInfo.qfqcnts) {
 		queueCreateInfos[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		queueCreateInfos[i].queueFamilyIndex = deviceInfo.qfqcnts[i].first;
-		queueCreateInfos[i].queueCount = deviceInfo.qfqcnts[i].second;
+		queueCreateInfos[i].queueFamilyIndex = fi;
+		queueCreateInfos[i].queueCount = qcnt;
 		queueCreateInfos[i].pQueuePriorities = queuePriorities;
+		++i;
 	}
 
 	uptr<const char*[]> extensions = std::make_unique_for_overwrite<const char*[]>(deviceInfo.extensions.size());
 	rng::transform(deviceInfo.extensions, extensions.get(), [](const string& it) -> const char* { return it.data(); });
 	VkDeviceCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-		.queueCreateInfoCount = deviceInfo.numQfams,
+		.queueCreateInfoCount = uint32(deviceInfo.qfqcnts.size()),
 		.pQueueCreateInfos = queueCreateInfos,
 		.enabledExtensionCount = uint32(deviceInfo.extensions.size()),
 		.ppEnabledExtensionNames = extensions.get()
@@ -1354,18 +1279,19 @@ void RendererVk::createDevice(DeviceInfo& deviceInfo) {
 	pdev = deviceInfo.dev;
 	pdevMemProperties = deviceInfo.memp;
 	maxTextureSize = deviceInfo.prop.limits.maxImageDimension2D;
-	transferAtomSize = std::max(deviceInfo.prop.limits.nonCoherentAtomSize, VkDeviceSize(4));	// should be at least 4 so shaders can accept buffers of uints
+	uniformAlignment = deviceInfo.prop.limits.minUniformBufferOffsetAlignment;
+	atomSize = deviceInfo.prop.limits.nonCoherentAtomSize;
+	transferAtomSize = std::max(atomSize, uint(sizeof(uint32)));	// should be at least 4 so shaders can accept buffers of uints
 	maxComputeWorkGroups = deviceInfo.prop.limits.maxComputeWorkGroupCount[0];
 	surfaceFormats = deviceInfo.surfaceFormats;
 	rng::copy(deviceInfo.formats, optionalFormats.begin());
 	canSrgb = deviceInfo.canSrgb;
 
-	gfamilyIndex = deviceInfo.graphicsQids.first;
-	vkGetDeviceQueue(ldev, gfamilyIndex, deviceInfo.graphicsQids.second, &gqueue);
-	pfamilyIndex = deviceInfo.presentQids.first;
-	vkGetDeviceQueue(ldev, pfamilyIndex, deviceInfo.presentQids.second, &pqueue);
-	tfamilyIndex = deviceInfo.transferQids.first;
-	vkGetDeviceQueue(ldev, tfamilyIndex, deviceInfo.transferQids.second, &tqueue);
+	gfamilyIndex = deviceInfo.graphicsQid.first;
+	vkGetDeviceQueue(ldev, gfamilyIndex, deviceInfo.graphicsQid.second, &gqueue);
+	vkGetDeviceQueue(ldev, gfamilyIndex, deviceInfo.transferQid.second, &tqueue);
+	pfamilyIndex = deviceInfo.presentQid.first;
+	vkGetDeviceQueue(ldev, pfamilyIndex, deviceInfo.presentQid.second, &pqueue);
 }
 
 VkCommandPool RendererVk::createCommandPool(uint32 family) const {
@@ -1420,8 +1346,9 @@ void RendererVk::createSwapchain(uint vid, VkSwapchainKHR oldSwapchain) {
 		throw std::runtime_error(fmt::format("Failed to create swapchain: {}", string_VkResult(rs)));
 
 	u32vec2 res(views[vid].extent.width, views[vid].extent.height);
-	if (renderPass.getFinPipeline())
-		views[vid].pp = createImage(res, RenderPass::subpassFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	if (renderPass.getPipeline(RenderPass::Pipeline::fin))
+		for (uint8 i = 0; i < maxFrames; ++i)
+			views[vid].pps[i] = createImage(res, RenderPass::subpassFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 	uint32 imgCount;
 	if (VkResult rs = vkGetSwapchainImagesKHR(ldev, swapchains[vid], &imgCount, nullptr); rs != VK_SUCCESS)
@@ -1430,13 +1357,13 @@ void RendererVk::createSwapchain(uint vid, VkSwapchainKHR oldSwapchain) {
 	vkGetSwapchainImagesKHR(ldev, swapchains[vid], &imgCount, images.get());
 	views[vid].frames = std::make_unique<ViewFrame[]>(imgCount);
 	views[vid].imageCount = imgCount;
+	uint aofs = !renderPass.getPipeline(RenderPass::Pipeline::fin);
 	for (uint32 i = 0; i < imgCount; ++i) {
 		views[vid].frames[i].view = createImageView(images[i], surfaceFormats[usesSrgb].format);
-		if (renderPass.getFinPipeline()) {
-			VkImageView attach[2] = { views[vid].pp.view, views[vid].frames[i].view };
-			views[vid].frames[i].framebuffer = createFramebuffer(renderPass.getHandle(), attach, std::size(attach), res);
-		} else
-			views[vid].frames[i].framebuffer = createFramebuffer(renderPass.getHandle(), &views[vid].frames[i].view, 1, res);
+		for (uint8 j = 0; j < maxFrames; ++j) {
+			VkImageView attach[] = { views[vid].pps[j].view, views[vid].frames[i].view };
+			views[vid].frames[i].framebuffers[j] = createFramebuffer(renderPass.getHandle(), attach + aofs, std::size(attach) - aofs, res);
+		}
 	}
 }
 
@@ -1451,55 +1378,78 @@ void RendererVk::recreateSwapchain(uint vid) {
 		vkDestroySwapchainKHR(ldev, oldSwapchain, nullptr);
 		throw;
 	}
-	vec4 pview(views[vid].rect.pos(), vec2(views[vid].rect.size()) / 2.f);
-	uploadBuffer(views[vid].uniformBuf, &pview, 0, sizeof(pview), VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT);
+	Descriptors::ViewData data = { vec4(views[vid].rect.pos(), vec2(views[vid].rect.size()) / 2.f) };
+	uploadBuffer(descs.getGlobviewBuffer(), &data, Descriptors::viewsOffset(this) + Descriptors::viewElementStride(this) * vid, sizeof(data), VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT);
 }
 
 void RendererVk::freeFramebuffers(ViewVk& view) noexcept {
 	for (uint32 i = 0; i < view.imageCount; ++i) {
-		vkDestroyFramebuffer(ldev, view.frames[i].framebuffer, nullptr);
+		for (uint j = 0; j < maxFrames; ++j)
+			vkDestroyFramebuffer(ldev, view.frames[i].framebuffers[j], nullptr);
 		vkDestroyImageView(ldev, view.frames[i].view, nullptr);
 	}
-	cleanupImage(view.pp);
-
+	for (uint i = 0; i < maxFrames; ++i) {
+		freeImage(view.pps[i]);
+		view.pps[i] = Image();
+	}
 	view.frames.reset();
 	view.imageCount = 0;
-	view.pp = Image();
 }
 
 void RendererVk::setColors(array<vec4, Settings::defaultColors.size()>& colors) {
 	prepareColorData(colors);
-	uploadBuffer(renderPass.getGlobBuffer(), colors.data(), 0, sizeof(RenderPass::GlobalData::colors), VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+	uploadBuffer(descs.getGlobviewBuffer(), colors.data(), 0, sizeof(Descriptors::GlobalData::colors), VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 }
 
 void RendererVk::initGlobalData(const Settings* sets, array<vec4, Settings::defaultColors.size()>& colors) {
+	uint viewOffs = Descriptors::viewsOffset(this);
+	uint viewStride = Descriptors::viewElementStride(this);
 	VkBufferCopy vertRegion = { .size = sizeof(vertices) + sizeof(scrVertices) };
-	VkBufferCopy globRegion = { .srcOffset = vertRegion.size, .size = sizeof(RenderPass::GlobalData) };
+	uptr<VkBufferCopy[]> globviewRegions = std::make_unique_for_overwrite<VkBufferCopy[]>(1 + numViews);
+	globviewRegions[0] = { .srcOffset = ceilAlignment(vertRegion.size, alignof(Descriptors::GlobalData)), .size = sizeof(Descriptors::GlobalData) };
+	VkDeviceSize srcOffset = ceilAlignment(globviewRegions[0].srcOffset + globviewRegions[0].size, alignof(Descriptors::ViewData));
+	for (uint8 i = 0; i < numViews; ++i) {
+		globviewRegions[1 + i] = {
+			.srcOffset = srcOffset,
+			.dstOffset = viewOffs + i * viewStride,
+			.size = sizeof(Descriptors::ViewData)
+		};
+		srcOffset += sizeof(Descriptors::ViewData);
+	}
+
 	vertexBuf = createBuffer(vertRegion.size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	float gamma = 10.f / float(sets->gammaValue);
 	prepareColorData(colors);
 	syncTransferCommands();
-	checkInputBufferSize(vertRegion.size + globRegion.size);
+	checkInputBufferSize(srcOffset);
 
 	auto idst = static_cast<uint8*>(inputsMapped[currentTransfer]);
 	memcpy(idst, vertices.data(), sizeof(vertices));
 	idst += sizeof(vertices);
 	memcpy(idst, scrVertices.data(), sizeof(scrVertices));
-	idst += sizeof(scrVertices);
-	memcpy(idst, colors.data(), sizeof(RenderPass::GlobalData::colors));
-	idst += sizeof(RenderPass::GlobalData::colors);
-	memcpy(idst, &gamma, sizeof(gamma));
 
+	idst = static_cast<uint8*>(inputsMapped[currentTransfer]) + globviewRegions[0].srcOffset;
+	memcpy(idst + offsetof(Descriptors::GlobalData, colors), colors.data(), sizeof(Descriptors::GlobalData::colors));
+	memcpy(idst + offsetof(Descriptors::GlobalData, gamma), &gamma, sizeof(Descriptors::GlobalData::gamma));
+
+	for (uint8 i = 0; i < numViews; ++i) {
+		auto vdat = static_cast<Descriptors::ViewData*>(static_cast<void*>(static_cast<uint8*>(inputsMapped[currentTransfer]) + globviewRegions[1 + i].srcOffset));
+		*vdat = { vec4(views[i].rect.pos(), vec2(views[i].rect.size()) / 2.f) };
+	}
+
+	VkBufferMemoryBarrier bufferBarriers[] = {
+		makeBufferBarrier(vertexBuf, 0, VK_WHOLE_SIZE, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT),
+		makeBufferBarrier(descs.getGlobviewBuffer(), 0, VK_WHOLE_SIZE, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT)
+	};
 	beginTransferCommands();
 	vkCmdCopyBuffer(tcmdBuffers[currentTransfer], inputBufs[currentTransfer], vertexBuf, 1, &vertRegion);
-	vkCmdCopyBuffer(tcmdBuffers[currentTransfer], inputBufs[currentTransfer], renderPass.getGlobBuffer(), 1, &globRegion);
-	transitionBuffer(vertexBuf, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, tfamilyIndex, gfamilyIndex);	// TODO: wrong stage (need to look over all barriers)
-	transitionBuffer(renderPass.getGlobBuffer(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, tfamilyIndex, gfamilyIndex);
+	vkCmdCopyBuffer(tcmdBuffers[currentTransfer], inputBufs[currentTransfer], descs.getGlobviewBuffer(), 1 + numViews, globviewRegions.get());
+	vkCmdPipelineBarrier(tcmdBuffers[currentTransfer], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, std::size(bufferBarriers), bufferBarriers, 0, nullptr);
 	endTransferCommands();
 }
 
 void RendererVk::prepareColorData(array<vec4, Settings::defaultColors.size()>& colors) noexcept {
-	convertColors(colors.data(), colors.size(), usesSrgb, renderPass.getFinPipeline());
+	convertColors(colors.data(), colors.size(), usesSrgb, renderPass.getPipeline(RenderPass::Pipeline::fin));
 	const vec4& bclr = colors[eint(Color::background)];
 	bgColor.color = { .float32 = { bclr.r, bclr.g, bclr.b, bclr.a } };
 }
@@ -1510,20 +1460,19 @@ bool RendererVk::setSettings(Settings* sets) {
 	bool prevSrgb = usesSrgb;
 	setUsesSrgb(sets);
 	bool reloadSrgb = usesSrgb != prevSrgb;
-	bool reloadGamma = bool(renderPass.getFinPipeline()) != (sets->gammaType == Settings::Gamma::value);
+	bool reloadGamma = bool(renderPass.getPipeline(RenderPass::Pipeline::fin)) != (sets->gammaType == Settings::Gamma::value);
 	bool recreate = (immediatePresent != prevPresent) || reloadSrgb || reloadGamma;
 	if (recreate)
 		vkDeviceWaitIdle(ldev);
 	if (reloadSrgb || reloadGamma) {
-		renderPass.freePass(this);
-		renderPass.createPass(this, surfaceFormats[usesSrgb].format, sets->gammaType, canSrgb);
+		renderPass.free(this);
+		renderPass.init(this, descs, surfaceFormats[usesSrgb].format, sets->gammaType, canSrgb);
 	}
-	if (recreate)
+	if (recreate) {
 		for (uint8 i = 0; i < numViews; ++i)
 			recreateSwapchain(i);
-	if (reloadGamma) {
-		renderPass.freeDescriptorPool(this);
-		renderPass.createDescriptorPoolAndSets(this, views.get(), numViews);
+		if (renderPass.getPipeline(RenderPass::Pipeline::fin))
+			descs.updateViewImages(this, views.get(), numViews);
 	}
 	setCompression(sets);
 	return reloadSrgb || reloadGamma;
@@ -1531,7 +1480,7 @@ bool RendererVk::setSettings(Settings* sets) {
 
 void RendererVk::setGammaValue(int gamma) {
 	float gval = 10.f / float(gamma);
-	uploadBuffer(renderPass.getGlobBuffer(), &gval, offsetof(RenderPass::GlobalData, gamma), sizeof(gval), VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+	uploadBuffer(descs.getGlobviewBuffer(), &gval, offsetof(Descriptors::GlobalData, gamma), sizeof(gval), VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 }
 
 bool RendererVk::updateView(ivec2& viewRes) {
@@ -1559,9 +1508,9 @@ void RendererVk::copyInputBuffer(VkBuffer buffer, VkDeviceSize dstOffs, VkDevice
 	};
 	beginTransferCommands();
 	if (srcStage != VK_PIPELINE_STAGE_NONE)
-		transitionBuffer(buffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, srcStage, VK_PIPELINE_STAGE_TRANSFER_BIT, gfamilyIndex, tfamilyIndex);
+		transitionBuffer(buffer, dstOffs, size, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, srcStage, VK_PIPELINE_STAGE_TRANSFER_BIT);
 	vkCmdCopyBuffer(tcmdBuffers[currentTransfer], inputBufs[currentTransfer], buffer, 1, &region);
-	transitionBuffer(buffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, dstStage, tfamilyIndex, gfamilyIndex);
+	transitionBuffer(buffer, dstOffs, size, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, dstStage);
 	endTransferCommands();
 }
 
@@ -1607,15 +1556,15 @@ Renderer::Action RendererVk::startDraw(uint vid) noexcept {
 	VkRenderPassBeginInfo renderPassInfo = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
 		.renderPass = renderPass.getHandle(),
-		.framebuffer = views[vid].frames[imageIndices[vid]].framebuffer,
+		.framebuffer = views[vid].frames[imageIndices[vid]].framebuffers[currentFrame],
 		.renderArea = { .extent = views[vid].extent },
 		.clearValueCount = 1,
 		.pClearValues = &bgColor
 	};
-	VkDescriptorSet descriptorSets[] = { renderPass.getGlobDescriptorSet(), views[vid].descriptorSet };
+	VkDescriptorSet descriptorSets[] = { descs.getGlobalDescriptorSet(), views[vid].descriptorSets[currentFrame] };
 	VkDeviceSize vertexOffset = 0;
 	vkCmdBeginRenderPass(commandBuffers[currentFrame], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-	vkCmdBindPipeline(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.getGuiPipeline());
+	vkCmdBindPipeline(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.getPipeline(RenderPass::Pipeline::gui));
 	vkCmdBindDescriptorSets(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.getGuiPipelineLayout(), RenderPass::dsetGlob, std::size(descriptorSets), descriptorSets, 0, nullptr);
 	vkCmdBindVertexBuffers(commandBuffers[currentFrame], 0, 1, &vertexBuf.buffer, &vertexOffset);
 	return Action::yes;
@@ -1635,11 +1584,11 @@ void RendererVk::drawRect(const Texture* tex, const Recti& rect, const Recti& fr
 }
 
 Renderer::Action RendererVk::finishDraw(uint vid) noexcept {
-	if (renderPass.getFinPipeline()) {
+	if (renderPass.getPipeline(RenderPass::Pipeline::fin)) {
 		vkCmdNextSubpass(commandBuffers[currentFrame], VK_SUBPASS_CONTENTS_INLINE);
-		vkCmdBindPipeline(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.getFinPipeline());
+		vkCmdBindPipeline(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.getPipeline(RenderPass::Pipeline::fin));
 
-		VkDescriptorSet descriptorSets[2] = { renderPass.getGlobDescriptorSet(), views[vid].descriptorSet };
+		VkDescriptorSet descriptorSets[] = { descs.getGlobalDescriptorSet(), views[vid].descriptorSets[currentFrame] };
 		vkCmdBindDescriptorSets(commandBuffers[currentFrame], VK_PIPELINE_BIND_POINT_GRAPHICS, renderPass.getFinPipelineLayout(), RenderPass::dsetGlob, std::size(descriptorSets), descriptorSets, 0, nullptr);
 		vkCmdDraw(commandBuffers[currentFrame], scrVertices.size(), 1, vertices.size(), 0);
 	}
@@ -1678,16 +1627,14 @@ Renderer::Action RendererVk::finishRender() noexcept {
 				throw std::runtime_error(fmt::format("Failed to present image: {}", string_VkResult(rs)));
 			refreshFramebuffers = true;
 		}
-		currentFrame = (currentFrame + 1) % ViewVk::maxFrames;
+		currentFrame = (currentFrame + 1) % maxFrames;
 
 		if (refreshFramebuffers) {
 			vkDeviceWaitIdle(ldev);
 			for (uint8 i = 0; i < numViews; ++i)
 				recreateSwapchain(i);
-			if (renderPass.getFinPipeline()) {
-				renderPass.freeDescriptorPool(this);
-				renderPass.createDescriptorPoolAndSets(this, views.get(), numViews);
-			}
+			if (renderPass.getPipeline(RenderPass::Pipeline::fin))
+				descs.updateViewImages(this, views.get(), numViews);
 			refreshFramebuffers = false;
 		}
 	} catch (const std::runtime_error& err) {
@@ -1703,7 +1650,7 @@ Texture* RendererVk::texFromSurface(SDL_Surface* img, bool rpic, bool linear) no
 		try {
 			tex = new TextureVk(uvec2(si.img->w, si.img->h), linear);
 			*static_cast<Image*>(tex) = createImage(tex->res, si.fmt, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, si.cmap);
-			std::tie(tex->pool, tex->set) = renderPass.newDescriptorSetTex(this, tex->view);
+			std::tie(tex->pool, tex->set) = descs.newDescriptorSetTex(this, tex->view);
 			if (!si.pid)
 				uploadTextureDirect(tex->image, tex->res, si.img->pixels, si.img->pitch, surfaceBytesPpx(si.img));
 			else
@@ -1731,7 +1678,7 @@ bool RendererVk::texFromSurface(Texture* tex, SDL_Surface* img, bool rpic) noexc
 			return true;
 		} catch (const std::exception& err) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
-			cleanupImage(vki);
+			freeImage(vki);
 		}
 	}
 	return false;
@@ -1741,9 +1688,9 @@ Texture* RendererVk::texFromText(const Pixmap& pm) noexcept {
 	if (pm.res.x) {
 		TextureVk* tex = nullptr;
 		try {
-			tex = new TextureVk(glm::min(pm.res, uvec2(maxTextureSize)), RenderPass::samplerNearest);
+			tex = new TextureVk(glm::min(pm.res, uvec2(maxTextureSize)), Descriptors::samplerNearest);
 			*static_cast<Image*>(tex) = createImage(tex->res, VK_FORMAT_R8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textSwizzle);
-			std::tie(tex->pool, tex->set) = renderPass.newDescriptorSetTex(this, tex->view);
+			std::tie(tex->pool, tex->set) = descs.newDescriptorSetTex(this, tex->view);
 			uploadTextureDirect(tex->image, tex->res, pm.pix.get(), pm.res.x, 1);
 			return tex;
 		} catch (const std::exception& err) {
@@ -1765,7 +1712,7 @@ bool RendererVk::texFromText(Texture* tex, const Pixmap& pm) noexcept {
 			return true;
 		} catch (const std::exception& err) {
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", err.what());
-			cleanupImage(vki);
+			freeImage(vki);
 		}
 	}
 	return false;
@@ -1773,17 +1720,17 @@ bool RendererVk::texFromText(Texture* tex, const Pixmap& pm) noexcept {
 
 void RendererVk::freeTexture(Texture* tex) noexcept {
 	if (auto vtx = static_cast<TextureVk*>(tex)) {
-		renderPass.freeDescriptorSetTex(this, vtx->pool, vtx->set);
-		cleanupImage(*vtx);
+		descs.freeDescriptorSetTex(this, vtx->pool, vtx->set);
+		freeImage(*vtx);
 		delete vtx;
 	}
 }
 
 void RendererVk::replaceTexture(TextureVk& tex, Image& vki, uvec2 res) noexcept {
-	cleanupImage(tex);
+	freeImage(tex);
 	tex.res = res;
 	static_cast<Image&>(tex) = vki;
-	renderPass.updateDescriptorSetImg(this, tex.set, tex.view);
+	descs.updateDescriptorSetImg(this, tex.set, tex.view);
 }
 
 void RendererVk::waitIdle() noexcept {
@@ -1800,48 +1747,55 @@ void RendererVk::uploadTextureDirect(VkImage img, u32vec2 res, const void* pix, 
 	copyPixels(inputsMapped[currentTransfer], pix, rowSize, pitch, res.y);
 
 	beginTransferCommands();
-	transitionImageLayout(img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+	transitionImage(img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 	copyBufferToImage(inputBufs[currentTransfer], img, res);
-	transitionImageLayout(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, tfamilyIndex, gfamilyIndex);
+	transitionImage(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 	endTransferCommands();
 }
 
 void RendererVk::uploadTextureIndirect(VkImage img, u32vec2 res, const SurfaceInfo& si) {
-	auto [pipelineLayout, descriptorSet, layoutId] = fmtConv.getPipelineInfo(*si.pid, currentTransfer);
 	uint32 rowSize = res.x * surfaceBytesPpx(si.img);
+	VkDescriptorSet descriptorSet = descs.getFmtconvDescriptorSet(currentTransfer);
 	syncTransferCommands();
 	checkInputBufferSize(VkDeviceSize(rowSize) * VkDeviceSize(res.y));
-	fmtConv.updateBufferSize(this, descriptorSet, currentTransfer, inputBufs[currentTransfer], inputSizesMax[currentTransfer], rebindInputBuffer[currentTransfer][layoutId]);
+	fmtConv.updateBufferSize(this, descriptorSet, currentTransfer, inputBufs[currentTransfer], inputSizesMax[currentTransfer], rebindInputBuffer[currentTransfer]);
 	copyPixels(inputsMapped[currentTransfer], si.img->pixels, rowSize, si.img->pitch, res.y);
-	if (*si.pid == FormatConverter::Pipeline::index8)
-		copyPalette(fmtConv.getUniformBufferMapped(currentTransfer)->colors, surfacePalette(si.img.get()));
+	if (*si.pid == FormatConverter::Pipeline::index8) {
+		uint* colors;
+		if (VkResult rs = vkMapMemory(ldev, descs.getColorsBuffer(), Descriptors::colorsElementStride(this) * currentTransfer, sizeof(Descriptors::ColorData), 0, reinterpret_cast<void**>(&colors)); rs != VK_SUCCESS)
+			throw std::runtime_error(fmt::format("Failed to map memory: {}", string_VkResult(rs)));
+		copyPalette(colors, surfacePalette(si.img.get()));
+		vkUnmapMemory(ldev, descs.getColorsBuffer());
+	}
 
 	beginTransferCommands();
 	vkCmdBindPipeline(tcmdBuffers[currentTransfer], VK_PIPELINE_BIND_POINT_COMPUTE, fmtConv.getPipeline(*si.pid));
-	vkCmdBindDescriptorSets(tcmdBuffers[currentTransfer], VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+	vkCmdBindDescriptorSets(tcmdBuffers[currentTransfer], VK_PIPELINE_BIND_POINT_COMPUTE, fmtConv.getPipelineLayout(), 0, 1, &descriptorSet, 0, nullptr);
 
 	uint32 texels = res.x * res.y;
 	uint32 numGroups = texels / FormatConverter::convStep + bool(texels % FormatConverter::convStep);
 	FormatConverter::PushData pd = { 0 };
 	for (uint32 gcnt; pd.offset < numGroups; pd.offset += gcnt) {
 		gcnt = std::min(numGroups - pd.offset, maxComputeWorkGroups);
-		vkCmdPushConstants(tcmdBuffers[currentTransfer], pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(FormatConverter::PushData), &pd);
+		vkCmdPushConstants(tcmdBuffers[currentTransfer], fmtConv.getPipelineLayout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(FormatConverter::PushData), &pd);
 		vkCmdDispatch(tcmdBuffers[currentTransfer], gcnt, 1, 1);
 	}
-	transitionBufferToImageLayout(fmtConv.getOutputBuffer(currentTransfer), img);
+	VkBufferMemoryBarrier bufferBarrier = makeBufferBarrier(fmtConv.getOutputBuffer(currentTransfer), 0, VK_WHOLE_SIZE, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT);
+	VkImageMemoryBarrier imageBarrier = makeImageBarrier(img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT);
+	vkCmdPipelineBarrier(tcmdBuffers[currentTransfer], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 1, &bufferBarrier, 1, &imageBarrier);
 	copyBufferToImage(fmtConv.getOutputBuffer(currentTransfer), img, res);
-	transitionImageLayout(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, tfamilyIndex, gfamilyIndex);
+	transitionImage(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 	endTransferCommands();
 }
 
 void RendererVk::checkInputBufferSize(VkDeviceSize size) {
 	if (size > inputSizesMax[currentTransfer]) {
-		size = glm::ceilMultiple(size, transferAtomSize);
+		size = glm::ceilMultiple(size, VkDeviceSize(transferAtomSize));
 		recreateBuffer(inputBufs[currentTransfer], size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		if (VkResult rs = vkMapMemory(ldev, inputBufs[currentTransfer].memory, 0, VK_WHOLE_SIZE, 0, &inputsMapped[currentTransfer]); rs != VK_SUCCESS)
 			throw std::runtime_error(fmt::format("Failed to map memory: {}", string_VkResult(rs)));
 		inputSizesMax[currentTransfer] = size;
-		rebindInputBuffer[currentTransfer].fill(true);
+		rebindInputBuffer[currentTransfer] = true;
 	}
 }
 
@@ -1870,7 +1824,7 @@ void RendererVk::endTransferCommands() {
 			throw std::runtime_error(fmt::format("Failed to submit command buffer: {}", string_VkResult(rs)));
 
 		transferRunning[currentTransfer] = true;
-		currentTransfer = (currentTransfer + 1) % FormatConverter::maxTransfers;
+		currentTransfer = (currentTransfer + 1) % Descriptors::maxTransfers;
 	} catch (const std::runtime_error&) {
 		if (VkResult rs = vkResetCommandBuffer(tcmdBuffers[currentTransfer], 0); rs != VK_SUCCESS)
 			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to reset command buffer: %s", string_VkResult(rs));
@@ -1888,28 +1842,28 @@ void RendererVk::syncTransferCommands() {
 	}
 }
 
-void RendererVk::transitionBuffer(VkBuffer buffer, VkAccessFlags srcAccess, VkAccessFlags dstAccess, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage, uint32 srcQfamily, uint32 dstQfamily) const noexcept {
-	VkBufferMemoryBarrier barrier = {
+VkBufferMemoryBarrier RendererVk::makeBufferBarrier(VkBuffer buffer, VkDeviceSize offset, VkDeviceSize size, VkAccessFlags srcAccess, VkAccessFlags dstAccess) noexcept {
+	return {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
 		.srcAccessMask = srcAccess,
 		.dstAccessMask = dstAccess,
-		.srcQueueFamilyIndex = srcQfamily,
-		.dstQueueFamilyIndex = dstQfamily,
+		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 		.buffer = buffer,
-		.size = VK_WHOLE_SIZE
+		.offset = offset,
+		.size = size
 	};
-	vkCmdPipelineBarrier(tcmdBuffers[currentTransfer], srcStage, dstStage, 0, 0, nullptr, 1, &barrier, 0, nullptr);
 }
 
-void RendererVk::transitionImageLayout(VkImage image, VkImageLayout srcLayout, VkImageLayout dstLayout, VkAccessFlags srcAccess, VkAccessFlags dstAccess, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage, uint32 srcQfamily, uint32 dstQfamily) const noexcept {
-	VkImageMemoryBarrier barrier = {
+VkImageMemoryBarrier RendererVk::makeImageBarrier(VkImage image, VkImageLayout srcLayout, VkImageLayout dstLayout, VkAccessFlags srcAccess, VkAccessFlags dstAccess) noexcept {
+	return {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
 		.srcAccessMask = srcAccess,
 		.dstAccessMask = dstAccess,
 		.oldLayout = srcLayout,
 		.newLayout = dstLayout,
-		.srcQueueFamilyIndex = srcQfamily,
-		.dstQueueFamilyIndex = dstQfamily,
+		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 		.image = image,
 		.subresourceRange = {
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1917,35 +1871,16 @@ void RendererVk::transitionImageLayout(VkImage image, VkImageLayout srcLayout, V
 			.layerCount = 1
 		}
 	};
-	vkCmdPipelineBarrier(tcmdBuffers[currentTransfer], srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 }
 
-void RendererVk::transitionBufferToImageLayout(VkBuffer buffer, VkImage image) const noexcept {
-	VkBufferMemoryBarrier bufferBarrier = {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-		.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-		.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.buffer = buffer,
-		.size = VK_WHOLE_SIZE
-	};
-	VkImageMemoryBarrier imageBarrier = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-		.srcAccessMask = VK_ACCESS_NONE,
-		.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-		.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-		.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.image = image,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.levelCount = 1,
-			.layerCount = 1
-		}
-	};
-	vkCmdPipelineBarrier(tcmdBuffers[currentTransfer], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 1, &bufferBarrier, 1, &imageBarrier);
+void RendererVk::transitionBuffer(VkBuffer buffer, VkDeviceSize offset, VkDeviceSize size, VkAccessFlags srcAccess, VkAccessFlags dstAccess, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage) const noexcept {
+	VkBufferMemoryBarrier barrier = makeBufferBarrier(buffer, offset, size, srcAccess, dstAccess);
+	vkCmdPipelineBarrier(tcmdBuffers[currentTransfer], srcStage, dstStage, 0, 0, nullptr, 1, &barrier, 0, nullptr);
+}
+
+void RendererVk::transitionImage(VkImage image, VkImageLayout srcLayout, VkImageLayout dstLayout, VkAccessFlags srcAccess, VkAccessFlags dstAccess, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage) const noexcept {
+	VkImageMemoryBarrier barrier = makeImageBarrier(image, srcLayout, dstLayout, srcAccess, dstAccess);
+	vkCmdPipelineBarrier(tcmdBuffers[currentTransfer], srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 }
 
 void RendererVk::copyBufferToImage(VkBuffer buffer, VkImage image, u32vec2 size) const noexcept {
@@ -2223,33 +2158,36 @@ bool RendererVk::findQueueFamilies(DeviceInfo& deviceInfo) const {
 	vkGetPhysicalDeviceQueueFamilyProperties(deviceInfo.dev, &count, families.get());
 
 	VkBool32 support;
-	optional<pair<uint32, uint32>> gqids, pqids, tqids;
+	optional<pair<uint32, uint32>> gqid, tqid, pqid;
 	for (uint32 i = 0; i < count; ++i) {
-		bool isGraphics = VkQueueFlagBits(families[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT)) == (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT);
+		bool isGraphics = (families[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT)) == (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT);
 		bool isCompute = families[i].queueFlags & VK_QUEUE_COMPUTE_BIT;
-		if (isGraphics && (!gqids || gqids == pqids || gqids == tqids))
-			assignQueueIndices(deviceInfo, families.get(), i, gqids);
-		if ((!pqids || pqids == gqids || pqids == tqids) && std::all_of(views.get(), views.get() + numViews, [this, &deviceInfo, i, &support](ViewVk& it) -> bool { return vkGetPhysicalDeviceSurfaceSupportKHR(deviceInfo.dev, i, it.surface, &support) == VK_SUCCESS && support; }))
-			assignQueueIndices(deviceInfo, families.get(), i, pqids);
-		if (isGraphics && (!tqids || (isCompute ? !deviceInfo.canCompute || tqids == gqids || tqids == pqids : !deviceInfo.canCompute && (tqids == gqids || tqids == pqids)))) {
-			assignQueueIndices(deviceInfo, families.get(), i, tqids);
+		bool isPresent = std::all_of(views.get(), views.get() + numViews, [this, &deviceInfo, i, &support](ViewVk& it) -> bool { return vkGetPhysicalDeviceSurfaceSupportKHR(deviceInfo.dev, i, it.surface, &support) == VK_SUCCESS && support; });
+		if (isGraphics && (!gqid || (pqid && gqid->first == pqid->first && (isCompute || !deviceInfo.canCompute)) || (isCompute && !deviceInfo.canCompute))) {
+			assignQueueIndices(deviceInfo, families.get(), i, gqid);
+			assignQueueIndices(deviceInfo, families.get(), i, tqid);
 			deviceInfo.canCompute = isCompute;
 		}
+		if (isPresent && (!pqid || (gqid && pqid->first == gqid->first)))
+			assignQueueIndices(deviceInfo, families.get(), i, pqid);
 	}
-	if (!(gqids && pqids && tqids))
+	if (!(gqid && tqid && pqid))
 		return false;
-	deviceInfo.graphicsQids = *gqids;
-	deviceInfo.presentQids = *pqids;
-	deviceInfo.transferQids = *tqids;
+	deviceInfo.graphicsQid = *gqid;
+	deviceInfo.transferQid = *tqid;
+	deviceInfo.presentQid = *pqid;
 	return true;
 }
 
-void RendererVk::assignQueueIndices(DeviceInfo& deviceInfo, const VkQueueFamilyProperties* families, uint32 fi, optional<pair<uint32, uint32>>& qids) {
-	if (!deviceInfo.numQfams || deviceInfo.qfqcnts[deviceInfo.numQfams - 1].first != fi)
-		deviceInfo.qfqcnts[deviceInfo.numQfams++] = pair(fi, 1);
-	else if (deviceInfo.qfqcnts[deviceInfo.numQfams - 1].second < families[fi].queueCount)
-		++deviceInfo.qfqcnts[deviceInfo.numQfams - 1].second;
-	qids = pair(fi, deviceInfo.qfqcnts[deviceInfo.numQfams - 1].second - 1);
+void RendererVk::assignQueueIndices(DeviceInfo& deviceInfo, const VkQueueFamilyProperties* families, uint32 fi, optional<pair<uint32, uint32>>& qid) {
+	if (qid)
+		if (auto it = deviceInfo.qfqcnts.find(qid->first); --it->second == 0)
+			deviceInfo.qfqcnts.erase(it);
+
+	if (auto it = deviceInfo.qfqcnts.find(fi); it != deviceInfo.qfqcnts.end())
+		qid = pair(fi, it->second < families[fi].queueCount ? it->second++ : it->second - 1);
+	else
+		qid = pair(fi, deviceInfo.qfqcnts.emplace(fi, 1).first->second - 1);
 }
 
 bool RendererVk::chooseSurfaceFormat(DeviceInfo& deviceInfo) const {
@@ -2292,15 +2230,13 @@ pair<VkPresentModeKHR, uint32> RendererVk::chooseSwapPresentMode(VkSurfaceKHR su
 	vkGetPhysicalDeviceSurfacePresentModesKHR(pdev, surface, &count, presentModes.get());
 
 	VkPresentModeKHR rmode = VK_PRESENT_MODE_FIFO_KHR;
-	if (immediatePresent) {
-		if (std::any_of(presentModes.get(), presentModes.get() + count, [](VkPresentModeKHR pm) -> bool { return pm == VK_PRESENT_MODE_IMMEDIATE_KHR; }))
-			rmode = VK_PRESENT_MODE_IMMEDIATE_KHR;
-		else if (std::any_of(presentModes.get(), presentModes.get() + count, [](VkPresentModeKHR pm) -> bool { return pm == VK_PRESENT_MODE_FIFO_RELAXED_KHR; }))
-			rmode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
-	} else if (std::any_of(presentModes.get(), presentModes.get() + count, [](VkPresentModeKHR pm) -> bool { return pm == VK_PRESENT_MODE_MAILBOX_KHR; }))
-		rmode = VK_PRESENT_MODE_MAILBOX_KHR;
+	for (VkPresentModeKHR it : immediatePresent ? std::initializer_list{ VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_RELAXED_KHR } : std::initializer_list{ VK_PRESENT_MODE_FIFO_RELAXED_KHR, VK_PRESENT_MODE_MAILBOX_KHR })
+		if (std::any_of(presentModes.get(), presentModes.get() + count, [it](VkPresentModeKHR pm) -> bool { return pm == it; })) {
+			rmode = it;
+			break;
+		}
 
-	uint32 rimg = std::max(ViewVk::maxFrames, capabilities.minImageCount) + (rmode != VK_PRESENT_MODE_IMMEDIATE_KHR);
+	uint32 rimg = std::max(maxFrames, capabilities.minImageCount) + (rmode != VK_PRESENT_MODE_IMMEDIATE_KHR);
 	return pair(rmode, !capabilities.maxImageCount || capabilities.maxImageCount >= rimg ? rimg : capabilities.maxImageCount);
 }
 
@@ -2333,7 +2269,7 @@ Renderer::Info RendererVk::getInfo() const {
 		.gamma = { Settings::Gamma::none, Settings::Gamma::value },
 		.compressions = { Settings::Compression::none },
 		.texSize = maxTextureSize,
-		.curGamma = usesSrgb ? Settings::Gamma::srgb : renderPass.getFinPipeline() ? Settings::Gamma::value : Settings::Gamma::none,
+		.curGamma = usesSrgb ? Settings::Gamma::srgb : renderPass.getPipeline(RenderPass::Pipeline::fin) ? Settings::Gamma::value : Settings::Gamma::none,
 		.curCompression = compression
 	};
 	if (canSrgb)
